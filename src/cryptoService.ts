@@ -1,6 +1,6 @@
 import axios from "axios";
 
-/** ราคาเทียบ USDT (Futures) — ฟิลด์ชื่อ usd เดิมเพื่อให้ scheduler/alerts ไม่ต้องเปลี่ยน */
+/** ราคาเทียบ USDT (Futures) — ฟิลด์ชื่อ usd เดิมเพื่อให้ alerts ไม่ต้องเปลี่ยน */
 export type CoinQuote = {
   usd: number;
   usd_24h_change?: number;

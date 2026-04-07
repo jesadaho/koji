@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { kv } from "@vercel/kv";
 
 export type PriceAlert = {
   id: string;
@@ -14,20 +15,38 @@ export type PriceAlert = {
   createdAt: string;
 };
 
-const path = join(process.cwd(), "data", "alerts.json");
+const KV_KEY = "koji:alerts";
+const filePath = join(process.cwd(), "data", "alerts.json");
+
+function useKv(): boolean {
+  return Boolean(process.env.KV_REST_API_URL);
+}
+
+function assertWritableStorage(): void {
+  if (process.env.VERCEL === "1" && !useKv()) {
+    throw new Error(
+      "บน Vercel ต้องเชื่อม Vercel KV (ให้มี KV_REST_API_URL) เพื่อเก็บการแจ้งเตือน"
+    );
+  }
+}
 
 async function ensureFile(): Promise<void> {
   try {
-    await readFile(path, "utf-8");
+    await readFile(filePath, "utf-8");
   } catch {
-    await mkdir(dirname(path), { recursive: true });
-    await writeFile(path, "[]", "utf-8");
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, "[]", "utf-8");
   }
 }
 
 export async function loadAlerts(): Promise<PriceAlert[]> {
+  if (useKv()) {
+    const data = await kv.get<PriceAlert[]>(KV_KEY);
+    return Array.isArray(data) ? data : [];
+  }
+
   await ensureFile();
-  const raw = await readFile(path, "utf-8");
+  const raw = await readFile(filePath, "utf-8");
   try {
     const parsed = JSON.parse(raw) as PriceAlert[];
     return Array.isArray(parsed) ? parsed : [];
@@ -37,8 +56,15 @@ export async function loadAlerts(): Promise<PriceAlert[]> {
 }
 
 async function saveAlerts(alerts: PriceAlert[]): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, JSON.stringify(alerts, null, 2), "utf-8");
+  if (useKv()) {
+    await kv.set(KV_KEY, alerts);
+    return;
+  }
+
+  assertWritableStorage();
+
+  await mkdir(dirname(filePath), { recursive: true });
+  await writeFile(filePath, JSON.stringify(alerts, null, 2), "utf-8");
 }
 
 export async function addAlert(alert: Omit<PriceAlert, "id" | "createdAt">): Promise<PriceAlert> {

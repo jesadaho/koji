@@ -6,27 +6,27 @@ function requireEnv(name: string): string {
   return v;
 }
 
-function parseCorsOrigins(): string[] {
-  const raw = process.env.CORS_ORIGINS;
-  if (raw === "" || raw === undefined) {
-    return ["http://localhost:3001", "http://127.0.0.1:3001"];
-  }
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
+/**
+ * อ่าน env แบบ lazy เพื่อไม่ให้ `next build` ล้มเมื่อยังไม่ใส่ secret ใน CI
+ * (จะ error ตอน runtime เมื่อมีการเรียกใช้จริง)
+ */
 export const config = {
-  port: Number(process.env.PORT) || 3000,
-  lineChannelSecret: requireEnv("LINE_CHANNEL_SECRET"),
-  lineChannelAccessToken: requireEnv("LINE_CHANNEL_ACCESS_TOKEN"),
-  /** ช่วงเช็คราคา (นาที) */
-  priceCheckCron: process.env.PRICE_CHECK_CRON || "*/2 * * * *",
-  /** LIFF ID จาก LINE Developers (หน้า LIFF) */
-  liffId: process.env.LIFF_ID?.trim() || undefined,
-  /** Channel ID ตัวเลข — ใช้ยืนยัน ID token จาก LIFF (Basic settings ของช่อง OA) */
-  lineChannelId: process.env.LINE_CHANNEL_ID?.trim() || undefined,
-  /** origin ที่อนุญาตเรียก /api/liff จากเบราว์เซอร์ (Next.js dev ที่ :3001) */
-  corsOrigins: parseCorsOrigins(),
+  get port() {
+    return Number(process.env.PORT) || 3000;
+  },
+  get lineChannelSecret() {
+    return requireEnv("LINE_CHANNEL_SECRET");
+  },
+  get lineChannelAccessToken() {
+    return requireEnv("LINE_CHANNEL_ACCESS_TOKEN");
+  },
+  get priceCheckCron() {
+    return process.env.PRICE_CHECK_CRON || "*/2 * * * *";
+  },
+  get liffId() {
+    return process.env.LIFF_ID?.trim() || undefined;
+  },
+  get lineChannelId() {
+    return process.env.LINE_CHANNEL_ID?.trim() || undefined;
+  },
 };

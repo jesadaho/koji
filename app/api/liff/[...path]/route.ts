@@ -1,62 +1,83 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import {
+  authenticateLiffRequest,
+  getLiffConfig,
+  getLiffMeta,
+  liffCreateAlert,
+  liffDeleteAlert,
+  liffListAlerts,
+  liffPrice,
+} from "@/src/liffService";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function backendBase(): string {
-  return (process.env.KOJI_API_URL ?? "").replace(/\/$/, "");
-}
-
-async function proxy(req: NextRequest, segments: string[]) {
-  const base = backendBase();
-  if (!base) {
-    return NextResponse.json(
-      {
-        error:
-          "Next ยังไม่มี KOJI_API_URL — ตั้งใน Vercel/เซิร์ฟเวอร์ หรือใช้ NEXT_PUBLIC_API_BASE_URL แบบตรงไป API",
-      },
-      { status: 503 }
-    );
-  }
-
-  const sub = segments.length ? segments.join("/") : "";
-  const url = new URL(req.url);
-  const target = `${base}/api/liff/${sub}${url.search}`;
-
-  const headers = new Headers();
-  const auth = req.headers.get("authorization");
-  if (auth) headers.set("authorization", auth);
-  headers.set("accept", "application/json");
-  const ct = req.headers.get("content-type");
-  if (ct) headers.set("content-type", ct);
-
-  const init: RequestInit = { method: req.method, headers };
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    const buf = await req.arrayBuffer();
-    if (buf.byteLength > 0) {
-      init.body = buf;
-    }
-  }
-
-  const res = await fetch(target, init);
-  const outHeaders = new Headers();
-  const outCt = res.headers.get("content-type");
-  if (outCt) outHeaders.set("content-type", outCt);
-  const text = await res.text();
-  return new NextResponse(text, { status: res.status, headers: outHeaders });
-}
-
 type Ctx = { params: { path: string[] } };
 
+function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status });
+}
+
 export async function GET(req: NextRequest, ctx: Ctx) {
-  return proxy(req, ctx.params.path ?? []);
+  const segs = ctx.params.path ?? [];
+  const [a] = segs;
+
+  if (segs.length === 1 && a === "config") {
+    return json(getLiffConfig());
+  }
+  if (segs.length === 1 && a === "meta") {
+    return json(getLiffMeta());
+  }
+  if (segs.length === 1 && a === "alerts") {
+    const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+    if (!auth.ok) return json({ error: auth.error }, auth.status);
+    return json(await liffListAlerts(auth.userId));
+  }
+  if (segs.length === 1 && a === "price") {
+    const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+    if (!auth.ok) return json({ error: auth.error }, auth.status);
+    const symbol = req.nextUrl.searchParams.get("symbol") ?? "";
+    const r = await liffPrice(symbol);
+    return json(r.json, r.status);
+  }
+
+  return json({ error: "ไม่พบเส้นทาง" }, 404);
 }
 
 export async function POST(req: NextRequest, ctx: Ctx) {
-  return proxy(req, ctx.params.path ?? []);
+  const segs = ctx.params.path ?? [];
+  const [a] = segs;
+
+  if (segs.length === 1 && a === "alerts") {
+    const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+    if (!auth.ok) return json({ error: auth.error }, auth.status);
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "JSON ไม่ถูกต้อง" }, 400);
+    }
+    const r = await liffCreateAlert(auth.userId, body);
+    return json(r.json, r.status);
+  }
+
+  return json({ error: "ไม่พบเส้นทาง" }, 404);
 }
 
 export async function DELETE(req: NextRequest, ctx: Ctx) {
-  return proxy(req, ctx.params.path ?? []);
+  const segs = ctx.params.path ?? [];
+  const [a, id] = segs;
+
+  if (segs.length === 2 && a === "alerts" && id) {
+    const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+    if (!auth.ok) return json({ error: auth.error }, auth.status);
+    const r = await liffDeleteAlert(auth.userId, decodeURIComponent(id));
+    if (r.status === 204) {
+      return new NextResponse(null, { status: 204 });
+    }
+    return json(r.json ?? {}, r.status);
+  }
+
+  return json({ error: "ไม่พบเส้นทาง" }, 404);
 }
