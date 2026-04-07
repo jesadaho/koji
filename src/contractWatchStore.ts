@@ -179,11 +179,11 @@ export function userIdsForSymbol(watches: ContractWatch[], symbol: string): stri
   for (const w of watches) {
     if (w.coinId === symbol) set.add(w.userId);
   }
-  return [...set];
+  return Array.from(set);
 }
 
 export function uniqueWatchedSymbols(watches: ContractWatch[]): string[] {
   const set = new Set<string>();
   for (const w of watches) set.add(w.coinId);
-  return [...set];
+  return Array.from(set);
 }
