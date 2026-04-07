@@ -49,7 +49,7 @@ export function buildKojiWelcomeFlexContents(liffId?: string): FlexBubble {
       height: "sm" as const,
       action: {
         type: "uri" as const,
-        label: "Markets Top 25",
+        label: "Markets Top 50",
         uri: `https://liff.line.me/${liffId}/markets`,
       },
     });

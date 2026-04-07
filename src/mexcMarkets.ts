@@ -3,6 +3,18 @@ import axios from "axios";
 const MEXC_TICKER = "https://api.mexc.com/api/v1/contract/ticker";
 const MEXC_DETAIL = "https://api.mexc.com/api/v1/contract/detail";
 
+/** น้ำหนักส่วน volume spike */
+const MOMENTUM_W_V = 1;
+/** น้ำหนักส่วน price return (สเกลเดียวกับ return เป็นทศนิยม เช่น 0.02 = 2%) */
+const MOMENTUM_W_P = 1;
+
+/** ดึง kline แค่ candidate อันดับต้น ๆ ตาม amount24 เพื่อจำกัด request */
+const KLINE_CANDIDATE_CAP = 120;
+/** เรียก kline พร้อมกันต่อรอบ */
+const KLINE_CONCURRENCY = 14;
+/** แท่ง 15m ย้อนหลังขั้นต่ำสำหรับค่าเฉลี่ย volume */
+const MIN_BASELINE_BARS = 32;
+
 type MexcTickerRow = {
   symbol?: string;
   lastPrice?: number;
@@ -38,6 +50,23 @@ type MexcDetailResponse = {
   data?: MexcDetailRow | MexcDetailRow[];
 };
 
+type KlineArrays = {
+  open: number[];
+  close: number[];
+  vol: number[];
+};
+
+type KlineApiResponse = {
+  success: boolean;
+  code: number;
+  data?: {
+    open?: number[];
+    close?: number[];
+    vol?: number[];
+    time?: number[];
+  };
+};
+
 function asArray<T>(data: T | T[] | undefined): T[] {
   if (data === undefined) return [];
   return Array.isArray(data) ? data : [data];
@@ -50,8 +79,13 @@ export type TopMarketRow = {
   volume24: number;
   amount24Usdt: number;
   fundingRate: number;
-  /** สูงสุดจาก risk tiers (สัญญา) — ไม่มีจะเป็น null */
   maxPositionContracts: number | null;
+  /** S = (w_v·V_recent/V_avg)·(w_p·ΔP/P_start) แท่ง 15m ปิดล่าสุด */
+  momentumScore: number;
+  /** V_recent / V_avg */
+  volumeSpikeRatio: number;
+  /** % จาก open→close แท่ง 15m ปิดล่าสุด */
+  return15mPercent: number;
 };
 
 function maxFromRiskTiers(detail: MexcDetailRow): number | null {
@@ -81,10 +115,81 @@ async function fetchContractDetails(): Promise<MexcDetailRow[]> {
   return asArray(data.data);
 }
 
+function parseKlineArrays(raw: KlineApiResponse["data"]): KlineArrays | null {
+  if (!raw?.vol?.length || !raw.open?.length || !raw.close?.length) return null;
+  const n = raw.vol.length;
+  if (raw.open.length !== n || raw.close.length !== n) return null;
+  return {
+    vol: raw.vol.map((v) => Number(v)),
+    open: raw.open.map((v) => Number(v)),
+    close: raw.close.map((v) => Number(v)),
+  };
+}
+
 /**
- * Top USDT perpetual ตามมูลค่าเทิร์นโอเวอร์ 24h (amount24)
+ * แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด (กันท้ายที่อาจยังไม่ปิด)
+ * V_avg = เฉลี่ย vol แท่งก่อนหน้า สูงสุด 96 แท่ง (~24 ชม.)
  */
-export async function getTopUsdtMarketsByAmount24(limit = 25): Promise<TopMarketRow[]> {
+function computeMomentum15m(k: KlineArrays): { score: number; volRatio: number; returnPct: number } | null {
+  const { vol, open, close } = k;
+  const n = vol.length;
+  if (n < 4) return null;
+  const i = n - 2;
+  const windowStart = Math.max(0, i - 96);
+  const baseline = vol.slice(windowStart, i);
+  if (baseline.length < MIN_BASELINE_BARS) return null;
+
+  let sum = 0;
+  for (const v of baseline) {
+    if (typeof v === "number" && !Number.isNaN(v)) sum += v;
+  }
+  const V_avg = sum / baseline.length;
+  if (V_avg <= 0) return null;
+
+  const V_recent = vol[i];
+  if (typeof V_recent !== "number" || Number.isNaN(V_recent) || V_recent < 0) return null;
+
+  const o = open[i];
+  const c = close[i];
+  if (typeof o !== "number" || o <= 0 || typeof c !== "number" || Number.isNaN(o) || Number.isNaN(c)) return null;
+
+  const ret = (c - o) / o;
+  const volRatio = V_recent / V_avg;
+  const score = MOMENTUM_W_V * volRatio * (MOMENTUM_W_P * ret);
+
+  return { score, volRatio, returnPct: ret * 100 };
+}
+
+async function fetchContractKline15m(symbol: string): Promise<KlineArrays | null> {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - 26 * 3600;
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(symbol)}`;
+  try {
+    const { data } = await axios.get<KlineApiResponse>(url, {
+      timeout: 12_000,
+      params: { interval: "Min15", start, end },
+    });
+    if (!data.success || !data.data) return null;
+    return parseKlineArrays(data.data);
+  } catch {
+    return null;
+  }
+}
+
+async function mapPoolConcurrent<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const chunk = items.slice(i, i + concurrency);
+    const part = await Promise.all(chunk.map(fn));
+    out.push(...part);
+  }
+  return out;
+}
+
+/**
+ * USDT perpetual อันดับตาม Momentum score (kline 15m) จาก candidate ตาม amount24
+ */
+export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarketRow[]> {
   const [tickers, details] = await Promise.all([fetchContractTickers(), fetchContractDetails()]);
 
   const detailBySymbol = new Map<string, MexcDetailRow>();
@@ -105,10 +210,20 @@ export async function getTopUsdtMarketsByAmount24(limit = 25): Promise<TopMarket
   });
 
   usdtPerp.sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
+  const candidates = usdtPerp.slice(0, KLINE_CANDIDATE_CAP);
 
-  const top = usdtPerp.slice(0, limit);
+  const scored = await mapPoolConcurrent(candidates, KLINE_CONCURRENCY, async (t) => {
+    const sym = t.symbol!.trim();
+    const kline = await fetchContractKline15m(sym);
+    const mom = kline ? computeMomentum15m(kline) : null;
+    return { t, mom };
+  });
 
-  return top.map((t) => {
+  type Row = TopMarketRow & { _sort: number };
+  const rows: Row[] = [];
+
+  for (const { t, mom } of scored) {
+    if (!mom) continue;
     const sym = t.symbol!;
     const detail = detailBySymbol.get(sym);
     const r = t.riseFallRate;
@@ -116,7 +231,7 @@ export async function getTopUsdtMarketsByAmount24(limit = 25): Promise<TopMarket
     const fr = t.fundingRate;
     const funding = typeof fr === "number" && !Number.isNaN(fr) ? fr : 0;
 
-    return {
+    rows.push({
       symbol: sym,
       lastPrice: t.lastPrice!,
       change24hPercent: changePct,
@@ -124,6 +239,13 @@ export async function getTopUsdtMarketsByAmount24(limit = 25): Promise<TopMarket
       amount24Usdt: t.amount24!,
       fundingRate: funding,
       maxPositionContracts: detail ? maxFromRiskTiers(detail) : null,
-    };
-  });
+      momentumScore: mom.score,
+      volumeSpikeRatio: mom.volRatio,
+      return15mPercent: mom.returnPct,
+      _sort: mom.score,
+    });
+  }
+
+  rows.sort((a, b) => b._sort - a._sort);
+  return rows.slice(0, limit).map(({ _sort, ...rest }) => rest);
 }

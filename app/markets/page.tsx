@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getTopUsdtMarketsByAmount24 } from "@/src/mexcMarkets";
+import { getTopUsdtMarketsByMomentum } from "@/src/mexcMarkets";
 
 export const metadata: Metadata = {
-  title: "Markets — Top 25 MEXC Futures",
-  description: "สัญญา USDT perpetual บน MEXC เรียงตามปริมาณ 24 ชม. (amount24) พร้อม funding และ max position จาก risk tier",
+  title: "Markets — Top 50 MEXC Futures (Momentum)",
+  description:
+    "สัญญา USDT perpetual บน MEXC เรียงตาม Momentum score (volume spike × price 15m) พร้อม funding และ max position",
 };
 
 export const revalidate = 60;
+
+const TOP_LIMIT = 50;
 
 function formatUsd(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
@@ -27,12 +30,20 @@ function formatFunding(rate: number): string {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(4)}%`;
 }
 
+function formatScore(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  const abs = Math.abs(n);
+  if (abs >= 100) return n.toFixed(1);
+  if (abs >= 10) return n.toFixed(2);
+  return n.toFixed(3);
+}
+
 export default async function MarketsPage() {
-  let rows: Awaited<ReturnType<typeof getTopUsdtMarketsByAmount24>> = [];
+  let rows: Awaited<ReturnType<typeof getTopUsdtMarketsByMomentum>> = [];
   let errorMessage: string | null = null;
 
   try {
-    rows = await getTopUsdtMarketsByAmount24(25);
+    rows = await getTopUsdtMarketsByMomentum(TOP_LIMIT);
   } catch {
     errorMessage = "โหลดข้อมูลจาก MEXC ไม่ได้ ลองใหม่ภายหลัง";
   }
@@ -40,7 +51,9 @@ export default async function MarketsPage() {
   return (
     <main className="marketsPage">
       <h1>Markets</h1>
-      <p className="sub">Top 25 USDT perpetual ตามมูลค่าเทิร์นโอเวอร์ 24 ชม. (amount24)</p>
+      <p className="sub">
+        Top {TOP_LIMIT} USDT perpetual ตาม Momentum score — volume แท่ง 15m ล่าสุด เทียบค่าเฉลี่ยย้อนหลัง × % เปลี่ยนราคาในแท่งเดียวกัน
+      </p>
 
       {errorMessage ? (
         <div className="card">
@@ -51,7 +64,7 @@ export default async function MarketsPage() {
       ) : rows.length === 0 ? (
         <div className="card">
           <p className="sub" style={{ marginBottom: 0 }}>
-            ไม่มีข้อมูลตลาด
+            ไม่มีข้อมูลตลาด (หรือคำนวณ momentum ไม่ได้)
           </p>
         </div>
       ) : (
@@ -61,6 +74,13 @@ export default async function MarketsPage() {
               <thead>
                 <tr>
                   <th>สัญญา</th>
+                  <th className="num" title="(V_recent/V_avg)×(ΔP/P)">
+                    Score
+                  </th>
+                  <th className="num" title="Volume แท่ง 15m ปิดล่าสุด / เฉลี่ยแท่งก่อนหน้า">
+                    Vol×
+                  </th>
+                  <th className="num">15m</th>
                   <th className="num">ราคา</th>
                   <th className="num">24h</th>
                   <th className="num">Vol 24h (USDT)</th>
@@ -73,10 +93,21 @@ export default async function MarketsPage() {
               <tbody>
                 {rows.map((r) => {
                   const up = r.change24hPercent >= 0;
+                  const up15 = r.return15mPercent >= 0;
                   return (
                     <tr key={r.symbol}>
                       <td data-label="สัญญา" className="marketsCellSymbol">
                         <code>{r.symbol}</code>
+                      </td>
+                      <td className="num" data-label="Score">
+                        {formatScore(r.momentumScore)}
+                      </td>
+                      <td className="num" data-label="Vol×">
+                        {r.volumeSpikeRatio.toFixed(2)}×
+                      </td>
+                      <td className={`num ${up15 ? "changeUp" : "changeDown"}`} data-label="15m">
+                        {up15 ? "+" : ""}
+                        {r.return15mPercent.toFixed(2)}%
                       </td>
                       <td className="num" data-label="ราคา">
                         {formatPrice(r.lastPrice)}
@@ -105,7 +136,8 @@ export default async function MarketsPage() {
             </table>
           </div>
           <p className="sub marketsFootnote">
-            Vol 24h = amount24 (มูลค่า USDT) · Funding จาก ticker · Max pos = max ของ maxVol ใน risk tiers
+            Score = (V_recent/V_avg)×(ΔP/P) แท่ง 15m ปิดล่าสุด · ดึง kline จาก candidate ~120 คู่ตาม amount24 · Vol 24h = amount24 ·
+            Funding จาก ticker · Max pos จาก risk tiers
           </p>
         </div>
       )}

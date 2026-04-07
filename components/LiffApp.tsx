@@ -404,7 +404,7 @@ export default function LiffApp() {
       <h1>Koji</h1>
       <p className="sub">{welcome}</p>
       <p className="sub liffQuickNav">
-        <Link href="/markets">Markets Top 25</Link>
+        <Link href="/markets">Markets Top 50</Link>
       </p>
 
       <div className="card">
