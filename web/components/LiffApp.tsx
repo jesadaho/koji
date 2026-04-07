@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import liff from "@line/liff";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -31,13 +31,13 @@ async function parseJson(res: Response): Promise<unknown> {
 
 export default function LiffApp() {
   const [phase, setPhase] = useState<Phase>("loading");
-  const [setupBody, setSetupBody] = useState<React.ReactNode>(null);
+  const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [welcome, setWelcome] = useState("MEXC Futures — จัดการแจ้งเตือน");
   const [shortcuts, setShortcuts] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
 
   const [qSymbol, setQSymbol] = useState("");
-  const [priceHtml, setPriceHtml] = useState<React.ReactNode>(null);
+  const [priceHtml, setPriceHtml] = useState<ReactNode>(null);
   const [priceErr, setPriceErr] = useState("");
 
   const [aSymbol, setASymbol] = useState("");

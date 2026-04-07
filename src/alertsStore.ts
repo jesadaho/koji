@@ -42,7 +42,7 @@ async function saveAlerts(alerts: PriceAlert[]): Promise<void> {
   await writeFile(path, JSON.stringify(alerts, null, 2), "utf-8");
 }
 
-export async function addAlert(alert: Omit<PriceAlert, "id" | "createdAt" | "fired">): Promise<PriceAlert> {
+export async function addAlert(alert: Omit<PriceAlert, "id" | "createdAt">): Promise<PriceAlert> {
   const all = await loadAlerts();
   const row: PriceAlert = {
     ...alert,
