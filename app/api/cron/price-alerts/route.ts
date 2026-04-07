@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { config } from "@/src/config";
 import { createLineClient } from "@/src/lineHandler";
+import { runContractConditionTick } from "@/src/contractConditionTick";
 import { runPriceAlertTick } from "@/src/priceAlertTick";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,11 @@ export async function GET(req: NextRequest) {
   try {
     const client = createLineClient(config.lineChannelAccessToken);
     await runPriceAlertTick(client);
+    try {
+      await runContractConditionTick(client);
+    } catch (e) {
+      console.error("[cron] contract condition tick", e);
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error(e);

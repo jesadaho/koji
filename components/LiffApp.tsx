@@ -103,6 +103,13 @@ type PriceAlert = {
   targetUsd: number;
 };
 
+type ContractWatch = {
+  id: string;
+  coinId: string;
+  symbolLabel: string;
+  createdAt: string;
+};
+
 type Phase = "loading" | "setup" | "ready";
 
 export default function LiffApp() {
@@ -111,6 +118,7 @@ export default function LiffApp() {
   const [welcome, setWelcome] = useState("MEXC Futures — จัดการแจ้งเตือน");
   const [shortcuts, setShortcuts] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const [contractWatches, setContractWatches] = useState<ContractWatch[]>([]);
 
   const [qSymbol, setQSymbol] = useState("");
   const [priceHtml, setPriceHtml] = useState<ReactNode>(null);
@@ -120,6 +128,8 @@ export default function LiffApp() {
   const [aDir, setADir] = useState<"above" | "below">("above");
   const [aTarget, setATarget] = useState("");
   const [addErr, setAddErr] = useState("");
+  const [wSymbol, setWSymbol] = useState("");
+  const [wErr, setWErr] = useState("");
 
   const api = useCallback(
     async (path: string, opts: RequestInit = {}) => {
@@ -159,6 +169,11 @@ export default function LiffApp() {
   const refreshAlerts = useCallback(async () => {
     const data = (await api("/alerts")) as { alerts?: PriceAlert[] };
     setAlerts(Array.isArray(data.alerts) ? data.alerts : []);
+  }, [api]);
+
+  const refreshContractWatches = useCallback(async () => {
+    const data = (await api("/contract-watches")) as { watches?: ContractWatch[] };
+    setContractWatches(Array.isArray(data.watches) ? data.watches : []);
   }, [api]);
 
   useEffect(() => {
@@ -276,6 +291,7 @@ export default function LiffApp() {
             try {
               await loadMeta();
               await refreshAlerts();
+              await refreshContractWatches();
               if (!cancelled) {
                 setPhase("ready");
               }
@@ -316,7 +332,7 @@ export default function LiffApp() {
     return () => {
       cancelled = true;
     };
-  }, [loadMeta, refreshAlerts]);
+  }, [loadMeta, refreshAlerts, refreshContractWatches]);
 
   const onPrice = async () => {
     setPriceErr("");
@@ -382,6 +398,38 @@ export default function LiffApp() {
     try {
       await api(`/alerts/${encodeURIComponent(id)}`, { method: "DELETE" });
       await refreshAlerts();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
+    }
+  };
+
+  const onAddWatch = async () => {
+    setWErr("");
+    if (!wSymbol.trim()) {
+      setWErr("ใส่สัญญาหรือย่อ");
+      return;
+    }
+    try {
+      await api("/contract-watches", {
+        method: "POST",
+        body: JSON.stringify({ symbol: wSymbol.trim() }),
+      });
+      setWSymbol("");
+      await refreshContractWatches();
+    } catch (e) {
+      if (e instanceof ApiRequestError) {
+        setWErr(`${e.message}\n\nHTTP ${e.status} ${e.url}`);
+      } else {
+        setWErr(e instanceof Error ? e.message : "เพิ่มไม่สำเร็จ");
+      }
+    }
+  };
+
+  const onDeleteWatch = async (id: string) => {
+    if (!confirm("เลิกติดตามสัญญานี้?")) return;
+    try {
+      await api(`/contract-watches/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await refreshContractWatches();
     } catch (e) {
       alert(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
     }
@@ -503,6 +551,58 @@ export default function LiffApp() {
                 </span>
               </div>
               <button type="button" className="danger" onClick={() => onDelete(a.id)}>
+                ลบ
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="card">
+        <h2>ติดตามเงื่อนไขสัญญา</h2>
+        <p className="sub" style={{ marginTop: 0 }}>
+          แจ้งทาง LINE เมื่อรอบ funding / เวลาตัดเปลี่ยน หรือ funding ขยับ ≥ 0.1% pt จากครั้งก่อน หรือ min·max vol เปลี่ยน
+          (เช็คทุกต้นชั่วโมง)
+        </p>
+        <div className="row cols2">
+          <div>
+            <label htmlFor="w-symbol">สัญญา / ย่อ</label>
+            <input
+              id="w-symbol"
+              list="syms"
+              value={wSymbol}
+              onChange={(e) => setWSymbol(e.target.value)}
+              placeholder="btc / STO_USDT"
+              autoComplete="off"
+            />
+          </div>
+          <div className="priceActions">
+            <button type="button" className="primary" onClick={onAddWatch}>
+              เพิ่มการติดตาม
+            </button>
+          </div>
+        </div>
+        {wErr ? (
+          <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {wErr}
+          </div>
+        ) : null}
+        <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
+          กำลังติดตาม
+        </p>
+        {contractWatches.length === 0 ? (
+          <p className="sub" style={{ margin: 0 }}>
+            ยังไม่มีรายการ
+          </p>
+        ) : (
+          contractWatches.map((w) => (
+            <div key={w.id} className="alertItem">
+              <div>
+                <strong>{w.coinId}</strong>
+                <br />
+                <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>เงื่อนไขสัญญา</span>
+              </div>
+              <button type="button" className="danger" onClick={() => onDeleteWatch(w.id)}>
                 ลบ
               </button>
             </div>

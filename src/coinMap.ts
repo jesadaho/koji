@@ -39,5 +39,10 @@ export function resolveContractSymbol(input: string): { contractSymbol: string; 
     return { contractSymbol, label };
   }
 
+  if (/^[a-z0-9]{2,20}$/i.test(trimmed) && !trimmed.includes("_")) {
+    const u = trimmed.toUpperCase();
+    return { contractSymbol: `${u}_USDT`, label: u };
+  }
+
   return null;
 }

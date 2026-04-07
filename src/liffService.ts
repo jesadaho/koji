@@ -1,6 +1,11 @@
 import { config } from "./config";
 import { verifyLiffIdToken } from "./liffAuth";
 import { addAlert, listAlertsForUser, removeAlertById } from "./alertsStore";
+import {
+  addContractWatch,
+  listContractWatchesForUser,
+  removeContractWatchById,
+} from "./contractWatchStore";
 import { resolveContractSymbol, BASE_TO_CONTRACT } from "./coinMap";
 import { fetchSimplePrices, formatSignal } from "./cryptoService";
 
@@ -92,6 +97,42 @@ export async function liffDeleteAlert(
   const ok = await removeAlertById(userId, id);
   if (!ok) {
     return { status: 404, json: { error: "ไม่พบการแจ้งเตือน" } };
+  }
+  return { status: 204 };
+}
+
+export async function liffListContractWatches(userId: string) {
+  const list = await listContractWatchesForUser(userId);
+  return { watches: list };
+}
+
+export async function liffCreateContractWatch(
+  userId: string,
+  body: unknown
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const { symbol } = (body ?? {}) as Record<string, unknown>;
+  if (typeof symbol !== "string" || !symbol.trim()) {
+    return { status: 400, json: { error: "ระบุ symbol" } };
+  }
+  const resolved = resolveContractSymbol(symbol);
+  if (!resolved) {
+    return { status: 400, json: { error: "ไม่รู้จักคู่นี้" } };
+  }
+  const row = await addContractWatch({
+    userId,
+    coinId: resolved.contractSymbol,
+    symbolLabel: resolved.label,
+  });
+  return { status: 201, json: { watch: row } };
+}
+
+export async function liffDeleteContractWatch(
+  userId: string,
+  id: string
+): Promise<{ status: number; json?: Record<string, unknown> }> {
+  const ok = await removeContractWatchById(userId, id);
+  if (!ok) {
+    return { status: 404, json: { error: "ไม่พบการติดตาม" } };
   }
   return { status: 204 };
 }

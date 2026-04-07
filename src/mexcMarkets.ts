@@ -16,7 +16,7 @@ const KLINE_CONCURRENCY = 14;
 const MIN_BASELINE_BARS = 32;
 
 /** กรองเฉพาะสัญญาที่มูลค่าเทิร์นโอเวอร์ 24h (amount24) มากกว่านี้ (USDT) */
-export const MIN_AMOUNT24_USDT = 10_000_000;
+export const MIN_AMOUNT24_USDT = 5_000_000;
 
 type MexcTickerRow = {
   symbol?: string;

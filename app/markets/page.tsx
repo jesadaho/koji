@@ -21,13 +21,13 @@ export async function generateMetadata({
     return {
       title: "Markets — Top 50 by |Funding|",
       description:
-        "สัญญา USDT perpetual บน MEXC (Vol 24h > 10M USDT) เรียงตาม funding rate ที่ห่างจาก 0 มากที่สุด พร้อม momentum และ max position",
+        `สัญญา USDT perpetual บน MEXC (Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT) เรียงตาม funding rate ที่ห่างจาก 0 มากที่สุด พร้อม momentum และ max position`,
     };
   }
   return {
     title: "Markets — Top 50 MEXC Futures (Momentum)",
     description:
-      "สัญญา USDT perpetual บน MEXC (Vol 24h > 10M USDT) เรียงตาม Momentum score (volume spike × price 15m) พร้อม funding และ max position",
+      `สัญญา USDT perpetual บน MEXC (Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT) เรียงตาม Momentum score (volume spike × price 15m) พร้อม funding และ max position`,
   };
 }
 
