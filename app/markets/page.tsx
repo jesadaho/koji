@@ -1,16 +1,35 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getTopUsdtMarketsByMomentum } from "@/src/mexcMarkets";
-
-export const metadata: Metadata = {
-  title: "Markets — Top 50 MEXC Futures (Momentum)",
-  description:
-    "สัญญา USDT perpetual บน MEXC เรียงตาม Momentum score (volume spike × price 15m) พร้อม funding และ max position",
-};
+import {
+  getTopUsdtMarkets,
+  MIN_AMOUNT24_USDT,
+  parseMarketsSort,
+  type MarketsSortMode,
+} from "@/src/mexcMarkets";
 
 export const revalidate = 60;
 
 const TOP_LIMIT = 50;
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: { sort?: string };
+}): Promise<Metadata> {
+  const sort = parseMarketsSort(searchParams?.sort);
+  if (sort === "funding") {
+    return {
+      title: "Markets — Top 50 by |Funding|",
+      description:
+        "สัญญา USDT perpetual บน MEXC (Vol 24h > 10M USDT) เรียงตาม funding rate ที่ห่างจาก 0 มากที่สุด พร้อม momentum และ max position",
+    };
+  }
+  return {
+    title: "Markets — Top 50 MEXC Futures (Momentum)",
+    description:
+      "สัญญา USDT perpetual บน MEXC (Vol 24h > 10M USDT) เรียงตาม Momentum score (volume spike × price 15m) พร้อม funding และ max position",
+  };
+}
 
 function formatUsd(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
@@ -38,12 +57,30 @@ function formatScore(n: number): string {
   return n.toFixed(3);
 }
 
-export default async function MarketsPage() {
-  let rows: Awaited<ReturnType<typeof getTopUsdtMarketsByMomentum>> = [];
+const VOL_FILTER_LABEL = `Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT`;
+
+function sortIntro(sort: MarketsSortMode): string {
+  if (sort === "funding") {
+    return `Top ${TOP_LIMIT} USDT perpetual เรียงตาม |funding rate| มากสุดก่อน — ${VOL_FILTER_LABEL} · คอลัมน์ Score / Vol× / 15m จาก kline 15m ประกอบ`;
+  }
+  return `Top ${TOP_LIMIT} USDT perpetual ตาม Momentum score — ${VOL_FILTER_LABEL} · volume แท่ง 15m ล่าสุด เทียบค่าเฉลี่ยย้อนหลัง × % เปลี่ยนราคาในแท่งเดียวกัน`;
+}
+
+function footnote(sort: MarketsSortMode): string {
+  const base = `${VOL_FILTER_LABEL} · Vol 24h = amount24 · Funding จาก ticker · Max pos (USDT) ≈ สัญญาสูงสุดจาก risk tier × ราคา · Score = (V_recent/V_avg)×(ΔP/P) แท่ง 15m ปิดล่าสุด`;
+  if (sort === "funding") {
+    return `เรียงตาม |funding| จาก ticker ทุกคู่ที่ผ่านเงื่อนไข · ${base}`;
+  }
+  return `${base} · ดึง kline จาก candidate ~120 คู่ตาม amount24`;
+}
+
+export default async function MarketsPage({ searchParams }: { searchParams: { sort?: string } }) {
+  const sort = parseMarketsSort(searchParams?.sort);
+  let rows: Awaited<ReturnType<typeof getTopUsdtMarkets>> = [];
   let errorMessage: string | null = null;
 
   try {
-    rows = await getTopUsdtMarketsByMomentum(TOP_LIMIT);
+    rows = await getTopUsdtMarkets({ sort, limit: TOP_LIMIT });
   } catch {
     errorMessage = "โหลดข้อมูลจาก MEXC ไม่ได้ ลองใหม่ภายหลัง";
   }
@@ -51,9 +88,18 @@ export default async function MarketsPage() {
   return (
     <main className="marketsPage">
       <h1>Markets</h1>
-      <p className="sub">
-        Top {TOP_LIMIT} USDT perpetual ตาม Momentum score — volume แท่ง 15m ล่าสุด เทียบค่าเฉลี่ยย้อนหลัง × % เปลี่ยนราคาในแท่งเดียวกัน
-      </p>
+      <nav className="marketsSortNav" aria-label="เรียงลำดับ">
+        <Link href="/markets" aria-current={sort === "momentum" ? "page" : undefined}>
+          Momentum
+        </Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/markets?sort=funding" aria-current={sort === "funding" ? "page" : undefined}>
+          |Funding| สูงสุด
+        </Link>
+      </nav>
+      <p className="sub">{sortIntro(sort)}</p>
 
       {errorMessage ? (
         <div className="card">
@@ -139,10 +185,7 @@ export default async function MarketsPage() {
               </tbody>
             </table>
           </div>
-          <p className="sub marketsFootnote">
-            Score = (V_recent/V_avg)×(ΔP/P) แท่ง 15m ปิดล่าสุด · ดึง kline จาก candidate ~120 คู่ตาม amount24 · Vol 24h = amount24 ·
-            Funding จาก ticker · Max pos (USDT) ≈ สัญญาสูงสุดจาก risk tier × ราคา
-          </p>
+          <p className="sub marketsFootnote">{footnote(sort)}</p>
         </div>
       )}
 

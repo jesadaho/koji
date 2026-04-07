@@ -15,6 +15,9 @@ const KLINE_CONCURRENCY = 14;
 /** แท่ง 15m ย้อนหลังขั้นต่ำสำหรับค่าเฉลี่ย volume */
 const MIN_BASELINE_BARS = 32;
 
+/** กรองเฉพาะสัญญาที่มูลค่าเทิร์นโอเวอร์ 24h (amount24) มากกว่านี้ (USDT) */
+export const MIN_AMOUNT24_USDT = 10_000_000;
+
 type MexcTickerRow = {
   symbol?: string;
   lastPrice?: number;
@@ -188,10 +191,58 @@ async function mapPoolConcurrent<T, R>(items: T[], concurrency: number, fn: (ite
   return out;
 }
 
+function fundingRateNum(t: MexcTickerRow): number {
+  const fr = t.fundingRate;
+  return typeof fr === "number" && !Number.isNaN(fr) ? fr : 0;
+}
+
+function toTopMarketRow(
+  t: MexcTickerRow,
+  detailBySymbol: Map<string, MexcDetailRow>,
+  mom: { score: number; volRatio: number; returnPct: number }
+): TopMarketRow {
+  const sym = t.symbol!.trim();
+  const detail = detailBySymbol.get(sym);
+  const r = t.riseFallRate;
+  const changePct = typeof r === "number" && !Number.isNaN(r) ? r * 100 : 0;
+  const funding = fundingRateNum(t);
+  const maxContracts = detail ? maxFromRiskTiers(detail) : null;
+  const maxUsdt = maxContracts != null && maxContracts > 0 ? maxContracts * t.lastPrice! : null;
+
+  return {
+    symbol: sym,
+    lastPrice: t.lastPrice!,
+    change24hPercent: changePct,
+    volume24: typeof t.volume24 === "number" && !Number.isNaN(t.volume24) ? t.volume24 : 0,
+    amount24Usdt: t.amount24!,
+    fundingRate: funding,
+    maxPositionContracts: maxContracts,
+    maxPositionUsdt: maxUsdt,
+    momentumScore: mom.score,
+    volumeSpikeRatio: mom.volRatio,
+    return15mPercent: mom.returnPct,
+  };
+}
+
+const EMPTY_MOM = { score: 0, volRatio: 1, returnPct: 0 };
+
+export type MarketsSortMode = "momentum" | "funding";
+
+export function parseMarketsSort(raw: string | string[] | undefined): MarketsSortMode {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return v === "funding" ? "funding" : "momentum";
+}
+
+export type GetTopUsdtMarketsOptions = {
+  sort: MarketsSortMode;
+  limit?: number;
+};
+
 /**
- * USDT perpetual อันดับตาม Momentum score (kline 15m) จาก candidate ตาม amount24
+ * USDT perpetual Top N — เรียงตาม momentum (จาก kline + candidate ตาม amount24) หรือ |funding| มากสุดก่อน
  */
-export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarketRow[]> {
+export async function getTopUsdtMarkets(options: GetTopUsdtMarketsOptions): Promise<TopMarketRow[]> {
+  const limit = options.limit ?? 50;
   const [tickers, details] = await Promise.all([fetchContractTickers(), fetchContractDetails()]);
 
   const detailBySymbol = new Map<string, MexcDetailRow>();
@@ -203,7 +254,7 @@ export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarket
     const sym = t.symbol?.trim();
     if (!sym || !sym.endsWith("_USDT")) return false;
     const amt = t.amount24;
-    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= 0) return false;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= MIN_AMOUNT24_USDT) return false;
     const price = t.lastPrice;
     if (typeof price !== "number" || Number.isNaN(price) || price <= 0) return false;
     const d = detailBySymbol.get(sym);
@@ -211,8 +262,28 @@ export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarket
     return true;
   });
 
-  usdtPerp.sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
-  const candidates = usdtPerp.slice(0, KLINE_CANDIDATE_CAP);
+  if (options.sort === "funding") {
+    const sorted = [...usdtPerp].sort((a, b) => {
+      const diff = Math.abs(fundingRateNum(b)) - Math.abs(fundingRateNum(a));
+      if (diff !== 0) return diff;
+      return (b.amount24 ?? 0) - (a.amount24 ?? 0);
+    });
+    const picked = sorted.slice(0, limit);
+    const scored = await mapPoolConcurrent(picked, KLINE_CONCURRENCY, async (t) => {
+      const sym = t.symbol!.trim();
+      const kline = await fetchContractKline15m(sym);
+      const mom = kline ? computeMomentum15m(kline) : null;
+      return mom;
+    });
+    return picked.map((t, i) => {
+      const mom = scored[i];
+      const fill = mom ? { score: mom.score, volRatio: mom.volRatio, returnPct: mom.returnPct } : EMPTY_MOM;
+      return toTopMarketRow(t, detailBySymbol, fill);
+    });
+  }
+
+  const ranked = [...usdtPerp].sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
+  const candidates = ranked.slice(0, KLINE_CANDIDATE_CAP);
 
   const scored = await mapPoolConcurrent(candidates, KLINE_CONCURRENCY, async (t) => {
     const sym = t.symbol!.trim();
@@ -226,32 +297,17 @@ export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarket
 
   for (const { t, mom } of scored) {
     if (!mom) continue;
-    const sym = t.symbol!;
-    const detail = detailBySymbol.get(sym);
-    const r = t.riseFallRate;
-    const changePct = typeof r === "number" && !Number.isNaN(r) ? r * 100 : 0;
-    const fr = t.fundingRate;
-    const funding = typeof fr === "number" && !Number.isNaN(fr) ? fr : 0;
-    const maxContracts = detail ? maxFromRiskTiers(detail) : null;
-    const maxUsdt =
-      maxContracts != null && maxContracts > 0 ? maxContracts * t.lastPrice! : null;
-
     rows.push({
-      symbol: sym,
-      lastPrice: t.lastPrice!,
-      change24hPercent: changePct,
-      volume24: typeof t.volume24 === "number" && !Number.isNaN(t.volume24) ? t.volume24 : 0,
-      amount24Usdt: t.amount24!,
-      fundingRate: funding,
-      maxPositionContracts: maxContracts,
-      maxPositionUsdt: maxUsdt,
-      momentumScore: mom.score,
-      volumeSpikeRatio: mom.volRatio,
-      return15mPercent: mom.returnPct,
+      ...toTopMarketRow(t, detailBySymbol, mom),
       _sort: mom.score,
     });
   }
 
   rows.sort((a, b) => b._sort - a._sort);
   return rows.slice(0, limit).map(({ _sort, ...rest }) => rest);
+}
+
+/** ใช้ getTopUsdtMarkets({ sort: "momentum", limit }) แทนได้ */
+export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarketRow[]> {
+  return getTopUsdtMarkets({ sort: "momentum", limit });
 }
