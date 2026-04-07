@@ -7,7 +7,7 @@ export async function runPriceAlertTick(client: Client): Promise<void> {
   const alerts = await loadAlerts();
   if (alerts.length === 0) return;
 
-  const ids = [...new Set(alerts.map((a) => a.coinId))];
+  const ids = Array.from(new Set(alerts.map((a) => a.coinId)));
   const prices = await fetchSimplePrices(ids);
 
   for (const a of alerts) {

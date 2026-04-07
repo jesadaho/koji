@@ -50,7 +50,7 @@ function normalizeResponse(
  * - หลายสัญญา: GET ทั้งหมดแล้วกรอง (คำขอเดียว)
  */
 export async function fetchSimplePrices(contractSymbols: string[]): Promise<Record<string, CoinQuote>> {
-  const unique = [...new Set(contractSymbols.filter(Boolean))];
+  const unique = Array.from(new Set(contractSymbols.filter(Boolean)));
   if (unique.length === 0) return {};
 
   const wanted = new Set(unique);
