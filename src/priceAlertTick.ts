@@ -1,4 +1,4 @@
-import type Client from "@line/bot-sdk";
+import type { Client } from "@line/bot-sdk";
 import { loadAlerts, markFired } from "./alertsStore";
 import { fetchSimplePrices } from "./cryptoService";
 

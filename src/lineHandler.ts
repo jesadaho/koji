@@ -1,4 +1,4 @@
-import Client from "@line/bot-sdk";
+import { Client } from "@line/bot-sdk";
 import type { MessageEvent, WebhookEvent } from "@line/bot-sdk";
 import { resolveContractSymbol } from "./coinMap";
 import { addAlert, listAlertsForUser, removeAlertByIndex } from "./alertsStore";
