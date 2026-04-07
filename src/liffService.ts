@@ -40,11 +40,12 @@ export async function authenticateLiffRequest(authHeader: string | null): Promis
   try {
     const { userId } = await verifyLiffIdToken(idToken, config.lineChannelId);
     return { ok: true, userId };
-  } catch {
+  } catch (e) {
+    const detail = e instanceof Error && e.message ? e.message : "verify_failed";
     return {
       ok: false,
       status: 401,
-      error: "โทเคนไม่ถูกต้องหรือหมดอายุ ลองปิดแล้วเปิดแอปใหม่",
+      error: `โทเคนไม่ผ่านการยืนยัน: ${detail}`,
     };
   }
 }

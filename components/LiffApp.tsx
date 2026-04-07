@@ -67,7 +67,15 @@ export default function LiffApp() {
 
   const loadMeta = useCallback(async () => {
     const res = await fetch(`${apiBase}/api/liff/meta`);
-    const data = (await res.json()) as { shortcuts?: string[] };
+    const raw = await parseJson(res);
+    if (!res.ok) {
+      const msg =
+        raw && typeof raw === "object" && raw !== null && "error" in raw
+          ? String((raw as { error: unknown }).error)
+          : res.statusText;
+      throw new Error(msg);
+    }
+    const data = raw as { shortcuts?: string[] };
     if (Array.isArray(data.shortcuts)) setShortcuts(data.shortcuts);
   }, []);
 
@@ -141,6 +149,23 @@ export default function LiffApp() {
         return;
       }
 
+      const idToken = liff.getIDToken();
+      if (!idToken) {
+        if (!cancelled) {
+          setSetupBody(
+            <>
+              <p>ล็อกอินแล้วแต่ไม่มี ID Token</p>
+              <p className="sub">
+                ใน LINE Developers → แท็บ LIFF ของแอปนี้ ให้เปิด scope <code>openid</code> (และ{" "}
+                <code>profile</code>) แล้วลอง <strong>ปิดแอป LINE แล้วเปิด LIFF ใหม่</strong> หรือกดล็อกเอาต์แล้วล็อกอินใหม่
+              </p>
+            </>
+          );
+          setPhase("setup");
+        }
+        return;
+      }
+
       if (!cancelled) {
         try {
           const p = await liff.getProfile();
@@ -159,8 +184,15 @@ export default function LiffApp() {
               <p>ล็อกอินแล้วแต่เรียก API ไม่ได้</p>
               <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
               <p className="sub">
-                ตรวจสอบ scope <code>openid</code>, CORS (<code>CORS_ORIGINS</code>) และ{" "}
-                <code>NEXT_PUBLIC_API_BASE_URL</code>
+                ตรวจสอบ <code>LINE_CHANNEL_ID</code> บน Vercel = <strong>Channel ID ตัวเลข</strong> ในแท็บ Basic
+                settings ของ <strong>Official Account เดียวกับ LIFF</strong> (ไม่ใช่ LIFF ID / Channel secret)
+              </p>
+              <p className="sub">
+                LIFF ต้องเปิด scope <code>openid</code> — ถ้าเพิ่งแก้ ให้รีเฟรชหน้าแล้วล็อกอินใหม่
+              </p>
+              <p className="sub">
+                โปรดักชันบน Vercel: เว้น <code>NEXT_PUBLIC_API_BASE_URL</code> ว่างเพื่อเรียก{" "}
+                <code>/api/liff</code> แบบ same-origin
               </p>
             </>
           );
