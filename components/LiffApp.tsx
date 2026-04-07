@@ -5,6 +5,80 @@ import liff from "@line/liff";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
+const MAX_API_DEBUG_BODY = 12_000;
+
+function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
+}
+
+class ApiRequestError extends Error {
+  readonly status: number;
+  readonly bodyText: string;
+  readonly url: string;
+
+  constructor(message: string, status: number, bodyText: string, url: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.bodyText = bodyText;
+    this.url = url;
+  }
+}
+
+async function readApiResponse(res: Response): Promise<{ text: string; parsed: unknown }> {
+  const text = await res.text();
+  if (!text) return { text: "", parsed: null };
+  try {
+    return { text, parsed: JSON.parse(text) as unknown };
+  } catch {
+    return { text, parsed: null };
+  }
+}
+
+function messageFromParsed(parsed: unknown, fallback: string): string {
+  if (parsed && typeof parsed === "object" && parsed !== null && "error" in parsed) {
+    return String((parsed as { error: unknown }).error);
+  }
+  return fallback;
+}
+
+function ApiDebugBlock({ error }: { error: ApiRequestError }) {
+  return (
+    <>
+      <p className="sub" style={{ marginTop: "0.75rem" }}>
+        <strong>HTTP {error.status}</strong>{" "}
+        <code style={{ wordBreak: "break-all", fontSize: "0.8rem" }}>{error.url}</code>
+      </p>
+      <p className="sub" style={{ marginTop: "0.5rem" }}>
+        Response body (ดิบ):
+      </p>
+      <pre
+        style={{
+          marginTop: "0.25rem",
+          padding: "0.75rem",
+          fontSize: "0.72rem",
+          overflow: "auto",
+          maxHeight: "45vh",
+          background: "rgba(0,0,0,0.2)",
+          borderRadius: "6px",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+        }}
+      >
+        {truncateApiBody(error.bodyText)}
+      </pre>
+    </>
+  );
+}
+
+function apiDebugSection(err: unknown): ReactNode {
+  if (err instanceof ApiRequestError) {
+    return <ApiDebugBlock error={err} />;
+  }
+  return null;
+}
+
 type LiffConfig = {
   liffId: string | null;
   channelIdConfigured: boolean;
@@ -18,16 +92,6 @@ type PriceAlert = {
 };
 
 type Phase = "loading" | "setup" | "ready";
-
-async function parseJson(res: Response): Promise<unknown> {
-  const text = await res.text();
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { error: text || res.statusText };
-  }
-}
 
 export default function LiffApp() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -54,28 +118,27 @@ export default function LiffApp() {
         ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
         ...((opts.headers as Record<string, string>) ?? {}),
       };
-      const res = await fetch(`${apiBase}/api/liff${path}`, { ...opts, headers });
-      const data = (await parseJson(res)) as { error?: string } | null;
+      const url = `${apiBase}/api/liff${path}`;
+      const res = await fetch(url, { ...opts, headers });
+      const { text, parsed } = await readApiResponse(res);
       if (!res.ok) {
-        const err = new Error(data && typeof data === "object" && "error" in data ? String(data.error) : res.statusText);
-        throw err;
+        const msg = messageFromParsed(parsed, res.statusText);
+        throw new ApiRequestError(msg, res.status, text, url);
       }
-      return data;
+      return parsed;
     },
     []
   );
 
   const loadMeta = useCallback(async () => {
-    const res = await fetch(`${apiBase}/api/liff/meta`);
-    const raw = await parseJson(res);
+    const url = `${apiBase}/api/liff/meta`;
+    const res = await fetch(url);
+    const { text, parsed } = await readApiResponse(res);
     if (!res.ok) {
-      const msg =
-        raw && typeof raw === "object" && raw !== null && "error" in raw
-          ? String((raw as { error: unknown }).error)
-          : res.statusText;
-      throw new Error(msg);
+      const msg = messageFromParsed(parsed, res.statusText);
+      throw new ApiRequestError(msg, res.status, text, url);
     }
-    const data = raw as { shortcuts?: string[] };
+    const data = parsed as { shortcuts?: string[] };
     if (Array.isArray(data.shortcuts)) setShortcuts(data.shortcuts);
   }, []);
 
@@ -90,11 +153,35 @@ export default function LiffApp() {
     (async () => {
       let cfg: LiffConfig;
       try {
-        const res = await fetch(`${apiBase}/api/liff/config`);
-        cfg = (await res.json()) as LiffConfig;
-      } catch {
+        const configUrl = `${apiBase}/api/liff/config`;
+        const res = await fetch(configUrl);
+        const { text, parsed } = await readApiResponse(res);
+        if (!res.ok) {
+          const msg = messageFromParsed(parsed, res.statusText);
+          if (!cancelled) {
+            setSetupBody(
+              <>
+                <p>โหลด config ไม่สำเร็จ</p>
+                <p className="sub">{msg}</p>
+                <ApiDebugBlock error={new ApiRequestError(msg, res.status, text, configUrl)} />
+              </>
+            );
+            setPhase("setup");
+          }
+          return;
+        }
+        cfg = parsed as LiffConfig;
+      } catch (e) {
         if (!cancelled) {
-          setSetupBody(<p>โหลด config ไม่ได้ — ตรวจสอบเครือข่ายและ NEXT_PUBLIC_API_BASE_URL</p>);
+          setSetupBody(
+            <>
+              <p>โหลด config ไม่ได้ — เครือข่ายหรือ URL ผิด</p>
+              <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
+              <p className="sub">
+                ตรวจ <code>NEXT_PUBLIC_API_BASE_URL</code> (บน Vercel เว้นว่างเพื่อ same-origin)
+              </p>
+            </>
+          );
           setPhase("setup");
         }
         return;
@@ -183,16 +270,17 @@ export default function LiffApp() {
             <>
               <p>ล็อกอินแล้วแต่เรียก API ไม่ได้</p>
               <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
-              <p className="sub">
-                ตรวจสอบ <code>LINE_CHANNEL_ID</code> บน Vercel = <strong>Channel ID ตัวเลข</strong> ในแท็บ Basic
-                settings ของ <strong>Official Account เดียวกับ LIFF</strong> (ไม่ใช่ LIFF ID / Channel secret)
+              {apiDebugSection(e)}
+              <p className="sub" style={{ marginTop: "0.75rem" }}>
+                ตรวจสอบ <code>LINE_CHANNEL_ID</code> บน Vercel = Channel ID ของแท็บ <strong>LINE Login</strong> (เดียวกับ
+                LIFF) — ไม่ใช่ Channel ID ของ Messaging API
               </p>
               <p className="sub">
-                LIFF ต้องเปิด scope <code>openid</code> — ถ้าเพิ่งแก้ ให้รีเฟรชหน้าแล้วล็อกอินใหม่
+                LIFF ต้องเปิด scope <code>openid</code> — ถ้าโทเคนหมดอายุให้ปิดแอปแล้วเปิด LIFF ใหม่
               </p>
               <p className="sub">
-                โปรดักชันบน Vercel: เว้น <code>NEXT_PUBLIC_API_BASE_URL</code> ว่างเพื่อเรียก{" "}
-                <code>/api/liff</code> แบบ same-origin
+                เว้น <code>NEXT_PUBLIC_API_BASE_URL</code> ว่างบน Vercel เพื่อเรียก <code>/api/liff</code> แบบ
+                same-origin
               </p>
             </>
           );
@@ -229,7 +317,13 @@ export default function LiffApp() {
         </>
       );
     } catch (e) {
-      setPriceErr(e instanceof Error ? e.message : "ดึงราคาไม่สำเร็จ");
+      if (e instanceof ApiRequestError) {
+        setPriceErr(
+          `${e.message}\n\nHTTP ${e.status} ${e.url}\n\n${truncateApiBody(e.bodyText, 4000)}`
+        );
+      } else {
+        setPriceErr(e instanceof Error ? e.message : "ดึงราคาไม่สำเร็จ");
+      }
     }
   };
 
@@ -249,7 +343,13 @@ export default function LiffApp() {
       setATarget("");
       await refreshAlerts();
     } catch (e) {
-      setAddErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+      if (e instanceof ApiRequestError) {
+        setAddErr(
+          `${e.message}\n\nHTTP ${e.status} ${e.url}\n\n${truncateApiBody(e.bodyText, 4000)}`
+        );
+      } else {
+        setAddErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+      }
     }
   };
 
@@ -300,7 +400,11 @@ export default function LiffApp() {
           </div>
         </div>
         {priceHtml ? <div className="sub" style={{ marginTop: "0.5rem" }}>{priceHtml}</div> : null}
-        {priceErr ? <div className="err">{priceErr}</div> : null}
+        {priceErr ? (
+          <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {priceErr}
+          </div>
+        ) : null}
       </div>
 
       <div className="card">
@@ -348,7 +452,11 @@ export default function LiffApp() {
         <button type="button" className="primary" onClick={onAdd}>
           บันทึก
         </button>
-        {addErr ? <div className="err">{addErr}</div> : null}
+        {addErr ? (
+          <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {addErr}
+          </div>
+        ) : null}
       </div>
 
       <div className="card">
