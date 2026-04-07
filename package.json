@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "description": "Koji — LINE OA bot for crypto price alerts and signals",
-  "type": "module",
   "scripts": {
-    "build": "npm run build:web && npm run build:api",
+    "build": "next build",
     "build:api": "tsc -p tsconfig.server.json",
+    "build:full": "next build && npm run build:api",
     "build:web": "next build",
     "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --tsconfig tsconfig.server.json src/server.ts",
     "dev:web": "next dev -p 3001",
     "dev:all": "concurrently -n api,web -c blue,magenta \"npm run dev\" \"npm run dev:web\""
   },

@@ -1,16 +1,15 @@
 import express from "express";
 import cors from "cors";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { middleware, type WebhookEvent } from "@line/bot-sdk";
-import { config } from "./config.js";
-import { createLineClient, handleWebhookEvent } from "./lineHandler.js";
-import { startAlertScheduler } from "./scheduler.js";
-import { liffRouter } from "./liffRoutes.js";
+import { config } from "./config";
+import { createLineClient, handleWebhookEvent } from "./lineHandler";
+import { startAlertScheduler } from "./scheduler";
+import { liffRouter } from "./liffRoutes";
 
 const app = express();
 const client = createLineClient(config.lineChannelAccessToken);
-const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
+const rootDir = process.cwd();
 
 app.use(
   cors({

@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import type Client from "@line/bot-sdk";
-import { loadAlerts, markFired } from "./alertsStore.js";
-import { fetchSimplePrices } from "./cryptoService.js";
+import { loadAlerts, markFired } from "./alertsStore";
+import { fetchSimplePrices } from "./cryptoService";
 
 export function startAlertScheduler(client: Client, cronExpr: string): void {
   cron.schedule(cronExpr, async () => {

@@ -1,8 +1,8 @@
 import Client from "@line/bot-sdk";
 import type { MessageEvent, WebhookEvent } from "@line/bot-sdk";
-import { resolveContractSymbol } from "./coinMap.js";
-import { addAlert, listAlertsForUser, removeAlertByIndex } from "./alertsStore.js";
-import { fetchSimplePrices, formatSignal } from "./cryptoService.js";
+import { resolveContractSymbol } from "./coinMap";
+import { addAlert, listAlertsForUser, removeAlertByIndex } from "./alertsStore";
+import { fetchSimplePrices, formatSignal } from "./cryptoService";
 
 export function createLineClient(channelAccessToken: string) {
   return new Client({ channelAccessToken });

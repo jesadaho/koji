@@ -1,9 +1,9 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
-import { config } from "./config.js";
-import { verifyLiffIdToken } from "./liffAuth.js";
-import { addAlert, listAlertsForUser, removeAlertById } from "./alertsStore.js";
-import { resolveContractSymbol, BASE_TO_CONTRACT } from "./coinMap.js";
-import { fetchSimplePrices, formatSignal } from "./cryptoService.js";
+import { config } from "./config";
+import { verifyLiffIdToken } from "./liffAuth";
+import { addAlert, listAlertsForUser, removeAlertById } from "./alertsStore";
+import { resolveContractSymbol, BASE_TO_CONTRACT } from "./coinMap";
+import { fetchSimplePrices, formatSignal } from "./cryptoService";
 
 export const liffRouter = Router();
 

@@ -1,6 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 
 export type PriceAlert = {
@@ -15,7 +14,7 @@ export type PriceAlert = {
   createdAt: string;
 };
 
-const path = join(dirname(fileURLToPath(import.meta.url)), "..", "data", "alerts.json");
+const path = join(process.cwd(), "data", "alerts.json");
 
 async function ensureFile(): Promise<void> {
   try {
