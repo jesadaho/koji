@@ -297,6 +297,40 @@ code {
   text-decoration: underline;
 }
 
+.marketsSearchBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.marketsSearchLabel {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.marketsSearchBar .marketsSearchInput {
+  flex: 1 1 12rem;
+  width: auto;
+  min-width: 0;
+  max-width: 22rem;
+  margin-top: 0;
+}
+
+.marketsSearchCount {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.marketsSearchEmpty {
+  margin: 1rem 1rem 0.85rem;
+}
+
 /* Mobile: แถวเป็นบล็อก label + ค่า แทนตารางหลายคอลัมน์ */
 @media (max-width: 639px) {
   .marketsTable thead {

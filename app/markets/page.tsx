@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import MarketsTableWithSearch from "@/components/MarketsTableWithSearch";
 import {
   getTopUsdtMarkets,
   MIN_AMOUNT24_USDT,
@@ -29,46 +30,6 @@ export async function generateMetadata({
     description:
       `สัญญา USDT perpetual บน MEXC (Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT) เรียงตาม Momentum score (volume spike × price 15m) พร้อม funding และ max position`,
   };
-}
-
-function formatUsd(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
-  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
-}
-
-function formatPrice(n: number): string {
-  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-  return n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 8 });
-}
-
-function formatFunding(rate: number): string {
-  const pct = rate * 100;
-  return `${pct >= 0 ? "+" : ""}${pct.toFixed(4)}%`;
-}
-
-function formatFundingCycleHours(h: number | null): string {
-  if (h == null || h <= 0) return "—";
-  return `${h}h`;
-}
-
-function fundingSettleTitle(ms: number | null): string | undefined {
-  if (ms == null || ms <= 0) return undefined;
-  try {
-    return `ตัด funding ถัดไป (UTC): ${new Date(ms).toISOString()}`;
-  } catch {
-    return undefined;
-  }
-}
-
-function formatScore(n: number): string {
-  if (!Number.isFinite(n)) return "—";
-  const abs = Math.abs(n);
-  if (abs >= 100) return n.toFixed(1);
-  if (abs >= 10) return n.toFixed(2);
-  return n.toFixed(3);
 }
 
 const VOL_FILTER_LABEL = `Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT`;
@@ -158,96 +119,7 @@ export default async function MarketsPage({
         </div>
       ) : (
         <div className="card marketsCard">
-          <div className="marketsTableWrap">
-            <table className="marketsTable">
-              <thead>
-                <tr>
-                  <th>สัญญา</th>
-                  {showDebugColumns ? (
-                    <>
-                      <th className="num" title="(V_recent/V_avg)×(ΔP/P)">
-                        Score
-                      </th>
-                      <th className="num" title="Volume แท่ง 15m ปิดล่าสุด / เฉลี่ยแท่งก่อนหน้า">
-                        Vol×
-                      </th>
-                      <th className="num">15m</th>
-                    </>
-                  ) : null}
-                  <th className="num">ราคา</th>
-                  <th className="num">24h</th>
-                  <th className="num">Vol 24h (USDT)</th>
-                  <th className="num">Funding</th>
-                  <th className="num" title="collectCycle (ชม.) จาก MEXC funding_rate">
-                    รอบ
-                  </th>
-                  <th className="num" title="ประมาณ notional USDT (สัญญา × ราคา) จาก tier สูงสุด">
-                    Max pos (USDT)
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const up = r.change24hPercent >= 0;
-                  return (
-                    <tr key={r.symbol}>
-                      <td data-label="สัญญา" className="marketsCellSymbol">
-                        <code>{r.symbol}</code>
-                      </td>
-                      {showDebugColumns ? (
-                        <>
-                          <td className="num" data-label="Score">
-                            {formatScore(r.momentumScore)}
-                          </td>
-                          <td className="num" data-label="Vol×">
-                            {r.volumeSpikeRatio.toFixed(2)}×
-                          </td>
-                          <td
-                            className={`num ${r.return15mPercent >= 0 ? "changeUp" : "changeDown"}`}
-                            data-label="15m"
-                          >
-                            {r.return15mPercent >= 0 ? "+" : ""}
-                            {r.return15mPercent.toFixed(2)}%
-                          </td>
-                        </>
-                      ) : null}
-                      <td className="num" data-label="ราคา">
-                        {formatPrice(r.lastPrice)}
-                      </td>
-                      <td className={`num ${up ? "changeUp" : "changeDown"}`} data-label="24h">
-                        {up ? "+" : ""}
-                        {r.change24hPercent.toFixed(2)}%
-                      </td>
-                      <td className="num" data-label="Vol 24h">
-                        {formatUsd(r.amount24Usdt)}
-                      </td>
-                      <td className="num" data-label="Funding">
-                        {formatFunding(r.fundingRate)}
-                      </td>
-                      <td
-                        className="num"
-                        data-label="รอบ"
-                        title={fundingSettleTitle(r.nextFundingSettleMs)}
-                      >
-                        {formatFundingCycleHours(r.fundingCycleHours)}
-                      </td>
-                      <td
-                        className="num"
-                        data-label="Max pos"
-                        title={
-                          r.maxPositionContracts != null
-                            ? `≈ สัญญา × ราคา (USDT-M) · สัญญาสูงสุด ${r.maxPositionContracts.toLocaleString("en-US")} สัญญา`
-                            : "ไม่มีข้อมูล tier / limit"
-                        }
-                      >
-                        {r.maxPositionUsdt != null ? formatUsd(r.maxPositionUsdt) : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <MarketsTableWithSearch rows={rows} showDebugColumns={showDebugColumns} />
           <p className="sub marketsFootnote">{footnote(sort, showDebugColumns)}</p>
         </div>
       )}
