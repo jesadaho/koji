@@ -3,6 +3,8 @@ import type { MessageEvent, WebhookEvent } from "@line/bot-sdk";
 import { resolveContractSymbol } from "./coinMap";
 import { addAlert, listAlertsForUser, removeAlertByIndex } from "./alertsStore";
 import { fetchSimplePrices, formatSignal } from "./cryptoService";
+import { config } from "./config";
+import { buildKojiWelcomeFlexContents, KOJI_MENU_ALT_TEXT } from "./lineFlexKojiMenu";
 
 export function createLineClient(channelAccessToken: string) {
   return new Client({ channelAccessToken });
@@ -67,6 +69,12 @@ function parseUnalert(t: string): number | null {
   return Number(m[1]);
 }
 
+function isKojiMenuTrigger(text: string): boolean {
+  const t = text.trim();
+  if (t === "โคจิ") return true;
+  return /^koji$/i.test(t);
+}
+
 export async function handleWebhookEvent(client: Client, event: WebhookEvent): Promise<void> {
   if (event.mode === "standby") return;
 
@@ -91,6 +99,17 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
   const lower = text.toLowerCase();
   if (lower === "help" || lower === "ช่วยเหลือ" || lower === "?") {
     await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: HELP }]);
+    return;
+  }
+
+  if (isKojiMenuTrigger(text)) {
+    await client.replyMessage(msgEvent.replyToken, [
+      {
+        type: "flex",
+        altText: KOJI_MENU_ALT_TEXT,
+        contents: buildKojiWelcomeFlexContents(config.liffId),
+      },
+    ]);
     return;
   }
 
