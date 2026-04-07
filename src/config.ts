@@ -6,6 +6,17 @@ function requireEnv(name: string): string {
   return v;
 }
 
+function parseCorsOrigins(): string[] {
+  const raw = process.env.CORS_ORIGINS;
+  if (raw === "" || raw === undefined) {
+    return ["http://localhost:3001", "http://127.0.0.1:3001"];
+  }
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export const config = {
   port: Number(process.env.PORT) || 3000,
   lineChannelSecret: requireEnv("LINE_CHANNEL_SECRET"),
@@ -16,4 +27,6 @@ export const config = {
   liffId: process.env.LIFF_ID?.trim() || undefined,
   /** Channel ID ตัวเลข — ใช้ยืนยัน ID token จาก LIFF (Basic settings ของช่อง OA) */
   lineChannelId: process.env.LINE_CHANNEL_ID?.trim() || undefined,
+  /** origin ที่อนุญาตเรียก /api/liff จากเบราว์เซอร์ (Next.js dev ที่ :3001) */
+  corsOrigins: parseCorsOrigins(),
 };

@@ -30,7 +30,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 
 (ภาษาอังกฤษ: price btc, alert btc above 100000, alerts, unalert 1)
 
-จัดการผ่านเว็บ: ตั้ง LIFF ใน LINE Developers แล้วเปิด URL …/liff/ ในแอป LINE`;
+จัดการผ่านเว็บ Next.js — dev: http://localhost:3001 (npm run dev:all) ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
 
 function parsePriceCmd(t: string): string | null {
   const m = t.match(/^(?:ราคา|price)\s+(.+)$/i);

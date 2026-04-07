@@ -1,0 +1,166 @@
+:root {
+  color-scheme: light dark;
+  --bg: #0f1419;
+  --card: #1a2332;
+  --text: #e7ecf3;
+  --muted: #8b9cb3;
+  --accent: #06c755;
+  --danger: #e85d4c;
+  --border: #2d3a4d;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f6f9;
+    --card: #fff;
+    --text: #1a1a1a;
+    --muted: #5c6b7a;
+    --border: #dde3ea;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+input,
+select,
+button.field {
+  font: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 0.6rem 0.75rem;
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  margin-top: 0.75rem;
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  padding: 0.6rem 0.75rem;
+  width: 100%;
+}
+
+button.danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  width: auto;
+  padding: 0.35rem 0.65rem;
+  margin-top: 0;
+  font-size: 0.8rem;
+}
+
+.row {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+@media (min-width: 480px) {
+  .row.cols2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.alertItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.alertItem:first-child {
+  padding-top: 0;
+}
+
+.alertItem:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.err {
+  color: var(--danger);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.priceBox {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.hidden {
+  display: none !important;
+}
+
+code {
+  font-size: 0.85em;
+}
+
+.priceActions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.priceActions button.primary {
+  margin-top: 1.4rem;
+}

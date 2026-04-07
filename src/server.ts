@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { middleware, type WebhookEvent } from "@line/bot-sdk";
@@ -10,6 +11,19 @@ import { liffRouter } from "./liffRoutes.js";
 const app = express();
 const client = createLineClient(config.lineChannelAccessToken);
 const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin) {
+        cb(null, true);
+        return;
+      }
+      cb(null, config.corsOrigins.includes(origin));
+    },
+    credentials: true,
+  })
+);
 
 app.use(express.static(join(rootDir, "public")));
 
