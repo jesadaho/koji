@@ -1,4 +1,5 @@
 import axios from "axios";
+import { fetchContractFunding } from "./mexcContractMeta";
 
 const MEXC_TICKER = "https://api.mexc.com/api/v1/contract/ticker";
 const MEXC_DETAIL = "https://api.mexc.com/api/v1/contract/detail";
@@ -91,6 +92,10 @@ export type TopMarketRow = {
   volumeSpikeRatio: number;
   /** % จาก open→close แท่ง 15m ปิดล่าสุด */
   return15mPercent: number;
+  /** ชม. ต่อรอบ funding จาก REST funding_rate */
+  fundingCycleHours: number | null;
+  /** ms epoch เวลาตัด funding ถัดไป */
+  nextFundingSettleMs: number | null;
 };
 
 function maxFromRiskTiers(detail: MexcDetailRow): number | null {
@@ -221,10 +226,28 @@ function toTopMarketRow(
     momentumScore: mom.score,
     volumeSpikeRatio: mom.volRatio,
     return15mPercent: mom.returnPct,
+    fundingCycleHours: null,
+    nextFundingSettleMs: null,
   };
 }
 
 const EMPTY_MOM = { score: 0, volRatio: 1, returnPct: 0 };
+
+const FUNDING_META_CONCURRENCY = 12;
+
+async function enrichFundingMeta(rows: TopMarketRow[]): Promise<TopMarketRow[]> {
+  if (rows.length === 0) return rows;
+  const parts = await mapPoolConcurrent(rows, FUNDING_META_CONCURRENCY, async (row) => {
+    const f = await fetchContractFunding(row.symbol);
+    if (!f) {
+      return { ...row, fundingCycleHours: null, nextFundingSettleMs: null };
+    }
+    const cc = f.collectCycle > 0 ? f.collectCycle : null;
+    const ns = f.nextSettleTime > 0 ? f.nextSettleTime : null;
+    return { ...row, fundingCycleHours: cc, nextFundingSettleMs: ns };
+  });
+  return parts;
+}
 
 export type MarketsSortMode = "momentum" | "funding";
 
@@ -275,11 +298,12 @@ export async function getTopUsdtMarkets(options: GetTopUsdtMarketsOptions): Prom
       const mom = kline ? computeMomentum15m(kline) : null;
       return mom;
     });
-    return picked.map((t, i) => {
+    const built = picked.map((t, i) => {
       const mom = scored[i];
       const fill = mom ? { score: mom.score, volRatio: mom.volRatio, returnPct: mom.returnPct } : EMPTY_MOM;
       return toTopMarketRow(t, detailBySymbol, fill);
     });
+    return enrichFundingMeta(built);
   }
 
   const ranked = [...usdtPerp].sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
@@ -304,7 +328,8 @@ export async function getTopUsdtMarkets(options: GetTopUsdtMarketsOptions): Prom
   }
 
   rows.sort((a, b) => b._sort - a._sort);
-  return rows.slice(0, limit).map(({ _sort, ...rest }) => rest);
+  const top = rows.slice(0, limit).map(({ _sort, ...rest }) => rest);
+  return enrichFundingMeta(top);
 }
 
 /** ใช้ getTopUsdtMarkets({ sort: "momentum", limit }) แทนได้ */

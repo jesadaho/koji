@@ -14,7 +14,7 @@ const TOP_LIMIT = 50;
 export async function generateMetadata({
   searchParams,
 }: {
-  searchParams: { sort?: string };
+  searchParams: { sort?: string; debug?: string };
 }): Promise<Metadata> {
   const sort = parseMarketsSort(searchParams?.sort);
   if (sort === "funding") {
@@ -49,6 +49,20 @@ function formatFunding(rate: number): string {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(4)}%`;
 }
 
+function formatFundingCycleHours(h: number | null): string {
+  if (h == null || h <= 0) return "—";
+  return `${h}h`;
+}
+
+function fundingSettleTitle(ms: number | null): string | undefined {
+  if (ms == null || ms <= 0) return undefined;
+  try {
+    return `ตัด funding ถัดไป (UTC): ${new Date(ms).toISOString()}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function formatScore(n: number): string {
   if (!Number.isFinite(n)) return "—";
   const abs = Math.abs(n);
@@ -59,23 +73,52 @@ function formatScore(n: number): string {
 
 const VOL_FILTER_LABEL = `Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT`;
 
-function sortIntro(sort: MarketsSortMode): string {
-  if (sort === "funding") {
-    return `Top ${TOP_LIMIT} USDT perpetual เรียงตาม |funding rate| มากสุดก่อน — ${VOL_FILTER_LABEL} · คอลัมน์ Score / Vol× / 15m จาก kline 15m ประกอบ`;
-  }
-  return `Top ${TOP_LIMIT} USDT perpetual ตาม Momentum score — ${VOL_FILTER_LABEL} · volume แท่ง 15m ล่าสุด เทียบค่าเฉลี่ยย้อนหลัง × % เปลี่ยนราคาในแท่งเดียวกัน`;
+/** คอลัมน์ Score / Vol× / 15m — เปิดด้วย ?debug=1 หรือ MARKETS_DEBUG_COLUMNS=1 */
+function parseMarketsDebugFlag(sp: { debug?: string } | undefined): boolean {
+  const d = sp?.debug?.trim().toLowerCase();
+  if (d === "1" || d === "true" || d === "yes") return true;
+  const env = process.env.MARKETS_DEBUG_COLUMNS?.trim().toLowerCase();
+  return env === "1" || env === "true";
 }
 
-function footnote(sort: MarketsSortMode): string {
-  const base = `${VOL_FILTER_LABEL} · Vol 24h = amount24 · Funding จาก ticker · Max pos (USDT) ≈ สัญญาสูงสุดจาก risk tier × ราคา · Score = (V_recent/V_avg)×(ΔP/P) แท่ง 15m ปิดล่าสุด`;
-  if (sort === "funding") {
-    return `เรียงตาม |funding| จาก ticker ทุกคู่ที่ผ่านเงื่อนไข · ${base}`;
-  }
-  return `${base} · ดึง kline จาก candidate ~120 คู่ตาม amount24`;
+function marketsHref(sort: MarketsSortMode, debug: boolean): string {
+  const p = new URLSearchParams();
+  if (sort === "funding") p.set("sort", "funding");
+  if (debug) p.set("debug", "1");
+  const q = p.toString();
+  return q ? `/markets?${q}` : "/markets";
 }
 
-export default async function MarketsPage({ searchParams }: { searchParams: { sort?: string } }) {
+function sortIntro(sort: MarketsSortMode, showDebugColumns: boolean): string {
+  if (sort === "funding") {
+    const dbg = showDebugColumns ? " · คอลัมน์ Score / Vol× / 15m (debug)" : "";
+    return `Top ${TOP_LIMIT} USDT perpetual เรียงตาม |funding rate| มากสุดก่อน — ${VOL_FILTER_LABEL}${dbg}`;
+  }
+  if (showDebugColumns) {
+    return `Top ${TOP_LIMIT} USDT perpetual ตาม Momentum score — ${VOL_FILTER_LABEL} · volume แท่ง 15m ล่าสุด เทียบค่าเฉลี่ยย้อนหลัง × % เปลี่ยนราคาในแท่งเดียวกัน`;
+  }
+  return `Top ${TOP_LIMIT} USDT perpetual ตาม Momentum score — ${VOL_FILTER_LABEL} (คอลัมน์ Score·Vol×·15m ซ่อน — ใส่ ?debug=1 เพื่อดู)`;
+}
+
+function footnote(sort: MarketsSortMode, showDebugColumns: boolean): string {
+  const core = `${VOL_FILTER_LABEL} · Vol 24h = amount24 · Funding จาก ticker · รอบ/เวลาตัด funding จาก contract/funding_rate · Max pos (USDT) ≈ สัญญาสูงสุดจาก risk tier × ราคา`;
+  const momDbg =
+    showDebugColumns
+      ? ` · Score = (V_recent/V_avg)×(ΔP/P) แท่ง 15m ปิดล่าสุด · ดึง kline จาก candidate ตาม amount24`
+      : ` · เรียง momentum ใช้ kline 15m (รายละเอียดคอลัมน์เมื่อ ?debug=1)`;
+  if (sort === "funding") {
+    return `เรียงตาม |funding| จาก ticker ทุกคู่ที่ผ่านเงื่อนไข · ${core}${showDebugColumns ? momDbg : ""}`;
+  }
+  return `${core}${momDbg}`;
+}
+
+export default async function MarketsPage({
+  searchParams,
+}: {
+  searchParams: { sort?: string; debug?: string };
+}) {
   const sort = parseMarketsSort(searchParams?.sort);
+  const showDebugColumns = parseMarketsDebugFlag(searchParams);
   let rows: Awaited<ReturnType<typeof getTopUsdtMarkets>> = [];
   let errorMessage: string | null = null;
 
@@ -89,17 +132,17 @@ export default async function MarketsPage({ searchParams }: { searchParams: { so
     <main className="marketsPage">
       <h1>Markets</h1>
       <nav className="marketsSortNav" aria-label="เรียงลำดับ">
-        <Link href="/markets" aria-current={sort === "momentum" ? "page" : undefined}>
+        <Link href={marketsHref("momentum", showDebugColumns)} aria-current={sort === "momentum" ? "page" : undefined}>
           Momentum
         </Link>
         <span className="siteNavSep" aria-hidden>
           |
         </span>
-        <Link href="/markets?sort=funding" aria-current={sort === "funding" ? "page" : undefined}>
+        <Link href={marketsHref("funding", showDebugColumns)} aria-current={sort === "funding" ? "page" : undefined}>
           |Funding| สูงสุด
         </Link>
       </nav>
-      <p className="sub">{sortIntro(sort)}</p>
+      <p className="sub">{sortIntro(sort, showDebugColumns)}</p>
 
       {errorMessage ? (
         <div className="card">
@@ -120,17 +163,24 @@ export default async function MarketsPage({ searchParams }: { searchParams: { so
               <thead>
                 <tr>
                   <th>สัญญา</th>
-                  <th className="num" title="(V_recent/V_avg)×(ΔP/P)">
-                    Score
-                  </th>
-                  <th className="num" title="Volume แท่ง 15m ปิดล่าสุด / เฉลี่ยแท่งก่อนหน้า">
-                    Vol×
-                  </th>
-                  <th className="num">15m</th>
+                  {showDebugColumns ? (
+                    <>
+                      <th className="num" title="(V_recent/V_avg)×(ΔP/P)">
+                        Score
+                      </th>
+                      <th className="num" title="Volume แท่ง 15m ปิดล่าสุด / เฉลี่ยแท่งก่อนหน้า">
+                        Vol×
+                      </th>
+                      <th className="num">15m</th>
+                    </>
+                  ) : null}
                   <th className="num">ราคา</th>
                   <th className="num">24h</th>
                   <th className="num">Vol 24h (USDT)</th>
                   <th className="num">Funding</th>
+                  <th className="num" title="collectCycle (ชม.) จาก MEXC funding_rate">
+                    รอบ
+                  </th>
                   <th className="num" title="ประมาณ notional USDT (สัญญา × ราคา) จาก tier สูงสุด">
                     Max pos (USDT)
                   </th>
@@ -139,22 +189,28 @@ export default async function MarketsPage({ searchParams }: { searchParams: { so
               <tbody>
                 {rows.map((r) => {
                   const up = r.change24hPercent >= 0;
-                  const up15 = r.return15mPercent >= 0;
                   return (
                     <tr key={r.symbol}>
                       <td data-label="สัญญา" className="marketsCellSymbol">
                         <code>{r.symbol}</code>
                       </td>
-                      <td className="num" data-label="Score">
-                        {formatScore(r.momentumScore)}
-                      </td>
-                      <td className="num" data-label="Vol×">
-                        {r.volumeSpikeRatio.toFixed(2)}×
-                      </td>
-                      <td className={`num ${up15 ? "changeUp" : "changeDown"}`} data-label="15m">
-                        {up15 ? "+" : ""}
-                        {r.return15mPercent.toFixed(2)}%
-                      </td>
+                      {showDebugColumns ? (
+                        <>
+                          <td className="num" data-label="Score">
+                            {formatScore(r.momentumScore)}
+                          </td>
+                          <td className="num" data-label="Vol×">
+                            {r.volumeSpikeRatio.toFixed(2)}×
+                          </td>
+                          <td
+                            className={`num ${r.return15mPercent >= 0 ? "changeUp" : "changeDown"}`}
+                            data-label="15m"
+                          >
+                            {r.return15mPercent >= 0 ? "+" : ""}
+                            {r.return15mPercent.toFixed(2)}%
+                          </td>
+                        </>
+                      ) : null}
                       <td className="num" data-label="ราคา">
                         {formatPrice(r.lastPrice)}
                       </td>
@@ -167,6 +223,13 @@ export default async function MarketsPage({ searchParams }: { searchParams: { so
                       </td>
                       <td className="num" data-label="Funding">
                         {formatFunding(r.fundingRate)}
+                      </td>
+                      <td
+                        className="num"
+                        data-label="รอบ"
+                        title={fundingSettleTitle(r.nextFundingSettleMs)}
+                      >
+                        {formatFundingCycleHours(r.fundingCycleHours)}
                       </td>
                       <td
                         className="num"
@@ -185,7 +248,7 @@ export default async function MarketsPage({ searchParams }: { searchParams: { so
               </tbody>
             </table>
           </div>
-          <p className="sub marketsFootnote">{footnote(sort)}</p>
+          <p className="sub marketsFootnote">{footnote(sort, showDebugColumns)}</p>
         </div>
       )}
 
