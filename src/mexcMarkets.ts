@@ -80,6 +80,8 @@ export type TopMarketRow = {
   amount24Usdt: number;
   fundingRate: number;
   maxPositionContracts: number | null;
+  /** ประมาณ notional USDT = maxPositionContracts × lastPrice (USDT-M linear) */
+  maxPositionUsdt: number | null;
   /** S = (w_v·V_recent/V_avg)·(w_p·ΔP/P_start) แท่ง 15m ปิดล่าสุด */
   momentumScore: number;
   /** V_recent / V_avg */
@@ -230,6 +232,9 @@ export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarket
     const changePct = typeof r === "number" && !Number.isNaN(r) ? r * 100 : 0;
     const fr = t.fundingRate;
     const funding = typeof fr === "number" && !Number.isNaN(fr) ? fr : 0;
+    const maxContracts = detail ? maxFromRiskTiers(detail) : null;
+    const maxUsdt =
+      maxContracts != null && maxContracts > 0 ? maxContracts * t.lastPrice! : null;
 
     rows.push({
       symbol: sym,
@@ -238,7 +243,8 @@ export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarket
       volume24: typeof t.volume24 === "number" && !Number.isNaN(t.volume24) ? t.volume24 : 0,
       amount24Usdt: t.amount24!,
       fundingRate: funding,
-      maxPositionContracts: detail ? maxFromRiskTiers(detail) : null,
+      maxPositionContracts: maxContracts,
+      maxPositionUsdt: maxUsdt,
       momentumScore: mom.score,
       volumeSpikeRatio: mom.volRatio,
       return15mPercent: mom.returnPct,

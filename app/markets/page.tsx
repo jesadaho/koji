@@ -85,8 +85,8 @@ export default async function MarketsPage() {
                   <th className="num">24h</th>
                   <th className="num">Vol 24h (USDT)</th>
                   <th className="num">Funding</th>
-                  <th className="num" title="สูงสุดจาก risk tier (สัญญา)">
-                    Max pos
+                  <th className="num" title="ประมาณ notional USDT (สัญญา × ราคา) จาก tier สูงสุด">
+                    Max pos (USDT)
                   </th>
                 </tr>
               </thead>
@@ -125,9 +125,13 @@ export default async function MarketsPage() {
                       <td
                         className="num"
                         data-label="Max pos"
-                        title="จาก riskLimitCustom tier สูงสุด (หรือ limit ของสัญญา)"
+                        title={
+                          r.maxPositionContracts != null
+                            ? `≈ สัญญา × ราคา (USDT-M) · สัญญาสูงสุด ${r.maxPositionContracts.toLocaleString("en-US")} สัญญา`
+                            : "ไม่มีข้อมูล tier / limit"
+                        }
                       >
-                        {r.maxPositionContracts != null ? r.maxPositionContracts.toLocaleString("en-US") : "—"}
+                        {r.maxPositionUsdt != null ? formatUsd(r.maxPositionUsdt) : "—"}
                       </td>
                     </tr>
                   );
@@ -137,7 +141,7 @@ export default async function MarketsPage() {
           </div>
           <p className="sub marketsFootnote">
             Score = (V_recent/V_avg)×(ΔP/P) แท่ง 15m ปิดล่าสุด · ดึง kline จาก candidate ~120 คู่ตาม amount24 · Vol 24h = amount24 ·
-            Funding จาก ticker · Max pos จาก risk tiers
+            Funding จาก ticker · Max pos (USDT) ≈ สัญญาสูงสุดจาก risk tier × ราคา
           </p>
         </div>
       )}
