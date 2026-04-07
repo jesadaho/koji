@@ -1,5 +1,10 @@
 import axios from "axios";
 
+/**
+ * ยืนยัน ID Token ผ่าน LINE `POST /oauth2/v2.1/verify` (ฝั่ง LINE ตรวจ exp/iat)
+ * ไม่ได้ decode JWT ในเครื่อง — ไม่เกี่ยวกับ clockTolerance ของ jsonwebtoken บนเซิร์ฟเวอร์เรา
+ */
+
 type VerifyOk = {
   sub?: string;
   aud?: string;

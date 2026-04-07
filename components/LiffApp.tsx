@@ -79,6 +79,17 @@ function apiDebugSection(err: unknown): ReactNode {
   return null;
 }
 
+/** 401 + เคยส่ง Bearer แล้ว → สันนิษฐานว่าโทเคนใน SDK หมดอายุ ให้ล้าง session แล้วล็อกอินใหม่ */
+function reloginIfUnauthorized(status: number, hadIdToken: boolean): void {
+  if (status !== 401 || !hadIdToken) return;
+  try {
+    liff.logout();
+  } catch {
+    /* ignore */
+  }
+  liff.login();
+}
+
 type LiffConfig = {
   liffId: string | null;
   channelIdConfigured: boolean;
@@ -111,6 +122,7 @@ export default function LiffApp() {
 
   const api = useCallback(
     async (path: string, opts: RequestInit = {}) => {
+      // ดึงจาก SDK ทุกครั้งก่อนยิง request — ห้ามเก็บใน state/localStorage/global นาน
       const idToken = liff.getIDToken();
       const headers: HeadersInit = {
         Accept: "application/json",
@@ -123,6 +135,7 @@ export default function LiffApp() {
       const { text, parsed } = await readApiResponse(res);
       if (!res.ok) {
         const msg = messageFromParsed(parsed, res.statusText);
+        reloginIfUnauthorized(res.status, Boolean(idToken));
         throw new ApiRequestError(msg, res.status, text, url);
       }
       return parsed;
@@ -222,70 +235,80 @@ export default function LiffApp() {
       }
 
       try {
-        await liff.init({ liffId: cfg.liffId, withLoginOnExternalBrowser: true });
+        await liff
+          .init({ liffId: cfg.liffId, withLoginOnExternalBrowser: true })
+          .then(async () => {
+            if (cancelled) return;
+
+            if (!liff.isLoggedIn()) {
+              liff.login();
+              return;
+            }
+
+            const freshToken = liff.getIDToken();
+            if (!freshToken) {
+              if (!cancelled) {
+                setSetupBody(
+                  <>
+                    <p>ล็อกอินแล้วแต่ไม่มี ID Token</p>
+                    <p className="sub">
+                      ใน LINE Developers → แท็บ LIFF ของแอปนี้ ให้เปิด scope <code>openid</code> (และ{" "}
+                      <code>profile</code>) แล้วลอง <strong>ปิดแอป LINE แล้วเปิด LIFF ใหม่</strong> หรือกดล็อกเอาต์แล้ว
+                      ล็อกอินใหม่
+                    </p>
+                  </>
+                );
+                setPhase("setup");
+              }
+              return;
+            }
+
+            try {
+              const p = await liff.getProfile();
+              if (!cancelled) {
+                setWelcome(`สวัสดี ${p.displayName || ""} — MEXC Futures USDT`);
+              }
+            } catch {
+              /* ignore */
+            }
+
+            try {
+              await loadMeta();
+              await refreshAlerts();
+              if (!cancelled) {
+                setPhase("ready");
+              }
+            } catch (e) {
+              if (!cancelled) {
+                setSetupBody(
+                  <>
+                    <p>ล็อกอินแล้วแต่เรียก API ไม่ได้</p>
+                    <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
+                    {apiDebugSection(e)}
+                    <p className="sub" style={{ marginTop: "0.75rem" }}>
+                      ตรวจสอบ <code>LINE_CHANNEL_ID</code> บน Vercel = Channel ID ของแท็บ <strong>LINE Login</strong>{" "}
+                      (เดียวกับ LIFF) — ไม่ใช่ Channel ID ของ Messaging API
+                    </p>
+                    <p className="sub">
+                      LIFF ต้องเปิด scope <code>openid</code> — ถ้าได้ 401 ระบบจะลอง{" "}
+                      <code>logout</code> + <code>login</code> ให้อัตโนมัติ
+                    </p>
+                    <p className="sub">
+                      เว้น <code>NEXT_PUBLIC_API_BASE_URL</code> ว่างบน Vercel เพื่อเรียก <code>/api/liff</code> แบบ
+                      same-origin
+                    </p>
+                  </>
+                );
+                setPhase("setup");
+              }
+            }
+          });
       } catch (e) {
         if (!cancelled) {
           setSetupBody(<p>LIFF init ล้มเหลว: {e instanceof Error ? e.message : String(e)}</p>);
           setPhase("setup");
         }
         return;
-      }
-
-      if (!liff.isLoggedIn()) {
-        liff.login();
-        return;
-      }
-
-      const idToken = liff.getIDToken();
-      if (!idToken) {
-        if (!cancelled) {
-          setSetupBody(
-            <>
-              <p>ล็อกอินแล้วแต่ไม่มี ID Token</p>
-              <p className="sub">
-                ใน LINE Developers → แท็บ LIFF ของแอปนี้ ให้เปิด scope <code>openid</code> (และ{" "}
-                <code>profile</code>) แล้วลอง <strong>ปิดแอป LINE แล้วเปิด LIFF ใหม่</strong> หรือกดล็อกเอาต์แล้วล็อกอินใหม่
-              </p>
-            </>
-          );
-          setPhase("setup");
-        }
-        return;
-      }
-
-      if (!cancelled) {
-        try {
-          const p = await liff.getProfile();
-          setWelcome(`สวัสดี ${p.displayName || ""} — MEXC Futures USDT`);
-        } catch {
-          /* ignore */
-        }
-
-        try {
-          await loadMeta();
-          await refreshAlerts();
-          setPhase("ready");
-        } catch (e) {
-          setSetupBody(
-            <>
-              <p>ล็อกอินแล้วแต่เรียก API ไม่ได้</p>
-              <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
-              {apiDebugSection(e)}
-              <p className="sub" style={{ marginTop: "0.75rem" }}>
-                ตรวจสอบ <code>LINE_CHANNEL_ID</code> บน Vercel = Channel ID ของแท็บ <strong>LINE Login</strong> (เดียวกับ
-                LIFF) — ไม่ใช่ Channel ID ของ Messaging API
-              </p>
-              <p className="sub">
-                LIFF ต้องเปิด scope <code>openid</code> — ถ้าโทเคนหมดอายุให้ปิดแอปแล้วเปิด LIFF ใหม่
-              </p>
-              <p className="sub">
-                เว้น <code>NEXT_PUBLIC_API_BASE_URL</code> ว่างบน Vercel เพื่อเรียก <code>/api/liff</code> แบบ
-                same-origin
-              </p>
-            </>
-          );
-          setPhase("setup");
-        }
       }
     })();
 
