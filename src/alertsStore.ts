@@ -22,6 +22,10 @@ function useKv(): boolean {
   return Boolean(process.env.KV_REST_API_URL);
 }
 
+function isVercel(): boolean {
+  return process.env.VERCEL === "1";
+}
+
 function assertWritableStorage(): void {
   if (process.env.VERCEL === "1" && !useKv()) {
     throw new Error(
@@ -41,8 +45,20 @@ async function ensureFile(): Promise<void> {
 
 export async function loadAlerts(): Promise<PriceAlert[]> {
   if (useKv()) {
-    const data = await kv.get<PriceAlert[]>(KV_KEY);
-    return Array.isArray(data) ? data : [];
+    try {
+      const data = await kv.get<PriceAlert[]>(KV_KEY);
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      const hint = e instanceof Error ? e.message : String(e);
+      console.error("[alertsStore] kv.get failed", e);
+      throw new Error(
+        `อ่าน Vercel KV ไม่สำเร็จ (${hint}) — เชื่อม KV กับโปรเจกต์และตรวจ KV_REST_API_URL / KV_REST_API_TOKEN`
+      );
+    }
+  }
+
+  if (isVercel()) {
+    return [];
   }
 
   await ensureFile();
