@@ -164,3 +164,81 @@ code {
 .priceActions button.primary {
   margin-top: 1.4rem;
 }
+
+.siteNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.siteNav a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.siteNav a:hover {
+  text-decoration: underline;
+}
+
+.siteNavSep {
+  color: var(--muted);
+  user-select: none;
+}
+
+.marketsCard {
+  padding: 0;
+  overflow: hidden;
+}
+
+.marketsTableWrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.marketsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.marketsTable th,
+.marketsTable td {
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.marketsTable th {
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.marketsTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.marketsTable .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.marketsTable .changeUp {
+  color: var(--accent);
+}
+
+.marketsTable .changeDown {
+  color: var(--danger);
+}
+
+.marketsFootnote {
+  padding: 0.75rem 1rem;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+}
