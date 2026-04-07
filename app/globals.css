@@ -35,6 +35,17 @@ body {
 body {
   padding: 1rem;
   padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 0.65rem;
+    padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
+    padding-left: max(0.65rem, env(safe-area-inset-left));
+    padding-right: max(0.65rem, env(safe-area-inset-right));
+  }
 }
 
 h1 {
@@ -172,6 +183,14 @@ code {
   align-items: center;
   margin-bottom: 1rem;
   font-size: 0.9rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin-top: -0.25rem;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
 }
 
 .siteNav a {
@@ -186,6 +205,23 @@ code {
 .siteNavSep {
   color: var(--muted);
   user-select: none;
+}
+
+.liffQuickNav {
+  margin-top: -0.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.liffQuickNav a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.liffQuickNav a:hover,
+.liffQuickNav a:focus-visible {
+  text-decoration: underline;
 }
 
 .marketsCard {
@@ -241,4 +277,88 @@ code {
   margin: 0;
   border-top: 1px solid var(--border);
   font-size: 0.75rem;
+}
+
+.marketsPage {
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+/* Mobile: แถวเป็นบล็อก label + ค่า แทนตารางหลายคอลัมน์ */
+@media (max-width: 639px) {
+  .marketsTable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .marketsTable tbody {
+    display: block;
+  }
+
+  .marketsTable tbody tr {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 0.65rem;
+    padding: 0.35rem 0;
+    background: var(--bg);
+  }
+
+  .marketsTable tbody tr:last-child {
+    margin-bottom: 0;
+  }
+
+  .marketsTable tbody td {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.4rem 0.75rem;
+    border-bottom: none;
+    text-align: right;
+    font-size: 0.8125rem;
+  }
+
+  .marketsTable tbody td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-align: left;
+    flex-shrink: 0;
+    max-width: 42%;
+  }
+
+  .marketsTable tbody td.marketsCellSymbol {
+    flex-wrap: wrap;
+    padding-top: 0.55rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.2rem;
+  }
+
+  .marketsTable tbody td.marketsCellSymbol::before {
+    width: 100%;
+    max-width: none;
+    margin-bottom: 0.2rem;
+  }
+
+  .marketsTable tbody td.marketsCellSymbol code {
+    font-size: 0.9rem;
+    word-break: break-all;
+    text-align: left;
+    width: 100%;
+  }
+
+  .marketsFootnote {
+    font-size: 0.68rem;
+    line-height: 1.4;
+  }
 }

@@ -38,7 +38,7 @@ export default async function MarketsPage() {
   }
 
   return (
-    <main>
+    <main className="marketsPage">
       <h1>Markets</h1>
       <p className="sub">Top 25 USDT perpetual ตามมูลค่าเทิร์นโอเวอร์ 24 ชม. (amount24)</p>
 
@@ -75,17 +75,27 @@ export default async function MarketsPage() {
                   const up = r.change24hPercent >= 0;
                   return (
                     <tr key={r.symbol}>
-                      <td>
+                      <td data-label="สัญญา" className="marketsCellSymbol">
                         <code>{r.symbol}</code>
                       </td>
-                      <td className="num">{formatPrice(r.lastPrice)}</td>
-                      <td className={`num ${up ? "changeUp" : "changeDown"}`}>
+                      <td className="num" data-label="ราคา">
+                        {formatPrice(r.lastPrice)}
+                      </td>
+                      <td className={`num ${up ? "changeUp" : "changeDown"}`} data-label="24h">
                         {up ? "+" : ""}
                         {r.change24hPercent.toFixed(2)}%
                       </td>
-                      <td className="num">{formatUsd(r.amount24Usdt)}</td>
-                      <td className="num">{formatFunding(r.fundingRate)}</td>
-                      <td className="num" title="จาก riskLimitCustom tier สูงสุด (หรือ limit ของสัญญา)">
+                      <td className="num" data-label="Vol 24h">
+                        {formatUsd(r.amount24Usdt)}
+                      </td>
+                      <td className="num" data-label="Funding">
+                        {formatFunding(r.fundingRate)}
+                      </td>
+                      <td
+                        className="num"
+                        data-label="Max pos"
+                        title="จาก riskLimitCustom tier สูงสุด (หรือ limit ของสัญญา)"
+                      >
                         {r.maxPositionContracts != null ? r.maxPositionContracts.toLocaleString("en-US") : "—"}
                       </td>
                     </tr>

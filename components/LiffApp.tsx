@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import liff from "@line/liff";
 
@@ -402,6 +403,9 @@ export default function LiffApp() {
     <>
       <h1>Koji</h1>
       <p className="sub">{welcome}</p>
+      <p className="sub liffQuickNav">
+        <Link href="/markets">Markets Top 25</Link>
+      </p>
 
       <div className="card">
         <h2>เช็คราคาเร็ว</h2>

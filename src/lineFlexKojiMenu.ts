@@ -43,6 +43,16 @@ export function buildKojiWelcomeFlexContents(liffId?: string): FlexBubble {
         uri: `https://liff.line.me/${liffId}`,
       },
     });
+    footerContents.push({
+      type: "button" as const,
+      style: "secondary" as const,
+      height: "sm" as const,
+      action: {
+        type: "uri" as const,
+        label: "Markets Top 25",
+        uri: `https://liff.line.me/${liffId}/markets`,
+      },
+    });
   }
   footerContents.push({
     type: "button" as const,
