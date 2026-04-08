@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { TopMarketRow } from "@/src/mexcMarkets";
+import type { MarketsSortMode, TopMarketRow } from "@/src/mexcMarkets";
+import FundingHistoryButton from "@/components/FundingHistoryButton";
 import {
   formatFunding,
   formatFundingCycleHours,
@@ -14,6 +15,7 @@ import {
 type Props = {
   rows: TopMarketRow[];
   showDebugColumns: boolean;
+  marketsSort: MarketsSortMode;
 };
 
 function symbolMatches(symbol: string, q: string): boolean {
@@ -22,7 +24,7 @@ function symbolMatches(symbol: string, q: string): boolean {
   return symbol.toLowerCase().includes(t);
 }
 
-export default function MarketsTableWithSearch({ rows, showDebugColumns }: Props) {
+export default function MarketsTableWithSearch({ rows, showDebugColumns, marketsSort }: Props) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(
     () => rows.filter((r) => symbolMatches(r.symbol, query)),
@@ -121,8 +123,9 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns }: Props
                     <td className="num" data-label="Vol 24h">
                       {formatUsd(r.amount24Usdt)}
                     </td>
-                    <td className="num" data-label="Funding">
-                      {formatFunding(r.fundingRate)}
+                    <td className="num marketsCellFunding" data-label="Funding">
+                      <span className="marketsFundingValue">{formatFunding(r.fundingRate)}</span>
+                      {marketsSort === "funding" ? <FundingHistoryButton symbol={r.symbol} /> : null}
                     </td>
                     <td
                       className="num"

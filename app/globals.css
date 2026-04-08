@@ -262,6 +262,131 @@ code {
   color: var(--danger);
 }
 
+.marketsCellFunding {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.marketsFundingValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.marketsFundingHistBtn {
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  margin-top: 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--accent);
+  width: auto;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+
+.marketsFundingHistBtn:hover,
+.marketsFundingHistBtn:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.marketsFundingHistBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.marketsFundingHistDialog {
+  position: relative;
+  z-index: 81;
+  width: 100%;
+  max-width: 22rem;
+  max-height: min(70vh, 28rem);
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0.85rem 1rem 1rem;
+  overflow: hidden;
+}
+
+.marketsFundingHistHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.marketsFundingHistTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.marketsFundingHistClose {
+  margin-top: 0;
+  padding: 0.15rem 0.45rem;
+  width: auto;
+  font-size: 1.25rem;
+  line-height: 1;
+  font-weight: 400;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  border-radius: 6px;
+}
+
+.marketsFundingHistClose:hover,
+.marketsFundingHistClose:focus-visible {
+  color: var(--text);
+  background: color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+.marketsFundingHistHint {
+  margin: 0 0 0.65rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.marketsFundingHistTableWrap {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  margin: 0 -0.25rem;
+}
+
+.marketsFundingHistTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.marketsFundingHistTable th,
+.marketsFundingHistTable td {
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.marketsFundingHistTable th.num,
+.marketsFundingHistTable td.num {
+  text-align: right;
+}
+
+.marketsFundingHistTime {
+  font-size: 0.78rem;
+}
+
 .marketsFootnote {
   padding: 0.75rem 1rem;
   margin: 0;

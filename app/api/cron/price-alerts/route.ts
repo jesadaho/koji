@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { config } from "@/src/config";
 import { createLineClient } from "@/src/lineHandler";
 import { runContractConditionTick } from "@/src/contractConditionTick";
+import { runFundingHistoryTick } from "@/src/fundingHistoryTick";
 import { runPriceAlertTick } from "@/src/priceAlertTick";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,11 @@ export async function GET(req: NextRequest) {
       await runContractConditionTick(client);
     } catch (e) {
       console.error("[cron] contract condition tick", e);
+    }
+    try {
+      await runFundingHistoryTick();
+    } catch (e) {
+      console.error("[cron] funding history tick", e);
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

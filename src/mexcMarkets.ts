@@ -336,3 +336,37 @@ export async function getTopUsdtMarkets(options: GetTopUsdtMarketsOptions): Prom
 export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarketRow[]> {
   return getTopUsdtMarkets({ sort: "momentum", limit });
 }
+
+/**
+ * Top N สัญญา USDT ที่ผ่าน Vol filter — เรียง |funding| จาก ticker (ไม่เรียก kline)
+ * ใช้ sample ประวัติ funding รายชั่วโมงให้สอดคล้องโหมด Funding บนหน้า Markets
+ */
+export async function getFundingHistorySampleRows(
+  limit = 50
+): Promise<Array<{ symbol: string; fundingRate: number }>> {
+  const [tickers, details] = await Promise.all([fetchContractTickers(), fetchContractDetails()]);
+  const detailBySymbol = new Map<string, MexcDetailRow>();
+  for (const d of details) {
+    if (d.symbol) detailBySymbol.set(d.symbol, d);
+  }
+  const usdtPerp = tickers.filter((t) => {
+    const sym = t.symbol?.trim();
+    if (!sym || !sym.endsWith("_USDT")) return false;
+    const amt = t.amount24;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= MIN_AMOUNT24_USDT) return false;
+    const price = t.lastPrice;
+    if (typeof price !== "number" || Number.isNaN(price) || price <= 0) return false;
+    const d = detailBySymbol.get(sym);
+    if (d && typeof d.state === "number" && d.state !== 0) return false;
+    return true;
+  });
+  const sorted = [...usdtPerp].sort((a, b) => {
+    const diff = Math.abs(fundingRateNum(b)) - Math.abs(fundingRateNum(a));
+    if (diff !== 0) return diff;
+    return (b.amount24 ?? 0) - (a.amount24 ?? 0);
+  });
+  return sorted.slice(0, limit).map((t) => ({
+    symbol: t.symbol!.trim(),
+    fundingRate: fundingRateNum(t),
+  }));
+}

@@ -119,7 +119,7 @@ export default async function MarketsPage({
         </div>
       ) : (
         <div className="card marketsCard">
-          <MarketsTableWithSearch rows={rows} showDebugColumns={showDebugColumns} />
+          <MarketsTableWithSearch rows={rows} showDebugColumns={showDebugColumns} marketsSort={sort} />
           <p className="sub marketsFootnote">{footnote(sort, showDebugColumns)}</p>
         </div>
       )}
