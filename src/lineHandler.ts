@@ -51,7 +51,8 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 
 (ภาษาอังกฤษ: price btc, alert btc above 100000, alerts, unalert 1)
 
-• ติดตามระบบ — รับแจ้งเตือน System conditions: funding / ขนาดออเดอร์ (คู่ใน Top 50 |funding| บน MEXC ไม่ต้องเลือกเหรียญ)
+• ติดตามระบบ — System conditions: funding / ขนาดออเดอร์ (Top 50 |funding|)
+  funding: แจ้งเมื่อรอบหรือเวลาตัดเปลี่ยน หรือ |Δfunding| ≥ 0.1% pt จากครั้งก่อน (ปรับ env CONTRACT_FUNDING_MIN_DELTA_DISPLAY ได้)
 • เลิกติดตามระบบ — ปิดการแจ้งเตือนดังกล่าว
 • สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
   (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)

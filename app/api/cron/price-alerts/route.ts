@@ -21,7 +21,14 @@ export async function GET(req: NextRequest) {
 
   if (isProd) {
     if (!secret) {
-      return NextResponse.json({ error: "ตั้ง CRON_SECRET บน Vercel" }, { status: 503 });
+      return NextResponse.json(
+        {
+          error: "ตั้ง CRON_SECRET บน Vercel",
+          hint:
+            "Project → Settings → Environment Variables: เพิ่ม CRON_SECRET แล้วเลือก Environment ให้ตรง (Production และ/หรือ Preview) จากนั้น redeploy — Cron ของ Vercel ยิง production เป็นหลัก",
+        },
+        { status: 503 }
+      );
     }
     if (auth !== `Bearer ${secret}`) {
       return new NextResponse("Unauthorized", { status: 401 });
