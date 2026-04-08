@@ -10,14 +10,26 @@ import {
   type FundingSnapshotRow,
   type OrderSnapshotRow,
 } from "./contractWatchStore";
+import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
+import { getFundingHistorySampleRows } from "./mexcMarkets";
 import {
   fetchAllContractDetails,
   fetchContractFunding,
   orderMetaFromDetail,
 } from "./mexcContractMeta";
 
-/** แจ้ง funding เฉพาะเมื่อ |Δ| ตามที่โชว์เป็น % ≥ ค่านี้ (จุดล่าสุด = snapshot รอบก่อน) */
-const MIN_FUNDING_CHANGE_DISPLAY_PCT = 0.1;
+/**
+ * แจ้ง funding เมื่อ |Δrate|×100 ≥ ค่านี้ (สเกลเดียวกับ rate×100 บนจอ)
+ * ปรับได้: CONTRACT_FUNDING_MIN_DELTA_DISPLAY
+ */
+function minFundingChangeDisplayPct(): number {
+  const raw = process.env.CONTRACT_FUNDING_MIN_DELTA_DISPLAY?.trim();
+  if (raw) {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return 0.001;
+}
 
 async function mapPoolConcurrent<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out: R[] = [];
@@ -53,10 +65,10 @@ function fundingStructuralChanged(prev: FundingSnapshotRow, next: FundingMetaLik
 }
 
 function fundingRateJumpSignificant(prev: FundingSnapshotRow, next: FundingMetaLike): boolean {
-  return fundingDeltaDisplayPct(prev.fundingRate, next.fundingRate) >= MIN_FUNDING_CHANGE_DISPLAY_PCT;
+  return fundingDeltaDisplayPct(prev.fundingRate, next.fundingRate) >= minFundingChangeDisplayPct();
 }
 
-/** แจ้งเมื่อรอบ/เวลาตัดเปลี่ยน หรือ funding ขยับ ≥ 0.1% pt จาก snapshot ล่าสุด */
+/** แจ้งเมื่อรอบ/เวลาตัดเปลี่ยน หรือ funding ขยับถึงเกณฑ์จาก snapshot ล่าสุด */
 function shouldNotifyFunding(prev: FundingSnapshotRow, next: FundingMetaLike): boolean {
   if (fundingStructuralChanged(prev, next)) return true;
   return fundingRateJumpSignificant(prev, next);
@@ -107,14 +119,25 @@ function buildOrderMessage(symbol: string, prev: OrderSnapshotRow, next: OrderSn
   ].join("\n");
 }
 
+function unionPollSymbols(watchSymbols: string[], topSample: { symbol: string }[]): string[] {
+  const s = new Set<string>();
+  for (const x of watchSymbols) s.add(x);
+  for (const r of topSample) s.add(r.symbol);
+  return Array.from(s).sort();
+}
+
 /**
  * รายชั่วโมง: เทียบ funding + order limits กับ snapshot → LINE push
  */
 export async function runContractConditionTick(client: Client): Promise<void> {
   const watches = await loadContractWatches();
-  if (watches.length === 0) return;
+  const systemUsers = await loadSystemChangeSubscribers();
+  if (watches.length === 0 && systemUsers.length === 0) return;
 
-  const symbols = uniqueWatchedSymbols(watches);
+  const topSample = await getFundingHistorySampleRows(50);
+  const symbols = unionPollSymbols(uniqueWatchedSymbols(watches), topSample);
+  if (symbols.length === 0) return;
+
   const now = new Date().toISOString();
 
   let fundingMap = await loadFundingSnapshots();
@@ -137,7 +160,8 @@ export async function runContractConditionTick(client: Client): Promise<void> {
     }
     if (shouldNotifyFunding(prev, live)) {
       const text = buildFundingMessage(symbol, prev, live);
-      for (const uid of userIdsForSymbol(watches, symbol)) {
+      const recipients = new Set([...userIdsForSymbol(watches, symbol), ...systemUsers]);
+      for (const uid of recipients) {
         try {
           await client.pushMessage(uid, [{ type: "text", text }]);
         } catch (e) {
@@ -175,7 +199,8 @@ export async function runContractConditionTick(client: Client): Promise<void> {
     }
     if (orderChanged(prev, nextRow)) {
       const text = buildOrderMessage(symbol, prev, nextRow);
-      for (const uid of userIdsForSymbol(watches, symbol)) {
+      const recipients = new Set([...userIdsForSymbol(watches, symbol), ...systemUsers]);
+      for (const uid of recipients) {
         try {
           await client.pushMessage(uid, [{ type: "text", text }]);
         } catch (e) {

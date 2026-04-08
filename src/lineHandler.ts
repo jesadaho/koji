@@ -5,6 +5,11 @@ import { addAlert, listAlertsForUser, removeAlertByIndex } from "./alertsStore";
 import { fetchSimplePrices, formatSignal } from "./cryptoService";
 import { config } from "./config";
 import { buildKojiWelcomeFlexContents, KOJI_MENU_ALT_TEXT } from "./lineFlexKojiMenu";
+import { parseSystemChangeSubscribeCommand } from "./systemChangeLineCommands";
+import {
+  addSystemChangeSubscriber,
+  removeSystemChangeSubscriber,
+} from "./systemChangeSubscribersStore";
 
 export function createLineClient(channelAccessToken: string) {
   return new Client({ channelAccessToken });
@@ -31,6 +36,10 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
   ตัวอย่าง: ลบเตือน 1
 
 (ภาษาอังกฤษ: price btc, alert btc above 100000, alerts, unalert 1)
+
+• ติดตามระบบ — รับแจ้งเตือน System conditions: funding / ขนาดออเดอร์ (คู่ใน Top 50 |funding| บน MEXC ไม่ต้องเลือกเหรียญ)
+• เลิกติดตามระบบ — ปิดการแจ้งเตือนดังกล่าว
+  (EN: follow system / unfollow system, system conditions on / off)
 
 จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
 
@@ -110,6 +119,30 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
         contents: buildKojiWelcomeFlexContents(config.liffId),
       },
     ]);
+    return;
+  }
+
+  const sysCmd = parseSystemChangeSubscribeCommand(text);
+  if (sysCmd) {
+    if (sysCmd === "on") {
+      const added = await addSystemChangeSubscriber(uid);
+      await client.replyMessage(msgEvent.replyToken, [
+        {
+          type: "text",
+          text: added
+            ? "เปิดรับแจ้งเตือน System conditions แล้ว (funding / ขนาดออเดอร์ — Top 50 |funding|)"
+            : "คุณเปิดรับอยู่แล้ว",
+        },
+      ]);
+    } else {
+      const removed = await removeSystemChangeSubscriber(uid);
+      await client.replyMessage(msgEvent.replyToken, [
+        {
+          type: "text",
+          text: removed ? "ปิดรับแจ้งเตือน System conditions แล้ว" : "คุณยังไม่ได้เปิดรับ",
+        },
+      ]);
+    }
     return;
   }
 
