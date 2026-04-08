@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { kv } from "@vercel/kv";
+import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 
 export type ContractWatch = {
   id: string;
@@ -34,17 +34,15 @@ const fileWatches = join(process.cwd(), "data", "contract_watches.json");
 const fileSnapFunding = join(process.cwd(), "data", "contract_snap_funding.json");
 const fileSnapOrder = join(process.cwd(), "data", "contract_snap_order.json");
 
-function useKv(): boolean {
-  return Boolean(process.env.KV_REST_API_URL);
-}
-
 function isVercel(): boolean {
   return process.env.VERCEL === "1";
 }
 
 function assertWritableStorage(): void {
-  if (process.env.VERCEL === "1" && !useKv()) {
-    throw new Error("บน Vercel ต้องมี Vercel KV สำหรับ contract watches / snapshots");
+  if (process.env.VERCEL === "1" && !useCloudStorage()) {
+    throw new Error(
+      "บน Vercel ต้องตั้ง REDIS_URL หรือ Vercel KV (KV_REST_API_URL) สำหรับ contract watches / snapshots"
+    );
   }
 }
 
@@ -58,14 +56,14 @@ async function ensureJsonFile(path: string, initial: string): Promise<void> {
 }
 
 export async function loadContractWatches(): Promise<ContractWatch[]> {
-  if (useKv()) {
+  if (useCloudStorage()) {
     try {
-      const data = await kv.get<ContractWatch[]>(KV_WATCHES);
+      const data = await cloudGet<ContractWatch[]>(KV_WATCHES);
       return Array.isArray(data) ? data : [];
     } catch (e) {
       const hint = e instanceof Error ? e.message : String(e);
-      console.error("[contractWatchStore] kv.get watches failed", e);
-      throw new Error(`อ่าน KV contract_watches ไม่สำเร็จ (${hint})`);
+      console.error("[contractWatchStore] cloud get watches failed", e);
+      throw new Error(`อ่าน contract_watches ไม่สำเร็จ (${hint})`);
     }
   }
   if (isVercel()) return [];
@@ -80,8 +78,8 @@ export async function loadContractWatches(): Promise<ContractWatch[]> {
 }
 
 async function saveContractWatches(rows: ContractWatch[]): Promise<void> {
-  if (useKv()) {
-    await kv.set(KV_WATCHES, rows);
+  if (useCloudStorage()) {
+    await cloudSet(KV_WATCHES, rows);
     return;
   }
   assertWritableStorage();
@@ -90,8 +88,8 @@ async function saveContractWatches(rows: ContractWatch[]): Promise<void> {
 }
 
 export async function loadFundingSnapshots(): Promise<Record<string, FundingSnapshotRow>> {
-  if (useKv()) {
-    const data = await kv.get<Record<string, FundingSnapshotRow>>(KV_SNAP_FUNDING);
+  if (useCloudStorage()) {
+    const data = await cloudGet<Record<string, FundingSnapshotRow>>(KV_SNAP_FUNDING);
     return data && typeof data === "object" ? data : {};
   }
   if (isVercel()) return {};
@@ -106,8 +104,8 @@ export async function loadFundingSnapshots(): Promise<Record<string, FundingSnap
 }
 
 export async function saveFundingSnapshots(map: Record<string, FundingSnapshotRow>): Promise<void> {
-  if (useKv()) {
-    await kv.set(KV_SNAP_FUNDING, map);
+  if (useCloudStorage()) {
+    await cloudSet(KV_SNAP_FUNDING, map);
     return;
   }
   assertWritableStorage();
@@ -116,8 +114,8 @@ export async function saveFundingSnapshots(map: Record<string, FundingSnapshotRo
 }
 
 export async function loadOrderSnapshots(): Promise<Record<string, OrderSnapshotRow>> {
-  if (useKv()) {
-    const data = await kv.get<Record<string, OrderSnapshotRow>>(KV_SNAP_ORDER);
+  if (useCloudStorage()) {
+    const data = await cloudGet<Record<string, OrderSnapshotRow>>(KV_SNAP_ORDER);
     return data && typeof data === "object" ? data : {};
   }
   if (isVercel()) return {};
@@ -132,8 +130,8 @@ export async function loadOrderSnapshots(): Promise<Record<string, OrderSnapshot
 }
 
 export async function saveOrderSnapshots(map: Record<string, OrderSnapshotRow>): Promise<void> {
-  if (useKv()) {
-    await kv.set(KV_SNAP_ORDER, map);
+  if (useCloudStorage()) {
+    await cloudSet(KV_SNAP_ORDER, map);
     return;
   }
   assertWritableStorage();

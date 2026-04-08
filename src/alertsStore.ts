@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { kv } from "@vercel/kv";
+import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 
 export type PriceAlert = {
   id: string;
@@ -18,18 +18,14 @@ export type PriceAlert = {
 const KV_KEY = "koji:alerts";
 const filePath = join(process.cwd(), "data", "alerts.json");
 
-function useKv(): boolean {
-  return Boolean(process.env.KV_REST_API_URL);
-}
-
 function isVercel(): boolean {
   return process.env.VERCEL === "1";
 }
 
 function assertWritableStorage(): void {
-  if (process.env.VERCEL === "1" && !useKv()) {
+  if (process.env.VERCEL === "1" && !useCloudStorage()) {
     throw new Error(
-      "บน Vercel ต้องเชื่อม Vercel KV (ให้มี KV_REST_API_URL) เพื่อเก็บการแจ้งเตือน"
+      "บน Vercel ต้องตั้ง REDIS_URL หรือ Vercel KV (KV_REST_API_URL) เพื่อเก็บการแจ้งเตือน"
     );
   }
 }
@@ -44,15 +40,15 @@ async function ensureFile(): Promise<void> {
 }
 
 export async function loadAlerts(): Promise<PriceAlert[]> {
-  if (useKv()) {
+  if (useCloudStorage()) {
     try {
-      const data = await kv.get<PriceAlert[]>(KV_KEY);
+      const data = await cloudGet<PriceAlert[]>(KV_KEY);
       return Array.isArray(data) ? data : [];
     } catch (e) {
       const hint = e instanceof Error ? e.message : String(e);
-      console.error("[alertsStore] kv.get failed", e);
+      console.error("[alertsStore] cloud get failed", e);
       throw new Error(
-        `อ่าน Vercel KV ไม่สำเร็จ (${hint}) — เชื่อม KV กับโปรเจกต์และตรวจ KV_REST_API_URL / KV_REST_API_TOKEN`
+        `อ่าน cloud storage ไม่สำเร็จ (${hint}) — ตรวจ REDIS_URL หรือ KV_REST_API_URL / KV_REST_API_TOKEN`
       );
     }
   }
@@ -72,8 +68,8 @@ export async function loadAlerts(): Promise<PriceAlert[]> {
 }
 
 async function saveAlerts(alerts: PriceAlert[]): Promise<void> {
-  if (useKv()) {
-    await kv.set(KV_KEY, alerts);
+  if (useCloudStorage()) {
+    await cloudSet(KV_KEY, alerts);
     return;
   }
 

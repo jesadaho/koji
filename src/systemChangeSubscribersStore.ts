@@ -1,21 +1,19 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { kv } from "@vercel/kv";
+import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 
 const KV_KEY = "koji:system_change_subscribers";
 const filePath = join(process.cwd(), "data", "system_change_subscribers.json");
-
-function useKv(): boolean {
-  return Boolean(process.env.KV_REST_API_URL);
-}
 
 function isVercel(): boolean {
   return process.env.VERCEL === "1";
 }
 
 function assertWritableStorage(): void {
-  if (process.env.VERCEL === "1" && !useKv()) {
-    throw new Error("บน Vercel ต้องมี Vercel KV สำหรับ system change subscribers");
+  if (process.env.VERCEL === "1" && !useCloudStorage()) {
+    throw new Error(
+      "บน Vercel ต้องตั้ง REDIS_URL หรือ Vercel KV (KV_REST_API_URL) สำหรับ system change subscribers"
+    );
   }
 }
 
@@ -35,14 +33,14 @@ function dedupeSorted(ids: string[]): string[] {
 }
 
 export async function loadSystemChangeSubscribers(): Promise<string[]> {
-  if (useKv()) {
+  if (useCloudStorage()) {
     try {
-      const data = await kv.get<string[]>(KV_KEY);
+      const data = await cloudGet<string[]>(KV_KEY);
       return Array.isArray(data) ? dedupeSorted(data) : [];
     } catch (e) {
       const hint = e instanceof Error ? e.message : String(e);
-      console.error("[systemChangeSubscribersStore] kv.get failed", e);
-      throw new Error(`อ่าน KV system_change_subscribers ไม่สำเร็จ (${hint})`);
+      console.error("[systemChangeSubscribersStore] cloud get failed", e);
+      throw new Error(`อ่าน system_change_subscribers ไม่สำเร็จ (${hint})`);
     }
   }
   if (isVercel()) return [];
@@ -58,8 +56,8 @@ export async function loadSystemChangeSubscribers(): Promise<string[]> {
 
 async function saveSubscribers(ids: string[]): Promise<void> {
   const next = dedupeSorted(ids);
-  if (useKv()) {
-    await kv.set(KV_KEY, next);
+  if (useCloudStorage()) {
+    await cloudSet(KV_KEY, next);
     return;
   }
   assertWritableStorage();

@@ -1,0 +1,79 @@
+import { createClient, type RedisClientType } from "redis";
+import { kv } from "@vercel/kv";
+
+/** Redis แบบ TCP (เช่น Upstash rediss://) — ถ้ามีจะใช้แทน Vercel KV REST */
+export function useRedisUrl(): boolean {
+  return Boolean(process.env.REDIS_URL?.trim());
+}
+
+export function useKvRest(): boolean {
+  return Boolean(process.env.KV_REST_API_URL?.trim());
+}
+
+/** มี backend ระยะไกลสำหรับเก็บ JSON (Redis หรือ KV) */
+export function useCloudStorage(): boolean {
+  return useRedisUrl() || useKvRest();
+}
+
+let redisClient: RedisClientType | null = null;
+let redisConnecting: Promise<RedisClientType> | null = null;
+
+async function getRedis(): Promise<RedisClientType> {
+  const url = process.env.REDIS_URL?.trim();
+  if (!url) {
+    throw new Error("REDIS_URL ไม่ได้ตั้ง");
+  }
+  if (redisClient?.isOpen) {
+    return redisClient;
+  }
+  if (!redisConnecting) {
+    redisConnecting = (async () => {
+      try {
+        const c = createClient({ url }) as RedisClientType;
+        c.on("error", (err) => console.error("[redis]", err));
+        await c.connect();
+        redisClient = c;
+        return c;
+      } catch (e) {
+        redisClient = null;
+        throw e;
+      } finally {
+        redisConnecting = null;
+      }
+    })();
+  }
+  return redisConnecting;
+}
+
+/** อ่านค่า JSON จาก Redis (string) หรือ Vercel KV */
+export async function cloudGet<T>(key: string): Promise<T | null> {
+  if (useRedisUrl()) {
+    const r = await getRedis();
+    const raw = await r.get(key);
+    if (raw == null || raw === "") return null;
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      return null;
+    }
+  }
+  if (useKvRest()) {
+    return kv.get<T>(key);
+  }
+  return null;
+}
+
+/** เขียน JSON — Redis ใช้ SET string; KV ใช้พฤติกรรมเดิมของ @vercel/kv */
+export async function cloudSet(key: string, value: unknown): Promise<void> {
+  if (useRedisUrl()) {
+    const r = await getRedis();
+    await r.set(key, JSON.stringify(value));
+    return;
+  }
+  if (useKvRest()) {
+    // @vercel/kv รับ object/array/primitive — เก็บเหมือนเดิมก่อนมี Redis
+    await kv.set(key, value as Parameters<typeof kv.set>[1]);
+    return;
+  }
+  throw new Error("ไม่มี cloud storage (ตั้ง REDIS_URL หรือ KV_REST_API_URL)");
+}

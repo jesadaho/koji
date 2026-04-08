@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { kv } from "@vercel/kv";
+import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 
 export type FundingHistoryPoint = {
   /** ISO timestamp ต้นชั่วโมง UTC ที่ sample */
@@ -13,17 +13,15 @@ const KV_KEY = "koji:funding_history_24h";
 const MAX_POINTS = 24;
 const filePath = join(process.cwd(), "data", "funding_history_24h.json");
 
-function useKv(): boolean {
-  return Boolean(process.env.KV_REST_API_URL);
-}
-
 function isVercel(): boolean {
   return process.env.VERCEL === "1";
 }
 
 function assertWritableStorage(): void {
-  if (process.env.VERCEL === "1" && !useKv()) {
-    throw new Error("บน Vercel ต้องมี Vercel KV สำหรับ funding history");
+  if (process.env.VERCEL === "1" && !useCloudStorage()) {
+    throw new Error(
+      "บน Vercel ต้องตั้ง REDIS_URL หรือ Vercel KV (KV_REST_API_URL) สำหรับ funding history"
+    );
   }
 }
 
@@ -39,8 +37,8 @@ async function ensureJsonFile(): Promise<void> {
 export type FundingHistoryBlob = Record<string, FundingHistoryPoint[]>;
 
 export async function loadFundingHistoryBlob(): Promise<FundingHistoryBlob> {
-  if (useKv()) {
-    const data = await kv.get<FundingHistoryBlob>(KV_KEY);
+  if (useCloudStorage()) {
+    const data = await cloudGet<FundingHistoryBlob>(KV_KEY);
     return data && typeof data === "object" ? data : {};
   }
   if (isVercel()) return {};
@@ -55,8 +53,8 @@ export async function loadFundingHistoryBlob(): Promise<FundingHistoryBlob> {
 }
 
 export async function saveFundingHistoryBlob(blob: FundingHistoryBlob): Promise<void> {
-  if (useKv()) {
-    await kv.set(KV_KEY, blob);
+  if (useCloudStorage()) {
+    await cloudSet(KV_KEY, blob);
     return;
   }
   assertWritableStorage();
