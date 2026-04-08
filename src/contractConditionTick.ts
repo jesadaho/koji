@@ -119,6 +119,9 @@ function buildOrderMessage(symbol: string, prev: OrderSnapshotRow, next: OrderSn
   ].join("\n");
 }
 
+/** เมื่อดึง Top 50 ไม่ได้แต่มีคนติดตามระบบ — ยัง poll อย่างน้อยเพื่อไม่ให้ cron เงียบทั้งก้อน */
+const FALLBACK_POLL_SYMBOLS = ["BTC_USDT", "ETH_USDT", "SOL_USDT"] as const;
+
 function unionPollSymbols(watchSymbols: string[], topSample: { symbol: string }[]): string[] {
   const s = new Set<string>();
   for (const x of watchSymbols) s.add(x);
@@ -135,7 +138,13 @@ export async function runContractConditionTick(client: Client): Promise<void> {
   if (watches.length === 0 && systemUsers.length === 0) return;
 
   const topSample = await getFundingHistorySampleRows(50);
-  const symbols = unionPollSymbols(uniqueWatchedSymbols(watches), topSample);
+  let symbols = unionPollSymbols(uniqueWatchedSymbols(watches), topSample);
+  if (symbols.length === 0 && systemUsers.length > 0) {
+    console.error(
+      "[contractConditionTick] getFundingHistorySampleRows returned no symbols but system subscribers exist — using fallback",
+    );
+    symbols = Array.from(FALLBACK_POLL_SYMBOLS);
+  }
   if (symbols.length === 0) return;
 
   const now = new Date().toISOString();

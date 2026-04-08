@@ -5,9 +5,13 @@ import { addAlert, listAlertsForUser, removeAlertByIndex } from "./alertsStore";
 import { fetchSimplePrices, formatSignal } from "./cryptoService";
 import { config } from "./config";
 import { buildKojiWelcomeFlexContents, KOJI_MENU_ALT_TEXT } from "./lineFlexKojiMenu";
-import { parseSystemChangeSubscribeCommand } from "./systemChangeLineCommands";
+import {
+  isSystemSubscribeStatusQuery,
+  parseSystemChangeSubscribeCommand,
+} from "./systemChangeLineCommands";
 import {
   addSystemChangeSubscriber,
+  hasSystemChangeSubscriber,
   removeSystemChangeSubscriber,
 } from "./systemChangeSubscribersStore";
 
@@ -18,6 +22,14 @@ export function createLineClient(channelAccessToken: string) {
 function textOf(e: MessageEvent): string | null {
   if (e.message.type !== "text") return null;
   return e.message.text.trim();
+}
+
+/** userId ของคนส่งข้อความ — รองรับแชท 1:1 และกลุ่ม/ห้อง (แตะปุ่ม Flex ในกลุ่มจะได้ source แบบ group/room) */
+function messageEventUserId(event: MessageEvent): string | undefined {
+  const s = event.source;
+  if (s.type === "user") return s.userId;
+  if (s.type === "group" || s.type === "room") return s.userId;
+  return undefined;
 }
 
 const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USDT)
@@ -39,7 +51,8 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 
 • ติดตามระบบ — รับแจ้งเตือน System conditions: funding / ขนาดออเดอร์ (คู่ใน Top 50 |funding| บน MEXC ไม่ต้องเลือกเหรียญ)
 • เลิกติดตามระบบ — ปิดการแจ้งเตือนดังกล่าว
-  (EN: follow system / unfollow system, system conditions on / off)
+• สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
+  (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)
 
 จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
 
@@ -97,11 +110,10 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
     return;
   }
 
-  if (event.type !== "message" || event.source.type !== "user") return;
-  const uid = event.source.userId;
-  if (!uid) return;
-
+  if (event.type !== "message") return;
   const msgEvent = event as MessageEvent;
+  const uid = messageEventUserId(msgEvent);
+  if (!uid) return;
   const text = textOf(msgEvent);
   if (!text) return;
 
@@ -122,24 +134,55 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
     return;
   }
 
+  if (isSystemSubscribeStatusQuery(text)) {
+    const on = await hasSystemChangeSubscriber(uid);
+    await client.replyMessage(msgEvent.replyToken, [
+      {
+        type: "text",
+        text: on
+          ? "สถานะ: เปิดรับแจ้งเตือน System conditions อยู่ (funding / ขนาดออเดอร์ · Top 50 |funding|)"
+          : "สถานะ: ยังไม่ได้เปิดรับ — พิมพ์ ติดตามระบบ เพื่อเปิด",
+      },
+    ]);
+    return;
+  }
+
   const sysCmd = parseSystemChangeSubscribeCommand(text);
   if (sysCmd) {
-    if (sysCmd === "on") {
-      const added = await addSystemChangeSubscriber(uid);
+    try {
+      if (sysCmd === "on") {
+        const added = await addSystemChangeSubscriber(uid);
+        await client.replyMessage(msgEvent.replyToken, [
+          {
+            type: "text",
+            text: added
+              ? [
+                  "เปิดรับแจ้งเตือน System conditions แล้ว",
+                  "",
+                  "• แจ้งเมื่อ funding / รอบตัด หรือขนาดออเดอร์เปลี่ยน (สัญญา Top 50 |funding|)",
+                  "• เซิร์ฟเวอร์เช็ครายชั่วโมง (cron) — รอบแรกจะบันทึกค่าอ้างอิงเท่านั้น ยังไม่ส่งแจ้งเตือน",
+                  "• จะได้ LINE เมื่อค่าเปลี่ยนจริงจากรอบก่อน — ถ้ายังเงียบ = ยังไม่ถึงเกณฑ์หรือยังไม่ถึงรอบถัดไป",
+                  "",
+                  "พิมพ์ สถานะติดตามระบบ เพื่อเช็คอีกครั้ง",
+                ].join("\n")
+              : "คุณเปิดรับอยู่แล้ว — พิมพ์ สถานะติดตามระบบ เพื่อเช็ค",
+          },
+        ]);
+      } else {
+        const removed = await removeSystemChangeSubscriber(uid);
+        await client.replyMessage(msgEvent.replyToken, [
+          {
+            type: "text",
+            text: removed ? "ปิดรับแจ้งเตือน System conditions แล้ว" : "คุณยังไม่ได้เปิดรับ",
+          },
+        ]);
+      }
+    } catch (e) {
+      console.error("[lineHandler] system change subscribe storage", e);
       await client.replyMessage(msgEvent.replyToken, [
         {
           type: "text",
-          text: added
-            ? "เปิดรับแจ้งเตือน System conditions แล้ว (funding / ขนาดออเดอร์ — Top 50 |funding|)"
-            : "คุณเปิดรับอยู่แล้ว",
-        },
-      ]);
-    } else {
-      const removed = await removeSystemChangeSubscriber(uid);
-      await client.replyMessage(msgEvent.replyToken, [
-        {
-          type: "text",
-          text: removed ? "ปิดรับแจ้งเตือน System conditions แล้ว" : "คุณยังไม่ได้เปิดรับ",
+          text: "บันทึกการตั้งค่าไม่สำเร็จ — บน Vercel ต้องต่อ Vercel KV (KV_REST_API_URL) ให้โปรเจกต์",
         },
       ]);
     }
