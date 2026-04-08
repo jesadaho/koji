@@ -29,7 +29,7 @@ async function ensureJsonFile(): Promise<void> {
 }
 
 function dedupeSorted(ids: string[]): string[] {
-  const u = [...new Set(ids.map((x) => x.trim()).filter(Boolean))];
+  const u = Array.from(new Set(ids.map((x) => x.trim()).filter(Boolean)));
   u.sort();
   return u;
 }
