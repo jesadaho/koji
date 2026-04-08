@@ -161,7 +161,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
     if (shouldNotifyFunding(prev, live)) {
       const text = buildFundingMessage(symbol, prev, live);
       const recipients = new Set([...userIdsForSymbol(watches, symbol), ...systemUsers]);
-      for (const uid of recipients) {
+      for (const uid of Array.from(recipients)) {
         try {
           await client.pushMessage(uid, [{ type: "text", text }]);
         } catch (e) {
@@ -200,7 +200,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
     if (orderChanged(prev, nextRow)) {
       const text = buildOrderMessage(symbol, prev, nextRow);
       const recipients = new Set([...userIdsForSymbol(watches, symbol), ...systemUsers]);
-      for (const uid of recipients) {
+      for (const uid of Array.from(recipients)) {
         try {
           await client.pushMessage(uid, [{ type: "text", text }]);
         } catch (e) {
