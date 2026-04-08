@@ -21,6 +21,13 @@ export function formatFundingCycleHours(h: number | null): string {
   return `${h}h`;
 }
 
+/** แสดง funding จาก ticker + รอบ (ชม.) ในวงเล็บ เช่น +0.0100% (8h) */
+export function formatFundingWithCycleHours(rate: number, cycleHours: number | null): string {
+  const rateStr = formatFunding(rate);
+  if (cycleHours == null || cycleHours <= 0) return rateStr;
+  return `${rateStr} (${cycleHours}h)`;
+}
+
 export function fundingSettleTitle(ms: number | null): string | undefined {
   if (ms == null || ms <= 0) return undefined;
   try {

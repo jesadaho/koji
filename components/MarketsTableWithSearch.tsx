@@ -4,8 +4,7 @@ import { useMemo, useState } from "react";
 import type { MarketsSortMode, TopMarketRow } from "@/src/mexcMarkets";
 import FundingHistoryButton from "@/components/FundingHistoryButton";
 import {
-  formatFunding,
-  formatFundingCycleHours,
+  formatFundingWithCycleHours,
   formatPrice,
   formatScore,
   formatUsd,
@@ -79,9 +78,11 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns, markets
                 <th className="num">ราคา</th>
                 <th className="num">24h</th>
                 <th className="num">Vol 24h (USDT)</th>
-                <th className="num">Funding</th>
-                <th className="num" title="collectCycle (ชม.) จาก MEXC funding_rate">
-                  รอบ
+                <th
+                  className="num"
+                  title="Funding rate จาก ticker · รอบ (ชม.) = collectCycle จาก contract/funding_rate"
+                >
+                  Funding
                 </th>
                 <th className="num" title="ประมาณ notional USDT (สัญญา × ราคา) จาก tier สูงสุด">
                   Max pos (USDT)
@@ -123,16 +124,15 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns, markets
                     <td className="num" data-label="Vol 24h">
                       {formatUsd(r.amount24Usdt)}
                     </td>
-                    <td className="num marketsCellFunding" data-label="Funding">
-                      <span className="marketsFundingValue">{formatFunding(r.fundingRate)}</span>
-                      {marketsSort === "funding" ? <FundingHistoryButton symbol={r.symbol} /> : null}
-                    </td>
                     <td
-                      className="num"
-                      data-label="รอบ"
+                      className="num marketsCellFunding"
+                      data-label="Funding"
                       title={fundingSettleTitle(r.nextFundingSettleMs)}
                     >
-                      {formatFundingCycleHours(r.fundingCycleHours)}
+                      <span className="marketsFundingValue">
+                        {formatFundingWithCycleHours(r.fundingRate, r.fundingCycleHours)}
+                      </span>
+                      {marketsSort === "funding" ? <FundingHistoryButton symbol={r.symbol} /> : null}
                     </td>
                     <td
                       className="num"
