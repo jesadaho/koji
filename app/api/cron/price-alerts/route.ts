@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { config } from "@/src/config";
 import { createLineClient } from "@/src/lineHandler";
+import { saveCronRunRecord, type CronRunRecord, type CronStepResult } from "@/src/cronStatusStore";
 import { runContractConditionTick } from "@/src/contractConditionTick";
 import { runFundingHistoryTick } from "@/src/fundingHistoryTick";
 import { runPriceAlertTick } from "@/src/priceAlertTick";
@@ -27,22 +28,54 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  try {
-    const client = createLineClient(config.lineChannelAccessToken);
-    await runPriceAlertTick(client);
+  const started = Date.now();
+  const steps: CronRunRecord["steps"] = {
+    priceAlerts: { ok: false },
+    contractCondition: { ok: false },
+    fundingHistory: { ok: false },
+  };
+
+  async function runStep<K extends keyof CronRunRecord["steps"]>(
+    key: K,
+    fn: () => Promise<string | void>
+  ): Promise<void> {
+    const t0 = Date.now();
     try {
-      await runContractConditionTick(client);
+      const detail = await fn();
+      const d: CronStepResult = { ok: true, ms: Date.now() - t0 };
+      if (detail) d.detail = detail;
+      steps[key] = d;
     } catch (e) {
-      console.error("[cron] contract condition tick", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[cron] ${key}`, e);
+      steps[key] = { ok: false, ms: Date.now() - t0, error: msg };
     }
-    try {
-      await runFundingHistoryTick();
-    } catch (e) {
-      console.error("[cron] funding history tick", e);
-    }
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false }, { status: 500 });
   }
+
+  const client = createLineClient(config.lineChannelAccessToken);
+
+  await runStep("priceAlerts", async () => {
+    await runPriceAlertTick(client);
+  });
+  await runStep("contractCondition", async () => {
+    await runContractConditionTick(client);
+  });
+  await runStep("fundingHistory", async () => {
+    const r = await runFundingHistoryTick();
+    return `${r.rowsSampled} คู่ · bucket ${r.bucket}`;
+  });
+
+  const record: CronRunRecord = {
+    at: new Date().toISOString(),
+    durationMs: Date.now() - started,
+    steps,
+  };
+  try {
+    await saveCronRunRecord(record);
+  } catch (e) {
+    console.error("[cron] saveCronRunRecord", e);
+  }
+
+  const allOk = steps.priceAlerts.ok && steps.contractCondition.ok && steps.fundingHistory.ok;
+  return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }

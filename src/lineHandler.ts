@@ -5,10 +5,12 @@ import { addAlert, listAlertsForUser, removeAlertByIndex } from "./alertsStore";
 import { fetchSimplePrices, formatSignal } from "./cryptoService";
 import { config } from "./config";
 import { buildKojiWelcomeFlexContents, KOJI_MENU_ALT_TEXT } from "./lineFlexKojiMenu";
+import { isCronStatusQuery } from "./cronLineCommands";
 import {
   isSystemSubscribeStatusQuery,
   parseSystemChangeSubscribeCommand,
 } from "./systemChangeLineCommands";
+import { formatCronRunForLine, loadCronRunRecord } from "./cronStatusStore";
 import {
   addSystemChangeSubscriber,
   hasSystemChangeSubscriber,
@@ -53,6 +55,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • เลิกติดตามระบบ — ปิดการแจ้งเตือนดังกล่าว
 • สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
   (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)
+
+• สถานะ cron — รอบ job ล่าสุด (แจ้งเตือนราคา / สัญญา / ประวัติ funding Top 50)
+  (EN: cron status, #cronStatus)
 
 จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
 
@@ -123,6 +128,19 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
     return;
   }
 
+  if (isCronStatusQuery(text)) {
+    try {
+      const rec = await loadCronRunRecord();
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: formatCronRunForLine(rec) }]);
+    } catch (e) {
+      console.error("[lineHandler] cron status", e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: "อ่านสถานะ cron ไม่สำเร็จ — บน Vercel ต้องมี REDIS_URL หรือ Vercel KV" },
+      ]);
+    }
+    return;
+  }
+
   if (isKojiMenuTrigger(text)) {
     await client.replyMessage(msgEvent.replyToken, [
       {
@@ -182,7 +200,7 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       await client.replyMessage(msgEvent.replyToken, [
         {
           type: "text",
-          text: "บันทึกการตั้งค่าไม่สำเร็จ — บน Vercel ต้องต่อ Vercel KV (KV_REST_API_URL) ให้โปรเจกต์",
+          text: "บันทึกการตั้งค่าไม่สำเร็จ — บน Vercel ต้องตั้ง REDIS_URL หรือ Vercel KV (KV_REST_API_URL)",
         },
       ]);
     }

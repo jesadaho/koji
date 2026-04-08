@@ -1,0 +1,28 @@
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { loadCronRunRecord } from "@/src/cronStatusStore";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+/**
+ * ดูบันทึกรอบ cron ล่าสุด (JSON) — production ต้องมี Authorization: Bearer CRON_SECRET
+ * ตัวอย่าง: curl -sH "Authorization: Bearer $CRON_SECRET" https://<host>/api/cron/status
+ */
+export async function GET(req: NextRequest) {
+  const secret = process.env.CRON_SECRET?.trim();
+  const auth = req.headers.get("authorization");
+  const isProd = process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
+
+  if (isProd) {
+    if (!secret) {
+      return NextResponse.json({ error: "ตั้ง CRON_SECRET บน Vercel" }, { status: 503 });
+    }
+    if (auth !== `Bearer ${secret}`) {
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+  }
+
+  const record = await loadCronRunRecord();
+  return NextResponse.json({ record });
+}

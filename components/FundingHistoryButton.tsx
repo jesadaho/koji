@@ -87,14 +87,19 @@ export default function FundingHistoryButton({ symbol }: { symbol: string }) {
               </button>
             </div>
             <p className="sub marketsFundingHistHint">
-              ค่าจาก ticker ชั่วโมงละครั้ง (Top 50 ตาม |funding|) สูงสุด 24 จุด — ต้องรอ cron เก็บข้อมูล
+              เก็บชั่วโมงละจุด (ต้นชั่วโมง UTC) เฉพาะคู่ใน Top 50 |funding| ณ เวลานั้น — สูงสุด 24 จุดต่อคู่
+              ถ้าว่าง: คู่นี้อาจยังไม่เคยอยู่ใน 50 อันดับตอน cron รัน หรือ cron/Redis·KV ยังไม่พร้อม — ใน LINE พิมพ์{" "}
+              <strong>สถานะ cron</strong>
             </p>
             {loading ? (
               <p className="sub">กำลังโหลด…</p>
             ) : error ? (
               <p className="err">{error}</p>
             ) : points.length === 0 ? (
-              <p className="sub">ยังไม่มีประวัติสำหรับสัญญานี้</p>
+              <p className="sub">
+                ยังไม่มีประวัติสำหรับสัญญานี้ — ระบบ sample เฉพาะ Top 50 |funding| ทุกต้นชั่วโมง UTC หรือรออีกหลัง cron
+                รันสำเร็จ
+              </p>
             ) : (
               <div className="marketsFundingHistTableWrap">
                 <table className="marketsFundingHistTable">

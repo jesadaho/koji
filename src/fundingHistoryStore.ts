@@ -74,17 +74,13 @@ function mergePoint(series: FundingHistoryPoint[], bucketIso: string, r: number)
 }
 
 /**
- * อัปเดตเฉพาะ symbol ในรายการ — ลบ symbol อื่นออกจาก blob (เก็บแค่ top ชุดล่าสุด)
+ * อัปเดตเฉพาะ symbol ในรายการ — ไม่ลบ symbol อื่น (ประวัติคู่ที่เคยอยู่ Top 50 ยังอยู่ได้)
  */
 export async function appendFundingHistorySamples(
   entries: Array<{ symbol: string; fundingRate: number }>,
   hourBucketUtcIso: string
 ): Promise<void> {
   const blob = await loadFundingHistoryBlob();
-  const keep = new Set(entries.map((e) => e.symbol));
-  for (const key of Object.keys(blob)) {
-    if (!keep.has(key)) delete blob[key];
-  }
   for (const { symbol, fundingRate } of entries) {
     const prev = blob[symbol] ?? [];
     blob[symbol] = mergePoint(prev, hourBucketUtcIso, fundingRate);
