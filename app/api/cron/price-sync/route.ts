@@ -78,10 +78,11 @@ export async function GET(req: NextRequest) {
     console.error("[cron price-sync] savePriceSyncCronRecord", e);
   }
 
+  /** ฟิลด์ volumeSignalAlerts / indicatorAlerts อาจไม่มีในบันทึกเก่า — ถ้าไม่มีถือว่าไม่ล้ม step นั้น */
   const allOk =
     steps.priceAlerts.ok &&
     steps.pctStepAlerts.ok &&
-    steps.volumeSignalAlerts.ok &&
-    steps.indicatorAlerts.ok;
+    steps.volumeSignalAlerts?.ok !== false &&
+    steps.indicatorAlerts?.ok !== false;
   return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }
