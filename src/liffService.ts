@@ -19,6 +19,18 @@ import {
   hasSystemChangeSubscriber,
   removeSystemChangeSubscriber,
 } from "./systemChangeSubscribersStore";
+import { getTopUsdtSymbolsByAmount24 } from "./mexcMarkets";
+import {
+  addVolumeSignalAlert,
+  listVolumeSignalAlertsForUser,
+  MAX_VOLUME_SIGNAL_ALERTS_PER_USER,
+  removeVolumeSignalAlertById,
+  type VolumeSignalTimeframe,
+} from "./volumeSignalAlertsStore";
+import {
+  getVolumeSignalCooldownMsDisplay,
+  getVolumeSignalMinVolRatioDisplay,
+} from "./volumeSignalAlertTick";
 
 export function getLiffConfig() {
   return {
@@ -238,4 +250,93 @@ export async function liffPrice(symbol: string): Promise<{ status: number; json:
   } catch {
     return { status: 502, json: { error: "MEXC ไม่พร้อม" } };
   }
+}
+
+const VOLUME_SIGNAL_TOP_N = 30;
+
+export async function liffListVolumeSignalAlerts(userId: string) {
+  const list = await listVolumeSignalAlertsForUser(userId);
+  return { volumeSignalAlerts: list };
+}
+
+export async function liffGetVolumeSignalMeta() {
+  try {
+    const topSymbols = await getTopUsdtSymbolsByAmount24(VOLUME_SIGNAL_TOP_N);
+    return {
+      topSymbols,
+      topN: VOLUME_SIGNAL_TOP_N,
+      minVolRatio: getVolumeSignalMinVolRatioDisplay(),
+      cooldownMs: getVolumeSignalCooldownMsDisplay(),
+      maxAlertsPerUser: MAX_VOLUME_SIGNAL_ALERTS_PER_USER,
+    };
+  } catch {
+    return {
+      topSymbols: [] as string[],
+      topN: VOLUME_SIGNAL_TOP_N,
+      minVolRatio: getVolumeSignalMinVolRatioDisplay(),
+      cooldownMs: getVolumeSignalCooldownMsDisplay(),
+      maxAlertsPerUser: MAX_VOLUME_SIGNAL_ALERTS_PER_USER,
+    };
+  }
+}
+
+export async function liffCreateVolumeSignalAlert(
+  userId: string,
+  body: unknown
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const { symbol } = b;
+  const tfRaw = b.timeframe ?? b.tf;
+  if (typeof symbol !== "string" || !symbol.trim()) {
+    return { status: 400, json: { error: "ระบุ symbol" } };
+  }
+  const tf = typeof tfRaw === "string" ? tfRaw.trim() : "";
+  if (tf !== "1h" && tf !== "4h") {
+    return { status: 400, json: { error: "timeframe ต้องเป็น 1h หรือ 4h" } };
+  }
+  const timeframe: VolumeSignalTimeframe = tf === "4h" ? "4h" : "1h";
+
+  const resolved = resolveContractSymbol(symbol);
+  if (!resolved) {
+    return { status: 400, json: { error: "ไม่รู้จักคู่นี้" } };
+  }
+
+  let top: string[];
+  try {
+    top = await getTopUsdtSymbolsByAmount24(VOLUME_SIGNAL_TOP_N);
+  } catch {
+    return { status: 503, json: { error: "ดึงรายชื่อสัญญา Top vol ไม่สำเร็จ" } };
+  }
+  if (!top.includes(resolved.contractSymbol)) {
+    return {
+      status: 400,
+      json: {
+        error: `สัญญานี้ไม่อยู่ใน Top ${VOLUME_SIGNAL_TOP_N} ตาม Vol 24h บน MEXC ตอนนี้ — เลือกจากรายการที่อนุญาต`,
+      },
+    };
+  }
+
+  try {
+    const row = await addVolumeSignalAlert({
+      userId,
+      coinId: resolved.contractSymbol,
+      symbolLabel: resolved.label,
+      timeframe,
+    });
+    return { status: 201, json: { volumeSignalAlert: row } };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
+    return { status: 400, json: { error: msg } };
+  }
+}
+
+export async function liffDeleteVolumeSignalAlert(
+  userId: string,
+  id: string
+): Promise<{ status: number; json?: Record<string, unknown> }> {
+  const ok = await removeVolumeSignalAlertById(userId, id);
+  if (!ok) {
+    return { status: 404, json: { error: "ไม่พบรายการ" } };
+  }
+  return { status: 204 };
 }

@@ -39,13 +39,15 @@ export type HourlyCronRecord = {
   };
 };
 
-/** ~15 นาที: แจ้งเตือนราคาเป้า + แจ้งเตือนการเคลื่อนไหวราคา */
+/** ~15 นาที: แจ้งเตือนราคาเป้า + แจ้งเตือนการเคลื่อนไหวราคา + volume signal (Top 30) */
 export type PriceSyncCronRecord = {
   at: string;
   durationMs: number;
   steps: {
     priceAlerts: CronStepResult;
     pctStepAlerts: CronStepResult;
+    /** บันทึกเก่าอาจไม่มีฟิลด์นี้ */
+    volumeSignalAlerts?: CronStepResult;
   };
 };
 
@@ -177,6 +179,9 @@ export function formatCronStatusForLine(bundle: {
     parts.push(`เวลา: ${priceSync.at} · รวม ${priceSync.durationMs}ms`);
     parts.push(fmt(priceSync.steps.priceAlerts, "แจ้งเตือนเป้าราคา"));
     parts.push(fmt(priceSync.steps.pctStepAlerts, "แจ้งเตือนการเคลื่อนไหวราคา"));
+    if (priceSync.steps.volumeSignalAlerts) {
+      parts.push(fmt(priceSync.steps.volumeSignalAlerts, "Volume signal (Top 30)"));
+    }
     parts.push("");
   }
 

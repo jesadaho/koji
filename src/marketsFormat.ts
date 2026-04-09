@@ -28,6 +28,22 @@ export function formatFundingWithCycleHours(rate: number, cycleHours: number | n
   return `${rateStr} (${cycleHours}h)`;
 }
 
+/** สีตามทิศทาง funding: long จ่ายมาก = แดงเข้ม, short จ่ายมาก = เขียว, ใกล้ศูนย์ = กลาง */
+export function fundingRateVisualClass(rate: number): "fundingHotLong" | "fundingHotShort" | "fundingNeutral" {
+  const t = 0.00015;
+  if (rate > t) return "fundingHotLong";
+  if (rate < -t) return "fundingHotShort";
+  return "fundingNeutral";
+}
+
+/** คำนวณเกณฑ์ max pos ต่ำ (liquidity แคบ) จากชุดแถวที่แสดง — ล่าง ~15% */
+export function maxPositionWarnThreshold(usdts: Array<number | null | undefined>): number | null {
+  const vals = usdts.filter((x): x is number => typeof x === "number" && x > 0).sort((a, b) => a - b);
+  if (vals.length < 5) return null;
+  const idx = Math.max(0, Math.floor(vals.length * 0.15) - 1);
+  return vals[idx] ?? null;
+}
+
 export function fundingSettleTitle(ms: number | null): string | undefined {
   if (ms == null || ms <= 0) return undefined;
   try {

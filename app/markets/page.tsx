@@ -104,6 +104,13 @@ export default async function MarketsPage({
         </Link>
       </nav>
       <p className="sub">{sortIntro(sort, showDebugColumns)}</p>
+      {!errorMessage ? (
+        <p className="sub marketsMetricLegend">
+          💹 <strong>Funding</strong> สีตามทิศทางต้นทุนถือสถานะ · 🕒 <strong>Cycle</strong> รอบจ่าย · 📦{" "}
+          <strong>Max pos</strong> ขีดจำกัดโน้ต (สีฟ้า) —{" "}
+          <span className="marketsLegendWarn">⚠️ ส้ม</span> เมื่อสภาพคล่องต่ำเมื่อเทียบคู่อื่นในตาราง
+        </p>
+      ) : null}
 
       {errorMessage ? (
         <div className="card">

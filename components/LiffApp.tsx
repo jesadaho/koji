@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import liff from "@line/liff";
 
@@ -113,9 +114,17 @@ type PctStepAlert = {
 
 type Phase = "loading" | "setup" | "ready";
 
-type HomeAlertTab = "price" | "change";
+type HomeAlertTab = "price" | "change" | "vol";
 
 const PCT_STEP_PRESET_VALUES = [1, 2, 3, 5, 10] as const;
+
+type VolumeSignalAlertRow = {
+  id: string;
+  coinId: string;
+  symbolLabel: string;
+  timeframe: "1h" | "4h";
+  createdAt: string;
+};
 
 export default function LiffApp() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -137,6 +146,17 @@ export default function LiffApp() {
   const [pctMode, setPctMode] = useState<"daily_07_bkk" | "trailing">("daily_07_bkk");
   const [pctErr, setPctErr] = useState("");
   const [homeAlertTab, setHomeAlertTab] = useState<HomeAlertTab>("price");
+
+  const [volAlerts, setVolAlerts] = useState<VolumeSignalAlertRow[]>([]);
+  const [volMeta, setVolMeta] = useState<{
+    topSymbols: string[];
+    minVolRatio: number;
+    cooldownMs: number;
+    maxAlertsPerUser: number;
+  } | null>(null);
+  const [volSymbol, setVolSymbol] = useState("");
+  const [volTf, setVolTf] = useState<"1h" | "4h">("1h");
+  const [volErr, setVolErr] = useState("");
 
   const api = useCallback(
     async (path: string, opts: RequestInit = {}) => {
@@ -181,6 +201,33 @@ export default function LiffApp() {
   const refreshPctAlerts = useCallback(async () => {
     const data = (await api("/pct-alerts")) as { pctAlerts?: PctStepAlert[] };
     setPctAlerts(Array.isArray(data.pctAlerts) ? data.pctAlerts : []);
+  }, [api]);
+
+  const refreshVolMeta = useCallback(async () => {
+    const url = `${apiBase}/api/liff/volume-signal-meta`;
+    const res = await fetch(url);
+    const { text, parsed } = await readApiResponse(res);
+    if (!res.ok) {
+      const msg = messageFromParsed(parsed, res.statusText);
+      throw new ApiRequestError(msg, res.status, text, url);
+    }
+    const data = parsed as {
+      topSymbols?: string[];
+      minVolRatio?: number;
+      cooldownMs?: number;
+      maxAlertsPerUser?: number;
+    };
+    setVolMeta({
+      topSymbols: Array.isArray(data.topSymbols) ? data.topSymbols : [],
+      minVolRatio: typeof data.minVolRatio === "number" ? data.minVolRatio : 3,
+      cooldownMs: typeof data.cooldownMs === "number" ? data.cooldownMs : 4 * 3600 * 1000,
+      maxAlertsPerUser: typeof data.maxAlertsPerUser === "number" ? data.maxAlertsPerUser : 10,
+    });
+  }, []);
+
+  const refreshVolAlerts = useCallback(async () => {
+    const data = (await api("/volume-signal-alerts")) as { volumeSignalAlerts?: VolumeSignalAlertRow[] };
+    setVolAlerts(Array.isArray(data.volumeSignalAlerts) ? data.volumeSignalAlerts : []);
   }, [api]);
 
   useEffect(() => {
@@ -297,8 +344,10 @@ export default function LiffApp() {
 
             try {
               await loadMeta();
+              await refreshVolMeta();
               await refreshAlerts();
               await refreshPctAlerts();
+              await refreshVolAlerts();
               if (!cancelled) {
                 setPhase("ready");
               }
@@ -339,7 +388,7 @@ export default function LiffApp() {
     return () => {
       cancelled = true;
     };
-  }, [loadMeta, refreshAlerts, refreshPctAlerts]);
+  }, [loadMeta, refreshVolMeta, refreshAlerts, refreshPctAlerts, refreshVolAlerts]);
 
   const onAdd = async () => {
     setAddErr("");
@@ -415,6 +464,40 @@ export default function LiffApp() {
     }
   };
 
+  const onAddVol = async () => {
+    setVolErr("");
+    const symbol = volSymbol.trim();
+    if (!symbol) {
+      setVolErr("กรอกสัญญาหรือย่อ");
+      return;
+    }
+    try {
+      await api("/volume-signal-alerts", {
+        method: "POST",
+        body: JSON.stringify({ symbol, timeframe: volTf }),
+      });
+      setVolSymbol("");
+      await refreshVolAlerts();
+      await refreshVolMeta();
+    } catch (e) {
+      if (e instanceof ApiRequestError) {
+        setVolErr(`${e.message}\n\nHTTP ${e.status}`);
+      } else {
+        setVolErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+      }
+    }
+  };
+
+  const onDeleteVol = async (id: string) => {
+    if (!confirm("ลบการแจ้งเตือน Volume signal นี้?")) return;
+    try {
+      await api(`/volume-signal-alerts/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await refreshVolAlerts();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
+    }
+  };
+
   if (phase === "loading") {
     return (
       <div className="card">
@@ -463,6 +546,19 @@ export default function LiffApp() {
           >
             <span>แจ้งเตือนความเคลื่อนไหว</span>
             <span className="liffTabEn">Change Alert</span>
+          </button>
+          <button
+            type="button"
+            className="liffTab"
+            id="liff-tab-vol"
+            role="tab"
+            aria-selected={homeAlertTab === "vol"}
+            aria-controls="liff-panel-vol"
+            tabIndex={homeAlertTab === "vol" ? 0 : -1}
+            onClick={() => setHomeAlertTab("vol")}
+          >
+            <span>สัญญาณ Volume</span>
+            <span className="liffTabEn">Vol signal</span>
           </button>
         </div>
 
@@ -551,7 +647,7 @@ export default function LiffApp() {
               ))
             )}
           </div>
-        ) : (
+        ) : homeAlertTab === "change" ? (
           <div
             className="liffTabPanel"
             id="liff-panel-change"
@@ -561,6 +657,12 @@ export default function LiffApp() {
             <h2>แจ้งเตือนการเคลื่อนไหวราคา</h2>
             <p className="sub" style={{ marginTop: 0 }}>
               ทุก x% จาก anchor · รายวัน: 07:00 น. (ไทย) · trailing: เลื่อน anchor หลังแจ้ง — เช็คประมาณทุก 15 นาที
+            </p>
+            <p className="sub" style={{ marginTop: "0.35rem", fontSize: "0.82rem" }}>
+              ดู Funding / รอบ / Max pos แบบแยกคอลัมน์และสีสัญญาณตลาดได้ที่หน้า{" "}
+              <Link href="/markets" style={{ color: "var(--accent)", fontWeight: 600 }}>
+                Markets
+              </Link>
             </p>
             <div className="row">
               <div>
@@ -651,6 +753,82 @@ export default function LiffApp() {
                     </span>
                   </div>
                   <button type="button" className="danger" onClick={() => onDeletePct(a.id)}>
+                    ลบ
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <div
+            className="liffTabPanel"
+            id="liff-panel-vol"
+            role="tabpanel"
+            aria-labelledby="liff-tab-vol"
+          >
+            <h2>Volume signal (Top 30 vol)</h2>
+            <p className="sub" style={{ marginTop: 0 }}>
+              แจ้งเมื่อปริมาณแท่งล่าสุดสูงผิดปกติเทียบค่าเฉลี่ย (TF 1h หรือ 4h) — เฉพาะสัญญาใน Top 30 ตาม Vol
+              24h บน MEXC · เช็คทุก ~15 นาที
+            </p>
+            {volMeta ? (
+              <p className="sub" style={{ marginTop: "0.35rem" }}>
+                เกณฑ์ Vol ratio ≥ {volMeta.minVolRatio.toFixed(2)}× · cooldown ~{" "}
+                {Math.round(volMeta.cooldownMs / 3600000)} ชม. หลังแจ้ง · สูงสุด {volMeta.maxAlertsPerUser}{" "}
+                รายการ/คน
+              </p>
+            ) : null}
+            <div className="row cols2">
+              <div>
+                <label htmlFor="vol-symbol">สัญญา / ย่อ (ต้องอยู่ใน Top vol)</label>
+                <input
+                  id="vol-symbol"
+                  list="vol-top-syms"
+                  value={volSymbol}
+                  onChange={(e) => setVolSymbol(e.target.value)}
+                  placeholder="BTC_USDT หรือ btc"
+                  autoComplete="off"
+                />
+                <datalist id="vol-top-syms">
+                  {(volMeta?.topSymbols ?? []).map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <label htmlFor="vol-tf">ช่วงเวลา</label>
+                <select id="vol-tf" value={volTf} onChange={(e) => setVolTf(e.target.value as "1h" | "4h")}>
+                  <option value="1h">1 ชม.</option>
+                  <option value="4h">4 ชม.</option>
+                </select>
+              </div>
+            </div>
+            <button type="button" className="primary" onClick={onAddVol}>
+              เพิ่มการติดตาม
+            </button>
+            {volErr ? (
+              <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {volErr}
+              </div>
+            ) : null}
+            <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
+              รายการที่ติดตาม
+            </p>
+            {volAlerts.length === 0 ? (
+              <p className="sub" style={{ margin: 0 }}>
+                ยังไม่มีรายการ
+              </p>
+            ) : (
+              volAlerts.map((a) => (
+                <div key={a.id} className="alertItem">
+                  <div>
+                    <strong>{a.coinId}</strong>
+                    <br />
+                    <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                      TF {a.timeframe === "4h" ? "4 ชม." : "1 ชม."}
+                    </span>
+                  </div>
+                  <button type="button" className="danger" onClick={() => onDeleteVol(a.id)}>
                     ลบ
                   </button>
                 </div>

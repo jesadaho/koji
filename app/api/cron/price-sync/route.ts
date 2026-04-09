@@ -10,12 +10,13 @@ import {
 } from "@/src/cronStatusStore";
 import { runPctStepPriceAlertTick } from "@/src/pctStepPriceAlertTick";
 import { runPriceAlertTick } from "@/src/priceAlertTick";
+import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + แจ้งเตือนการเคลื่อนไหวราคา (ทุก x%)
+ * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + แจ้งเตือนการเคลื่อนไหวราคา (ทุก x%) + Volume signal (Top 30)
  * GET + Authorization: Bearer CRON_SECRET
  */
 export async function GET(req: NextRequest) {
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
   const steps: PriceSyncCronRecord["steps"] = {
     priceAlerts: { ok: false },
     pctStepAlerts: { ok: false },
+    volumeSignalAlerts: { ok: false },
   };
 
   async function runStep(
@@ -54,6 +56,10 @@ export async function GET(req: NextRequest) {
     const r = await runPctStepPriceAlertTick(client);
     return `แจ้ง ${r.notified} ครั้ง`;
   });
+  await runStep("volumeSignalAlerts", async () => {
+    const r = await runVolumeSignalAlertTick(client);
+    return `แจ้ง ${r.notified} ครั้ง`;
+  });
 
   const record: PriceSyncCronRecord = {
     at: new Date().toISOString(),
@@ -66,6 +72,9 @@ export async function GET(req: NextRequest) {
     console.error("[cron price-sync] savePriceSyncCronRecord", e);
   }
 
-  const allOk = steps.priceAlerts.ok && steps.pctStepAlerts.ok;
+  const allOk =
+    steps.priceAlerts.ok &&
+    steps.pctStepAlerts.ok &&
+    steps.volumeSignalAlerts.ok;
   return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }

@@ -7,6 +7,14 @@
   --accent: #06c755;
   --danger: #f07167;
   --border: #2a3545;
+  /* Markets — professional metric accents */
+  --markets-pro-blue: #6eb5f2;
+  --markets-funding-long-heat: #f87171;
+  --markets-funding-short-cool: #4ade80;
+  --markets-funding-neutral: #94a3b8;
+  --markets-insight-purple: #c4b5fd;
+  --markets-cycle-amber: #fbbf24;
+  --markets-max-warn: #fb923c;
 }
 
 * {
@@ -269,7 +277,7 @@ code {
   gap: 0.12rem;
   text-align: center;
   line-height: 1.2;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 600;
   background: transparent;
   color: var(--muted);
@@ -293,13 +301,31 @@ code {
 }
 
 .liffTabEn {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 500;
   opacity: 0.85;
 }
 
 .liffTabPanel h2:first-child {
   margin-top: 0;
+}
+
+.marketsMetricLegend {
+  margin-top: 0.25rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.marketsMetricLegend strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.marketsLegendWarn {
+  color: var(--markets-max-warn);
+  font-weight: 600;
 }
 
 .marketsCard {
@@ -348,6 +374,81 @@ code {
 
 .marketsTable .changeDown {
   color: var(--danger);
+}
+
+.marketsThIcon {
+  opacity: 0.9;
+}
+
+.marketsThFunding {
+  color: var(--muted);
+}
+
+.marketsThCycle {
+  color: var(--markets-insight-purple);
+}
+
+.marketsThMaxPos {
+  color: var(--markets-pro-blue);
+}
+
+.marketsMetricIcon {
+  margin-right: 0.2rem;
+  opacity: 0.95;
+}
+
+.marketsCellFundingRateInner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.marketsFundingRate--fundingHotLong .marketsFundingRateText {
+  color: var(--markets-funding-long-heat);
+  font-weight: 600;
+}
+
+.marketsFundingRate--fundingHotShort .marketsFundingRateText {
+  color: var(--markets-funding-short-cool);
+  font-weight: 600;
+}
+
+.marketsFundingRate--fundingNeutral .marketsFundingRateText {
+  color: var(--markets-funding-neutral);
+  font-weight: 500;
+}
+
+.marketsCellFundingCycle {
+  color: var(--markets-insight-purple);
+  font-weight: 500;
+}
+
+.marketsFundingCycleText {
+  font-variant-numeric: tabular-nums;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: rgba(196, 181, 253, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: var(--markets-cycle-amber);
+}
+
+.marketsCellMaxPos {
+  color: var(--markets-pro-blue);
+  font-weight: 500;
+}
+
+.marketsCellMaxPos--warn {
+  color: var(--markets-max-warn);
+}
+
+.marketsCellMaxPos--warn .marketsMaxPosValue {
+  font-weight: 600;
+}
+
+.marketsMaxPosValue {
+  font-variant-numeric: tabular-nums;
 }
 
 .marketsCellFunding {

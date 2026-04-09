@@ -4,11 +4,13 @@ import { useMemo, useState } from "react";
 import type { MarketsSortMode, TopMarketRow } from "@/src/mexcMarkets";
 import FundingHistoryButton from "@/components/FundingHistoryButton";
 import {
-  formatFundingWithCycleHours,
+  formatFunding,
   formatPrice,
   formatScore,
   formatUsd,
+  fundingRateVisualClass,
   fundingSettleTitle,
+  maxPositionWarnThreshold,
 } from "@/src/marketsFormat";
 
 type Props = {
@@ -30,6 +32,11 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns, markets
     [rows, query],
   );
   const trimmed = query.trim();
+
+  const maxPosWarnBelow = useMemo(
+    () => maxPositionWarnThreshold(filtered.map((r) => r.maxPositionUsdt)),
+    [filtered],
+  );
 
   return (
     <>
@@ -79,19 +86,39 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns, markets
                 <th className="num">24h</th>
                 <th className="num">Vol 24h (USDT)</th>
                 <th
-                  className="num"
-                  title="Funding rate จาก ticker · รอบ (ชม.) = collectCycle จาก contract/funding_rate"
+                  className="num marketsThFunding"
+                  title="Funding rate จาก ticker — สีสะท้อนต้นทุนถือสถานะ"
                 >
+                  <span className="marketsThIcon" aria-hidden>
+                    💹
+                  </span>{" "}
                   Funding
                 </th>
-                <th className="num" title="ประมาณ notional USDT (สัญญา × ราคา) จาก tier สูงสุด">
-                  Max pos (USDT)
+                <th
+                  className="num marketsThCycle"
+                  title="รอบจ่าย funding (ชม.) — collectCycle จาก contract/funding_rate"
+                >
+                  <span className="marketsThIcon" aria-hidden>
+                    🕒
+                  </span>{" "}
+                  Cycle
+                </th>
+                <th className="num marketsThMaxPos" title="ประมาณ notional USDT สูงสุดจาก tier — สะท้อนสภาพคล่อง">
+                  <span className="marketsThIcon" aria-hidden>
+                    📦
+                  </span>{" "}
+                  Max pos
                 </th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((r) => {
                 const up = r.change24hPercent >= 0;
+                const fundingCls = fundingRateVisualClass(r.fundingRate);
+                const maxLowLiquidity =
+                  r.maxPositionUsdt != null &&
+                  maxPosWarnBelow != null &&
+                  r.maxPositionUsdt <= maxPosWarnBelow;
                 return (
                   <tr key={r.symbol}>
                     <td data-label="สัญญา" className="marketsCellSymbol">
@@ -125,25 +152,51 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns, markets
                       {formatUsd(r.amount24Usdt)}
                     </td>
                     <td
-                      className="num marketsCellFunding"
+                      className={`num marketsCellFundingRate marketsFundingRate--${fundingCls}`}
                       data-label="Funding"
-                      title={fundingSettleTitle(r.nextFundingSettleMs)}
+                      title="ค่าธรรมเนียมถือสถานะ (ต่อรอบ) — บวกมาก = ฝั่ง long จ่ายหนัก"
                     >
-                      <span className="marketsFundingValue">
-                        {formatFundingWithCycleHours(r.fundingRate, r.fundingCycleHours)}
-                      </span>
-                      {marketsSort === "funding" ? <FundingHistoryButton symbol={r.symbol} /> : null}
+                      <div className="marketsCellFundingRateInner">
+                        <span>
+                          <span className="marketsMetricIcon" aria-hidden>
+                            💹
+                          </span>
+                          <span className="marketsFundingRateText">{formatFunding(r.fundingRate)}</span>
+                        </span>
+                        {marketsSort === "funding" ? <FundingHistoryButton symbol={r.symbol} /> : null}
+                      </div>
                     </td>
                     <td
-                      className="num"
+                      className="num marketsCellFundingCycle"
+                      data-label="Cycle"
+                      title={fundingSettleTitle(r.nextFundingSettleMs) ?? "รอบจ่าย funding (ชม.)"}
+                    >
+                      <span className="marketsMetricIcon" aria-hidden>
+                        🕒
+                      </span>
+                      <span className="marketsFundingCycleText">
+                        {r.fundingCycleHours != null && r.fundingCycleHours > 0
+                          ? `${r.fundingCycleHours}h`
+                          : "—"}
+                      </span>
+                    </td>
+                    <td
+                      className={`num marketsCellMaxPos${maxLowLiquidity ? " marketsCellMaxPos--warn" : ""}`}
                       data-label="Max pos"
                       title={
-                        r.maxPositionContracts != null
-                          ? `≈ สัญญา × ราคา (USDT-M) · สัญญาสูงสุด ${r.maxPositionContracts.toLocaleString("en-US")} สัญญา`
-                          : "ไม่มีข้อมูล tier / limit"
+                        maxLowLiquidity
+                          ? "ขนาดไม้สูงสุดต่ำเมื่อเทียบกับคู่อื่นในตาราง — ระวังสภาพคล่อง"
+                          : r.maxPositionContracts != null
+                            ? `≈ สัญญา × ราคา (USDT-M) · สัญญาสูงสุด ${r.maxPositionContracts.toLocaleString("en-US")} สัญญา`
+                            : "ไม่มีข้อมูล tier / limit"
                       }
                     >
-                      {r.maxPositionUsdt != null ? formatUsd(r.maxPositionUsdt) : "—"}
+                      <span className="marketsMetricIcon" aria-hidden>
+                        {maxLowLiquidity ? "⚠️" : "📦"}
+                      </span>
+                      <span className="marketsMaxPosValue">
+                        {r.maxPositionUsdt != null ? formatUsd(r.maxPositionUsdt) : "—"}
+                      </span>
                     </td>
                   </tr>
                 );

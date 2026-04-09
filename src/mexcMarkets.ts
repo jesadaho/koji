@@ -338,6 +338,32 @@ export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarket
 }
 
 /**
+ * Top N สัญญา USDT perpetual ตาม amount24 มากสุดก่อน (กรอง liquidity เหมือน getTopUsdtMarkets)
+ */
+export async function getTopUsdtSymbolsByAmount24(limit: number): Promise<string[]> {
+  const [tickers, details] = await Promise.all([fetchContractTickers(), fetchContractDetails()]);
+  const detailBySymbol = new Map<string, MexcDetailRow>();
+  for (const d of details) {
+    if (d.symbol) detailBySymbol.set(d.symbol, d);
+  }
+
+  const usdtPerp = tickers.filter((t) => {
+    const sym = t.symbol?.trim();
+    if (!sym || !sym.endsWith("_USDT")) return false;
+    const amt = t.amount24;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= MIN_AMOUNT24_USDT) return false;
+    const price = t.lastPrice;
+    if (typeof price !== "number" || Number.isNaN(price) || price <= 0) return false;
+    const d = detailBySymbol.get(sym);
+    if (d && typeof d.state === "number" && d.state !== 0) return false;
+    return true;
+  });
+
+  const ranked = [...usdtPerp].sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
+  return ranked.slice(0, limit).map((t) => t.symbol!.trim());
+}
+
+/**
  * Top N สัญญา USDT ที่ผ่าน Vol filter — เรียง |funding| จาก ticker (ไม่เรียก kline)
  * ใช้ sample ประวัติ funding รายชั่วโมงให้สอดคล้องโหมด Funding บนหน้า Markets
  */

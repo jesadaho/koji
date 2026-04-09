@@ -16,6 +16,10 @@ import {
   liffGetSystemChangeSubscription,
   liffPrice,
   liffSetSystemChangeSubscription,
+  liffListVolumeSignalAlerts,
+  liffGetVolumeSignalMeta,
+  liffCreateVolumeSignalAlert,
+  liffDeleteVolumeSignalAlert,
 } from "@/src/liffService";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +75,14 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       return json(await liffGetSystemChangeSubscription(auth.userId));
     }
+    if (segs.length === 1 && a === "volume-signal-meta") {
+      return json(await liffGetVolumeSignalMeta());
+    }
+    if (segs.length === 1 && a === "volume-signal-alerts") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      return json(await liffListVolumeSignalAlerts(auth.userId));
+    }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);
   } catch (e) {
@@ -117,6 +129,18 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         return json({ error: "JSON ไม่ถูกต้อง" }, 400);
       }
       const r = await liffCreatePctAlert(auth.userId, body);
+      return json(r.json, r.status);
+    }
+    if (segs.length === 1 && a === "volume-signal-alerts") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return json({ error: "JSON ไม่ถูกต้อง" }, 400);
+      }
+      const r = await liffCreateVolumeSignalAlert(auth.userId, body);
       return json(r.json, r.status);
     }
 
@@ -177,6 +201,15 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       const auth = await authenticateLiffRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await liffDeletePctAlert(auth.userId, decodeURIComponent(id));
+      if (r.status === 204) {
+        return new NextResponse(null, { status: 204 });
+      }
+      return json(r.json ?? {}, r.status);
+    }
+    if (segs.length === 2 && a === "volume-signal-alerts" && id) {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const r = await liffDeleteVolumeSignalAlert(auth.userId, decodeURIComponent(id));
       if (r.status === 204) {
         return new NextResponse(null, { status: 204 });
       }
