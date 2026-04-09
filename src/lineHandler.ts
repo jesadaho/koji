@@ -54,9 +54,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • ลบเตือน <ลำดับ> — ลบตามเลขในรายการ
   ตัวอย่าง: ลบเตือน 1
 
-• เตือน% <เหรียญ> <ขั้น%> — แจ้งเมื่อราคาห่างจาก anchor รายวัน (07:00 ไทย) ครบทุกขั้น%
-• เตือน% <เหรียญ> <ขั้น%> trailing — แบบ trailing (หลังแจ้งเลื่อน anchor)
-• รายการเตือน% — รายการเตือน %
+• เตือน% <เหรียญ> <ขั้น%> — แจ้งเตือนการเคลื่อนไหวราคา (รายวัน 07:00 ไทย) เมื่อครบทุกขั้น%
+• เตือน% <เหรียญ> <ขั้น%> trailing — แจ้งเตือนการเคลื่อนไหวราคา แบบ trailing (หลังแจ้งเลื่อน anchor)
+• รายการเตือน% — ดูรายการแจ้งเตือนการเคลื่อนไหวราคา
 • ลบเตือน% <ลำดับ>
   ตัวอย่าง: เตือน% btc 2 · เตือน% eth 1.5 trailing · ลบเตือน% 1
   (EN: pctalert btc 2, pct alerts, unpct 1)
@@ -70,7 +70,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
   (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)
 
-• สถานะ cron — บันทึก job ~15 นาที (แจ้งเตือนราคา) + ชั่วโมง (สัญญา / funding)
+• สถานะ cron — บันทึก job ~15 นาที (เป้าราคา + แจ้งเตือนการเคลื่อนไหวราคา) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
 
 จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
@@ -256,7 +256,9 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
   if (isPctAlertsListQuery(text)) {
     const list = await listPctStepAlertsForUser(uid);
     if (list.length === 0) {
-      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: "ยังไม่มีเตือน %" }]);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: "ยังไม่มีรายการแจ้งเตือนการเคลื่อนไหวราคา" },
+      ]);
       return;
     }
     const body = list
@@ -265,7 +267,9 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
         return `${i + 1}. ${a.coinId} ทุก ${a.stepPct}% (${modeLabel})`;
       })
       .join("\n");
-    await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: `เตือน %:\n${body}` }]);
+    await client.replyMessage(msgEvent.replyToken, [
+      { type: "text", text: `แจ้งเตือนการเคลื่อนไหวราคา:\n${body}` },
+    ]);
     return;
   }
 
@@ -289,7 +293,7 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
   if (unPctIdx !== null) {
     const ok = await removePctStepAlertByIndex(uid, unPctIdx);
     await client.replyMessage(msgEvent.replyToken, [
-      { type: "text", text: ok ? "ลบเตือน % แล้ว" : "ไม่พบลำดับนี้" },
+      { type: "text", text: ok ? "ลบรายการแจ้งเตือนการเคลื่อนไหวราคาแล้ว" : "ไม่พบลำดับนี้" },
     ]);
     return;
   }
@@ -349,7 +353,7 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       await client.replyMessage(msgEvent.replyToken, [
         {
           type: "text",
-          text: `ตั้งเตือน % ${resolved.contractSymbol} ทุก ${pctAlert.stepPct}% — ${modeTh}`,
+          text: `ตั้งแจ้งเตือนการเคลื่อนไหวราคา ${resolved.contractSymbol} ทุก ${pctAlert.stepPct}% — ${modeTh}`,
         },
       ]);
     } catch (e) {

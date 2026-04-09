@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เตือน % step
+ * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + แจ้งเตือนการเคลื่อนไหวราคา (ทุก x%)
  * GET + Authorization: Bearer CRON_SECRET
  */
 export async function GET(req: NextRequest) {

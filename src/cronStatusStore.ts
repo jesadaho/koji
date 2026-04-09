@@ -39,7 +39,7 @@ export type HourlyCronRecord = {
   };
 };
 
-/** ~15 นาที: แจ้งเตือนราคาเป้า + เตือน % */
+/** ~15 นาที: แจ้งเตือนราคาเป้า + แจ้งเตือนการเคลื่อนไหวราคา */
 export type PriceSyncCronRecord = {
   at: string;
   durationMs: number;
@@ -176,7 +176,7 @@ export function formatCronStatusForLine(bundle: {
     parts.push("— รอบล่าสุด: แจ้งเตือนราคา (~15 นาที) —");
     parts.push(`เวลา: ${priceSync.at} · รวม ${priceSync.durationMs}ms`);
     parts.push(fmt(priceSync.steps.priceAlerts, "แจ้งเตือนเป้าราคา"));
-    parts.push(fmt(priceSync.steps.pctStepAlerts, "เตือน % (ทุก x%)"));
+    parts.push(fmt(priceSync.steps.pctStepAlerts, "แจ้งเตือนการเคลื่อนไหวราคา"));
     parts.push("");
   }
 

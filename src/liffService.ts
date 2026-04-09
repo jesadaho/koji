@@ -147,7 +147,7 @@ export async function liffDeletePctAlert(
 ): Promise<{ status: number; json?: Record<string, unknown> }> {
   const ok = await removePctStepAlertById(userId, id);
   if (!ok) {
-    return { status: 404, json: { error: "ไม่พบการแจ้งเตือน %" } };
+    return { status: 404, json: { error: "ไม่พบรายการแจ้งเตือนการเคลื่อนไหวราคา" } };
   }
   return { status: 204 };
 }

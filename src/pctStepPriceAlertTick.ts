@@ -79,7 +79,7 @@ function buildTrailingMessage(row: PctStepAlert, prevAnchor: number, p: number):
 }
 
 /**
- * แจ้งเตือนราคาแบบทุก x% — เรียกจาก cron ~15 นาที
+ * แจ้งเตือนการเคลื่อนไหวราคา (ทุก x%) — เรียกจาก cron ~15 นาที
  */
 export async function runPctStepPriceAlertTick(client: Client): Promise<{ notified: number }> {
   const rows = await loadPctStepAlerts();
