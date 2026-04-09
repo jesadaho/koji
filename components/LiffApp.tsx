@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import liff from "@line/liff";
+import IndicatorCoinPickerModal from "@/components/IndicatorCoinPickerModal";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -214,7 +215,6 @@ export default function LiffApp() {
   const [enableEma, setEnableEma] = useState(false);
   const [trackedChips, setTrackedChips] = useState<string[]>([]);
   const [addCoinOpen, setAddCoinOpen] = useState(false);
-  const [addCoinDraft, setAddCoinDraft] = useState("");
   const [indSettingsErr, setIndSettingsErr] = useState("");
   const [indSettingsSaving, setIndSettingsSaving] = useState(false);
   /** เปิดช่องกรอกตัวเลข — ค่าเริ่มปิด (ประหยัดพื้นที่) */
@@ -631,19 +631,6 @@ export default function LiffApp() {
     } catch (e) {
       alert(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
     }
-  };
-
-  const confirmAddCoinFromModal = () => {
-    setIndSettingsErr("");
-    const raw = addCoinDraft.trim();
-    if (!raw) return;
-    setTrackedChips((prev) => {
-      const k = raw.toUpperCase();
-      if (prev.some((p) => p.toUpperCase() === k)) return prev;
-      return [...prev, raw];
-    });
-    setAddCoinDraft("");
-    setAddCoinOpen(false);
   };
 
   const onSaveIndicatorSettings = async () => {
@@ -1347,50 +1334,19 @@ export default function LiffApp() {
               </div>
             ) : null}
 
-            {addCoinOpen ? (
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="ind-add-coin-title"
-                className="indModalBackdrop"
-                onClick={() => setAddCoinOpen(false)}
-              >
-                <div className="card indModalPanel" onClick={(e) => e.stopPropagation()}>
-                  <h3 id="ind-add-coin-title" style={{ marginTop: 0 }}>
-                    เพิ่มเหรียญ
-                  </h3>
-                  <label htmlFor="ind-add-coin-input">สัญญา / ย่อ</label>
-                  <input
-                    id="ind-add-coin-input"
-                    list="ind-combined-syms"
-                    value={addCoinDraft}
-                    onChange={(e) => setAddCoinDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        confirmAddCoinFromModal();
-                      }
-                    }}
-                    placeholder="เช่น BTC หรือ BTC_USDT"
-                    autoComplete="off"
-                    autoFocus
-                  />
-                  <datalist id="ind-combined-syms">
-                    {combinedTopSymbols.map((s) => (
-                      <option key={s} value={s} />
-                    ))}
-                  </datalist>
-                  <div className="indModalActions">
-                    <button type="button" onClick={() => setAddCoinOpen(false)}>
-                      ยกเลิก
-                    </button>
-                    <button type="button" className="primary" onClick={confirmAddCoinFromModal}>
-                      ตกลง
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            <IndicatorCoinPickerModal
+              open={addCoinOpen}
+              onClose={() => setAddCoinOpen(false)}
+              onConfirm={(contracts) => {
+                setIndSettingsErr("");
+                setTrackedChips(contracts);
+                setAddCoinOpen(false);
+              }}
+              topSymbols={combinedTopSymbols}
+              volAlerts={volAlerts}
+              techRows={techRows}
+              initialChips={trackedChips}
+            />
 
             <p className="indSavedHead">รายการที่บันทึกแล้ว</p>
             {volAlerts.length === 0 && techRows.length === 0 ? (

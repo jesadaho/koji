@@ -709,6 +709,190 @@ code {
   width: auto;
 }
 
+/* Indicator — เลือกหลายเหรียญ (modal) */
+.indCoinPickerPanel {
+  max-width: 26rem;
+  max-height: min(92vh, 36rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.indCoinPickerHint {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.indCoinPickerSearch {
+  margin-bottom: 0.5rem;
+}
+
+.indCoinPickerQuickLabel {
+  margin: 0.35rem 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.indCoinPickerQuick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.65rem;
+}
+
+.indCoinPickerQuickBtn {
+  margin-top: 0;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: auto;
+  min-width: unset;
+}
+
+.indCoinPickerQuickBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.indCoinPickerQuickBtn--on {
+  background: rgba(6, 199, 85, 0.18);
+  border-color: rgba(6, 199, 85, 0.45);
+  color: #b8f5cf;
+}
+
+.indCoinPickerListWrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.indCoinPickerListCaption {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.indCoinPickerList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: min(42vh, 16rem);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.indCoinPickerRow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  font: inherit;
+  font-weight: 500;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.03);
+  border: none;
+  border-bottom: 1px solid rgba(42, 53, 69, 0.65);
+  border-radius: 0;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.indCoinPickerList li:last-child .indCoinPickerRow {
+  border-bottom: none;
+}
+
+.indCoinPickerRow:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.indCoinPickerRow--selected {
+  background: rgba(6, 199, 85, 0.08);
+}
+
+.indCoinPickerRowCheck {
+  flex-shrink: 0;
+  width: 1.15rem;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.indCoinPickerRowIcon {
+  flex-shrink: 0;
+  width: 1.35rem;
+  text-align: center;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.indCoinPickerRowSym {
+  flex-shrink: 0;
+  font-weight: 700;
+  min-width: 2.75rem;
+}
+
+.indCoinPickerRowName {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.indCoinPickerEmpty {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.indCoinPickerFooter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+  padding-top: 0.35rem;
+  flex-shrink: 0;
+}
+
+.indCoinPickerConfirm {
+  width: 100%;
+  margin-top: 0;
+}
+
+.indCoinPickerCancel {
+  width: 100%;
+  margin-top: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.indCoinPickerCancel:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
 .marketsMetricLegend {
   margin-top: 0.25rem;
   margin-bottom: 0.85rem;
