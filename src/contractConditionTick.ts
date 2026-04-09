@@ -119,15 +119,14 @@ function buildMexcSystemConditionMessage(
     const rateStr = `${formatFunding(funding.prev.fundingRate)} → ${formatFunding(funding.next.fundingRate)}`;
     lines.push("", `💹 อัตรา Funding ${heat}`, `   ${rateStr}`);
 
-    /** รอบจ่าย — ใส่เฉพาะเมื่อช่วงชำระ (ชม.) เปลี่ยนจริง เช่น 1h→4h (ไม่ใส่เมื่อแจ้งแค่ rate ขยับ) */
+    /** รอบจ่าย (ชม. ต่อรอบ) — แสดงทุกครั้ง · ถ้ารอบเปลี่ยนจะโชว์ a→b · ไม่ใส่เวลาตัดรอบถัดไป */
     const cycleChanged = funding.prev.collectCycle !== funding.next.collectCycle;
-    if (cycleChanged) {
-      lines.push(
-        "",
-        `🕒 รอบจ่าย (cycle) เปลี่ยน`,
-        `   ${funding.prev.collectCycle}h → ${funding.next.collectCycle}h`,
-      );
-    }
+    lines.push("", `🕒 รอบจ่าย (cycle)`);
+    lines.push(
+      cycleChanged
+        ? `   ${funding.prev.collectCycle}h → ${funding.next.collectCycle}h`
+        : `   ${funding.next.collectCycle}h`,
+    );
   }
 
   return lines.join("\n");
