@@ -930,6 +930,25 @@ code {
   opacity: 0.9;
 }
 
+.marketsThFundingCycleMerged {
+  color: var(--muted);
+}
+
+.marketsThFundingCycleMergedInner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  font-weight: 600;
+}
+
+.marketsThFundingCycleSep {
+  color: var(--border);
+  font-weight: 500;
+  user-select: none;
+}
+
 .marketsThFunding {
   color: var(--muted);
 }
@@ -955,6 +974,28 @@ code {
   flex-wrap: wrap;
 }
 
+.marketsCellFundingMergedInner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.marketsFundingRateBlock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.marketsFundingCycleInline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--markets-insight-purple);
+  font-weight: 500;
+}
+
 .marketsFundingRate--fundingHotLong .marketsFundingRateText {
   color: var(--markets-funding-long-heat);
   font-weight: 600;
@@ -967,11 +1008,6 @@ code {
 
 .marketsFundingRate--fundingNeutral .marketsFundingRateText {
   color: var(--markets-funding-neutral);
-  font-weight: 500;
-}
-
-.marketsCellFundingCycle {
-  color: var(--markets-insight-purple);
   font-weight: 500;
 }
 

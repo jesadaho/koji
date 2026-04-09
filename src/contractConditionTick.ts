@@ -83,16 +83,6 @@ function shouldNotifyOrderMaxVol(prev: OrderSnapshotRow, next: OrderSnapshotRow)
   return prev.maxVol !== next.maxVol;
 }
 
-function fmtNextFundingSettleUtc(ms: number): string | null {
-  if (typeof ms !== "number" || ms <= 0) return null;
-  try {
-    const iso = new Date(ms).toISOString();
-    return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
-  } catch {
-    return null;
-  }
-}
-
 function peerMaxVolThresholdFromDetails(detailBySymbol: Map<string, MexcDetailRow>): number | null {
   const vols: number[] = [];
   detailBySymbol.forEach((row) => {
@@ -102,7 +92,7 @@ function peerMaxVolThresholdFromDetails(detailBySymbol: Map<string, MexcDetailRo
   return maxVolContractWarnThreshold(vols);
 }
 
-/** แยกบล็อกข้อความ: 📦 สภาพคล่อง / 💹 ต้นทุนถือสถานะ / 🕒 รอบ-เวลา */
+/** แยกบล็อกข้อความ: 📦 สภาพคล่อง / 💹 ต้นทุนถือสถานะ / 🕒 รอบจ่าย (เมื่อช่วงชำระเปลี่ยน) */
 function buildMexcSystemConditionMessage(
   symbol: string,
   funding: { prev: FundingSnapshotRow; next: FundingMetaLike } | null,
@@ -129,14 +119,14 @@ function buildMexcSystemConditionMessage(
     const rateStr = `${formatFunding(funding.prev.fundingRate)} → ${formatFunding(funding.next.fundingRate)}`;
     lines.push("", `💹 อัตรา Funding ${heat}`, `   ${rateStr}`);
 
+    /** รอบจ่าย — ใส่เฉพาะเมื่อช่วงชำระ (ชม.) เปลี่ยนจริง เช่น 1h→4h (ไม่ใส่เมื่อแจ้งแค่ rate ขยับ) */
     const cycleChanged = funding.prev.collectCycle !== funding.next.collectCycle;
-    const cycleStr = cycleChanged
-      ? `${funding.prev.collectCycle}h → ${funding.next.collectCycle}h`
-      : `${funding.next.collectCycle}h`;
-    lines.push("", `🕒 รอบจ่าย (cycle)`, `   ${cycleStr}`);
-    const settle = fmtNextFundingSettleUtc(funding.next.nextSettleTime);
-    if (settle) {
-      lines.push(`   ตัด funding ถัดไป: ${settle}`);
+    if (cycleChanged) {
+      lines.push(
+        "",
+        `🕒 รอบจ่าย (cycle) เปลี่ยน`,
+        `   ${funding.prev.collectCycle}h → ${funding.next.collectCycle}h`,
+      );
     }
   }
 

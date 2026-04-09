@@ -86,22 +86,20 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns, markets
                 <th className="num">24h</th>
                 <th className="num">Vol 24h (USDT)</th>
                 <th
-                  className="num marketsThFunding"
-                  title="Funding rate จาก ticker — สีสะท้อนต้นทุนถือสถานะ"
+                  className="num marketsThFundingCycleMerged"
+                  title="Funding rate จาก ticker + รอบจ่าย (ชม.) — collectCycle จาก contract/funding_rate"
                 >
-                  <span className="marketsThIcon" aria-hidden>
-                    💹
-                  </span>{" "}
-                  Funding
-                </th>
-                <th
-                  className="num marketsThCycle"
-                  title="รอบจ่าย funding (ชม.) — collectCycle จาก contract/funding_rate"
-                >
-                  <span className="marketsThIcon" aria-hidden>
-                    🕒
-                  </span>{" "}
-                  Cycle
+                  <span className="marketsThFundingCycleMergedInner">
+                    <span className="marketsThFunding" aria-hidden>
+                      💹 Funding
+                    </span>
+                    <span className="marketsThFundingCycleSep" aria-hidden>
+                      ·
+                    </span>
+                    <span className="marketsThCycle" aria-hidden>
+                      🕒 Cycle
+                    </span>
+                  </span>
                 </th>
                 <th className="num marketsThMaxPos" title="ประมาณ notional USDT สูงสุดจาก tier — สะท้อนสภาพคล่อง">
                   <span className="marketsThIcon" aria-hidden>
@@ -152,33 +150,37 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns, markets
                       {formatUsd(r.amount24Usdt)}
                     </td>
                     <td
-                      className={`num marketsCellFundingRate marketsFundingRate--${fundingCls}`}
-                      data-label="Funding"
-                      title="ค่าธรรมเนียมถือสถานะ (ต่อรอบ) — บวกมาก = ฝั่ง long จ่ายหนัก"
+                      className="num marketsCellFundingMerged"
+                      data-label="Funding / Cycle"
+                      title={[
+                        "ค่าธรรมเนียมถือสถานะ (ต่อรอบ) — บวกมาก = ฝั่ง long จ่ายหนัก",
+                        r.fundingCycleHours != null && r.fundingCycleHours > 0
+                          ? `รอบจ่าย ${r.fundingCycleHours} ชม.`
+                          : null,
+                        fundingSettleTitle(r.nextFundingSettleMs),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     >
-                      <div className="marketsCellFundingRateInner">
-                        <span>
+                      <div className="marketsCellFundingMergedInner">
+                        <span className={`marketsFundingRateBlock marketsFundingRate--${fundingCls}`}>
                           <span className="marketsMetricIcon" aria-hidden>
                             💹
                           </span>
                           <span className="marketsFundingRateText">{formatFunding(r.fundingRate)}</span>
                         </span>
+                        <span className="marketsFundingCycleInline">
+                          <span className="marketsMetricIcon" aria-hidden>
+                            🕒
+                          </span>
+                          <span className="marketsFundingCycleText">
+                            {r.fundingCycleHours != null && r.fundingCycleHours > 0
+                              ? `${r.fundingCycleHours}h`
+                              : "—"}
+                          </span>
+                        </span>
                         {marketsSort === "funding" ? <FundingHistoryButton symbol={r.symbol} /> : null}
                       </div>
-                    </td>
-                    <td
-                      className="num marketsCellFundingCycle"
-                      data-label="Cycle"
-                      title={fundingSettleTitle(r.nextFundingSettleMs) ?? "รอบจ่าย funding (ชม.)"}
-                    >
-                      <span className="marketsMetricIcon" aria-hidden>
-                        🕒
-                      </span>
-                      <span className="marketsFundingCycleText">
-                        {r.fundingCycleHours != null && r.fundingCycleHours > 0
-                          ? `${r.fundingCycleHours}h`
-                          : "—"}
-                      </span>
                     </td>
                     <td
                       className={`num marketsCellMaxPos${maxLowLiquidity ? " marketsCellMaxPos--warn" : ""}`}
