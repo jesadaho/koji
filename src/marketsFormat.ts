@@ -44,6 +44,22 @@ export function maxPositionWarnThreshold(usdts: Array<number | null | undefined>
   return vals[idx] ?? null;
 }
 
+/** เกณฑ์ maxVol สัญญาต่ำ (ล่าง ~15%) — ใช้เตือนสภาพคล่องใน LINE / logic อื่น */
+export function maxVolContractWarnThreshold(maxVols: number[]): number | null {
+  const vals = maxVols.filter((x) => typeof x === "number" && x > 0).sort((a, b) => a - b);
+  if (vals.length < 5) return null;
+  const idx = Math.max(0, Math.floor(vals.length * 0.15) - 1);
+  return vals[idx] ?? null;
+}
+
+/** ข้อความแจ้งเตือน LINE: สรุปทิศทางต้นทุนถือสถานะ (สอดคล้อง fundingRateVisualClass) */
+export function fundingRateLineEmoji(rate: number): string {
+  const c = fundingRateVisualClass(rate);
+  if (c === "fundingHotLong") return "🔴";
+  if (c === "fundingHotShort") return "🟢";
+  return "📊";
+}
+
 export function fundingSettleTitle(ms: number | null): string | undefined {
   if (ms == null || ms <= 0) return undefined;
   try {

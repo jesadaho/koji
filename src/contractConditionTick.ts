@@ -16,7 +16,9 @@ import {
   fetchAllContractDetails,
   fetchContractFunding,
   orderMetaFromDetail,
+  type MexcDetailRow,
 } from "./mexcContractMeta";
+import { formatFunding, fundingRateLineEmoji, maxVolContractWarnThreshold } from "./marketsFormat";
 
 /**
  * แจ้ง funding เมื่อ |Δrate|×100 ≥ ค่านี้ (หน่วยเดียวกับความต่างของ % ที่โชว์ Markets)
@@ -40,11 +42,6 @@ async function mapPoolConcurrent<T, R>(items: T[], concurrency: number, fn: (ite
   return out;
 }
 
-/** แสดงใน LINE ให้ใกล้เคียงที่ผู้ใช้ระบุ (ทศนิยม 2 ตำแหน่ง) */
-function fmtFundingPctShort(rate: number): string {
-  return `${(rate * 100).toFixed(2)}%`;
-}
-
 function displaySymbol(mexcSymbol: string): string {
   const s = mexcSymbol.trim();
   const base = s.replace(/_USDT$/i, "");
@@ -59,11 +56,6 @@ function formatContractVol(n: number): string {
   if (n >= 1000 && n % 1000 === 0) return `${n / 1000}K`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
   return n.toLocaleString("en-US");
-}
-
-/** แจ้งเตือนเฉพาะเมื่อ max order size (maxVol) เปลี่ยน */
-function orderChangeSummaryLine(prev: OrderSnapshotRow, next: OrderSnapshotRow): string {
-  return `Max order size ${formatContractVol(prev.maxVol)} → ${formatContractVol(next.maxVol)}`;
 }
 
 type FundingMetaLike = { fundingRate: number; collectCycle: number; nextSettleTime: number };
@@ -91,27 +83,63 @@ function shouldNotifyOrderMaxVol(prev: OrderSnapshotRow, next: OrderSnapshotRow)
   return prev.maxVol !== next.maxVol;
 }
 
-function buildFundingBodyLine(prev: FundingSnapshotRow, next: FundingMetaLike): string {
-  const a = fmtFundingPctShort(prev.fundingRate);
-  const b = fmtFundingPctShort(next.fundingRate);
-  if (prev.collectCycle !== next.collectCycle) {
-    return `${a} → ${b} (รอบ ${prev.collectCycle}h → ${next.collectCycle}h)`;
+function fmtNextFundingSettleUtc(ms: number): string | null {
+  if (typeof ms !== "number" || ms <= 0) return null;
+  try {
+    const iso = new Date(ms).toISOString();
+    return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+  } catch {
+    return null;
   }
-  return `${a} → ${b}`;
 }
 
+function peerMaxVolThresholdFromDetails(detailBySymbol: Map<string, MexcDetailRow>): number | null {
+  const vols: number[] = [];
+  for (const [, row] of detailBySymbol) {
+    const v = row.maxVol;
+    if (typeof v === "number" && !Number.isNaN(v) && v > 0) vols.push(v);
+  }
+  return maxVolContractWarnThreshold(vols);
+}
+
+/** แยกบล็อกข้อความ: 📦 สภาพคล่อง / 💹 ต้นทุนถือสถานะ / 🕒 รอบ-เวลา */
 function buildMexcSystemConditionMessage(
   symbol: string,
   funding: { prev: FundingSnapshotRow; next: FundingMetaLike } | null,
-  order: { prev: OrderSnapshotRow; next: OrderSnapshotRow } | null
+  order: { prev: OrderSnapshotRow; next: OrderSnapshotRow } | null,
+  peerMaxVolThreshold: number | null
 ): string {
-  const lines = [`🔔 [MEXC System Condition Change]`, `🪙 Symbol: ${displaySymbol(symbol)}`];
+  const lines: string[] = [`🔔 [MEXC System Condition Change]`, `🪙 Symbol: ${displaySymbol(symbol)}`];
+
   if (order) {
-    lines.push(`🛠 Change: ${orderChangeSummaryLine(order.prev, order.next)}`);
+    const summary = `${formatContractVol(order.prev.maxVol)} → ${formatContractVol(order.next.maxVol)}`;
+    const lowLiquidity =
+      peerMaxVolThreshold != null &&
+      order.next.maxVol > 0 &&
+      order.next.maxVol <= peerMaxVolThreshold;
+    const head = lowLiquidity ? "⚠️ ขนาดออเดอร์สูงสุด (Max order)" : "📦 ขนาดออเดอร์สูงสุด (Max order)";
+    lines.push("", head, `   ${summary}`);
+    if (lowLiquidity) {
+      lines.push("   (สภาพคล่องต่ำเทียบสัญญาอื่น — ระวังไม้ใหญ่/ส่งคำสั่งยาก)");
+    }
   }
+
   if (funding) {
-    lines.push(`📉 Funding: ${buildFundingBodyLine(funding.prev, funding.next)}`);
+    const heat = fundingRateLineEmoji(funding.next.fundingRate);
+    const rateStr = `${formatFunding(funding.prev.fundingRate)} → ${formatFunding(funding.next.fundingRate)}`;
+    lines.push("", `💹 อัตรา Funding ${heat}`, `   ${rateStr}`);
+
+    const cycleChanged = funding.prev.collectCycle !== funding.next.collectCycle;
+    const cycleStr = cycleChanged
+      ? `${funding.prev.collectCycle}h → ${funding.next.collectCycle}h`
+      : `${funding.next.collectCycle}h`;
+    lines.push("", `🕒 รอบจ่าย (cycle)`, `   ${cycleStr}`);
+    const settle = fmtNextFundingSettleUtc(funding.next.nextSettleTime);
+    if (settle) {
+      lines.push(`   ตัด funding ถัดไป: ${settle}`);
+    }
   }
+
   return lines.join("\n");
 }
 
@@ -158,6 +186,8 @@ export async function runContractConditionTick(client: Client): Promise<void> {
     liveBySymbol.set(symbol, live);
   }
 
+  const peerMaxVolThreshold = peerMaxVolThresholdFromDetails(detailBySymbol);
+
   let fundingMap = await loadFundingSnapshots();
   let orderMap = await loadOrderSnapshots();
 
@@ -195,7 +225,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
       const fundingBlock =
         notifyF && live && prevF ? { prev: prevF, next: live } : null;
       const orderBlock = notifyO && prevO && nextRow ? { prev: prevO, next: nextRow } : null;
-      const text = buildMexcSystemConditionMessage(symbol, fundingBlock, orderBlock);
+      const text = buildMexcSystemConditionMessage(symbol, fundingBlock, orderBlock, peerMaxVolThreshold);
       for (const uid of Array.from(recipientsFor(symbol))) {
         try {
           await client.pushMessage(uid, [{ type: "text", text }]);
