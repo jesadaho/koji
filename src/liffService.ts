@@ -14,6 +14,11 @@ import {
 } from "./contractWatchStore";
 import { resolveContractSymbol, BASE_TO_CONTRACT } from "./coinMap";
 import { fetchSimplePrices, formatSignal } from "./cryptoService";
+import {
+  addSystemChangeSubscriber,
+  hasSystemChangeSubscriber,
+  removeSystemChangeSubscriber,
+} from "./systemChangeSubscribersStore";
 
 export function getLiffConfig() {
   return {
@@ -186,6 +191,28 @@ export async function liffDeleteContractWatch(
     return { status: 404, json: { error: "ไม่พบการติดตาม" } };
   }
   return { status: 204 };
+}
+
+export async function liffGetSystemChangeSubscription(userId: string) {
+  const subscribed = await hasSystemChangeSubscriber(userId);
+  return { subscribed };
+}
+
+export async function liffSetSystemChangeSubscription(
+  userId: string,
+  body: unknown
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const raw = b.subscribed;
+  if (typeof raw !== "boolean") {
+    return { status: 400, json: { error: "subscribed ต้องเป็น true หรือ false" } };
+  }
+  if (raw) {
+    const changed = await addSystemChangeSubscriber(userId);
+    return { status: 200, json: { subscribed: true, changed } };
+  }
+  const changed = await removeSystemChangeSubscriber(userId);
+  return { status: 200, json: { subscribed: false, changed } };
 }
 
 export async function liffPrice(symbol: string): Promise<{ status: number; json: Record<string, unknown> }> {

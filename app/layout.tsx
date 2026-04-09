@@ -25,6 +25,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             |
           </span>
           <Link href="/markets">Markets</Link>
+          <span className="siteNavSep" aria-hidden>
+            |
+          </span>
+          <Link href="/settings">Settings</Link>
         </nav>
         {children}
       </body>

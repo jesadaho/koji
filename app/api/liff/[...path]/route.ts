@@ -13,7 +13,9 @@ import {
   liffListPctAlerts,
   liffCreatePctAlert,
   liffDeletePctAlert,
+  liffGetSystemChangeSubscription,
   liffPrice,
+  liffSetSystemChangeSubscription,
 } from "@/src/liffService";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +66,11 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const r = await liffPrice(symbol);
       return json(r.json, r.status);
     }
+    if (segs.length === 1 && a === "system-change-subscription") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      return json(await liffGetSystemChangeSubscription(auth.userId));
+    }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);
   } catch (e) {
@@ -110,6 +117,30 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         return json({ error: "JSON ไม่ถูกต้อง" }, 400);
       }
       const r = await liffCreatePctAlert(auth.userId, body);
+      return json(r.json, r.status);
+    }
+
+    return json({ error: "ไม่พบเส้นทาง" }, 404);
+  } catch (e) {
+    return jsonError(e);
+  }
+}
+
+export async function PUT(req: NextRequest, ctx: Ctx) {
+  try {
+    const segs = ctx.params.path ?? [];
+    const [a] = segs;
+
+    if (segs.length === 1 && a === "system-change-subscription") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return json({ error: "JSON ไม่ถูกต้อง" }, 400);
+      }
+      const r = await liffSetSystemChangeSubscription(auth.userId, body);
       return json(r.json, r.status);
     }
 

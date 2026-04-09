@@ -66,6 +66,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • ติดตามระบบ — System conditions: funding / max order size (Top 50 |funding|)
   funding: แจ้งเมื่อรอบชำระ (ชม.) เปลี่ยน หรือ |Δfunding| ≥ 0.1% pt — ไม่แจ้งเมื่อมีแค่เวลาตัดถัดไปเปลี่ยน (ปรับ env CONTRACT_FUNDING_MIN_DELTA_DISPLAY ได้)
   order: แจ้งเมื่อ max order size เปลี่ยน
+  (หรือเปิด/ปิดจาก LIFF หน้า Settings เมื่อตั้ง LIFF แล้ว)
 • เลิกติดตามระบบ — ปิดการแจ้งเตือนดังกล่าว
 • สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
   (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)

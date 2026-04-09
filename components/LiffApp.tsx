@@ -460,6 +460,10 @@ export default function LiffApp() {
       <p className="sub">{welcome}</p>
       <p className="sub liffQuickNav">
         <Link href="/markets">Markets Top 50</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/settings">Settings</Link>
       </p>
 
       <div className="card">
