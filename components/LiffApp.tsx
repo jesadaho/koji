@@ -217,6 +217,10 @@ export default function LiffApp() {
   const [addCoinDraft, setAddCoinDraft] = useState("");
   const [indSettingsErr, setIndSettingsErr] = useState("");
   const [indSettingsSaving, setIndSettingsSaving] = useState(false);
+  /** เปิดช่องกรอกตัวเลข — ค่าเริ่มปิด (ประหยัดพื้นที่) */
+  const [volAdvancedOpen, setVolAdvancedOpen] = useState(false);
+  const [rsiAdvancedOpen, setRsiAdvancedOpen] = useState(false);
+  const [emaAdvancedOpen, setEmaAdvancedOpen] = useState(false);
 
   const combinedTopSymbols = useMemo(() => {
     const s = new Set<string>();
@@ -743,10 +747,35 @@ export default function LiffApp() {
     }
   };
 
+  const rsiThresholdPlaceholder = techDirection === "above" ? "70" : "30";
+
+  const applyRsiPresetStandard = () => {
+    setTechDirection("above");
+    setTechThreshold("70");
+  };
+
+  const applyRsiPresetExtreme = () => {
+    setTechDirection("below");
+    setTechThreshold("20");
+  };
+
+  const applyEmaPresetDayTrade = () => {
+    setEmaFast("9");
+    setEmaSlow("21");
+  };
+
+  const applyEmaPresetSwing = () => {
+    setEmaFast("50");
+    setEmaSlow("200");
+  };
+
   if (phase === "loading") {
     return (
       <div className="card">
-        <p>กำลังโหลด…</p>
+        <div className="liffLoading" role="status" aria-live="polite" aria-busy="true">
+          <div className="liffLoadingSpinner" aria-hidden />
+          <p className="liffLoadingLabel">กำลังโหลด…</p>
+        </div>
       </div>
     );
   }
@@ -1051,134 +1080,231 @@ export default function LiffApp() {
             <p className="indTfLabel" style={{ marginTop: "0.15rem" }}>
               Indicators
             </p>
-            <div className="indCheckList">
-              <label className="indCheckRow">
-                <input type="checkbox" checked={enableVol} onChange={(e) => setEnableVol(e.target.checked)} />
-                Vol signal (Top vol)
-              </label>
-              <label className="indCheckRow">
-                <input type="checkbox" checked={enableRsi} onChange={(e) => setEnableRsi(e.target.checked)} />
-                RSI {techMeta?.period ?? 14}
-              </label>
-              <label className="indCheckRow">
-                <input type="checkbox" checked={enableEma} onChange={(e) => setEnableEma(e.target.checked)} />
-                EMA Cross
-              </label>
-            </div>
-
-            {enableVol ? (
-              <div className="indParamBlock">
-              <div className="row cols2" style={{ marginTop: 0 }}>
-                <div>
-                  <label htmlFor="ind-vol-ratio">Vol ratio ขั้นต่ำ (ว่าง = ค่าเซิร์ฟเวอร์)</label>
+            <div className="indStratStack">
+              <div className="indStratCard">
+                <label className="indStratCardHead">
                   <input
-                    id="ind-vol-ratio"
-                    type="text"
-                    inputMode="decimal"
-                    value={volOptMinRatio}
-                    onChange={(e) => setVolOptMinRatio(e.target.value)}
-                    placeholder={`เช่น ${volMeta?.minVolRatio?.toFixed(1) ?? "3"}`}
-                    autoComplete="off"
+                    type="checkbox"
+                    checked={enableVol}
+                    onChange={(e) => {
+                      setEnableVol(e.target.checked);
+                      if (!e.target.checked) setVolAdvancedOpen(false);
+                    }}
                   />
-                </div>
-                <div>
-                  <label htmlFor="ind-vol-ret">|แท่ง %| ขั้นต่ำ (ว่าง = ค่าเซิร์ฟเวอร์)</label>
-                  <input
-                    id="ind-vol-ret"
-                    type="text"
-                    inputMode="decimal"
-                    value={volOptMinRet}
-                    onChange={(e) => setVolOptMinRet(e.target.value)}
-                    placeholder="เช่น 0.15"
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
-              </div>
-            ) : null}
-
-            {enableRsi ? (
-              <div className="indParamBlock">
-                <div className="row cols2" style={{ marginTop: 0 }}>
-                  <div>
-                    <label htmlFor="ind-rsi-dir">เงื่อนไข RSI</label>
-                    <select
-                      id="ind-rsi-dir"
-                      value={techDirection}
-                      onChange={(e) => setTechDirection(e.target.value as "above" | "below")}
-                    >
-                      <option value="above">ข้ามขึ้นเหนือ (&gt;)</option>
-                      <option value="below">ข้ามลงใต้ (&lt;)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="ind-rsi-th">เกณฑ์ RSI</label>
-                    <div className="inputSuffixWrap">
+                  <span>Vol signal (Top vol)</span>
+                </label>
+                {enableVol ? (
+                  <div className="indStratCardBody">
+                    <p className="indSummaryLine">
+                      ใช้เกณฑ์ตามเซิร์ฟเวอร์ — ถ้าไม่เปิด &quot;แก้ไขค่าละเอียด&quot; ระบบใช้ค่าเริ่มของเซิร์ฟเวอร์ (แนะนำ ratio ≥ 3.0× เมื่อ Vol พุ่งเทียบค่าเฉลี่ย · |แท่ง %| แนะนำ 0.5%)
+                    </p>
+                    <label className="indAdvancedRow">
                       <input
-                        id="ind-rsi-th"
-                        type="number"
-                        inputMode="numeric"
-                        min={1}
-                        max={99}
-                        step={1}
-                        value={techThreshold}
-                        onChange={(e) => setTechThreshold(e.target.value)}
-                        placeholder="70"
+                        type="checkbox"
+                        checked={volAdvancedOpen}
+                        onChange={(e) => setVolAdvancedOpen(e.target.checked)}
                       />
-                      <span className="inputSuffix">RSI</span>
-                    </div>
+                      <span className="indAdvancedGear" aria-hidden>
+                        ⚙
+                      </span>
+                      <span>แก้ไขค่าละเอียด</span>
+                    </label>
+                    {volAdvancedOpen ? (
+                      <div className="indParamBlock" style={{ marginTop: "0.65rem" }}>
+                        <div className="row cols2" style={{ marginTop: 0 }}>
+                          <div>
+                            <label htmlFor="ind-vol-ratio">Vol ratio ขั้นต่ำ</label>
+                            <input
+                              id="ind-vol-ratio"
+                              type="text"
+                              inputMode="decimal"
+                              value={volOptMinRatio}
+                              onChange={(e) => setVolOptMinRatio(e.target.value)}
+                              placeholder="3.0"
+                              autoComplete="off"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="ind-vol-ret">|แท่ง %| ขั้นต่ำ</label>
+                            <input
+                              id="ind-vol-ret"
+                              type="text"
+                              inputMode="decimal"
+                              value={volOptMinRet}
+                              onChange={(e) => setVolOptMinRet(e.target.value)}
+                              placeholder="0.5"
+                              autoComplete="off"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                </div>
+                ) : null}
               </div>
-            ) : null}
 
-            {enableEma ? (
-              <div className="indParamBlock">
-                <div className="row">
-                  <div>
-                    <label htmlFor="ind-ema-kind">ประเภท cross</label>
-                    <select
-                      id="ind-ema-kind"
-                      value={emaKind}
-                      onChange={(e) => setEmaKind(e.target.value === "death" ? "death" : "golden")}
-                    >
-                      <option value="golden">Golden</option>
-                      <option value="death">Death</option>
-                    </select>
+              <div className="indStratCard">
+                <label className="indStratCardHead">
+                  <input
+                    type="checkbox"
+                    checked={enableRsi}
+                    onChange={(e) => {
+                      setEnableRsi(e.target.checked);
+                      if (!e.target.checked) setRsiAdvancedOpen(false);
+                    }}
+                  />
+                  <span>RSI {techMeta?.period ?? 14}</span>
+                </label>
+                {enableRsi ? (
+                  <div className="indStratCardBody">
+                    <p className="indSummaryLine">
+                      Koji จะเตือนเมื่อ RSI({techMeta?.period ?? 14}) <strong>ข้าม{techDirection === "above" ? "ขึ้นเหนือ" : "ลงใต้"}</strong> เกณฑ์{" "}
+                      <strong>{techThreshold}</strong> — ค่าเริ่มต้นแนะนำจากปุ่มด้านล่าง (ไม่ต้องแก้ช่องถ้าไม่จำเป็น)
+                    </p>
+                    <div className="indPresetRow">
+                      <button type="button" className="indPresetBtn" onClick={applyRsiPresetStandard}>
+                        มาตรฐาน (70 / 30)
+                      </button>
+                      <button type="button" className="indPresetBtn" onClick={applyRsiPresetExtreme}>
+                        สุดโต่ง (80 / 20)
+                      </button>
+                    </div>
+                    <label className="indAdvancedRow">
+                      <input
+                        type="checkbox"
+                        checked={rsiAdvancedOpen}
+                        onChange={(e) => setRsiAdvancedOpen(e.target.checked)}
+                      />
+                      <span className="indAdvancedGear" aria-hidden>
+                        ⚙
+                      </span>
+                      <span>แก้ไขค่าละเอียด</span>
+                    </label>
+                    {rsiAdvancedOpen ? (
+                      <div className="indParamBlock" style={{ marginTop: "0.65rem" }}>
+                        <div className="row cols2" style={{ marginTop: 0 }}>
+                          <div>
+                            <label htmlFor="ind-rsi-dir">ทิศทาง / เงื่อนไข</label>
+                            <select
+                              id="ind-rsi-dir"
+                              value={techDirection}
+                              onChange={(e) => setTechDirection(e.target.value as "above" | "below")}
+                            >
+                              <option value="above">ข้ามขึ้นเหนือ (&gt;)</option>
+                              <option value="below">ข้ามลงใต้ (&lt;)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor="ind-rsi-th">เกณฑ์ RSI</label>
+                            <div className="inputSuffixWrap">
+                              <input
+                                id="ind-rsi-th"
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={99}
+                                step={1}
+                                value={techThreshold}
+                                onChange={(e) => setTechThreshold(e.target.value)}
+                                placeholder={rsiThresholdPlaceholder}
+                              />
+                              <span className="inputSuffix">RSI</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
-                </div>
-                <div className="row cols2" style={{ marginTop: "0.5rem" }}>
-                  <div>
-                    <label htmlFor="ind-ema-fast">EMA เร็ว</label>
-                    <input
-                      id="ind-ema-fast"
-                      type="number"
-                      inputMode="numeric"
-                      min={2}
-                      max={199}
-                      step={1}
-                      value={emaFast}
-                      onChange={(e) => setEmaFast(e.target.value)}
-                      placeholder={String(techMeta?.emaDefaults.fast ?? 9)}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="ind-ema-slow">EMA ช้า</label>
-                    <input
-                      id="ind-ema-slow"
-                      type="number"
-                      inputMode="numeric"
-                      min={3}
-                      max={200}
-                      step={1}
-                      value={emaSlow}
-                      onChange={(e) => setEmaSlow(e.target.value)}
-                      placeholder={String(techMeta?.emaDefaults.slow ?? 21)}
-                    />
-                  </div>
-                </div>
+                ) : null}
               </div>
-            ) : null}
+
+              <div className="indStratCard">
+                <label className="indStratCardHead">
+                  <input
+                    type="checkbox"
+                    checked={enableEma}
+                    onChange={(e) => {
+                      setEnableEma(e.target.checked);
+                      if (!e.target.checked) setEmaAdvancedOpen(false);
+                    }}
+                  />
+                  <span>EMA Cross</span>
+                </label>
+                {enableEma ? (
+                  <div className="indStratCardBody">
+                    <p className="indSummaryLine">
+                      {emaKind === "golden" ? "Golden" : "Death"} cross · EMA {emaFast} / {emaSlow} — ค่าเริ่มแนะนำ 9/21 หรือ Swing 50/200
+                    </p>
+                    <div className="indPresetRow">
+                      <button type="button" className="indPresetBtn" onClick={applyEmaPresetDayTrade}>
+                        Day Trade (9 / 21)
+                      </button>
+                      <button type="button" className="indPresetBtn" onClick={applyEmaPresetSwing}>
+                        Swing (50 / 200)
+                      </button>
+                    </div>
+                    <label className="indAdvancedRow">
+                      <input
+                        type="checkbox"
+                        checked={emaAdvancedOpen}
+                        onChange={(e) => setEmaAdvancedOpen(e.target.checked)}
+                      />
+                      <span className="indAdvancedGear" aria-hidden>
+                        ⚙
+                      </span>
+                      <span>แก้ไขค่าละเอียด</span>
+                    </label>
+                    {emaAdvancedOpen ? (
+                      <div className="indParamBlock" style={{ marginTop: "0.65rem" }}>
+                        <div className="row">
+                          <div>
+                            <label htmlFor="ind-ema-kind">ประเภท cross</label>
+                            <select
+                              id="ind-ema-kind"
+                              value={emaKind}
+                              onChange={(e) => setEmaKind(e.target.value === "death" ? "death" : "golden")}
+                            >
+                              <option value="golden">Golden</option>
+                              <option value="death">Death</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="row cols2" style={{ marginTop: "0.5rem" }}>
+                          <div>
+                            <label htmlFor="ind-ema-fast">EMA เร็ว</label>
+                            <input
+                              id="ind-ema-fast"
+                              type="number"
+                              inputMode="numeric"
+                              min={2}
+                              max={199}
+                              step={1}
+                              value={emaFast}
+                              onChange={(e) => setEmaFast(e.target.value)}
+                              placeholder="9"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="ind-ema-slow">EMA ช้า</label>
+                            <input
+                              id="ind-ema-slow"
+                              type="number"
+                              inputMode="numeric"
+                              min={3}
+                              max={200}
+                              step={1}
+                              value={emaSlow}
+                              onChange={(e) => setEmaSlow(e.target.value)}
+                              placeholder="21"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </div>
 
             <p className="indSectionTitle" style={{ marginTop: "1.15rem" }}>
               2. เหรียญที่กำลังติดตาม (Apply to)

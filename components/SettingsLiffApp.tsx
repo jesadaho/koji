@@ -304,7 +304,10 @@ export default function SettingsLiffApp() {
   if (phase === "loading") {
     return (
       <div className="card">
-        <p>กำลังโหลด…</p>
+        <div className="liffLoading" role="status" aria-live="polite" aria-busy="true">
+          <div className="liffLoadingSpinner" aria-hidden />
+          <p className="liffLoadingLabel">กำลังโหลด…</p>
+        </div>
       </div>
     );
   }
@@ -337,7 +340,10 @@ export default function SettingsLiffApp() {
         </p>
 
         {subscribed === null ? (
-          <p className="sub">กำลังโหลดสถานะ…</p>
+          <p className="sub liffLoadingRow" role="status" aria-live="polite">
+            <span className="liffLoadingSpinner liffLoadingSpinner--sm" aria-hidden />
+            <span>กำลังโหลดสถานะ…</span>
+          </p>
         ) : (
           <div style={{ marginTop: "1rem" }}>
             <label
