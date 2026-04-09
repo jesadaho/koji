@@ -1,0 +1,36 @@
+/**
+ * RSI Wilder — ค่าแรกที่ index = period (0-based); ก่อนหน้านั้น NaN
+ */
+export function rsiWilder(closes: number[], period: number): number[] {
+  const n = closes.length;
+  const result: number[] = new Array(n).fill(Number.NaN);
+  if (n <= period || period < 2) return result;
+
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const change = closes[i]! - closes[i - 1]!;
+    if (change >= 0) gains += change;
+    else losses -= change;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+
+  const calcRsi = (): number => {
+    if (avgLoss === 0) return avgGain === 0 ? 50 : 100;
+    return 100 - 100 / (1 + avgGain / avgLoss);
+  };
+
+  result[period] = calcRsi();
+
+  for (let i = period + 1; i < n; i++) {
+    const change = closes[i]! - closes[i - 1]!;
+    const g = change > 0 ? change : 0;
+    const l = change < 0 ? -change : 0;
+    avgGain = (avgGain * (period - 1) + g) / period;
+    avgLoss = (avgLoss * (period - 1) + l) / period;
+    result[i] = calcRsi();
+  }
+
+  return result;
+}

@@ -28,7 +28,16 @@ import {
   type VolumeSignalTimeframe,
 } from "./volumeSignalAlertsStore";
 import {
+  listIndicatorAlertsForUser,
+  maxIndicatorAlertsPerUser,
+  removeIndicatorAlertById,
+  replaceUserRsi1hAlerts,
+} from "./indicatorAlertsStore";
+import { getIndicatorCooldownMsDisplay } from "./indicatorAlertWorker";
+import {
   getVolumeSignalCooldownMsDisplay,
+  getVolumeSignalMinAbsMomentumDisplay,
+  getVolumeSignalMinAbsReturnPctDisplay,
   getVolumeSignalMinVolRatioDisplay,
 } from "./volumeSignalAlertTick";
 
@@ -266,6 +275,8 @@ export async function liffGetVolumeSignalMeta() {
       topSymbols,
       topN: VOLUME_SIGNAL_TOP_N,
       minVolRatio: getVolumeSignalMinVolRatioDisplay(),
+      minAbsReturnPct: getVolumeSignalMinAbsReturnPctDisplay(),
+      minAbsMomentum: getVolumeSignalMinAbsMomentumDisplay(),
       cooldownMs: getVolumeSignalCooldownMsDisplay(),
       maxAlertsPerUser: MAX_VOLUME_SIGNAL_ALERTS_PER_USER,
     };
@@ -274,10 +285,28 @@ export async function liffGetVolumeSignalMeta() {
       topSymbols: [] as string[],
       topN: VOLUME_SIGNAL_TOP_N,
       minVolRatio: getVolumeSignalMinVolRatioDisplay(),
+      minAbsReturnPct: getVolumeSignalMinAbsReturnPctDisplay(),
+      minAbsMomentum: getVolumeSignalMinAbsMomentumDisplay(),
       cooldownMs: getVolumeSignalCooldownMsDisplay(),
       maxAlertsPerUser: MAX_VOLUME_SIGNAL_ALERTS_PER_USER,
     };
   }
+}
+
+function parseOptionalMinVolRatio(raw: unknown): number | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) throw new Error("minVolRatio ไม่ถูกต้อง");
+  if (n < 1.5 || n > 50) throw new Error("minVolRatio ต้องอยู่ระหว่าง 1.5–50");
+  return n;
+}
+
+function parseOptionalMinAbsReturnPct(raw: unknown): number | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) throw new Error("minAbsReturnPct ไม่ถูกต้อง");
+  if (n < 0 || n > 10) throw new Error("minAbsReturnPct ต้องอยู่ระหว่าง 0–10 (% ของราคาแท่ง)");
+  return n;
 }
 
 export async function liffCreateVolumeSignalAlert(
@@ -295,6 +324,16 @@ export async function liffCreateVolumeSignalAlert(
     return { status: 400, json: { error: "timeframe ต้องเป็น 1h หรือ 4h" } };
   }
   const timeframe: VolumeSignalTimeframe = tf === "4h" ? "4h" : "1h";
+
+  let minVolRatio: number | undefined;
+  let minAbsReturnPct: number | undefined;
+  try {
+    minVolRatio = parseOptionalMinVolRatio(b.minVolRatio);
+    minAbsReturnPct = parseOptionalMinAbsReturnPct(b.minAbsReturnPct);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "พารามิเตอร์ไม่ถูกต้อง";
+    return { status: 400, json: { error: msg } };
+  }
 
   const resolved = resolveContractSymbol(symbol);
   if (!resolved) {
@@ -322,6 +361,8 @@ export async function liffCreateVolumeSignalAlert(
       coinId: resolved.contractSymbol,
       symbolLabel: resolved.label,
       timeframe,
+      ...(minVolRatio !== undefined ? { minVolRatio } : {}),
+      ...(minAbsReturnPct !== undefined ? { minAbsReturnPct } : {}),
     });
     return { status: 201, json: { volumeSignalAlert: row } };
   } catch (e) {
@@ -335,6 +376,121 @@ export async function liffDeleteVolumeSignalAlert(
   id: string
 ): Promise<{ status: number; json?: Record<string, unknown> }> {
   const ok = await removeVolumeSignalAlertById(userId, id);
+  if (!ok) {
+    return { status: 404, json: { error: "ไม่พบรายการ" } };
+  }
+  return { status: 204 };
+}
+
+const INDICATOR_META_TOP_N = 50;
+
+export async function liffGetIndicatorMeta() {
+  try {
+    const topSymbols = await getTopUsdtSymbolsByAmount24(INDICATOR_META_TOP_N);
+    return {
+      timeframe: "1h" as const,
+      period: 14,
+      maxAlertsPerUser: maxIndicatorAlertsPerUser(),
+      cooldownMs: getIndicatorCooldownMsDisplay(),
+      topSymbols,
+      topN: INDICATOR_META_TOP_N,
+    };
+  } catch {
+    return {
+      timeframe: "1h" as const,
+      period: 14,
+      maxAlertsPerUser: maxIndicatorAlertsPerUser(),
+      cooldownMs: getIndicatorCooldownMsDisplay(),
+      topSymbols: [] as string[],
+      topN: INDICATOR_META_TOP_N,
+    };
+  }
+}
+
+export async function liffListIndicatorAlerts(userId: string) {
+  const indicatorAlerts = await listIndicatorAlertsForUser(userId);
+  return { indicatorAlerts };
+}
+
+/**
+ * แทนที่ชุด RSI 1h ทั้งหมดของ user ด้วยรายการ symbol + เงื่อนไขเดียว
+ */
+export async function liffSyncRsi1hIndicatorAlerts(
+  userId: string,
+  body: unknown
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const rawSyms = b.symbols ?? b.symbolList;
+  if (!Array.isArray(rawSyms) || rawSyms.length === 0) {
+    return { status: 400, json: { error: "ระบุ symbols อย่างน้อย 1 รายการ" } };
+  }
+
+  const threshold = typeof b.threshold === "number" ? b.threshold : Number(b.threshold);
+  if (!Number.isFinite(threshold) || threshold < 1 || threshold > 99) {
+    return { status: 400, json: { error: "threshold ต้องอยู่ระหว่าง 1–99" } };
+  }
+
+  const dirRaw = typeof b.direction === "string" ? b.direction.trim().toLowerCase() : "";
+  let direction: "above" | "below" | null = null;
+  if (dirRaw === "below" || dirRaw === "under") direction = "below";
+  else if (dirRaw === "above" || dirRaw === "over") direction = "above";
+  if (!direction) {
+    return { status: 400, json: { error: "direction ต้องเป็น above หรือ below" } };
+  }
+
+  const periodNum = b.period !== undefined && b.period !== null ? Number(b.period) : 14;
+  if (!Number.isFinite(periodNum) || periodNum !== 14) {
+    return { status: 400, json: { error: "ตอนนี้รองรับ RSI period 14 เท่านั้น" } };
+  }
+
+  const resolvedSyms: { contractSymbol: string; label: string }[] = [];
+  const seen = new Set<string>();
+  for (const raw of rawSyms) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const r = resolveContractSymbol(raw);
+    if (!r) {
+      return { status: 400, json: { error: `ไม่รู้จักคู่: ${raw}` } };
+    }
+    if (seen.has(r.contractSymbol)) continue;
+    seen.add(r.contractSymbol);
+    resolvedSyms.push(r);
+  }
+
+  if (resolvedSyms.length === 0) {
+    return { status: 400, json: { error: "ไม่มีสัญญาที่ใช้ได้" } };
+  }
+  if (resolvedSyms.length > maxIndicatorAlertsPerUser()) {
+    return {
+      status: 400,
+      json: { error: `สูงสุด ${maxIndicatorAlertsPerUser()} สัญญาต่อผู้ใช้` },
+    };
+  }
+
+  try {
+    const rows = resolvedSyms.map((r) => ({
+      userId,
+      symbol: r.contractSymbol,
+      symbolLabel: r.label,
+      indicatorType: "RSI" as const,
+      parameters: { period: 14 },
+      timeframe: "1h" as const,
+      threshold,
+      direction,
+    }));
+
+    const indicatorAlerts = await replaceUserRsi1hAlerts(userId, rows);
+    return { status: 200, json: { indicatorAlerts, saved: indicatorAlerts.length } };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
+    return { status: 400, json: { error: msg } };
+  }
+}
+
+export async function liffDeleteIndicatorAlert(
+  userId: string,
+  id: string
+): Promise<{ status: number; json?: Record<string, unknown> }> {
+  const ok = await removeIndicatorAlertById(userId, id);
   if (!ok) {
     return { status: 404, json: { error: "ไม่พบรายการ" } };
   }

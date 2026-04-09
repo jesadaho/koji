@@ -8,6 +8,14 @@ const filePath = join(process.cwd(), "data", "volume_signal_alerts.json");
 
 export type VolumeSignalTimeframe = "1h" | "4h";
 
+/** บันทึกเมื่อแจ้งเตือนล่าสุด (เฟส 3 — แสดงใน LIFF) */
+export type VolumeSignalLastEvent = {
+  at: string;
+  volRatio: number;
+  returnPct: number;
+  momentumScore: number;
+};
+
 export type VolumeSignalAlert = {
   id: string;
   userId: string;
@@ -17,6 +25,12 @@ export type VolumeSignalAlert = {
   createdAt: string;
   /** ISO — cooldown หลังแจ้งเตือน */
   lastNotifiedAt?: string;
+  /** เกณฑ์เฉพาะรายการ — ถ้าไม่ระบุใช้ค่า default จาก env */
+  minVolRatio?: number;
+  /** |% เปลี่ยนแท่ง| ขั้นต่ำ (หน่วย % pt ของราคา เช่น 0.15 = 0.15%) */
+  minAbsReturnPct?: number;
+  /** สรุปครั้งแจ้งล่าสุด */
+  lastEvent?: VolumeSignalLastEvent;
 };
 
 function isVercel(): boolean {
@@ -75,7 +89,7 @@ export async function listVolumeSignalAlertsForUser(userId: string): Promise<Vol
 }
 
 export async function addVolumeSignalAlert(
-  row: Omit<VolumeSignalAlert, "id" | "createdAt">
+  row: Omit<VolumeSignalAlert, "id" | "createdAt" | "lastEvent">
 ): Promise<VolumeSignalAlert> {
   const all = await loadVolumeSignalAlerts();
   const mine = all.filter((a) => a.userId === row.userId);
@@ -105,11 +119,23 @@ export async function removeVolumeSignalAlertById(userId: string, id: string): P
   return true;
 }
 
-export async function setVolumeSignalLastNotified(id: string, iso: string): Promise<boolean> {
+export async function setVolumeSignalLastNotified(
+  id: string,
+  iso: string,
+  event?: Omit<VolumeSignalLastEvent, "at">
+): Promise<boolean> {
   const all = await loadVolumeSignalAlerts();
   const a = all.find((x) => x.id === id);
   if (!a) return false;
   a.lastNotifiedAt = iso;
+  if (event) {
+    a.lastEvent = {
+      at: iso,
+      volRatio: event.volRatio,
+      returnPct: event.returnPct,
+      momentumScore: event.momentumScore,
+    };
+  }
   await saveAll(all);
   return true;
 }

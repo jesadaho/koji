@@ -1,5 +1,6 @@
 import type { Client } from "@line/bot-sdk";
 import { getTopUsdtSymbolsByAmount24 } from "./mexcMarkets";
+import { formatScore } from "./marketsFormat";
 import {
   loadVolumeSignalAlerts,
   setVolumeSignalLastNotified,
@@ -18,6 +19,34 @@ function minVolRatio(): number {
 function cooldownMs(): number {
   const v = Number(process.env.VOLUME_SIGNAL_COOLDOWN_MS);
   return Number.isFinite(v) && v > 0 ? v : 4 * 3600 * 1000;
+}
+
+/** เฟส 2: |% เปลี่ยนราคาแท่ง| ขั้นต่ำ — 0 = ปิดเกณฑ์นี้ */
+function minAbsReturnPctEnv(): number {
+  const v = Number(process.env.VOLUME_SIGNAL_MIN_ABS_RETURN_PCT);
+  return Number.isFinite(v) && v >= 0 ? v : 0;
+}
+
+/** เฟส 2: |momentumScore| ขั้นต่ำ — 0 = ปิด */
+function minAbsMomentumEnv(): number {
+  const v = Number(process.env.VOLUME_SIGNAL_MIN_ABS_MOMENTUM);
+  return Number.isFinite(v) && v >= 0 ? v : 0;
+}
+
+function effectiveMinVolRatio(a: VolumeSignalAlert): number {
+  const d = minVolRatio();
+  if (typeof a.minVolRatio === "number" && Number.isFinite(a.minVolRatio) && a.minVolRatio >= 1.5) {
+    return a.minVolRatio;
+  }
+  return d;
+}
+
+function effectiveMinAbsReturnPct(a: VolumeSignalAlert): number {
+  const env = minAbsReturnPctEnv();
+  if (typeof a.minAbsReturnPct === "number" && Number.isFinite(a.minAbsReturnPct) && a.minAbsReturnPct >= 0) {
+    return a.minAbsReturnPct;
+  }
+  return env;
 }
 
 function inCooldown(a: VolumeSignalAlert, now: number): boolean {
@@ -39,6 +68,64 @@ async function mapPoolConcurrent<T, R>(items: T[], concurrency: number, fn: (ite
 
 type GroupKey = `${string}\t${VolumeSignalTimeframe}`;
 
+type Hit = { volRatio: number; returnPct: number; momentumScore: number };
+
+function passesQualityGates(hit: Hit, a: VolumeSignalAlert): boolean {
+  const minV = effectiveMinVolRatio(a);
+  if (hit.volRatio < minV) return false;
+
+  const minRet = effectiveMinAbsReturnPct(a);
+  if (minRet > 0 && Math.abs(hit.returnPct) < minRet) return false;
+
+  const minMom = minAbsMomentumEnv();
+  if (minMom > 0 && Math.abs(hit.momentumScore) < minMom) return false;
+
+  return true;
+}
+
+function directionEmoji(returnPct: number): string {
+  if (returnPct > 0.02) return "🟢";
+  if (returnPct < -0.02) return "🔴";
+  return "📊";
+}
+
+function buildVolumeSignalLineMessage(
+  a: VolumeSignalAlert,
+  hit: Hit,
+  ratioFloor: number
+): string {
+  const tfLabel = a.timeframe === "4h" ? "4 ชม." : "1 ชม.";
+  const dir = directionEmoji(hit.returnPct);
+  const minV = effectiveMinVolRatio(a);
+  const minRet = effectiveMinAbsReturnPct(a);
+  const momFloor = minAbsMomentumEnv();
+
+  const lines = [
+    `📊 Koji — Volume + Momentum (Top ${TOP_N} vol)`,
+    `🪙 ${a.coinId} · แท่ง ${tfLabel}`,
+    "",
+    `📦 ปริมาณ (Vol spike)`,
+    `   เทียบค่าเฉลี่ย: ${hit.volRatio.toFixed(2)}× (เกณฑ์ ≥ ${minV.toFixed(2)}× · ค่าเริ่มระบบ ${ratioFloor.toFixed(2)}×)`,
+    "",
+    `💹 Momentum ${dir}`,
+    `   Score: ${formatScore(hit.momentumScore)} · แท่ง ${hit.returnPct >= 0 ? "+" : ""}${hit.returnPct.toFixed(2)}%`,
+  ];
+
+  if (minRet > 0) {
+    lines.push(`   (กรอง |แท่ง %| ≥ ${minRet.toFixed(2)}%)`);
+  }
+  if (momFloor > 0) {
+    lines.push(`   (กรอง |score| ≥ ${formatScore(momFloor)})`);
+  }
+
+  lines.push(
+    "",
+    "มีการเคลื่อนไหวของปริมาณผิดปกติ — ใช้ร่วมกับทิศทาง/ความเสี่ยงของคุณ"
+  );
+
+  return lines.join("\n");
+}
+
 export async function runVolumeSignalAlertTick(client: Client): Promise<{ notified: number }> {
   const all = await loadVolumeSignalAlerts();
   if (all.length === 0) return { notified: 0 };
@@ -51,7 +138,7 @@ export async function runVolumeSignalAlertTick(client: Client): Promise<{ notifi
     return { notified: 0 };
   }
   const allowed = new Set(top);
-  const ratioMin = minVolRatio();
+  const ratioFloor = minVolRatio();
   const now = Date.now();
 
   const groups = new Map<GroupKey, VolumeSignalAlert[]>();
@@ -72,7 +159,7 @@ export async function runVolumeSignalAlertTick(client: Client): Promise<{ notifi
     const tf = key.slice(tab + 1) as VolumeSignalTimeframe;
 
     const kline = await fetchContractKlineVolumeSignal(symbol, tf);
-    if (!kline) return { alerts, hit: null as { volRatio: number; returnPct: number } | null };
+    if (!kline) return { alerts, hit: null as Hit | null };
     const hit = computeVolumeSpikeRatio(kline);
     return { alerts, hit };
   });
@@ -80,23 +167,22 @@ export async function runVolumeSignalAlertTick(client: Client): Promise<{ notifi
   let notified = 0;
 
   for (const { alerts, hit } of results) {
-    if (!hit || hit.volRatio < ratioMin) continue;
+    if (!hit) continue;
 
     for (const a of alerts) {
+      if (!passesQualityGates(hit, a)) continue;
       if (inCooldown(a, now)) continue;
-      const tfLabel = a.timeframe === "4h" ? "4 ชม." : "1 ชม.";
-      const msg = [
-        `📊 Koji — สัญญาณ Volume (Top ${TOP_N} vol)`,
-        `${a.coinId} · แท่ง ${tfLabel}`,
-        `ปริมาณเทียบค่าเฉลี่ย ~ ${hit.volRatio.toFixed(2)}× (เกณฑ์ ≥ ${ratioMin})`,
-        `แท่งล่าสุดเปลี่ยนราคา ~ ${hit.returnPct >= 0 ? "+" : ""}${hit.returnPct.toFixed(2)}%`,
-        "",
-        "มีการเคลื่อนไหวของปริมาณผิดปกติ — ระวังเลือกทิศทางเร็วๆ นี้",
-      ].join("\n");
+
+      const msg = buildVolumeSignalLineMessage(a, hit, ratioFloor);
+      const iso = new Date().toISOString();
 
       try {
         await client.pushMessage(a.userId, [{ type: "text", text: msg }]);
-        await setVolumeSignalLastNotified(a.id, new Date().toISOString());
+        await setVolumeSignalLastNotified(a.id, iso, {
+          volRatio: hit.volRatio,
+          returnPct: hit.returnPct,
+          momentumScore: hit.momentumScore,
+        });
         notified += 1;
       } catch (e) {
         console.error("[volumeSignalAlertTick] push", a.id, e);
@@ -114,4 +200,12 @@ export function getVolumeSignalMinVolRatioDisplay(): number {
 
 export function getVolumeSignalCooldownMsDisplay(): number {
   return cooldownMs();
+}
+
+export function getVolumeSignalMinAbsReturnPctDisplay(): number {
+  return minAbsReturnPctEnv();
+}
+
+export function getVolumeSignalMinAbsMomentumDisplay(): number {
+  return minAbsMomentumEnv();
 }

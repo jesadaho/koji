@@ -114,7 +114,20 @@ type PctStepAlert = {
 
 type Phase = "loading" | "setup" | "ready";
 
-type HomeAlertTab = "price" | "change" | "vol";
+type HomeAlertTab = "price" | "change" | "vol" | "tech";
+
+type IndicatorAlertRow = {
+  id: string;
+  symbol: string;
+  symbolLabel: string;
+  indicatorType: "RSI";
+  parameters: { period: number };
+  timeframe: "1h";
+  threshold: number;
+  direction: "above" | "below";
+  createdAt: string;
+  lastTriggeredAt?: string;
+};
 
 const PCT_STEP_PRESET_VALUES = [1, 2, 3, 5, 10] as const;
 
@@ -124,6 +137,14 @@ type VolumeSignalAlertRow = {
   symbolLabel: string;
   timeframe: "1h" | "4h";
   createdAt: string;
+  minVolRatio?: number;
+  minAbsReturnPct?: number;
+  lastEvent?: {
+    at: string;
+    volRatio: number;
+    returnPct: number;
+    momentumScore: number;
+  };
 };
 
 export default function LiffApp() {
@@ -151,12 +172,30 @@ export default function LiffApp() {
   const [volMeta, setVolMeta] = useState<{
     topSymbols: string[];
     minVolRatio: number;
+    minAbsReturnPct: number;
+    minAbsMomentum: number;
     cooldownMs: number;
     maxAlertsPerUser: number;
   } | null>(null);
   const [volSymbol, setVolSymbol] = useState("");
   const [volTf, setVolTf] = useState<"1h" | "4h">("1h");
+  const [volOptMinRatio, setVolOptMinRatio] = useState("");
+  const [volOptMinRet, setVolOptMinRet] = useState("");
   const [volErr, setVolErr] = useState("");
+
+  const [techMeta, setTechMeta] = useState<{
+    timeframe: string;
+    period: number;
+    maxAlertsPerUser: number;
+    cooldownMs: number;
+    topSymbols: string[];
+  } | null>(null);
+  const [techRows, setTechRows] = useState<IndicatorAlertRow[]>([]);
+  const [techInput, setTechInput] = useState("");
+  const [techChips, setTechChips] = useState<string[]>([]);
+  const [techThreshold, setTechThreshold] = useState("70");
+  const [techDirection, setTechDirection] = useState<"above" | "below">("above");
+  const [techErr, setTechErr] = useState("");
 
   const api = useCallback(
     async (path: string, opts: RequestInit = {}) => {
@@ -214,12 +253,16 @@ export default function LiffApp() {
     const data = parsed as {
       topSymbols?: string[];
       minVolRatio?: number;
+      minAbsReturnPct?: number;
+      minAbsMomentum?: number;
       cooldownMs?: number;
       maxAlertsPerUser?: number;
     };
     setVolMeta({
       topSymbols: Array.isArray(data.topSymbols) ? data.topSymbols : [],
       minVolRatio: typeof data.minVolRatio === "number" ? data.minVolRatio : 3,
+      minAbsReturnPct: typeof data.minAbsReturnPct === "number" ? data.minAbsReturnPct : 0,
+      minAbsMomentum: typeof data.minAbsMomentum === "number" ? data.minAbsMomentum : 0,
       cooldownMs: typeof data.cooldownMs === "number" ? data.cooldownMs : 4 * 3600 * 1000,
       maxAlertsPerUser: typeof data.maxAlertsPerUser === "number" ? data.maxAlertsPerUser : 10,
     });
@@ -228,6 +271,44 @@ export default function LiffApp() {
   const refreshVolAlerts = useCallback(async () => {
     const data = (await api("/volume-signal-alerts")) as { volumeSignalAlerts?: VolumeSignalAlertRow[] };
     setVolAlerts(Array.isArray(data.volumeSignalAlerts) ? data.volumeSignalAlerts : []);
+  }, [api]);
+
+  const refreshTechMeta = useCallback(async () => {
+    const url = `${apiBase}/api/liff/indicator-meta`;
+    const res = await fetch(url);
+    const { text, parsed } = await readApiResponse(res);
+    if (!res.ok) {
+      const msg = messageFromParsed(parsed, res.statusText);
+      throw new ApiRequestError(msg, res.status, text, url);
+    }
+    const data = parsed as {
+      timeframe?: string;
+      period?: number;
+      maxAlertsPerUser?: number;
+      cooldownMs?: number;
+      topSymbols?: string[];
+    };
+    setTechMeta({
+      timeframe: data.timeframe ?? "1h",
+      period: typeof data.period === "number" ? data.period : 14,
+      maxAlertsPerUser: typeof data.maxAlertsPerUser === "number" ? data.maxAlertsPerUser : 30,
+      cooldownMs: typeof data.cooldownMs === "number" ? data.cooldownMs : 4 * 3600 * 1000,
+      topSymbols: Array.isArray(data.topSymbols) ? data.topSymbols : [],
+    });
+  }, []);
+
+  const refreshTechAlerts = useCallback(async () => {
+    const data = (await api("/indicator-alerts")) as { indicatorAlerts?: IndicatorAlertRow[] };
+    const list = Array.isArray(data.indicatorAlerts) ? data.indicatorAlerts : [];
+    setTechRows(list);
+    if (list.length > 0) {
+      const f = list[0]!;
+      setTechChips(list.map((r) => r.symbol));
+      setTechThreshold(String(f.threshold));
+      setTechDirection(f.direction);
+    } else {
+      setTechChips([]);
+    }
   }, [api]);
 
   useEffect(() => {
@@ -345,9 +426,11 @@ export default function LiffApp() {
             try {
               await loadMeta();
               await refreshVolMeta();
+              await refreshTechMeta();
               await refreshAlerts();
               await refreshPctAlerts();
               await refreshVolAlerts();
+              await refreshTechAlerts();
               if (!cancelled) {
                 setPhase("ready");
               }
@@ -388,7 +471,7 @@ export default function LiffApp() {
     return () => {
       cancelled = true;
     };
-  }, [loadMeta, refreshVolMeta, refreshAlerts, refreshPctAlerts, refreshVolAlerts]);
+  }, [loadMeta, refreshVolMeta, refreshTechMeta, refreshAlerts, refreshPctAlerts, refreshVolAlerts, refreshTechAlerts]);
 
   const onAdd = async () => {
     setAddErr("");
@@ -472,11 +555,18 @@ export default function LiffApp() {
       return;
     }
     try {
+      const payload: Record<string, unknown> = { symbol, timeframe: volTf };
+      const mr = volOptMinRatio.trim();
+      if (mr) payload.minVolRatio = Number(mr.replace(",", "."));
+      const ar = volOptMinRet.trim();
+      if (ar) payload.minAbsReturnPct = Number(ar.replace(",", "."));
       await api("/volume-signal-alerts", {
         method: "POST",
-        body: JSON.stringify({ symbol, timeframe: volTf }),
+        body: JSON.stringify(payload),
       });
       setVolSymbol("");
+      setVolOptMinRatio("");
+      setVolOptMinRet("");
       await refreshVolAlerts();
       await refreshVolMeta();
     } catch (e) {
@@ -493,6 +583,59 @@ export default function LiffApp() {
     try {
       await api(`/volume-signal-alerts/${encodeURIComponent(id)}`, { method: "DELETE" });
       await refreshVolAlerts();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
+    }
+  };
+
+  const onAddTechChip = () => {
+    setTechErr("");
+    const raw = techInput.trim();
+    if (!raw) return;
+    setTechChips((prev) => {
+      const k = raw.toUpperCase();
+      if (prev.some((p) => p.toUpperCase() === k)) return prev;
+      return [...prev, raw];
+    });
+    setTechInput("");
+  };
+
+  const onSaveTech = async () => {
+    setTechErr("");
+    if (techChips.length === 0) {
+      setTechErr("เพิ่มสัญญาอย่างน้อย 1 รายการ");
+      return;
+    }
+    const th = Number(techThreshold.replace(",", "."));
+    if (!Number.isFinite(th) || th < 1 || th > 99) {
+      setTechErr("เกณฑ์ RSI ต้องอยู่ระหว่าง 1–99");
+      return;
+    }
+    try {
+      await api("/indicator-alerts", {
+        method: "POST",
+        body: JSON.stringify({
+          symbols: techChips,
+          threshold: th,
+          direction: techDirection,
+          period: 14,
+        }),
+      });
+      await refreshTechAlerts();
+    } catch (e) {
+      if (e instanceof ApiRequestError) {
+        setTechErr(`${e.message}\n\nHTTP ${e.status}`);
+      } else {
+        setTechErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+      }
+    }
+  };
+
+  const onDeleteTech = async (id: string) => {
+    if (!confirm("ลบการแจ้งเตือน RSI รายการนี้?")) return;
+    try {
+      await api(`/indicator-alerts/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await refreshTechAlerts();
     } catch (e) {
       alert(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
     }
@@ -559,6 +702,19 @@ export default function LiffApp() {
           >
             <span>สัญญาณ Volume</span>
             <span className="liffTabEn">Vol signal</span>
+          </button>
+          <button
+            type="button"
+            className="liffTab"
+            id="liff-tab-tech"
+            role="tab"
+            aria-selected={homeAlertTab === "tech"}
+            aria-controls="liff-panel-tech"
+            tabIndex={homeAlertTab === "tech" ? 0 : -1}
+            onClick={() => setHomeAlertTab("tech")}
+          >
+            <span>Indicator</span>
+            <span className="liffTabEn">RSI 1h</span>
           </button>
         </div>
 
@@ -759,7 +915,7 @@ export default function LiffApp() {
               ))
             )}
           </div>
-        ) : (
+        ) : homeAlertTab === "vol" ? (
           <div
             className="liffTabPanel"
             id="liff-panel-vol"
@@ -768,14 +924,20 @@ export default function LiffApp() {
           >
             <h2>Volume signal (Top 30 vol)</h2>
             <p className="sub" style={{ marginTop: 0 }}>
-              แจ้งเมื่อปริมาณแท่งล่าสุดสูงผิดปกติเทียบค่าเฉลี่ย (TF 1h หรือ 4h) — เฉพาะสัญญาใน Top 30 ตาม Vol
-              24h บน MEXC · เช็คทุก ~15 นาที
+              เฟส 2–3: ใช้ Vol spike + คะแนน Momentum (สูตรเดียวกับหน้า Markets) บน TF 1h/4h — เฉพาะสัญญาใน Top 30
+              ตาม Vol 24h · เช็คทุก ~15 นาที
             </p>
             {volMeta ? (
               <p className="sub" style={{ marginTop: "0.35rem" }}>
-                เกณฑ์ Vol ratio ≥ {volMeta.minVolRatio.toFixed(2)}× · cooldown ~{" "}
-                {Math.round(volMeta.cooldownMs / 3600000)} ชม. หลังแจ้ง · สูงสุด {volMeta.maxAlertsPerUser}{" "}
-                รายการ/คน
+                ค่าเริ่ม: Vol ratio ≥ {volMeta.minVolRatio.toFixed(2)}×
+                {volMeta.minAbsReturnPct > 0
+                  ? ` · |แท่ง %| ≥ ${volMeta.minAbsReturnPct.toFixed(2)}%`
+                  : ""}
+                {volMeta.minAbsMomentum > 0
+                  ? ` · |momentum score| ≥ ${volMeta.minAbsMomentum.toFixed(4)}`
+                  : ""}{" "}
+                · cooldown ~{Math.round(volMeta.cooldownMs / 3600000)} ชม. · สูงสุด {volMeta.maxAlertsPerUser}{" "}
+                รายการ/คน — ปรับเกณฑ์รายการได้ด้านล่าง
               </p>
             ) : null}
             <div className="row cols2">
@@ -803,6 +965,32 @@ export default function LiffApp() {
                 </select>
               </div>
             </div>
+            <div className="row cols2" style={{ marginTop: "0.75rem" }}>
+              <div>
+                <label htmlFor="vol-opt-ratio">Vol ratio ขั้นต่ำ (ทับค่าเซิร์ฟเวอร์ — ว่าง = ใช้ค่าเริ่ม)</label>
+                <input
+                  id="vol-opt-ratio"
+                  type="text"
+                  inputMode="decimal"
+                  value={volOptMinRatio}
+                  onChange={(e) => setVolOptMinRatio(e.target.value)}
+                  placeholder={`เช่น ${volMeta?.minVolRatio?.toFixed(1) ?? "3"}`}
+                  autoComplete="off"
+                />
+              </div>
+              <div>
+                <label htmlFor="vol-opt-ret">|แท่ง %| ขั้นต่ำ (ทับค่าเซิร์ฟเวอร์ — ว่าง = ใช้ค่าเริ่ม)</label>
+                <input
+                  id="vol-opt-ret"
+                  type="text"
+                  inputMode="decimal"
+                  value={volOptMinRet}
+                  onChange={(e) => setVolOptMinRet(e.target.value)}
+                  placeholder="เช่น 0.15 (=0.15%)"
+                  autoComplete="off"
+                />
+              </div>
+            </div>
             <button type="button" className="primary" onClick={onAddVol}>
               เพิ่มการติดตาม
             </button>
@@ -826,9 +1014,162 @@ export default function LiffApp() {
                     <br />
                     <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
                       TF {a.timeframe === "4h" ? "4 ชม." : "1 ชม."}
+                      {typeof a.minVolRatio === "number" ? ` · Vol≥${a.minVolRatio}×` : ""}
+                      {typeof a.minAbsReturnPct === "number" ? ` · |แท่ง|≥${a.minAbsReturnPct}%` : ""}
                     </span>
+                    {a.lastEvent ? (
+                      <>
+                        <br />
+                        <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
+                          ล่าสุด:{" "}
+                          {new Date(a.lastEvent.at).toLocaleString("th-TH", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}{" "}
+                          · Vol {a.lastEvent.volRatio.toFixed(2)}× · แท่ง {a.lastEvent.returnPct >= 0 ? "+" : ""}
+                          {a.lastEvent.returnPct.toFixed(2)}%
+                        </span>
+                      </>
+                    ) : null}
                   </div>
                   <button type="button" className="danger" onClick={() => onDeleteVol(a.id)}>
+                    ลบ
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        ) : (
+          <div
+            className="liffTabPanel"
+            id="liff-panel-tech"
+            role="tabpanel"
+            aria-labelledby="liff-tab-tech"
+          >
+            <h2>Technical indicator (Phase 1.5)</h2>
+            <p className="sub" style={{ marginTop: 0 }}>
+              RSI({techMeta?.period ?? 14}) บนแท่ง 1h — แจ้งเมื่อ RSI <strong>ข้าม</strong>เกณฑ์ (เข้าโซน) ไม่ใช่แค่ค้างอยู่ในโซน ·
+              เช็คทุก ~15 นาทีจากแท่งปิดล่าสุด
+            </p>
+            {techMeta ? (
+              <p className="sub" style={{ marginTop: "0.35rem" }}>
+                TF ล็อก 1 ชม. · สูงสุด {techMeta.maxAlertsPerUser} สัญญา/คน · cooldown ~{Math.round(techMeta.cooldownMs / 3600000)} ชม. หลังแจ้ง
+              </p>
+            ) : null}
+            <div className="row cols2">
+              <div>
+                <label htmlFor="tech-tf">Timeframe</label>
+                <input id="tech-tf" type="text" value="1 ชม. (ล็อก)" readOnly disabled style={{ opacity: 0.85 }} />
+              </div>
+              <div>
+                <label htmlFor="tech-dir">เงื่อนไข RSI 14</label>
+                <div className="row cols2" style={{ marginTop: 0, gap: "0.5rem", alignItems: "flex-end" }}>
+                  <select
+                    id="tech-dir"
+                    value={techDirection}
+                    onChange={(e) => setTechDirection(e.target.value as "above" | "below")}
+                  >
+                    <option value="above">ข้ามขึ้นเหนือ (&gt;)</option>
+                    <option value="below">ข้ามลงใต้ (&lt;)</option>
+                  </select>
+                  <div className="inputSuffixWrap">
+                    <input
+                      id="tech-th"
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={99}
+                      step={1}
+                      value={techThreshold}
+                      onChange={(e) => setTechThreshold(e.target.value)}
+                      placeholder="70"
+                    />
+                    <span className="inputSuffix">RSI</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="row" style={{ marginTop: "0.75rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div style={{ flex: "1 1 12rem" }}>
+                <label htmlFor="tech-sym">สัญญา / ย่อ</label>
+                <input
+                  id="tech-sym"
+                  list="tech-top-syms"
+                  value={techInput}
+                  onChange={(e) => setTechInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      onAddTechChip();
+                    }
+                  }}
+                  placeholder="btc หรือ BTC_USDT"
+                  autoComplete="off"
+                />
+                <datalist id="tech-top-syms">
+                  {(techMeta?.topSymbols ?? []).map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </div>
+              <button type="button" className="primary" style={{ marginTop: "1.25rem" }} onClick={onAddTechChip}>
+                เพิ่ม
+              </button>
+            </div>
+            {techChips.length > 0 ? (
+              <div style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                {techChips.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="danger"
+                    style={{ fontSize: "0.85rem", padding: "0.35rem 0.65rem" }}
+                    onClick={() => setTechChips((c) => c.filter((x) => x !== s))}
+                    title="ลบออกจากรายการก่อนบันทึก"
+                  >
+                    (×) {s}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <button type="button" className="primary" style={{ marginTop: "1rem", width: "100%" }} onClick={onSaveTech}>
+              บันทึกและเริ่มทำงาน
+            </button>
+            {techErr ? (
+              <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {techErr}
+              </div>
+            ) : null}
+            <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
+              รายการที่บันทึกแล้ว
+            </p>
+            {techRows.length === 0 ? (
+              <p className="sub" style={{ margin: 0 }}>
+                ยังไม่มี — ตั้งเกณฑ์ แล้วเพิ่มสัญญา แล้วกดบันทึก
+              </p>
+            ) : (
+              techRows.map((a) => (
+                <div key={a.id} className="alertItem">
+                  <div>
+                    <strong>{a.symbol}</strong>
+                    <br />
+                    <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                      RSI({a.parameters.period}) 1h · {a.direction === "above" ? "ข้ามขึ้น >" : "ข้ามลง <"} {a.threshold}
+                    </span>
+                    {a.lastTriggeredAt ? (
+                      <>
+                        <br />
+                        <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
+                          แจ้งล่าสุด:{" "}
+                          {new Date(a.lastTriggeredAt).toLocaleString("th-TH", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          })}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                  <button type="button" className="danger" onClick={() => onDeleteTech(a.id)}>
                     ลบ
                   </button>
                 </div>

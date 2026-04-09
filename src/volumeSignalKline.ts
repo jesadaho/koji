@@ -20,6 +20,10 @@ type KlineApiResponse = {
 
 const MIN_BASELINE_BARS = 12;
 
+/** สอดคล้อง momentum บนหน้า Markets: score = w_v·(V/Vavg)·(w_p·ΔP/P), w_v=w_p=1 */
+const MOMENTUM_W_V = 1;
+const MOMENTUM_W_P = 1;
+
 const INTERVAL: Record<VolumeSignalTimeframe, string> = {
   "1h": "Min60",
   "4h": "Min240",
@@ -43,10 +47,12 @@ function parseKlineArrays(raw: KlineApiResponse["data"]): KlineArrays | null {
 
 /**
  * แท่ง index n-2 = แท่งที่ปิดล่าสุด
+ * momentumScore = w_v·volRatio·(w_p·ret) โดย ret เป็นทศนิยม (สอดคล้อง mexcMarkets computeMomentum15m)
  */
 export function computeVolumeSpikeRatio(k: KlineArrays): {
   volRatio: number;
   returnPct: number;
+  momentumScore: number;
 } | null {
   const { vol, open, close } = k;
   const n = vol.length;
@@ -72,7 +78,8 @@ export function computeVolumeSpikeRatio(k: KlineArrays): {
 
   const ret = (c - o) / o;
   const volRatio = V_recent / V_avg;
-  return { volRatio, returnPct: ret * 100 };
+  const momentumScore = MOMENTUM_W_V * volRatio * (MOMENTUM_W_P * ret);
+  return { volRatio, returnPct: ret * 100, momentumScore };
 }
 
 export async function fetchContractKlineVolumeSignal(
