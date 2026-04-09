@@ -513,11 +513,17 @@ export async function liffSyncRsi1hIndicatorAlerts(
   }
 
   const dirRaw = typeof b.direction === "string" ? b.direction.trim().toLowerCase() : "";
-  let direction: "above" | "below" | null = null;
-  if (dirRaw === "below" || dirRaw === "under") direction = "below";
+  let direction: "above" | "below" | "both" | null = null;
+  if (!dirRaw) {
+    direction = "both";
+  } else if (dirRaw === "below" || dirRaw === "under") direction = "below";
   else if (dirRaw === "above" || dirRaw === "over") direction = "above";
+  else if (dirRaw === "both" || dirRaw === "any" || dirRaw === "cross" || dirRaw === "either") direction = "both";
   if (!direction) {
-    return { status: 400, json: { error: "direction ต้องเป็น above หรือ below" } };
+    return {
+      status: 400,
+      json: { error: "direction ต้องเป็น both (ค่าเริ่ม), above หรือ below" },
+    };
   }
 
   const periodNum = b.period !== undefined && b.period !== null ? Number(b.period) : 14;

@@ -42,8 +42,13 @@ function rsiCrossMatch(
   rPrev: number,
   rNow: number,
   threshold: number,
-  direction: "above" | "below"
+  direction: "above" | "below" | "both"
 ): boolean {
+  if (direction === "both") {
+    const up = rPrev <= threshold && rNow > threshold;
+    const down = rPrev >= threshold && rNow < threshold;
+    return up || down;
+  }
   if (direction === "above") {
     return rPrev <= threshold && rNow > threshold;
   }
@@ -56,14 +61,22 @@ function rsiTfLabel(tf: RsiIndicatorAlert["timeframe"]): string {
 
 function buildRsiLineMessage(a: RsiIndicatorAlert, rPrev: number, rNow: number, barIso: string): string {
   const sym = displaySymbol(a.symbol);
-  const cmp = a.direction === "above" ? ">" : "<";
-  const dirTh = `${cmp} ${a.threshold}`;
   const tfLabel = rsiTfLabel(a.timeframe);
+  let crossLine: string;
+  if (a.direction === "both") {
+    const up = rPrev <= a.threshold && rNow > a.threshold;
+    crossLine = up
+      ? `ข้ามขึ้นเหนือ > ${a.threshold}`
+      : `ข้ามลงใต้ < ${a.threshold}`;
+  } else {
+    const cmp = a.direction === "above" ? ">" : "<";
+    crossLine = `ข้ามเกณฑ์ (${cmp} ${a.threshold})`;
+  }
   return [
     `📈 Koji — RSI alert (${tfLabel})`,
     `🪙 ${sym}`,
     "",
-    `📊 RSI(${a.parameters.period}) ข้ามเกณฑ์ (${dirTh})`,
+    `📊 RSI(${a.parameters.period}) ${crossLine}`,
     `   แท่งก่อน: ${rPrev.toFixed(2)} → ล่าสุด: ${rNow.toFixed(2)}`,
     `   แท่งปิด (UTC): ${barIso}`,
     "",

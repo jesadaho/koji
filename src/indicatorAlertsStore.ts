@@ -8,7 +8,8 @@ const filePath = join(process.cwd(), "data", "indicator_alerts.json");
 
 export type IndicatorTimeframe = "1h" | "4h";
 
-export type IndicatorAlertDirection = "above" | "below";
+/** RSI: both = เตือนทุกครั้งที่ข้ามเกณฑ์ (ขึ้นหรือลง) — above/below รองรับข้อมูลเก่า */
+export type IndicatorAlertDirection = "above" | "below" | "both";
 
 export type EmaCrossKind = "golden" | "death";
 

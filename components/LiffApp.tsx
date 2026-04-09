@@ -126,7 +126,7 @@ type IndicatorAlertRow =
       parameters: { period: number };
       timeframe: "1h" | "4h";
       threshold: number;
-      direction: "above" | "below";
+      direction: "above" | "below" | "both";
       createdAt: string;
       lastTriggeredAt?: string;
     }
@@ -203,7 +203,6 @@ export default function LiffApp() {
   } | null>(null);
   const [techRows, setTechRows] = useState<IndicatorAlertRow[]>([]);
   const [techThreshold, setTechThreshold] = useState("70");
-  const [techDirection, setTechDirection] = useState<"above" | "below">("above");
 
   const [emaFast, setEmaFast] = useState("9");
   const [emaSlow, setEmaSlow] = useState("21");
@@ -357,7 +356,6 @@ export default function LiffApp() {
       if (rsiForTf.length > 0) {
         const f = rsiForTf[0]!;
         setTechThreshold(String(f.threshold));
-        setTechDirection(f.direction);
         setEnableRsi(true);
       } else {
         setEnableRsi(false);
@@ -681,7 +679,7 @@ export default function LiffApp() {
             symbols: trackedChips,
             timeframe: strategyTf,
             threshold: th,
-            direction: techDirection,
+            direction: "both",
             period: 14,
           }),
         });
@@ -733,16 +731,12 @@ export default function LiffApp() {
     }
   };
 
-  const rsiThresholdPlaceholder = techDirection === "above" ? "70" : "30";
-
   const applyRsiPresetStandard = () => {
-    setTechDirection("above");
     setTechThreshold("70");
   };
 
   const applyRsiPresetExtreme = () => {
-    setTechDirection("below");
-    setTechThreshold("20");
+    setTechThreshold("30");
   };
 
   const applyEmaPresetDayTrade = () => {
@@ -1144,15 +1138,15 @@ export default function LiffApp() {
                 {enableRsi ? (
                   <div className="indStratCardBody">
                     <p className="indSummaryLine">
-                      Koji จะเตือนเมื่อ RSI({techMeta?.period ?? 14}) <strong>ข้าม{techDirection === "above" ? "ขึ้นเหนือ" : "ลงใต้"}</strong> เกณฑ์{" "}
-                      <strong>{techThreshold}</strong> — ค่าเริ่มต้นแนะนำจากปุ่มด้านล่าง (ไม่ต้องแก้ช่องถ้าไม่จำเป็น)
+                      Koji จะเตือนเมื่อ RSI({techMeta?.period ?? 14}) <strong>ข้ามเกณฑ์ {techThreshold}</strong> ทั้งแบบข้ามขึ้นและข้ามลง
+                      (ครั้งละทิศทางต่อแท่งปิด) — ปรับตัวเลขจากปุ่มหรือช่องด้านล่าง
                     </p>
                     <div className="indPresetRow">
                       <button type="button" className="indPresetBtn" onClick={applyRsiPresetStandard}>
-                        มาตรฐาน (70 / 30)
+                        เกณฑ์ 70 (มาตรฐาน)
                       </button>
                       <button type="button" className="indPresetBtn" onClick={applyRsiPresetExtreme}>
-                        สุดโต่ง (80 / 20)
+                        เกณฑ์ 30 (โซนแรง)
                       </button>
                     </div>
                     <label className="indAdvancedRow">
@@ -1168,20 +1162,9 @@ export default function LiffApp() {
                     </label>
                     {rsiAdvancedOpen ? (
                       <div className="indParamBlock" style={{ marginTop: "0.65rem" }}>
-                        <div className="row cols2" style={{ marginTop: 0 }}>
+                        <div className="row" style={{ marginTop: 0 }}>
                           <div>
-                            <label htmlFor="ind-rsi-dir">ทิศทาง / เงื่อนไข</label>
-                            <select
-                              id="ind-rsi-dir"
-                              value={techDirection}
-                              onChange={(e) => setTechDirection(e.target.value as "above" | "below")}
-                            >
-                              <option value="above">ข้ามขึ้นเหนือ (&gt;)</option>
-                              <option value="below">ข้ามลงใต้ (&lt;)</option>
-                            </select>
-                          </div>
-                          <div>
-                            <label htmlFor="ind-rsi-th">เกณฑ์ RSI</label>
+                            <label htmlFor="ind-rsi-th">เกณฑ์ RSI (เตือนทุกครั้งที่ข้าม ทั้งขึ้นและลง)</label>
                             <div className="inputSuffixWrap">
                               <input
                                 id="ind-rsi-th"
@@ -1192,7 +1175,7 @@ export default function LiffApp() {
                                 step={1}
                                 value={techThreshold}
                                 onChange={(e) => setTechThreshold(e.target.value)}
-                                placeholder={rsiThresholdPlaceholder}
+                                placeholder="70"
                               />
                               <span className="inputSuffix">RSI</span>
                             </div>
@@ -1394,7 +1377,11 @@ export default function LiffApp() {
                             <br />
                             <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
                               RSI({a.parameters.period}) {a.timeframe === "4h" ? "4h" : "1h"} ·{" "}
-                              {a.direction === "above" ? "ข้ามขึ้น >" : "ข้ามลง <"} {a.threshold}
+                              {a.direction === "both"
+                                ? `ข้าม ↑/↓ ที่ ${a.threshold}`
+                                : a.direction === "above"
+                                  ? `ข้ามขึ้น > ${a.threshold}`
+                                  : `ข้ามลง < ${a.threshold}`}
                             </span>
                             {a.lastTriggeredAt ? (
                               <>
