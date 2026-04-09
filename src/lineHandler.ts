@@ -51,8 +51,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 
 (ภาษาอังกฤษ: price btc, alert btc above 100000, alerts, unalert 1)
 
-• ติดตามระบบ — System conditions: funding / ขนาดออเดอร์ (Top 50 |funding|)
-  funding: แจ้งเมื่อรอบหรือเวลาตัดเปลี่ยน หรือ |Δfunding| ≥ 0.1% pt จากครั้งก่อน (ปรับ env CONTRACT_FUNDING_MIN_DELTA_DISPLAY ได้)
+• ติดตามระบบ — System conditions: funding / max order size (Top 50 |funding|)
+  funding: แจ้งเมื่อรอบชำระ (ชม.) เปลี่ยน หรือ |Δfunding| ≥ 0.1% pt — ไม่แจ้งเมื่อมีแค่เวลาตัดถัดไปเปลี่ยน (ปรับ env CONTRACT_FUNDING_MIN_DELTA_DISPLAY ได้)
+  order: แจ้งเมื่อ max order size เปลี่ยน
 • เลิกติดตามระบบ — ปิดการแจ้งเตือนดังกล่าว
 • สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
   (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)
@@ -159,7 +160,7 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       {
         type: "text",
         text: on
-          ? "สถานะ: เปิดรับแจ้งเตือน System conditions อยู่ (funding / ขนาดออเดอร์ · Top 50 |funding|)"
+          ? "สถานะ: เปิดรับแจ้งเตือน System conditions อยู่ (funding rate / รอบชำระ / max order size · Top 50 |funding|)"
           : "สถานะ: ยังไม่ได้เปิดรับ — พิมพ์ ติดตามระบบ เพื่อเปิด",
       },
     ]);
@@ -178,7 +179,7 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
               ? [
                   "เปิดรับแจ้งเตือน System conditions แล้ว",
                   "",
-                  "• แจ้งเมื่อ funding / รอบตัด หรือขนาดออเดอร์เปลี่ยน (สัญญา Top 50 |funding|)",
+                  "• แจ้งเมื่อ funding rate / รอบชำระ / max order size เปลี่ยน (สัญญา Top 50 |funding|)",
                   "• เซิร์ฟเวอร์เช็ครายชั่วโมง (cron) — รอบแรกจะบันทึกค่าอ้างอิงเท่านั้น ยังไม่ส่งแจ้งเตือน",
                   "• จะได้ LINE เมื่อค่าเปลี่ยนจริงจากรอบก่อน — ถ้ายังเงียบ = ยังไม่ถึงเกณฑ์หรือยังไม่ถึงรอบถัดไป",
                   "",

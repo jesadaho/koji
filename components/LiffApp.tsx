@@ -561,7 +561,7 @@ export default function LiffApp() {
       <div className="card">
         <h2>ติดตามเงื่อนไขสัญญา</h2>
         <p className="sub" style={{ marginTop: 0 }}>
-          แจ้งทาง LINE เมื่อรอบ funding / เวลาตัดเปลี่ยน หรือ funding ขยับ ≥ 0.1% pt จากครั้งก่อน หรือ min·max vol เปลี่ยน
+          แจ้งทาง LINE เมื่อรอบชำระ funding เปลี่ยน หรือ funding ขยับ ≥ 0.1% pt หรือ max order size เปลี่ยน (ไม่แจ้งเมื่อมีแค่เวลาตัดถัดไปเลื่อน)
           (เช็คทุกต้นชั่วโมง)
         </p>
         <div className="row cols2">

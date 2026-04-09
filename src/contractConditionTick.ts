@@ -45,15 +45,6 @@ function fmtFundingPctShort(rate: number): string {
   return `${(rate * 100).toFixed(2)}%`;
 }
 
-function fmtTs(ms: number): string {
-  if (!ms) return "—";
-  try {
-    return new Date(ms).toISOString();
-  } catch {
-    return String(ms);
-  }
-}
-
 function displaySymbol(mexcSymbol: string): string {
   const s = mexcSymbol.trim();
   const base = s.replace(/_USDT$/i, "");
@@ -70,20 +61,9 @@ function formatContractVol(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+/** แจ้งเตือนเฉพาะเมื่อ max order size (maxVol) เปลี่ยน */
 function orderChangeSummaryLine(prev: OrderSnapshotRow, next: OrderSnapshotRow): string {
-  const parts: string[] = [];
-  if (prev.maxVol !== next.maxVol) {
-    parts.push(`Max order size ${formatContractVol(prev.maxVol)} → ${formatContractVol(next.maxVol)}`);
-  }
-  if (prev.minVol !== next.minVol) {
-    parts.push(`Min vol ${formatContractVol(prev.minVol)} → ${formatContractVol(next.minVol)}`);
-  }
-  if (prev.limitMaxVol !== next.limitMaxVol) {
-    const a = prev.limitMaxVol == null ? "—" : formatContractVol(prev.limitMaxVol);
-    const b = next.limitMaxVol == null ? "—" : formatContractVol(next.limitMaxVol);
-    parts.push(`Limit max vol ${a} → ${b}`);
-  }
-  return parts.join(" · ");
+  return `Max order size ${formatContractVol(prev.maxVol)} → ${formatContractVol(next.maxVol)}`;
 }
 
 type FundingMetaLike = { fundingRate: number; collectCycle: number; nextSettleTime: number };
@@ -92,40 +72,32 @@ function fundingDeltaDisplayPct(prev: number, next: number): number {
   return Math.abs(prev - next) * 100;
 }
 
-function fundingStructuralChanged(prev: FundingSnapshotRow, next: FundingMetaLike): boolean {
-  return prev.collectCycle !== next.collectCycle || prev.nextSettleTime !== next.nextSettleTime;
+function fundingCycleChanged(prev: FundingSnapshotRow, next: FundingMetaLike): boolean {
+  return prev.collectCycle !== next.collectCycle;
 }
 
 function fundingRateJumpSignificant(prev: FundingSnapshotRow, next: FundingMetaLike): boolean {
   return fundingDeltaDisplayPct(prev.fundingRate, next.fundingRate) >= minFundingChangeDisplayPct();
 }
 
-/** แจ้งเมื่อรอบ/เวลาตัดเปลี่ยน หรือ funding ขยับถึงเกณฑ์จาก snapshot ล่าสุด */
+/** แจ้งเมื่อรอบชำระ (ชม.) เปลี่ยน หรือ funding rate ขยับถึงเกณฑ์ — ไม่แจ้งเมื่อมีแค่ nextSettleTime เปลี่ยน */
 function shouldNotifyFunding(prev: FundingSnapshotRow, next: FundingMetaLike): boolean {
-  if (fundingStructuralChanged(prev, next)) return true;
+  if (fundingCycleChanged(prev, next)) return true;
   return fundingRateJumpSignificant(prev, next);
 }
 
-function orderChanged(prev: OrderSnapshotRow, next: OrderSnapshotRow): boolean {
-  return (
-    prev.minVol !== next.minVol ||
-    prev.maxVol !== next.maxVol ||
-    prev.limitMaxVol !== next.limitMaxVol
-  );
+/** แจ้งเตือนเฉพาะ max order size; snapshot ยังอัปเดต min/limit ตาม API */
+function shouldNotifyOrderMaxVol(prev: OrderSnapshotRow, next: OrderSnapshotRow): boolean {
+  return prev.maxVol !== next.maxVol;
 }
 
 function buildFundingBodyLine(prev: FundingSnapshotRow, next: FundingMetaLike): string {
   const a = fmtFundingPctShort(prev.fundingRate);
   const b = fmtFundingPctShort(next.fundingRate);
-  const extras: string[] = [];
   if (prev.collectCycle !== next.collectCycle) {
-    extras.push(`รอบ ${prev.collectCycle}h → ${next.collectCycle}h`);
+    return `${a} → ${b} (รอบ ${prev.collectCycle}h → ${next.collectCycle}h)`;
   }
-  if (prev.nextSettleTime !== next.nextSettleTime) {
-    extras.push(`ตัด ${fmtTs(prev.nextSettleTime)} → ${fmtTs(next.nextSettleTime)}`);
-  }
-  if (extras.length === 0) return `${a} → ${b}`;
-  return `${a} → ${b} (${extras.join(" · ")})`;
+  return `${a} → ${b}`;
 }
 
 function buildMexcSystemConditionMessage(
@@ -215,7 +187,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
         updatedAt: now,
       };
       if (prevO) {
-        notifyO = orderChanged(prevO, nextRow);
+        notifyO = shouldNotifyOrderMaxVol(prevO, nextRow);
       }
     }
 
