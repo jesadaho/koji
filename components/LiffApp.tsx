@@ -110,6 +110,15 @@ type ContractWatch = {
   createdAt: string;
 };
 
+type PctStepAlert = {
+  id: string;
+  coinId: string;
+  symbolLabel: string;
+  stepPct: number;
+  mode: "daily_07_bkk" | "trailing";
+  createdAt: string;
+};
+
 type Phase = "loading" | "setup" | "ready";
 
 export default function LiffApp() {
@@ -118,6 +127,7 @@ export default function LiffApp() {
   const [welcome, setWelcome] = useState("MEXC Futures — จัดการแจ้งเตือน");
   const [shortcuts, setShortcuts] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const [pctAlerts, setPctAlerts] = useState<PctStepAlert[]>([]);
   const [contractWatches, setContractWatches] = useState<ContractWatch[]>([]);
 
   const [qSymbol, setQSymbol] = useState("");
@@ -130,6 +140,11 @@ export default function LiffApp() {
   const [addErr, setAddErr] = useState("");
   const [wSymbol, setWSymbol] = useState("");
   const [wErr, setWErr] = useState("");
+
+  const [pctSymbol, setPctSymbol] = useState("");
+  const [pctStep, setPctStep] = useState("");
+  const [pctMode, setPctMode] = useState<"daily_07_bkk" | "trailing">("daily_07_bkk");
+  const [pctErr, setPctErr] = useState("");
 
   const api = useCallback(
     async (path: string, opts: RequestInit = {}) => {
@@ -174,6 +189,11 @@ export default function LiffApp() {
   const refreshContractWatches = useCallback(async () => {
     const data = (await api("/contract-watches")) as { watches?: ContractWatch[] };
     setContractWatches(Array.isArray(data.watches) ? data.watches : []);
+  }, [api]);
+
+  const refreshPctAlerts = useCallback(async () => {
+    const data = (await api("/pct-alerts")) as { pctAlerts?: PctStepAlert[] };
+    setPctAlerts(Array.isArray(data.pctAlerts) ? data.pctAlerts : []);
   }, [api]);
 
   useEffect(() => {
@@ -291,6 +311,7 @@ export default function LiffApp() {
             try {
               await loadMeta();
               await refreshAlerts();
+              await refreshPctAlerts();
               await refreshContractWatches();
               if (!cancelled) {
                 setPhase("ready");
@@ -332,7 +353,7 @@ export default function LiffApp() {
     return () => {
       cancelled = true;
     };
-  }, [loadMeta, refreshAlerts, refreshContractWatches]);
+  }, [loadMeta, refreshAlerts, refreshPctAlerts, refreshContractWatches]);
 
   const onPrice = async () => {
     setPriceErr("");
@@ -398,6 +419,40 @@ export default function LiffApp() {
     try {
       await api(`/alerts/${encodeURIComponent(id)}`, { method: "DELETE" });
       await refreshAlerts();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
+    }
+  };
+
+  const onAddPct = async () => {
+    setPctErr("");
+    const symbol = pctSymbol.trim();
+    const step = Number(pctStep);
+    if (!symbol || !Number.isFinite(step) || step <= 0) {
+      setPctErr("กรอกสัญญาและขั้น % ให้ครบ");
+      return;
+    }
+    try {
+      await api("/pct-alerts", {
+        method: "POST",
+        body: JSON.stringify({ symbol, stepPct: step, mode: pctMode }),
+      });
+      setPctStep("");
+      await refreshPctAlerts();
+    } catch (e) {
+      if (e instanceof ApiRequestError) {
+        setPctErr(`${e.message}\n\nHTTP ${e.status}`);
+      } else {
+        setPctErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+      }
+    }
+  };
+
+  const onDeletePct = async (id: string) => {
+    if (!confirm("ลบเตือน % นี้?")) return;
+    try {
+      await api(`/pct-alerts/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await refreshPctAlerts();
     } catch (e) {
       alert(e instanceof Error ? e.message : "ลบไม่สำเร็จ");
     }
@@ -551,6 +606,83 @@ export default function LiffApp() {
                 </span>
               </div>
               <button type="button" className="danger" onClick={() => onDelete(a.id)}>
+                ลบ
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="card">
+        <h2>เตือน % (ทุก x%)</h2>
+        <p className="sub" style={{ marginTop: 0 }}>
+          รายวัน: anchor ที่ 07:00 น. (ไทย) · trailing: เลื่อน anchor หลังแจ้ง — เช็คประมาณทุก 15 นาที
+        </p>
+        <div className="row">
+          <div>
+            <label htmlFor="pct-symbol">สัญญา / ย่อ</label>
+            <input
+              id="pct-symbol"
+              list="syms"
+              value={pctSymbol}
+              onChange={(e) => setPctSymbol(e.target.value)}
+              placeholder="btc"
+              autoComplete="off"
+            />
+          </div>
+        </div>
+        <div className="row cols2">
+          <div>
+            <label htmlFor="pct-step">ขั้น % (เช่น 1 = 1%)</label>
+            <input
+              id="pct-step"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="any"
+              placeholder="2"
+              value={pctStep}
+              onChange={(e) => setPctStep(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="pct-mode">โหมด</label>
+            <select
+              id="pct-mode"
+              value={pctMode}
+              onChange={(e) => setPctMode(e.target.value as "daily_07_bkk" | "trailing")}
+            >
+              <option value="daily_07_bkk">รายวัน (07:00 ไทย)</option>
+              <option value="trailing">Trailing</option>
+            </select>
+          </div>
+        </div>
+        <button type="button" className="primary" onClick={onAddPct}>
+          เพิ่มเตือน %
+        </button>
+        {pctErr ? (
+          <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {pctErr}
+          </div>
+        ) : null}
+        <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
+          รายการเตือน %
+        </p>
+        {pctAlerts.length === 0 ? (
+          <p className="sub" style={{ margin: 0 }}>
+            ยังไม่มีรายการ
+          </p>
+        ) : (
+          pctAlerts.map((a) => (
+            <div key={a.id} className="alertItem">
+              <div>
+                <strong>{a.coinId}</strong>
+                <br />
+                <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                  ทุก {a.stepPct}% · {a.mode === "trailing" ? "trailing" : "รายวัน 07:00"}
+                </span>
+              </div>
+              <button type="button" className="danger" onClick={() => onDeletePct(a.id)}>
                 ลบ
               </button>
             </div>

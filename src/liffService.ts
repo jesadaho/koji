@@ -2,6 +2,12 @@ import { config } from "./config";
 import { verifyLiffIdToken } from "./liffAuth";
 import { addAlert, listAlertsForUser, removeAlertById } from "./alertsStore";
 import {
+  addPctStepAlert,
+  listPctStepAlertsForUser,
+  removePctStepAlertById,
+  type PctStepMode,
+} from "./pctStepAlertsStore";
+import {
   addContractWatch,
   listContractWatchesForUser,
   removeContractWatchById,
@@ -97,6 +103,51 @@ export async function liffDeleteAlert(
   const ok = await removeAlertById(userId, id);
   if (!ok) {
     return { status: 404, json: { error: "ไม่พบการแจ้งเตือน" } };
+  }
+  return { status: 204 };
+}
+
+export async function liffListPctAlerts(userId: string) {
+  const list = await listPctStepAlertsForUser(userId);
+  return { pctAlerts: list };
+}
+
+export async function liffCreatePctAlert(
+  userId: string,
+  body: unknown
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const { symbol, mode } = b;
+  const stepRaw = b.stepPct ?? b.step;
+  const stepPct = typeof stepRaw === "number" ? stepRaw : Number(stepRaw);
+  if (!Number.isFinite(stepPct) || stepPct <= 0 || stepPct > 100) {
+    return { status: 400, json: { error: "stepPct ต้องเป็นตัวเลข 0–100" } };
+  }
+  const m: PctStepMode = mode === "trailing" ? "trailing" : "daily_07_bkk";
+  if (typeof symbol !== "string" || !symbol.trim()) {
+    return { status: 400, json: { error: "ระบุ symbol" } };
+  }
+  const resolved = resolveContractSymbol(symbol);
+  if (!resolved) {
+    return { status: 400, json: { error: "ไม่รู้จักคู่นี้" } };
+  }
+  const row = await addPctStepAlert({
+    userId,
+    coinId: resolved.contractSymbol,
+    symbolLabel: resolved.label,
+    stepPct,
+    mode: m,
+  });
+  return { status: 201, json: { pctAlert: row } };
+}
+
+export async function liffDeletePctAlert(
+  userId: string,
+  id: string
+): Promise<{ status: number; json?: Record<string, unknown> }> {
+  const ok = await removePctStepAlertById(userId, id);
+  if (!ok) {
+    return { status: 404, json: { error: "ไม่พบการแจ้งเตือน %" } };
   }
   return { status: 204 };
 }

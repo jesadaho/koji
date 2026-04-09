@@ -2,6 +2,11 @@ import { Client } from "@line/bot-sdk";
 import type { MessageEvent, WebhookEvent } from "@line/bot-sdk";
 import { resolveContractSymbol } from "./coinMap";
 import { addAlert, listAlertsForUser, removeAlertByIndex } from "./alertsStore";
+import {
+  addPctStepAlert,
+  listPctStepAlertsForUser,
+  removePctStepAlertByIndex,
+} from "./pctStepAlertsStore";
 import { fetchSimplePrices, formatSignal } from "./cryptoService";
 import { config } from "./config";
 import { buildKojiWelcomeFlexContents, KOJI_MENU_ALT_TEXT } from "./lineFlexKojiMenu";
@@ -10,7 +15,7 @@ import {
   isSystemSubscribeStatusQuery,
   parseSystemChangeSubscribeCommand,
 } from "./systemChangeLineCommands";
-import { formatCronRunForLine, loadCronRunRecord } from "./cronStatusStore";
+import { formatCronStatusForLine, loadCronStatusBundle } from "./cronStatusStore";
 import {
   addSystemChangeSubscriber,
   hasSystemChangeSubscriber,
@@ -49,6 +54,13 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • ลบเตือน <ลำดับ> — ลบตามเลขในรายการ
   ตัวอย่าง: ลบเตือน 1
 
+• เตือน% <เหรียญ> <ขั้น%> — แจ้งเมื่อราคาห่างจาก anchor รายวัน (07:00 ไทย) ครบทุกขั้น%
+• เตือน% <เหรียญ> <ขั้น%> trailing — แบบ trailing (หลังแจ้งเลื่อน anchor)
+• รายการเตือน% — รายการเตือน %
+• ลบเตือน% <ลำดับ>
+  ตัวอย่าง: เตือน% btc 2 · เตือน% eth 1.5 trailing · ลบเตือน% 1
+  (EN: pctalert btc 2, pct alerts, unpct 1)
+
 (ภาษาอังกฤษ: price btc, alert btc above 100000, alerts, unalert 1)
 
 • ติดตามระบบ — System conditions: funding / max order size (Top 50 |funding|)
@@ -58,7 +70,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
   (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)
 
-• สถานะ cron — รอบ job ล่าสุด (แจ้งเตือนราคา / สัญญา / ประวัติ funding Top 50)
+• สถานะ cron — บันทึก job ~15 นาที (แจ้งเตือนราคา) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
 
 จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
@@ -98,6 +110,36 @@ function parseUnalert(t: string): number | null {
   return Number(m[1]);
 }
 
+function parseUnpctCmd(t: string): number | null {
+  const m = t.match(/^(?:ลบเตือน%|unpct|delpct)\s+(\d+)\s*$/i);
+  if (!m) return null;
+  return Number(m[1]);
+}
+
+function parsePctAlertCmd(t: string): {
+  symbol: string;
+  stepPct: number;
+  mode: "daily_07_bkk" | "trailing";
+} | null {
+  const s = t.trim();
+  const m =
+    s.match(/^(?:เตือน%|pctalert)\s+(\S+)\s+([\d.,]+)\s*(trailing)?\s*$/i) ||
+    s.match(/^เตือน\s*%\s+(\S+)\s+([\d.,]+)\s*(trailing)?\s*$/i);
+  if (!m) return null;
+  const stepPct = Number(m[2]!.replace(/,/g, ""));
+  if (!Number.isFinite(stepPct) || stepPct <= 0 || stepPct > 100) return null;
+  return {
+    symbol: m[1]!,
+    stepPct,
+    mode: m[3]?.toLowerCase() === "trailing" ? "trailing" : "daily_07_bkk",
+  };
+}
+
+function isPctAlertsListQuery(text: string): boolean {
+  const l = text.trim().toLowerCase();
+  return l === "รายการเตือน%" || l === "pct alerts" || l === "pctalerts";
+}
+
 function isKojiMenuTrigger(text: string): boolean {
   const t = text.trim();
   if (t === "โคจิ") return true;
@@ -132,8 +174,10 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
 
   if (isCronStatusQuery(text)) {
     try {
-      const rec = await loadCronRunRecord();
-      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: formatCronRunForLine(rec) }]);
+      const bundle = await loadCronStatusBundle();
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: formatCronStatusForLine(bundle) },
+      ]);
     } catch (e) {
       console.error("[lineHandler] cron status", e);
       await client.replyMessage(msgEvent.replyToken, [
@@ -209,6 +253,22 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
     return;
   }
 
+  if (isPctAlertsListQuery(text)) {
+    const list = await listPctStepAlertsForUser(uid);
+    if (list.length === 0) {
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: "ยังไม่มีเตือน %" }]);
+      return;
+    }
+    const body = list
+      .map((a, i) => {
+        const modeLabel = a.mode === "trailing" ? "trailing" : "รายวัน 07:00";
+        return `${i + 1}. ${a.coinId} ทุก ${a.stepPct}% (${modeLabel})`;
+      })
+      .join("\n");
+    await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: `เตือน %:\n${body}` }]);
+    return;
+  }
+
   if (/^(?:รายการเตือน|alerts?)\s*$/i.test(text)) {
     const list = await listAlertsForUser(uid);
     if (list.length === 0) {
@@ -222,6 +282,15 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       )
       .join("\n");
     await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: `การแจ้งเตือน:\n${body}` }]);
+    return;
+  }
+
+  const unPctIdx = parseUnpctCmd(text);
+  if (unPctIdx !== null) {
+    const ok = await removePctStepAlertByIndex(uid, unPctIdx);
+    await client.replyMessage(msgEvent.replyToken, [
+      { type: "text", text: ok ? "ลบเตือน % แล้ว" : "ไม่พบลำดับนี้" },
+    ]);
     return;
   }
 
@@ -256,6 +325,37 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
     } catch {
       await client.replyMessage(msgEvent.replyToken, [
         { type: "text", text: "ดึงราคา MEXC ไม่สำเร็จ (เครือข่าย / สัญญาไม่มีบน MEXC)" },
+      ]);
+    }
+    return;
+  }
+
+  const pctAlert = parsePctAlertCmd(text);
+  if (pctAlert) {
+    const resolved = resolveContractSymbol(pctAlert.symbol);
+    if (!resolved) {
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: "ไม่รู้จักคู่นี้ (ลอง btc หรือ BTC_USDT)" }]);
+      return;
+    }
+    try {
+      await addPctStepAlert({
+        userId: uid,
+        coinId: resolved.contractSymbol,
+        symbolLabel: resolved.label,
+        stepPct: pctAlert.stepPct,
+        mode: pctAlert.mode,
+      });
+      const modeTh = pctAlert.mode === "trailing" ? "trailing" : "รายวัน (anchor 07:00 ไทย)";
+      await client.replyMessage(msgEvent.replyToken, [
+        {
+          type: "text",
+          text: `ตั้งเตือน % ${resolved.contractSymbol} ทุก ${pctAlert.stepPct}% — ${modeTh}`,
+        },
+      ]);
+    } catch (e) {
+      console.error("[lineHandler] addPctStepAlert", e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: "บันทึกไม่สำเร็จ — บน Vercel ต้องมี REDIS_URL หรือ Vercel KV" },
       ]);
     }
     return;

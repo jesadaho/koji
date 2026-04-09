@@ -1,13 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { loadCronRunRecord } from "@/src/cronStatusStore";
+import { loadCronStatusBundle } from "@/src/cronStatusStore";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * ดูบันทึกรอบ cron ล่าสุด (JSON) — production ต้องมี Authorization: Bearer CRON_SECRET
- * ตัวอย่าง: curl -sH "Authorization: Bearer $CRON_SECRET" https://<host>/api/cron/status
+ * ดูบันทึก cron (JSON) — hourly + price-sync + legacy
+ * curl -sH "Authorization: Bearer $CRON_SECRET" https://<host>/api/cron/status
  */
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -30,6 +30,6 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const record = await loadCronRunRecord();
-  return NextResponse.json({ record });
+  const bundle = await loadCronStatusBundle();
+  return NextResponse.json(bundle);
 }

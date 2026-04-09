@@ -4,6 +4,10 @@
   "buildCommand": "next build",
   "crons": [
     {
+      "path": "/api/cron/price-sync",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/price-alerts",
       "schedule": "0 * * * *"
     }

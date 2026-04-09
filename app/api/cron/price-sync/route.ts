@@ -4,31 +4,32 @@ import { config } from "@/src/config";
 import { requireCronAuth } from "@/src/cronAuth";
 import { createLineClient } from "@/src/lineHandler";
 import {
-  saveHourlyCronRecord,
+  savePriceSyncCronRecord,
   type CronStepResult,
-  type HourlyCronRecord,
+  type PriceSyncCronRecord,
 } from "@/src/cronStatusStore";
-import { runContractConditionTick } from "@/src/contractConditionTick";
-import { runFundingHistoryTick } from "@/src/fundingHistoryTick";
+import { runPctStepPriceAlertTick } from "@/src/pctStepPriceAlertTick";
+import { runPriceAlertTick } from "@/src/priceAlertTick";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Vercel Cron ทุกชั่วโมง — สัญญา / ประวัติ funding (ไม่รวมแจ้งเตือนราคา — ใช้ /api/cron/price-sync)
+ * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เตือน % step
+ * GET + Authorization: Bearer CRON_SECRET
  */
 export async function GET(req: NextRequest) {
   const denied = requireCronAuth(req);
   if (denied) return denied;
 
   const started = Date.now();
-  const steps: HourlyCronRecord["steps"] = {
-    contractCondition: { ok: false },
-    fundingHistory: { ok: false },
+  const steps: PriceSyncCronRecord["steps"] = {
+    priceAlerts: { ok: false },
+    pctStepAlerts: { ok: false },
   };
 
   async function runStep(
-    key: keyof HourlyCronRecord["steps"],
+    key: keyof PriceSyncCronRecord["steps"],
     fn: () => Promise<string | void>
   ): Promise<void> {
     const t0 = Date.now();
@@ -39,32 +40,32 @@ export async function GET(req: NextRequest) {
       steps[key] = d;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error(`[cron price-alerts] ${key}`, e);
+      console.error(`[cron price-sync] ${key}`, e);
       steps[key] = { ok: false, ms: Date.now() - t0, error: msg };
     }
   }
 
   const client = createLineClient(config.lineChannelAccessToken);
 
-  await runStep("contractCondition", async () => {
-    await runContractConditionTick(client);
+  await runStep("priceAlerts", async () => {
+    await runPriceAlertTick(client);
   });
-  await runStep("fundingHistory", async () => {
-    const r = await runFundingHistoryTick();
-    return `${r.rowsSampled} คู่ · bucket ${r.bucket}`;
+  await runStep("pctStepAlerts", async () => {
+    const r = await runPctStepPriceAlertTick(client);
+    return `แจ้ง ${r.notified} ครั้ง`;
   });
 
-  const record: HourlyCronRecord = {
+  const record: PriceSyncCronRecord = {
     at: new Date().toISOString(),
     durationMs: Date.now() - started,
     steps,
   };
   try {
-    await saveHourlyCronRecord(record);
+    await savePriceSyncCronRecord(record);
   } catch (e) {
-    console.error("[cron] saveHourlyCronRecord", e);
+    console.error("[cron price-sync] savePriceSyncCronRecord", e);
   }
 
-  const allOk = steps.contractCondition.ok && steps.fundingHistory.ok;
+  const allOk = steps.priceAlerts.ok && steps.pctStepAlerts.ok;
   return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }
