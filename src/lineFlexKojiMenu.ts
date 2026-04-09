@@ -2,7 +2,7 @@ import type { FlexBubble } from "@line/bot-sdk";
 import { SYSTEM_CHANGE_CMD_OFF_TH, SYSTEM_CHANGE_CMD_ON_TH } from "./systemChangeLineCommands";
 
 export const KOJI_MENU_ALT_TEXT =
-  "Koji — เปิดแอป, Market, System conditions, ติดตาม/เลิกติดตามระบบ, ช่วยเหลือ";
+  "Koji — เปิดแอป, Market, Top 50 Funding, System conditions, ติดตาม/เลิกติดตามระบบ, ช่วยเหลือ";
 
 export function buildKojiWelcomeFlexContents(liffId?: string): FlexBubble {
   const footerContents: NonNullable<FlexBubble["footer"]>["contents"] = [];
@@ -26,6 +26,16 @@ export function buildKojiWelcomeFlexContents(liffId?: string): FlexBubble {
         type: "uri" as const,
         label: "Market",
         uri: `https://liff.line.me/${liffId}/markets`,
+      },
+    });
+    footerContents.push({
+      type: "button" as const,
+      style: "secondary" as const,
+      height: "sm" as const,
+      action: {
+        type: "uri" as const,
+        label: "Top 50 Funding rate",
+        uri: `https://liff.line.me/${liffId}/markets?sort=funding`,
       },
     });
   }
@@ -96,7 +106,7 @@ export function buildKojiWelcomeFlexContents(liffId?: string): FlexBubble {
         {
           type: "text",
           text: liffId
-            ? "แตะปุ่มด้านล่าง — เปิดแอป / Markets / ติดตาม System conditions (funding & ขนาดออเดอร์ Top 50 |funding|) / ช่วยเหลือ"
+            ? "แตะปุ่มด้านล่าง — เปิดแอป / Market (Momentum) / Top 50 Funding rate / ติดตาม System conditions / ช่วยเหลือ"
             : "ติดตามระบบ = แจ้งเมื่อ funding หรือขนาดออเดอร์เปลี่ยน (ไม่ต้องเลือกเหรียญ) · ตั้ง LIFF เพื่อเปิดแอป/Market",
           size: "xs",
           color: "#888888",
