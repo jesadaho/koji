@@ -95,10 +95,10 @@ function fmtNextFundingSettleUtc(ms: number): string | null {
 
 function peerMaxVolThresholdFromDetails(detailBySymbol: Map<string, MexcDetailRow>): number | null {
   const vols: number[] = [];
-  for (const [, row] of detailBySymbol) {
+  detailBySymbol.forEach((row) => {
     const v = row.maxVol;
     if (typeof v === "number" && !Number.isNaN(v) && v > 0) vols.push(v);
-  }
+  });
   return maxVolContractWarnThreshold(vols);
 }
 
