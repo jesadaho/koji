@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import liff from "@line/liff";
 
@@ -116,6 +115,8 @@ type Phase = "loading" | "setup" | "ready";
 
 type HomeAlertTab = "price" | "change";
 
+const PCT_STEP_PRESET_VALUES = [1, 2, 3, 5, 10] as const;
+
 export default function LiffApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
@@ -130,7 +131,9 @@ export default function LiffApp() {
   const [addErr, setAddErr] = useState("");
 
   const [pctSymbol, setPctSymbol] = useState("");
-  const [pctStep, setPctStep] = useState("");
+  /** ค่า select: "1".."10" หรือ "custom" */
+  const [pctStepPreset, setPctStepPreset] = useState<string>("2");
+  const [pctStepCustom, setPctStepCustom] = useState("");
   const [pctMode, setPctMode] = useState<"daily_07_bkk" | "trailing">("daily_07_bkk");
   const [pctErr, setPctErr] = useState("");
   const [homeAlertTab, setHomeAlertTab] = useState<HomeAlertTab>("price");
@@ -377,7 +380,10 @@ export default function LiffApp() {
   const onAddPct = async () => {
     setPctErr("");
     const symbol = pctSymbol.trim();
-    const step = Number(pctStep);
+    const step =
+      pctStepPreset === "custom"
+        ? Number(pctStepCustom.trim())
+        : Number(pctStepPreset);
     if (!symbol || !Number.isFinite(step) || step <= 0) {
       setPctErr("กรอกสัญญาและขั้น % ให้ครบ");
       return;
@@ -387,7 +393,8 @@ export default function LiffApp() {
         method: "POST",
         body: JSON.stringify({ symbol, stepPct: step, mode: pctMode }),
       });
-      setPctStep("");
+      setPctStepPreset("2");
+      setPctStepCustom("");
       await refreshPctAlerts();
     } catch (e) {
       if (e instanceof ApiRequestError) {
@@ -424,13 +431,6 @@ export default function LiffApp() {
     <>
       <h1>Koji</h1>
       <p className="sub">{welcome}</p>
-      <p className="sub liffQuickNav">
-        <Link href="/markets">Markets Top 50</Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
-        <Link href="/settings">Settings</Link>
-      </p>
 
       <div className="card">
         <div
@@ -577,23 +577,41 @@ export default function LiffApp() {
             </div>
             <div className="row cols2">
               <div>
-                <label htmlFor="pct-step">
+                <label htmlFor="pct-step-preset">
                   ขั้น<span className="srOnly"> เปอร์เซ็นต์</span>
                 </label>
-                <div className="inputSuffixWrap">
-                  <input
-                    id="pct-step"
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="any"
-                    placeholder="2"
-                    title="ตัวเลขเป็นเปอร์เซ็นต์ เช่น 2 = ทุก 2%"
-                    value={pctStep}
-                    onChange={(e) => setPctStep(e.target.value)}
-                  />
-                  <span className="inputSuffix">%</span>
-                </div>
+                <select
+                  id="pct-step-preset"
+                  value={pctStepPreset}
+                  onChange={(e) => setPctStepPreset(e.target.value)}
+                >
+                  {PCT_STEP_PRESET_VALUES.map((n) => (
+                    <option key={n} value={String(n)}>
+                      {n}%
+                    </option>
+                  ))}
+                  <option value="custom">กำหนดเอง…</option>
+                </select>
+                {pctStepPreset === "custom" ? (
+                  <div className="inputSuffixWrap" style={{ marginTop: "0.65rem" }}>
+                    <label htmlFor="pct-step-custom" className="srOnly">
+                      ระบุเปอร์เซ็นต์ (กำหนดเอง)
+                    </label>
+                    <input
+                      id="pct-step-custom"
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      step="any"
+                      placeholder="เช่น 4.5"
+                      title="ตัวเลขเป็นเปอร์เซ็นต์"
+                      value={pctStepCustom}
+                      onChange={(e) => setPctStepCustom(e.target.value)}
+                      autoComplete="off"
+                    />
+                    <span className="inputSuffix">%</span>
+                  </div>
+                ) : null}
               </div>
               <div>
                 <label htmlFor="pct-mode">โหมด</label>
