@@ -114,6 +114,8 @@ type PctStepAlert = {
 
 type Phase = "loading" | "setup" | "ready";
 
+type HomeAlertTab = "price" | "change";
+
 export default function LiffApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
@@ -121,10 +123,6 @@ export default function LiffApp() {
   const [shortcuts, setShortcuts] = useState<string[]>([]);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [pctAlerts, setPctAlerts] = useState<PctStepAlert[]>([]);
-
-  const [qSymbol, setQSymbol] = useState("");
-  const [priceHtml, setPriceHtml] = useState<ReactNode>(null);
-  const [priceErr, setPriceErr] = useState("");
 
   const [aSymbol, setASymbol] = useState("");
   const [aDir, setADir] = useState<"above" | "below">("above");
@@ -135,6 +133,7 @@ export default function LiffApp() {
   const [pctStep, setPctStep] = useState("");
   const [pctMode, setPctMode] = useState<"daily_07_bkk" | "trailing">("daily_07_bkk");
   const [pctErr, setPctErr] = useState("");
+  const [homeAlertTab, setHomeAlertTab] = useState<HomeAlertTab>("price");
 
   const api = useCallback(
     async (path: string, opts: RequestInit = {}) => {
@@ -339,39 +338,6 @@ export default function LiffApp() {
     };
   }, [loadMeta, refreshAlerts, refreshPctAlerts]);
 
-  const onPrice = async () => {
-    setPriceErr("");
-    setPriceHtml(null);
-    if (!qSymbol.trim()) {
-      setPriceErr("ใส่สัญญาหรือย่อ");
-      return;
-    }
-    try {
-      const d = (await api(`/price?symbol=${encodeURIComponent(qSymbol.trim())}`)) as {
-        contract: string;
-        priceUsdt: number;
-        signal?: string;
-      };
-      setPriceHtml(
-        <>
-          <div className="priceBox">{d.contract}</div>
-          <div style={{ marginTop: "0.5rem", color: "var(--muted)", fontSize: "0.9rem" }}>
-            {Number(d.priceUsdt).toLocaleString("en-US", { maximumFractionDigits: 8 })} USDT
-          </div>
-          <div style={{ marginTop: "0.35rem", fontSize: "0.85rem" }}>{d.signal ?? ""}</div>
-        </>
-      );
-    } catch (e) {
-      if (e instanceof ApiRequestError) {
-        setPriceErr(
-          `${e.message}\n\nHTTP ${e.status} ${e.url}\n\n${truncateApiBody(e.bodyText, 4000)}`
-        );
-      } else {
-        setPriceErr(e instanceof Error ? e.message : "ดึงราคาไม่สำเร็จ");
-      }
-    }
-  };
-
   const onAdd = async () => {
     setAddErr("");
     const symbol = aSymbol.trim();
@@ -467,182 +433,212 @@ export default function LiffApp() {
       </p>
 
       <div className="card">
-        <h2>เช็คราคาเร็ว</h2>
-        <div className="row cols2">
-          <div>
-            <label htmlFor="q-symbol">สัญญา / ย่อ (btc, BTC_USDT)</label>
-            <input
-              id="q-symbol"
-              value={qSymbol}
-              onChange={(e) => setQSymbol(e.target.value)}
-              placeholder="btc"
-              autoComplete="off"
-            />
-          </div>
-          <div className="priceActions">
-            <button type="button" className="primary" onClick={onPrice}>
-              ดูราคา
+        <div
+          className="liffTabList"
+          role="tablist"
+          aria-label="ประเภทการแจ้งเตือน"
+        >
+          <button
+            type="button"
+            className="liffTab"
+            id="liff-tab-price"
+            role="tab"
+            aria-selected={homeAlertTab === "price"}
+            aria-controls="liff-panel-price"
+            tabIndex={homeAlertTab === "price" ? 0 : -1}
+            onClick={() => setHomeAlertTab("price")}
+          >
+            <span>แจ้งเตือนเป้าราคา</span>
+            <span className="liffTabEn">Price Alert</span>
+          </button>
+          <button
+            type="button"
+            className="liffTab"
+            id="liff-tab-change"
+            role="tab"
+            aria-selected={homeAlertTab === "change"}
+            aria-controls="liff-panel-change"
+            tabIndex={homeAlertTab === "change" ? 0 : -1}
+            onClick={() => setHomeAlertTab("change")}
+          >
+            <span>แจ้งเตือนความเคลื่อนไหว</span>
+            <span className="liffTabEn">Change Alert</span>
+          </button>
+        </div>
+
+        <datalist id="syms">
+          {shortcuts.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+
+        {homeAlertTab === "price" ? (
+          <div
+            className="liffTabPanel"
+            id="liff-panel-price"
+            role="tabpanel"
+            aria-labelledby="liff-tab-price"
+          >
+            <h2>เพิ่มการแจ้งเตือน</h2>
+            <div className="row">
+              <div>
+                <label htmlFor="a-symbol">สัญญา / ย่อ</label>
+                <input
+                  id="a-symbol"
+                  list="syms"
+                  value={aSymbol}
+                  onChange={(e) => setASymbol(e.target.value)}
+                  placeholder="eth"
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+            <div className="row cols2">
+              <div>
+                <label htmlFor="a-dir">ทิศทาง</label>
+                <select id="a-dir" value={aDir} onChange={(e) => setADir(e.target.value as "above" | "below")}>
+                  <option value="above">ราคาเกิน (≥)</option>
+                  <option value="below">ราคาต่ำกว่า (≤)</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="a-target">
+                  เป้า<span className="srOnly"> USDT</span>
+                </label>
+                <div className="inputSuffixWrap">
+                  <input
+                    id="a-target"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="any"
+                    placeholder="4000"
+                    value={aTarget}
+                    onChange={(e) => setATarget(e.target.value)}
+                  />
+                  <span className="inputSuffix">USDT</span>
+                </div>
+              </div>
+            </div>
+            <button type="button" className="primary" onClick={onAdd}>
+              บันทึก
             </button>
-          </div>
-        </div>
-        {priceHtml ? <div className="sub" style={{ marginTop: "0.5rem" }}>{priceHtml}</div> : null}
-        {priceErr ? (
-          <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-            {priceErr}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="card">
-        <h2>เพิ่มการแจ้งเตือน</h2>
-        <div className="row">
-          <div>
-            <label htmlFor="a-symbol">สัญญา / ย่อ</label>
-            <input
-              id="a-symbol"
-              list="syms"
-              value={aSymbol}
-              onChange={(e) => setASymbol(e.target.value)}
-              placeholder="eth"
-              autoComplete="off"
-            />
-            <datalist id="syms">
-              {shortcuts.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-          </div>
-        </div>
-        <div className="row cols2">
-          <div>
-            <label htmlFor="a-dir">ทิศทาง</label>
-            <select id="a-dir" value={aDir} onChange={(e) => setADir(e.target.value as "above" | "below")}>
-              <option value="above">ราคาเกิน (≥)</option>
-              <option value="below">ราคาต่ำกว่า (≤)</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="a-target">เป้า (USDT)</label>
-            <input
-              id="a-target"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="any"
-              placeholder="4000"
-              value={aTarget}
-              onChange={(e) => setATarget(e.target.value)}
-            />
-          </div>
-        </div>
-        <button type="button" className="primary" onClick={onAdd}>
-          บันทึก
-        </button>
-        {addErr ? (
-          <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-            {addErr}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="card">
-        <h2>รายการแจ้งเตือน</h2>
-        {alerts.length === 0 ? (
-          <p className="sub" style={{ margin: 0 }}>
-            ยังไม่มีรายการ
-          </p>
-        ) : (
-          alerts.map((a) => (
-            <div key={a.id} className="alertItem">
-              <div>
-                <strong>{a.coinId}</strong>
-                <br />
-                <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                  {a.direction === "above" ? "≥" : "≤"} {a.targetUsd} USDT
-                </span>
+            {addErr ? (
+              <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {addErr}
               </div>
-              <button type="button" className="danger" onClick={() => onDelete(a.id)}>
-                ลบ
-              </button>
-            </div>
-          ))
-        )}
-      </div>
+            ) : null}
 
-      <div className="card">
-        <h2>แจ้งเตือนการเคลื่อนไหวราคา</h2>
-        <p className="sub" style={{ marginTop: 0 }}>
-          ทุก x% จาก anchor · รายวัน: 07:00 น. (ไทย) · trailing: เลื่อน anchor หลังแจ้ง — เช็คประมาณทุก 15 นาที
-        </p>
-        <div className="row">
-          <div>
-            <label htmlFor="pct-symbol">สัญญา / ย่อ</label>
-            <input
-              id="pct-symbol"
-              list="syms"
-              value={pctSymbol}
-              onChange={(e) => setPctSymbol(e.target.value)}
-              placeholder="btc"
-              autoComplete="off"
-            />
+            <h2 style={{ marginTop: "1.25rem" }}>รายการแจ้งเตือน</h2>
+            {alerts.length === 0 ? (
+              <p className="sub" style={{ margin: 0 }}>
+                ยังไม่มีรายการ
+              </p>
+            ) : (
+              alerts.map((a) => (
+                <div key={a.id} className="alertItem">
+                  <div>
+                    <strong>{a.coinId}</strong>
+                    <br />
+                    <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                      {a.direction === "above" ? "≥" : "≤"} {a.targetUsd} USDT
+                    </span>
+                  </div>
+                  <button type="button" className="danger" onClick={() => onDelete(a.id)}>
+                    ลบ
+                  </button>
+                </div>
+              ))
+            )}
           </div>
-        </div>
-        <div className="row cols2">
-          <div>
-            <label htmlFor="pct-step">ขั้น % (เช่น 1 = 1%)</label>
-            <input
-              id="pct-step"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="any"
-              placeholder="2"
-              value={pctStep}
-              onChange={(e) => setPctStep(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="pct-mode">โหมด</label>
-            <select
-              id="pct-mode"
-              value={pctMode}
-              onChange={(e) => setPctMode(e.target.value as "daily_07_bkk" | "trailing")}
-            >
-              <option value="daily_07_bkk">รายวัน (07:00 ไทย)</option>
-              <option value="trailing">Trailing</option>
-            </select>
-          </div>
-        </div>
-        <button type="button" className="primary" onClick={onAddPct}>
-          เพิ่มรายการ
-        </button>
-        {pctErr ? (
-          <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-            {pctErr}
-          </div>
-        ) : null}
-        <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
-          รายการที่ตั้งไว้
-        </p>
-        {pctAlerts.length === 0 ? (
-          <p className="sub" style={{ margin: 0 }}>
-            ยังไม่มีรายการ
-          </p>
         ) : (
-          pctAlerts.map((a) => (
-            <div key={a.id} className="alertItem">
+          <div
+            className="liffTabPanel"
+            id="liff-panel-change"
+            role="tabpanel"
+            aria-labelledby="liff-tab-change"
+          >
+            <h2>แจ้งเตือนการเคลื่อนไหวราคา</h2>
+            <p className="sub" style={{ marginTop: 0 }}>
+              ทุก x% จาก anchor · รายวัน: 07:00 น. (ไทย) · trailing: เลื่อน anchor หลังแจ้ง — เช็คประมาณทุก 15 นาที
+            </p>
+            <div className="row">
               <div>
-                <strong>{a.coinId}</strong>
-                <br />
-                <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                  ทุก {a.stepPct}% · {a.mode === "trailing" ? "trailing" : "รายวัน 07:00"}
-                </span>
+                <label htmlFor="pct-symbol">สัญญา / ย่อ</label>
+                <input
+                  id="pct-symbol"
+                  list="syms"
+                  value={pctSymbol}
+                  onChange={(e) => setPctSymbol(e.target.value)}
+                  placeholder="btc"
+                  autoComplete="off"
+                />
               </div>
-              <button type="button" className="danger" onClick={() => onDeletePct(a.id)}>
-                ลบ
-              </button>
             </div>
-          ))
+            <div className="row cols2">
+              <div>
+                <label htmlFor="pct-step">
+                  ขั้น<span className="srOnly"> เปอร์เซ็นต์</span>
+                </label>
+                <div className="inputSuffixWrap">
+                  <input
+                    id="pct-step"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="any"
+                    placeholder="2"
+                    title="ตัวเลขเป็นเปอร์เซ็นต์ เช่น 2 = ทุก 2%"
+                    value={pctStep}
+                    onChange={(e) => setPctStep(e.target.value)}
+                  />
+                  <span className="inputSuffix">%</span>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="pct-mode">โหมด</label>
+                <select
+                  id="pct-mode"
+                  value={pctMode}
+                  onChange={(e) => setPctMode(e.target.value as "daily_07_bkk" | "trailing")}
+                >
+                  <option value="daily_07_bkk">รายวัน (07:00 ไทย)</option>
+                  <option value="trailing">Trailing</option>
+                </select>
+              </div>
+            </div>
+            <button type="button" className="primary" onClick={onAddPct}>
+              เพิ่มรายการ
+            </button>
+            {pctErr ? (
+              <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                {pctErr}
+              </div>
+            ) : null}
+            <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
+              รายการที่ตั้งไว้
+            </p>
+            {pctAlerts.length === 0 ? (
+              <p className="sub" style={{ margin: 0 }}>
+                ยังไม่มีรายการ
+              </p>
+            ) : (
+              pctAlerts.map((a) => (
+                <div key={a.id} className="alertItem">
+                  <div>
+                    <strong>{a.coinId}</strong>
+                    <br />
+                    <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                      ทุก {a.stepPct}% · {a.mode === "trailing" ? "trailing" : "รายวัน 07:00"}
+                    </span>
+                  </div>
+                  <button type="button" className="danger" onClick={() => onDeletePct(a.id)}>
+                    ลบ
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
     </>
