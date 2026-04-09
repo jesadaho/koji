@@ -1011,65 +1011,64 @@ export default function LiffApp() {
             role="tabpanel"
             aria-labelledby="liff-tab-indicators"
           >
-            <h2 style={{ marginBottom: "0.25rem" }}>Koji — Indicator Settings</h2>
-            <p className="sub" style={{ marginTop: 0 }}>
-              ตั้งกลยุทธ์ (TF + ประเภท) แล้วเลือกเหรียญชุดเดียว — บันทึกครั้งเดียว · Vol เฉพาะ Top 30 vol 24h · RSI/EMA
-              เช็คทุก ~15 นาที
-            </p>
-            {volMeta ? (
-              <p className="sub" style={{ marginTop: "0.35rem" }}>
-                Vol: ค่าเริ่ม ratio ≥ {volMeta.minVolRatio.toFixed(2)}× · สูงสุด {volMeta.maxAlertsPerUser} รายการ/คน ·
-                cooldown ~{Math.round(volMeta.cooldownMs / 3600000)} ชม.
+            <h2 className="indSettingsTitle">Koji — Indicator Settings</h2>
+            <div className="indSettingsInfo">
+              <p style={{ margin: "0 0 0.5rem" }}>
+                ตั้งกลยุทธ์แล้วเลือกเหรียญชุดเดียว · บันทึกครั้งเดียว · เช็คสัญญาณทุก ~15 นาที
               </p>
-            ) : null}
-            {techMeta ? (
-              <p className="sub" style={{ marginTop: "0.25rem" }}>
-                RSI/EMA: สูงสุด {techMeta.maxAlertsPerUser} แถวรวม/คน · cooldown ~
-                {Math.round(techMeta.cooldownMs / 3600000)} ชม.
-              </p>
-            ) : null}
+              {volMeta ? (
+                <p style={{ margin: "0 0 0.45rem" }}>
+                  <strong>Vol</strong> (Top 30 vol 24h): ratio เริ่มต้น ≥ {volMeta.minVolRatio.toFixed(2)}× · สูงสุด{" "}
+                  {volMeta.maxAlertsPerUser} รายการ/คน · cooldown ~{Math.round(volMeta.cooldownMs / 3600000)} ชม.
+                </p>
+              ) : null}
+              {techMeta ? (
+                <p style={{ margin: 0 }}>
+                  <strong>RSI / EMA</strong>: รวมสูงสุด {techMeta.maxAlertsPerUser} แถว/คน · cooldown ~
+                  {Math.round(techMeta.cooldownMs / 3600000)} ชม.
+                </p>
+              ) : null}
+            </div>
 
-            <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
-              1. เลือกกลยุทธ์ (Strategy)
-            </p>
-            <div className="row" style={{ flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
-              <span className="sub" style={{ margin: 0 }}>
-                Timeframe:
-              </span>
+            <p className="indSectionTitle">1. เลือกกลยุทธ์ (Strategy)</p>
+            <p className="indTfLabel">Timeframe</p>
+            <div className="indTfStack" role="group" aria-label="เลือก timeframe">
               <button
                 type="button"
-                className={strategyTf === "1h" ? "primary" : ""}
-                style={{ padding: "0.4rem 0.75rem", fontSize: "0.9rem" }}
+                className={`indTfBtn${strategyTf === "1h" ? " indTfBtn--active" : ""}`}
                 onClick={() => setStrategyTf("1h")}
               >
                 1H
               </button>
               <button
                 type="button"
-                className={strategyTf === "4h" ? "primary" : ""}
-                style={{ padding: "0.4rem 0.75rem", fontSize: "0.9rem" }}
+                className={`indTfBtn${strategyTf === "4h" ? " indTfBtn--active" : ""}`}
                 onClick={() => setStrategyTf("4h")}
               >
                 4H
               </button>
             </div>
-            <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+            <p className="indTfLabel" style={{ marginTop: "0.15rem" }}>
+              Indicators
+            </p>
+            <div className="indCheckList">
+              <label className="indCheckRow">
                 <input type="checkbox" checked={enableVol} onChange={(e) => setEnableVol(e.target.checked)} />
                 Vol signal (Top vol)
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+              <label className="indCheckRow">
                 <input type="checkbox" checked={enableRsi} onChange={(e) => setEnableRsi(e.target.checked)} />
                 RSI {techMeta?.period ?? 14}
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+              <label className="indCheckRow">
                 <input type="checkbox" checked={enableEma} onChange={(e) => setEnableEma(e.target.checked)} />
                 EMA Cross
               </label>
             </div>
 
             {enableVol ? (
-              <div className="row cols2" style={{ marginTop: "0.75rem" }}>
+              <div className="indParamBlock">
+              <div className="row cols2" style={{ marginTop: 0 }}>
                 <div>
                   <label htmlFor="ind-vol-ratio">Vol ratio ขั้นต่ำ (ว่าง = ค่าเซิร์ฟเวอร์)</label>
                   <input
@@ -1095,44 +1094,47 @@ export default function LiffApp() {
                   />
                 </div>
               </div>
+              </div>
             ) : null}
 
             {enableRsi ? (
-              <div className="row cols2" style={{ marginTop: "0.75rem" }}>
-                <div>
-                  <label htmlFor="ind-rsi-dir">เงื่อนไข RSI</label>
-                  <select
-                    id="ind-rsi-dir"
-                    value={techDirection}
-                    onChange={(e) => setTechDirection(e.target.value as "above" | "below")}
-                  >
-                    <option value="above">ข้ามขึ้นเหนือ (&gt;)</option>
-                    <option value="below">ข้ามลงใต้ (&lt;)</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="ind-rsi-th">เกณฑ์ RSI</label>
-                  <div className="inputSuffixWrap">
-                    <input
-                      id="ind-rsi-th"
-                      type="number"
-                      inputMode="numeric"
-                      min={1}
-                      max={99}
-                      step={1}
-                      value={techThreshold}
-                      onChange={(e) => setTechThreshold(e.target.value)}
-                      placeholder="70"
-                    />
-                    <span className="inputSuffix">RSI</span>
+              <div className="indParamBlock">
+                <div className="row cols2" style={{ marginTop: 0 }}>
+                  <div>
+                    <label htmlFor="ind-rsi-dir">เงื่อนไข RSI</label>
+                    <select
+                      id="ind-rsi-dir"
+                      value={techDirection}
+                      onChange={(e) => setTechDirection(e.target.value as "above" | "below")}
+                    >
+                      <option value="above">ข้ามขึ้นเหนือ (&gt;)</option>
+                      <option value="below">ข้ามลงใต้ (&lt;)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="ind-rsi-th">เกณฑ์ RSI</label>
+                    <div className="inputSuffixWrap">
+                      <input
+                        id="ind-rsi-th"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={99}
+                        step={1}
+                        value={techThreshold}
+                        onChange={(e) => setTechThreshold(e.target.value)}
+                        placeholder="70"
+                      />
+                      <span className="inputSuffix">RSI</span>
+                    </div>
                   </div>
                 </div>
               </div>
             ) : null}
 
             {enableEma ? (
-              <>
-                <div className="row cols2" style={{ marginTop: "0.75rem" }}>
+              <div className="indParamBlock">
+                <div className="row">
                   <div>
                     <label htmlFor="ind-ema-kind">ประเภท cross</label>
                     <select
@@ -1175,40 +1177,39 @@ export default function LiffApp() {
                     />
                   </div>
                 </div>
-              </>
+              </div>
             ) : null}
 
-            <p className="sub" style={{ marginTop: "1.25rem", marginBottom: "0.35rem", fontWeight: 600 }}>
+            <p className="indSectionTitle" style={{ marginTop: "1.15rem" }}>
               2. เหรียญที่กำลังติดตาม (Apply to)
             </p>
-            <button type="button" className="primary" style={{ marginBottom: "0.75rem" }} onClick={() => setAddCoinOpen(true)}>
+            <button type="button" className="primary indAddCoinBtn" onClick={() => setAddCoinOpen(true)}>
               + เพิ่มเหรียญ
             </button>
             {trackedChips.length > 0 ? (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+              <div className="indChipWrap">
                 {trackedChips.map((s) => (
                   <button
                     key={s}
                     type="button"
-                    className="danger"
-                    style={{ fontSize: "0.85rem", padding: "0.35rem 0.65rem" }}
+                    className="indChip"
                     onClick={() => setTrackedChips((c) => c.filter((x) => x !== s))}
                     title="ลบออกจากรายการก่อนบันทึก"
                   >
-                    (×) {s}
+                    {s}
+                    <span className="indChipRemove" aria-hidden>
+                      ×
+                    </span>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="sub" style={{ marginTop: 0 }}>
-                ยังไม่มี — กด &quot;+ เพิ่มเหรียญ&quot;
-              </p>
+              <p className="indHintEmpty">ยังไม่มี — กด &quot;+ เพิ่มเหรียญ&quot;</p>
             )}
 
             <button
               type="button"
-              className="primary"
-              style={{ width: "100%", marginTop: "0.5rem" }}
+              className="primary indSaveBtn"
               disabled={indSettingsSaving}
               onClick={() => void onSaveIndicatorSettings()}
             >
@@ -1225,23 +1226,10 @@ export default function LiffApp() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="ind-add-coin-title"
-                style={{
-                  position: "fixed",
-                  inset: 0,
-                  zIndex: 1000,
-                  background: "rgba(0,0,0,0.45)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "1rem",
-                }}
+                className="indModalBackdrop"
                 onClick={() => setAddCoinOpen(false)}
               >
-                <div
-                  className="card"
-                  style={{ maxWidth: "22rem", width: "100%", margin: 0 }}
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <div className="card indModalPanel" onClick={(e) => e.stopPropagation()}>
                   <h3 id="ind-add-coin-title" style={{ marginTop: 0 }}>
                     เพิ่มเหรียญ
                   </h3>
@@ -1266,7 +1254,7 @@ export default function LiffApp() {
                       <option key={s} value={s} />
                     ))}
                   </datalist>
-                  <div className="row" style={{ marginTop: "1rem", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <div className="indModalActions">
                     <button type="button" onClick={() => setAddCoinOpen(false)}>
                       ยกเลิก
                     </button>
@@ -1278,20 +1266,16 @@ export default function LiffApp() {
               </div>
             ) : null}
 
-            <p className="sub" style={{ marginTop: "1.25rem", marginBottom: "0.35rem", fontWeight: 600 }}>
-              รายการที่บันทึกแล้ว
-            </p>
+            <p className="indSavedHead">รายการที่บันทึกแล้ว</p>
             {volAlerts.length === 0 && techRows.length === 0 ? (
-              <p className="sub" style={{ margin: 0 }}>
+              <p className="indHintEmpty" style={{ marginBottom: 0 }}>
                 ยังไม่มีรายการ
               </p>
             ) : (
               <>
                 {volAlerts.length > 0 ? (
                   <>
-                    <p className="sub" style={{ margin: "0.5rem 0 0.35rem", fontSize: "0.85rem" }}>
-                      Volume signal
-                    </p>
+                    <p className="indSavedSub">Volume signal</p>
                     {volAlerts.map((a) => (
                       <div key={a.id} className="alertItem">
                         <div>
@@ -1326,9 +1310,7 @@ export default function LiffApp() {
                 ) : null}
                 {techRows.length > 0 ? (
                   <>
-                    <p className="sub" style={{ margin: "0.75rem 0 0.35rem", fontSize: "0.85rem" }}>
-                      RSI / EMA
-                    </p>
+                    <p className="indSavedSub">RSI / EMA</p>
                     {techRows.map((a) =>
                       a.indicatorType === "RSI" ? (
                         <div key={a.id} className="alertItem">

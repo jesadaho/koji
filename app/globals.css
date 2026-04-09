@@ -310,6 +310,244 @@ code {
   margin-top: 0;
 }
 
+/* LIFF — Indicator Settings (strategy-first, mobile-friendly) */
+.indSettingsTitle {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+  letter-spacing: -0.02em;
+}
+
+.indSettingsInfo {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.75rem;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+
+.indSettingsInfo strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.indSectionTitle {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 0.5rem;
+}
+
+.indTfLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.4rem;
+}
+
+.indTfStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+.indTfBtn {
+  display: block;
+  width: 100%;
+  margin-top: 0;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.indTfBtn:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.indTfBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.indTfBtn--active {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(6, 199, 85, 0.35);
+}
+
+.indCheckList {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.indCheckRow {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.indCheckRow:last-child {
+  border-bottom: none;
+}
+
+.indCheckRow input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+
+.indParamBlock {
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  background: rgba(6, 199, 85, 0.06);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
+}
+
+.indParamBlock .row {
+  margin-bottom: 0.5rem;
+}
+
+.indParamBlock .row:last-child {
+  margin-bottom: 0;
+}
+
+.indChipWrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.85rem;
+}
+
+.indChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.38rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: rgba(6, 199, 85, 0.1);
+  color: var(--text);
+  cursor: pointer;
+  margin-top: 0;
+}
+
+.indChip:hover {
+  background: rgba(6, 199, 85, 0.16);
+}
+
+.indChip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.indChipRemove {
+  font-size: 0.95rem;
+  font-weight: 700;
+  opacity: 0.75;
+  margin-left: 0.35rem;
+  line-height: 1;
+}
+
+.indAddCoinBtn {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.indHintEmpty {
+  font-size: 0.84rem;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+  line-height: 1.4;
+}
+
+.indSaveBtn {
+  margin-top: 0.35rem;
+}
+
+.indSavedHead {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 1.1rem 0 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.indSavedSub {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0.65rem 0 0.35rem;
+}
+
+.indModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.52);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.indModalPanel {
+  max-width: 22rem;
+  width: 100%;
+  margin: 0;
+}
+
+.indModalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.indModalActions button {
+  width: auto;
+  min-width: 5.5rem;
+  margin-top: 0;
+}
+
+.indModalActions button.primary {
+  width: auto;
+}
+
 .marketsMetricLegend {
   margin-top: 0.25rem;
   margin-bottom: 0.85rem;
