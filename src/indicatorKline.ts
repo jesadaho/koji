@@ -18,9 +18,20 @@ export type IndicatorKlinePack = {
   timeSec: number[];
 };
 
-/** ~100 แท่ง 1h + buffer */
+/** TF สำหรับ indicator alerts */
+export type IndicatorChartTf = "1h" | "4h";
+
 const BAR_COUNT = 100;
-const LOOKBACK_SEC = BAR_COUNT * 3600 + 7200;
+
+const INTERVAL: Record<IndicatorChartTf, string> = {
+  "1h": "Min60",
+  "4h": "Min240",
+};
+
+const LOOKBACK_SEC: Record<IndicatorChartTf, number> = {
+  "1h": BAR_COUNT * 3600 + 7200,
+  "4h": BAR_COUNT * 4 * 3600 + 7200,
+};
 
 function parseKline(raw: KlineApiResponse["data"]): IndicatorKlinePack | null {
   if (!raw?.close?.length || !raw.time?.length) return null;
@@ -32,18 +43,25 @@ function parseKline(raw: KlineApiResponse["data"]): IndicatorKlinePack | null {
   };
 }
 
-/** TF 1h เท่านั้น (Phase 1.5) */
-export async function fetchContractKline1h(symbol: string): Promise<IndicatorKlinePack | null> {
+export async function fetchContractKlineForTf(
+  symbol: string,
+  tf: IndicatorChartTf
+): Promise<IndicatorKlinePack | null> {
   const end = Math.floor(Date.now() / 1000);
-  const start = end - LOOKBACK_SEC;
+  const start = end - LOOKBACK_SEC[tf];
   try {
     const { data } = await axios.get<KlineApiResponse>(`${KLINE_URL}/${encodeURIComponent(symbol)}`, {
       timeout: 20_000,
-      params: { interval: "Min60", start, end },
+      params: { interval: INTERVAL[tf], start, end },
     });
     if (!data.success || !data.data) return null;
     return parseKline(data.data);
   } catch {
     return null;
   }
+}
+
+/** ความเข้ากันได้ย้อนหลัง — RSI 1h */
+export async function fetchContractKline1h(symbol: string): Promise<IndicatorKlinePack | null> {
+  return fetchContractKlineForTf(symbol, "1h");
 }

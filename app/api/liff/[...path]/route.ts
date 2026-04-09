@@ -19,10 +19,11 @@ import {
   liffListVolumeSignalAlerts,
   liffGetVolumeSignalMeta,
   liffCreateVolumeSignalAlert,
+  liffSyncVolumeSignalAlerts,
   liffDeleteVolumeSignalAlert,
   liffGetIndicatorMeta,
   liffListIndicatorAlerts,
-  liffSyncRsi1hIndicatorAlerts,
+  liffSyncIndicatorAlerts,
   liffDeleteIndicatorAlert,
 } from "@/src/liffService";
 
@@ -143,6 +144,18 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       const r = await liffCreatePctAlert(auth.userId, body);
       return json(r.json, r.status);
     }
+    if (segs.length === 2 && segs[0] === "volume-signal-alerts" && segs[1] === "sync") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return json({ error: "JSON ไม่ถูกต้อง" }, 400);
+      }
+      const r = await liffSyncVolumeSignalAlerts(auth.userId, body);
+      return json(r.json, r.status);
+    }
     if (segs.length === 1 && a === "volume-signal-alerts") {
       const auth = await authenticateLiffRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
@@ -164,7 +177,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       } catch {
         return json({ error: "JSON ไม่ถูกต้อง" }, 400);
       }
-      const r = await liffSyncRsi1hIndicatorAlerts(auth.userId, body);
+      const r = await liffSyncIndicatorAlerts(auth.userId, body);
       return json(r.json, r.status);
     }
 

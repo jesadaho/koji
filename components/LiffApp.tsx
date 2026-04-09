@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import liff from "@line/liff";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -114,20 +114,32 @@ type PctStepAlert = {
 
 type Phase = "loading" | "setup" | "ready";
 
-type HomeAlertTab = "price" | "change" | "vol" | "tech";
+type HomeAlertTab = "price" | "change" | "indicators";
 
-type IndicatorAlertRow = {
-  id: string;
-  symbol: string;
-  symbolLabel: string;
-  indicatorType: "RSI";
-  parameters: { period: number };
-  timeframe: "1h";
-  threshold: number;
-  direction: "above" | "below";
-  createdAt: string;
-  lastTriggeredAt?: string;
-};
+type IndicatorAlertRow =
+  | {
+      id: string;
+      symbol: string;
+      symbolLabel: string;
+      indicatorType: "RSI";
+      parameters: { period: number };
+      timeframe: "1h" | "4h";
+      threshold: number;
+      direction: "above" | "below";
+      createdAt: string;
+      lastTriggeredAt?: string;
+    }
+  | {
+      id: string;
+      symbol: string;
+      symbolLabel: string;
+      indicatorType: "EMA_CROSS";
+      parameters: { fast: number; slow: number };
+      timeframe: "1h" | "4h";
+      emaCrossKind: "golden" | "death";
+      createdAt: string;
+      lastTriggeredAt?: string;
+    };
 
 const PCT_STEP_PRESET_VALUES = [1, 2, 3, 5, 10] as const;
 
@@ -177,25 +189,41 @@ export default function LiffApp() {
     cooldownMs: number;
     maxAlertsPerUser: number;
   } | null>(null);
-  const [volSymbol, setVolSymbol] = useState("");
-  const [volTf, setVolTf] = useState<"1h" | "4h">("1h");
   const [volOptMinRatio, setVolOptMinRatio] = useState("");
   const [volOptMinRet, setVolOptMinRet] = useState("");
-  const [volErr, setVolErr] = useState("");
 
   const [techMeta, setTechMeta] = useState<{
     timeframe: string;
     period: number;
+    emaDefaults: { fast: number; slow: number };
     maxAlertsPerUser: number;
     cooldownMs: number;
     topSymbols: string[];
   } | null>(null);
   const [techRows, setTechRows] = useState<IndicatorAlertRow[]>([]);
-  const [techInput, setTechInput] = useState("");
-  const [techChips, setTechChips] = useState<string[]>([]);
   const [techThreshold, setTechThreshold] = useState("70");
   const [techDirection, setTechDirection] = useState<"above" | "below">("above");
-  const [techErr, setTechErr] = useState("");
+
+  const [emaFast, setEmaFast] = useState("9");
+  const [emaSlow, setEmaSlow] = useState("21");
+  const [emaKind, setEmaKind] = useState<"golden" | "death">("golden");
+
+  const [strategyTf, setStrategyTf] = useState<"1h" | "4h">("1h");
+  const [enableVol, setEnableVol] = useState(false);
+  const [enableRsi, setEnableRsi] = useState(false);
+  const [enableEma, setEnableEma] = useState(false);
+  const [trackedChips, setTrackedChips] = useState<string[]>([]);
+  const [addCoinOpen, setAddCoinOpen] = useState(false);
+  const [addCoinDraft, setAddCoinDraft] = useState("");
+  const [indSettingsErr, setIndSettingsErr] = useState("");
+  const [indSettingsSaving, setIndSettingsSaving] = useState(false);
+
+  const combinedTopSymbols = useMemo(() => {
+    const s = new Set<string>();
+    (volMeta?.topSymbols ?? []).forEach((x) => s.add(x));
+    (techMeta?.topSymbols ?? []).forEach((x) => s.add(x));
+    return Array.from(s).sort();
+  }, [volMeta?.topSymbols, techMeta?.topSymbols]);
 
   const api = useCallback(
     async (path: string, opts: RequestInit = {}) => {
@@ -284,6 +312,7 @@ export default function LiffApp() {
     const data = parsed as {
       timeframe?: string;
       period?: number;
+      emaDefaults?: { fast?: number; slow?: number };
       maxAlertsPerUser?: number;
       cooldownMs?: number;
       topSymbols?: string[];
@@ -291,6 +320,10 @@ export default function LiffApp() {
     setTechMeta({
       timeframe: data.timeframe ?? "1h",
       period: typeof data.period === "number" ? data.period : 14,
+      emaDefaults: {
+        fast: typeof data.emaDefaults?.fast === "number" ? data.emaDefaults.fast : 9,
+        slow: typeof data.emaDefaults?.slow === "number" ? data.emaDefaults.slow : 21,
+      },
       maxAlertsPerUser: typeof data.maxAlertsPerUser === "number" ? data.maxAlertsPerUser : 30,
       cooldownMs: typeof data.cooldownMs === "number" ? data.cooldownMs : 4 * 3600 * 1000,
       topSymbols: Array.isArray(data.topSymbols) ? data.topSymbols : [],
@@ -301,15 +334,64 @@ export default function LiffApp() {
     const data = (await api("/indicator-alerts")) as { indicatorAlerts?: IndicatorAlertRow[] };
     const list = Array.isArray(data.indicatorAlerts) ? data.indicatorAlerts : [];
     setTechRows(list);
-    if (list.length > 0) {
-      const f = list[0]!;
-      setTechChips(list.map((r) => r.symbol));
-      setTechThreshold(String(f.threshold));
-      setTechDirection(f.direction);
-    } else {
-      setTechChips([]);
-    }
   }, [api]);
+
+  const applyHydrationForTf = useCallback(
+    (tf: "1h" | "4h") => {
+      const symSet = new Set<string>();
+      for (const v of volAlerts) {
+        if (v.timeframe === tf) symSet.add(v.coinId);
+      }
+      for (const r of techRows) {
+        if (r.timeframe === tf) symSet.add(r.symbol);
+      }
+      setTrackedChips(Array.from(symSet).sort());
+
+      const rsiForTf = techRows.filter(
+        (r): r is Extract<IndicatorAlertRow, { indicatorType: "RSI" }> =>
+          r.indicatorType === "RSI" && r.timeframe === tf
+      );
+      if (rsiForTf.length > 0) {
+        const f = rsiForTf[0]!;
+        setTechThreshold(String(f.threshold));
+        setTechDirection(f.direction);
+        setEnableRsi(true);
+      } else {
+        setEnableRsi(false);
+      }
+
+      const emaForTf = techRows.filter(
+        (r): r is Extract<IndicatorAlertRow, { indicatorType: "EMA_CROSS" }> =>
+          r.indicatorType === "EMA_CROSS" && r.timeframe === tf
+      );
+      if (emaForTf.length > 0) {
+        const ex = emaForTf[0]!;
+        setEmaFast(String(ex.parameters.fast));
+        setEmaSlow(String(ex.parameters.slow));
+        setEmaKind(ex.emaCrossKind);
+        setEnableEma(true);
+      } else {
+        setEnableEma(false);
+      }
+
+      const volForTf = volAlerts.filter((v) => v.timeframe === tf);
+      if (volForTf.length > 0) {
+        setEnableVol(true);
+        const v0 = volForTf[0]!;
+        setVolOptMinRatio(typeof v0.minVolRatio === "number" ? String(v0.minVolRatio) : "");
+        setVolOptMinRet(typeof v0.minAbsReturnPct === "number" ? String(v0.minAbsReturnPct) : "");
+      } else {
+        setEnableVol(false);
+        setVolOptMinRatio("");
+        setVolOptMinRet("");
+      }
+    },
+    [volAlerts, techRows]
+  );
+
+  useEffect(() => {
+    applyHydrationForTf(strategyTf);
+  }, [strategyTf, volAlerts, techRows, applyHydrationForTf]);
 
   useEffect(() => {
     let cancelled = false;
@@ -547,34 +629,97 @@ export default function LiffApp() {
     }
   };
 
-  const onAddVol = async () => {
-    setVolErr("");
-    const symbol = volSymbol.trim();
-    if (!symbol) {
-      setVolErr("กรอกสัญญาหรือย่อ");
+  const confirmAddCoinFromModal = () => {
+    setIndSettingsErr("");
+    const raw = addCoinDraft.trim();
+    if (!raw) return;
+    setTrackedChips((prev) => {
+      const k = raw.toUpperCase();
+      if (prev.some((p) => p.toUpperCase() === k)) return prev;
+      return [...prev, raw];
+    });
+    setAddCoinDraft("");
+    setAddCoinOpen(false);
+  };
+
+  const onSaveIndicatorSettings = async () => {
+    setIndSettingsErr("");
+    if (!enableVol && !enableRsi && !enableEma) {
+      setIndSettingsErr("เลือกกลยุทธ์อย่างน้อย 1 อย่าง (Vol / RSI / EMA)");
       return;
     }
+    if (trackedChips.length === 0) {
+      setIndSettingsErr("เพิ่มเหรียญอย่างน้อย 1 รายการ");
+      return;
+    }
+    const th = Number(techThreshold.replace(",", "."));
+    if (enableRsi && (!Number.isFinite(th) || th < 1 || th > 99)) {
+      setIndSettingsErr("เกณฑ์ RSI ต้องอยู่ระหว่าง 1–99");
+      return;
+    }
+    const fast = Number(emaFast.replace(",", "."));
+    const slow = Number(emaSlow.replace(",", "."));
+    if (enableEma) {
+      if (!Number.isFinite(fast) || !Number.isFinite(slow) || fast < 2 || slow < 3 || fast >= slow) {
+        setIndSettingsErr("EMA fast/slow ต้องเป็นตัวเลข โดย fast < slow (เช่น 9 / 21)");
+        return;
+      }
+      if (slow > 200) {
+        setIndSettingsErr("slow สูงสุด 200");
+        return;
+      }
+    }
+
+    setIndSettingsSaving(true);
     try {
-      const payload: Record<string, unknown> = { symbol, timeframe: volTf };
-      const mr = volOptMinRatio.trim();
-      if (mr) payload.minVolRatio = Number(mr.replace(",", "."));
-      const ar = volOptMinRet.trim();
-      if (ar) payload.minAbsReturnPct = Number(ar.replace(",", "."));
-      await api("/volume-signal-alerts", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      setVolSymbol("");
-      setVolOptMinRatio("");
-      setVolOptMinRet("");
+      if (enableVol) {
+        const payload: Record<string, unknown> = { symbols: trackedChips, timeframe: strategyTf };
+        const mr = volOptMinRatio.trim();
+        if (mr) payload.minVolRatio = Number(mr.replace(",", "."));
+        const ar = volOptMinRet.trim();
+        if (ar) payload.minAbsReturnPct = Number(ar.replace(",", "."));
+        await api("/volume-signal-alerts/sync", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+      if (enableRsi) {
+        await api("/indicator-alerts", {
+          method: "POST",
+          body: JSON.stringify({
+            kind: "rsi",
+            symbols: trackedChips,
+            timeframe: strategyTf,
+            threshold: th,
+            direction: techDirection,
+            period: 14,
+          }),
+        });
+      }
+      if (enableEma) {
+        await api("/indicator-alerts", {
+          method: "POST",
+          body: JSON.stringify({
+            kind: "ema",
+            symbols: trackedChips,
+            timeframe: strategyTf,
+            fast,
+            slow,
+            crossKind: emaKind,
+          }),
+        });
+      }
       await refreshVolAlerts();
+      await refreshTechAlerts();
       await refreshVolMeta();
     } catch (e) {
       if (e instanceof ApiRequestError) {
-        setVolErr(`${e.message}\n\nHTTP ${e.status}`);
+        setIndSettingsErr(`${e.message}\n\nHTTP ${e.status}`);
       } else {
-        setVolErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
+        setIndSettingsErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
       }
+    } finally {
+      setIndSettingsSaving(false);
     }
   };
 
@@ -588,51 +733,8 @@ export default function LiffApp() {
     }
   };
 
-  const onAddTechChip = () => {
-    setTechErr("");
-    const raw = techInput.trim();
-    if (!raw) return;
-    setTechChips((prev) => {
-      const k = raw.toUpperCase();
-      if (prev.some((p) => p.toUpperCase() === k)) return prev;
-      return [...prev, raw];
-    });
-    setTechInput("");
-  };
-
-  const onSaveTech = async () => {
-    setTechErr("");
-    if (techChips.length === 0) {
-      setTechErr("เพิ่มสัญญาอย่างน้อย 1 รายการ");
-      return;
-    }
-    const th = Number(techThreshold.replace(",", "."));
-    if (!Number.isFinite(th) || th < 1 || th > 99) {
-      setTechErr("เกณฑ์ RSI ต้องอยู่ระหว่าง 1–99");
-      return;
-    }
-    try {
-      await api("/indicator-alerts", {
-        method: "POST",
-        body: JSON.stringify({
-          symbols: techChips,
-          threshold: th,
-          direction: techDirection,
-          period: 14,
-        }),
-      });
-      await refreshTechAlerts();
-    } catch (e) {
-      if (e instanceof ApiRequestError) {
-        setTechErr(`${e.message}\n\nHTTP ${e.status}`);
-      } else {
-        setTechErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
-      }
-    }
-  };
-
   const onDeleteTech = async (id: string) => {
-    if (!confirm("ลบการแจ้งเตือน RSI รายการนี้?")) return;
+    if (!confirm("ลบการแจ้งเตือนรายการนี้?")) return;
     try {
       await api(`/indicator-alerts/${encodeURIComponent(id)}`, { method: "DELETE" });
       await refreshTechAlerts();
@@ -693,28 +795,15 @@ export default function LiffApp() {
           <button
             type="button"
             className="liffTab"
-            id="liff-tab-vol"
+            id="liff-tab-indicators"
             role="tab"
-            aria-selected={homeAlertTab === "vol"}
-            aria-controls="liff-panel-vol"
-            tabIndex={homeAlertTab === "vol" ? 0 : -1}
-            onClick={() => setHomeAlertTab("vol")}
+            aria-selected={homeAlertTab === "indicators"}
+            aria-controls="liff-panel-indicators"
+            tabIndex={homeAlertTab === "indicators" ? 0 : -1}
+            onClick={() => setHomeAlertTab("indicators")}
           >
-            <span>สัญญาณ Volume</span>
-            <span className="liffTabEn">Vol signal</span>
-          </button>
-          <button
-            type="button"
-            className="liffTab"
-            id="liff-tab-tech"
-            role="tab"
-            aria-selected={homeAlertTab === "tech"}
-            aria-controls="liff-panel-tech"
-            tabIndex={homeAlertTab === "tech" ? 0 : -1}
-            onClick={() => setHomeAlertTab("tech")}
-          >
-            <span>Indicator</span>
-            <span className="liffTabEn">RSI 1h</span>
+            <span>Indicator Settings</span>
+            <span className="liffTabEn">Vol · RSI · EMA</span>
           </button>
         </div>
 
@@ -915,166 +1004,117 @@ export default function LiffApp() {
               ))
             )}
           </div>
-        ) : homeAlertTab === "vol" ? (
+        ) : homeAlertTab === "indicators" ? (
           <div
             className="liffTabPanel"
-            id="liff-panel-vol"
+            id="liff-panel-indicators"
             role="tabpanel"
-            aria-labelledby="liff-tab-vol"
+            aria-labelledby="liff-tab-indicators"
           >
-            <h2>Volume signal (Top 30 vol)</h2>
+            <h2 style={{ marginBottom: "0.25rem" }}>Koji — Indicator Settings</h2>
             <p className="sub" style={{ marginTop: 0 }}>
-              เฟส 2–3: ใช้ Vol spike + คะแนน Momentum (สูตรเดียวกับหน้า Markets) บน TF 1h/4h — เฉพาะสัญญาใน Top 30
-              ตาม Vol 24h · เช็คทุก ~15 นาที
+              ตั้งกลยุทธ์ (TF + ประเภท) แล้วเลือกเหรียญชุดเดียว — บันทึกครั้งเดียว · Vol เฉพาะ Top 30 vol 24h · RSI/EMA
+              เช็คทุก ~15 นาที
             </p>
             {volMeta ? (
               <p className="sub" style={{ marginTop: "0.35rem" }}>
-                ค่าเริ่ม: Vol ratio ≥ {volMeta.minVolRatio.toFixed(2)}×
-                {volMeta.minAbsReturnPct > 0
-                  ? ` · |แท่ง %| ≥ ${volMeta.minAbsReturnPct.toFixed(2)}%`
-                  : ""}
-                {volMeta.minAbsMomentum > 0
-                  ? ` · |momentum score| ≥ ${volMeta.minAbsMomentum.toFixed(4)}`
-                  : ""}{" "}
-                · cooldown ~{Math.round(volMeta.cooldownMs / 3600000)} ชม. · สูงสุด {volMeta.maxAlertsPerUser}{" "}
-                รายการ/คน — ปรับเกณฑ์รายการได้ด้านล่าง
+                Vol: ค่าเริ่ม ratio ≥ {volMeta.minVolRatio.toFixed(2)}× · สูงสุด {volMeta.maxAlertsPerUser} รายการ/คน ·
+                cooldown ~{Math.round(volMeta.cooldownMs / 3600000)} ชม.
               </p>
             ) : null}
-            <div className="row cols2">
-              <div>
-                <label htmlFor="vol-symbol">สัญญา / ย่อ (ต้องอยู่ใน Top vol)</label>
-                <input
-                  id="vol-symbol"
-                  list="vol-top-syms"
-                  value={volSymbol}
-                  onChange={(e) => setVolSymbol(e.target.value)}
-                  placeholder="BTC_USDT หรือ btc"
-                  autoComplete="off"
-                />
-                <datalist id="vol-top-syms">
-                  {(volMeta?.topSymbols ?? []).map((s) => (
-                    <option key={s} value={s} />
-                  ))}
-                </datalist>
-              </div>
-              <div>
-                <label htmlFor="vol-tf">ช่วงเวลา</label>
-                <select id="vol-tf" value={volTf} onChange={(e) => setVolTf(e.target.value as "1h" | "4h")}>
-                  <option value="1h">1 ชม.</option>
-                  <option value="4h">4 ชม.</option>
-                </select>
-              </div>
-            </div>
-            <div className="row cols2" style={{ marginTop: "0.75rem" }}>
-              <div>
-                <label htmlFor="vol-opt-ratio">Vol ratio ขั้นต่ำ (ทับค่าเซิร์ฟเวอร์ — ว่าง = ใช้ค่าเริ่ม)</label>
-                <input
-                  id="vol-opt-ratio"
-                  type="text"
-                  inputMode="decimal"
-                  value={volOptMinRatio}
-                  onChange={(e) => setVolOptMinRatio(e.target.value)}
-                  placeholder={`เช่น ${volMeta?.minVolRatio?.toFixed(1) ?? "3"}`}
-                  autoComplete="off"
-                />
-              </div>
-              <div>
-                <label htmlFor="vol-opt-ret">|แท่ง %| ขั้นต่ำ (ทับค่าเซิร์ฟเวอร์ — ว่าง = ใช้ค่าเริ่ม)</label>
-                <input
-                  id="vol-opt-ret"
-                  type="text"
-                  inputMode="decimal"
-                  value={volOptMinRet}
-                  onChange={(e) => setVolOptMinRet(e.target.value)}
-                  placeholder="เช่น 0.15 (=0.15%)"
-                  autoComplete="off"
-                />
-              </div>
-            </div>
-            <button type="button" className="primary" onClick={onAddVol}>
-              เพิ่มการติดตาม
-            </button>
-            {volErr ? (
-              <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {volErr}
-              </div>
-            ) : null}
-            <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
-              รายการที่ติดตาม
-            </p>
-            {volAlerts.length === 0 ? (
-              <p className="sub" style={{ margin: 0 }}>
-                ยังไม่มีรายการ
-              </p>
-            ) : (
-              volAlerts.map((a) => (
-                <div key={a.id} className="alertItem">
-                  <div>
-                    <strong>{a.coinId}</strong>
-                    <br />
-                    <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                      TF {a.timeframe === "4h" ? "4 ชม." : "1 ชม."}
-                      {typeof a.minVolRatio === "number" ? ` · Vol≥${a.minVolRatio}×` : ""}
-                      {typeof a.minAbsReturnPct === "number" ? ` · |แท่ง|≥${a.minAbsReturnPct}%` : ""}
-                    </span>
-                    {a.lastEvent ? (
-                      <>
-                        <br />
-                        <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
-                          ล่าสุด:{" "}
-                          {new Date(a.lastEvent.at).toLocaleString("th-TH", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })}{" "}
-                          · Vol {a.lastEvent.volRatio.toFixed(2)}× · แท่ง {a.lastEvent.returnPct >= 0 ? "+" : ""}
-                          {a.lastEvent.returnPct.toFixed(2)}%
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
-                  <button type="button" className="danger" onClick={() => onDeleteVol(a.id)}>
-                    ลบ
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        ) : (
-          <div
-            className="liffTabPanel"
-            id="liff-panel-tech"
-            role="tabpanel"
-            aria-labelledby="liff-tab-tech"
-          >
-            <h2>Technical indicator (Phase 1.5)</h2>
-            <p className="sub" style={{ marginTop: 0 }}>
-              RSI({techMeta?.period ?? 14}) บนแท่ง 1h — แจ้งเมื่อ RSI <strong>ข้าม</strong>เกณฑ์ (เข้าโซน) ไม่ใช่แค่ค้างอยู่ในโซน ·
-              เช็คทุก ~15 นาทีจากแท่งปิดล่าสุด
-            </p>
             {techMeta ? (
-              <p className="sub" style={{ marginTop: "0.35rem" }}>
-                TF ล็อก 1 ชม. · สูงสุด {techMeta.maxAlertsPerUser} สัญญา/คน · cooldown ~{Math.round(techMeta.cooldownMs / 3600000)} ชม. หลังแจ้ง
+              <p className="sub" style={{ marginTop: "0.25rem" }}>
+                RSI/EMA: สูงสุด {techMeta.maxAlertsPerUser} แถวรวม/คน · cooldown ~
+                {Math.round(techMeta.cooldownMs / 3600000)} ชม.
               </p>
             ) : null}
-            <div className="row cols2">
-              <div>
-                <label htmlFor="tech-tf">Timeframe</label>
-                <input id="tech-tf" type="text" value="1 ชม. (ล็อก)" readOnly disabled style={{ opacity: 0.85 }} />
+
+            <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
+              1. เลือกกลยุทธ์ (Strategy)
+            </p>
+            <div className="row" style={{ flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+              <span className="sub" style={{ margin: 0 }}>
+                Timeframe:
+              </span>
+              <button
+                type="button"
+                className={strategyTf === "1h" ? "primary" : ""}
+                style={{ padding: "0.4rem 0.75rem", fontSize: "0.9rem" }}
+                onClick={() => setStrategyTf("1h")}
+              >
+                1H
+              </button>
+              <button
+                type="button"
+                className={strategyTf === "4h" ? "primary" : ""}
+                style={{ padding: "0.4rem 0.75rem", fontSize: "0.9rem" }}
+                onClick={() => setStrategyTf("4h")}
+              >
+                4H
+              </button>
+            </div>
+            <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                <input type="checkbox" checked={enableVol} onChange={(e) => setEnableVol(e.target.checked)} />
+                Vol signal (Top vol)
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                <input type="checkbox" checked={enableRsi} onChange={(e) => setEnableRsi(e.target.checked)} />
+                RSI {techMeta?.period ?? 14}
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                <input type="checkbox" checked={enableEma} onChange={(e) => setEnableEma(e.target.checked)} />
+                EMA Cross
+              </label>
+            </div>
+
+            {enableVol ? (
+              <div className="row cols2" style={{ marginTop: "0.75rem" }}>
+                <div>
+                  <label htmlFor="ind-vol-ratio">Vol ratio ขั้นต่ำ (ว่าง = ค่าเซิร์ฟเวอร์)</label>
+                  <input
+                    id="ind-vol-ratio"
+                    type="text"
+                    inputMode="decimal"
+                    value={volOptMinRatio}
+                    onChange={(e) => setVolOptMinRatio(e.target.value)}
+                    placeholder={`เช่น ${volMeta?.minVolRatio?.toFixed(1) ?? "3"}`}
+                    autoComplete="off"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ind-vol-ret">|แท่ง %| ขั้นต่ำ (ว่าง = ค่าเซิร์ฟเวอร์)</label>
+                  <input
+                    id="ind-vol-ret"
+                    type="text"
+                    inputMode="decimal"
+                    value={volOptMinRet}
+                    onChange={(e) => setVolOptMinRet(e.target.value)}
+                    placeholder="เช่น 0.15"
+                    autoComplete="off"
+                  />
+                </div>
               </div>
-              <div>
-                <label htmlFor="tech-dir">เงื่อนไข RSI 14</label>
-                <div className="row cols2" style={{ marginTop: 0, gap: "0.5rem", alignItems: "flex-end" }}>
+            ) : null}
+
+            {enableRsi ? (
+              <div className="row cols2" style={{ marginTop: "0.75rem" }}>
+                <div>
+                  <label htmlFor="ind-rsi-dir">เงื่อนไข RSI</label>
                   <select
-                    id="tech-dir"
+                    id="ind-rsi-dir"
                     value={techDirection}
                     onChange={(e) => setTechDirection(e.target.value as "above" | "below")}
                   >
                     <option value="above">ข้ามขึ้นเหนือ (&gt;)</option>
                     <option value="below">ข้ามลงใต้ (&lt;)</option>
                   </select>
+                </div>
+                <div>
+                  <label htmlFor="ind-rsi-th">เกณฑ์ RSI</label>
                   <div className="inputSuffixWrap">
                     <input
-                      id="tech-th"
+                      id="ind-rsi-th"
                       type="number"
                       inputMode="numeric"
                       min={1}
@@ -1088,95 +1128,268 @@ export default function LiffApp() {
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="row" style={{ marginTop: "0.75rem", flexWrap: "wrap", alignItems: "flex-end" }}>
-              <div style={{ flex: "1 1 12rem" }}>
-                <label htmlFor="tech-sym">สัญญา / ย่อ</label>
-                <input
-                  id="tech-sym"
-                  list="tech-top-syms"
-                  value={techInput}
-                  onChange={(e) => setTechInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      onAddTechChip();
-                    }
-                  }}
-                  placeholder="btc หรือ BTC_USDT"
-                  autoComplete="off"
-                />
-                <datalist id="tech-top-syms">
-                  {(techMeta?.topSymbols ?? []).map((s) => (
-                    <option key={s} value={s} />
-                  ))}
-                </datalist>
-              </div>
-              <button type="button" className="primary" style={{ marginTop: "1.25rem" }} onClick={onAddTechChip}>
-                เพิ่ม
-              </button>
-            </div>
-            {techChips.length > 0 ? (
-              <div style={{ marginTop: "0.75rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                {techChips.map((s) => (
+            ) : null}
+
+            {enableEma ? (
+              <>
+                <div className="row cols2" style={{ marginTop: "0.75rem" }}>
+                  <div>
+                    <label htmlFor="ind-ema-kind">ประเภท cross</label>
+                    <select
+                      id="ind-ema-kind"
+                      value={emaKind}
+                      onChange={(e) => setEmaKind(e.target.value === "death" ? "death" : "golden")}
+                    >
+                      <option value="golden">Golden</option>
+                      <option value="death">Death</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="row cols2" style={{ marginTop: "0.5rem" }}>
+                  <div>
+                    <label htmlFor="ind-ema-fast">EMA เร็ว</label>
+                    <input
+                      id="ind-ema-fast"
+                      type="number"
+                      inputMode="numeric"
+                      min={2}
+                      max={199}
+                      step={1}
+                      value={emaFast}
+                      onChange={(e) => setEmaFast(e.target.value)}
+                      placeholder={String(techMeta?.emaDefaults.fast ?? 9)}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="ind-ema-slow">EMA ช้า</label>
+                    <input
+                      id="ind-ema-slow"
+                      type="number"
+                      inputMode="numeric"
+                      min={3}
+                      max={200}
+                      step={1}
+                      value={emaSlow}
+                      onChange={(e) => setEmaSlow(e.target.value)}
+                      placeholder={String(techMeta?.emaDefaults.slow ?? 21)}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : null}
+
+            <p className="sub" style={{ marginTop: "1.25rem", marginBottom: "0.35rem", fontWeight: 600 }}>
+              2. เหรียญที่กำลังติดตาม (Apply to)
+            </p>
+            <button type="button" className="primary" style={{ marginBottom: "0.75rem" }} onClick={() => setAddCoinOpen(true)}>
+              + เพิ่มเหรียญ
+            </button>
+            {trackedChips.length > 0 ? (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+                {trackedChips.map((s) => (
                   <button
                     key={s}
                     type="button"
                     className="danger"
                     style={{ fontSize: "0.85rem", padding: "0.35rem 0.65rem" }}
-                    onClick={() => setTechChips((c) => c.filter((x) => x !== s))}
+                    onClick={() => setTrackedChips((c) => c.filter((x) => x !== s))}
                     title="ลบออกจากรายการก่อนบันทึก"
                   >
                     (×) {s}
                   </button>
                 ))}
               </div>
-            ) : null}
-            <button type="button" className="primary" style={{ marginTop: "1rem", width: "100%" }} onClick={onSaveTech}>
-              บันทึกและเริ่มทำงาน
+            ) : (
+              <p className="sub" style={{ marginTop: 0 }}>
+                ยังไม่มี — กด &quot;+ เพิ่มเหรียญ&quot;
+              </p>
+            )}
+
+            <button
+              type="button"
+              className="primary"
+              style={{ width: "100%", marginTop: "0.5rem" }}
+              disabled={indSettingsSaving}
+              onClick={() => void onSaveIndicatorSettings()}
+            >
+              {indSettingsSaving ? "กำลังบันทึก…" : "บันทึกและเริ่มทำงาน"}
             </button>
-            {techErr ? (
-              <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                {techErr}
+            {indSettingsErr ? (
+              <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", marginTop: "0.75rem" }}>
+                {indSettingsErr}
               </div>
             ) : null}
-            <p className="sub" style={{ marginTop: "1rem", marginBottom: "0.35rem", fontWeight: 600 }}>
+
+            {addCoinOpen ? (
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="ind-add-coin-title"
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  zIndex: 1000,
+                  background: "rgba(0,0,0,0.45)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "1rem",
+                }}
+                onClick={() => setAddCoinOpen(false)}
+              >
+                <div
+                  className="card"
+                  style={{ maxWidth: "22rem", width: "100%", margin: 0 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <h3 id="ind-add-coin-title" style={{ marginTop: 0 }}>
+                    เพิ่มเหรียญ
+                  </h3>
+                  <label htmlFor="ind-add-coin-input">สัญญา / ย่อ</label>
+                  <input
+                    id="ind-add-coin-input"
+                    list="ind-combined-syms"
+                    value={addCoinDraft}
+                    onChange={(e) => setAddCoinDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        confirmAddCoinFromModal();
+                      }
+                    }}
+                    placeholder="เช่น BTC หรือ BTC_USDT"
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <datalist id="ind-combined-syms">
+                    {combinedTopSymbols.map((s) => (
+                      <option key={s} value={s} />
+                    ))}
+                  </datalist>
+                  <div className="row" style={{ marginTop: "1rem", justifyContent: "flex-end", gap: "0.5rem" }}>
+                    <button type="button" onClick={() => setAddCoinOpen(false)}>
+                      ยกเลิก
+                    </button>
+                    <button type="button" className="primary" onClick={confirmAddCoinFromModal}>
+                      ตกลง
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <p className="sub" style={{ marginTop: "1.25rem", marginBottom: "0.35rem", fontWeight: 600 }}>
               รายการที่บันทึกแล้ว
             </p>
-            {techRows.length === 0 ? (
+            {volAlerts.length === 0 && techRows.length === 0 ? (
               <p className="sub" style={{ margin: 0 }}>
-                ยังไม่มี — ตั้งเกณฑ์ แล้วเพิ่มสัญญา แล้วกดบันทึก
+                ยังไม่มีรายการ
               </p>
             ) : (
-              techRows.map((a) => (
-                <div key={a.id} className="alertItem">
-                  <div>
-                    <strong>{a.symbol}</strong>
-                    <br />
-                    <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
-                      RSI({a.parameters.period}) 1h · {a.direction === "above" ? "ข้ามขึ้น >" : "ข้ามลง <"} {a.threshold}
-                    </span>
-                    {a.lastTriggeredAt ? (
-                      <>
-                        <br />
-                        <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
-                          แจ้งล่าสุด:{" "}
-                          {new Date(a.lastTriggeredAt).toLocaleString("th-TH", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })}
-                        </span>
-                      </>
-                    ) : null}
-                  </div>
-                  <button type="button" className="danger" onClick={() => onDeleteTech(a.id)}>
-                    ลบ
-                  </button>
-                </div>
-              ))
+              <>
+                {volAlerts.length > 0 ? (
+                  <>
+                    <p className="sub" style={{ margin: "0.5rem 0 0.35rem", fontSize: "0.85rem" }}>
+                      Volume signal
+                    </p>
+                    {volAlerts.map((a) => (
+                      <div key={a.id} className="alertItem">
+                        <div>
+                          <strong>{a.coinId}</strong>
+                          <br />
+                          <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                            TF {a.timeframe === "4h" ? "4 ชม." : "1 ชม."}
+                            {typeof a.minVolRatio === "number" ? ` · Vol≥${a.minVolRatio}×` : ""}
+                            {typeof a.minAbsReturnPct === "number" ? ` · |แท่ง|≥${a.minAbsReturnPct}%` : ""}
+                          </span>
+                          {a.lastEvent ? (
+                            <>
+                              <br />
+                              <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
+                                ล่าสุด:{" "}
+                                {new Date(a.lastEvent.at).toLocaleString("th-TH", {
+                                  dateStyle: "short",
+                                  timeStyle: "short",
+                                })}{" "}
+                                · Vol {a.lastEvent.volRatio.toFixed(2)}× · แท่ง {a.lastEvent.returnPct >= 0 ? "+" : ""}
+                                {a.lastEvent.returnPct.toFixed(2)}%
+                              </span>
+                            </>
+                          ) : null}
+                        </div>
+                        <button type="button" className="danger" onClick={() => onDeleteVol(a.id)}>
+                          ลบ
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                ) : null}
+                {techRows.length > 0 ? (
+                  <>
+                    <p className="sub" style={{ margin: "0.75rem 0 0.35rem", fontSize: "0.85rem" }}>
+                      RSI / EMA
+                    </p>
+                    {techRows.map((a) =>
+                      a.indicatorType === "RSI" ? (
+                        <div key={a.id} className="alertItem">
+                          <div>
+                            <strong>{a.symbol}</strong>
+                            <br />
+                            <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                              RSI({a.parameters.period}) {a.timeframe === "4h" ? "4h" : "1h"} ·{" "}
+                              {a.direction === "above" ? "ข้ามขึ้น >" : "ข้ามลง <"} {a.threshold}
+                            </span>
+                            {a.lastTriggeredAt ? (
+                              <>
+                                <br />
+                                <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
+                                  แจ้งล่าสุด:{" "}
+                                  {new Date(a.lastTriggeredAt).toLocaleString("th-TH", {
+                                    dateStyle: "short",
+                                    timeStyle: "short",
+                                  })}
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
+                          <button type="button" className="danger" onClick={() => onDeleteTech(a.id)}>
+                            ลบ
+                          </button>
+                        </div>
+                      ) : (
+                        <div key={a.id} className="alertItem">
+                          <div>
+                            <strong>{a.symbol}</strong>
+                            <br />
+                            <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                              EMA {a.parameters.fast}/{a.parameters.slow} · {a.timeframe === "4h" ? "4h" : "1h"} ·{" "}
+                              {a.emaCrossKind === "golden" ? "Golden" : "Death"}
+                            </span>
+                            {a.lastTriggeredAt ? (
+                              <>
+                                <br />
+                                <span style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
+                                  แจ้งล่าสุด:{" "}
+                                  {new Date(a.lastTriggeredAt).toLocaleString("th-TH", {
+                                    dateStyle: "short",
+                                    timeStyle: "short",
+                                  })}
+                                </span>
+                              </>
+                            ) : null}
+                          </div>
+                          <button type="button" className="danger" onClick={() => onDeleteTech(a.id)}>
+                            ลบ
+                          </button>
+                        </div>
+                      )
+                    )}
+                  </>
+                ) : null}
+              </>
             )}
           </div>
-        )}
+        ) : null}
       </div>
     </>
   );

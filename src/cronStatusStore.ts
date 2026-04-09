@@ -185,7 +185,7 @@ export function formatCronStatusForLine(bundle: {
       parts.push(fmt(priceSync.steps.volumeSignalAlerts, "Volume signal (Top 30)"));
     }
     if (priceSync.steps.indicatorAlerts) {
-      parts.push(fmt(priceSync.steps.indicatorAlerts, "RSI indicator (1h)"));
+      parts.push(fmt(priceSync.steps.indicatorAlerts, "RSI / EMA indicator"));
     }
     parts.push("");
   }

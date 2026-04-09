@@ -1,10 +1,12 @@
 import type { Client } from "@line/bot-sdk";
-import { fetchContractKline1h } from "./indicatorKline";
-import { rsiWilder } from "./indicatorMath";
+import { fetchContractKlineForTf, type IndicatorChartTf } from "./indicatorKline";
+import { emaLine, rsiWilder } from "./indicatorMath";
 import {
-  loadActiveRsi1hAlerts,
+  loadActiveEmaCrossAlerts,
+  loadActiveRsiAlerts,
   updateIndicatorAlertAfterFire,
-  type IndicatorAlert,
+  type EmaCrossIndicatorAlert,
+  type RsiIndicatorAlert,
 } from "./indicatorAlertsStore";
 
 function cooldownMs(): number {
@@ -12,7 +14,10 @@ function cooldownMs(): number {
   return Number.isFinite(v) && v > 0 ? v : 4 * 3600 * 1000;
 }
 
-function inCooldown(a: IndicatorAlert, now: number): boolean {
+function inCooldown(
+  a: { lastTriggeredAt?: string },
+  now: number
+): boolean {
   if (!a.lastTriggeredAt) return false;
   const t = Date.parse(a.lastTriggeredAt);
   if (Number.isNaN(t)) return false;
@@ -33,7 +38,7 @@ function displaySymbol(mexcSymbol: string): string {
   return `$${base}/USDT`;
 }
 
-function crossMatch(
+function rsiCrossMatch(
   rPrev: number,
   rNow: number,
   threshold: number,
@@ -45,12 +50,17 @@ function crossMatch(
   return rPrev >= threshold && rNow < threshold;
 }
 
-function buildLineMessage(a: IndicatorAlert, rPrev: number, rNow: number, barIso: string): string {
+function rsiTfLabel(tf: RsiIndicatorAlert["timeframe"]): string {
+  return tf === "4h" ? "4 ชม." : "1 ชม.";
+}
+
+function buildRsiLineMessage(a: RsiIndicatorAlert, rPrev: number, rNow: number, barIso: string): string {
   const sym = displaySymbol(a.symbol);
   const cmp = a.direction === "above" ? ">" : "<";
   const dirTh = `${cmp} ${a.threshold}`;
+  const tfLabel = rsiTfLabel(a.timeframe);
   return [
-    `📈 Koji — RSI alert (1h)`,
+    `📈 Koji — RSI alert (${tfLabel})`,
     `🪙 ${sym}`,
     "",
     `📊 RSI(${a.parameters.period}) ข้ามเกณฑ์ (${dirTh})`,
@@ -61,28 +71,53 @@ function buildLineMessage(a: IndicatorAlert, rPrev: number, rNow: number, barIso
   ].join("\n");
 }
 
-/**
- * Collector → Evaluator → Notifier ในรอบเดียว (cron ~15 นาที)
- */
-export async function runIndicatorAlertTick(client: Client): Promise<{ notified: number }> {
-  const alerts = await loadActiveRsi1hAlerts();
-  if (alerts.length === 0) return { notified: 0 };
+function buildEmaLineMessage(
+  a: EmaCrossIndicatorAlert,
+  fastPrev: number,
+  slowPrev: number,
+  fastNow: number,
+  slowNow: number,
+  barIso: string
+): string {
+  const sym = displaySymbol(a.symbol);
+  const tfLabel = a.timeframe === "4h" ? "4 ชม." : "1 ชม.";
+  const kindLabel = a.emaCrossKind === "golden" ? "Golden cross (เร่งตัว)" : "Death cross (กดลง)";
+  return [
+    `📉 Koji — EMA Cross (${tfLabel})`,
+    `🪙 ${sym}`,
+    "",
+    `📊 ${kindLabel}`,
+    `   EMA ${a.parameters.fast} / ${a.parameters.slow}`,
+    `   ก่อน: ${fastPrev.toFixed(4)} vs ${slowPrev.toFixed(4)} → ล่าสุด: ${fastNow.toFixed(4)} vs ${slowNow.toFixed(4)}`,
+    `   แท่งปิด (UTC): ${barIso}`,
+    "",
+    "สัญญาณจากแท่งปิดล่าสุด — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน",
+  ].join("\n");
+}
 
-  const uniqueSymbols = Array.from(new Set(alerts.map((a) => a.symbol))).sort();
-  const CONCURRENCY = 8;
+async function runRsiInternal(client: Client, now: number): Promise<number> {
+  const alerts = await loadActiveRsiAlerts();
+  if (alerts.length === 0) return 0;
 
-  const klineBySymbol = new Map<string, Awaited<ReturnType<typeof fetchContractKline1h>>>();
-  await mapPoolConcurrent(uniqueSymbols, CONCURRENCY, async (sym) => {
-    const k = await fetchContractKline1h(sym);
-    klineBySymbol.set(sym, k);
+  const keys = new Set<string>();
+  for (const a of alerts) {
+    keys.add(`${a.symbol}\t${a.timeframe}`);
+  }
+
+  const klineMap = new Map<string, Awaited<ReturnType<typeof fetchContractKlineForTf>>>();
+  await mapPoolConcurrent(Array.from(keys), 8, async (key) => {
+    const tab = key.indexOf("\t");
+    const sym = key.slice(0, tab);
+    const tf = key.slice(tab + 1) as IndicatorChartTf;
+    const k = await fetchContractKlineForTf(sym, tf);
+    klineMap.set(key, k);
     return k;
   });
 
-  const now = Date.now();
   let notified = 0;
 
   for (const a of alerts) {
-    const pack = klineBySymbol.get(a.symbol);
+    const pack = klineMap.get(`${a.symbol}\t${a.timeframe}`);
     if (!pack) continue;
 
     const { close, timeSec } = pack;
@@ -100,12 +135,12 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
     const barTimeSec = timeSec[i];
     if (typeof barTimeSec !== "number" || !Number.isFinite(barTimeSec)) continue;
 
-    if (!crossMatch(rPrev, rNow, a.threshold, a.direction)) continue;
+    if (!rsiCrossMatch(rPrev, rNow, a.threshold, a.direction)) continue;
     if (a.lastFiredBarTimeSec === barTimeSec) continue;
     if (inCooldown(a, now)) continue;
 
     const barIso = new Date(barTimeSec * 1000).toISOString();
-    const msg = buildLineMessage(a, rPrev, rNow, barIso);
+    const msg = buildRsiLineMessage(a, rPrev, rNow, barIso);
     const iso = new Date().toISOString();
 
     try {
@@ -113,11 +148,105 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
       await updateIndicatorAlertAfterFire(a.id, iso, barTimeSec);
       notified += 1;
     } catch (e) {
-      console.error("[indicatorAlertWorker] push", a.id, e);
+      console.error("[indicatorAlertWorker] RSI push", a.id, e);
     }
   }
 
-  return { notified };
+  return notified;
+}
+
+function emaCrossMatch(fastAbovePrev: boolean, fastAboveNow: boolean, kind: "golden" | "death"): boolean {
+  if (kind === "golden") {
+    return !fastAbovePrev && fastAboveNow;
+  }
+  return fastAbovePrev && !fastAboveNow;
+}
+
+async function runEmaCrossInternal(client: Client, now: number): Promise<number> {
+  const alerts = await loadActiveEmaCrossAlerts();
+  if (alerts.length === 0) return 0;
+
+  const keys = new Set<string>();
+  for (const a of alerts) {
+    keys.add(`${a.symbol}\t${a.timeframe}`);
+  }
+
+  const klineMap = new Map<string, Awaited<ReturnType<typeof fetchContractKlineForTf>>>();
+  await mapPoolConcurrent(Array.from(keys), 8, async (key) => {
+    const tab = key.indexOf("\t");
+    const sym = key.slice(0, tab);
+    const tf = key.slice(tab + 1) as IndicatorChartTf;
+    const k = await fetchContractKlineForTf(sym, tf);
+    klineMap.set(key, k);
+    return k;
+  });
+
+  let notified = 0;
+
+  for (const a of alerts) {
+    const pack = klineMap.get(`${a.symbol}\t${a.timeframe}`);
+    if (!pack) continue;
+
+    const { close, timeSec } = pack;
+    const n = close.length;
+    const { fast, slow } = a.parameters;
+    if (fast >= slow || fast < 2 || slow < 3) continue;
+
+    const minIdx = Math.max(fast, slow) - 1;
+    const emaF = emaLine(close, fast);
+    const emaS = emaLine(close, slow);
+
+    const i = n - 2;
+    const iPrev = i - 1;
+    if (i < minIdx || iPrev < minIdx) continue;
+
+    const efNow = emaF[i];
+    const esNow = emaS[i];
+    const efPrev = emaF[iPrev];
+    const esPrev = emaS[iPrev];
+    if (
+      !Number.isFinite(efNow) ||
+      !Number.isFinite(esNow) ||
+      !Number.isFinite(efPrev) ||
+      !Number.isFinite(esPrev)
+    ) {
+      continue;
+    }
+
+    const fastAboveNow = efNow > esNow;
+    const fastAbovePrev = efPrev > esPrev;
+
+    if (!emaCrossMatch(fastAbovePrev, fastAboveNow, a.emaCrossKind)) continue;
+
+    const barTimeSec = timeSec[i];
+    if (typeof barTimeSec !== "number" || !Number.isFinite(barTimeSec)) continue;
+    if (a.lastFiredBarTimeSec === barTimeSec) continue;
+    if (inCooldown(a, now)) continue;
+
+    const barIso = new Date(barTimeSec * 1000).toISOString();
+    const msg = buildEmaLineMessage(a, efPrev, esPrev, efNow, esNow, barIso);
+    const iso = new Date().toISOString();
+
+    try {
+      await client.pushMessage(a.userId, [{ type: "text", text: msg }]);
+      await updateIndicatorAlertAfterFire(a.id, iso, barTimeSec);
+      notified += 1;
+    } catch (e) {
+      console.error("[indicatorAlertWorker] EMA push", a.id, e);
+    }
+  }
+
+  return notified;
+}
+
+/**
+ * Collector → Evaluator → Notifier ในรอบเดียว (cron ~15 นาที)
+ */
+export async function runIndicatorAlertTick(client: Client): Promise<{ notified: number }> {
+  const now = Date.now();
+  const rsiN = await runRsiInternal(client, now);
+  const emaN = await runEmaCrossInternal(client, now);
+  return { notified: rsiN + emaN };
 }
 
 export function getIndicatorCooldownMsDisplay(): number {

@@ -82,10 +82,45 @@ async function saveAll(rows: VolumeSignalAlert[]): Promise<void> {
 
 export const MAX_VOLUME_SIGNAL_ALERTS_PER_USER = 10;
 
+function countUserVolumeRows(all: VolumeSignalAlert[], userId: string): number {
+  return all.filter((a) => a.userId === userId).length;
+}
+
 export async function listVolumeSignalAlertsForUser(userId: string): Promise<VolumeSignalAlert[]> {
   return (await loadVolumeSignalAlerts())
     .filter((a) => a.userId === userId)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/**
+ * ลบทุกแถว volume signal ของ user ใน timeframe นี้ แล้วแทนที่ด้วยชุดใหม่ (สำหรับ sync จาก LIFF)
+ */
+export async function replaceUserVolumeSignalAlertsForTimeframe(
+  userId: string,
+  timeframe: VolumeSignalTimeframe,
+  rows: Array<Omit<VolumeSignalAlert, "id" | "createdAt" | "lastEvent">>
+): Promise<VolumeSignalAlert[]> {
+  const all = await loadVolumeSignalAlerts();
+  const others = all.filter((a) => !(a.userId === userId && a.timeframe === timeframe));
+  const afterCount = countUserVolumeRows(others, userId) + rows.length;
+  if (afterCount > MAX_VOLUME_SIGNAL_ALERTS_PER_USER) {
+    throw new Error(`สูงสุด ${MAX_VOLUME_SIGNAL_ALERTS_PER_USER} รายการต่อผู้ใช้`);
+  }
+  const seen = new Set<string>();
+  for (const r of rows) {
+    if (seen.has(r.coinId)) {
+      throw new Error("มีสัญญาซ้ำในรายการ");
+    }
+    seen.add(r.coinId);
+  }
+  const now = new Date().toISOString();
+  const created: VolumeSignalAlert[] = rows.map((r) => ({
+    ...r,
+    id: randomUUID(),
+    createdAt: now,
+  }));
+  await saveAll([...others, ...created]);
+  return created;
 }
 
 export async function addVolumeSignalAlert(

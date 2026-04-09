@@ -6,34 +6,42 @@ import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 const KV_KEY = "koji:indicator_alerts";
 const filePath = join(process.cwd(), "data", "indicator_alerts.json");
 
-/** Phase 1.5: RSI 1h — ขยายเป็น 4h/1D และ EMA ภายหลัง */
-export type IndicatorTimeframe = "1h";
-
-export type IndicatorType = "RSI";
+export type IndicatorTimeframe = "1h" | "4h";
 
 export type IndicatorAlertDirection = "above" | "below";
 
-export type RsiParameters = {
-  period: number;
-};
+export type EmaCrossKind = "golden" | "death";
 
-export type IndicatorAlert = {
+export type RsiIndicatorAlert = {
   id: string;
   userId: string;
-  /** สัญญา MEXC เช่น BTC_USDT */
   symbol: string;
   symbolLabel: string;
-  indicatorType: IndicatorType;
-  parameters: RsiParameters;
+  indicatorType: "RSI";
+  parameters: { period: number };
   timeframe: IndicatorTimeframe;
-  /** เช่น RSI ข้ามเหนือ 70 → threshold 70, direction above */
   threshold: number;
   direction: IndicatorAlertDirection;
   createdAt: string;
   lastTriggeredAt?: string;
-  /** Unix sec เวลาเปิดแท่งที่แจ้งล่าสุด — กันยิงซ้ำขณะแท่งเดิม */
   lastFiredBarTimeSec?: number;
 };
+
+export type EmaCrossIndicatorAlert = {
+  id: string;
+  userId: string;
+  symbol: string;
+  symbolLabel: string;
+  indicatorType: "EMA_CROSS";
+  parameters: { fast: number; slow: number };
+  timeframe: IndicatorTimeframe;
+  emaCrossKind: EmaCrossKind;
+  createdAt: string;
+  lastTriggeredAt?: string;
+  lastFiredBarTimeSec?: number;
+};
+
+export type IndicatorAlert = RsiIndicatorAlert | EmaCrossIndicatorAlert;
 
 function isVercel(): boolean {
   return process.env.VERCEL === "1";
@@ -87,32 +95,73 @@ export function maxIndicatorAlertsPerUser(): number {
   return Number.isFinite(v) && v > 0 ? Math.min(Math.floor(v), 100) : 30;
 }
 
+function countUserRows(all: IndicatorAlert[], userId: string): number {
+  return all.filter((a) => a.userId === userId).length;
+}
+
 export async function listIndicatorAlertsForUser(userId: string): Promise<IndicatorAlert[]> {
   return (await loadIndicatorAlerts())
     .filter((a) => a.userId === userId)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-/** แถว RSI 1h ทั้งหมด (สำหรับ worker) */
-export async function loadActiveRsi1hAlerts(): Promise<IndicatorAlert[]> {
-  return (await loadIndicatorAlerts()).filter(
-    (a) => a.indicatorType === "RSI" && a.timeframe === "1h"
-  );
+/** RSI ทุก timeframe (1h / 4h) สำหรับ worker */
+export async function loadActiveRsiAlerts(): Promise<RsiIndicatorAlert[]> {
+  return (await loadIndicatorAlerts()).filter((a): a is RsiIndicatorAlert => a.indicatorType === "RSI");
 }
 
-export async function replaceUserRsi1hAlerts(
+export async function loadActiveEmaCrossAlerts(): Promise<EmaCrossIndicatorAlert[]> {
+  return (await loadIndicatorAlerts()).filter((a): a is EmaCrossIndicatorAlert => a.indicatorType === "EMA_CROSS");
+}
+
+/** แทนที่ชุด RSI ของ user ต่อ timeframe (เหมือน EMA) */
+export async function replaceUserRsiAlerts(
   userId: string,
-  rows: Omit<IndicatorAlert, "id" | "createdAt" | "lastTriggeredAt" | "lastFiredBarTimeSec">[]
-): Promise<IndicatorAlert[]> {
+  timeframe: IndicatorTimeframe,
+  rows: Array<
+    Omit<RsiIndicatorAlert, "id" | "createdAt" | "lastTriggeredAt" | "lastFiredBarTimeSec">
+  >
+): Promise<RsiIndicatorAlert[]> {
   const all = await loadIndicatorAlerts();
   const others = all.filter(
-    (a) => !(a.userId === userId && a.indicatorType === "RSI" && a.timeframe === "1h")
+    (a) => !(a.userId === userId && a.indicatorType === "RSI" && a.timeframe === timeframe)
   );
-  if (rows.length > maxIndicatorAlertsPerUser()) {
-    throw new Error(`สูงสุด ${maxIndicatorAlertsPerUser()} รายการ RSI 1h ต่อผู้ใช้`);
+  const afterCount = countUserRows(others, userId) + rows.length;
+  if (afterCount > maxIndicatorAlertsPerUser()) {
+    throw new Error(`สูงสุด ${maxIndicatorAlertsPerUser()} รายการ indicator ต่อผู้ใช้ (รวม RSI + EMA)`);
   }
   const now = new Date().toISOString();
-  const created: IndicatorAlert[] = rows.map((r) => ({
+  const created: RsiIndicatorAlert[] = rows.map((r) => ({
+    ...r,
+    id: randomUUID(),
+    createdAt: now,
+  }));
+  await saveAll([...others, ...created]);
+  return created;
+}
+
+export async function replaceUserEmaCrossAlerts(
+  userId: string,
+  timeframe: IndicatorTimeframe,
+  rows: Array<
+    Omit<EmaCrossIndicatorAlert, "id" | "createdAt" | "lastTriggeredAt" | "lastFiredBarTimeSec">
+  >
+): Promise<EmaCrossIndicatorAlert[]> {
+  const all = await loadIndicatorAlerts();
+  const others = all.filter(
+    (a) =>
+      !(
+        a.userId === userId &&
+        a.indicatorType === "EMA_CROSS" &&
+        a.timeframe === timeframe
+      )
+  );
+  const afterCount = countUserRows(others, userId) + rows.length;
+  if (afterCount > maxIndicatorAlertsPerUser()) {
+    throw new Error(`สูงสุด ${maxIndicatorAlertsPerUser()} รายการ indicator ต่อผู้ใช้ (รวม RSI + EMA)`);
+  }
+  const now = new Date().toISOString();
+  const created: EmaCrossIndicatorAlert[] = rows.map((r) => ({
     ...r,
     id: randomUUID(),
     createdAt: now,

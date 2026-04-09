@@ -34,3 +34,23 @@ export function rsiWilder(closes: number[], period: number): number[] {
 
   return result;
 }
+
+/**
+ * EMA — seed ด้วย SMA ที่ index period-1 แล้วใช้ multiplier k = 2/(period+1)
+ */
+export function emaLine(closes: number[], period: number): number[] {
+  const n = closes.length;
+  const result: number[] = new Array(n).fill(Number.NaN);
+  if (n < period || period < 1) return result;
+
+  let sum = 0;
+  for (let i = 0; i < period; i++) {
+    sum += closes[i]!;
+  }
+  result[period - 1] = sum / period;
+  const k = 2 / (period + 1);
+  for (let i = period; i < n; i++) {
+    result[i] = (closes[i]! - result[i - 1]!) * k + result[i - 1]!;
+  }
+  return result;
+}

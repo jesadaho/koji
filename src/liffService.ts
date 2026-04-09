@@ -25,13 +25,16 @@ import {
   listVolumeSignalAlertsForUser,
   MAX_VOLUME_SIGNAL_ALERTS_PER_USER,
   removeVolumeSignalAlertById,
+  replaceUserVolumeSignalAlertsForTimeframe,
   type VolumeSignalTimeframe,
 } from "./volumeSignalAlertsStore";
 import {
   listIndicatorAlertsForUser,
   maxIndicatorAlertsPerUser,
   removeIndicatorAlertById,
-  replaceUserRsi1hAlerts,
+  replaceUserEmaCrossAlerts,
+  replaceUserRsiAlerts,
+  type IndicatorTimeframe,
 } from "./indicatorAlertsStore";
 import { getIndicatorCooldownMsDisplay } from "./indicatorAlertWorker";
 import {
@@ -371,6 +374,76 @@ export async function liffCreateVolumeSignalAlert(
   }
 }
 
+/** POST sync — แทนที่รายการ volume signal ทั้งหมดใน timeframe ด้วย symbols[] (ว่าง = ลบทุกรายการใน TF นี้) */
+export async function liffSyncVolumeSignalAlerts(
+  userId: string,
+  body: unknown
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const rawSyms = b.symbols ?? b.symbolList;
+  if (!Array.isArray(rawSyms)) {
+    return { status: 400, json: { error: "ระบุ symbols เป็น array" } };
+  }
+
+  const tfRaw = typeof b.timeframe === "string" ? b.timeframe.trim().toLowerCase() : "1h";
+  const timeframe: VolumeSignalTimeframe = tfRaw === "4h" ? "4h" : "1h";
+
+  let minVolRatio: number | undefined;
+  let minAbsReturnPct: number | undefined;
+  try {
+    minVolRatio = parseOptionalMinVolRatio(b.minVolRatio);
+    minAbsReturnPct = parseOptionalMinAbsReturnPct(b.minAbsReturnPct);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "พารามิเตอร์ไม่ถูกต้อง";
+    return { status: 400, json: { error: msg } };
+  }
+
+  let top: string[];
+  try {
+    top = await getTopUsdtSymbolsByAmount24(VOLUME_SIGNAL_TOP_N);
+  } catch {
+    return { status: 503, json: { error: "ดึงรายชื่อสัญญา Top vol ไม่สำเร็จ" } };
+  }
+
+  const resolvedSyms: { contractSymbol: string; label: string }[] = [];
+  const seen = new Set<string>();
+  for (const raw of rawSyms) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const r = resolveContractSymbol(raw);
+    if (!r) {
+      return { status: 400, json: { error: `ไม่รู้จักคู่: ${raw}` } };
+    }
+    if (seen.has(r.contractSymbol)) continue;
+    seen.add(r.contractSymbol);
+    if (!top.includes(r.contractSymbol)) {
+      return {
+        status: 400,
+        json: {
+          error: `${r.label} ไม่อยู่ใน Top ${VOLUME_SIGNAL_TOP_N} ตาม Vol 24h — ลบออกหรือเลือกคู่อื่น`,
+        },
+      };
+    }
+    resolvedSyms.push(r);
+  }
+
+  try {
+    const rows = resolvedSyms.map((r) => ({
+      userId,
+      coinId: r.contractSymbol,
+      symbolLabel: r.label,
+      timeframe,
+      ...(minVolRatio !== undefined ? { minVolRatio } : {}),
+      ...(minAbsReturnPct !== undefined ? { minAbsReturnPct } : {}),
+    }));
+
+    const volumeSignalAlerts = await replaceUserVolumeSignalAlertsForTimeframe(userId, timeframe, rows);
+    return { status: 200, json: { volumeSignalAlerts, saved: volumeSignalAlerts.length } };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
+    return { status: 400, json: { error: msg } };
+  }
+}
+
 export async function liffDeleteVolumeSignalAlert(
   userId: string,
   id: string
@@ -390,6 +463,9 @@ export async function liffGetIndicatorMeta() {
     return {
       timeframe: "1h" as const,
       period: 14,
+      rsiTimeframes: ["1h", "4h"] as const,
+      emaDefaults: { fast: 9, slow: 21 },
+      emaTimeframes: ["1h", "4h"] as const,
       maxAlertsPerUser: maxIndicatorAlertsPerUser(),
       cooldownMs: getIndicatorCooldownMsDisplay(),
       topSymbols,
@@ -399,6 +475,9 @@ export async function liffGetIndicatorMeta() {
     return {
       timeframe: "1h" as const,
       period: 14,
+      rsiTimeframes: ["1h", "4h"] as const,
+      emaDefaults: { fast: 9, slow: 21 },
+      emaTimeframes: ["1h", "4h"] as const,
       maxAlertsPerUser: maxIndicatorAlertsPerUser(),
       cooldownMs: getIndicatorCooldownMsDisplay(),
       topSymbols: [] as string[],
@@ -413,7 +492,7 @@ export async function liffListIndicatorAlerts(userId: string) {
 }
 
 /**
- * แทนที่ชุด RSI 1h ทั้งหมดของ user ด้วยรายการ symbol + เงื่อนไขเดียว
+ * แทนที่ชุด RSI ต่อ timeframe (1h / 4h) ของ user ด้วยรายการ symbol + เงื่อนไขเดียว
  */
 export async function liffSyncRsi1hIndicatorAlerts(
   userId: string,
@@ -424,6 +503,9 @@ export async function liffSyncRsi1hIndicatorAlerts(
   if (!Array.isArray(rawSyms) || rawSyms.length === 0) {
     return { status: 400, json: { error: "ระบุ symbols อย่างน้อย 1 รายการ" } };
   }
+
+  const tfRaw = typeof b.timeframe === "string" ? b.timeframe.trim().toLowerCase() : "1h";
+  const timeframe: IndicatorTimeframe = tfRaw === "4h" ? "4h" : "1h";
 
   const threshold = typeof b.threshold === "number" ? b.threshold : Number(b.threshold);
   if (!Number.isFinite(threshold) || threshold < 1 || threshold > 99) {
@@ -459,12 +541,6 @@ export async function liffSyncRsi1hIndicatorAlerts(
   if (resolvedSyms.length === 0) {
     return { status: 400, json: { error: "ไม่มีสัญญาที่ใช้ได้" } };
   }
-  if (resolvedSyms.length > maxIndicatorAlertsPerUser()) {
-    return {
-      status: 400,
-      json: { error: `สูงสุด ${maxIndicatorAlertsPerUser()} สัญญาต่อผู้ใช้` },
-    };
-  }
 
   try {
     const rows = resolvedSyms.map((r) => ({
@@ -473,17 +549,94 @@ export async function liffSyncRsi1hIndicatorAlerts(
       symbolLabel: r.label,
       indicatorType: "RSI" as const,
       parameters: { period: 14 },
-      timeframe: "1h" as const,
+      timeframe,
       threshold,
       direction,
     }));
 
-    const indicatorAlerts = await replaceUserRsi1hAlerts(userId, rows);
+    const indicatorAlerts = await replaceUserRsiAlerts(userId, timeframe, rows);
     return { status: 200, json: { indicatorAlerts, saved: indicatorAlerts.length } };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
     return { status: 400, json: { error: msg } };
   }
+}
+
+export async function liffSyncEmaCrossIndicatorAlerts(
+  userId: string,
+  body: unknown
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const rawSyms = b.symbols ?? b.symbolList;
+  if (!Array.isArray(rawSyms) || rawSyms.length === 0) {
+    return { status: 400, json: { error: "ระบุ symbols อย่างน้อย 1 รายการ" } };
+  }
+
+  const tfRaw = typeof b.timeframe === "string" ? b.timeframe.trim().toLowerCase() : "1h";
+  const timeframe: IndicatorTimeframe = tfRaw === "4h" ? "4h" : "1h";
+
+  const fast = typeof b.fast === "number" ? b.fast : Number(b.fast);
+  const slow = typeof b.slow === "number" ? b.slow : Number(b.slow);
+  if (!Number.isFinite(fast) || !Number.isFinite(slow) || fast < 2 || slow < 3 || fast >= slow) {
+    return { status: 400, json: { error: "fast/slow ต้องเป็นตัวเลข โดย fast < slow (เช่น 9 / 21)" } };
+  }
+  if (slow > 200) {
+    return { status: 400, json: { error: "slow สูงสุด 200" } };
+  }
+
+  const kindRaw = typeof b.crossKind === "string" ? b.crossKind.trim().toLowerCase() : "";
+  let emaCrossKind: "golden" | "death" | null = null;
+  if (kindRaw === "golden" || kindRaw === "bull" || kindRaw === "bullish") emaCrossKind = "golden";
+  else if (kindRaw === "death" || kindRaw === "bear" || kindRaw === "bearish") emaCrossKind = "death";
+  if (!emaCrossKind) {
+    return { status: 400, json: { error: "crossKind ต้องเป็น golden หรือ death" } };
+  }
+
+  const resolvedSyms: { contractSymbol: string; label: string }[] = [];
+  const seen = new Set<string>();
+  for (const raw of rawSyms) {
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const r = resolveContractSymbol(raw);
+    if (!r) {
+      return { status: 400, json: { error: `ไม่รู้จักคู่: ${raw}` } };
+    }
+    if (seen.has(r.contractSymbol)) continue;
+    seen.add(r.contractSymbol);
+    resolvedSyms.push(r);
+  }
+
+  if (resolvedSyms.length === 0) {
+    return { status: 400, json: { error: "ไม่มีสัญญาที่ใช้ได้" } };
+  }
+
+  try {
+    const rows = resolvedSyms.map((r) => ({
+      userId,
+      symbol: r.contractSymbol,
+      symbolLabel: r.label,
+      indicatorType: "EMA_CROSS" as const,
+      parameters: { fast: Math.floor(fast), slow: Math.floor(slow) },
+      timeframe,
+      emaCrossKind,
+    }));
+
+    const indicatorAlerts = await replaceUserEmaCrossAlerts(userId, timeframe, rows);
+    return { status: 200, json: { indicatorAlerts, saved: indicatorAlerts.length } };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "บันทึกไม่สำเร็จ";
+    return { status: 400, json: { error: msg } };
+  }
+}
+
+/** POST /indicator-alerts — kind: rsi (ค่าเริ่ม) | ema */
+export async function liffSyncIndicatorAlerts(
+  userId: string,
+  body: unknown
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const kind = typeof b.kind === "string" ? b.kind.trim().toLowerCase() : "rsi";
+  if (kind === "ema") return liffSyncEmaCrossIndicatorAlerts(userId, body);
+  return liffSyncRsi1hIndicatorAlerts(userId, body);
 }
 
 export async function liffDeleteIndicatorAlert(

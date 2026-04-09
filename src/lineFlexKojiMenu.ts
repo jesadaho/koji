@@ -4,8 +4,18 @@ import { SYSTEM_CHANGE_CMD_OFF_TH, SYSTEM_CHANGE_CMD_ON_TH } from "./systemChang
 export const KOJI_MENU_ALT_TEXT =
   "Koji — เปิดแอป, Market, Top 50 Funding, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อไม่มี LIFF), ช่วยเหลือ";
 
-export function buildKojiWelcomeFlexContents(liffId?: string): FlexBubble {
+/** เมื่อยังไม่ติดตามระบบ — ไม่มีปุ่ม Top Funding */
+export const KOJI_MENU_ALT_TEXT_NO_TOP_FUNDING =
+  "Koji — เปิดแอป, Market, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อไม่มี LIFF), ช่วยเหลือ";
+
+export type KojiWelcomeFlexOptions = {
+  /** ถ้า true แสดงปุ่ม Top 50 Funding (เฉพาะเมื่อมี LIFF) — ผูกกับผู้ที่ติดตาม System conditions */
+  subscribedSystemChange?: boolean;
+};
+
+export function buildKojiWelcomeFlexContents(liffId?: string, options?: KojiWelcomeFlexOptions): FlexBubble {
   const footerContents: NonNullable<FlexBubble["footer"]>["contents"] = [];
+  const showTopFunding = Boolean(liffId && options?.subscribedSystemChange === true);
 
   if (liffId) {
     footerContents.push({
@@ -28,16 +38,18 @@ export function buildKojiWelcomeFlexContents(liffId?: string): FlexBubble {
         uri: `https://liff.line.me/${liffId}/markets`,
       },
     });
-    footerContents.push({
-      type: "button" as const,
-      style: "secondary" as const,
-      height: "sm" as const,
-      action: {
-        type: "uri" as const,
-        label: "Top 50 Funding rate",
-        uri: `https://liff.line.me/${liffId}/markets?sort=funding`,
-      },
-    });
+    if (showTopFunding) {
+      footerContents.push({
+        type: "button" as const,
+        style: "secondary" as const,
+        height: "sm" as const,
+        action: {
+          type: "uri" as const,
+          label: "Top 50 Funding rate",
+          uri: `https://liff.line.me/${liffId}/markets?sort=funding`,
+        },
+      });
+    }
     footerContents.push({
       type: "button" as const,
       style: "secondary" as const,
@@ -116,7 +128,9 @@ export function buildKojiWelcomeFlexContents(liffId?: string): FlexBubble {
         {
           type: "text",
           text: liffId
-            ? "แตะปุ่มด้านล่าง — เปิดแอป / Market (Momentum) / Top 50 Funding rate / ตั้งค่า (ติดตาม System conditions) / ช่วยเหลือ"
+            ? showTopFunding
+              ? "แตะปุ่มด้านล่าง — เปิดแอป / Market (Momentum) / Top 50 Funding rate / ตั้งค่า (ติดตาม System conditions) / ช่วยเหลือ"
+              : "แตะปุ่มด้านล่าง — เปิดแอป / Market (Momentum) / ตั้งค่า (ติดตาม System conditions) / ช่วยเหลือ · เปิดรับแจ้งเตือนระบบใน Settings แล้วจะมีลิงก์ Top Funding"
             : "ติดตามระบบ = แจ้งเมื่อ funding หรือขนาดออเดอร์เปลี่ยน (ไม่ต้องเลือกเหรียญ) · ตั้ง LIFF เพื่อเปิดแอป/Market/ตั้งค่า",
           size: "xs",
           color: "#888888",

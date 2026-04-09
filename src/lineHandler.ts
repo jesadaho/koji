@@ -9,7 +9,11 @@ import {
 } from "./pctStepAlertsStore";
 import { fetchSimplePrices, formatSignal } from "./cryptoService";
 import { config } from "./config";
-import { buildKojiWelcomeFlexContents, KOJI_MENU_ALT_TEXT } from "./lineFlexKojiMenu";
+import {
+  buildKojiWelcomeFlexContents,
+  KOJI_MENU_ALT_TEXT,
+  KOJI_MENU_ALT_TEXT_NO_TOP_FUNDING,
+} from "./lineFlexKojiMenu";
 import { isCronStatusQuery } from "./cronLineCommands";
 import {
   isSystemSubscribeStatusQuery,
@@ -189,11 +193,14 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
   }
 
   if (isKojiMenuTrigger(text)) {
+    const subscribedSystem = await hasSystemChangeSubscriber(uid);
     await client.replyMessage(msgEvent.replyToken, [
       {
         type: "flex",
-        altText: KOJI_MENU_ALT_TEXT,
-        contents: buildKojiWelcomeFlexContents(config.liffId),
+        altText: subscribedSystem ? KOJI_MENU_ALT_TEXT : KOJI_MENU_ALT_TEXT_NO_TOP_FUNDING,
+        contents: buildKojiWelcomeFlexContents(config.liffId, {
+          subscribedSystemChange: subscribedSystem,
+        }),
       },
     ]);
     return;
