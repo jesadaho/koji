@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import liff from "@line/liff";
-import IndicatorCoinPickerModal from "@/components/IndicatorCoinPickerModal";
+import IndicatorCoinPicker from "@/components/IndicatorCoinPicker";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -214,7 +214,6 @@ export default function LiffApp() {
   const [enableRsi, setEnableRsi] = useState(false);
   const [enableEma, setEnableEma] = useState(false);
   const [trackedChips, setTrackedChips] = useState<string[]>([]);
-  const [addCoinOpen, setAddCoinOpen] = useState(false);
   const [indSettingsErr, setIndSettingsErr] = useState("");
   const [indSettingsSaving, setIndSettingsSaving] = useState(false);
   /** เปิดช่องกรอกตัวเลข — ค่าเริ่มปิด (ประหยัดพื้นที่) */
@@ -1296,9 +1295,6 @@ export default function LiffApp() {
             <p className="indSectionTitle" style={{ marginTop: "1.15rem" }}>
               2. เหรียญที่กำลังติดตาม (Apply to)
             </p>
-            <button type="button" className="primary indAddCoinBtn" onClick={() => setAddCoinOpen(true)}>
-              + เพิ่มเหรียญ
-            </button>
             {trackedChips.length > 0 ? (
               <div className="indChipWrap">
                 {trackedChips.map((s) => (
@@ -1317,8 +1313,19 @@ export default function LiffApp() {
                 ))}
               </div>
             ) : (
-              <p className="indHintEmpty">ยังไม่มี — กด &quot;+ เพิ่มเหรียญ&quot;</p>
+              <p className="indHintEmpty">ยังไม่มีเหรียญ — เลือกจากรายการด้านล่าง</p>
             )}
+
+            <IndicatorCoinPicker
+              contracts={trackedChips}
+              onContractsChange={(next) => {
+                setIndSettingsErr("");
+                setTrackedChips(next);
+              }}
+              topSymbols={combinedTopSymbols}
+              volAlerts={volAlerts}
+              techRows={techRows}
+            />
 
             <button
               type="button"
@@ -1333,20 +1340,6 @@ export default function LiffApp() {
                 {indSettingsErr}
               </div>
             ) : null}
-
-            <IndicatorCoinPickerModal
-              open={addCoinOpen}
-              onClose={() => setAddCoinOpen(false)}
-              onConfirm={(contracts) => {
-                setIndSettingsErr("");
-                setTrackedChips(contracts);
-                setAddCoinOpen(false);
-              }}
-              topSymbols={combinedTopSymbols}
-              volAlerts={volAlerts}
-              techRows={techRows}
-              initialChips={trackedChips}
-            />
 
             <p className="indSavedHead">รายการที่บันทึกแล้ว</p>
             {volAlerts.length === 0 && techRows.length === 0 ? (

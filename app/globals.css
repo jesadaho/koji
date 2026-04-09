@@ -532,11 +532,6 @@ code {
   line-height: 1;
 }
 
-.indAddCoinBtn {
-  margin-top: 0;
-  margin-bottom: 0.5rem;
-}
-
 .indHintEmpty {
   font-size: 0.84rem;
   color: var(--muted);
@@ -709,10 +704,10 @@ code {
   width: auto;
 }
 
-/* Indicator — เลือกหลายเหรียญ (modal) */
-.indCoinPickerPanel {
-  max-width: 26rem;
-  max-height: min(92vh, 36rem);
+/* Indicator — เลือกหลายเหรียญ (ฝังในหน้า) */
+.indCoinPickerEmbed {
+  margin-top: 0.5rem;
+  margin-bottom: 0.35rem;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -863,34 +858,6 @@ code {
   font-size: 0.82rem;
   color: var(--muted);
   text-align: center;
-}
-
-.indCoinPickerFooter {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  margin-top: 0.85rem;
-  padding-top: 0.35rem;
-  flex-shrink: 0;
-}
-
-.indCoinPickerConfirm {
-  width: 100%;
-  margin-top: 0;
-}
-
-.indCoinPickerCancel {
-  width: 100%;
-  margin-top: 0;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.indCoinPickerCancel:hover {
-  color: var(--text);
-  border-color: var(--muted);
 }
 
 .marketsMetricLegend {
