@@ -231,7 +231,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
         notifyF && live && prevF ? { prev: prevF, next: live } : null;
       const orderBlock = notifyO && prevO && nextRow ? { prev: prevO, next: nextRow } : null;
       const text = buildMexcSystemConditionMessage(symbol, fundingBlock, orderBlock, peerMaxVolThreshold);
-      for (const uid of recipientsFor(symbol)) {
+      for (const uid of Array.from(recipientsFor(symbol))) {
         const list = pendingByUser.get(uid) ?? [];
         list.push(text);
         pendingByUser.set(uid, list);
