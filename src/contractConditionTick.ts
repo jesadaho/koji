@@ -253,7 +253,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
   }
 
   const sep = "\n\n────────\n\n";
-  for (const [uid, parts] of pendingByUser) {
+  for (const [uid, parts] of Array.from(pendingByUser.entries())) {
     if (parts.length === 0) continue;
     const digest =
       parts.length > 1
