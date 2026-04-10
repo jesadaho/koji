@@ -1,6 +1,6 @@
 import type { Client } from "@line/bot-sdk";
 import { loadAlerts, markFired } from "./alertsStore";
-import { linePushMessages } from "./linePush";
+import { sendAlertNotification } from "./alertNotify";
 import { fetchSimplePrices } from "./cryptoService";
 
 /** รอบเช็คราคาแจ้งเตือน — เรียกจาก Vercel Cron หรือ job ภายนอก */
@@ -24,12 +24,11 @@ export async function runPriceAlertTick(client: Client): Promise<void> {
         : "";
 
     try {
-      await linePushMessages(client, a.userId, [
-        {
-          type: "text",
-          text: `🔔 Koji (MEXC Futures)\n${a.coinId}\nถึงเงื่อนไขแล้ว\nราคา ~ ${p.toLocaleString("en-US", { maximumFractionDigits: 8 })} USDT${chg}\nเงื่อนไข: ${a.direction === "above" ? "≥" : "≤"} ${a.targetUsd} USDT`,
-        },
-      ]);
+      await sendAlertNotification(
+        client,
+        a.userId,
+        `🔔 Koji (MEXC Futures)\n${a.coinId}\nถึงเงื่อนไขแล้ว\nราคา ~ ${p.toLocaleString("en-US", { maximumFractionDigits: 8 })} USDT${chg}\nเงื่อนไข: ${a.direction === "above" ? "≥" : "≤"} ${a.targetUsd} USDT`,
+      );
       await markFired(a.id);
     } catch (e) {
       console.error("push alert failed", a.id, e);

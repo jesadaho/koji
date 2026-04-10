@@ -1,5 +1,5 @@
 import type { Client } from "@line/bot-sdk";
-import { linePushMessages } from "./linePush";
+import { sendAlertNotification } from "./alertNotify";
 import { getTopUsdtSymbolsByAmount24 } from "./mexcMarkets";
 import { formatScore } from "./marketsFormat";
 import {
@@ -178,7 +178,7 @@ export async function runVolumeSignalAlertTick(client: Client): Promise<{ notifi
       const iso = new Date().toISOString();
 
       try {
-        await linePushMessages(client, a.userId, [{ type: "text", text: msg }]);
+        await sendAlertNotification(client, a.userId, msg);
         await setVolumeSignalLastNotified(a.id, iso, {
           volRatio: hit.volRatio,
           returnPct: hit.returnPct,

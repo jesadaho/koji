@@ -19,7 +19,7 @@ import {
   type MexcDetailRow,
 } from "./mexcContractMeta";
 import { formatFunding, fundingRateLineEmoji, maxVolContractWarnThreshold } from "./marketsFormat";
-import { linePushMessages } from "./linePush";
+import { sendAlertNotification } from "./alertNotify";
 
 /**
  * แจ้ง funding เมื่อ |Δrate|×100 ≥ ค่านี้ (หน่วยเดียวกับความต่างของ % ที่โชว์ Markets)
@@ -265,7 +265,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
       const suffix = blobs.length > 1 ? `\n\n( ${bi + 1}/${blobs.length} )` : "";
       const body = `${blobs[bi]!}${suffix}`;
       try {
-        await linePushMessages(client, uid, [{ type: "text", text: body }]);
+        await sendAlertNotification(client, uid, body);
       } catch (e) {
         console.error("[contractConditionTick] push batched system condition", uid, bi, e);
       }

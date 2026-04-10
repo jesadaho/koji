@@ -25,7 +25,7 @@ import {
   hasSystemChangeSubscriber,
   removeSystemChangeSubscriber,
 } from "./systemChangeSubscribersStore";
-import { linePushMessages } from "./linePush";
+import { sendAlertNotification } from "./alertNotify";
 
 export function createLineClient(channelAccessToken: string) {
   return new Client({ channelAccessToken });
@@ -79,7 +79,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถานะ cron — บันทึก job ~15 นาที (เป้าราคา + แจ้งเตือนการเคลื่อนไหวราคา) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
 
-• ทดสอบ push — ยิงข้อความแบบ push (เหมือนแจ้งเตือน/cron) แล้วตอบยืนยันในแชท
+• ทดสอบแจ้งเตือน — ส่งไป Discord (ถ้าตั้ง DISCORD_ALERT_WEBHOOK_URL) หรือ LINE push แล้วตอบยืนยันในแชท
   (EN: test push, #testpush)
 
 จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
@@ -155,7 +155,7 @@ function isKojiMenuTrigger(text: string): boolean {
   return /^koji$/i.test(t);
 }
 
-/** ทดสอบ pushMessage จากแชท — ไม่ต้องใช้ cron */
+/** ทดสอบช่องแจ้งเตือน (Discord หรือ LINE push) จากแชท */
 function isWebhookPushTestQuery(t: string): boolean {
   const s = t.trim().toLowerCase();
   if (s === "#testpush" || s === "test push") return true;
@@ -207,28 +207,24 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
 
   if (isWebhookPushTestQuery(text)) {
     try {
-      await linePushMessages(client, uid, [
-        {
-          type: "text",
-          text: [
-            "🧪 Push ทดสอบ (จาก webhook)",
-            `UTC: ${new Date().toISOString()}`,
-            "",
-            "ข้อความนี้ใช้ pushMessage — แยกจาก reply ถัดไป (เหมือนแจ้งเตือน/cron)",
-          ].join("\n"),
-        },
-      ]);
+      const body = [
+        "🧪 ทดสอบแจ้งเตือน (จาก LINE webhook)",
+        `UTC: ${new Date().toISOString()}`,
+        "",
+        "ใช้ช่องเดียวกับ cron — Discord ถ้ามี DISCORD_ALERT_WEBHOOK_URL มิฉะนั้น LINE push",
+      ].join("\n");
+      await sendAlertNotification(client, uid, body);
       await client.replyMessage(msgEvent.replyToken, [
         {
           type: "text",
-          text: "✅ ส่ง push ทดสอบแล้ว — bubble ด้านบนคือ push ถ้าไม่มีหรือ 429 = โควตา/เรทลิมิต",
+          text: "✅ ส่งทดสอบแล้ว — ดูที่ Discord หรือข้อความ push ในแชท (ตามที่ตั้ง env)",
         },
       ]);
     } catch (e) {
-      console.error("[lineHandler] webhook test push", e);
+      console.error("[lineHandler] webhook test alert", e);
       const detail = e instanceof Error ? e.message : String(e);
       await client.replyMessage(msgEvent.replyToken, [
-        { type: "text", text: `❌ push ทดสอบไม่สำเร็จ: ${detail}` },
+        { type: "text", text: `❌ ทดสอบไม่สำเร็จ: ${detail}` },
       ]);
     }
     return;

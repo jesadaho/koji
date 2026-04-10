@@ -1,5 +1,5 @@
 import type { Client } from "@line/bot-sdk";
-import { linePushMessages } from "./linePush";
+import { sendAlertNotification } from "./alertNotify";
 import { bkkTradingSessionId } from "./bkkSession";
 import { fetchSimplePrices } from "./cryptoService";
 import {
@@ -111,9 +111,7 @@ export async function runPctStepPriceAlertTick(client: Client): Promise<{ notifi
       const diffPct = (Math.abs(p - anchor) / anchor) * 100;
       if (diffPct + EPS >= row.stepPct) {
         try {
-          await linePushMessages(client, row.userId, [
-            { type: "text", text: buildTrailingMessage(row, anchor, p) },
-          ]);
+          await sendAlertNotification(client, row.userId, buildTrailingMessage(row, anchor, p));
           notified += 1;
         } catch (e) {
           console.error("[pctStepPriceAlertTick] push trailing", row.id, e);
@@ -167,12 +165,7 @@ export async function runPctStepPriceAlertTick(client: Client): Promise<{ notifi
 
     if (newUp > maxUp || newDown > maxDown) {
       try {
-        await linePushMessages(client, row.userId, [
-          {
-            type: "text",
-            text: buildDailyMessage(row, anchor, p),
-          },
-        ]);
+        await sendAlertNotification(client, row.userId, buildDailyMessage(row, anchor, p));
         notified += 1;
       } catch (e) {
         console.error("[pctStepPriceAlertTick] push daily", row.id, e);
