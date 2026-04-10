@@ -23,48 +23,14 @@ async function throttleBeforePush(): Promise<void> {
   if (elapsed < gap) await sleep(gap - elapsed);
 }
 
-function getHttpStatus(e: unknown): number | undefined {
-  if (!e || typeof e !== "object") return undefined;
-  const o = e as Record<string, unknown>;
-  if (typeof o.statusCode === "number") return o.statusCode;
-  const orig = o.originalError as { response?: { status?: number } } | undefined;
-  if (orig?.response?.status) return orig.response.status;
-  return undefined;
-}
-
-function retryAfterMs(e: unknown): number | null {
-  const orig = (e as { originalError?: { response?: { headers?: Record<string, unknown> } } })?.originalError;
-  const h = orig?.response?.headers;
-  if (!h) return null;
-  const ra = h["retry-after"] ?? h["Retry-After"];
-  const raw = Array.isArray(ra) ? ra[0] : ra;
-  if (raw == null) return null;
-  const s = Number(raw);
-  if (!Number.isFinite(s) || s < 0) return null;
-  return Math.min(s * 1000, 60_000);
-}
-
 /**
- * `pushMessage` พร้อมเว้นระยะระหว่างการเรียก + retry เมื่อ LINE คืน 429 (Too Many Requests)
+ * `pushMessage` พร้อมเว้นระยะระหว่างการเรียก (ไม่ retry — ถ้า LINE คืน 429 ให้ caller จัดการ)
  */
 export async function linePushMessages(client: Client, to: string, messages: Message[]): Promise<void> {
-  const maxAttempts = 8;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await throttleBeforePush();
-    try {
-      await client.pushMessage(to, messages);
-      markPushDone();
-      return;
-    } catch (e: unknown) {
-      const st = getHttpStatus(e);
-      if (st === 429 && attempt < maxAttempts - 1) {
-        const backoff = retryAfterMs(e) ?? Math.min(500 * 2 ** attempt, 30_000);
-        console.warn(`[linePush] 429 → wait ${backoff}ms (attempt ${attempt + 1}/${maxAttempts})`);
-        await sleep(backoff);
-        continue;
-      }
-      markPushDone();
-      throw e;
-    }
+  await throttleBeforePush();
+  try {
+    await client.pushMessage(to, messages);
+  } finally {
+    markPushDone();
   }
 }
