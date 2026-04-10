@@ -1,4 +1,5 @@
 import type { Client } from "@line/bot-sdk";
+import { linePushMessages } from "./linePush";
 import { bkkTradingSessionId } from "./bkkSession";
 import { fetchSimplePrices } from "./cryptoService";
 import {
@@ -110,7 +111,7 @@ export async function runPctStepPriceAlertTick(client: Client): Promise<{ notifi
       const diffPct = (Math.abs(p - anchor) / anchor) * 100;
       if (diffPct + EPS >= row.stepPct) {
         try {
-          await client.pushMessage(row.userId, [
+          await linePushMessages(client, row.userId, [
             { type: "text", text: buildTrailingMessage(row, anchor, p) },
           ]);
           notified += 1;
@@ -166,7 +167,7 @@ export async function runPctStepPriceAlertTick(client: Client): Promise<{ notifi
 
     if (newUp > maxUp || newDown > maxDown) {
       try {
-        await client.pushMessage(row.userId, [
+        await linePushMessages(client, row.userId, [
           {
             type: "text",
             text: buildDailyMessage(row, anchor, p),

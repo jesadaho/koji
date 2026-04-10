@@ -19,6 +19,7 @@ import {
   type MexcDetailRow,
 } from "./mexcContractMeta";
 import { formatFunding, fundingRateLineEmoji, maxVolContractWarnThreshold } from "./marketsFormat";
+import { linePushMessages } from "./linePush";
 
 /**
  * แจ้ง funding เมื่อ |Δrate|×100 ≥ ค่านี้ (หน่วยเดียวกับความต่างของ % ที่โชว์ Markets)
@@ -217,7 +218,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
       const text = buildMexcSystemConditionMessage(symbol, fundingBlock, orderBlock, peerMaxVolThreshold);
       for (const uid of Array.from(recipientsFor(symbol))) {
         try {
-          await client.pushMessage(uid, [{ type: "text", text }]);
+          await linePushMessages(client, uid, [{ type: "text", text }]);
         } catch (e) {
           console.error("[contractConditionTick] push system condition", symbol, uid, e);
         }

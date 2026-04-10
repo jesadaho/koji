@@ -1,5 +1,6 @@
 import type { Client } from "@line/bot-sdk";
 import { fetchContractKlineForTf, type IndicatorChartTf } from "./indicatorKline";
+import { linePushMessages } from "./linePush";
 import { emaLine, rsiWilder } from "./indicatorMath";
 import {
   loadActiveEmaCrossAlerts,
@@ -157,7 +158,7 @@ async function runRsiInternal(client: Client, now: number): Promise<number> {
     const iso = new Date().toISOString();
 
     try {
-      await client.pushMessage(a.userId, [{ type: "text", text: msg }]);
+      await linePushMessages(client, a.userId, [{ type: "text", text: msg }]);
       await updateIndicatorAlertAfterFire(a.id, iso, barTimeSec);
       notified += 1;
     } catch (e) {
@@ -241,7 +242,7 @@ async function runEmaCrossInternal(client: Client, now: number): Promise<number>
     const iso = new Date().toISOString();
 
     try {
-      await client.pushMessage(a.userId, [{ type: "text", text: msg }]);
+      await linePushMessages(client, a.userId, [{ type: "text", text: msg }]);
       await updateIndicatorAlertAfterFire(a.id, iso, barTimeSec);
       notified += 1;
     } catch (e) {
