@@ -3,7 +3,7 @@ import type { Client, Message } from "@line/bot-sdk";
 /** เว้นระหว่าง push ต่อเนื่อง (โทเค็นบอทเดียวกัน) — ลด LINE Messaging API 429 เมื่อ cron ยิงหลายข้อความติดกัน */
 function minIntervalMs(): number {
   const v = Number(process.env.LINE_PUSH_MIN_INTERVAL_MS);
-  return Number.isFinite(v) && v >= 0 ? v : 120;
+  return Number.isFinite(v) && v >= 0 ? v : 280;
 }
 
 let lastPushDoneAt = 0;
@@ -48,7 +48,7 @@ function retryAfterMs(e: unknown): number | null {
  * `pushMessage` พร้อมเว้นระยะระหว่างการเรียก + retry เมื่อ LINE คืน 429 (Too Many Requests)
  */
 export async function linePushMessages(client: Client, to: string, messages: Message[]): Promise<void> {
-  const maxAttempts = 5;
+  const maxAttempts = 8;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     await throttleBeforePush();
     try {
@@ -58,7 +58,7 @@ export async function linePushMessages(client: Client, to: string, messages: Mes
     } catch (e: unknown) {
       const st = getHttpStatus(e);
       if (st === 429 && attempt < maxAttempts - 1) {
-        const backoff = retryAfterMs(e) ?? Math.min(250 * 2 ** attempt, 10_000);
+        const backoff = retryAfterMs(e) ?? Math.min(500 * 2 ** attempt, 30_000);
         console.warn(`[linePush] 429 → wait ${backoff}ms (attempt ${attempt + 1}/${maxAttempts})`);
         await sleep(backoff);
         continue;

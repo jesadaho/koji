@@ -143,6 +143,18 @@ function unionPollSymbols(watchSymbols: string[], topSample: { symbol: string }[
   return Array.from(s).sort();
 }
 
+/** LINE text สูงสุด 5000 — ตัดก้อนเผื่อหัวข้อรวม */
+const LINE_TEXT_CHUNK_SAFE = 4500;
+
+function chunkLineTextBody(full: string, maxLen: number): string[] {
+  if (full.length <= maxLen) return [full];
+  const out: string[] = [];
+  for (let i = 0; i < full.length; i += maxLen) {
+    out.push(full.slice(i, i + maxLen));
+  }
+  return out;
+}
+
 /**
  * รายชั่วโมง: เทียบ funding + order limits กับ snapshot → LINE push (รวมเป็นข้อความเดียวถ้าทั้งคู่เปลี่ยน)
  */
@@ -185,6 +197,9 @@ export async function runContractConditionTick(client: Client): Promise<void> {
     return new Set([...userIdsForSymbol(watches, symbol), ...systemUsers]);
   }
 
+  /** รวมหลายสัญญา → push น้อยครั้งต่อ user (ลด LINE 429) */
+  const pendingByUser = new Map<string, string[]>();
+
   for (const symbol of symbols) {
     const live = liveBySymbol.get(symbol) ?? null;
     const prevF = fundingMap[symbol];
@@ -216,12 +231,10 @@ export async function runContractConditionTick(client: Client): Promise<void> {
         notifyF && live && prevF ? { prev: prevF, next: live } : null;
       const orderBlock = notifyO && prevO && nextRow ? { prev: prevO, next: nextRow } : null;
       const text = buildMexcSystemConditionMessage(symbol, fundingBlock, orderBlock, peerMaxVolThreshold);
-      for (const uid of Array.from(recipientsFor(symbol))) {
-        try {
-          await linePushMessages(client, uid, [{ type: "text", text }]);
-        } catch (e) {
-          console.error("[contractConditionTick] push system condition", symbol, uid, e);
-        }
+      for (const uid of recipientsFor(symbol)) {
+        const list = pendingByUser.get(uid) ?? [];
+        list.push(text);
+        pendingByUser.set(uid, list);
       }
     }
 
@@ -236,6 +249,26 @@ export async function runContractConditionTick(client: Client): Promise<void> {
 
     if (meta && nextRow) {
       orderMap[symbol] = nextRow;
+    }
+  }
+
+  const sep = "\n\n────────\n\n";
+  for (const [uid, parts] of pendingByUser) {
+    if (parts.length === 0) continue;
+    const digest =
+      parts.length > 1
+        ? `🔔 [MEXC System] สรุป ${parts.length} สัญญา (รอบเดียวกัน)\n\n`
+        : "";
+    const joined = digest + parts.join(sep);
+    const blobs = chunkLineTextBody(joined, LINE_TEXT_CHUNK_SAFE);
+    for (let bi = 0; bi < blobs.length; bi++) {
+      const suffix = blobs.length > 1 ? `\n\n( ${bi + 1}/${blobs.length} )` : "";
+      const body = `${blobs[bi]!}${suffix}`;
+      try {
+        await linePushMessages(client, uid, [{ type: "text", text: body }]);
+      } catch (e) {
+        console.error("[contractConditionTick] push batched system condition", uid, bi, e);
+      }
     }
   }
 
