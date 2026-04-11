@@ -156,7 +156,7 @@ function chunkLineTextBody(full: string, maxLen: number): string[] {
 }
 
 /**
- * รายชั่วโมง: เทียบ funding + order limits กับ snapshot → LINE push (รวมเป็นข้อความเดียวถ้าทั้งคู่เปลี่ยน)
+ * รายชั่วโมง: เทียบ funding + order limits กับ snapshot → แจ้งทีละสัญญา (ข้อความแยกต่อเหรียญ)
  */
 export async function runContractConditionTick(client: Client): Promise<void> {
   const watches = await loadContractWatches();
@@ -197,7 +197,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
     return new Set([...userIdsForSymbol(watches, symbol), ...systemUsers]);
   }
 
-  /** รวมหลายสัญญา → push น้อยครั้งต่อ user (ลด LINE 429) */
+  /** สะสมข้อความต่อสัญญาแล้วส่งทีละข้อความต่อ user */
   const pendingByUser = new Map<string, string[]>();
 
   for (const symbol of symbols) {
@@ -252,22 +252,18 @@ export async function runContractConditionTick(client: Client): Promise<void> {
     }
   }
 
-  const sep = "\n\n────────\n\n";
   for (const [uid, parts] of Array.from(pendingByUser.entries())) {
     if (parts.length === 0) continue;
-    const digest =
-      parts.length > 1
-        ? `🔔 [MEXC System] สรุป ${parts.length} สัญญา (รอบเดียวกัน)\n\n`
-        : "";
-    const joined = digest + parts.join(sep);
-    const blobs = chunkLineTextBody(joined, LINE_TEXT_CHUNK_SAFE);
-    for (let bi = 0; bi < blobs.length; bi++) {
-      const suffix = blobs.length > 1 ? `\n\n( ${bi + 1}/${blobs.length} )` : "";
-      const body = `${blobs[bi]!}${suffix}`;
-      try {
-        await sendAlertNotification(client, uid, body);
-      } catch (e) {
-        console.error("[contractConditionTick] push batched system condition", uid, bi, e);
+    for (const single of parts) {
+      const blobs = chunkLineTextBody(single, LINE_TEXT_CHUNK_SAFE);
+      for (let bi = 0; bi < blobs.length; bi++) {
+        const suffix = blobs.length > 1 ? `\n\n( ${bi + 1}/${blobs.length} )` : "";
+        const body = `${blobs[bi]!}${suffix}`;
+        try {
+          await sendAlertNotification(client, uid, body);
+        } catch (e) {
+          console.error("[contractConditionTick] push system condition", uid, bi, e);
+        }
       }
     }
   }
