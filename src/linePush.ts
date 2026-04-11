@@ -1,6 +1,6 @@
 import type { Client, Message } from "@line/bot-sdk";
 
-/** เว้นระหว่าง push ต่อเนื่อง (โทเค็นบอทเดียวกัน) — ลด LINE Messaging API 429 เมื่อ cron ยิงหลายข้อความติดกัน */
+/** เว้นระหว่าง push ต่อเนื่อง (โทเค็นบอทเดียวกัน) — ลด LINE Messaging API 429 เมื่อ cron ยิงหลายข้อความติดกัน (แจ้งเตือนอัตโนมัติใช้เมื่อ LINE_ALERT_PUSH_ENABLED=1) */
 function minIntervalMs(): number {
   const v = Number(process.env.LINE_PUSH_MIN_INTERVAL_MS);
   return Number.isFinite(v) && v >= 0 ? v : 280;

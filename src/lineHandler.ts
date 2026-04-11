@@ -79,7 +79,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถานะ cron — บันทึก job ~15 นาที (เป้าราคา + แจ้งเตือนการเคลื่อนไหวราคา) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
 
-• ทดสอบแจ้งเตือน — ส่งไป Telegram / Discord / LINE ตาม env (ลำดับ: Telegram → Discord → LINE) แล้วตอบยืนยันในแชท
+• ทดสอบแจ้งเตือน — ส่งไป Telegram / Discord / LINE ตาม env (LINE ต้อง LINE_ALERT_PUSH_ENABLED=1) แล้วตอบยืนยันในแชท
   (EN: test push, #testpush)
 
 จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
