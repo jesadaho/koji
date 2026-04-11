@@ -3,20 +3,23 @@ import { NextResponse } from "next/server";
 import { config } from "@/src/config";
 import { requireCronAuth } from "@/src/cronAuth";
 import { createLineClient } from "@/src/lineHandler";
-import { linePushMessages } from "@/src/linePush";
-import { discordWebhookConfigured, sendDiscordWebhookContent } from "@/src/discordWebhook";
+import { sendAlertNotification, isAlertAlsoLinePush } from "@/src/alertNotify";
+import { discordWebhookConfigured } from "@/src/discordWebhook";
+import { telegramAlertConfigured } from "@/src/telegramAlert";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * ทดสอบช่องทางแจ้งเตือน (Discord webhook ถ้ามี env มิฉะนั้น LINE push)
+ * ทดสอบช่องทางแจ้งเตือน (Telegram → Discord → LINE ตามลำดับความสำคัญของ env)
  *
  * GET /api/cron/test-push — Authorization: Bearer $CRON_SECRET
  *
  * Env:
- * - DISCORD_ALERT_WEBHOOK_URL — ถ้ามีจะส่งข้อความทดสอบไป Discord (ไม่ต้องมี LINE_CRON_TEST_USER_ID)
- * - LINE_CRON_TEST_USER_ID — ใช้เมื่อไม่มี Discord URL (ทดสอบ LINE push)
+ * - TELEGRAM_BOT_TOKEN + TELEGRAM_ALERT_CHAT_ID — ช่องหลัก (แนะนำ)
+ * - DISCORD_ALERT_WEBHOOK_URL — ถ้าไม่มี Telegram
+ * - LINE_CRON_TEST_USER_ID — ใช้เมื่อไม่มี Telegram/Discord; หรือคู่กับ ALERT_ALSO_LINE_PUSH=1
+ * - ALERT_ALSO_LINE_PUSH / TELEGRAM_ALERT_ALSO_LINE_PUSH / DISCORD_ALERT_ALSO_LINE_PUSH
  * - LINE_CRON_TEST_DISABLED=1 — ข้าม
  */
 export async function GET(req: NextRequest) {
@@ -32,44 +35,51 @@ export async function GET(req: NextRequest) {
   }
 
   const iso = new Date().toISOString();
-  const text = [
-    "🧪 Koji — ทดสอบแจ้งเตือนจาก cron",
-    `เวลา (UTC): ${iso}`,
-    "",
-    discordWebhookConfigured()
+  const channelHint = telegramAlertConfigured()
+    ? "ช่อง: Telegram (TELEGRAM_BOT_TOKEN + TELEGRAM_ALERT_CHAT_ID)"
+    : discordWebhookConfigured()
       ? "ช่อง: Discord webhook (DISCORD_ALERT_WEBHOOK_URL)"
-      : "ช่อง: LINE push (LINE_CRON_TEST_USER_ID)",
-  ].join("\n");
+      : "ช่อง: LINE push (LINE_CRON_TEST_USER_ID)";
+
+  const text = ["🧪 Koji — ทดสอบแจ้งเตือนจาก cron", `เวลา (UTC): ${iso}`, "", channelHint].join("\n");
+
+  const testLineUid = process.env.LINE_CRON_TEST_USER_ID?.trim() ?? "";
 
   try {
-    if (discordWebhookConfigured()) {
-      await sendDiscordWebhookContent(text);
-      return NextResponse.json({
-        ok: true,
-        sent: true,
-        channel: "discord",
-        at: iso,
-      });
-    }
+    const hasPrimary = telegramAlertConfigured() || discordWebhookConfigured();
 
-    const userId = process.env.LINE_CRON_TEST_USER_ID?.trim();
-    if (!userId) {
+    if (!hasPrimary && !testLineUid) {
       return NextResponse.json({
         ok: true,
         skipped: true,
         message:
-          "ตั้ง DISCORD_ALERT_WEBHOOK_URL หรือ LINE_CRON_TEST_USER_ID — ข้ามการทดสอบ",
+          "ตั้ง TELEGRAM_BOT_TOKEN+TELEGRAM_ALERT_CHAT_ID หรือ DISCORD_ALERT_WEBHOOK_URL หรือ LINE_CRON_TEST_USER_ID — ข้ามการทดสอบ",
       });
     }
 
+    if (hasPrimary && isAlertAlsoLinePush() && !testLineUid) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "ALERT_ALSO_LINE_PUSH=1 (หรือ TELEGRAM/DISCORD_ALERT_ALSO_LINE_PUSH) ต้องตั้ง LINE_CRON_TEST_USER_ID สำหรับการทดสอบ cron",
+        },
+        { status: 400 },
+      );
+    }
+
     const client = createLineClient(config.lineChannelAccessToken);
-    await linePushMessages(client, userId, [{ type: "text", text }]);
+    await sendAlertNotification(client, testLineUid, text);
+
+    const primary = telegramAlertConfigured() ? "telegram" : discordWebhookConfigured() ? "discord" : "line";
+
     return NextResponse.json({
       ok: true,
       sent: true,
-      channel: "line",
+      channel: primary,
+      alsoLine: hasPrimary && isAlertAlsoLinePush(),
       at: iso,
-      toPrefix: `${userId.slice(0, 8)}…`,
+      ...(testLineUid ? { toPrefix: `${testLineUid.slice(0, 8)}…` } : {}),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

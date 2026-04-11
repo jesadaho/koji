@@ -79,7 +79,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถานะ cron — บันทึก job ~15 นาที (เป้าราคา + แจ้งเตือนการเคลื่อนไหวราคา) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
 
-• ทดสอบแจ้งเตือน — ส่งไป Discord (ถ้าตั้ง DISCORD_ALERT_WEBHOOK_URL) หรือ LINE push แล้วตอบยืนยันในแชท
+• ทดสอบแจ้งเตือน — ส่งไป Telegram / Discord / LINE ตาม env (ลำดับ: Telegram → Discord → LINE) แล้วตอบยืนยันในแชท
   (EN: test push, #testpush)
 
 จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
@@ -155,7 +155,7 @@ function isKojiMenuTrigger(text: string): boolean {
   return /^koji$/i.test(t);
 }
 
-/** ทดสอบช่องแจ้งเตือน (Discord หรือ LINE push) จากแชท */
+/** ทดสอบช่องแจ้งเตือน (Telegram / Discord / LINE) จากแชท */
 function isWebhookPushTestQuery(t: string): boolean {
   const s = t.trim().toLowerCase();
   if (s === "#testpush" || s === "test push") return true;
@@ -211,13 +211,13 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
         "🧪 ทดสอบแจ้งเตือน (จาก LINE webhook)",
         `UTC: ${new Date().toISOString()}`,
         "",
-        "ใช้ช่องเดียวกับ cron — Discord ถ้ามี DISCORD_ALERT_WEBHOOK_URL มิฉะนั้น LINE push",
+        "ช่องเดียวกับ cron — Telegram → Discord → LINE ตาม env",
       ].join("\n");
       await sendAlertNotification(client, uid, body);
       await client.replyMessage(msgEvent.replyToken, [
         {
           type: "text",
-          text: "✅ ส่งทดสอบแล้ว — ดูที่ Discord หรือข้อความ push ในแชท (ตามที่ตั้ง env)",
+          text: "✅ ส่งทดสอบแล้ว — ดูที่ Telegram / Discord หรือข้อความ push ในแชท (ตาม env)",
         },
       ]);
     } catch (e) {
