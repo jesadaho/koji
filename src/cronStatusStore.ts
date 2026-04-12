@@ -39,7 +39,7 @@ export type HourlyCronRecord = {
   };
 };
 
-/** ~15 นาที: แจ้งเตือนราคาเป้า + แจ้งเตือนการเคลื่อนไหวราคา + volume signal + RSI 1h */
+/** ~15 นาที: แจ้งเตือนราคาเป้า + เตือน% รายวัน + volume signal + RSI 1h (เตือน% trailing → cron แยกทุก ~5 นาที) */
 export type PriceSyncCronRecord = {
   at: string;
   durationMs: number;
@@ -169,7 +169,7 @@ export function formatCronStatusForLine(bundle: {
       "• บน Vercel ยังไม่ได้ตั้ง REDIS_URL หรือ KV",
       "• CRON_SECRET ไม่ตรง (cron ได้ 401)",
       "",
-      "กำหนดการ: price-sync ~ทุก 15 นาที (UTC) · price-alerts ทุกชั่วโมง (UTC)",
+      "กำหนดการ: pct-trailing ~ทุก 5 นาที (UTC) · price-sync ~ทุก 15 นาที (UTC) · price-alerts ทุกชั่วโมง (UTC)",
       "ดู log: Vercel → Project → Logs",
     ].join("\n");
   }
@@ -177,10 +177,10 @@ export function formatCronStatusForLine(bundle: {
   const parts: string[] = ["🗓 สถานะ cron", ""];
 
   if (priceSync) {
-    parts.push("— รอบล่าสุด: แจ้งเตือนราคา (~15 นาที) —");
+    parts.push("— รอบล่าสุด: price-sync (~15 นาที; เตือน% trailing อยู่ cron อื่น) —");
     parts.push(`เวลา: ${priceSync.at} · รวม ${priceSync.durationMs}ms`);
     parts.push(fmt(priceSync.steps.priceAlerts, "แจ้งเตือนเป้าราคา"));
-    parts.push(fmt(priceSync.steps.pctStepAlerts, "แจ้งเตือนการเคลื่อนไหวราคา"));
+    parts.push(fmt(priceSync.steps.pctStepAlerts, "เตือน% รายวัน (07:00 ไทย)"));
     if (priceSync.steps.volumeSignalAlerts) {
       parts.push(fmt(priceSync.steps.volumeSignalAlerts, "Volume signal (Top 30)"));
     }

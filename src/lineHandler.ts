@@ -76,7 +76,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
   (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)
 
-• สถานะ cron — บันทึก job ~15 นาที (เป้าราคา + แจ้งเตือนการเคลื่อนไหวราคา) + ชั่วโมง (สัญญา / funding)
+• สถานะ cron — บันทึก job: เตือน% trailing ~5 นาที · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
 
 • ทดสอบแจ้งเตือน — ส่งไป Telegram / Discord / LINE ตาม env (LINE ต้อง LINE_ALERT_PUSH_ENABLED=1) แล้วตอบยืนยันในแชท

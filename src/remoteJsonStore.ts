@@ -77,3 +77,39 @@ export async function cloudSet(key: string, value: unknown): Promise<void> {
   }
   throw new Error("ไม่มี cloud storage (ตั้ง REDIS_URL หรือ KV_REST_API_URL)");
 }
+
+const PCT_STEP_ALERTS_LOCK_KEY = "koji:lock:pct_step_alerts";
+const PCT_STEP_ALERTS_LOCK_TTL_SEC = 120;
+
+/** ล็อกก่อน read-modify-write pct step alerts (กัน race ระหว่าง cron 5 นาที vs 15 นาที) — local file ไม่ล็อก */
+export async function acquirePctStepAlertsLock(): Promise<boolean> {
+  if (!useCloudStorage()) return true;
+  if (useRedisUrl()) {
+    const r = await getRedis();
+    const ok = await r.set(PCT_STEP_ALERTS_LOCK_KEY, "1", {
+      EX: PCT_STEP_ALERTS_LOCK_TTL_SEC,
+      NX: true,
+    });
+    return ok === "OK";
+  }
+  if (useKvRest()) {
+    const res = await kv.set(PCT_STEP_ALERTS_LOCK_KEY, "1", {
+      ex: PCT_STEP_ALERTS_LOCK_TTL_SEC,
+      nx: true,
+    });
+    return res === "OK";
+  }
+  return true;
+}
+
+export async function releasePctStepAlertsLock(): Promise<void> {
+  if (!useCloudStorage()) return;
+  if (useRedisUrl()) {
+    const r = await getRedis();
+    await r.del(PCT_STEP_ALERTS_LOCK_KEY);
+    return;
+  }
+  if (useKvRest()) {
+    await kv.del(PCT_STEP_ALERTS_LOCK_KEY);
+  }
+}

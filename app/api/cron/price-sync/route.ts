@@ -8,7 +8,7 @@ import {
   type CronStepResult,
   type PriceSyncCronRecord,
 } from "@/src/cronStatusStore";
-import { runPctStepPriceAlertTick } from "@/src/pctStepPriceAlertTick";
+import { runPctStepDailyPriceAlertTick } from "@/src/pctStepPriceAlertTick";
 import { runPriceAlertTick } from "@/src/priceAlertTick";
 import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
 import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
@@ -17,7 +17,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เคลื่อนไหวราคา + Volume signal + RSI 1h
+ * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เตือน% รายวัน (07:00 ไทย) + Volume signal + RSI 1h
+ * เตือน% trailing → /api/cron/pct-trailing ทุก ~5 นาที
  * GET + Authorization: Bearer CRON_SECRET
  */
 export async function GET(req: NextRequest) {
@@ -55,8 +56,8 @@ export async function GET(req: NextRequest) {
     await runPriceAlertTick(client);
   });
   await runStep("pctStepAlerts", async () => {
-    const r = await runPctStepPriceAlertTick(client);
-    return `แจ้ง ${r.notified} ครั้ง`;
+    const r = await runPctStepDailyPriceAlertTick(client);
+    return `แจ้ง ${r.notified} ครั้ง (เตือน% รายวัน)`;
   });
   await runStep("volumeSignalAlerts", async () => {
     const r = await runVolumeSignalAlertTick(client);

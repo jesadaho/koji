@@ -254,7 +254,7 @@ async function runEmaCrossInternal(client: Client, now: number): Promise<number>
 }
 
 /**
- * Collector → Evaluator → Notifier ในรอบเดียว (cron ~15 นาที)
+ * Collector → Evaluator → Notifier ในรอบเดียว (cron price-sync ~15 นาที)
  */
 export async function runIndicatorAlertTick(client: Client): Promise<{ notified: number }> {
   const now = Date.now();

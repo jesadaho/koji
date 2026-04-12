@@ -3,12 +3,40 @@ import { sendAlertNotification } from "./alertNotify";
 import { bkkTradingSessionId } from "./bkkSession";
 import { fetchSimplePrices } from "./cryptoService";
 import {
+  acquirePctStepAlertsLock,
+  releasePctStepAlertsLock,
+} from "./remoteJsonStore";
+import {
   loadPctStepAlerts,
   replacePctStepAlerts,
   type PctStepAlert,
+  type PctStepMode,
 } from "./pctStepAlertsStore";
 
 const EPS = 1e-10;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** read-modify-write ภายใต้ lock — กัน race ระหว่าง cron trailing 5 นาที กับ daily 15 นาที */
+async function withPctStepStoreLock<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const got = await acquirePctStepAlertsLock();
+    if (got) {
+      try {
+        return await run();
+      } finally {
+        await releasePctStepAlertsLock();
+      }
+    }
+    await sleep(200 + attempt * 100);
+  }
+  throw new Error("pct_step_alerts: ล็อก store ไม่สำเร็จ (ลองครบแล้ว)");
+}
+
+/** trailing = เช็คถี่ (cron 5 นาที) · daily = รายวัน 07:00 (cron 15 นาที) · both = รวมในครั้งเดียว */
+export type PctStepScope = "trailing" | "daily" | "both";
 
 function fmtPrice(p: number): string {
   return p.toLocaleString("en-US", { maximumFractionDigits: 8 });
@@ -79,14 +107,24 @@ function buildTrailingMessage(row: PctStepAlert, prevAnchor: number, p: number):
   ].join("\n");
 }
 
-/**
- * แจ้งเตือนการเคลื่อนไหวราคา (ทุก x%) — เรียกจาก cron ~15 นาที
- */
-export async function runPctStepPriceAlertTick(client: Client): Promise<{ notified: number }> {
+function coinIdsForScope(rows: PctStepAlert[], scope: PctStepScope): string[] {
+  if (scope === "both") {
+    return Array.from(new Set(rows.map((r) => r.coinId)));
+  }
+  const modeFilter: PctStepMode = scope === "trailing" ? "trailing" : "daily_07_bkk";
+  return Array.from(new Set(rows.filter((r) => r.mode === modeFilter).map((r) => r.coinId)));
+}
+
+async function runPctStepPriceAlertTickInner(
+  client: Client,
+  scope: PctStepScope,
+): Promise<{ notified: number }> {
   const rows = await loadPctStepAlerts();
   if (rows.length === 0) return { notified: 0 };
 
-  const symbols = Array.from(new Set(rows.map((r) => r.coinId)));
+  const symbols = coinIdsForScope(rows, scope);
+  if (symbols.length === 0) return { notified: 0 };
+
   const prices = await fetchSimplePrices(symbols);
   const now = new Date();
   const sessionId = bkkTradingSessionId(now);
@@ -95,18 +133,25 @@ export async function runPctStepPriceAlertTick(client: Client): Promise<{ notifi
   const nextRows: PctStepAlert[] = [];
 
   for (const row of rows) {
-    const q = prices[row.coinId];
-    if (!q) {
-      nextRows.push(row);
-      continue;
-    }
-    const p = q.usd;
-    if (!Number.isFinite(p) || p <= 0) {
-      nextRows.push(row);
-      continue;
-    }
+    const runTrailing = scope === "both" || scope === "trailing";
+    const runDaily = scope === "both" || scope === "daily";
 
     if (row.mode === "trailing") {
+      if (!runTrailing) {
+        nextRows.push(row);
+        continue;
+      }
+      const q = prices[row.coinId];
+      if (!q) {
+        nextRows.push(row);
+        continue;
+      }
+      const p = q.usd;
+      if (!Number.isFinite(p) || p <= 0) {
+        nextRows.push(row);
+        continue;
+      }
+
       const anchor = row.trailingAnchorPrice ?? p;
       const diffPct = (Math.abs(p - anchor) / anchor) * 100;
       if (diffPct + EPS >= row.stepPct) {
@@ -130,6 +175,22 @@ export async function runPctStepPriceAlertTick(client: Client): Promise<{ notifi
     }
 
     // daily_07_bkk
+    if (!runDaily) {
+      nextRows.push(row);
+      continue;
+    }
+
+    const q = prices[row.coinId];
+    if (!q) {
+      nextRows.push(row);
+      continue;
+    }
+    const p = q.usd;
+    if (!Number.isFinite(p) || p <= 0) {
+      nextRows.push(row);
+      continue;
+    }
+
     let anchorDate = row.anchorDateBkk;
     let maxUp = row.maxUpStep ?? 0;
     let maxDown = row.maxDownStep ?? 0;
@@ -183,4 +244,30 @@ export async function runPctStepPriceAlertTick(client: Client): Promise<{ notifi
 
   await replacePctStepAlerts(nextRows);
   return { notified };
+}
+
+/**
+ * แจ้งเตือนการเคลื่อนไหวราคา (ทุก x%)
+ * - default `both` = trailing + daily ในครั้งเดียว (ทดสอบ/เรียกเอง)
+ * - production: ใช้ `runPctStepTrailingPriceAlertTick` (5 นาที) + `runPctStepDailyPriceAlertTick` (15 นาที)
+ */
+export async function runPctStepPriceAlertTick(
+  client: Client,
+  scope: PctStepScope = "both",
+): Promise<{ notified: number }> {
+  return withPctStepStoreLock(() => runPctStepPriceAlertTickInner(client, scope));
+}
+
+/** Trailing เท่านั้น — เรียกจาก cron ทุก ~5 นาที */
+export async function runPctStepTrailingPriceAlertTick(
+  client: Client,
+): Promise<{ notified: number }> {
+  return runPctStepPriceAlertTick(client, "trailing");
+}
+
+/** Daily (07:00 ไทย) เท่านั้น — เรียกจาก /api/cron/price-sync ~15 นาที */
+export async function runPctStepDailyPriceAlertTick(
+  client: Client,
+): Promise<{ notified: number }> {
+  return runPctStepPriceAlertTick(client, "daily");
 }
