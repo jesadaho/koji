@@ -26,7 +26,7 @@ function extremeThresholdPct(): number {
 
 function renotifyDeltaPct(): number {
   const n = Number(process.env.SPOT_FUT_BASIS_RENOTIFY_DELTA?.trim());
-  return Number.isFinite(n) && n > 0 ? n : 2;
+  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 /** ใช้ |basis| — Normal &lt; warningMin; Warning [warningMin, extremeThreshold]; Extreme &gt; extremeThreshold */
@@ -51,8 +51,7 @@ function buildSpotFutBasisMessage(row: SpotFutBasisRow, tier: SpotFutBasisTier):
   const pctStr = `${d >= 0 ? "+" : ""}${d.toFixed(2)}%`;
   const tag = tier === "extreme" ? "(Extreme!)" : "(Warning)";
 
-  const head =
-    tier === "extreme" ? "🚨 Koji Liquidation Alert!" : "⚠️ Koji Liquidation Alert";
+  const head = "⚡ Koji: Price Gap Detected!";
 
   return [
     head,

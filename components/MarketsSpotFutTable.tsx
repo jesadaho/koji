@@ -20,6 +20,10 @@ function symbolMatches(symbol: string, q: string): boolean {
   return symbol.toLowerCase().includes(t);
 }
 
+function fmtSignedBasisPct(n: number, digits = 2): string {
+  return `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
+}
+
 export default function MarketsSpotFutTable({ rows }: Props) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(
@@ -71,6 +75,15 @@ export default function MarketsSpotFutTable({ rows }: Props) {
                 <th className="num" title="(Perp − Spot) / Spot × 100">
                   Basis %
                 </th>
+                <th
+                  className="num"
+                  title="ส่วนต่าง basis จากแท่ง 1h แรก → แท่งสุด (~24 ชม.)"
+                >
+                  Δ Basis 24h
+                </th>
+                <th className="num" title="ต่ำสุด–สูงสุดของ basis ในแท่ง 1h ที่จับคู่ได้">
+                  Basis 24h (ต่ำ…สูง)
+                </th>
                 <th className="num">24h</th>
                 <th className="num">Vol 24h (USDT)</th>
                 <th className="num" title="Funding rate จาก contract ticker">
@@ -113,6 +126,21 @@ export default function MarketsSpotFutTable({ rows }: Props) {
                     >
                       {basisUp ? "+" : ""}
                       {r.basisPct.toFixed(3)}%
+                    </td>
+                    <td
+                      className={`num${r.basis24h ? ` ${r.basis24h.deltaBasisPct24h >= 0 ? "changeUp" : "changeDown"}` : ""}`}
+                      data-label="Δ Basis 24h"
+                    >
+                      {r.basis24h ? fmtSignedBasisPct(r.basis24h.deltaBasisPct24h, 3) : "—"}
+                    </td>
+                    <td className="num" data-label="Basis 24h (ต่ำ…สูง)">
+                      {r.basis24h ? (
+                        <>
+                          {fmtSignedBasisPct(r.basis24h.minBasisPct, 3)} … {fmtSignedBasisPct(r.basis24h.maxBasisPct, 3)}
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className={`num ${up ? "changeUp" : "changeDown"}`} data-label="24h">
                       {up ? "+" : ""}

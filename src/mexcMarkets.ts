@@ -4,6 +4,11 @@ import { fetchContractFunding } from "./mexcContractMeta";
 const MEXC_TICKER = "https://api.mexc.com/api/v1/contract/ticker";
 const MEXC_DETAIL = "https://api.mexc.com/api/v1/contract/detail";
 const MEXC_SPOT_TICKER_PRICE = "https://api.mexc.com/api/v3/ticker/price";
+const MEXC_SPOT_KLINES = "https://api.mexc.com/api/v3/klines";
+
+/** แท่ง 1h สำหรับสถิติ basis ย้อนหลัง ~24 ชม. (spot + perp) */
+const BASIS_24H_KLINE_LIMIT = 26;
+const BASIS_24H_FETCH_CONCURRENCY = 5;
 
 /** น้ำหนักส่วน volume spike */
 const MOMENTUM_W_V = 1;
@@ -77,6 +82,14 @@ function asArray<T>(data: T | T[] | undefined): T[] {
   return Array.isArray(data) ? data : [data];
 }
 
+/** จากแท่ง 1h ที่จับคู่เวลา — basis = (perp close − spot close) / spot close × 100 */
+export type SpotFutBasis24hStats = {
+  minBasisPct: number;
+  maxBasisPct: number;
+  /** แท่ง 1h สุดท้าย − แท่งแรกในช่วงที่ดึงได้ (~24–25 ชม.) */
+  deltaBasisPct24h: number;
+};
+
 /** Spot vs USDT-M perpetual — เรียงตาม |basis| (ไม่เรียก kline / funding_rate แยก) */
 export type SpotFutBasisRow = {
   symbol: string;
@@ -92,6 +105,8 @@ export type SpotFutBasisRow = {
   amount24Usdt: number;
   fundingRate: number;
   maxPositionUsdt: number | null;
+  /** เติมใน getTopUsdtMarketsBySpotFutBasis — จาก kline 1h */
+  basis24h?: SpotFutBasis24hStats | null;
 };
 
 export type TopMarketRow = {
@@ -229,6 +244,95 @@ async function fetchContractKline15m(symbol: string): Promise<KlineArrays | null
   } catch {
     return null;
   }
+}
+
+type KlineTimeClose = { timeSec: number[]; close: number[] };
+
+async function fetchContractKline60m(perpSymbol: string, limit: number): Promise<KlineTimeClose | null> {
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(perpSymbol)}`;
+  try {
+    const { data } = await axios.get<KlineApiResponse>(url, {
+      timeout: 14_000,
+      params: { interval: "Min60", limit },
+    });
+    if (!data.success || !data.data?.time?.length || !data.data.close?.length) return null;
+    const t = data.data.time;
+    const c = data.data.close;
+    if (t.length !== c.length) return null;
+    return {
+      timeSec: t.map((x) => Number(x)),
+      close: c.map((x) => Number(x)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+type SpotKlineRow = (string | number)[];
+
+async function fetchSpotKlines60m(spotSymbol: string, limit: number): Promise<KlineTimeClose | null> {
+  try {
+    const { data } = await axios.get<SpotKlineRow[]>(MEXC_SPOT_KLINES, {
+      timeout: 14_000,
+      params: { symbol: spotSymbol, interval: "60m", limit },
+    });
+    if (!Array.isArray(data) || data.length === 0) return null;
+    const timeSec: number[] = [];
+    const close: number[] = [];
+    for (const row of data) {
+      if (!Array.isArray(row) || row.length < 5) continue;
+      const tMs = Number(row[0]);
+      const cl = Number(row[4]);
+      if (!Number.isFinite(tMs) || !Number.isFinite(cl) || cl <= 0) continue;
+      timeSec.push(Math.floor(tMs / 1000));
+      close.push(cl);
+    }
+    return timeSec.length ? { timeSec, close } : null;
+  } catch {
+    return null;
+  }
+}
+
+function computeBasis24hStatsFromAlignedKlines(fut: KlineTimeClose, spot: KlineTimeClose): SpotFutBasis24hStats | null {
+  const smap = new Map<number, number>();
+  for (let i = 0; i < spot.timeSec.length; i++) {
+    smap.set(spot.timeSec[i], spot.close[i]);
+  }
+  const basis: number[] = [];
+  for (let i = 0; i < fut.timeSec.length; i++) {
+    const ts = fut.timeSec[i];
+    const sp = smap.get(ts);
+    const fc = fut.close[i];
+    if (sp == null || sp <= 0 || !Number.isFinite(fc)) continue;
+    basis.push(((fc - sp) / sp) * 100);
+  }
+  if (basis.length < 3) return null;
+  let minB = basis[0];
+  let maxB = basis[0];
+  for (const b of basis) {
+    if (b < minB) minB = b;
+    if (b > maxB) maxB = b;
+  }
+  const deltaBasisPct24h = basis[basis.length - 1] - basis[0];
+  return { minBasisPct: minB, maxBasisPct: maxB, deltaBasisPct24h };
+}
+
+async function fetchSpotFutBasis24hStats(perpSymbol: string, spotSymbol: string): Promise<SpotFutBasis24hStats | null> {
+  const lim = BASIS_24H_KLINE_LIMIT;
+  const [fut, spot] = await Promise.all([fetchContractKline60m(perpSymbol, lim), fetchSpotKlines60m(spotSymbol, lim)]);
+  if (!fut || !spot) return null;
+  return computeBasis24hStatsFromAlignedKlines(fut, spot);
+}
+
+async function enrichSpotFutBasisRowsWith24h(rows: SpotFutBasisRow[]): Promise<SpotFutBasisRow[]> {
+  if (rows.length === 0) return rows;
+  const statsList = await mapPoolConcurrent(rows, BASIS_24H_FETCH_CONCURRENCY, (r) =>
+    fetchSpotFutBasis24hStats(r.symbol, r.spotSymbol),
+  );
+  return rows.map((r, i) => ({
+    ...r,
+    basis24h: statsList[i] ?? null,
+  }));
 }
 
 async function mapPoolConcurrent<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -459,7 +563,8 @@ export async function getTopUsdtMarketsBySpotFutBasis(options: { limit?: number 
     if (d !== 0) return d;
     return b.amount24Usdt - a.amount24Usdt;
   });
-  return rows.slice(0, limit);
+  const top = rows.slice(0, limit);
+  return enrichSpotFutBasisRowsWith24h(top);
 }
 
 /**

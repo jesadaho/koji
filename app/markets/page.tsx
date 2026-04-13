@@ -79,7 +79,8 @@ function footnote(sort: MarketsSortMode, showDebugColumns: boolean): string {
   if (sort === "basis") {
     return [
       `${VOL_FILTER_LABEL} · ราคา spot จาก MEXC Spot API (v3/ticker/price) · ราคา perp จาก contract/ticker`,
-      "Basis เป็นค่าประมาณณ จุดหนึ่ง — ไม่ได้พิสูจน์การไล่ liquidate หรือเจตนาเจ้าตลาด; ใช้เป็นมุมมองข้อมูลเท่านั้น",
+      "คอลัมน์ Δ Basis 24h / ช่วง 24h คำนวณจากแท่ง 1h (spot + perp kline) ที่จับคู่เวลา — ไม่ใช่ราคาเรียลไทม์",
+      "Basis ปัจจุบันเป็นค่าประมาณณ จุดหนึ่ง — ไม่ได้พิสูจน์การไล่ liquidate หรือเจตนาเจ้าตลาด; ใช้เป็นมุมมองข้อมูลเท่านั้น",
     ].join(" · ");
   }
   const core = `${VOL_FILTER_LABEL} · Vol 24h = amount24 · Funding จาก ticker · รอบ/เวลาตัด funding จาก contract/funding_rate · Max pos (USDT) ≈ สัญญาสูงสุดจาก risk tier × ราคา`;
@@ -142,7 +143,7 @@ export default async function MarketsPage({
       ) : null}
       {!errorMessage && sort === "basis" ? (
         <p className="sub marketsMetricLegend">
-          บวก = ราคา perp สูงกว่า spot (premium) · ลบ = perp ต่ำกว่า spot (discount) — ไม่มีคอลัมน์รอบ funding ในโหมดนี้ (ลดการเรียก API)
+          บวก = ราคา perp สูงกว่า spot (premium) · ลบ = perp ต่ำกว่า spot (discount) · Δ Basis 24h / ช่วง 24h จากแท่ง 1h — ไม่มีคอลัมน์รอบ funding ในโหมดนี้
         </p>
       ) : null}
 
