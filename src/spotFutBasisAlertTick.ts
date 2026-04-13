@@ -12,13 +12,16 @@ import {
 
 function warningMinPct(): number {
   const n = Number(process.env.SPOT_FUT_BASIS_WARNING_MIN?.trim());
-  return Number.isFinite(n) && n > 0 ? n : 0.5;
+  return Number.isFinite(n) && n > 0 ? n : 1.0;
 }
 
-/** ขอบบนของ Warning — abs > ค่านี้ = Extreme */
+/** ขอบบนของ Warning — abs มากกว่าค่านี้ = Extreme (ต้องมากกว่า warningMin) */
 function extremeThresholdPct(): number {
+  const w = warningMinPct();
   const n = Number(process.env.SPOT_FUT_BASIS_EXTREME_MIN?.trim());
-  return Number.isFinite(n) && n > 0 ? n : 1.0;
+  const defaultAbove = Math.max(2.0, w + 1.0);
+  if (!Number.isFinite(n) || n <= 0) return defaultAbove;
+  return n > w ? n : defaultAbove;
 }
 
 function renotifyDeltaPct(): number {
