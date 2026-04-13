@@ -13,7 +13,7 @@ import {
 export const revalidate = 60;
 
 const TOP_LIMIT = 50;
-const BASIS_TOP_LIMIT = 30;
+const BASIS_TOP_LIMIT = 10;
 
 export async function generateMetadata({
   searchParams,
@@ -30,7 +30,7 @@ export async function generateMetadata({
   }
   if (sort === "basis") {
     return {
-      title: "Markets — Top 30 Spot vs Perp basis",
+      title: "Markets — Top 10 Spot vs Perp basis",
       description:
         `สัญญา USDT perpetual บน MEXC (Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT) เรียงตามความต่าง % ระหว่างราคา perp กับ spot — ข้อมูล snapshot ไม่ได้พิสูจน์พฤติกรรมตลาด`,
     };
@@ -125,15 +125,9 @@ export default async function MarketsPage({
         <Link href={marketsHref("momentum", showDebugColumns)} aria-current={sort === "momentum" ? "page" : undefined}>
           Momentum
         </Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
         <Link href={marketsHref("funding", showDebugColumns)} aria-current={sort === "funding" ? "page" : undefined}>
           |Funding| สูงสุด
         </Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
         <Link href={marketsHref("basis", showDebugColumns)} aria-current={sort === "basis" ? "page" : undefined}>
           Spot–Perp basis
         </Link>

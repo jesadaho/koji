@@ -452,7 +452,7 @@ export async function listAllSpotFutBasisRows(): Promise<SpotFutBasisRow[]> {
  * ดึง spot แบบ batch ครั้งเดียว ไม่เรียก kline
  */
 export async function getTopUsdtMarketsBySpotFutBasis(options: { limit?: number } = {}): Promise<SpotFutBasisRow[]> {
-  const limit = options.limit ?? 30;
+  const limit = options.limit ?? 10;
   const rows = await listAllSpotFutBasisRows();
   rows.sort((a, b) => {
     const d = b.absBasisPct - a.absBasisPct;
