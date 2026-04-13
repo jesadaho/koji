@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import MarketsSpotFutTable from "@/components/MarketsSpotFutTable";
 import MarketsTableWithSearch from "@/components/MarketsTableWithSearch";
 import {
   getTopUsdtMarkets,
+  getTopUsdtMarketsBySpotFutBasis,
   MIN_AMOUNT24_USDT,
   parseMarketsSort,
   type MarketsSortMode,
@@ -11,6 +13,7 @@ import {
 export const revalidate = 60;
 
 const TOP_LIMIT = 50;
+const BASIS_TOP_LIMIT = 30;
 
 export async function generateMetadata({
   searchParams,
@@ -23,6 +26,13 @@ export async function generateMetadata({
       title: "Markets — Top 50 by |Funding|",
       description:
         `สัญญา USDT perpetual บน MEXC (Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT) เรียงตาม funding rate ที่ห่างจาก 0 มากที่สุด พร้อม momentum และ max position`,
+    };
+  }
+  if (sort === "basis") {
+    return {
+      title: "Markets — Top 30 Spot vs Perp basis",
+      description:
+        `สัญญา USDT perpetual บน MEXC (Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT) เรียงตามความต่าง % ระหว่างราคา perp กับ spot — ข้อมูล snapshot ไม่ได้พิสูจน์พฤติกรรมตลาด`,
     };
   }
   return {
@@ -45,12 +55,16 @@ function parseMarketsDebugFlag(sp: { debug?: string } | undefined): boolean {
 function marketsHref(sort: MarketsSortMode, debug: boolean): string {
   const p = new URLSearchParams();
   if (sort === "funding") p.set("sort", "funding");
+  if (sort === "basis") p.set("sort", "basis");
   if (debug) p.set("debug", "1");
   const q = p.toString();
   return q ? `/markets?${q}` : "/markets";
 }
 
 function sortIntro(sort: MarketsSortMode, showDebugColumns: boolean): string {
+  if (sort === "basis") {
+    return `Top ${BASIS_TOP_LIMIT} USDT perpetual เรียงตาม |basis| มากสุดก่อน — basis = (ราคา perp − ราคา spot) / spot × 100 — ${VOL_FILTER_LABEL} · คู่ที่ไม่มี spot บน MEXC จะไม่แสดง`;
+  }
   if (sort === "funding") {
     const dbg = showDebugColumns ? " · คอลัมน์ Score / Vol× / 15m (debug)" : "";
     return `Top ${TOP_LIMIT} USDT perpetual เรียงตาม |funding rate| มากสุดก่อน — ${VOL_FILTER_LABEL}${dbg}`;
@@ -62,6 +76,12 @@ function sortIntro(sort: MarketsSortMode, showDebugColumns: boolean): string {
 }
 
 function footnote(sort: MarketsSortMode, showDebugColumns: boolean): string {
+  if (sort === "basis") {
+    return [
+      `${VOL_FILTER_LABEL} · ราคา spot จาก MEXC Spot API (v3/ticker/price) · ราคา perp จาก contract/ticker`,
+      "Basis เป็นค่าประมาณณ จุดหนึ่ง — ไม่ได้พิสูจน์การไล่ liquidate หรือเจตนาเจ้าตลาด; ใช้เป็นมุมมองข้อมูลเท่านั้น",
+    ].join(" · ");
+  }
   const core = `${VOL_FILTER_LABEL} · Vol 24h = amount24 · Funding จาก ticker · รอบ/เวลาตัด funding จาก contract/funding_rate · Max pos (USDT) ≈ สัญญาสูงสุดจาก risk tier × ราคา`;
   const momDbg =
     showDebugColumns
@@ -80,14 +100,23 @@ export default async function MarketsPage({
 }) {
   const sort = parseMarketsSort(searchParams?.sort);
   const showDebugColumns = parseMarketsDebugFlag(searchParams);
-  let rows: Awaited<ReturnType<typeof getTopUsdtMarkets>> = [];
+  let rowsMomentum: Awaited<ReturnType<typeof getTopUsdtMarkets>> = [];
+  let rowsBasis: Awaited<ReturnType<typeof getTopUsdtMarketsBySpotFutBasis>> = [];
   let errorMessage: string | null = null;
 
   try {
-    rows = await getTopUsdtMarkets({ sort, limit: TOP_LIMIT });
+    if (sort === "basis") {
+      rowsBasis = await getTopUsdtMarketsBySpotFutBasis({ limit: BASIS_TOP_LIMIT });
+    } else {
+      rowsMomentum = await getTopUsdtMarkets({ sort, limit: TOP_LIMIT });
+    }
   } catch {
     errorMessage = "โหลดข้อมูลจาก MEXC ไม่ได้ ลองใหม่ภายหลัง";
   }
+
+  const emptyBasis = sort === "basis" && !errorMessage && rowsBasis.length === 0;
+  const emptyMomentum =
+    sort !== "basis" && !errorMessage && rowsMomentum.length === 0;
 
   return (
     <main className="marketsPage">
@@ -102,13 +131,24 @@ export default async function MarketsPage({
         <Link href={marketsHref("funding", showDebugColumns)} aria-current={sort === "funding" ? "page" : undefined}>
           |Funding| สูงสุด
         </Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href={marketsHref("basis", showDebugColumns)} aria-current={sort === "basis" ? "page" : undefined}>
+          Spot–Perp basis
+        </Link>
       </nav>
       <p className="sub">{sortIntro(sort, showDebugColumns)}</p>
-      {!errorMessage ? (
+      {!errorMessage && sort !== "basis" ? (
         <p className="sub marketsMetricLegend">
           💹 <strong>Funding</strong> + 🕒 <strong>Cycle</strong> ในคอลัมน์เดียว (สี rate = ต้นทุนถือสถานะ · รอบจ่าย) · 📦{" "}
           <strong>Max pos</strong> ขีดจำกัดโน้ต (สีฟ้า) —{" "}
           <span className="marketsLegendWarn">⚠️ ส้ม</span> เมื่อสภาพคล่องต่ำเมื่อเทียบคู่อื่นในตาราง
+        </p>
+      ) : null}
+      {!errorMessage && sort === "basis" ? (
+        <p className="sub marketsMetricLegend">
+          บวก = ราคา perp สูงกว่า spot (premium) · ลบ = perp ต่ำกว่า spot (discount) — ไม่มีคอลัมน์รอบ funding ในโหมดนี้ (ลดการเรียก API)
         </p>
       ) : null}
 
@@ -118,15 +158,26 @@ export default async function MarketsPage({
             {errorMessage}
           </p>
         </div>
-      ) : rows.length === 0 ? (
+      ) : emptyBasis ? (
+        <div className="card">
+          <p className="sub" style={{ marginBottom: 0 }}>
+            ไม่มีคู่ที่จับราคา spot ได้ (หรือไม่มีสัญญาที่ผ่านเงื่อนไขพร้อมคู่ spot บน MEXC)
+          </p>
+        </div>
+      ) : emptyMomentum ? (
         <div className="card">
           <p className="sub" style={{ marginBottom: 0 }}>
             ไม่มีข้อมูลตลาด (หรือคำนวณ momentum ไม่ได้)
           </p>
         </div>
+      ) : sort === "basis" ? (
+        <div className="card marketsCard">
+          <MarketsSpotFutTable rows={rowsBasis} />
+          <p className="sub marketsFootnote">{footnote(sort, showDebugColumns)}</p>
+        </div>
       ) : (
         <div className="card marketsCard">
-          <MarketsTableWithSearch rows={rows} showDebugColumns={showDebugColumns} marketsSort={sort} />
+          <MarketsTableWithSearch rows={rowsMomentum} showDebugColumns={showDebugColumns} marketsSort={sort} />
           <p className="sub marketsFootnote">{footnote(sort, showDebugColumns)}</p>
         </div>
       )}

@@ -3,6 +3,7 @@ import { fetchContractFunding } from "./mexcContractMeta";
 
 const MEXC_TICKER = "https://api.mexc.com/api/v1/contract/ticker";
 const MEXC_DETAIL = "https://api.mexc.com/api/v1/contract/detail";
+const MEXC_SPOT_TICKER_PRICE = "https://api.mexc.com/api/v3/ticker/price";
 
 /** น้ำหนักส่วน volume spike */
 const MOMENTUM_W_V = 1;
@@ -76,6 +77,23 @@ function asArray<T>(data: T | T[] | undefined): T[] {
   return Array.isArray(data) ? data : [data];
 }
 
+/** Spot vs USDT-M perpetual — เรียงตาม |basis| (ไม่เรียก kline / funding_rate แยก) */
+export type SpotFutBasisRow = {
+  symbol: string;
+  /** เช่น BTCUSDT */
+  spotSymbol: string;
+  spotPrice: number;
+  futPrice: number;
+  /** (fut - spot) / spot × 100 — บวก = perp แพงกว่า spot */
+  basisPct: number;
+  absBasisPct: number;
+  change24hPercent: number;
+  volume24: number;
+  amount24Usdt: number;
+  fundingRate: number;
+  maxPositionUsdt: number | null;
+};
+
 export type TopMarketRow = {
   symbol: string;
   lastPrice: number;
@@ -117,6 +135,33 @@ async function fetchContractTickers(): Promise<MexcTickerRow[]> {
   const { data } = await axios.get<MexcTickerResponse>(MEXC_TICKER, { timeout: 45_000 });
   if (!data.success || data.data === undefined) return [];
   return asArray(data.data);
+}
+
+type MexcSpotPriceRow = { symbol?: string; price?: string };
+
+/** แปลงสัญญา perp BTC_USDT → คู่ spot BTCUSDT */
+export function perpSymbolToSpotSymbol(contractSymbol: string): string {
+  return contractSymbol.trim().replace(/_/g, "");
+}
+
+/** ราคา last ทุกคู่ spot — GET ครั้งเดียว */
+async function fetchSpotTickerPrices(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  try {
+    const { data } = await axios.get<MexcSpotPriceRow | MexcSpotPriceRow[]>(MEXC_SPOT_TICKER_PRICE, {
+      timeout: 60_000,
+    });
+    const rows = Array.isArray(data) ? data : data ? [data] : [];
+    for (const r of rows) {
+      const sym = r.symbol?.trim();
+      if (!sym) continue;
+      const p = Number(r.price);
+      if (Number.isFinite(p) && p > 0) map.set(sym, p);
+    }
+  } catch {
+    /* empty map */
+  }
+  return map;
 }
 
 async function fetchContractDetails(): Promise<MexcDetailRow[]> {
@@ -249,11 +294,13 @@ async function enrichFundingMeta(rows: TopMarketRow[]): Promise<TopMarketRow[]> 
   return parts;
 }
 
-export type MarketsSortMode = "momentum" | "funding";
+export type MarketsSortMode = "momentum" | "funding" | "basis";
 
 export function parseMarketsSort(raw: string | string[] | undefined): MarketsSortMode {
   const v = Array.isArray(raw) ? raw[0] : raw;
-  return v === "funding" ? "funding" : "momentum";
+  if (v === "funding") return "funding";
+  if (v === "basis") return "basis";
+  return "momentum";
 }
 
 export type GetTopUsdtMarketsOptions = {
@@ -335,6 +382,84 @@ export async function getTopUsdtMarkets(options: GetTopUsdtMarketsOptions): Prom
 /** ใช้ getTopUsdtMarkets({ sort: "momentum", limit }) แทนได้ */
 export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarketRow[]> {
   return getTopUsdtMarkets({ sort: "momentum", limit });
+}
+
+/**
+ * ทุกสัญญาที่ผ่าน Vol filter และจับคู่ราคา spot ได้ — basis = (perp − spot) / spot × 100
+ * ไม่เรียก kline
+ */
+export async function listAllSpotFutBasisRows(): Promise<SpotFutBasisRow[]> {
+  const [tickers, details, spotBySymbol] = await Promise.all([
+    fetchContractTickers(),
+    fetchContractDetails(),
+    fetchSpotTickerPrices(),
+  ]);
+
+  const detailBySymbol = new Map<string, MexcDetailRow>();
+  for (const d of details) {
+    if (d.symbol) detailBySymbol.set(d.symbol, d);
+  }
+
+  const usdtPerp = tickers.filter((t) => {
+    const sym = t.symbol?.trim();
+    if (!sym || !sym.endsWith("_USDT")) return false;
+    const amt = t.amount24;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= MIN_AMOUNT24_USDT) return false;
+    const price = t.lastPrice;
+    if (typeof price !== "number" || Number.isNaN(price) || price <= 0) return false;
+    const d = detailBySymbol.get(sym);
+    if (d && typeof d.state === "number" && d.state !== 0) return false;
+    return true;
+  });
+
+  const rows: SpotFutBasisRow[] = [];
+
+  for (const t of usdtPerp) {
+    const sym = t.symbol!.trim();
+    const fut = t.lastPrice!;
+    const spotSym = perpSymbolToSpotSymbol(sym);
+    const spot = spotBySymbol.get(spotSym);
+    if (spot == null || spot <= 0) continue;
+
+    const basisPct = ((fut - spot) / spot) * 100;
+    const absBasisPct = Math.abs(basisPct);
+    const detail = detailBySymbol.get(sym);
+    const maxContracts = detail ? maxFromRiskTiers(detail) : null;
+    const maxUsdt = maxContracts != null && maxContracts > 0 ? maxContracts * fut : null;
+    const r = t.riseFallRate;
+    const changePct = typeof r === "number" && !Number.isNaN(r) ? r * 100 : 0;
+
+    rows.push({
+      symbol: sym,
+      spotSymbol: spotSym,
+      spotPrice: spot,
+      futPrice: fut,
+      basisPct,
+      absBasisPct,
+      change24hPercent: changePct,
+      volume24: typeof t.volume24 === "number" && !Number.isNaN(t.volume24) ? t.volume24 : 0,
+      amount24Usdt: typeof t.amount24 === "number" && !Number.isNaN(t.amount24) ? t.amount24 : 0,
+      fundingRate: fundingRateNum(t),
+      maxPositionUsdt: maxUsdt,
+    });
+  }
+
+  return rows;
+}
+
+/**
+ * Top N ตาม |basis| มากสุดก่อน — basis = (ราคา perp − ราคา spot) / spot × 100
+ * ดึง spot แบบ batch ครั้งเดียว ไม่เรียก kline
+ */
+export async function getTopUsdtMarketsBySpotFutBasis(options: { limit?: number } = {}): Promise<SpotFutBasisRow[]> {
+  const limit = options.limit ?? 30;
+  const rows = await listAllSpotFutBasisRows();
+  rows.sort((a, b) => {
+    const d = b.absBasisPct - a.absBasisPct;
+    if (d !== 0) return d;
+    return b.amount24Usdt - a.amount24Usdt;
+  });
+  return rows.slice(0, limit);
 }
 
 /**
