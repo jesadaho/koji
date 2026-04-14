@@ -22,7 +22,6 @@ export async function GET(req: NextRequest) {
     const client = createLineClient(config.lineChannelAccessToken);
     const r = await runMarketPulseTick(client);
     return NextResponse.json({
-      ok: r.ok,
       ...r,
       at: new Date().toISOString(),
       durationMs: Date.now() - started,
