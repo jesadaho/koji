@@ -673,3 +673,18 @@ export async function fetchPerpHourlyClosesForNearHigh(perpSymbol: string): Prom
   if (valid.length === 0) return null;
   return { maxClose: Math.max(...valid) };
 }
+
+/**
+ * ขนาดออเดอร์สูงสุดต่อครั้ง (สัญญา) จาก GET contract/detail — เทียบกับ risk tier / limitMaxVol / maxVol
+ * เรียกดึงรายการสัญญาทั้งหมดแล้วกรองตาม symbol
+ */
+export async function fetchMaxOrderContractsForSymbol(contractSymbol: string): Promise<number | null> {
+  const details = await fetchContractDetails();
+  const sym = contractSymbol.trim();
+  for (const d of details) {
+    if (d.symbol?.trim() === sym) {
+      return maxFromRiskTiers(d);
+    }
+  }
+  return null;
+}

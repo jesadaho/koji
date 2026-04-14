@@ -3,6 +3,7 @@ import { resolveContractSymbol } from "./coinMap";
 import { fetchMarketPulseData, MarketPulseFetchError } from "./marketPulseFetch";
 import {
   fetchContractTickerSingle,
+  fetchMaxOrderContractsForSymbol,
   fetchPerpHourlyClosesForNearHigh,
   fetchSpotPriceSingle,
   perpSymbolToSpotSymbol,
@@ -110,11 +111,12 @@ export async function buildPositionChecklistMessage(
   const basisAbsPct = envNum("KOJI_SCORE_BASIS_ABS_PCT", 1);
   const maxLevCfg = envNum("KOJI_SCORE_MAX_LEVERAGE", 3);
 
-  const [ticker, klineHigh, mcapUsd, pulseResult] = await Promise.all([
+  const [ticker, klineHigh, mcapUsd, pulseResult, maxOrderContracts] = await Promise.all([
     fetchContractTickerSingle(contractSymbol),
     fetchPerpHourlyClosesForNearHigh(contractSymbol),
     fetchCoinGeckoMarketCapUsd(base),
     fetchMarketPulseData().catch((e: unknown) => ({ error: e })),
+    fetchMaxOrderContractsForSymbol(contractSymbol),
   ]);
 
   if (!ticker?.lastPrice || typeof ticker.lastPrice !== "number" || ticker.lastPrice <= 0) {
@@ -272,6 +274,11 @@ export async function buildPositionChecklistMessage(
       ? `Vol 24h: ${formatUsd(amount24)} USDT${amount24 < minVolAdvisory ? " ⚠️ (below soft min)" : ""}`
       : `Vol 24h: ❓ N/A`;
 
+  const maxOrderLine =
+    maxOrderContracts != null && maxOrderContracts > 0
+      ? `Max order size: ${maxOrderContracts.toLocaleString("en-US")} contracts (~${formatUsd(maxOrderContracts * futPx)} USDT @ last)`
+      : "Max order size: —";
+
   const capLine =
     mcapUsd != null
       ? `Market Cap: ~$${formatUsd(mcapUsd)}${mcapUsd < minMcapAdvisory ? " ⚠️ (below soft min)" : ""}`
@@ -305,6 +312,7 @@ export async function buildPositionChecklistMessage(
     "⛓️ On-Chain & Market Metrics",
     "",
     volLine,
+    maxOrderLine,
     capLine,
     fundingLine,
     basisLine,
