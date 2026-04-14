@@ -15,6 +15,8 @@ import {
   KOJI_MENU_ALT_TEXT_NO_TOP_FUNDING,
 } from "./lineFlexKojiMenu";
 import { isCronStatusQuery } from "./cronLineCommands";
+import { isMarketPulseStatusQuery } from "./marketPulseLineCommands";
+import { getMarketPulseStatusMessage } from "./marketPulseTick";
 import {
   isSystemSubscribeStatusQuery,
   parseSystemChangeSubscribeCommand,
@@ -75,6 +77,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • เลิกติดตามระบบ — ปิดการแจ้งเตือนดังกล่าว
 • สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
   (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)
+
+• สถานะ sentiment — สรุป Fear & Greed, BTC dominance, Vol ~24h, Sentiment (ข้อมูลล่าสุดจาก API)
+  (EN: sentiment, market pulse, #marketPulse)
 
 • สถานะ cron — บันทึก job: เตือน% trailing ~5 นาที · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
@@ -254,6 +259,24 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
           : "สถานะ: ยังไม่ได้เปิดรับ — พิมพ์ ติดตามระบบ เพื่อเปิด",
       },
     ]);
+    return;
+  }
+
+  if (isMarketPulseStatusQuery(text)) {
+    try {
+      const body = await getMarketPulseStatusMessage();
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: body }]);
+    } catch (e) {
+      const detail =
+        e instanceof Error ? e.message : String(e);
+      console.error("[lineHandler] market pulse status", e);
+      await client.replyMessage(msgEvent.replyToken, [
+        {
+          type: "text",
+          text: `ดึงสถานะ sentiment ไม่สำเร็จ — ลองใหม่ภายหลัง (${detail.slice(0, 200)})`,
+        },
+      ]);
+    }
     return;
   }
 
