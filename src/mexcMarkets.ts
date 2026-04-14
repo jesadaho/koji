@@ -25,7 +25,7 @@ const MIN_BASELINE_BARS = 32;
 /** กรองเฉพาะสัญญาที่มูลค่าเทิร์นโอเวอร์ 24h (amount24) มากกว่านี้ (USDT) */
 export const MIN_AMOUNT24_USDT = 5_000_000;
 
-type MexcTickerRow = {
+export type MexcTickerRow = {
   symbol?: string;
   lastPrice?: number;
   riseFallRate?: number;
@@ -625,4 +625,51 @@ export async function getFundingHistorySampleRows(
     symbol: t.symbol!.trim(),
     fundingRate: fundingRateNum(t),
   }));
+}
+
+/** ดึง ticker สัญญาเดียว — checklist / basis รายคู่ */
+export async function fetchContractTickerSingle(contractSymbol: string): Promise<MexcTickerRow | null> {
+  const sym = contractSymbol.trim();
+  if (!sym) return null;
+  try {
+    const { data } = await axios.get<MexcTickerResponse>(MEXC_TICKER, {
+      params: { symbol: sym },
+      timeout: 15_000,
+    });
+    if (!data.success || data.data === undefined) return null;
+    const rows = asArray(data.data);
+    const row = rows[0];
+    if (!row?.symbol) return null;
+    return row;
+  } catch {
+    return null;
+  }
+}
+
+/** ราคา spot คู่เดียว เช่น BTCUSDT */
+export async function fetchSpotPriceSingle(spotSymbol: string): Promise<number | null> {
+  const sym = spotSymbol.trim().toUpperCase();
+  if (!sym) return null;
+  try {
+    const { data } = await axios.get<MexcSpotPriceRow | MexcSpotPriceRow[]>(MEXC_SPOT_TICKER_PRICE, {
+      params: { symbol: sym },
+      timeout: 12_000,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    const p = Number(row?.price);
+    return Number.isFinite(p) && p > 0 ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+const NEAR_HIGH_KLINE_LIMIT = 48;
+
+/** max(close) แท่ง 1h ย้อนหลัง — ใช้เทียบ New High Guard */
+export async function fetchPerpHourlyClosesForNearHigh(perpSymbol: string): Promise<{ maxClose: number } | null> {
+  const k = await fetchContractKline60m(perpSymbol.trim(), NEAR_HIGH_KLINE_LIMIT);
+  if (!k?.close.length) return null;
+  const valid = k.close.filter((c) => typeof c === "number" && !Number.isNaN(c) && c > 0);
+  if (valid.length === 0) return null;
+  return { maxClose: Math.max(...valid) };
 }

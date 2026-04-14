@@ -28,6 +28,8 @@ import {
   removeSystemChangeSubscriber,
 } from "./systemChangeSubscribersStore";
 import { sendAlertNotification } from "./alertNotify";
+import { parsePositionChecklist } from "./positionChecklistLineCommands";
+import { buildPositionChecklistMessage } from "./positionChecklistService";
 
 export function createLineClient(channelAccessToken: string) {
   return new Client({ channelAccessToken });
@@ -83,6 +85,10 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 
 • สถานะ cron — บันทึก job: เตือน% trailing ~5 นาที · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI + spot–perp basis) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
+
+• เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis)
+  ตัวอย่าง: short btc · long eth · ชอต btc 5x
+  (EN: short btc, long eth)
 
 • ทดสอบแจ้งเตือน — ส่งไป Telegram / Discord / LINE ตาม env (LINE ต้อง LINE_ALERT_PUSH_ENABLED=1) แล้วตอบยืนยันในแชท
   (EN: test push, #testpush)
@@ -259,6 +265,21 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
           : "สถานะ: ยังไม่ได้เปิดรับ — พิมพ์ ติดตามระบบ เพื่อเปิด",
       },
     ]);
+    return;
+  }
+
+  const checklist = parsePositionChecklist(text);
+  if (checklist) {
+    try {
+      const body = await buildPositionChecklistMessage(checklist);
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: body }]);
+    } catch (e) {
+      console.error("[lineHandler] position checklist", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: `สร้าง checklist ไม่สำเร็จ — ${detail.slice(0, 300)}` },
+      ]);
+    }
     return;
   }
 
