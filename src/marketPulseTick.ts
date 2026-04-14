@@ -1,6 +1,10 @@
 import type { Client } from "@line/bot-sdk";
 import { sendAlertNotification } from "./alertNotify";
-import { fetchMarketPulseData, MarketPulseFetchError } from "./marketPulseFetch";
+import {
+  fetchMarketPulseData,
+  MarketPulseFetchError,
+  marketPulseUsesCoinMarketCap,
+} from "./marketPulseFetch";
 import {
   appendVolumeSnapshot,
   computeVolumeChangeVs24hApprox,
@@ -63,6 +67,10 @@ export function buildMarketPulseMessage(input: {
       ? `24h Vol: ${volPctStr} (${volComment(null)})`
       : `24h Vol: ${volPctStr} (${volComment(input.volumeChangePct24hApprox)})`;
 
+  const sourceHint = marketPulseUsesCoinMarketCap()
+    ? "ที่มา: CoinMarketCap (Crypto Fear & Greed + global metrics — สอดคล้องการ์ดบน CMC)"
+    : "ที่มา: Alternative.me (F&G) + CoinGecko (BTC.D / Vol)";
+
   return [
     "🦉 Koji Market Pulse",
     `สถานะตลาดปัจจุบัน: ${input.fngClassification} (${input.fngValue}/100) ${dot}`,
@@ -72,6 +80,8 @@ export function buildMarketPulseMessage(input: {
     volLine,
     "",
     `Sentiment: ${sent.label} ${sent.emoji}`,
+    "",
+    sourceHint,
   ].join("\n");
 }
 
