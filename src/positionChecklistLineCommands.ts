@@ -19,7 +19,7 @@ export function parsePositionChecklist(text: string): ParsedPositionChecklist | 
   const t = text.trim();
   if (!t) return null;
 
-  const m = t.match(/^(short|long|ชอต|shot)\s+(\S+?)(?:\s+([\d.,]+)\s*x)?\s*$/iu);
+  const m = t.match(/^(short|long|ชอต|shot)\s+(\S+?)(?:\s+([\d.,]+)\s*x)?\s*$/i);
   if (!m) return null;
 
   const dir = normalizeDirection(m[1]!);
