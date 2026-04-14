@@ -171,7 +171,7 @@ export function formatCronStatusForLine(bundle: {
       "• บน Vercel ยังไม่ได้ตั้ง REDIS_URL หรือ KV",
       "• CRON_SECRET ไม่ตรง (cron ได้ 401)",
       "",
-      "กำหนดการ: pct-trailing ~ทุก 5 นาที (UTC) · market-pulse ~ทุก 6 ชม. (UTC) · price-sync ~ทุก 15 นาที (UTC; รวม spot–perp basis) · price-alerts ทุกชั่วโมง (UTC)",
+      "กำหนดการ: pct-trailing ~ทุก 5 นาที (UTC) · market-pulse ~ทุกชั่วโมง (UTC; แจ้งเมื่อ ΔF&G ถึงเกณฑ์) · price-sync ~ทุก 15 นาที (UTC; รวม spot–perp basis) · price-alerts ทุกชั่วโมง (UTC)",
       "ดู log: Vercel → Project → Logs",
     ].join("\n");
   }

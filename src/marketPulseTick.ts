@@ -11,11 +11,26 @@ import {
   loadMarketPulseVolumeBlob,
 } from "./marketPulseVolumeStore";
 import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
+import {
+  loadMarketPulseAlertState,
+  saveMarketPulseAlertState,
+} from "./marketPulseAlertStateStore";
 
 function marketPulseEnabled(): boolean {
   const v = process.env.MARKET_PULSE_ENABLED?.trim().toLowerCase();
   if (v === "0" || v === "false" || v === "no") return false;
   return true;
+}
+
+/** แจ้งซ้ำเมื่อ |Δ ค่า Fear & Greed| จากครั้งแจ้งล่าสุด ≥ จุดนี้ (ค่าเริ่ม 3) */
+function marketPulseAlertDeltaFng(): number {
+  const n = Number(process.env.MARKET_PULSE_ALERT_DELTA_FNG?.trim());
+  return Number.isFinite(n) && n > 0 ? n : 3;
+}
+
+function shouldNotifyMarketPulseFng(prev: number | null, current: number): boolean {
+  if (prev == null || !Number.isFinite(prev)) return true;
+  return Math.abs(current - prev) >= marketPulseAlertDeltaFng();
 }
 
 function fngDotEmoji(value: number): string {
@@ -91,6 +106,11 @@ export type MarketPulseTickResult = {
   notifiedPushes: number;
   subscribers: number;
   error?: string;
+  /** ค่า F&G ล่าสุดที่ดึงได้ (เมื่อ fetch สำเร็จ) */
+  fngValue?: number;
+  /** ไม่แจ้งเพราะ |ΔF&G| ต่ำกว่าเกณฑ์ */
+  skippedDelta?: boolean;
+  lastNotifiedFng?: number | null;
 };
 
 /**
@@ -114,7 +134,8 @@ export async function getMarketPulseStatusMessage(): Promise<string> {
 }
 
 /**
- * ดึง F&G + CoinGecko, คำนวณ Vol% เทียบ snapshot ~24 ชม., แจ้งผู้ติดตามระบบ
+ * ดึง F&G + ตลาด, คำนวณ Vol% เทียบ snapshot ~24 ชม.
+ * แจ้งผู้ติดตามระบบเมื่อ |Δ Fear & Greed| จากครั้งแจ้งล่าสุด ≥ MARKET_PULSE_ALERT_DELTA_FNG (ค่าเริ่ม 3)
  */
 export async function runMarketPulseTick(client: Client): Promise<MarketPulseTickResult> {
   if (!marketPulseEnabled()) {
@@ -137,6 +158,12 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
     return { ok: false, notifiedPushes: 0, subscribers: subscribers.length, error: msg };
   }
 
+  const fngVal = data.fng.value;
+  let alertState = await loadMarketPulseAlertState();
+  const prevFng = alertState.lastNotifiedFngValue;
+  const deltaMin = marketPulseAlertDeltaFng();
+  const shouldPush = shouldNotifyMarketPulseFng(prevFng, fngVal);
+
   const nowIso = new Date().toISOString();
   const volBlob = await loadMarketPulseVolumeBlob();
   const volChange = computeVolumeChangeVs24hApprox(
@@ -152,16 +179,37 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
     volumeChangePct24hApprox: volChange,
   });
 
-  let notifiedPushes = 0;
-  if (subscribers.length === 0) {
-    try {
-      await appendVolumeSnapshot(nowIso, data.global.totalVolumeUsd);
-    } catch (e) {
-      console.error("[marketPulseTick] appendVolumeSnapshot", e);
-    }
-    return { ok: true, skipped: "NO_SUBSCRIBERS", notifiedPushes: 0, subscribers: 0 };
+  try {
+    await appendVolumeSnapshot(nowIso, data.global.totalVolumeUsd);
+  } catch (e) {
+    console.error("[marketPulseTick] appendVolumeSnapshot", e);
   }
 
+  if (subscribers.length === 0) {
+    return {
+      ok: true,
+      skipped: "NO_SUBSCRIBERS",
+      notifiedPushes: 0,
+      subscribers: 0,
+      fngValue: fngVal,
+      skippedDelta: !shouldPush,
+      lastNotifiedFng: prevFng,
+    };
+  }
+
+  if (!shouldPush) {
+    return {
+      ok: true,
+      skipped: "FNG_DELTA_BELOW_THRESHOLD",
+      notifiedPushes: 0,
+      subscribers: subscribers.length,
+      fngValue: fngVal,
+      skippedDelta: true,
+      lastNotifiedFng: prevFng,
+    };
+  }
+
+  let notifiedPushes = 0;
   for (const uid of subscribers) {
     try {
       await sendAlertNotification(client, uid, body);
@@ -171,11 +219,21 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
     }
   }
 
-  try {
-    await appendVolumeSnapshot(nowIso, data.global.totalVolumeUsd);
-  } catch (e) {
-    console.error("[marketPulseTick] appendVolumeSnapshot", e);
+  if (notifiedPushes > 0) {
+    try {
+      alertState = { ...alertState, lastNotifiedFngValue: fngVal };
+      await saveMarketPulseAlertState(alertState);
+    } catch (e) {
+      console.error("[marketPulseTick] saveMarketPulseAlertState", e);
+    }
   }
 
-  return { ok: true, notifiedPushes, subscribers: subscribers.length };
+  return {
+    ok: true,
+    notifiedPushes,
+    subscribers: subscribers.length,
+    fngValue: fngVal,
+    skippedDelta: false,
+    lastNotifiedFng: prevFng,
+  };
 }

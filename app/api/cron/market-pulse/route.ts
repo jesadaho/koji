@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Market Pulse — ทุก 6 ชม. UTC (vercel.json) — F&G + BTC.D + Vol% (เทียบ snapshot ~24 ชม.)
+ * Market Pulse — ทุกชั่วโมง UTC (vercel.json) — เช็ค F&G + ตลาด; แจ้งเตือนเมื่อ |Δ Fear & Greed| ≥ จุด (ค่าเริ่ม 3) จากครั้งแจ้งล่าสุด
  * ผู้รับ: ผู้ติดตาม «ระบบ» เดียวกับ spot–perp basis
  * GET + Authorization: Bearer CRON_SECRET
  */

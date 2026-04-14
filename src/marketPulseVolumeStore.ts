@@ -4,7 +4,7 @@ import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 
 const KV_KEY = "koji:market_pulse_volume_snapshots";
 const filePath = join(process.cwd(), "data", "market_pulse_volume_snapshots.json");
-/** เก็บ snapshot ย้อนหลังพอหาแท่งใกล้ 24 ชม. (รอบ cron 6 ชม. ≈ 5 วัน) */
+/** เก็บ snapshot ย้อนหลังพอหาแท่งใกล้ 24 ชม. (รอบ cron Market Pulse ทุกชั่วโมง) */
 const MAX_SNAPSHOTS = 24;
 
 export type VolumeSnapshot = {
