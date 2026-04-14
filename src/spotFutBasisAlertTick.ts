@@ -15,7 +15,9 @@ function warningMinPct(): number {
   return Number.isFinite(n) && n > 0 ? n : 1.0;
 }
 
-/** ขอบบนของ Warning — abs มากกว่าค่านี้ = Extreme (ต้องมากกว่า warningMin) */
+const BASIS_TIER_EPS = 1e-9;
+
+/** ขอบบนของช่วง Warning — abs มากกว่าค่านี้ = Extreme (ต้องมากกว่า warningMin) */
 function extremeThresholdPct(): number {
   const w = warningMinPct();
   const n = Number(process.env.SPOT_FUT_BASIS_EXTREME_MIN?.trim());
@@ -29,12 +31,12 @@ function renotifyDeltaPct(): number {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
-/** ใช้ |basis| — Normal &lt; warningMin; Warning [warningMin, extremeThreshold]; Extreme &gt; extremeThreshold */
+/** ใช้ |basis| — Normal ถึง warningMin (รวม เช่น 1.00% ไม่ Warning); Warning เมื่อมากกว่า warningMin ถึง extremeThreshold; Extreme เมื่อมากกว่า extremeThreshold */
 function basisTierFromAbs(abs: number): "normal" | SpotFutBasisTier {
   const w = warningMinPct();
   const e = extremeThresholdPct();
-  if (abs < w) return "normal";
-  if (abs <= e) return "warning";
+  if (abs <= w + BASIS_TIER_EPS) return "normal";
+  if (abs <= e + BASIS_TIER_EPS) return "warning";
   return "extreme";
 }
 
