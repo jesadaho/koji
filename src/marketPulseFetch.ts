@@ -32,11 +32,18 @@ export class MarketPulseFetchError extends Error {
   }
 }
 
-type CmcStatus = { error_code?: number; error_message?: string };
+type CmcStatus = { error_code?: number | string; error_message?: string | null };
+
+/** CMC บางครั้งส่ง error_code เป็น string "0" — ต้องเทียบแบบเลขเท่านั้น */
+function cmcErrorCodeNum(code: number | string | undefined | null): number | undefined {
+  if (code === undefined || code === null) return undefined;
+  const n = typeof code === "string" ? Number(code.trim()) : code;
+  return Number.isFinite(n) ? n : undefined;
+}
 
 function throwIfCmcStatusBad(status: CmcStatus | undefined, ctx: string): void {
   if (status == null) return;
-  const code = status.error_code;
+  const code = cmcErrorCodeNum(status.error_code);
   if (code !== undefined && code !== 0) {
     const msg = status.error_message?.trim() || `error_code ${code}`;
     throw new MarketPulseFetchError(`${ctx}: ${msg}`, "cmc");
@@ -49,6 +56,15 @@ function throwIfCmcStatusBad(status: CmcStatus | undefined, ctx: string): void {
  */
 export function marketPulseUsesCoinMarketCap(): boolean {
   return Boolean(cmcProApiKey());
+}
+
+/** เมื่อ API ไม่ส่ง value_classification — ใกล้เคียงแบนของ CMC */
+function fallbackCmcFngClassification(value: number): string {
+  if (value >= 75) return "Extreme Greed";
+  if (value >= 55) return "Greed";
+  if (value >= 45) return "Neutral";
+  if (value >= 25) return "Fear";
+  return "Extreme Fear";
 }
 
 async function fetchCmcFearGreedLatest(): Promise<FearGreedSnapshot> {
@@ -67,7 +83,8 @@ async function fetchCmcFearGreedLatest(): Promise<FearGreedSnapshot> {
     throwIfCmcStatusBad(data?.status, "CMC F&G");
     const row = data?.data;
     const v = row?.value != null ? Number(row.value) : Number.NaN;
-    const cls = String(row?.value_classification ?? "").trim();
+    const clsRaw = String(row?.value_classification ?? "").trim();
+    const cls = clsRaw || (Number.isFinite(v) ? fallbackCmcFngClassification(v) : "");
     if (!Number.isFinite(v) || v < 0 || v > 100 || !cls) {
       throw new MarketPulseFetchError("รูปแบบข้อมูล CMC F&G ไม่ถูกต้อง", "cmc");
     }
