@@ -63,10 +63,27 @@ function nearHighFromMaxClose(lastPrice: number, maxClose: number, nearPct: numb
   return distPct <= nearPct;
 }
 
-function formatFundingLine(rate: number | undefined): string {
-  if (rate == null || Number.isNaN(rate)) return "Funding: —";
-  const pct = rate * 100;
-  return `Funding: ${pct >= 0 ? "+" : ""}${pct.toFixed(4)}% (per รอบ)`;
+function fundingPct(rate: number): number {
+  return rate * 100;
+}
+
+function fundingIntensityLabel(pct: number): string {
+  const a = Math.abs(pct);
+  if (a >= 0.75) return pct < 0 ? "(High Negative!) ⚠️" : "(High Positive!) ⚠️";
+  if (a >= 0.25) return pct < 0 ? "(Elevated negative)" : "(Elevated positive)";
+  return "";
+}
+
+function classifyFngShort(fng: number, maxForShort: number): { emoji: string; label: string } {
+  if (fng <= maxForShort) return { emoji: "✅", label: `Pass (F&G ${fng} — OK for short)` };
+  if (fng <= 55) return { emoji: "⚠️", label: `Neutral / tilt (${fng})` };
+  return { emoji: "⚠️", label: `Greed zone (${fng}) — against short` };
+}
+
+function classifyFngLong(fng: number, minForLong: number): { emoji: string; label: string } {
+  if (fng >= minForLong) return { emoji: "✅", label: `Pass (F&G ${fng} — OK for long)` };
+  if (fng >= 45) return { emoji: "⚠️", label: `Neutral (${fng})` };
+  return { emoji: "⚠️", label: `Fear-heavy (${fng}) — weak for long` };
 }
 
 export async function buildPositionChecklistMessage(
@@ -129,15 +146,27 @@ export async function buildPositionChecklistMessage(
     fngCls = pulseResult.fng.valueClassification;
   }
 
-  type Pen = { key: string; points: number; note: string };
+  type Pen = {
+    key: string;
+    points: number;
+    deductionLine: string;
+  };
   const penalties: Pen[] = [];
 
   if (weekend && dir === "short") {
-    penalties.push({ key: "weekend", points: 20, note: "สุดสัปดาห์ (short)" });
+    penalties.push({
+      key: "weekend",
+      points: 20,
+      deductionLine: `❌ Weekend short (BKK): −20`,
+    });
   }
 
   if (nearHigh && (lev == null || lev > maxLevCfg)) {
-    penalties.push({ key: "newHigh", points: 25, note: "ใกล้ New High + เลเวอเรจสูง/ไม่ระบุ" });
+    penalties.push({
+      key: "newHigh",
+      points: 25,
+      deductionLine: `❌ Near 1h high + lev >${maxLevCfg}x (or unset): −25`,
+    });
   }
 
   const liqBadVol = amount24 == null || amount24 < scoreLiqVol;
@@ -146,16 +175,24 @@ export async function buildPositionChecklistMessage(
     penalties.push({
       key: "liquidity",
       points: 25,
-      note: `สภาพคล่อง (Vol/Cap ต่ำเกณฑ์คะแนน)`,
+      deductionLine: `❌ Low Vol/Cap (score threshold): −25`,
     });
   }
 
   if (fngVal != null) {
     if (dir === "short" && fngVal > sentGreedTh) {
-      penalties.push({ key: "sentiment", points: 15, note: `F&G สูง (${fngVal}) — short สวนกระแส` });
+      penalties.push({
+        key: "sentiment",
+        points: 15,
+        deductionLine: `❌ F&G ${fngVal} (Shorting against trend): −15`,
+      });
     }
     if (dir === "long" && fngVal < sentGreedTh) {
-      penalties.push({ key: "sentiment", points: 15, note: `F&G ต่ำ (${fngVal}) — long ไม่สอดคล้อง` });
+      penalties.push({
+        key: "sentiment",
+        points: 15,
+        deductionLine: `❌ F&G ${fngVal} (Long vs weak sentiment): −15`,
+      });
     }
   }
 
@@ -163,87 +200,118 @@ export async function buildPositionChecklistMessage(
     penalties.push({
       key: "basis",
       points: 15,
-      note: `|Spot−Perp| > ${basisAbsPct}%`,
+      deductionLine: `❌ |Spot−Perp| gap > ${basisAbsPct}%: −15`,
     });
   }
 
   const totalPen = penalties.reduce((s, p) => s + p.points, 0);
   const score = Math.max(0, 100 - totalPen);
 
-  const lines: string[] = [];
-  lines.push(`Checklist: ${dir.toUpperCase()} ${contractSymbol}`);
-  lines.push("");
+  const dirEmoji = dir === "short" ? "📉" : "📈";
+  const header = `[${dir.toUpperCase()}] ${base} / USDT ${dirEmoji}`;
 
-  lines.push("— กฎ —");
-  if (dir === "short" && weekend) {
-    lines.push("• Weekend: เสาร์–อาทิตย์ (ไทย) — ระวังวอลลุ่มหลอก");
-  } else if (weekend && dir === "long") {
-    lines.push("• Weekend: สุดสัปดาห์ — ระวังความผันผัน");
+  const statusOrder = ["sentiment", "liquidity", "newHigh", "weekend", "basis"] as const;
+  const statusReason = (() => {
+    for (const k of statusOrder) {
+      const hit = penalties.find((p) => p.key === k);
+      if (hit) {
+        if (k === "sentiment") return "Market Sentiment";
+        if (k === "liquidity") return "Liquidity";
+        if (k === "newHigh") return "New High / Leverage";
+        if (k === "weekend") return "Weekend";
+        if (k === "basis") return "Spot–Perp Gap";
+      }
+    }
+    return null;
+  })();
+
+  let statusLine: string;
+  if (score >= 85) {
+    statusLine = "Status: ✅ OK";
+  } else if (score >= 60) {
+    statusLine = statusReason
+      ? `Status: ⚠️ WARNING (${statusReason})`
+      : "Status: ⚠️ WARNING";
   } else {
-    lines.push("• Weekend: ไม่ใช่สุดสัปดาห์ (จันทร์–ศุกร์ ไทย)");
+    statusLine = statusReason
+      ? `Status: 🔴 RISK (${statusReason})`
+      : "Status: 🔴 HIGH RISK";
   }
 
-  if (nearHigh) {
-    lines.push(`• New High Guard: ราคาใกล้ยอด 1h ล่าสุด (~${nearHighPct}% จาก high) — แนะนำเลเวอเรจ ≤ ${maxLevCfg}x`);
-  } else {
-    lines.push("• New High Guard: ไม่ใกล้จุดสูงช่วง 1h ล่าสุด (ประมาณการจาก kline)");
-  }
+  const weekendRuleBad = dir === "short" && weekend;
+  const weekendLine = weekendRuleBad
+    ? `Weekend: ⚠️ Sat–Sun (BKK) — risky for SHORT`
+    : `Weekend: ✅ Pass (weekday or long OK)`;
 
+  const athLine = nearHigh
+    ? `New High Guard: ⚠️ Near local 1h high — use ≤${maxLevCfg}x lev`
+    : `New High Guard: ✅ Pass (not hugging 1h range top)`;
+
+  let sentimentRuleLine: string;
   if (fngVal != null) {
-    const cls = fngCls?.trim() || "?";
-    const warnShort = dir === "short" && fngVal > fngMaxShort;
-    lines.push(
-      `• Sentiment: F&G ${fngVal} (${cls})${warnShort ? " — เตือน: short ในช่วงไม่ Fear ตามเกณฑ์" : ""}`
-    );
+    const cls = fngCls?.trim() ?? "";
+    if (dir === "short") {
+      const c = classifyFngShort(fngVal, fngMaxShort);
+      sentimentRuleLine = `Market Sentiment: ${c.emoji} ${c.label}${cls ? ` — ${cls}` : ""}`;
+    } else {
+      const c = classifyFngLong(fngVal, sentGreedTh);
+      sentimentRuleLine = `Market Sentiment: ${c.emoji} ${c.label}${cls ? ` — ${cls}` : ""}`;
+    }
   } else {
     const err =
       pulseResult && "error" in pulseResult
         ? pulseResult.error instanceof MarketPulseFetchError
           ? pulseResult.error.message
           : String(pulseResult.error)
-        : "ไม่ทราบสาเหตุ";
-    lines.push(`• Sentiment: ดึง F&G ไม่สำเร็จ (${err.slice(0, 120)})`);
+        : "unknown";
+    sentimentRuleLine = `Market Sentiment: ❓ No F&G (${err.slice(0, 80)})`;
   }
 
-  if (amount24 != null) {
-    const softVol = amount24 < minVolAdvisory;
-    lines.push(
-      `• Vol 24h (สัญญา): ${formatUsd(amount24)} USDT${softVol ? ` — เตือน: ต่ำกว่า ${formatUsd(minVolAdvisory)}` : ""}`
-    );
-  } else {
-    lines.push("• Vol 24h: ไม่มีข้อมูล amount24");
-  }
+  const volLine =
+    amount24 != null
+      ? `Vol 24h: ${formatUsd(amount24)} USDT${amount24 < minVolAdvisory ? " ⚠️ (below soft min)" : ""}`
+      : `Vol 24h: ❓ N/A`;
 
-  if (mcapUsd != null) {
-    const softCap = mcapUsd < minMcapAdvisory;
-    lines.push(
-      `• Market cap (${base}): ~$${formatUsd(mcapUsd)}${softCap ? ` — เตือน: ต่ำกว่า $${formatUsd(minMcapAdvisory)}` : ""}`
-    );
-  } else {
-    lines.push(`• Market cap (${base}): ไม่มีข้อมูล (CoinGecko)`);
-  }
+  const capLine =
+    mcapUsd != null
+      ? `Market Cap: ~$${formatUsd(mcapUsd)}${mcapUsd < minMcapAdvisory ? " ⚠️ (below soft min)" : ""}`
+      : `Market Cap: ❓ N/A (CoinGecko)`;
 
-  lines.push("");
-  lines.push(`📊 Koji Score: ${score}/100`);
-  if (penalties.length === 0) {
-    lines.push("(ไม่มีหักคะแนนตามเกณฑ์ชุดนี้)");
-  } else {
-    for (const p of penalties) {
-      lines.push(`  − ${p.note}: −${p.points}`);
-    }
-  }
+  const fundPct = fundingPct(funding);
+  const fundExtra = fundingIntensityLabel(fundPct);
+  const fundingLine = `Funding Rate: ${fundPct >= 0 ? "+" : ""}${fundPct.toFixed(4)}% ${fundExtra}`.trim();
 
-  lines.push("");
-  lines.push("— Metrics —");
-  lines.push(formatFundingLine(funding));
-  if (basisPct != null) {
-    lines.push(`Basis (perp−spot)/spot: ${basisPct >= 0 ? "+" : ""}${basisPct.toFixed(4)}%`);
-  } else {
-    lines.push("Basis: ไม่มีราคา spot คู่นี้บน MEXC — คำนวณไม่ได้");
-  }
+  const basisLine =
+    basisPct != null
+      ? `Basis: ${basisPct >= 0 ? "+" : ""}${basisPct.toFixed(4)}%${Math.abs(basisPct) > basisAbsPct ? " ⚠️" : ""}`
+      : `Basis: ❓ No spot pair on MEXC`;
 
-  lines.push("");
-  lines.push("ข้อมูลอัตโนมัติ ไม่ใช่คำแนะนำลงทุน — ใช้วิจารณญาณของคุณ");
+  const lines: string[] = [
+    header,
+    "",
+    statusLine,
+    "",
+    "🛡️ Trade Rules Check",
+    "",
+    weekendLine,
+    athLine,
+    sentimentRuleLine,
+    "",
+    `📊 Koji Score: ${score}/100`,
+    "",
+    "Deductions:",
+    penalties.length === 0 ? "✅ No deductions" : penalties.map((p) => p.deductionLine).join("\n"),
+    "",
+    "⛓️ On-Chain & Market Metrics",
+    "",
+    volLine,
+    capLine,
+    fundingLine,
+    basisLine,
+    "",
+    "—",
+    "Not financial advice · automated snapshot",
+  ];
 
   return lines.join("\n");
 }
