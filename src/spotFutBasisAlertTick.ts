@@ -83,6 +83,7 @@ function removeSymbol(state: SpotFutBasisAlertState, sym: string): SpotFutBasisA
 
 /**
  * แจ้งผู้ติดตาม system conditions เมื่อ |spot–perp basis| อยู่ระดับ Warning/Extreme ตามเกณฑ์และ state
+ * เรียกจาก /api/cron/price-sync (~15 นาที) — ไม่ใช่ pct-trailing
  */
 export async function runSpotFutBasisAlertTick(
   client: Client,

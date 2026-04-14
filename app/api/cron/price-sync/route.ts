@@ -12,12 +12,13 @@ import { runPctStepDailyPriceAlertTick } from "@/src/pctStepPriceAlertTick";
 import { runPriceAlertTick } from "@/src/priceAlertTick";
 import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
 import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
+import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เตือน% รายวัน (07:00 ไทย) + Volume signal + RSI 1h
+ * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เตือน% รายวัน (07:00 ไทย) + Volume signal + RSI 1h + spot–perp basis (ราคาผิดปกติ)
  * เตือน% trailing → /api/cron/pct-trailing ทุก ~5 นาที
  * GET + Authorization: Bearer CRON_SECRET
  */
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
     pctStepAlerts: { ok: false },
     volumeSignalAlerts: { ok: false },
     indicatorAlerts: { ok: false },
+    spotFutBasisAlerts: { ok: false },
   };
 
   async function runStep(
@@ -67,6 +69,10 @@ export async function GET(req: NextRequest) {
     const r = await runIndicatorAlertTick(client);
     return `แจ้ง ${r.notified} ครั้ง`;
   });
+  await runStep("spotFutBasisAlerts", async () => {
+    const r = await runSpotFutBasisAlertTick(client);
+    return `แจ้ง ${r.symbolsAlerted} สัญญา · ${r.notifiedPushes} push`;
+  });
 
   const record: PriceSyncCronRecord = {
     at: new Date().toISOString(),
@@ -84,6 +90,7 @@ export async function GET(req: NextRequest) {
     steps.priceAlerts.ok &&
     steps.pctStepAlerts.ok &&
     steps.volumeSignalAlerts?.ok !== false &&
-    steps.indicatorAlerts?.ok !== false;
+    steps.indicatorAlerts?.ok !== false &&
+    steps.spotFutBasisAlerts?.ok !== false;
   return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }

@@ -39,7 +39,7 @@ export type HourlyCronRecord = {
   };
 };
 
-/** ~15 นาที: แจ้งเตือนราคาเป้า + เตือน% รายวัน + volume signal + RSI 1h (เตือน% trailing → cron แยกทุก ~5 นาที) */
+/** ~15 นาที: แจ้งเตือนราคาเป้า + เตือน% รายวัน + volume signal + RSI 1h + spot–perp basis (เตือน% trailing → cron แยกทุก ~5 นาที) */
 export type PriceSyncCronRecord = {
   at: string;
   durationMs: number;
@@ -50,6 +50,8 @@ export type PriceSyncCronRecord = {
     volumeSignalAlerts?: CronStepResult;
     /** Indicator engine Phase 1.5 — RSI 1h */
     indicatorAlerts?: CronStepResult;
+    /** บันทึกเก่าอาจไม่มีฟิลด์นี้ — แจ้งเมื่อ |spot–perp basis| ผิดปกติ */
+    spotFutBasisAlerts?: CronStepResult;
   };
 };
 
@@ -169,7 +171,7 @@ export function formatCronStatusForLine(bundle: {
       "• บน Vercel ยังไม่ได้ตั้ง REDIS_URL หรือ KV",
       "• CRON_SECRET ไม่ตรง (cron ได้ 401)",
       "",
-      "กำหนดการ: pct-trailing ~ทุก 5 นาที (UTC) · market-pulse ~ทุก 6 ชม. (UTC) · price-sync ~ทุก 15 นาที (UTC) · price-alerts ทุกชั่วโมง (UTC)",
+      "กำหนดการ: pct-trailing ~ทุก 5 นาที (UTC) · market-pulse ~ทุก 6 ชม. (UTC) · price-sync ~ทุก 15 นาที (UTC; รวม spot–perp basis) · price-alerts ทุกชั่วโมง (UTC)",
       "ดู log: Vercel → Project → Logs",
     ].join("\n");
   }
@@ -186,6 +188,9 @@ export function formatCronStatusForLine(bundle: {
     }
     if (priceSync.steps.indicatorAlerts) {
       parts.push(fmt(priceSync.steps.indicatorAlerts, "RSI / EMA indicator"));
+    }
+    if (priceSync.steps.spotFutBasisAlerts) {
+      parts.push(fmt(priceSync.steps.spotFutBasisAlerts, "Spot–perp basis (ราคาผิดปกติ)"));
     }
     parts.push("");
   }
