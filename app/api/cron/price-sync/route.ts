@@ -13,6 +13,7 @@ import { runPriceAlertTick } from "@/src/priceAlertTick";
 import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
 import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
 import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
+import { runPriceSpike15mAlertTick } from "@/src/priceSpike15mAlertTick";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
     volumeSignalAlerts: { ok: false },
     indicatorAlerts: { ok: false },
     spotFutBasisAlerts: { ok: false },
+    priceSpike15mAlerts: { ok: false },
   };
 
   async function runStep(
@@ -73,6 +75,10 @@ export async function GET(req: NextRequest) {
     const r = await runSpotFutBasisAlertTick(client);
     return `แจ้ง ${r.symbolsAlerted} สัญญา · ${r.notifiedPushes} push`;
   });
+  await runStep("priceSpike15mAlerts", async () => {
+    const r = await runPriceSpike15mAlertTick(client);
+    return `แจ้ง ${r.symbolsHit} สัญญา · ${r.notifiedPushes} push`;
+  });
 
   const record: PriceSyncCronRecord = {
     at: new Date().toISOString(),
@@ -91,6 +97,7 @@ export async function GET(req: NextRequest) {
     steps.pctStepAlerts.ok &&
     steps.volumeSignalAlerts?.ok !== false &&
     steps.indicatorAlerts?.ok !== false &&
-    steps.spotFutBasisAlerts?.ok !== false;
+    steps.spotFutBasisAlerts?.ok !== false &&
+    steps.priceSpike15mAlerts?.ok !== false;
   return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }

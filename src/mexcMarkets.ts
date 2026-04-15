@@ -246,6 +246,126 @@ async function fetchContractKline15m(symbol: string): Promise<KlineArrays | null
   }
 }
 
+/** แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด — return เป็น % จาก open→close */
+export type LastClosed15mBarResult = {
+  returnPct: number;
+  /** เวลาเปิดแท่ง (วินาที) ใช้กันซ้ำแจ้งเตือน */
+  barOpenTimeSec: number;
+};
+
+export async function fetchLastClosed15mBarReturn(contractSymbol: string): Promise<LastClosed15mBarResult | null> {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - 26 * 3600;
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(contractSymbol.trim())}`;
+  try {
+    const { data } = await axios.get<KlineApiResponse>(url, {
+      timeout: 12_000,
+      params: { interval: "Min15", start, end },
+    });
+    if (!data.success || !data.data?.open?.length) return null;
+    const raw = data.data;
+    const n = raw.open.length;
+    if (n < 4) return null;
+    const i = n - 2;
+    const o = Number(raw.open[i]);
+    const c = raw.close != null ? Number(raw.close[i]) : Number.NaN;
+    if (!Number.isFinite(o) || o <= 0 || !Number.isFinite(c)) return null;
+    let barOpenTimeSec = 0;
+    if (raw.time != null && raw.time.length === n) {
+      const t = Number(raw.time[i]);
+      if (Number.isFinite(t)) {
+        barOpenTimeSec = t > 1e12 ? Math.floor(t / 1000) : Math.floor(t);
+      }
+    }
+    if (barOpenTimeSec <= 0) {
+      barOpenTimeSec = Math.floor(Date.now() / 1000 / 900) * 900;
+    }
+    return {
+      returnPct: ((c - o) / o) * 100,
+      barOpenTimeSec,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const SPARK_5M_BASELINE_BARS = 48;
+
+/** แท่ง 5m ล่าสุดที่ปิดแล้ว — return, ราคาปิด, Vol โดยประมาณ (USDT) และ % เทียบค่าเฉลี่ย Vol ของแท่งก่อนหน้า */
+export type LastClosed5mSparkBarResult = {
+  returnPct: number;
+  barOpenTimeSec: number;
+  lastClose: number;
+  /** มูลค่าโดยประมาณของแท่ง 5m ล่าสุด (vol×close, USDT-M) */
+  volUsdt5m: number;
+  /** (V/V_avg − 1)×100 — ใช้โชว์ "สูงกว่าค่าเฉลี่ย X%" */
+  volVsAvgPct: number | null;
+};
+
+export async function fetchLastClosed5mSparkBar(contractSymbol: string): Promise<LastClosed5mSparkBarResult | null> {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - 7 * 24 * 3600;
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(contractSymbol.trim())}`;
+  try {
+    const { data } = await axios.get<KlineApiResponse>(url, {
+      timeout: 14_000,
+      params: { interval: "Min5", start, end },
+    });
+    if (!data.success || !data.data?.open?.length || !data.data.vol?.length) return null;
+    const raw = data.data;
+    const n = raw.open.length;
+    if (n < 4) return null;
+    const i = n - 2;
+    const windowStart = Math.max(0, i - SPARK_5M_BASELINE_BARS);
+    const baselineEnd = i;
+    const o = Number(raw.open[i]);
+    const c = raw.close != null ? Number(raw.close[i]) : Number.NaN;
+    const v = Number(raw.vol![i]);
+    if (!Number.isFinite(o) || o <= 0 || !Number.isFinite(c) || !Number.isFinite(v) || v < 0) return null;
+
+    let barOpenTimeSec = 0;
+    if (raw.time != null && raw.time.length === n) {
+      const t = Number(raw.time[i]);
+      if (Number.isFinite(t)) {
+        barOpenTimeSec = t > 1e12 ? Math.floor(t / 1000) : Math.floor(t);
+      }
+    }
+    if (barOpenTimeSec <= 0) {
+      barOpenTimeSec = Math.floor(Date.now() / 1000 / 300) * 300;
+    }
+
+    const volUsdt5m = v * c;
+    let volVsAvgPct: number | null = null;
+    if (baselineEnd > windowStart) {
+      let sum = 0;
+      let count = 0;
+      for (let j = windowStart; j < baselineEnd; j++) {
+        const vj = Number(raw.vol![j]);
+        const cj = raw.close != null ? Number(raw.close[j]) : Number.NaN;
+        if (!Number.isFinite(vj) || vj < 0 || !Number.isFinite(cj) || cj <= 0) continue;
+        sum += vj * cj;
+        count += 1;
+      }
+      if (count >= 8) {
+        const vAvg = sum / count;
+        if (vAvg > 0 && volUsdt5m >= 0) {
+          volVsAvgPct = (volUsdt5m / vAvg - 1) * 100;
+        }
+      }
+    }
+
+    return {
+      returnPct: ((c - o) / o) * 100,
+      barOpenTimeSec,
+      lastClose: c,
+      volUsdt5m,
+      volVsAvgPct,
+    };
+  } catch {
+    return null;
+  }
+}
+
 type KlineTimeClose = { timeSec: number[]; close: number[] };
 
 async function fetchContractKline60m(perpSymbol: string, limit: number): Promise<KlineTimeClose | null> {

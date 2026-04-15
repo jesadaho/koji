@@ -83,7 +83,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถานะ sentiment — สรุป Fear & Greed, BTC dominance, Vol ~24h, Sentiment (ข้อมูลล่าสุดจาก API)
   (EN: sentiment, market pulse, #marketPulse)
 
-• สถานะ cron — บันทึก job: เตือน% trailing ~5 นาที · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI + spot–perp basis) + ชั่วโมง (สัญญา / funding)
+• สถานะ cron — บันทึก job: เตือน% trailing ~5 นาที · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI + spot–perp basis + 5m Spark) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
 
 • เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis)
