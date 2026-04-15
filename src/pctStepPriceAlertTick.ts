@@ -90,12 +90,12 @@ function buildTrailingMessage(row: PctStepAlert, prevAnchor: number, p: number):
       : `-${Math.abs(deltaPct).toFixed(1)}%`;
 
   const head =
-    deltaPct >= 0 ? `🚀 Price Alert: [${label}]` : `🔴 Price Alert: [${label}]`;
+    deltaPct >= 0
+      ? `🚀 Price Alert: [${label}] (${pctStr})`
+      : `🔴 Price Alert: [${label}] (${pctStr})`;
 
   const body =
-    deltaPct >= 0
-      ? `ขยับขึ้นอีก ${pctStr} แล้ว!`
-      : `ขยับลงอีก ${pctStr} แล้ว!`;
+    deltaPct >= 0 ? `ขยับขึ้นจากเตือนครั้งก่อนแล้ว!` : `ขยับลงจากเตือนครั้งก่อนแล้ว!`;
 
   return [
     head,

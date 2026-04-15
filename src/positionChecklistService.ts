@@ -167,7 +167,7 @@ export async function buildPositionChecklistMessage(
     penalties.push({
       key: "newHigh",
       points: 25,
-      deductionLine: `❌ Near 1h high + lev >${maxLevCfg}x (or unset): −25`,
+      deductionLine: `❌ Near 48h high (ATH window) + lev >${maxLevCfg}x (or unset): −25`,
     });
   }
 
@@ -219,7 +219,7 @@ export async function buildPositionChecklistMessage(
       if (hit) {
         if (k === "sentiment") return "Market Sentiment";
         if (k === "liquidity") return "Liquidity";
-        if (k === "newHigh") return "New High / Leverage";
+        if (k === "newHigh") return "ATH Guard (48h)";
         if (k === "weekend") return "Weekend";
         if (k === "basis") return "Spot–Perp Gap";
       }
@@ -246,8 +246,8 @@ export async function buildPositionChecklistMessage(
     : `Weekend: ✅ Pass (weekday or long OK)`;
 
   const athLine = nearHigh
-    ? `New High Guard: ⚠️ Near local 1h high — use ≤${maxLevCfg}x lev`
-    : `New High Guard: ✅ Pass (not hugging 1h range top)`;
+    ? `ATH Guard (48h): ⚠️ ราคาใกล้ยอดสูงสุดในช่วง ~48 ชม. — ระวังเป็นพิเศษ · เลเวอเรจ ≤${maxLevCfg}x แนะนำ`
+    : `ATH Guard (48h): ✅ ยังไม่แนบยอดสูงสุด ~48 ชม. (เทียบจาก kline 1h)`;
 
   let sentimentRuleLine: string;
   if (fngVal != null) {

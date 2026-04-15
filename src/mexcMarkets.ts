@@ -663,9 +663,10 @@ export async function fetchSpotPriceSingle(spotSymbol: string): Promise<number |
   }
 }
 
+/** 48 แท่ง × 1h ≈ ยอดสูงสุดในช่วง ~48 ชม. (ATH ในหน้าต่างนี้ ไม่ใช่ ATH ตลาดทั้งหมด) */
 const NEAR_HIGH_KLINE_LIMIT = 48;
 
-/** max(close) แท่ง 1h ย้อนหลัง — ใช้เทียบ New High Guard */
+/** max(close) แท่ง 1h ย้อนหลัง ~48 ชม. — ใช้ ATH Guard (48h) */
 export async function fetchPerpHourlyClosesForNearHigh(perpSymbol: string): Promise<{ maxClose: number } | null> {
   const k = await fetchContractKline60m(perpSymbol.trim(), NEAR_HIGH_KLINE_LIMIT);
   if (!k?.close.length) return null;
