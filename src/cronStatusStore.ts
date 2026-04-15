@@ -39,7 +39,7 @@ export type HourlyCronRecord = {
   };
 };
 
-/** ~15 นาที: แจ้งเตือนราคาเป้า + เตือน% รายวัน + volume signal + RSI 1h + spot–perp basis + 15m price spike (เตือน% trailing → cron แยกทุก ~5 นาที) */
+/** ~15 นาที: แจ้งเตือนราคาเป้า + เตือน% รายวัน + volume signal + RSI 1h + spot–perp basis (Spark / follow-up → pct-trailing ทุก ~5 นาที) */
 export type PriceSyncCronRecord = {
   at: string;
   durationMs: number;
@@ -52,10 +52,6 @@ export type PriceSyncCronRecord = {
     indicatorAlerts?: CronStepResult;
     /** บันทึกเก่าอาจไม่มีฟิลด์นี้ — แจ้งเมื่อ |spot–perp basis| ผิดปกติ */
     spotFutBasisAlerts?: CronStepResult;
-    /** แท่ง 15m ล่าสุด |open→close| ≥ เกณฑ์ (Top N vol) */
-    priceSpike15mAlerts?: CronStepResult;
-    /** Spark follow-up T+30m / T+1h */
-    sparkFollowUpAlerts?: CronStepResult;
   };
 };
 
@@ -195,12 +191,6 @@ export function formatCronStatusForLine(bundle: {
     }
     if (priceSync.steps.spotFutBasisAlerts) {
       parts.push(fmt(priceSync.steps.spotFutBasisAlerts, "Spot–perp basis (ราคาผิดปกติ)"));
-    }
-    if (priceSync.steps.priceSpike15mAlerts) {
-      parts.push(fmt(priceSync.steps.priceSpike15mAlerts, "5m Spark (Top vol)"));
-    }
-    if (priceSync.steps.sparkFollowUpAlerts) {
-      parts.push(fmt(priceSync.steps.sparkFollowUpAlerts, "Spark follow-up (30m / 1h)"));
     }
     parts.push("");
   }

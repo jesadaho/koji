@@ -12,7 +12,7 @@ function isVercel(): boolean {
 function assertWritableStorage(): void {
   if (process.env.VERCEL === "1" && !useCloudStorage()) {
     throw new Error(
-      "บน Vercel ต้องตั้ง REDIS_URL หรือ Vercel KV สำหรับ price spike 15m alert state"
+      "บน Vercel ต้องตั้ง REDIS_URL หรือ Vercel KV สำหรับ Spark signal state"
     );
   }
 }
@@ -26,18 +26,27 @@ async function ensureJsonFile(): Promise<void> {
   }
 }
 
-/** ต่อสัญญา: เวลาเปิดแท่ง 15m ล่าสุดที่แจ้งแล้ว */
-export type PriceSpike15mAlertState = Record<string, { lastNotifiedBarOpenSec: number }>;
+/** จุดอ้างอิงราคา last (ticker) — ไม่อิงแท่งเทียน */
+export type SparkSignalCheckpointState = {
+  checkpointPrice: number;
+  checkpointSec: number;
+};
+
+export type PriceSpike15mAlertState = Record<string, SparkSignalCheckpointState>;
 
 function normalizeState(raw: unknown): PriceSpike15mAlertState {
   if (!raw || typeof raw !== "object") return {};
   const out: PriceSpike15mAlertState = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!k?.trim()) continue;
-    const o = v as { lastNotifiedBarOpenSec?: unknown };
-    const t = Number(o?.lastNotifiedBarOpenSec);
-    if (!Number.isFinite(t) || t <= 0) continue;
-    out[k.trim()] = { lastNotifiedBarOpenSec: t };
+    if (!v || typeof v !== "object") continue;
+    const o = v as Record<string, unknown>;
+    if ("checkpointPrice" in o && "checkpointSec" in o) {
+      const cp = Number(o.checkpointPrice);
+      const cs = Number(o.checkpointSec);
+      if (!Number.isFinite(cp) || cp <= 0 || !Number.isFinite(cs) || cs <= 0) continue;
+      out[k.trim()] = { checkpointPrice: cp, checkpointSec: cs };
+    }
   }
   return out;
 }

@@ -13,9 +13,6 @@ import { runPriceAlertTick } from "@/src/priceAlertTick";
 import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
 import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
 import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
-import { runPriceSpike15mAlertTick } from "@/src/priceSpike15mAlertTick";
-import { runSparkFollowUpTick } from "@/src/sparkFollowUpTick";
-
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -35,8 +32,6 @@ export async function GET(req: NextRequest) {
     volumeSignalAlerts: { ok: false },
     indicatorAlerts: { ok: false },
     spotFutBasisAlerts: { ok: false },
-    priceSpike15mAlerts: { ok: false },
-    sparkFollowUpAlerts: { ok: false },
   };
 
   async function runStep(
@@ -77,14 +72,6 @@ export async function GET(req: NextRequest) {
     const r = await runSpotFutBasisAlertTick(client);
     return `แจ้ง ${r.symbolsAlerted} สัญญา · ${r.notifiedPushes} push`;
   });
-  await runStep("priceSpike15mAlerts", async () => {
-    const r = await runPriceSpike15mAlertTick(client);
-    return `แจ้ง ${r.symbolsHit} สัญญา · ${r.notifiedPushes} push`;
-  });
-  await runStep("sparkFollowUpAlerts", async () => {
-    const r = await runSparkFollowUpTick(client);
-    return `checkpoint ${r.checkpoints} · จบ ${r.resolvedEvents} เหตุการณ์ · ${r.notifiedPushes} push`;
-  });
 
   const record: PriceSyncCronRecord = {
     at: new Date().toISOString(),
@@ -103,8 +90,6 @@ export async function GET(req: NextRequest) {
     steps.pctStepAlerts.ok &&
     steps.volumeSignalAlerts?.ok !== false &&
     steps.indicatorAlerts?.ok !== false &&
-    steps.spotFutBasisAlerts?.ok !== false &&
-    steps.priceSpike15mAlerts?.ok !== false &&
-    steps.sparkFollowUpAlerts?.ok !== false;
+    steps.spotFutBasisAlerts?.ok !== false;
   return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }

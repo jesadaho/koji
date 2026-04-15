@@ -1,10 +1,6 @@
 import type { Client } from "@line/bot-sdk";
 import { sendAlertNotification } from "./alertNotify";
-import {
-  fetchContractTickerMetrics,
-  fetchLastClosed5mSparkBar,
-  getTopUsdtSymbolsByAmount24,
-} from "./mexcMarkets";
+import { fetchContractTickerMetrics, getTopUsdtSymbolsByAmount24 } from "./mexcMarkets";
 import { classifySparkMcapBand, classifySparkVolBand } from "./sparkTierContext";
 import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
 import {
@@ -13,6 +9,9 @@ import {
   type PriceSpike15mAlertState,
 } from "./priceSpike15mAlertStateStore";
 import { enqueueSparkFollowUp } from "./sparkFollowUpStore";
+
+/** ให้สอดคล้องกับ follow-up (refClose = barOpen + 5m) */
+const SPARK_SIGNAL_BAR_SEC = 300;
 
 function enabled(): boolean {
   const raw = process.env.PRICE_SPIKE_15M_ENABLED?.trim();
@@ -23,6 +22,12 @@ function enabled(): boolean {
 function minAbsPct(): number {
   const n = Number(process.env.PRICE_SPIKE_15M_MIN_PCT?.trim());
   return Number.isFinite(n) && n > 0 ? n : 10;
+}
+
+/** ช่วงเทียบ % ระหว่างราคา last สองครั้ง (วินาที) — default 300 = 5 นาที */
+function signalWindowSec(): number {
+  const n = Number(process.env.SPARK_SIGNAL_WINDOW_SEC?.trim());
+  return Number.isFinite(n) && n >= 60 && n <= 3600 ? Math.floor(n) : 300;
 }
 
 function topN(): number {
@@ -62,38 +67,37 @@ function formatUsdNotional(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
-function volVsAvgThai(volVsAvgPct: number | null): string {
-  if (volVsAvgPct == null || !Number.isFinite(volVsAvgPct)) return "";
-  const r = Math.round(volVsAvgPct);
-  if (r >= 0) return ` (สูงกว่าค่าเฉลี่ย ${r}%)`;
-  return ` (ต่ำกว่าค่าเฉลี่ย ${Math.abs(r)}%)`;
-}
-
 function buildSparkMessage(
   contractSymbol: string,
   returnPct: number,
-  lastClose: number,
-  volUsdt5m: number,
-  volVsAvgPct: number | null
+  lastPrice: number,
+  amount24Usdt: number,
+  windowSec: number
 ): string {
   const base = shortLabel(contractSymbol);
   const pctStr = `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%`;
   const moveLine =
     returnPct >= 0
-      ? `Price jumped ${pctStr} (ในรอบ 5 นาที)`
-      : `Price dropped ${pctStr} (ในรอบ 5 นาที)`;
-  const volSuffix = volVsAvgThai(volVsAvgPct);
+      ? `Price jumped ${pctStr} (สัญญาณจากราคา last)`
+      : `Price dropped ${pctStr} (สัญญาณจากราคา last)`;
+  const wm = Math.round(windowSec / 60);
+  const volLine =
+    amount24Usdt > 0
+      ? `📊 Vol 24h (เทิร์นโอเวอร์): ${formatUsdNotional(amount24Usdt)}`
+      : "📊 Vol 24h: —";
   return [
     `⚡️ Koji Spark Alert: [${base}]/USDT`,
     "",
     moveLine,
-    `💰 Price: ${formatPriceUsd(lastClose)}`,
-    `📊 Vol (5m): ${formatUsdNotional(volUsdt5m)}${volSuffix}`,
+    `⏱ เทียบช่วง ~${wm} นาที (ticker ไม่อิงแท่งเทียน)`,
+    `💰 Price: ${formatPriceUsd(lastPrice)}`,
+    volLine,
   ].join("\n");
 }
 
 /**
- * แจ้งผู้ติดตามระบบเมื่อ |% แท่ง 5m ล่าสุดที่ปิดแล้ว| ≥ เกณฑ์ — สแกน Top N ตาม Vol 24h (Spark)
+ * Spark — |% เปลี่ยน| ของราคา last เทียบจุดอ้างอิงก่อนหน้า ≥ เกณฑ์ (ไม่อิงแท่งเทียน)
+ * ควรเรียกจาก cron ~ทุก 5 นาที ให้สอดคล้องกับ SPARK_SIGNAL_WINDOW_SEC
  */
 export async function runPriceSpike15mAlertTick(
   client: Client
@@ -108,31 +112,47 @@ export async function runPriceSpike15mAlertTick(
   }
 
   const threshold = minAbsPct();
+  const windowSec = signalWindowSec();
   const limit = topN();
   const symbols = await getTopUsdtSymbolsByAmount24(limit);
   if (symbols.length === 0) {
     return { notifiedPushes: 0, symbolsHit: 0 };
   }
 
-  let state = await loadPriceSpike15mAlertState();
-  const minPct = threshold;
+  let state: PriceSpike15mAlertState = await loadPriceSpike15mAlertState();
 
-  const results = await mapPoolConcurrent(symbols, FETCH_CONCURRENCY, async (sym) => {
-    const bar = await fetchLastClosed5mSparkBar(sym);
-    return { sym, bar };
+  const metricsList = await mapPoolConcurrent(symbols, FETCH_CONCURRENCY, async (sym) => {
+    const m = await fetchContractTickerMetrics(sym);
+    return { sym, m };
   });
 
   let notifiedPushes = 0;
   let symbolsHit = 0;
+  const nowSec = Math.floor(Date.now() / 1000);
 
-  for (const { sym, bar } of results) {
-    if (!bar) continue;
-    if (Math.abs(bar.returnPct) < minPct) continue;
+  for (const { sym, m } of metricsList) {
+    if (!m || !Number.isFinite(m.lastPrice) || m.lastPrice <= 0) continue;
 
-    const prev = state[sym]?.lastNotifiedBarOpenSec;
-    if (prev === bar.barOpenTimeSec) continue;
+    const p = m.lastPrice;
+    const st = state[sym];
 
-    const body = buildSparkMessage(sym, bar.returnPct, bar.lastClose, bar.volUsdt5m, bar.volVsAvgPct);
+    if (!st) {
+      state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };
+      continue;
+    }
+
+    const elapsed = nowSec - st.checkpointSec;
+    if (elapsed < windowSec) {
+      continue;
+    }
+
+    const returnPct = ((p - st.checkpointPrice) / st.checkpointPrice) * 100;
+    if (Math.abs(returnPct) < threshold) {
+      state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };
+      continue;
+    }
+
+    const body = buildSparkMessage(sym, returnPct, p, m.amount24Usdt, windowSec);
     let anyOk = false;
     for (const uid of subs) {
       try {
@@ -144,22 +164,19 @@ export async function runPriceSpike15mAlertTick(
       }
     }
 
+    state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };
+
     if (anyOk) {
       symbolsHit += 1;
-      state = {
-        ...state,
-        [sym]: { lastNotifiedBarOpenSec: bar.barOpenTimeSec },
-      };
       try {
-        const metrics = await fetchContractTickerMetrics(sym);
-        const amount24 = metrics?.amount24Usdt ?? null;
+        const amount24 = m.amount24Usdt;
         await enqueueSparkFollowUp({
           symbol: sym,
-          barOpenTimeSec: bar.barOpenTimeSec,
-          refPrice: bar.lastClose,
-          sparkReturnPct: bar.returnPct,
-          amount24Usdt: amount24,
-          volBand: classifySparkVolBand(amount24),
+          barOpenTimeSec: nowSec - SPARK_SIGNAL_BAR_SEC,
+          refPrice: p,
+          sparkReturnPct: returnPct,
+          amount24Usdt: Number.isFinite(amount24) && amount24 >= 0 ? amount24 : null,
+          volBand: classifySparkVolBand(Number.isFinite(amount24) ? amount24 : null),
           mcapBand: classifySparkMcapBand(sym),
         });
       } catch (e) {

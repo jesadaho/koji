@@ -68,6 +68,16 @@ function buildCheckpointMessage(
   ].join("\n");
 }
 
+function isFollowUpComplete(cur: SparkFollowUpPending): boolean {
+  return (
+    cur.sent30 &&
+    cur.sent60 &&
+    cur.silent2h &&
+    cur.silent3h &&
+    cur.silent4h
+  );
+}
+
 export async function runSparkFollowUpTick(client: Client): Promise<{
   notifiedPushes: number;
   resolvedEvents: number;
@@ -125,6 +135,37 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       }
     };
 
+    /** สถิติเงียบ T+2h / T+3h / T+4h — ไม่แจ้งเตือน */
+    const runSilent = async (slot: "2h" | "3h" | "4h"): Promise<void> => {
+      const quotes = await fetchSimplePrices([cur.symbol]);
+      const q = quotes[cur.symbol];
+      const endPrice = q?.usd != null && Number.isFinite(q.usd) ? q.usd : null;
+      const won = momentumOutcome(cur.refPrice, cur.sparkReturnPct, endPrice);
+      checkpoints += 1;
+      if (slot === "2h") {
+        cur = {
+          ...cur,
+          silent2h: true,
+          price2h: endPrice,
+          momentumWon2h: won,
+        };
+      } else if (slot === "3h") {
+        cur = {
+          ...cur,
+          silent3h: true,
+          price3h: endPrice,
+          momentumWon3h: won,
+        };
+      } else {
+        cur = {
+          ...cur,
+          silent4h: true,
+          price4h: endPrice,
+          momentumWon4h: won,
+        };
+      }
+    };
+
     if (!cur.sent30 && nowSec >= cur.due30Sec) {
       await runCheckpoint("30");
     }
@@ -133,7 +174,17 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       await runCheckpoint("60");
     }
 
-    if (cur.sent30 && cur.sent60) {
+    if (cur.sent60 && !cur.silent2h && nowSec >= cur.due2hSec) {
+      await runSilent("2h");
+    }
+    if (cur.sent60 && !cur.silent3h && nowSec >= cur.due3hSec) {
+      await runSilent("3h");
+    }
+    if (cur.sent60 && !cur.silent4h && nowSec >= cur.due4hSec) {
+      await runSilent("4h");
+    }
+
+    if (isFollowUpComplete(cur)) {
       const row: SparkFollowUpHistoryRow = {
         eventKey: cur.eventKey,
         symbol: cur.symbol,
@@ -148,6 +199,12 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
         price60: cur.price60 ?? null,
         momentumWon30: cur.momentumWon30 ?? null,
         momentumWon60: cur.momentumWon60 ?? null,
+        price2h: cur.price2h ?? null,
+        momentumWon2h: cur.momentumWon2h ?? null,
+        price3h: cur.price3h ?? null,
+        momentumWon3h: cur.momentumWon3h ?? null,
+        price4h: cur.price4h ?? null,
+        momentumWon4h: cur.momentumWon4h ?? null,
         resolvedAtIso: new Date().toISOString(),
       };
       state = { ...state, history: [...state.history, row] };

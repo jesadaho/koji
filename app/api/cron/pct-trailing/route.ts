@@ -4,12 +4,14 @@ import { config } from "@/src/config";
 import { requireCronAuth } from "@/src/cronAuth";
 import { createLineClient } from "@/src/lineHandler";
 import { runPctStepTrailingPriceAlertTick } from "@/src/pctStepPriceAlertTick";
+import { runPriceSpike15mAlertTick } from "@/src/priceSpike15mAlertTick";
+import { runSparkFollowUpTick } from "@/src/sparkFollowUpTick";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Vercel Cron ~5 นาที — เตือน% trailing เท่านั้น
+ * Vercel Cron ~5 นาที — เตือน% trailing + Spark (สัญญาณจาก ticker) + Spark follow-up
  * แจ้งเตือน spot–perp basis (ราคาผิดปกติ) → /api/cron/price-sync ทุก ~15 นาที
  * GET + Authorization: Bearer CRON_SECRET
  */
@@ -21,10 +23,18 @@ export async function GET(req: NextRequest) {
   try {
     const client = createLineClient(config.lineChannelAccessToken);
     const r = await runPctStepTrailingPriceAlertTick(client);
+    const spark = await runPriceSpike15mAlertTick(client);
+    const follow = await runSparkFollowUpTick(client);
     return NextResponse.json({
       ok: true,
       scope: "trailing",
       notified: r.notified,
+      spark: { symbolsHit: spark.symbolsHit, notifiedPushes: spark.notifiedPushes },
+      sparkFollowUp: {
+        checkpoints: follow.checkpoints,
+        resolvedEvents: follow.resolvedEvents,
+        notifiedPushes: follow.notifiedPushes,
+      },
       at: new Date().toISOString(),
       durationMs: Date.now() - started,
     });
