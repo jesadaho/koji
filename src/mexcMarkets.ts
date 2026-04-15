@@ -152,6 +152,38 @@ async function fetchContractTickers(): Promise<MexcTickerRow[]> {
   return asArray(data.data);
 }
 
+/** ดึง amount24 / volume24 / last ต่อสัญญา — ใช้ตอนเก็บสถิติ Spark (แยก Vol / mcap proxy) */
+export async function fetchContractTickerMetrics(contractSymbol: string): Promise<{
+  amount24Usdt: number;
+  volume24: number;
+  lastPrice: number;
+} | null> {
+  const sym = contractSymbol.trim();
+  if (!sym) return null;
+  try {
+    const { data } = await axios.get<MexcTickerResponse>(MEXC_TICKER, {
+      params: { symbol: sym },
+      timeout: 15_000,
+    });
+    if (!data.success || data.data === undefined) return null;
+    const rows = asArray(data.data);
+    const t = rows.find((r) => r.symbol?.trim() === sym) ?? rows[0];
+    if (!t) return null;
+    const lp = t.lastPrice;
+    const amt = t.amount24;
+    if (typeof lp !== "number" || Number.isNaN(lp) || lp <= 0) return null;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt < 0) return null;
+    const vol = t.volume24;
+    return {
+      lastPrice: lp,
+      amount24Usdt: amt,
+      volume24: typeof vol === "number" && !Number.isNaN(vol) ? vol : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 type MexcSpotPriceRow = { symbol?: string; price?: string };
 
 /** แปลงสัญญา perp BTC_USDT → คู่ spot BTCUSDT */
@@ -262,12 +294,13 @@ export async function fetchLastClosed15mBarReturn(contractSymbol: string): Promi
       timeout: 12_000,
       params: { interval: "Min15", start, end },
     });
-    if (!data.success || !data.data?.open?.length) return null;
+    if (!data.success || !data.data) return null;
     const raw = data.data;
-    const n = raw.open.length;
-    if (n < 4) return null;
+    const opens = raw.open;
+    if (!opens?.length || opens.length < 4) return null;
+    const n = opens.length;
     const i = n - 2;
-    const o = Number(raw.open[i]);
+    const o = Number(opens[i]);
     const c = raw.close != null ? Number(raw.close[i]) : Number.NaN;
     if (!Number.isFinite(o) || o <= 0 || !Number.isFinite(c)) return null;
     let barOpenTimeSec = 0;
@@ -311,16 +344,18 @@ export async function fetchLastClosed5mSparkBar(contractSymbol: string): Promise
       timeout: 14_000,
       params: { interval: "Min5", start, end },
     });
-    if (!data.success || !data.data?.open?.length || !data.data.vol?.length) return null;
+    if (!data.success || !data.data) return null;
     const raw = data.data;
-    const n = raw.open.length;
-    if (n < 4) return null;
+    const opens = raw.open;
+    const vols = raw.vol;
+    if (!opens?.length || !vols?.length || opens.length < 4 || vols.length !== opens.length) return null;
+    const n = opens.length;
     const i = n - 2;
     const windowStart = Math.max(0, i - SPARK_5M_BASELINE_BARS);
     const baselineEnd = i;
-    const o = Number(raw.open[i]);
+    const o = Number(opens[i]);
     const c = raw.close != null ? Number(raw.close[i]) : Number.NaN;
-    const v = Number(raw.vol![i]);
+    const v = Number(vols[i]);
     if (!Number.isFinite(o) || o <= 0 || !Number.isFinite(c) || !Number.isFinite(v) || v < 0) return null;
 
     let barOpenTimeSec = 0;
@@ -340,7 +375,7 @@ export async function fetchLastClosed5mSparkBar(contractSymbol: string): Promise
       let sum = 0;
       let count = 0;
       for (let j = windowStart; j < baselineEnd; j++) {
-        const vj = Number(raw.vol![j]);
+        const vj = Number(vols[j]);
         const cj = raw.close != null ? Number(raw.close[j]) : Number.NaN;
         if (!Number.isFinite(vj) || vj < 0 || !Number.isFinite(cj) || cj <= 0) continue;
         sum += vj * cj;

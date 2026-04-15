@@ -16,6 +16,8 @@ import {
 } from "./lineFlexKojiMenu";
 import { isCronStatusQuery } from "./cronLineCommands";
 import { isMarketPulseStatusQuery } from "./marketPulseLineCommands";
+import { isSparkStatsQuery } from "./sparkFollowUpLineCommands";
+import { formatSparkStatsMessage } from "./sparkFollowUpStats";
 import { getMarketPulseStatusMessage } from "./marketPulseTick";
 import {
   isSystemSubscribeStatusQuery,
@@ -85,6 +87,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 
 • สถานะ cron — บันทึก job: เตือน% trailing ~5 นาที · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI + spot–perp basis + 5m Spark) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
+
+• สถิติ spark — สรุปผลติดตาม Spark หลัง T+30m / T+1h (momentum vs fade)
+  (EN: spark stats, #sparkStats)
 
 • เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis)
   ตัวอย่าง: short btc · long eth · ชอต btc 5x
@@ -278,6 +283,20 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       const detail = e instanceof Error ? e.message : String(e);
       await client.replyMessage(msgEvent.replyToken, [
         { type: "text", text: `สร้าง checklist ไม่สำเร็จ — ${detail.slice(0, 300)}` },
+      ]);
+    }
+    return;
+  }
+
+  if (isSparkStatsQuery(text)) {
+    try {
+      const body = await formatSparkStatsMessage();
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: body }]);
+    } catch (e) {
+      console.error("[lineHandler] spark stats", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: `อ่านสถิติ Spark ไม่สำเร็จ — ${detail.slice(0, 300)}` },
       ]);
     }
     return;

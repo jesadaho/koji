@@ -54,6 +54,8 @@ export type PriceSyncCronRecord = {
     spotFutBasisAlerts?: CronStepResult;
     /** แท่ง 15m ล่าสุด |open→close| ≥ เกณฑ์ (Top N vol) */
     priceSpike15mAlerts?: CronStepResult;
+    /** Spark follow-up T+30m / T+1h */
+    sparkFollowUpAlerts?: CronStepResult;
   };
 };
 
@@ -196,6 +198,9 @@ export function formatCronStatusForLine(bundle: {
     }
     if (priceSync.steps.priceSpike15mAlerts) {
       parts.push(fmt(priceSync.steps.priceSpike15mAlerts, "5m Spark (Top vol)"));
+    }
+    if (priceSync.steps.sparkFollowUpAlerts) {
+      parts.push(fmt(priceSync.steps.sparkFollowUpAlerts, "Spark follow-up (30m / 1h)"));
     }
     parts.push("");
   }

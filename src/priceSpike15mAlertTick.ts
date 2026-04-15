@@ -1,12 +1,18 @@
 import type { Client } from "@line/bot-sdk";
 import { sendAlertNotification } from "./alertNotify";
-import { fetchLastClosed5mSparkBar, getTopUsdtSymbolsByAmount24 } from "./mexcMarkets";
+import {
+  fetchContractTickerMetrics,
+  fetchLastClosed5mSparkBar,
+  getTopUsdtSymbolsByAmount24,
+} from "./mexcMarkets";
+import { classifySparkMcapBand, classifySparkVolBand } from "./sparkTierContext";
 import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
 import {
   loadPriceSpike15mAlertState,
   savePriceSpike15mAlertState,
   type PriceSpike15mAlertState,
 } from "./priceSpike15mAlertStateStore";
+import { enqueueSparkFollowUp } from "./sparkFollowUpStore";
 
 function enabled(): boolean {
   const raw = process.env.PRICE_SPIKE_15M_ENABLED?.trim();
@@ -144,6 +150,21 @@ export async function runPriceSpike15mAlertTick(
         ...state,
         [sym]: { lastNotifiedBarOpenSec: bar.barOpenTimeSec },
       };
+      try {
+        const metrics = await fetchContractTickerMetrics(sym);
+        const amount24 = metrics?.amount24Usdt ?? null;
+        await enqueueSparkFollowUp({
+          symbol: sym,
+          barOpenTimeSec: bar.barOpenTimeSec,
+          refPrice: bar.lastClose,
+          sparkReturnPct: bar.returnPct,
+          amount24Usdt: amount24,
+          volBand: classifySparkVolBand(amount24),
+          mcapBand: classifySparkMcapBand(sym),
+        });
+      } catch (e) {
+        console.error("[priceSpike15mAlertTick] enqueueSparkFollowUp", sym, e);
+      }
     }
   }
 
