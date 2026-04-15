@@ -57,7 +57,7 @@ function buildSpotFutBasisMessage(row: SpotFutBasisRow, tier: SpotFutBasisTier):
 
   return [
     head,
-    `[${base}]/USDT ตรวจพบส่วนต่างราคาผิดปกติ!`,
+    `[${base}]/USDT (${pctStr}) ตรวจพบส่วนต่างราคาผิดปกติ!`,
     "",
     `🔹 Futures Price: $${fp}`,
     `🔸 Spot Price: $${sp}`,

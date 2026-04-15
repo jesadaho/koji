@@ -100,7 +100,16 @@ function buildMexcSystemConditionMessage(
   order: { prev: OrderSnapshotRow; next: OrderSnapshotRow } | null,
   peerMaxVolThreshold: number | null
 ): string {
-  const lines: string[] = [`🔔 [MEXC System Condition Change]`, `🪙 Symbol: ${displaySymbol(symbol)}`];
+  const symbolLine = (() => {
+    const sym = displaySymbol(symbol);
+    if (order) {
+      const o = `${formatContractVol(order.prev.maxVol)} → ${formatContractVol(order.next.maxVol)}`;
+      return `🪙 Symbol: ${sym} (Max order ${o})`;
+    }
+    return `🪙 Symbol: ${sym}`;
+  })();
+
+  const lines: string[] = [`🔔 [MEXC System Condition Change]`, symbolLine];
 
   if (order) {
     const summary = `${formatContractVol(order.prev.maxVol)} → ${formatContractVol(order.next.maxVol)}`;
