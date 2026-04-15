@@ -18,7 +18,7 @@ import {
   orderMetaFromDetail,
   type MexcDetailRow,
 } from "./mexcContractMeta";
-import { formatFunding, fundingRateLineEmoji, maxVolContractWarnThreshold } from "./marketsFormat";
+import { formatFunding, maxVolContractWarnThreshold } from "./marketsFormat";
 import { sendAlertNotification } from "./alertNotify";
 
 /**
@@ -93,50 +93,39 @@ function peerMaxVolThresholdFromDetails(detailBySymbol: Map<string, MexcDetailRo
   return maxVolContractWarnThreshold(vols);
 }
 
-/** แยกบล็อกข้อความ: 📦 สภาพคล่อง / 💹 ต้นทุนถือสถานะ / 🕒 รอบจ่าย (เมื่อช่วงชำระเปลี่ยน) */
+/** ข้อความสั้น: หัว [System Change] + บรรทัด Symbol พร้อมสรุปใน () */
 function buildMexcSystemConditionMessage(
   symbol: string,
   funding: { prev: FundingSnapshotRow; next: FundingMetaLike } | null,
   order: { prev: OrderSnapshotRow; next: OrderSnapshotRow } | null,
   peerMaxVolThreshold: number | null
 ): string {
-  const symbolLine = (() => {
-    const sym = displaySymbol(symbol);
-    if (order) {
-      const o = `${formatContractVol(order.prev.maxVol)} → ${formatContractVol(order.next.maxVol)}`;
-      return `🪙 Symbol: ${sym} (Max order ${o})`;
-    }
-    return `🪙 Symbol: ${sym}`;
-  })();
-
-  const lines: string[] = [`🔔 [MEXC System Condition Change]`, symbolLine];
+  const sym = displaySymbol(symbol);
+  const bits: string[] = [];
 
   if (order) {
-    const summary = `${formatContractVol(order.prev.maxVol)} → ${formatContractVol(order.next.maxVol)}`;
+    const o = `${formatContractVol(order.prev.maxVol)} → ${formatContractVol(order.next.maxVol)}`;
+    bits.push(`Max order ${o}`);
+  }
+  if (funding) {
+    const fr = `${formatFunding(funding.prev.fundingRate)} → ${formatFunding(funding.next.fundingRate)}`;
+    bits.push(`Funding ${fr}`);
+    if (funding.prev.collectCycle !== funding.next.collectCycle) {
+      bits.push(`Cycle ${funding.prev.collectCycle}h→${funding.next.collectCycle}h`);
+    }
+  }
+
+  const paren = bits.length > 0 ? ` (${bits.join(" · ")})` : "";
+  const lines: string[] = [`🔔 [System Change]`, `🪙 Symbol: ${sym}${paren}`];
+
+  if (order) {
     const lowLiquidity =
       peerMaxVolThreshold != null &&
       order.next.maxVol > 0 &&
       order.next.maxVol <= peerMaxVolThreshold;
-    const head = lowLiquidity ? "⚠️ ขนาดออเดอร์สูงสุด (Max order)" : "📦 ขนาดออเดอร์สูงสุด (Max order)";
-    lines.push("", head, `   ${summary}`);
     if (lowLiquidity) {
-      lines.push("   (สภาพคล่องต่ำเทียบสัญญาอื่น — ระวังไม้ใหญ่/ส่งคำสั่งยาก)");
+      lines.push("⚠️ สภาพคล่องต่ำเทียบสัญญาอื่น — ระวังไม้ใหญ่/ส่งคำสั่งยาก");
     }
-  }
-
-  if (funding) {
-    const heat = fundingRateLineEmoji(funding.next.fundingRate);
-    const rateStr = `${formatFunding(funding.prev.fundingRate)} → ${formatFunding(funding.next.fundingRate)}`;
-    lines.push("", `💹 อัตรา Funding ${heat}`, `   ${rateStr}`);
-
-    /** รอบจ่าย (ชม. ต่อรอบ) — แสดงทุกครั้ง · ถ้ารอบเปลี่ยนจะโชว์ a→b · ไม่ใส่เวลาตัดรอบถัดไป */
-    const cycleChanged = funding.prev.collectCycle !== funding.next.collectCycle;
-    lines.push("", `🕒 รอบจ่าย (cycle)`);
-    lines.push(
-      cycleChanged
-        ? `   ${funding.prev.collectCycle}h → ${funding.next.collectCycle}h`
-        : `   ${funding.next.collectCycle}h`,
-    );
   }
 
   return lines.join("\n");
