@@ -100,6 +100,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • ล้างสถิติ spark — ล้างข้อมูล matrix (pending / history / fire log) เพื่อเก็บใหม่ — ต้องตั้ง env SPARK_MATRIX_RESET_ALLOWED_USER_IDS=LINE_user_id ของคุณ
   (EN: reset spark matrix, cleanup spark matrix, #sparkreset)
 
+• ไอดีไลน์ — แสดง LINE user id ของคุณ (ใช้ใส่ env เช่น SPARK_MATRIX_RESET_ALLOWED_USER_IDS) — เฉพาะแชท 1:1 กับบอท
+  (EN: line id, my line id, #lineid)
+
 • เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis / EMA6·12 บน 15m)
   ตัวอย่าง: short btc · long eth · ชอต btc 5x
   (EN: short btc, long eth)
@@ -182,6 +185,13 @@ function isKojiMenuTrigger(text: string): boolean {
   return /^koji$/i.test(t);
 }
 
+/** ดู LINE user id ของตัวเอง — ตอบได้เฉพาะแชท 1:1 (ไม่ส่งในกลุ่ม) */
+function isLineUserIdQuery(t: string): boolean {
+  const s = t.trim().toLowerCase();
+  if (s === "ไอดี" || s === "ไอดีไลน์" || s === "line id" || s === "my line id") return true;
+  return /^#lineid$/i.test(t.trim());
+}
+
 /** ทดสอบช่องแจ้งเตือน (Telegram / Discord / LINE) จากแชท */
 function isWebhookPushTestQuery(t: string): boolean {
   const s = t.trim().toLowerCase();
@@ -214,6 +224,31 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
   const lower = text.toLowerCase();
   if (lower === "help" || lower === "ช่วยเหลือ" || lower === "?") {
     await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: HELP }]);
+    return;
+  }
+
+  if (isLineUserIdQuery(text)) {
+    if (msgEvent.source.type !== "user") {
+      await client.replyMessage(msgEvent.replyToken, [
+        {
+          type: "text",
+          text: "คำสั่งนี้ใช้ได้เฉพาะแชท 1:1 กับ Koji — เปิดแชทส่วนตัวกับบอทแล้วพิมพ์ ไอดีไลน์ อีกครั้ง",
+        },
+      ]);
+      return;
+    }
+    await client.replyMessage(msgEvent.replyToken, [
+      {
+        type: "text",
+        text: [
+          "LINE user id ของคุณ (ใส่ใน env ได้ตรง ๆ):",
+          "",
+          uid,
+          "",
+          "ตัวอย่าง: SPARK_MATRIX_RESET_ALLOWED_USER_IDS=" + uid,
+        ].join("\n"),
+      },
+    ]);
     return;
   }
 
