@@ -21,55 +21,97 @@ type MexcTickerResponse = {
   data?: MexcTickerRow | MexcTickerRow[];
 };
 
+function parseLastPrice(row: MexcTickerRow): number | null {
+  const raw = row.lastPrice as unknown;
+  const p = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(p) || p <= 0) return null;
+  return p;
+}
+
 function rowToQuote(row: MexcTickerRow): CoinQuote | null {
-  const p = row.lastPrice;
-  if (typeof p !== "number" || Number.isNaN(p)) return null;
-  const r = row.riseFallRate;
-  const pct = typeof r === "number" && !Number.isNaN(r) ? r * 100 : undefined;
+  const p = parseLastPrice(row);
+  if (p == null) return null;
+  const r = row.riseFallRate as unknown;
+  const rr = typeof r === "number" ? r : Number(r);
+  const pct = Number.isFinite(rr) && !Number.isNaN(rr) ? rr * 100 : undefined;
   return { usd: p, usd_24h_change: pct };
 }
 
+/** แมป symbol จาก API → คีย์ที่ caller ใช้ (ไม่สนตัวพิมพ์) */
 function normalizeResponse(
   wanted: Set<string>,
   data: MexcTickerRow | MexcTickerRow[] | undefined
 ): Record<string, CoinQuote> {
   const out: Record<string, CoinQuote> = {};
   if (!data) return out;
+  const wantedByUpper = new Map<string, string>();
+  for (const w of wanted) {
+    wantedByUpper.set(w.trim().toUpperCase(), w);
+  }
   const rows = Array.isArray(data) ? data : [data];
   for (const row of rows) {
-    if (!row?.symbol || !wanted.has(row.symbol)) continue;
+    if (!row?.symbol) continue;
+    const key = wantedByUpper.get(row.symbol.trim().toUpperCase());
+    if (!key) continue;
     const q = rowToQuote(row);
-    if (q) out[row.symbol] = q;
+    if (q) out[key] = q;
   }
   return out;
 }
 
-/**
- * ดึงราคา MEXC Futures ตามสัญญา เช่น BTC_USDT
- * - 1 สัญญา: GET พร้อม ?symbol=
- * - หลายสัญญา: GET ทั้งหมดแล้วกรอง (คำขอเดียว)
- */
-export async function fetchSimplePrices(contractSymbols: string[]): Promise<Record<string, CoinQuote>> {
-  const unique = Array.from(new Set(contractSymbols.filter(Boolean)));
-  if (unique.length === 0) return {};
-
-  const wanted = new Set(unique);
-
-  if (unique.length === 1) {
-    const sym = unique[0]!;
+async function fetchContractTickerSingleSymbol(symbol: string): Promise<Record<string, CoinQuote>> {
+  const sym = symbol.trim();
+  if (!sym) return {};
+  const wanted = new Set([sym]);
+  try {
     const { data } = await axios.get<MexcTickerResponse>(MEXC, {
       params: { symbol: sym },
       timeout: 15_000,
     });
     if (!data.success || data.data === undefined) return {};
     return normalizeResponse(wanted, data.data);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * ดึงราคา MEXC Futures ตามสัญญา เช่น BTC_USDT
+ * - 1 สัญญา: GET พร้อม ?symbol=
+ * - หลายสัญญา: GET ทั้งหมดแล้วกรอง — ถ้าไม่เจอในชุดใหญ่ (เช่น alt บางคู่) จะ GET ทีละสัญญาเป็น fallback
+ */
+export async function fetchSimplePrices(contractSymbols: string[]): Promise<Record<string, CoinQuote>> {
+  const unique = Array.from(
+    new Set(contractSymbols.filter(Boolean).map((s) => s.trim()))
+  );
+  if (unique.length === 0) return {};
+
+  const wanted = new Set(unique);
+
+  if (unique.length === 1) {
+    return fetchContractTickerSingleSymbol(unique[0]!);
   }
 
-  const { data } = await axios.get<MexcTickerResponse>(MEXC, {
-    timeout: 30_000,
-  });
-  if (!data.success || data.data === undefined) return {};
-  return normalizeResponse(wanted, data.data);
+  let out: Record<string, CoinQuote> = {};
+  try {
+    const { data } = await axios.get<MexcTickerResponse>(MEXC, {
+      timeout: 30_000,
+    });
+    if (data.success && data.data !== undefined) {
+      out = normalizeResponse(wanted, data.data);
+    }
+  } catch {
+    /* fallback ด้านล่าง */
+  }
+
+  for (const sym of unique) {
+    const q = out[sym];
+    if (q?.usd != null && Number.isFinite(q.usd) && q.usd > 0) continue;
+    const single = await fetchContractTickerSingleSymbol(sym);
+    Object.assign(out, single);
+  }
+
+  return out;
 }
 
 export function formatSignal(change?: number): string {

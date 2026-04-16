@@ -39,17 +39,23 @@ export type SparkFollowUpPending = {
   amount24Usdt: number | null;
   volBand: SparkVolBand;
   mcapBand: SparkMcapBand;
+  /** T+15m หลัง refClose — เก็บสถิติอย่างเดียว (ไม่แจ้งเตือน LINE) */
+  due15Sec: number;
   due30Sec: number;
   due60Sec: number;
   /** เวลาคิวสถิติเงียบ T+2h / T+3h / T+4h นับจาก refCloseSec — เก็บสถิติอย่างเดียว (ไม่แจ้งเตือน) */
   due2hSec: number;
   due3hSec: number;
   due4hSec: number;
+  /** สถิติเงียบ T+15m — ไม่แจ้งเตือน LINE */
+  silent15: boolean;
   sent30: boolean;
   sent60: boolean;
   silent2h: boolean;
   silent3h: boolean;
   silent4h: boolean;
+  price15?: number | null;
+  momentumWon15?: boolean | null;
   price30?: number | null;
   momentumWon30?: boolean | null;
   price60?: number | null;
@@ -81,6 +87,8 @@ export type SparkFollowUpHistoryRow = {
   amount24Usdt: number | null;
   volBand: SparkVolBand;
   mcapBand: SparkMcapBand;
+  price15: number | null;
+  momentumWon15: boolean | null;
   price30: number | null;
   price60: number | null;
   momentumWon30: boolean | null;
@@ -156,6 +164,7 @@ function normalizePending(raw: unknown): SparkFollowUpPending[] {
     const refPrice = Number(o.refPrice);
     const refCloseSec = Number(o.refCloseSec);
     const sparkReturnPct = Number(o.sparkReturnPct);
+    const due15Raw = Number(o.due15Sec);
     const due30Sec = Number(o.due30Sec);
     const due60Sec = Number(o.due60Sec);
     const due2hSec = Number(o.due2hSec);
@@ -172,6 +181,7 @@ function normalizePending(raw: unknown): SparkFollowUpPending[] {
     ) {
       continue;
     }
+    const due15Sec = Number.isFinite(due15Raw) ? due15Raw : refCloseSec + 15 * 60;
     const d2 = Number.isFinite(due2hSec) ? due2hSec : refCloseSec + 2 * 3600;
     const d3 = Number.isFinite(due3hSec) ? due3hSec : refCloseSec + 3 * 3600;
     const d4 = Number.isFinite(due4hSec) ? due4hSec : refCloseSec + 4 * 3600;
@@ -180,6 +190,7 @@ function normalizePending(raw: unknown): SparkFollowUpPending[] {
       typeof amtRaw === "number" && Number.isFinite(amtRaw) && amtRaw >= 0 ? amtRaw : null;
     const volBand = parseVolBand(o.volBand);
     const mcapBand = parseMcapBand(o.mcapBand);
+    const p15 = o.price15;
     const p30 = o.price30;
     const p60 = o.price60;
     const p2 = o.price2h;
@@ -195,16 +206,21 @@ function normalizePending(raw: unknown): SparkFollowUpPending[] {
       amount24Usdt,
       volBand,
       mcapBand,
+      due15Sec,
       due30Sec,
       due60Sec,
       due2hSec: d2,
       due3hSec: d3,
       due4hSec: d4,
+      silent15: o.silent15 === true,
       sent30: o.sent30 === true,
       sent60: o.sent60 === true,
       silent2h: o.silent2h === true,
       silent3h: o.silent3h === true,
       silent4h: o.silent4h === true,
+      price15: typeof p15 === "number" && Number.isFinite(p15) ? p15 : p15 === null ? null : undefined,
+      momentumWon15:
+        o.momentumWon15 === true ? true : o.momentumWon15 === false ? false : o.momentumWon15 === null ? null : undefined,
       price30: typeof p30 === "number" && Number.isFinite(p30) ? p30 : p30 === null ? null : undefined,
       momentumWon30:
         o.momentumWon30 === true ? true : o.momentumWon30 === false ? false : o.momentumWon30 === null ? null : undefined,
@@ -254,6 +270,7 @@ function normalizeHistory(raw: unknown): SparkFollowUpHistoryRow[] {
       typeof amtH === "number" && Number.isFinite(amtH) && amtH >= 0 ? amtH : null;
     const volBand = parseVolBand(o.volBand);
     const mcapBand = parseMcapBand(o.mcapBand);
+    const p15 = o.price15;
     const p30 = o.price30;
     const p60 = o.price60;
     const p2 = o.price2h;
@@ -269,6 +286,9 @@ function normalizeHistory(raw: unknown): SparkFollowUpHistoryRow[] {
       amount24Usdt,
       volBand,
       mcapBand,
+      price15: typeof p15 === "number" && Number.isFinite(p15) ? p15 : null,
+      momentumWon15:
+        o.momentumWon15 === true ? true : o.momentumWon15 === false ? false : null,
       price30: typeof p30 === "number" && Number.isFinite(p30) ? p30 : null,
       price60: typeof p60 === "number" && Number.isFinite(p60) ? p60 : null,
       momentumWon30:
@@ -360,6 +380,7 @@ export async function enqueueSparkFollowUp(input: {
   if (!symbol || !Number.isFinite(barOpen) || !Number.isFinite(refPrice) || refPrice <= 0) return;
 
   const refCloseSec = barOpen + SPARK_BAR_SEC;
+  const due15Sec = refCloseSec + 15 * 60;
   const due30Sec = refCloseSec + 30 * 60;
   const due60Sec = refCloseSec + 60 * 60;
   const due2hSec = refCloseSec + 2 * 3600;
@@ -384,11 +405,13 @@ export async function enqueueSparkFollowUp(input: {
         amount24Usdt: input.amount24Usdt,
         volBand: input.volBand,
         mcapBand: input.mcapBand,
+        due15Sec,
         due30Sec,
         due60Sec,
         due2hSec,
         due3hSec,
         due4hSec,
+        silent15: false,
         sent30: false,
         sent60: false,
         silent2h: false,

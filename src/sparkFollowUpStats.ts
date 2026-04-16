@@ -30,13 +30,17 @@ function rate(won: number, total: number): string {
   return `${((won / total) * 100).toFixed(1)}%`;
 }
 
-type Agg = { t30: number; m30: number; t60: number; m60: number };
+type Agg = { t15: number; m15: number; t30: number; m30: number; t60: number; m60: number };
 
 function emptyAgg(): Agg {
-  return { t30: 0, m30: 0, t60: 0, m60: 0 };
+  return { t15: 0, m15: 0, t30: 0, m30: 0, t60: 0, m60: 0 };
 }
 
 function addMomentum(a: Agg, h: SparkFollowUpHistoryRow): void {
+  if (h.momentumWon15 === true || h.momentumWon15 === false) {
+    a.t15 += 1;
+    if (h.momentumWon15 === true) a.m15 += 1;
+  }
   if (h.momentumWon30 === true || h.momentumWon30 === false) {
     a.t30 += 1;
     if (h.momentumWon30 === true) a.m30 += 1;
@@ -70,7 +74,7 @@ function addLong(a: LongAgg, h: SparkFollowUpHistoryRow): void {
 }
 
 function fmtAggLine(label: string, a: Agg): string {
-  return `• ${label}: 30m ${a.m30}/${a.t30} (${rate(a.m30, a.t30)}) · 1h ${a.m60}/${a.t60} (${rate(a.m60, a.t60)})`;
+  return `• ${label}: 15m ${a.m15}/${a.t15} (${rate(a.m15, a.t15)}) · 30m ${a.m30}/${a.t30} (${rate(a.m30, a.t30)}) · 1h ${a.m60}/${a.t60} (${rate(a.m60, a.t60)})`;
 }
 
 function fmtLongLine(label: string, a: LongAgg): string {
@@ -113,12 +117,75 @@ function horizonCell(wins: number, total: number): SparkHorizonCell {
 
 function horizonsFromAgg(a: Agg, l: LongAgg): Record<SparkHorizonId, SparkHorizonCell> {
   return {
+    m15m: horizonCell(a.m15, a.t15),
     m30m: horizonCell(a.m30, a.t30),
     m1h: horizonCell(a.m60, a.t60),
     m2h: horizonCell(l.m2, l.t2),
     m3h: horizonCell(l.m3, l.t3),
     m4h: horizonCell(l.m4, l.t4),
   };
+}
+
+type AggregatedMatrices = {
+  total: Agg;
+  totalLong: LongAgg;
+  byVol: Record<SparkVolBand, Agg>;
+  byVolLong: Record<SparkVolBand, LongAgg>;
+  byMcap: Record<SparkMcapBand, Agg>;
+  byMcapLong: Record<SparkMcapBand, LongAgg>;
+  upSpark: number;
+  downSpark: number;
+};
+
+function aggregateHistory(history: SparkFollowUpHistoryRow[]): AggregatedMatrices {
+  const total = emptyAgg();
+  const totalLong = emptyLong();
+  let upSpark = 0;
+  let downSpark = 0;
+
+  const byVol: Record<SparkVolBand, Agg> = {
+    high: emptyAgg(),
+    mid: emptyAgg(),
+    low: emptyAgg(),
+    unknown: emptyAgg(),
+  };
+  const byVolLong: Record<SparkVolBand, LongAgg> = {
+    high: emptyLong(),
+    mid: emptyLong(),
+    low: emptyLong(),
+    unknown: emptyLong(),
+  };
+  const byMcap: Record<SparkMcapBand, Agg> = {
+    tier1: emptyAgg(),
+    tier2: emptyAgg(),
+    tier3: emptyAgg(),
+    unknown: emptyAgg(),
+  };
+  const byMcapLong: Record<SparkMcapBand, LongAgg> = {
+    tier1: emptyLong(),
+    tier2: emptyLong(),
+    tier3: emptyLong(),
+    unknown: emptyLong(),
+  };
+
+  for (const h of history) {
+    if (h.sparkReturnPct > 0) upSpark += 1;
+    else if (h.sparkReturnPct < 0) downSpark += 1;
+    addMomentum(total, h);
+    addLong(totalLong, h);
+    const vb = h.volBand ?? "unknown";
+    const mb = h.mcapBand ?? "unknown";
+    if (byVol[vb]) {
+      addMomentum(byVol[vb]!, h);
+      addLong(byVolLong[vb]!, h);
+    }
+    if (byMcap[mb]) {
+      addMomentum(byMcap[mb]!, h);
+      addLong(byMcapLong[mb]!, h);
+    }
+  }
+
+  return { total, totalLong, byVol, byVolLong, byMcap, byMcapLong, upSpark, downSpark };
 }
 
 /** สำหรับ format ข้อความ LINE — ค่าเดียวกับที่ใช้สร้าง matrix */
@@ -170,56 +237,18 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
 
   const emptyGlobal = fires === 0 && pendN === 0 && n === 0;
 
-  const total = emptyAgg();
-  const totalLong = emptyLong();
-  let upSpark = 0;
-  let downSpark = 0;
+  const full = aggregateHistory(history);
+  const upHist = history.filter((h) => h.sparkReturnPct > 0);
+  const downHist = history.filter((h) => h.sparkReturnPct < 0);
+  const sparkUp = aggregateHistory(upHist);
+  const sparkDown = aggregateHistory(downHist);
 
-  const byVol: Record<SparkVolBand, Agg> = {
-    high: emptyAgg(),
-    mid: emptyAgg(),
-    low: emptyAgg(),
-    unknown: emptyAgg(),
-  };
-  const byVolLong: Record<SparkVolBand, LongAgg> = {
-    high: emptyLong(),
-    mid: emptyLong(),
-    low: emptyLong(),
-    unknown: emptyLong(),
-  };
-  const byMcap: Record<SparkMcapBand, Agg> = {
-    tier1: emptyAgg(),
-    tier2: emptyAgg(),
-    tier3: emptyAgg(),
-    unknown: emptyAgg(),
-  };
-  const byMcapLong: Record<SparkMcapBand, LongAgg> = {
-    tier1: emptyLong(),
-    tier2: emptyLong(),
-    tier3: emptyLong(),
-    unknown: emptyLong(),
-  };
-
-  for (const h of history) {
-    if (h.sparkReturnPct > 0) upSpark += 1;
-    else if (h.sparkReturnPct < 0) downSpark += 1;
-    addMomentum(total, h);
-    addLong(totalLong, h);
-    const vb = h.volBand ?? "unknown";
-    const mb = h.mcapBand ?? "unknown";
-    if (byVol[vb]) {
-      addMomentum(byVol[vb]!, h);
-      addLong(byVolLong[vb]!, h);
-    }
-    if (byMcap[mb]) {
-      addMomentum(byMcap[mb]!, h);
-      addLong(byMcapLong[mb]!, h);
-    }
-  }
+  const { total, totalLong, byVol, byVolLong, byMcap, byMcapLong, upSpark, downSpark } = full;
 
   const tail = history.slice(-MAX_LINES).reverse();
   const historyTailLines = tail.map((h) => {
     const base = shortLabel(h.symbol);
+    const w15 = mf(h.momentumWon15);
     const w30 = mf(h.momentumWon30);
     const w1 = mf(h.momentumWon60);
     const w2 = mf(h.momentumWon2h);
@@ -228,22 +257,26 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
     const dt = h.resolvedAtIso.slice(0, 16).replace("T", " ");
     const vTag = volTag(h.volBand ?? "unknown");
     const mTag = mcapTag(h.mcapBand ?? "unknown");
-    return `${dt} [${base}] V${vTag}·M${mTag} 30m:${w30} 1h:${w1} 2h:${w2} 3h:${w3} 4h:${w4} (${h.sparkReturnPct >= 0 ? "+" : ""}${h.sparkReturnPct.toFixed(1)}%)`;
+    return `${dt} [${base}] V${vTag}·M${mTag} 15m:${w15} 30m:${w30} 1h:${w1} 2h:${w2} 3h:${w3} 4h:${w4} (${h.sparkReturnPct >= 0 ? "+" : ""}${h.sparkReturnPct.toFixed(1)}%)`;
   });
 
-  const matrixByVol: SparkMatrixRowVol[] = VOL_ORDER.map((b) => ({
-    band: b,
-    labelTh: volBandLabelTh(b),
-    horizons: horizonsFromAgg(byVol[b]!, byVolLong[b]!),
-  }));
+  const matrixFrom = (agg: AggregatedMatrices): { vol: SparkMatrixRowVol[]; mcap: SparkMatrixRowMcap[]; totalH: Record<SparkHorizonId, SparkHorizonCell> } => ({
+    vol: VOL_ORDER.map((b) => ({
+      band: b,
+      labelTh: volBandLabelTh(b),
+      horizons: horizonsFromAgg(agg.byVol[b]!, agg.byVolLong[b]!),
+    })),
+    mcap: MCAP_ORDER.map((b) => ({
+      band: b,
+      labelTh: mcapBandLabelTh(b),
+      horizons: horizonsFromAgg(agg.byMcap[b]!, agg.byMcapLong[b]!),
+    })),
+    totalH: horizonsFromAgg(agg.total, agg.totalLong),
+  });
 
-  const matrixByMcap: SparkMatrixRowMcap[] = MCAP_ORDER.map((b) => ({
-    band: b,
-    labelTh: mcapBandLabelTh(b),
-    horizons: horizonsFromAgg(byMcap[b]!, byMcapLong[b]!),
-  }));
-
-  const totalHorizons = horizonsFromAgg(total, totalLong);
+  const overall = matrixFrom(full);
+  const upM = matrixFrom(sparkUp);
+  const downM = matrixFrom(sparkDown);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -255,9 +288,15 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
     upSpark,
     downSpark,
     emptyGlobal,
-    matrixByVol,
-    matrixByMcap,
-    totalHorizons,
+    matrixByVol: overall.vol,
+    matrixByMcap: overall.mcap,
+    totalHorizons: overall.totalH,
+    matrixByVolSparkUp: upM.vol,
+    matrixByMcapSparkUp: upM.mcap,
+    totalHorizonsSparkUp: upM.totalH,
+    matrixByVolSparkDown: downM.vol,
+    matrixByMcapSparkDown: downM.mcap,
+    totalHorizonsSparkDown: downM.totalH,
     lineFormatAggs: {
       total,
       totalLong,
@@ -318,14 +357,14 @@ function formatSparkStatsFromPayload(p: SparkStatsPayload): string {
 
   const { total, totalLong, byVol, byVolLong, byMcap, byMcapLong } = p.lineFormatAggs;
 
-  const volSection = VOL_ORDER.filter((b) => (byVol[b]?.t60 ?? 0) > 0 || (byVol[b]?.t30 ?? 0) > 0).map((b) =>
-    fmtAggLine(volBandLabelTh(b), byVol[b]!)
-  );
+  const volSection = VOL_ORDER.filter(
+    (b) => (byVol[b]?.t60 ?? 0) > 0 || (byVol[b]?.t30 ?? 0) > 0 || (byVol[b]?.t15 ?? 0) > 0
+  ).map((b) => fmtAggLine(volBandLabelTh(b), byVol[b]!));
   const volLongSection = VOL_ORDER.filter((b) => (byVolLong[b]?.t4 ?? 0) > 0 || (byVolLong[b]?.t2 ?? 0) > 0).map(
     (b) => fmtLongLine(`${volBandLabelTh(b)} (เงียบ)`, byVolLong[b]!)
   );
   const mcapSection = MCAP_ORDER.filter(
-    (b) => (byMcap[b]?.t60 ?? 0) > 0 || (byMcap[b]?.t30 ?? 0) > 0
+    (b) => (byMcap[b]?.t60 ?? 0) > 0 || (byMcap[b]?.t30 ?? 0) > 0 || (byMcap[b]?.t15 ?? 0) > 0
   ).map((b) => fmtAggLine(mcapBandLabelTh(b), byMcap[b]!));
   const mcapLongSection = MCAP_ORDER.filter(
     (b) => (byMcapLong[b]?.t4 ?? 0) > 0 || (byMcapLong[b]?.t2 ?? 0) > 0
@@ -336,7 +375,7 @@ function formatSparkStatsFromPayload(p: SparkStatsPayload): string {
     "",
     `— สรุป momentum (follow-up จบแล้ว ${p.historyCount} เหตุการณ์ · Spark ขึ้น ${p.upSpark} · ลง ${p.downSpark}) —`,
     "",
-    "— รวม (แจ้งเตือน 30m / 1h) —",
+    "— รวม (สถิติเงียบ 15m · แจ้งเตือน 30m / 1h) —",
     fmtAggLine("ทั้งหมด", total),
     "",
     "— รวม (สถิติเงียบ 2h / 3h / 4h; 1h ดูจากแถวบน) —",

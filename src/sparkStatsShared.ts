@@ -4,11 +4,12 @@
  */
 import type { SparkMcapBand, SparkVolBand } from "./sparkTierContext";
 
-export type SparkHorizonId = "m30m" | "m1h" | "m2h" | "m3h" | "m4h";
+export type SparkHorizonId = "m15m" | "m30m" | "m1h" | "m2h" | "m3h" | "m4h";
 
-export const SPARK_STATS_HORIZON_ORDER: SparkHorizonId[] = ["m30m", "m1h", "m2h", "m3h", "m4h"];
+export const SPARK_STATS_HORIZON_ORDER: SparkHorizonId[] = ["m15m", "m30m", "m1h", "m2h", "m3h", "m4h"];
 
 export const SPARK_STATS_HORIZON_LABELS: Record<SparkHorizonId, string> = {
+  m15m: "15m",
   m30m: "30m",
   m1h: "1h",
   m2h: "2h",
@@ -49,6 +50,14 @@ export type SparkStatsApiPayload = {
   matrixByVol: SparkMatrixRowVol[];
   matrixByMcap: SparkMatrixRowMcap[];
   totalHorizons: Record<SparkHorizonId, SparkHorizonCell>;
+  /** Spark return > 0 */
+  matrixByVolSparkUp: SparkMatrixRowVol[];
+  matrixByMcapSparkUp: SparkMatrixRowMcap[];
+  totalHorizonsSparkUp: Record<SparkHorizonId, SparkHorizonCell>;
+  /** Spark return < 0 */
+  matrixByVolSparkDown: SparkMatrixRowVol[];
+  matrixByMcapSparkDown: SparkMatrixRowMcap[];
+  totalHorizonsSparkDown: Record<SparkHorizonId, SparkHorizonCell>;
   recentFireLines: string[];
   pendingLines: string[];
   historyTailLines: string[];

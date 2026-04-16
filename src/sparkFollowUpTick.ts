@@ -69,6 +69,7 @@ function buildCheckpointMessage(
 
 function isFollowUpComplete(cur: SparkFollowUpPending): boolean {
   return (
+    cur.silent15 &&
     cur.sent30 &&
     cur.sent60 &&
     cur.silent2h &&
@@ -79,6 +80,7 @@ function isFollowUpComplete(cur: SparkFollowUpPending): boolean {
 
 /** มี checkpoint ใดถึงกำหนดในรอบนี้ (ต้องดึงราคา) */
 function pendingHasDueCheckpoint(p: SparkFollowUpPending, nowSec: number): boolean {
+  if (!p.silent15 && nowSec >= p.due15Sec) return true;
   if (!p.sent30 && nowSec >= p.due30Sec) return true;
   if (!p.sent60 && nowSec >= p.due60Sec) return true;
   if (p.sent60 && !p.silent2h && nowSec >= p.due2hSec) return true;
@@ -178,6 +180,19 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       }
     };
 
+    /** สถิติเงียบ T+15m — ไม่แจ้งเตือน */
+    const runSilent15 = async (): Promise<void> => {
+      const endPrice = await snapUsd();
+      const won = momentumOutcome(cur.refPrice, cur.sparkReturnPct, endPrice);
+      checkpoints += 1;
+      cur = {
+        ...cur,
+        silent15: true,
+        price15: endPrice,
+        momentumWon15: won,
+      };
+    };
+
     /** สถิติเงียบ T+2h / T+3h / T+4h — ไม่แจ้งเตือน */
     const runSilent = async (slot: "2h" | "3h" | "4h"): Promise<void> => {
       const endPrice = await snapUsd();
@@ -206,6 +221,10 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
         };
       }
     };
+
+    if (!cur.silent15 && nowSec >= cur.due15Sec) {
+      await runSilent15();
+    }
 
     if (!cur.sent30 && nowSec >= cur.due30Sec) {
       await runCheckpoint("30");
@@ -236,6 +255,8 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
         amount24Usdt: cur.amount24Usdt ?? null,
         volBand: cur.volBand,
         mcapBand: cur.mcapBand,
+        price15: cur.price15 ?? null,
+        momentumWon15: cur.momentumWon15 ?? null,
         price30: cur.price30 ?? null,
         price60: cur.price60 ?? null,
         momentumWon30: cur.momentumWon30 ?? null,

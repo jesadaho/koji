@@ -136,7 +136,7 @@ function WinRateMatrixTable({
         </span>
       </h2>
       <p className="sub" style={{ marginTop: 0 }}>
-        Momentum win rate ตามจุดวัดผลหลังจุดอ้างอิงเวลา (แถว = กลุ่ม · คอลัมน์ = T+30m … T+4h; อ้าง last + timestamp / series ไม่ใช่ TF)
+        Momentum win rate ตามจุดวัดผลหลังจุดอ้างอิงเวลา (แถว = กลุ่ม · คอลัมน์ = T+15m … T+4h; 15m = สถิติเงียบ · อ้าง last + timestamp / series ไม่ใช่ TF)
       </p>
       <div className="sparkMatrixScroll">
         <table className="sparkMatrixTable">
@@ -427,6 +427,69 @@ export default function SparkStatsLiff() {
               titleEn="By mcap proxy"
               rows={payload.matrixByMcap}
             />
+
+            <h2 style={{ marginTop: "1.25rem", marginBottom: "0.35rem" }}>
+              Spark ขึ้น (return &gt; 0)
+              <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
+                Spark up only
+              </span>
+            </h2>
+            <div className="sparkMatrixScroll">
+              <table className="sparkMatrixTable sparkMatrixTable--compact">
+                <thead>
+                  <tr>
+                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
+                      <th key={hid} scope="col">
+                        {SPARK_STATS_HORIZON_LABELS[hid]}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
+                      <td key={hid}>
+                        <MatrixCell cell={payload.totalHorizonsSparkUp[hid]} />
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <WinRateMatrixTable title="Vol — Spark ขึ้น" titleEn="By volume (up)" rows={payload.matrixByVolSparkUp} />
+            <WinRateMatrixTable title="มาร์ก. — Spark ขึ้น" titleEn="By mcap (up)" rows={payload.matrixByMcapSparkUp} />
+
+            <h2 style={{ marginTop: "1.25rem", marginBottom: "0.35rem" }}>
+              Spark ลง (return &lt; 0)
+              <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
+                Spark down only
+              </span>
+            </h2>
+            <div className="sparkMatrixScroll">
+              <table className="sparkMatrixTable sparkMatrixTable--compact">
+                <thead>
+                  <tr>
+                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
+                      <th key={hid} scope="col">
+                        {SPARK_STATS_HORIZON_LABELS[hid]}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
+                      <td key={hid}>
+                        <MatrixCell cell={payload.totalHorizonsSparkDown[hid]} />
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <WinRateMatrixTable title="Vol — Spark ลง" titleEn="By volume (down)" rows={payload.matrixByVolSparkDown} />
+            <WinRateMatrixTable title="มาร์ก. — Spark ลง" titleEn="By mcap (down)" rows={payload.matrixByMcapSparkDown} />
+
             <p className="sub" style={{ marginTop: "1rem" }}>
               หมายเหตุ: มาร์ก. ไม่ใช่ CoinGecko — จัดกลุ่มจากฐานสินทรัพย์ (BTC/ETH · tier2 env · อื่นๆ) เหมือนข้อความคำสั่ง
               &quot;สถิติ spark&quot;
