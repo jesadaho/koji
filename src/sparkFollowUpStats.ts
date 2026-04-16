@@ -205,19 +205,16 @@ function aggregateHistory(history: SparkFollowUpHistoryRow[]): AggregatedMatrice
 }
 
 function buildMatrixRowsBySymbol(rows: SparkFollowUpHistoryRow[]): SparkSymbolMatrixRow[] {
-  const bySym = new Map<string, SparkFollowUpHistoryRow[]>();
+  const bySym: Record<string, SparkFollowUpHistoryRow[]> = {};
   for (const h of rows) {
     const sym = typeof h.symbol === "string" ? h.symbol.trim() : "";
     if (!sym) continue;
-    let list = bySym.get(sym);
-    if (!list) {
-      list = [];
-      bySym.set(sym, list);
-    }
-    list.push(h);
+    if (!bySym[sym]) bySym[sym] = [];
+    bySym[sym]!.push(h);
   }
   const out: SparkSymbolMatrixRow[] = [];
-  for (const [symbol, symRows] of bySym) {
+  for (const symbol of Object.keys(bySym)) {
+    const symRows = bySym[symbol]!;
     const full = aggregateHistory(symRows);
     const totalH = horizonsFromAgg(full.total, full.totalLong);
     out.push({
