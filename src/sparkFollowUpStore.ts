@@ -361,6 +361,16 @@ export async function saveSparkFollowUpState(state: SparkFollowUpState): Promise
   await writeFile(filePath, JSON.stringify(payload, null, 2), "utf-8");
 }
 
+const EMPTY_SPARK_STATE: SparkFollowUpState = { pending: [], history: [], recentSparks: [] };
+
+/**
+ * ล้าง state Spark ทั้งหมด (คิว follow-up · history สถิติ matrix · recentSparks / fire log)
+ * KV key `koji:spark_follow_up_state` หรือไฟล์ data/spark_follow_up_state.json
+ */
+export async function resetSparkFollowUpState(): Promise<void> {
+  await saveSparkFollowUpState(EMPTY_SPARK_STATE);
+}
+
 /** หลังแจ้ง Spark สำเร็จ — ยึด timestamp/series slot (refCloseSec) เป็นจุดนับ T+30m / T+1h … ไม่ใช่ TF กราฟ */
 export async function enqueueSparkFollowUp(input: {
   symbol: string;
