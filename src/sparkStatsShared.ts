@@ -36,6 +36,15 @@ export type SparkMatrixRowMcap = {
   horizons: Record<SparkHorizonId, SparkHorizonCell>;
 };
 
+/** ชื่อเหรียญ (สั้น) + จำนวนครั้งที่ปรากฏใน log / history */
+export type SparkSymbolCount = {
+  /** สัญลักษณ์สัญญา เช่น BTC_USDT — ใช้เป็น key */
+  symbol: string;
+  /** แสดงผล เช่น BTC */
+  label: string;
+  count: number;
+};
+
 /** ค่าที่ส่งออกทาง API LIFF (ไม่รวม aggregates ภายในสำหรับข้อความ LINE) */
 export type SparkStatsApiPayload = {
   generatedAt: string;
@@ -61,4 +70,8 @@ export type SparkStatsApiPayload = {
   recentFireLines: string[];
   pendingLines: string[];
   historyTailLines: string[];
+  /** นับจาก Spark fire log (รายการล่าสุดตาม env — อาจไม่ครบ lifetime) */
+  sparkFireLogBySymbol: SparkSymbolCount[];
+  /** นับจาก follow-up ที่จบแล้ว (เหตุการณ์ละ 1 แถว) */
+  followUpHistoryBySymbol: SparkSymbolCount[];
 };

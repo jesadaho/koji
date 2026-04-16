@@ -8,6 +8,7 @@ import {
   SPARK_STATS_HORIZON_ORDER,
   type SparkHorizonId,
   type SparkStatsApiPayload,
+  type SparkSymbolCount,
 } from "@/src/sparkStatsShared";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");

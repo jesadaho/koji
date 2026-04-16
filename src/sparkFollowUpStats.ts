@@ -8,6 +8,7 @@ import type {
   SparkMatrixRowMcap,
   SparkMatrixRowVol,
   SparkStatsApiPayload,
+  SparkSymbolCount,
 } from "./sparkStatsShared";
 import { SPARK_STATS_HORIZON_ORDER } from "./sparkStatsShared";
 
@@ -17,12 +18,25 @@ export type {
   SparkMatrixRowMcap,
   SparkMatrixRowVol,
   SparkStatsApiPayload,
+  SparkSymbolCount,
 } from "./sparkStatsShared";
 export { SPARK_STATS_HORIZON_LABELS, SPARK_STATS_HORIZON_ORDER } from "./sparkStatsShared";
 
 function shortLabel(contractSymbol: string): string {
   const s = contractSymbol.replace(/_USDT$/i, "").trim();
   return s.replace(/_/g, "") || contractSymbol;
+}
+
+function aggregateSymbolCounts(rows: { symbol: string }[]): SparkSymbolCount[] {
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const sym = typeof r.symbol === "string" ? r.symbol.trim() : "";
+    if (!sym) continue;
+    map.set(sym, (map.get(sym) ?? 0) + 1);
+  }
+  return Array.from(map.entries())
+    .map(([symbol, count]) => ({ symbol, label: shortLabel(symbol), count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 function rate(won: number, total: number): string {
@@ -278,6 +292,9 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
   const upM = matrixFrom(sparkUp);
   const downM = matrixFrom(sparkDown);
 
+  const sparkFireLogBySymbol = aggregateSymbolCounts(recentSparks);
+  const followUpHistoryBySymbol = aggregateSymbolCounts(history);
+
   return {
     generatedAt: new Date().toISOString(),
     historyCount: n,
@@ -308,6 +325,8 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
     recentFireLines,
     pendingLines,
     historyTailLines,
+    sparkFireLogBySymbol,
+    followUpHistoryBySymbol,
   };
 }
 

@@ -421,6 +421,47 @@ code {
   line-height: 1.35;
 }
 
+.sparkSymbolCountSection {
+  margin-top: 1rem;
+}
+
+.sparkSymbolCountSection h3 {
+  margin: 0 0 0.15rem;
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.sparkSymbolCountTable {
+  width: 100%;
+  min-width: 12rem;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  margin-top: 0.35rem;
+}
+
+.sparkSymbolCountTable th,
+.sparkSymbolCountTable td {
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.45rem;
+  vertical-align: middle;
+}
+
+.sparkSymbolCountTable thead th {
+  background: color-mix(in srgb, var(--card) 88%, var(--border));
+  font-weight: 600;
+}
+
+.sparkSymbolCountTable th[scope="row"] {
+  text-align: left;
+  font-weight: 600;
+}
+
+.sparkSymbolCountTable td:last-child {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .sparkStatsRefreshBtn {
   width: auto;
   max-width: 12rem;
