@@ -326,6 +326,10 @@ export default function SettingsLiffApp() {
           |
         </span>
         <Link href="/markets">Markets Top 50</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/spark-stats">สถิติ Spark · Matrix</Link>
       </p>
 
       <div className="card">

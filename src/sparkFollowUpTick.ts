@@ -1,6 +1,6 @@
 import type { Client } from "@line/bot-sdk";
 import { sendAlertNotification } from "./alertNotify";
-import { fetchSimplePrices } from "./cryptoService";
+import { fetchSimplePrices, type CoinQuote } from "./cryptoService";
 import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
 import {
   loadSparkFollowUpState,
@@ -57,10 +57,9 @@ function buildCheckpointMessage(
 ): string {
   const base = shortLabel(symbol);
   const sparkUp = sparkReturnPct > 0;
-  const label = which === "30m" ? "T+30m" : "T+1h";
   const pctStr = `${sparkReturnPct >= 0 ? "+" : ""}${sparkReturnPct.toFixed(1)}%`;
   return [
-    `📍 Koji Spark follow-up (${label})`,
+    `📍 Koji Spark follow-up (${which === "30m" ? "T+30m" : "T+1h"})`,
     `[${base}]/USDT · Spark ${pctStr}`,
     `อ้างอิงราคา: ${formatPriceUsd(refPrice)} (last + timestamp จาก series — ไม่ใช่ TF กราฟ)`,
     `ราคาปัจจุบัน: ${endPrice != null ? formatPriceUsd(endPrice) : "—"}`,
@@ -76,6 +75,30 @@ function isFollowUpComplete(cur: SparkFollowUpPending): boolean {
     cur.silent3h &&
     cur.silent4h
   );
+}
+
+/** มี checkpoint ใดถึงกำหนดในรอบนี้ (ต้องดึงราคา) */
+function pendingHasDueCheckpoint(p: SparkFollowUpPending, nowSec: number): boolean {
+  if (!p.sent30 && nowSec >= p.due30Sec) return true;
+  if (!p.sent60 && nowSec >= p.due60Sec) return true;
+  if (p.sent60 && !p.silent2h && nowSec >= p.due2hSec) return true;
+  if (p.sent60 && !p.silent3h && nowSec >= p.due3hSec) return true;
+  if (p.sent60 && !p.silent4h && nowSec >= p.due4hSec) return true;
+  return false;
+}
+
+async function usdForSymbol(symbol: string, cache: Record<string, CoinQuote>): Promise<number | null> {
+  const q = cache[symbol];
+  if (q?.usd != null && Number.isFinite(q.usd)) return q.usd;
+  try {
+    const r = await fetchSimplePrices([symbol]);
+    Object.assign(cache, r);
+    const q2 = cache[symbol];
+    return q2?.usd != null && Number.isFinite(q2.usd) ? q2.usd : null;
+  } catch (e) {
+    console.error("[sparkFollowUpTick] price fetch", symbol, e);
+    return null;
+  }
 }
 
 export async function runSparkFollowUpTick(client: Client): Promise<{
@@ -95,15 +118,35 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
   let checkpoints = 0;
   let resolvedEvents = 0;
 
+  const symbolsThisTick = new Set<string>();
+  for (const p of state.pending) {
+    if (pendingHasDueCheckpoint(p, nowSec)) symbolsThisTick.add(p.symbol);
+  }
+
+  let quoteCache: Record<string, CoinQuote> = {};
+  if (symbolsThisTick.size > 0) {
+    try {
+      quoteCache = await fetchSimplePrices([...symbolsThisTick]);
+    } catch (e) {
+      console.error("[sparkFollowUpTick] batch price fetch", e);
+    }
+  }
+
   const nextPending: SparkFollowUpPending[] = [];
 
   for (const p of state.pending) {
     let cur: SparkFollowUpPending = { ...p };
+    /** ราคา snapshot รอบเดียวต่อ 1 pending — ใช้ร่วม T+30m … T+4h ในรอบเดียวกัน */
+    let rowPrice: number | null | undefined;
+
+    const snapUsd = async (): Promise<number | null> => {
+      if (rowPrice !== undefined) return rowPrice;
+      rowPrice = await usdForSymbol(cur.symbol, quoteCache);
+      return rowPrice;
+    };
 
     const runCheckpoint = async (kind: "30" | "60"): Promise<void> => {
-      const quotes = await fetchSimplePrices([cur.symbol]);
-      const q = quotes[cur.symbol];
-      const endPrice = q?.usd != null && Number.isFinite(q.usd) ? q.usd : null;
+      const endPrice = await snapUsd();
       const won = momentumOutcome(cur.refPrice, cur.sparkReturnPct, endPrice);
       const which: "30m" | "1h" = kind === "30" ? "30m" : "1h";
       const body = buildCheckpointMessage(which, cur.symbol, cur.refPrice, endPrice, cur.sparkReturnPct, won);
@@ -137,9 +180,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
 
     /** สถิติเงียบ T+2h / T+3h / T+4h — ไม่แจ้งเตือน */
     const runSilent = async (slot: "2h" | "3h" | "4h"): Promise<void> => {
-      const quotes = await fetchSimplePrices([cur.symbol]);
-      const q = quotes[cur.symbol];
-      const endPrice = q?.usd != null && Number.isFinite(q.usd) ? q.usd : null;
+      const endPrice = await snapUsd();
       const won = momentumOutcome(cur.refPrice, cur.sparkReturnPct, endPrice);
       checkpoints += 1;
       if (slot === "2h") {

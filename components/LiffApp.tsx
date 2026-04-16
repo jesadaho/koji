@@ -768,6 +768,17 @@ export default function LiffApp() {
     <>
       <h1>Koji</h1>
       <p className="sub">{welcome}</p>
+      <p className="sub liffQuickNav">
+        <Link href="/markets">Markets</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/spark-stats">สถิติ Spark · Matrix</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/settings">Settings</Link>
+      </p>
 
       <div className="card">
         <div

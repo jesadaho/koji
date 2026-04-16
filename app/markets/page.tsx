@@ -177,8 +177,16 @@ export default async function MarketsPage({
         </div>
       )}
 
-      <p style={{ marginTop: "1rem" }}>
-        <Link href="/">← กลับหน้าแจ้งเตือน</Link>
+      <p className="sub liffQuickNav" style={{ marginTop: "1rem" }}>
+        <Link href="/">← หน้าแจ้งเตือน</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/spark-stats">สถิติ Spark · Matrix</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/settings">Settings</Link>
       </p>
     </main>
   );

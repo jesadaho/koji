@@ -360,11 +360,19 @@ export default function SparkStatsLiff() {
         </span>
       </p>
       <p className="sub liffQuickNav">
-        <Link href="/">หน้าแจ้งเตือน</Link>
+        <Link href="/">เปิดแอป</Link>
         <span className="siteNavSep" aria-hidden>
           |
         </span>
         <Link href="/markets">Markets</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <strong aria-current="page">สถิติ Spark · Matrix</strong>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/markets?sort=funding">Top Funding</Link>
         <span className="siteNavSep" aria-hidden>
           |
         </span>
