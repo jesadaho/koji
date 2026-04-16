@@ -1,4 +1,4 @@
-import type { SparkFollowUpHistoryRow } from "./sparkFollowUpStore";
+import type { SparkFollowUpHistoryRow, SparkFollowUpState } from "./sparkFollowUpStore";
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import type { SparkMcapBand, SparkVolBand } from "./sparkTierContext";
 import { mcapBandLabelTh, volBandLabelTh } from "./sparkTierContext";
@@ -84,19 +84,125 @@ function mf(w: boolean | null | undefined): string {
 }
 
 const MAX_LINES = 14;
+const MAX_FIRE_LINES = 20;
 
-/** สรุปสถิติ Spark follow-up จาก history ใน store — แยก section ตาม Vol 24h และมาร์ก. (พร็อกซี) */
-export async function formatSparkStatsMessage(): Promise<string> {
-  const { history } = await loadSparkFollowUpState();
+/** Horizon keys for win-rate matrix + API (30m … 4h momentum) */
+export type SparkHorizonId = "m30m" | "m1h" | "m2h" | "m3h" | "m4h";
+
+export const SPARK_STATS_HORIZON_ORDER: SparkHorizonId[] = ["m30m", "m1h", "m2h", "m3h", "m4h"];
+
+export const SPARK_STATS_HORIZON_LABELS: Record<SparkHorizonId, string> = {
+  m30m: "30m",
+  m1h: "1h",
+  m2h: "2h",
+  m3h: "3h",
+  m4h: "4h",
+};
+
+export type SparkHorizonCell = {
+  wins: number;
+  total: number;
+  /** 0–100 หรือ null เมื่อ total === 0 */
+  rate: number | null;
+};
+
+function horizonCell(wins: number, total: number): SparkHorizonCell {
+  return {
+    wins,
+    total,
+    rate: total <= 0 ? null : (wins / total) * 100,
+  };
+}
+
+function horizonsFromAgg(a: Agg, l: LongAgg): Record<SparkHorizonId, SparkHorizonCell> {
+  return {
+    m30m: horizonCell(a.m30, a.t30),
+    m1h: horizonCell(a.m60, a.t60),
+    m2h: horizonCell(l.m2, l.t2),
+    m3h: horizonCell(l.m3, l.t3),
+    m4h: horizonCell(l.m4, l.t4),
+  };
+}
+
+export type SparkMatrixRowVol = {
+  band: SparkVolBand;
+  labelTh: string;
+  horizons: Record<SparkHorizonId, SparkHorizonCell>;
+};
+
+export type SparkMatrixRowMcap = {
+  band: SparkMcapBand;
+  labelTh: string;
+  horizons: Record<SparkHorizonId, SparkHorizonCell>;
+};
+
+/** สำหรับ format ข้อความ LINE — ค่าเดียวกับที่ใช้สร้าง matrix */
+export type SparkStatsLineFormatAggs = {
+  total: Agg;
+  totalLong: LongAgg;
+  byVol: Record<SparkVolBand, Agg>;
+  byVolLong: Record<SparkVolBand, LongAgg>;
+  byMcap: Record<SparkMcapBand, Agg>;
+  byMcapLong: Record<SparkMcapBand, LongAgg>;
+};
+
+/** ค่าที่ส่งออกทาง API LIFF (ไม่รวม aggregates ภายในสำหรับข้อความ LINE) */
+export type SparkStatsApiPayload = Omit<SparkStatsPayload, "lineFormatAggs">;
+
+export type SparkStatsPayload = {
+  generatedAt: string;
+  historyCount: number;
+  pendingCount: number;
+  fireLogCount: number;
+  upFire: number;
+  downFire: number;
+  upSpark: number;
+  downSpark: number;
+  /** true เมื่อไม่มี log spark, pending, history — ข้อความพิเศษ */
+  emptyGlobal: boolean;
+  matrixByVol: SparkMatrixRowVol[];
+  matrixByMcap: SparkMatrixRowMcap[];
+  totalHorizons: Record<SparkHorizonId, SparkHorizonCell>;
+  lineFormatAggs: SparkStatsLineFormatAggs;
+  recentFireLines: string[];
+  pendingLines: string[];
+  historyTailLines: string[];
+};
+
+/**
+ * สรุปสถิติ Spark + follow-up เป็น JSON (ใช้ LIFF / LINE ร่วมกัน)
+ */
+export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPayload {
+  const { history, pending, recentSparks = [] } = state;
   const n = history.length;
-  if (n === 0) {
-    return [
-      "📊 สถิติ Spark follow-up",
-      "",
-      "ยังไม่มีเหตุการณ์ที่จบครบ",
-      "(T+30m · T+1h แจ้งเตือน + สถิติเงียบ T+2h · T+3h · T+4h)",
-    ].join("\n");
+  const fires = recentSparks.length;
+  const pendN = pending.length;
+
+  let upFire = 0;
+  let downFire = 0;
+  for (const r of recentSparks) {
+    if (r.sparkReturnPct > 0) upFire += 1;
+    else if (r.sparkReturnPct < 0) downFire += 1;
   }
+
+  const fireTail = recentSparks.slice(-MAX_FIRE_LINES).reverse();
+  const recentFireLines = fireTail.map((r) => {
+    const base = shortLabel(r.symbol);
+    const dt = r.atIso.slice(0, 16).replace("T", " ");
+    const vTag = volTag(r.volBand ?? "unknown");
+    const mTag = mcapTag(r.mcapBand ?? "unknown");
+    return `${dt} [${base}] V${vTag}·M${mTag} (${r.sparkReturnPct >= 0 ? "+" : ""}${r.sparkReturnPct.toFixed(1)}%)`;
+  });
+
+  const pendingLines =
+    pendN > 0
+      ? pending.slice(-10).map((p) => {
+          const base = shortLabel(p.symbol);
+          return `• [${base}] รอ follow-up… (สัญญาณ ${p.sparkReturnPct >= 0 ? "+" : ""}${p.sparkReturnPct.toFixed(1)}%)`;
+        })
+      : [];
+
+  const emptyGlobal = fires === 0 && pendN === 0 && n === 0;
 
   const total = emptyAgg();
   const totalLong = emptyLong();
@@ -146,7 +252,7 @@ export async function formatSparkStatsMessage(): Promise<string> {
   }
 
   const tail = history.slice(-MAX_LINES).reverse();
-  const lines = tail.map((h) => {
+  const historyTailLines = tail.map((h) => {
     const base = shortLabel(h.symbol);
     const w30 = mf(h.momentumWon30);
     const w1 = mf(h.momentumWon60);
@@ -158,6 +264,94 @@ export async function formatSparkStatsMessage(): Promise<string> {
     const mTag = mcapTag(h.mcapBand ?? "unknown");
     return `${dt} [${base}] V${vTag}·M${mTag} 30m:${w30} 1h:${w1} 2h:${w2} 3h:${w3} 4h:${w4} (${h.sparkReturnPct >= 0 ? "+" : ""}${h.sparkReturnPct.toFixed(1)}%)`;
   });
+
+  const matrixByVol: SparkMatrixRowVol[] = VOL_ORDER.map((b) => ({
+    band: b,
+    labelTh: volBandLabelTh(b),
+    horizons: horizonsFromAgg(byVol[b]!, byVolLong[b]!),
+  }));
+
+  const matrixByMcap: SparkMatrixRowMcap[] = MCAP_ORDER.map((b) => ({
+    band: b,
+    labelTh: mcapBandLabelTh(b),
+    horizons: horizonsFromAgg(byMcap[b]!, byMcapLong[b]!),
+  }));
+
+  const totalHorizons = horizonsFromAgg(total, totalLong);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    historyCount: n,
+    pendingCount: pendN,
+    fireLogCount: fires,
+    upFire,
+    downFire,
+    upSpark,
+    downSpark,
+    emptyGlobal,
+    matrixByVol,
+    matrixByMcap,
+    totalHorizons,
+    lineFormatAggs: {
+      total,
+      totalLong,
+      byVol,
+      byVolLong,
+      byMcap,
+      byMcapLong,
+    },
+    recentFireLines,
+    pendingLines,
+    historyTailLines,
+  };
+}
+
+/** สำหรับ API LIFF — ไม่ส่ง lineFormatAggs */
+export function buildSparkStatsApiPayload(state: SparkFollowUpState): SparkStatsApiPayload {
+  const p = buildSparkStatsPayload(state);
+  const copy = { ...p } as SparkStatsPayload & { lineFormatAggs?: SparkStatsLineFormatAggs };
+  delete copy.lineFormatAggs;
+  return copy as SparkStatsApiPayload;
+}
+
+function formatSparkStatsFromPayload(p: SparkStatsPayload): string {
+  const headerParts: string[] = [
+    "📊 สถิติ Spark",
+    `แจ้ง Spark แล้ว (log): ${p.fireLogCount} ครั้ง (ขึ้น ${p.upFire} · ลง ${p.downFire})`,
+  ];
+  if (p.pendingCount > 0) {
+    headerParts.push(
+      `กำลังติดตาม follow-up: ${p.pendingCount} เหตุการณ์ (ครบ ~4 ชม. หลังสัญญาณจึงเข้าสรุป momentum)`
+    );
+  }
+  if (p.emptyGlobal) {
+    return [
+      ...headerParts,
+      "",
+      "ยังไม่มี log Spark — หลังแจ้งเตือนสำเร็จจะบันทึกที่นี่",
+      "(ต้องมี Redis/KV บน Vercel ให้ state เก็บได้)",
+    ].join("\n");
+  }
+
+  if (p.fireLogCount > 0) {
+    headerParts.push(
+      "",
+      `— Spark ที่จับได้ (ล่าสุด ${Math.min(p.fireLogCount, MAX_FIRE_LINES)} รายการ) —`,
+      ...p.recentFireLines
+    );
+  }
+
+  if (p.historyCount === 0) {
+    return [
+      ...headerParts,
+      "",
+      "— สรุป momentum (หลัง follow-up จบ) —",
+      "ยังไม่มีเหตุการณ์ที่จบครบ T+30m … T+4h — รอเวลาหลังสัญญาณ",
+      ...(p.pendingLines.length > 0 ? ["", "— คิวติดตาม —", ...p.pendingLines] : []),
+    ].join("\n");
+  }
+
+  const { total, totalLong, byVol, byVolLong, byMcap, byMcapLong } = p.lineFormatAggs;
 
   const volSection = VOL_ORDER.filter((b) => (byVol[b]?.t60 ?? 0) > 0 || (byVol[b]?.t30 ?? 0) > 0).map((b) =>
     fmtAggLine(volBandLabelTh(b), byVol[b]!)
@@ -173,13 +367,14 @@ export async function formatSparkStatsMessage(): Promise<string> {
   ).map((b) => fmtLongLine(`${mcapBandLabelTh(b)} (เงียบ)`, byMcapLong[b]!));
 
   return [
-    "📊 สถิติ Spark follow-up",
-    `เหตุการณ์ในประวัติ: ${n} (Spark ขึ้น ${upSpark} · ลง ${downSpark})`,
+    ...headerParts,
+    "",
+    `— สรุป momentum (follow-up จบแล้ว ${p.historyCount} เหตุการณ์ · Spark ขึ้น ${p.upSpark} · ลง ${p.downSpark}) —`,
     "",
     "— รวม (แจ้งเตือน 30m / 1h) —",
     fmtAggLine("ทั้งหมด", total),
     "",
-    "— รวม (สถิติเงียบ 2h / 3h / 4h หลังปิดแท่ง; 1h ดูจากแถวบน) —",
+    "— รวม (สถิติเงียบ 2h / 3h / 4h; 1h ดูจากแถวบน) —",
     fmtLongLine("ทั้งหมด", totalLong),
     "",
     "— ตาม Vol 24h —",
@@ -195,7 +390,14 @@ export async function formatSparkStatsMessage(): Promise<string> {
     "",
     "M = momentum ชนะ · F = fade ชนะ · ? = ไม่มีราคา",
     "",
-    `ล่าสุด (สูงสุด ${MAX_LINES} รายการ):`,
-    ...lines,
+    `ล่าสุด follow-up จบแล้ว (สูงสุด ${MAX_LINES} รายการ):`,
+    ...p.historyTailLines,
+    ...(p.pendingLines.length > 0 ? ["", "— คิวติดตาม —", ...p.pendingLines] : []),
   ].join("\n");
+}
+
+/** สรุปสถิติ Spark + follow-up */
+export async function formatSparkStatsMessage(): Promise<string> {
+  const state = await loadSparkFollowUpState();
+  return formatSparkStatsFromPayload(buildSparkStatsPayload(state));
 }

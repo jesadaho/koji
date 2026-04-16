@@ -43,6 +43,8 @@ import {
   getVolumeSignalMinAbsReturnPctDisplay,
   getVolumeSignalMinVolRatioDisplay,
 } from "./volumeSignalAlertTick";
+import { loadSparkFollowUpState } from "./sparkFollowUpStore";
+import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
 
 export function getLiffConfig() {
   return {
@@ -654,4 +656,10 @@ export async function liffDeleteIndicatorAlert(
     return { status: 404, json: { error: "ไม่พบรายการ" } };
   }
   return { status: 204 };
+}
+
+/** สถิติ Spark (global) — ไม่มี userId แต่ต้องผ่าน LIFF auth */
+export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
+  const state = await loadSparkFollowUpState();
+  return buildSparkStatsApiPayload(state);
 }

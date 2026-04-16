@@ -25,6 +25,7 @@ import {
   liffListIndicatorAlerts,
   liffSyncIndicatorAlerts,
   liffDeleteIndicatorAlert,
+  liffGetSparkStats,
 } from "@/src/liffService";
 
 export const dynamic = "force-dynamic";
@@ -95,6 +96,15 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const auth = await authenticateLiffRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       return json(await liffListIndicatorAlerts(auth.userId));
+    }
+    if (segs.length === 1 && a === "spark-stats") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const data = await liffGetSparkStats();
+      return NextResponse.json(data, {
+        status: 200,
+        headers: { "Cache-Control": "no-store" },
+      });
     }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);

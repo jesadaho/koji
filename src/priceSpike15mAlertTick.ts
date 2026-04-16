@@ -8,9 +8,9 @@ import {
   savePriceSpike15mAlertState,
   type PriceSpike15mAlertState,
 } from "./priceSpike15mAlertStateStore";
-import { enqueueSparkFollowUp } from "./sparkFollowUpStore";
+import { appendSparkFireLog, enqueueSparkFollowUp } from "./sparkFollowUpStore";
 
-/** ให้สอดคล้องกับ follow-up (refClose = barOpen + 5m) */
+/** ให้สอดคล้องกับ follow-up scheduler (anchor: barOpen + SPARK_BAR_SEC วินาที — ไม่ใช่ TF chart) */
 const SPARK_SIGNAL_BAR_SEC = 300;
 
 function enabled(): boolean {
@@ -19,9 +19,25 @@ function enabled(): boolean {
   return true;
 }
 
-function minAbsPct(): number {
-  const n = Number(process.env.PRICE_SPIKE_15M_MIN_PCT?.trim());
-  return Number.isFinite(n) && n > 0 ? n : 10;
+/** ขาขึ้น: ต้อง ≥ นี้ (default 10%) */
+function minPctUp(): number {
+  const n = Number(process.env.PRICE_SPIKE_MIN_PCT_UP?.trim());
+  if (Number.isFinite(n) && n > 0) return n;
+  const legacy = Number(process.env.PRICE_SPIKE_15M_MIN_PCT?.trim());
+  if (Number.isFinite(legacy) && legacy > 0) return legacy;
+  return 10;
+}
+
+/** ขาลง: |%| ต้อง ≥ นี้ (default 7%) */
+function minPctDown(): number {
+  const n = Number(process.env.PRICE_SPIKE_MIN_PCT_DOWN?.trim());
+  return Number.isFinite(n) && n > 0 ? n : 7;
+}
+
+function sparkReturnPassesThreshold(returnPct: number): boolean {
+  if (returnPct > 0) return returnPct >= minPctUp();
+  if (returnPct < 0) return Math.abs(returnPct) >= minPctDown();
+  return false;
 }
 
 /** ช่วงเทียบ % ระหว่างราคา last สองครั้ง (วินาที) — default 300 = 5 นาที */
@@ -111,7 +127,6 @@ export async function runPriceSpike15mAlertTick(
     return { notifiedPushes: 0, symbolsHit: 0 };
   }
 
-  const threshold = minAbsPct();
   const windowSec = signalWindowSec();
   const limit = topN();
   const symbols = await getTopUsdtSymbolsByAmount24(limit);
@@ -147,7 +162,7 @@ export async function runPriceSpike15mAlertTick(
     }
 
     const returnPct = ((p - st.checkpointPrice) / st.checkpointPrice) * 100;
-    if (Math.abs(returnPct) < threshold) {
+    if (!sparkReturnPassesThreshold(returnPct)) {
       state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };
       continue;
     }
@@ -168,16 +183,29 @@ export async function runPriceSpike15mAlertTick(
 
     if (anyOk) {
       symbolsHit += 1;
+      const amount24 = m.amount24Usdt;
+      const volBand = classifySparkVolBand(Number.isFinite(amount24) ? amount24 : null);
+      const mcapBand = classifySparkMcapBand(sym);
       try {
-        const amount24 = m.amount24Usdt;
+        await appendSparkFireLog({
+          atIso: new Date().toISOString(),
+          symbol: sym,
+          sparkReturnPct: returnPct,
+          volBand,
+          mcapBand,
+        });
+      } catch (e) {
+        console.error("[priceSpike15mAlertTick] appendSparkFireLog", sym, e);
+      }
+      try {
         await enqueueSparkFollowUp({
           symbol: sym,
           barOpenTimeSec: nowSec - SPARK_SIGNAL_BAR_SEC,
           refPrice: p,
           sparkReturnPct: returnPct,
           amount24Usdt: Number.isFinite(amount24) && amount24 >= 0 ? amount24 : null,
-          volBand: classifySparkVolBand(Number.isFinite(amount24) ? amount24 : null),
-          mcapBand: classifySparkMcapBand(sym),
+          volBand,
+          mcapBand,
         });
       } catch (e) {
         console.error("[priceSpike15mAlertTick] enqueueSparkFollowUp", sym, e);

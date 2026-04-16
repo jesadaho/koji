@@ -362,6 +362,71 @@ code {
   }
 }
 
+/* LIFF — Spark stats win-rate matrix */
+.sparkStatsPage {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1rem 1rem 2rem;
+}
+
+.sparkMatrixScroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 0.5rem;
+}
+
+.sparkMatrixTable {
+  width: 100%;
+  min-width: 20rem;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.sparkMatrixTable th,
+.sparkMatrixTable td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.45rem;
+  text-align: right;
+  vertical-align: top;
+}
+
+.sparkMatrixTable th[scope="row"],
+.sparkMatrixTable tbody th {
+  text-align: left;
+  white-space: nowrap;
+  max-width: 11rem;
+  font-weight: 600;
+}
+
+.sparkMatrixTable thead th {
+  background: color-mix(in srgb, var(--card) 88%, var(--border));
+}
+
+.sparkMatrixTable--compact th,
+.sparkMatrixTable--compact td {
+  text-align: center;
+}
+
+.sparkMatrixPct {
+  font-weight: 600;
+}
+
+.sparkMatrixN {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.sparkMatrixCell {
+  display: inline-block;
+  line-height: 1.35;
+}
+
+.sparkStatsRefreshBtn {
+  width: auto;
+  max-width: 12rem;
+  margin-top: 0;
+}
+
 /* LIFF — Indicator Settings (strategy-first, mobile-friendly) */
 .indSettingsTitle {
   font-size: 1.05rem;

@@ -62,7 +62,7 @@ function buildCheckpointMessage(
   return [
     `📍 Koji Spark follow-up (${label})`,
     `[${base}]/USDT · Spark ${pctStr}`,
-    `อ้างอิง (ปิดแท่ง 5m): ${formatPriceUsd(refPrice)}`,
+    `อ้างอิงราคา: ${formatPriceUsd(refPrice)} (last + timestamp จาก series — ไม่ใช่ TF กราฟ)`,
     `ราคาปัจจุบัน: ${endPrice != null ? formatPriceUsd(endPrice) : "—"}`,
     `ผล: ${outcomeLabel(won, sparkUp)}`,
   ].join("\n");

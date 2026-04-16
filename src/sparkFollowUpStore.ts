@@ -6,6 +6,7 @@ import type { SparkMcapBand, SparkVolBand } from "./sparkTierContext";
 const KV_KEY = "koji:spark_follow_up_state";
 const filePath = join(process.cwd(), "data", "spark_follow_up_state.json");
 
+/** ความยาว slot จุดอ้างอิงเวลา (วินาที) สำหรับคำนวณ due — ยึด timestamp/series ไม่ใช่ TF กราฟ */
 const SPARK_BAR_SEC = 300;
 
 function isVercel(): boolean {
@@ -40,7 +41,7 @@ export type SparkFollowUpPending = {
   mcapBand: SparkMcapBand;
   due30Sec: number;
   due60Sec: number;
-  /** T+2h / T+3h / T+4h หลังปิดแท่ง Spark — เก็บสถิติอย่างเดียว (ไม่แจ้งเตือน) */
+  /** เวลาคิวสถิติเงียบ T+2h / T+3h / T+4h นับจาก refCloseSec — เก็บสถิติอย่างเดียว (ไม่แจ้งเตือน) */
   due2hSec: number;
   due3hSec: number;
   due4hSec: number;
@@ -59,6 +60,15 @@ export type SparkFollowUpPending = {
   momentumWon3h?: boolean | null;
   price4h?: number | null;
   momentumWon4h?: boolean | null;
+};
+
+/** บันทึกทุกครั้งที่แจ้ง Spark สำเร็จ — ใช้โชว์สถิติทันที (ไม่ต้องรอ follow-up จบ) */
+export type SparkFireLogRow = {
+  atIso: string;
+  symbol: string;
+  sparkReturnPct: number;
+  volBand: SparkVolBand;
+  mcapBand: SparkMcapBand;
 };
 
 export type SparkFollowUpHistoryRow = {
@@ -88,11 +98,39 @@ export type SparkFollowUpHistoryRow = {
 export type SparkFollowUpState = {
   pending: SparkFollowUpPending[];
   history: SparkFollowUpHistoryRow[];
+  /** แจ้ง Spark แล้วทุกครั้ง — สำหรับคำสั่งสถิติ */
+  recentSparks?: SparkFireLogRow[];
 };
 
 function historyMax(): number {
   const n = Number(process.env.SPARK_FOLLOWUP_HISTORY_MAX?.trim());
   return Number.isFinite(n) && n >= 20 && n <= 5000 ? Math.floor(n) : 400;
+}
+
+function sparkFireLogMax(): number {
+  const n = Number(process.env.SPARK_FIRE_LOG_MAX?.trim());
+  return Number.isFinite(n) && n >= 20 && n <= 2000 ? Math.floor(n) : 300;
+}
+
+function normalizeRecentSparks(raw: unknown): SparkFireLogRow[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SparkFireLogRow[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object") continue;
+    const o = x as Record<string, unknown>;
+    const atIso = typeof o.atIso === "string" ? o.atIso : "";
+    const symbol = typeof o.symbol === "string" ? o.symbol.trim() : "";
+    const sparkReturnPct = Number(o.sparkReturnPct);
+    if (!atIso || !symbol || !Number.isFinite(sparkReturnPct)) continue;
+    out.push({
+      atIso,
+      symbol,
+      sparkReturnPct,
+      volBand: parseVolBand(o.volBand),
+      mcapBand: parseMcapBand(o.mcapBand),
+    });
+  }
+  return out;
 }
 
 function parseVolBand(x: unknown): SparkVolBand {
@@ -253,11 +291,12 @@ function normalizeHistory(raw: unknown): SparkFollowUpHistoryRow[] {
 }
 
 function normalizeState(raw: unknown): SparkFollowUpState {
-  if (!raw || typeof raw !== "object") return { pending: [], history: [] };
+  if (!raw || typeof raw !== "object") return { pending: [], history: [], recentSparks: [] };
   const o = raw as Record<string, unknown>;
   return {
     pending: normalizePending(o.pending),
     history: normalizeHistory(o.history),
+    recentSparks: normalizeRecentSparks(o.recentSparks),
   };
 }
 
@@ -275,20 +314,23 @@ export async function loadSparkFollowUpState(): Promise<SparkFollowUpState> {
       throw new Error("อ่าน spark_follow_up_state ไม่สำเร็จ");
     }
   }
-  if (isVercel()) return { pending: [], history: [] };
+  if (isVercel()) return { pending: [], history: [], recentSparks: [] };
   await ensureJsonFile();
   try {
     const raw = await readFile(filePath, "utf-8");
     return normalizeState(JSON.parse(raw) as unknown);
   } catch {
-    return { pending: [], history: [] };
+    return { pending: [], history: [], recentSparks: [] };
   }
 }
 
 export async function saveSparkFollowUpState(state: SparkFollowUpState): Promise<void> {
   const maxH = historyMax();
+  const maxF = sparkFireLogMax();
   const history = state.history.length > maxH ? state.history.slice(-maxH) : state.history;
-  const payload: SparkFollowUpState = { ...state, history };
+  const rs = state.recentSparks ?? [];
+  const recentSparks = rs.length > maxF ? rs.slice(-maxF) : rs;
+  const payload: SparkFollowUpState = { ...state, history, recentSparks };
 
   if (useCloudStorage()) {
     await cloudSet(KV_KEY, payload);
@@ -299,7 +341,7 @@ export async function saveSparkFollowUpState(state: SparkFollowUpState): Promise
   await writeFile(filePath, JSON.stringify(payload, null, 2), "utf-8");
 }
 
-/** หลังแจ้ง Spark สำเร็จ — จากจุดยืนยันสัญญาณ (refClose ≈ barOpen+5m) นับ T+30m / T+1h … */
+/** หลังแจ้ง Spark สำเร็จ — ยึด timestamp/series slot (refCloseSec) เป็นจุดนับ T+30m / T+1h … ไม่ใช่ TF กราฟ */
 export async function enqueueSparkFollowUp(input: {
   symbol: string;
   barOpenTimeSec: number;
@@ -354,6 +396,18 @@ export async function enqueueSparkFollowUp(input: {
         silent4h: false,
       },
     ],
+  };
+  await saveSparkFollowUpState(state);
+}
+
+/** บันทึกว่า Spark แจ้งแล้ว — เรียกทุกครั้งที่ส่งแจ้งเตือนสำเร็จ (แยกจาก follow-up queue) */
+export async function appendSparkFireLog(entry: SparkFireLogRow): Promise<void> {
+  let state = await loadSparkFollowUpState();
+  const next = [...(state.recentSparks ?? []), entry];
+  const maxF = sparkFireLogMax();
+  state = {
+    ...state,
+    recentSparks: next.length > maxF ? next.slice(-maxF) : next,
   };
   await saveSparkFollowUpState(state);
 }
