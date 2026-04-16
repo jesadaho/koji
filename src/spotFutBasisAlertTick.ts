@@ -10,9 +10,13 @@ import {
   type SpotFutBasisTier,
 } from "./spotFutBasisAlertStateStore";
 
+/** |spot−perp basis| ไม่เกินค่านี้ = ไม่แจ้งเตือน — ต่ำสุด 2% (ไม่ถึง 2% ไม่แจ้ง) */
+const SPOT_FUT_BASIS_NOTIFY_FLOOR_PCT = 2;
+
 function warningMinPct(): number {
   const n = Number(process.env.SPOT_FUT_BASIS_WARNING_MIN?.trim());
-  return Number.isFinite(n) && n > 0 ? n : 1.0;
+  const configured = Number.isFinite(n) && n > 0 ? n : SPOT_FUT_BASIS_NOTIFY_FLOOR_PCT;
+  return Math.max(configured, SPOT_FUT_BASIS_NOTIFY_FLOOR_PCT);
 }
 
 const BASIS_TIER_EPS = 1e-9;

@@ -19,14 +19,9 @@ function enabled(): boolean {
   return true;
 }
 
-/** แจ้งเตือนเมื่อ |gap| ≥ เกณฑ์นี้เท่านั้น — ต่ำสุด 2% (ต่ำกว่านี้ไม่แจ้ง) */
-const SPARK_NOTIFY_ABSOLUTE_MIN_PCT = 2;
-
-/** เกณฑ์จาก env หรือ default 10% — ไม่ต่ำกว่า SPARK_NOTIFY_ABSOLUTE_MIN_PCT (2%) */
-function notifyThresholdPct(): number {
+function minAbsPct(): number {
   const n = Number(process.env.PRICE_SPIKE_15M_MIN_PCT?.trim());
-  const configured = Number.isFinite(n) && n > 0 ? n : 10;
-  return Math.max(configured, SPARK_NOTIFY_ABSOLUTE_MIN_PCT);
+  return Number.isFinite(n) && n > 0 ? n : 10;
 }
 
 /** ช่วงเทียบ % ระหว่างราคา last สองครั้ง (วินาที) — default 300 = 5 นาที */
@@ -116,7 +111,7 @@ export async function runPriceSpike15mAlertTick(
     return { notifiedPushes: 0, symbolsHit: 0 };
   }
 
-  const threshold = notifyThresholdPct();
+  const threshold = minAbsPct();
   const windowSec = signalWindowSec();
   const limit = topN();
   const symbols = await getTopUsdtSymbolsByAmount24(limit);
