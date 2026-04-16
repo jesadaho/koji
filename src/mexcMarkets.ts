@@ -228,6 +228,43 @@ function parseKlineArrays(raw: KlineApiResponse["data"]): KlineArrays | null {
   };
 }
 
+/** 15m kline สำหรับ EMA cross — close + เวลาเปิดแท่ง (สอดคล้อง indicator worker index n-2) */
+export type ContractKline15mIndicatorPack = {
+  close: number[];
+  timeSec: number[];
+};
+
+function parseKlineIndicator15m(raw: KlineApiResponse["data"]): ContractKline15mIndicatorPack | null {
+  if (!raw?.close?.length || !raw.time?.length) return null;
+  const n = raw.close.length;
+  if (raw.time.length !== n) return null;
+  return {
+    close: raw.close.map((c) => Number(c)),
+    timeSec: raw.time.map((t) => Number(t)),
+  };
+}
+
+/**
+ * ดึง kline 15m (เก่า→ใหม่) พร้อม time สำหรับ EMA6/12 — แท่งท้ายอาจยังไม่ปิด (ใช้ index n-2 เป็นแท่งปิดล่าสุด)
+ */
+export async function fetchContractKline15mIndicatorPack(
+  symbol: string
+): Promise<ContractKline15mIndicatorPack | null> {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - 26 * 3600;
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(symbol.trim())}`;
+  try {
+    const { data } = await axios.get<KlineApiResponse>(url, {
+      timeout: 12_000,
+      params: { interval: "Min15", start, end },
+    });
+    if (!data.success || !data.data) return null;
+    return parseKlineIndicator15m(data.data);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด (กันท้ายที่อาจยังไม่ปิด)
  * V_avg = เฉลี่ย vol แท่งก่อนหน้า สูงสุด 96 แท่ง (~24 ชม.)

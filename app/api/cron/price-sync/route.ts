@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
   });
   await runStep("indicatorAlerts", async () => {
     const r = await runIndicatorAlertTick(client);
-    return `แจ้ง ${r.notified} ครั้ง`;
+    return r.detail ?? `แจ้ง ${r.notified} ครั้ง`;
   });
   await runStep("spotFutBasisAlerts", async () => {
     const r = await runSpotFutBasisAlertTick(client);

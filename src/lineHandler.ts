@@ -85,7 +85,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถานะ sentiment — สรุป Fear & Greed, BTC dominance, Vol ~24h, Sentiment (ข้อมูลล่าสุดจาก API)
   (EN: sentiment, market pulse, #marketPulse)
 
-• สถานะ cron — บันทึก job: เตือน% trailing ~5 นาที (รวม Spark สัญญาณจาก ticker + Spark follow-up) · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI + spot–perp basis) + ชั่วโมง (สัญญา / funding)
+• สถานะ cron — บันทึก job: เตือน% trailing ~5 นาที (รวม Spark สัญญาณจาก ticker + Spark follow-up) · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI + EMA6/12·15m ติดตาม + spot–perp basis) + ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus)
 
 • สถิติ spark — สรุปผลติดตาม Spark หลัง T+30m … T+4h (momentum vs fade) ในแชท
@@ -98,6 +98,8 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 
 • ทดสอบแจ้งเตือน — ส่งไป Telegram / Discord / LINE ตาม env (LINE ต้อง LINE_ALERT_PUSH_ENABLED=1) แล้วตอบยืนยันในแชท
   (EN: test push, #testpush)
+
+• เหรียญที่ติดตามใน LIFF — แจ้งเมื่อ EMA6 กับ EMA12 ตัดกันบน 15 นาที (รอบเดียวกับ price-sync ~15 นาที; ปิดได้ EMA612_15M_WATCH_ALERTS_ENABLED=0)
 
 จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
 

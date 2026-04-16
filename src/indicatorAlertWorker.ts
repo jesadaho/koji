@@ -1,4 +1,5 @@
 import type { Client } from "@line/bot-sdk";
+import { runEma612ContractWatchAlertTick } from "./ema612ContractWatchAlertTick";
 import { fetchContractKlineForTf, type IndicatorChartTf } from "./indicatorKline";
 import { sendAlertNotification } from "./alertNotify";
 import { emaLine, rsiWilder } from "./indicatorMath";
@@ -256,11 +257,17 @@ async function runEmaCrossInternal(client: Client, now: number): Promise<number>
 /**
  * Collector → Evaluator → Notifier ในรอบเดียว (cron price-sync ~15 นาที)
  */
-export async function runIndicatorAlertTick(client: Client): Promise<{ notified: number }> {
+export async function runIndicatorAlertTick(client: Client): Promise<{ notified: number; detail?: string }> {
   const now = Date.now();
   const rsiN = await runRsiInternal(client, now);
   const emaN = await runEmaCrossInternal(client, now);
-  return { notified: rsiN + emaN };
+  const watch612 = await runEma612ContractWatchAlertTick(client);
+  const total = rsiN + emaN + watch612;
+  const detail =
+    watch612 > 0
+      ? `แจ้ง ${total} ครั้ง (RSI/EMA indicator ${rsiN + emaN} · EMA6/12·15m ติดตาม ${watch612})`
+      : undefined;
+  return { notified: total, ...(detail ? { detail } : {}) };
 }
 
 export function getIndicatorCooldownMsDisplay(): number {
