@@ -45,6 +45,15 @@ export type SparkSymbolCount = {
   count: number;
 };
 
+/** Win-rate แยกตามเหรียญ (เหตุการณ์ follow-up ที่จบแล้วเท่านั้น) */
+export type SparkSymbolMatrixRow = {
+  symbol: string;
+  label: string;
+  /** จำนวนเหตุการณ์ที่ใช้คำนวณแถวนี้ */
+  eventCount: number;
+  horizons: Record<SparkHorizonId, SparkHorizonCell>;
+};
+
 /** ค่าที่ส่งออกทาง API LIFF (ไม่รวม aggregates ภายในสำหรับข้อความ LINE) */
 export type SparkStatsApiPayload = {
   generatedAt: string;
@@ -74,4 +83,8 @@ export type SparkStatsApiPayload = {
   sparkFireLogBySymbol: SparkSymbolCount[];
   /** นับจาก follow-up ที่จบแล้ว (เหตุการณ์ละ 1 แถว) */
   followUpHistoryBySymbol: SparkSymbolCount[];
+  /** momentum win-rate ตาม T+… แยกรายสัญญา (เรียงจาก n มากไปน้อย) */
+  matrixBySymbol: SparkSymbolMatrixRow[];
+  matrixBySymbolSparkUp: SparkSymbolMatrixRow[];
+  matrixBySymbolSparkDown: SparkSymbolMatrixRow[];
 };

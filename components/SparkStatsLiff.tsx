@@ -9,6 +9,7 @@ import {
   type SparkHorizonId,
   type SparkStatsApiPayload,
   type SparkSymbolCount,
+  type SparkSymbolMatrixRow,
 } from "@/src/sparkStatsShared";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -104,6 +105,63 @@ type LiffConfig = {
 
 type Phase = "loading" | "setup" | "ready";
 
+type HorizonRecord = SparkStatsApiPayload["totalHorizons"];
+
+function HorizonCompactRow({ horizons }: { horizons: HorizonRecord }) {
+  return (
+    <div className="sparkMatrixScroll">
+      <table className="sparkMatrixTable sparkMatrixTable--compact">
+        <thead>
+          <tr>
+            {SPARK_STATS_HORIZON_ORDER.map((hid) => (
+              <th key={hid} scope="col">
+                {SPARK_STATS_HORIZON_LABELS[hid]}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {SPARK_STATS_HORIZON_ORDER.map((hid) => (
+              <td key={hid}>
+                <MatrixCell cell={horizons[hid]} />
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SparkStatsMatrixSection({
+  sectionId,
+  title,
+  titleEn,
+  intro,
+  children,
+}: {
+  sectionId: string;
+  title: string;
+  titleEn: string;
+  intro: string;
+  children: ReactNode;
+}) {
+  const headingId = `spark-matrix-section-${sectionId}`;
+  return (
+    <section className="sparkStatsMatrixSection" aria-labelledby={headingId}>
+      <h2 id={headingId} className="sparkStatsMatrixSectionTitle">
+        {title}
+        <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem", fontSize: "0.88em" }}>
+          {titleEn}
+        </span>
+      </h2>
+      <p className="sparkStatsMatrixSectionIntro">{intro}</p>
+      {children}
+    </section>
+  );
+}
+
 function MatrixCell({ cell }: { cell: { wins: number; total: number; rate: number | null } }) {
   if (cell.total <= 0) {
     return <span className="sparkMatrixCell">—</span>;
@@ -164,26 +222,96 @@ function SymbolCountBlock({
   );
 }
 
-function WinRateMatrixTable({
+function SymbolMatrixTable({
   title,
   titleEn,
+  hint,
   rows,
+  titleTag = "h2",
 }: {
   title: string;
   titleEn: string;
-  rows: SparkStatsApiPayload["matrixByVol"] | SparkStatsApiPayload["matrixByMcap"];
+  hint: string;
+  rows: SparkSymbolMatrixRow[];
+  /** ใช้ h3 เมื่ออยู่ภายใต้ SparkStatsMatrixSection */
+  titleTag?: "h2" | "h3";
 }) {
+  if (rows.length === 0) return null;
+  const Title = titleTag;
   return (
     <div style={{ marginTop: "1rem" }}>
-      <h2 style={{ marginBottom: "0.35rem" }}>
+      <Title style={{ marginBottom: "0.35rem", fontSize: titleTag === "h3" ? "0.95rem" : undefined }}>
         {title}
         <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
           {titleEn}
         </span>
-      </h2>
+      </Title>
       <p className="sub" style={{ marginTop: 0 }}>
-        Momentum win rate ตามจุดวัดผลหลังจุดอ้างอิงเวลา (แถว = กลุ่ม · คอลัมน์ = T+15m … T+4h; 15m = สถิติเงียบ · อ้าง last + timestamp / series ไม่ใช่ TF)
+        {hint}
       </p>
+      <div className="sparkMatrixScroll">
+        <table className="sparkMatrixTable">
+          <thead>
+            <tr>
+              <th scope="col">เหรียญ</th>
+              <th scope="col">n</th>
+              {SPARK_STATS_HORIZON_ORDER.map((hid) => (
+                <th key={hid} scope="col">
+                  {SPARK_STATS_HORIZON_LABELS[hid]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.symbol}>
+                <th scope="row">{row.label}</th>
+                <td>{row.eventCount}</td>
+                {SPARK_STATS_HORIZON_ORDER.map((hid: SparkHorizonId) => (
+                  <td key={hid}>
+                    <MatrixCell cell={row.horizons[hid]} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const WIN_RATE_MATRIX_DEFAULT_HINT =
+  "Momentum win rate ตามจุดวัดผลหลังจุดอ้างอิงเวลา (แถว = กลุ่ม · คอลัมน์ = T+15m … T+4h; 15m = สถิติเงียบ · อ้าง last + timestamp / series ไม่ใช่ TF)";
+
+function WinRateMatrixTable({
+  title,
+  titleEn,
+  rows,
+  titleTag = "h2",
+  hint = WIN_RATE_MATRIX_DEFAULT_HINT,
+}: {
+  title: string;
+  titleEn: string;
+  rows: SparkStatsApiPayload["matrixByVol"] | SparkStatsApiPayload["matrixByMcap"];
+  titleTag?: "h2" | "h3";
+  /** ส่งค่าว่าง "" เพื่อไม่แสดงบรรทัดอธิบาย (ใช้ในบล็อกที่มีหัวข้อหลักแล้ว) */
+  hint?: string;
+}) {
+  const Title = titleTag;
+  return (
+    <div style={{ marginTop: "1rem" }}>
+      <Title style={{ marginBottom: "0.35rem", fontSize: titleTag === "h3" ? "0.95rem" : undefined }}>
+        {title}
+        <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
+          {titleEn}
+        </span>
+      </Title>
+      {hint ? (
+        <p className="sub" style={{ marginTop: 0 }}>
+          {hint}
+        </p>
+      ) : null}
       <div className="sparkMatrixScroll">
         <table className="sparkMatrixTable">
           <thead>
@@ -450,103 +578,96 @@ export default function SparkStatsLiff() {
               hint="นับตามเหตุการณ์ที่จบครบช่วงวัดผล — เหรียญเดียวอาจมีหลายครั้ง"
               rows={payload.followUpHistoryBySymbol ?? []}
             />
-            <h2 style={{ marginTop: "1rem", marginBottom: "0.35rem" }}>
-              รวมทั้งหมด
-              <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-                Overall
-              </span>
-            </h2>
-            <div className="sparkMatrixScroll">
-              <table className="sparkMatrixTable sparkMatrixTable--compact">
-                <thead>
-                  <tr>
-                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
-                      <th key={hid} scope="col">
-                        {SPARK_STATS_HORIZON_LABELS[hid]}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
-                      <td key={hid}>
-                        <MatrixCell cell={thTotal[hid]} />
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
 
-            <WinRateMatrixTable title="Win-rate ตาม Vol 24h" titleEn="By volume band" rows={payload.matrixByVol} />
-            <WinRateMatrixTable
-              title="Win-rate ตามมาร์เก็ตแคป (พร็อกซี)"
-              titleEn="By mcap proxy"
-              rows={payload.matrixByMcap}
-            />
+            <SparkStatsMatrixSection
+              sectionId="overall"
+              title="รวมทั้งหมด"
+              titleEn="Overall — all directions"
+              intro="ทุกเหตุการณ์ follow-up ที่จบแล้ว (รวม Spark ขึ้นและลง) — แถวสรุป · Vol · มาร์ก. · แยกเหรียญ อยู่ในบล็อกนี้ทั้งหมด"
+            >
+              <HorizonCompactRow horizons={thTotal} />
+              <WinRateMatrixTable
+                title="Win-rate ตาม Vol 24h"
+                titleEn="By volume band"
+                rows={payload.matrixByVol}
+                titleTag="h3"
+                hint=""
+              />
+              <WinRateMatrixTable
+                title="Win-rate ตามมาร์เก็ตแคป (พร็อกซี)"
+                titleEn="By mcap proxy"
+                rows={payload.matrixByMcap}
+                titleTag="h3"
+                hint=""
+              />
+              <SymbolMatrixTable
+                title="แยกรายเหรียญ"
+                titleEn="Per-symbol matrix"
+                hint="แถวละสัญญา · n = จำนวนเหตุการณ์ในบล็อกนี้ · คอลัมน์ = T+15m … T+4h"
+                rows={payload.matrixBySymbol ?? []}
+                titleTag="h3"
+              />
+            </SparkStatsMatrixSection>
 
-            <h2 style={{ marginTop: "1.25rem", marginBottom: "0.35rem" }}>
-              Spark ขึ้น (return &gt; 0)
-              <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-                Spark up only
-              </span>
-            </h2>
-            <div className="sparkMatrixScroll">
-              <table className="sparkMatrixTable sparkMatrixTable--compact">
-                <thead>
-                  <tr>
-                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
-                      <th key={hid} scope="col">
-                        {SPARK_STATS_HORIZON_LABELS[hid]}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
-                      <td key={hid}>
-                        <MatrixCell cell={payload.totalHorizonsSparkUp[hid]} />
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <WinRateMatrixTable title="Vol — Spark ขึ้น" titleEn="By volume (up)" rows={payload.matrixByVolSparkUp} />
-            <WinRateMatrixTable title="มาร์ก. — Spark ขึ้น" titleEn="By mcap (up)" rows={payload.matrixByMcapSparkUp} />
+            <SparkStatsMatrixSection
+              sectionId="spark-up"
+              title="Spark ขึ้น (return > 0)"
+              titleEn="Spark up only"
+              intro="เฉพาะเหตุการณ์ที่ sparkReturnPct > 0 ตอนอ้างอิง — win rate รวม · แยก Vol/มาร์ก. · แยกเหรียญ ใช้ชุดข้อมูลเดียวกันในบล็อกนี้"
+            >
+              <HorizonCompactRow horizons={payload.totalHorizonsSparkUp} />
+              <WinRateMatrixTable
+                title="Win-rate ตาม Vol 24h"
+                titleEn="By volume (Spark up)"
+                rows={payload.matrixByVolSparkUp}
+                titleTag="h3"
+                hint=""
+              />
+              <WinRateMatrixTable
+                title="Win-rate ตามมาร์เก็ตแคป (พร็อกซี)"
+                titleEn="By mcap (Spark up)"
+                rows={payload.matrixByMcapSparkUp}
+                titleTag="h3"
+                hint=""
+              />
+              <SymbolMatrixTable
+                title="แยกรายเหรียญ"
+                titleEn="Per-symbol (Spark up)"
+                hint="เฉพาะเหตุการณ์ Spark ขึ้นในแต่ละสัญญา · n = จำนวนในบล็อกนี้"
+                rows={payload.matrixBySymbolSparkUp ?? []}
+                titleTag="h3"
+              />
+            </SparkStatsMatrixSection>
 
-            <h2 style={{ marginTop: "1.25rem", marginBottom: "0.35rem" }}>
-              Spark ลง (return &lt; 0)
-              <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-                Spark down only
-              </span>
-            </h2>
-            <div className="sparkMatrixScroll">
-              <table className="sparkMatrixTable sparkMatrixTable--compact">
-                <thead>
-                  <tr>
-                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
-                      <th key={hid} scope="col">
-                        {SPARK_STATS_HORIZON_LABELS[hid]}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    {SPARK_STATS_HORIZON_ORDER.map((hid) => (
-                      <td key={hid}>
-                        <MatrixCell cell={payload.totalHorizonsSparkDown[hid]} />
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <WinRateMatrixTable title="Vol — Spark ลง" titleEn="By volume (down)" rows={payload.matrixByVolSparkDown} />
-            <WinRateMatrixTable title="มาร์ก. — Spark ลง" titleEn="By mcap (down)" rows={payload.matrixByMcapSparkDown} />
+            <SparkStatsMatrixSection
+              sectionId="spark-down"
+              title="Spark ลง (return < 0)"
+              titleEn="Spark down only"
+              intro="เฉพาะเหตุการณ์ที่ sparkReturnPct < 0 ตอนอ้างอิง — win rate รวม · แยก Vol/มาร์ก. · แยกเหรียญ ใช้ชุดข้อมูลเดียวกันในบล็อกนี้"
+            >
+              <HorizonCompactRow horizons={payload.totalHorizonsSparkDown} />
+              <WinRateMatrixTable
+                title="Win-rate ตาม Vol 24h"
+                titleEn="By volume (Spark down)"
+                rows={payload.matrixByVolSparkDown}
+                titleTag="h3"
+                hint=""
+              />
+              <WinRateMatrixTable
+                title="Win-rate ตามมาร์เก็ตแคป (พร็อกซี)"
+                titleEn="By mcap (Spark down)"
+                rows={payload.matrixByMcapSparkDown}
+                titleTag="h3"
+                hint=""
+              />
+              <SymbolMatrixTable
+                title="แยกรายเหรียญ"
+                titleEn="Per-symbol (Spark down)"
+                hint="เฉพาะเหตุการณ์ Spark ลงในแต่ละสัญญา · n = จำนวนในบล็อกนี้"
+                rows={payload.matrixBySymbolSparkDown ?? []}
+                titleTag="h3"
+              />
+            </SparkStatsMatrixSection>
 
             <p className="sub" style={{ marginTop: "1rem" }}>
               หมายเหตุ: มาร์ก. ไม่ใช่ CoinGecko — จัดกลุ่มจากฐานสินทรัพย์ (BTC/ETH · tier2 env · อื่นๆ) เหมือนข้อความคำสั่ง

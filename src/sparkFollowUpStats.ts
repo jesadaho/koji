@@ -9,6 +9,7 @@ import type {
   SparkMatrixRowVol,
   SparkStatsApiPayload,
   SparkSymbolCount,
+  SparkSymbolMatrixRow,
 } from "./sparkStatsShared";
 import { SPARK_STATS_HORIZON_ORDER } from "./sparkStatsShared";
 
@@ -19,6 +20,7 @@ export type {
   SparkMatrixRowVol,
   SparkStatsApiPayload,
   SparkSymbolCount,
+  SparkSymbolMatrixRow,
 } from "./sparkStatsShared";
 export { SPARK_STATS_HORIZON_LABELS, SPARK_STATS_HORIZON_ORDER } from "./sparkStatsShared";
 
@@ -202,6 +204,32 @@ function aggregateHistory(history: SparkFollowUpHistoryRow[]): AggregatedMatrice
   return { total, totalLong, byVol, byVolLong, byMcap, byMcapLong, upSpark, downSpark };
 }
 
+function buildMatrixRowsBySymbol(rows: SparkFollowUpHistoryRow[]): SparkSymbolMatrixRow[] {
+  const bySym = new Map<string, SparkFollowUpHistoryRow[]>();
+  for (const h of rows) {
+    const sym = typeof h.symbol === "string" ? h.symbol.trim() : "";
+    if (!sym) continue;
+    let list = bySym.get(sym);
+    if (!list) {
+      list = [];
+      bySym.set(sym, list);
+    }
+    list.push(h);
+  }
+  const out: SparkSymbolMatrixRow[] = [];
+  for (const [symbol, symRows] of bySym) {
+    const full = aggregateHistory(symRows);
+    const totalH = horizonsFromAgg(full.total, full.totalLong);
+    out.push({
+      symbol,
+      label: shortLabel(symbol),
+      eventCount: symRows.length,
+      horizons: totalH,
+    });
+  }
+  return out.sort((a, b) => b.eventCount - a.eventCount || a.label.localeCompare(b.label));
+}
+
 /** สำหรับ format ข้อความ LINE — ค่าเดียวกับที่ใช้สร้าง matrix */
 export type SparkStatsLineFormatAggs = {
   total: Agg;
@@ -295,6 +323,10 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
   const sparkFireLogBySymbol = aggregateSymbolCounts(recentSparks);
   const followUpHistoryBySymbol = aggregateSymbolCounts(history);
 
+  const matrixBySymbol = buildMatrixRowsBySymbol(history);
+  const matrixBySymbolSparkUp = buildMatrixRowsBySymbol(upHist);
+  const matrixBySymbolSparkDown = buildMatrixRowsBySymbol(downHist);
+
   return {
     generatedAt: new Date().toISOString(),
     historyCount: n,
@@ -327,6 +359,9 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
     historyTailLines,
     sparkFireLogBySymbol,
     followUpHistoryBySymbol,
+    matrixBySymbol,
+    matrixBySymbolSparkUp,
+    matrixBySymbolSparkDown,
   };
 }
 

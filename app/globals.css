@@ -369,6 +369,33 @@ code {
   padding: 1rem 1rem 2rem;
 }
 
+/* แยกบล็อก: รวมทั้งหมด vs Spark ขึ้น vs Spark ลง (matrix + แยกเหรียญในกลุ่มเดียวกัน) */
+.sparkStatsMatrixSection {
+  margin-top: 1.35rem;
+  padding: 0.9rem 0.75rem 1.1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 92%, var(--border));
+}
+
+.sparkStatsMatrixSection:first-of-type {
+  margin-top: 0.75rem;
+}
+
+.sparkStatsMatrixSectionTitle {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sparkStatsMatrixSectionIntro {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 .sparkMatrixScroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
