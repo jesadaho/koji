@@ -16,7 +16,11 @@ import {
 } from "./lineFlexKojiMenu";
 import { isCronStatusQuery } from "./cronLineCommands";
 import { isMarketPulseStatusQuery } from "./marketPulseLineCommands";
-import { isSparkStatsQuery } from "./sparkFollowUpLineCommands";
+import {
+  isSparkMatrixResetAllowed,
+  isSparkMatrixResetCommand,
+  isSparkStatsQuery,
+} from "./sparkFollowUpLineCommands";
 import { formatSparkStatsMessage } from "./sparkFollowUpStats";
 import { getMarketPulseStatusMessage } from "./marketPulseTick";
 import {
@@ -32,6 +36,7 @@ import {
 import { sendAlertNotification } from "./alertNotify";
 import { parsePositionChecklist } from "./positionChecklistLineCommands";
 import { buildPositionChecklistMessage } from "./positionChecklistService";
+import { resetSparkFollowUpState } from "./sparkFollowUpStore";
 
 export function createLineClient(channelAccessToken: string) {
   return new Client({ channelAccessToken });
@@ -91,6 +96,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถิติ spark — สรุปผลติดตาม Spark หลัง T+30m … T+4h (momentum vs fade) ในแชท
   เปิด LIFF หน้า «สถิติ Spark» เพื่อดู Win-rate matrix แยก Vol / มาร์ก. (พร็อกซี)
   (EN: spark stats, #sparkStats)
+
+• ล้างสถิติ spark — ล้างข้อมูล matrix (pending / history / fire log) เพื่อเก็บใหม่ — ต้องตั้ง env SPARK_MATRIX_RESET_ALLOWED_USER_IDS=LINE_user_id ของคุณ
+  (EN: reset spark matrix, cleanup spark matrix, #sparkreset)
 
 • เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis / EMA6·12 บน 15m)
   ตัวอย่าง: short btc · long eth · ชอต btc 5x
@@ -300,6 +308,46 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       const detail = e instanceof Error ? e.message : String(e);
       await client.replyMessage(msgEvent.replyToken, [
         { type: "text", text: `อ่านสถิติ Spark ไม่สำเร็จ — ${detail.slice(0, 300)}` },
+      ]);
+    }
+    return;
+  }
+
+  if (isSparkMatrixResetCommand(text)) {
+    if (!isSparkMatrixResetAllowed(uid)) {
+      await client.replyMessage(msgEvent.replyToken, [
+        {
+          type: "text",
+          text: [
+            "ไม่ได้รับอนุญาตให้ล้างสถิติ Spark",
+            "",
+            "ตั้งค่า env: SPARK_MATRIX_RESET_ALLOWED_USER_IDS=<LINE user id ของคุณ>",
+            "(หลายคนคั่นด้วยจุลภาค) แล้ว redeploy — หรือใช้ GET /api/cron/reset-spark-state + Bearer CRON_SECRET",
+          ].join("\n"),
+        },
+      ]);
+      return;
+    }
+    try {
+      await resetSparkFollowUpState();
+      await client.replyMessage(msgEvent.replyToken, [
+        {
+          type: "text",
+          text: [
+            "✅ ล้างข้อมูล Spark matrix แล้ว",
+            "",
+            "ล้าง: คิว follow-up · history (win-rate) · recentSparks (fire log)",
+            "ไม่แตะ: price spike state อื่น",
+            "",
+            "เปิด LIFF «สถิติ Spark» จะเห็นข้อมูลว่างจนมี Spark ใหม่",
+          ].join("\n"),
+        },
+      ]);
+    } catch (e) {
+      console.error("[lineHandler] spark matrix reset", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: `ล้างไม่สำเร็จ — ${detail.slice(0, 300)}` },
       ]);
     }
     return;
