@@ -275,9 +275,8 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
 /** สำหรับ API LIFF — ไม่ส่ง lineFormatAggs */
 export function buildSparkStatsApiPayload(state: SparkFollowUpState): SparkStatsApiPayload {
   const p = buildSparkStatsPayload(state);
-  const copy = { ...p } as SparkStatsPayload & { lineFormatAggs?: SparkStatsLineFormatAggs };
-  delete copy.lineFormatAggs;
-  return copy as SparkStatsApiPayload;
+  const { lineFormatAggs: _omitLineFormat, ...rest } = p;
+  return rest;
 }
 
 function formatSparkStatsFromPayload(p: SparkStatsPayload): string {
