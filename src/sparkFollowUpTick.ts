@@ -126,7 +126,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
   let quoteCache: Record<string, CoinQuote> = {};
   if (symbolsThisTick.size > 0) {
     try {
-      quoteCache = await fetchSimplePrices([...symbolsThisTick]);
+      quoteCache = await fetchSimplePrices(Array.from(symbolsThisTick));
     } catch (e) {
       console.error("[sparkFollowUpTick] batch price fetch", e);
     }
