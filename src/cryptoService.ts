@@ -45,9 +45,9 @@ function normalizeResponse(
   const out: Record<string, CoinQuote> = {};
   if (!data) return out;
   const wantedByUpper = new Map<string, string>();
-  for (const w of wanted) {
+  wanted.forEach((w) => {
     wantedByUpper.set(w.trim().toUpperCase(), w);
-  }
+  });
   const rows = Array.isArray(data) ? data : [data];
   for (const row of rows) {
     if (!row?.symbol) continue;

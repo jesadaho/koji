@@ -119,6 +119,51 @@ function MatrixCell({ cell }: { cell: { wins: number; total: number; rate: numbe
   );
 }
 
+function SymbolCountBlock({
+  title,
+  titleEn,
+  hint,
+  rows,
+}: {
+  title: string;
+  titleEn: string;
+  hint: string;
+  rows: SparkSymbolCount[];
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="sparkSymbolCountSection">
+      <h3>
+        {title}
+        <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", fontSize: "0.85em", marginTop: "0.1rem" }}>
+          {titleEn}
+        </span>
+      </h3>
+      <p className="sub" style={{ marginTop: "0.25rem" }}>
+        {hint}
+      </p>
+      <div className="sparkMatrixScroll">
+        <table className="sparkSymbolCountTable">
+          <thead>
+            <tr>
+              <th scope="col">เหรียญ</th>
+              <th scope="col">ครั้ง</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.symbol}>
+                <th scope="row">{r.label}</th>
+                <td>{r.count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function WinRateMatrixTable({
   title,
   titleEn,
@@ -393,6 +438,18 @@ export default function SparkStatsLiff() {
               แจ้ง Spark (log): ขึ้น {payload.upFire} · ลง {payload.downFire} · สรุปจบแล้ว: Spark ขึ้น {payload.upSpark}{" "}
               · ลง {payload.downSpark}
             </p>
+            <SymbolCountBlock
+              title="เหรียญใน Spark log"
+              titleEn="Symbols (fire log)"
+              hint="นับทุกครั้งที่แจ้ง Spark สำเร็จ — รายการอิงตาม log ที่เซิร์ฟเวอร์เก็บ (อาจไม่ครบทุกเหตุการณ์ย้อนหลังถ้า log ถูกตัดตามความยาว)"
+              rows={payload.sparkFireLogBySymbol ?? []}
+            />
+            <SymbolCountBlock
+              title="เหรียญที่ follow-up จบแล้ว"
+              titleEn="Symbols (resolved follow-ups)"
+              hint="นับตามเหตุการณ์ที่จบครบช่วงวัดผล — เหรียญเดียวอาจมีหลายครั้ง"
+              rows={payload.followUpHistoryBySymbol ?? []}
+            />
             <h2 style={{ marginTop: "1rem", marginBottom: "0.35rem" }}>
               รวมทั้งหมด
               <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
