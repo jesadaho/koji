@@ -2,6 +2,23 @@ import type { SparkFollowUpHistoryRow, SparkFollowUpState } from "./sparkFollowU
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import type { SparkMcapBand, SparkVolBand } from "./sparkTierContext";
 import { mcapBandLabelTh, volBandLabelTh } from "./sparkTierContext";
+import type {
+  SparkHorizonCell,
+  SparkHorizonId,
+  SparkMatrixRowMcap,
+  SparkMatrixRowVol,
+  SparkStatsApiPayload,
+} from "./sparkStatsShared";
+import { SPARK_STATS_HORIZON_ORDER } from "./sparkStatsShared";
+
+export type {
+  SparkHorizonCell,
+  SparkHorizonId,
+  SparkMatrixRowMcap,
+  SparkMatrixRowVol,
+  SparkStatsApiPayload,
+} from "./sparkStatsShared";
+export { SPARK_STATS_HORIZON_LABELS, SPARK_STATS_HORIZON_ORDER } from "./sparkStatsShared";
 
 function shortLabel(contractSymbol: string): string {
   const s = contractSymbol.replace(/_USDT$/i, "").trim();
@@ -86,26 +103,6 @@ function mf(w: boolean | null | undefined): string {
 const MAX_LINES = 14;
 const MAX_FIRE_LINES = 20;
 
-/** Horizon keys for win-rate matrix + API (30m … 4h momentum) */
-export type SparkHorizonId = "m30m" | "m1h" | "m2h" | "m3h" | "m4h";
-
-export const SPARK_STATS_HORIZON_ORDER: SparkHorizonId[] = ["m30m", "m1h", "m2h", "m3h", "m4h"];
-
-export const SPARK_STATS_HORIZON_LABELS: Record<SparkHorizonId, string> = {
-  m30m: "30m",
-  m1h: "1h",
-  m2h: "2h",
-  m3h: "3h",
-  m4h: "4h",
-};
-
-export type SparkHorizonCell = {
-  wins: number;
-  total: number;
-  /** 0–100 หรือ null เมื่อ total === 0 */
-  rate: number | null;
-};
-
 function horizonCell(wins: number, total: number): SparkHorizonCell {
   return {
     wins,
@@ -124,18 +121,6 @@ function horizonsFromAgg(a: Agg, l: LongAgg): Record<SparkHorizonId, SparkHorizo
   };
 }
 
-export type SparkMatrixRowVol = {
-  band: SparkVolBand;
-  labelTh: string;
-  horizons: Record<SparkHorizonId, SparkHorizonCell>;
-};
-
-export type SparkMatrixRowMcap = {
-  band: SparkMcapBand;
-  labelTh: string;
-  horizons: Record<SparkHorizonId, SparkHorizonCell>;
-};
-
 /** สำหรับ format ข้อความ LINE — ค่าเดียวกับที่ใช้สร้าง matrix */
 export type SparkStatsLineFormatAggs = {
   total: Agg;
@@ -146,27 +131,8 @@ export type SparkStatsLineFormatAggs = {
   byMcapLong: Record<SparkMcapBand, LongAgg>;
 };
 
-/** ค่าที่ส่งออกทาง API LIFF (ไม่รวม aggregates ภายในสำหรับข้อความ LINE) */
-export type SparkStatsApiPayload = Omit<SparkStatsPayload, "lineFormatAggs">;
-
-export type SparkStatsPayload = {
-  generatedAt: string;
-  historyCount: number;
-  pendingCount: number;
-  fireLogCount: number;
-  upFire: number;
-  downFire: number;
-  upSpark: number;
-  downSpark: number;
-  /** true เมื่อไม่มี log spark, pending, history — ข้อความพิเศษ */
-  emptyGlobal: boolean;
-  matrixByVol: SparkMatrixRowVol[];
-  matrixByMcap: SparkMatrixRowMcap[];
-  totalHorizons: Record<SparkHorizonId, SparkHorizonCell>;
+export type SparkStatsPayload = SparkStatsApiPayload & {
   lineFormatAggs: SparkStatsLineFormatAggs;
-  recentFireLines: string[];
-  pendingLines: string[];
-  historyTailLines: string[];
 };
 
 /**
