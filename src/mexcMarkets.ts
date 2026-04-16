@@ -278,6 +278,19 @@ async function fetchContractKline15m(symbol: string): Promise<KlineArrays | null
   }
 }
 
+/**
+ * ดึง close 15m (เก่า→ใหม่) สำหรับ EMA — ตัดแท่งสุดท้ายที่อาจยังไม่ปิด (สอดคล้อง index n-2 ใน momentum)
+ */
+export async function fetchPerp15mClosesForChecklist(contractSymbol: string): Promise<number[] | null> {
+  const k = await fetchContractKline15m(contractSymbol.trim());
+  if (!k?.close.length) return null;
+  const raw = k.close.map((c) => Number(c)).filter((c) => Number.isFinite(c) && c > 0);
+  if (raw.length < 14) return null;
+  const n = raw.length;
+  const closed = n >= 3 ? raw.slice(0, n - 1) : raw;
+  return closed.length >= 14 ? closed : null;
+}
+
 /** แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด — return เป็น % จาก open→close */
 export type LastClosed15mBarResult = {
   returnPct: number;

@@ -1,9 +1,11 @@
 import axios from "axios";
 import { resolveContractSymbol } from "./coinMap";
 import { fetchMarketPulseData, MarketPulseFetchError } from "./marketPulseFetch";
+import { computeEmaLast } from "./emaUtils";
 import {
   fetchContractTickerSingle,
   fetchMaxOrderContractsForSymbol,
+  fetchPerp15mClosesForChecklist,
   fetchPerpHourlyClosesForNearHigh,
   fetchSpotPriceSingle,
   perpSymbolToSpotSymbol,
@@ -110,13 +112,16 @@ export async function buildPositionChecklistMessage(
   const sentGreedTh = envNum("KOJI_SCORE_SENT_GREED_THRESHOLD", 50);
   const basisAbsPct = envNum("KOJI_SCORE_BASIS_ABS_PCT", 1);
   const maxLevCfg = envNum("KOJI_SCORE_MAX_LEVERAGE", 3);
+  const emaPricePen = envNum("POSITION_CHECK_EMA_PRICE_PENALTY", 15);
+  const emaAlignPen = envNum("POSITION_CHECK_EMA_ALIGN_PENALTY", 10);
 
-  const [ticker, klineHigh, mcapUsd, pulseResult, maxOrderContracts] = await Promise.all([
+  const [ticker, klineHigh, mcapUsd, pulseResult, maxOrderContracts, closes15m] = await Promise.all([
     fetchContractTickerSingle(contractSymbol),
     fetchPerpHourlyClosesForNearHigh(contractSymbol),
     fetchCoinGeckoMarketCapUsd(base),
     fetchMarketPulseData().catch((e: unknown) => ({ error: e })),
     fetchMaxOrderContractsForSymbol(contractSymbol),
+    fetchPerp15mClosesForChecklist(contractSymbol),
   ]);
 
   if (!ticker?.lastPrice || typeof ticker.lastPrice !== "number" || ticker.lastPrice <= 0) {
@@ -134,6 +139,9 @@ export async function buildPositionChecklistMessage(
   const amount24 =
     typeof ticker.amount24 === "number" && !Number.isNaN(ticker.amount24) ? ticker.amount24 : null;
   const funding = typeof ticker.fundingRate === "number" && !Number.isNaN(ticker.fundingRate) ? ticker.fundingRate : 0;
+
+  const ema6 = closes15m ? computeEmaLast(closes15m, 6) : null;
+  const ema12 = closes15m ? computeEmaLast(closes15m, 12) : null;
 
   let nearHigh = false;
   if (klineHigh && klineHigh.maxClose > 0) {
@@ -206,13 +214,48 @@ export async function buildPositionChecklistMessage(
     });
   }
 
+  /** EMA 15m: short ต้อง last < EMA12 และ EMA6 < EMA12 — long สลับทิศ */
+  if (ema12 != null && ema6 != null) {
+    if (dir === "short") {
+      if (futPx >= ema12) {
+        penalties.push({
+          key: "ema15",
+          points: emaPricePen,
+          deductionLine: `❌ SHORT: last ≥ EMA12 (15m) — ต้องการราคาต่ำกว่า EMA12: −${emaPricePen}`,
+        });
+      }
+      if (ema6 >= ema12) {
+        penalties.push({
+          key: "emaAlign",
+          points: emaAlignPen,
+          deductionLine: `❌ SHORT: EMA6 ≥ EMA12 (15m) — ควร EMA6 < EMA12: −${emaAlignPen}`,
+        });
+      }
+    } else {
+      if (futPx <= ema12) {
+        penalties.push({
+          key: "ema15",
+          points: emaPricePen,
+          deductionLine: `❌ LONG: last ≤ EMA12 (15m) — ต้องการราคาเหนือ EMA12: −${emaPricePen}`,
+        });
+      }
+      if (ema6 <= ema12) {
+        penalties.push({
+          key: "emaAlign",
+          points: emaAlignPen,
+          deductionLine: `❌ LONG: EMA6 ≤ EMA12 (15m) — ควร EMA6 > EMA12: −${emaAlignPen}`,
+        });
+      }
+    }
+  }
+
   const totalPen = penalties.reduce((s, p) => s + p.points, 0);
   const score = Math.max(0, 100 - totalPen);
 
   const dirEmoji = dir === "short" ? "📉" : "📈";
   const header = `[${dir.toUpperCase()}] ${base} / USDT ${dirEmoji}`;
 
-  const statusOrder = ["sentiment", "liquidity", "newHigh", "weekend", "basis"] as const;
+  const statusOrder = ["sentiment", "liquidity", "newHigh", "ema15", "emaAlign", "weekend", "basis"] as const;
   const statusReason = (() => {
     for (const k of statusOrder) {
       const hit = penalties.find((p) => p.key === k);
@@ -220,6 +263,8 @@ export async function buildPositionChecklistMessage(
         if (k === "sentiment") return "Market Sentiment";
         if (k === "liquidity") return "Liquidity";
         if (k === "newHigh") return "ATH Guard (48h)";
+        if (k === "ema15") return "EMA12 (15m) vs price";
+        if (k === "emaAlign") return "EMA6/12 (15m)";
         if (k === "weekend") return "Weekend";
         if (k === "basis") return "Spot–Perp Gap";
       }
@@ -248,6 +293,30 @@ export async function buildPositionChecklistMessage(
   const athLine = nearHigh
     ? `ATH Guard (48h): ⚠️ ราคาใกล้ยอดสูงสุดในช่วง ~48 ชม. — ระวังเป็นพิเศษ · เลเวอเรจ ≤${maxLevCfg}x แนะนำ`
     : `ATH Guard (48h): ✅ ยังไม่แนบยอดสูงสุด ~48 ชม. (เทียบจาก kline 1h)`;
+
+  let ema15mLine: string;
+  if (ema6 != null && ema12 != null) {
+    const e6 = ema6.toFixed(4);
+    const e12 = ema12.toFixed(4);
+    const lp = futPx.toFixed(4);
+    if (dir === "short") {
+      const pxOk = futPx < ema12;
+      const alignOk = ema6 < ema12;
+      ema15mLine = [
+        `Trend filter (15m / EMA): Last=${lp} · EMA6=${e6} · EMA12=${e12}`,
+        `SHORT: ราคา < EMA12 → ${pxOk ? "✅" : "⚠️ ไม่เข้าเกณฑ์ (แจ้งใน Deductions)"} · EMA6 < EMA12 → ${alignOk ? "✅" : "⚠️ ไม่เข้าเกณฑ์"}`,
+      ].join("\n");
+    } else {
+      const pxOk = futPx > ema12;
+      const alignOk = ema6 > ema12;
+      ema15mLine = [
+        `Trend filter (15m / EMA): Last=${lp} · EMA6=${e6} · EMA12=${e12}`,
+        `LONG: ราคา > EMA12 → ${pxOk ? "✅" : "⚠️ ไม่เข้าเกณฑ์ (แจ้งใน Deductions)"} · EMA6 > EMA12 → ${alignOk ? "✅" : "⚠️ ไม่เข้าเกณฑ์"}`,
+      ].join("\n");
+    }
+  } else {
+    ema15mLine = `Trend filter (15m / EMA): ❓ ไม่มีข้อมูล kline 15m เพียงพอ (หรือดึงไม่สำเร็จ) — ข้ามกฎ EMA`;
+  }
 
   let sentimentRuleLine: string;
   if (fngVal != null) {
@@ -302,6 +371,7 @@ export async function buildPositionChecklistMessage(
     "",
     weekendLine,
     athLine,
+    ema15mLine,
     sentimentRuleLine,
     "",
     `📊 Koji Score: ${score}/100`,

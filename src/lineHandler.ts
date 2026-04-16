@@ -92,7 +92,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
   เปิด LIFF หน้า «สถิติ Spark» เพื่อดู Win-rate matrix แยก Vol / มาร์ก. (พร็อกซี)
   (EN: spark stats, #sparkStats)
 
-• เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis)
+• เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis / EMA6·12 บน 15m)
   ตัวอย่าง: short btc · long eth · ชอต btc 5x
   (EN: short btc, long eth)
 
