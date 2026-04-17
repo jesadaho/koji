@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sendTelegramMessageToChat } from "@/src/telegramAlert";
+import { parsePositionChecklist } from "@/src/positionChecklistLineCommands";
+import { buildPositionChecklistMessage } from "@/src/positionChecklistService";
+import { isSparkStatsQuery } from "@/src/sparkFollowUpLineCommands";
+import { formatSparkStatsMessage } from "@/src/sparkFollowUpStats";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/** `/short@bot btc` → `short btc` — ให้ตรงกับพาร์สเซอร์แบบ LINE */
+function normalizeTelegramSlashCommand(raw: string): string {
+  const t = raw.trim();
+  if (!t.startsWith("/")) return t;
+  let rest = t.slice(1);
+  const m = rest.match(/^([a-zA-Z_]+)@\S+\s*(.*)$/s);
+  if (m) {
+    rest = `${m[1]!} ${m[2] ?? ""}`.trim();
+  }
+  return rest;
+}
 
 /** URL ที่เปิด Mini App (BotFather Menu Button / ปุ่ม web_app) */
 function miniAppOpenUrl(): string {
@@ -14,7 +31,8 @@ function miniAppOpenUrl(): string {
 }
 
 /**
- * Telegram Bot webhook — ตอบ /start ด้วยปุ่มเปิด Web App
+ * Telegram Bot webhook — /start → ปุ่ม Mini App · ข้อความอื่น: เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
+ * ในกลุ่ม: ถ้า BotFather เปิด Group Privacy บอทจะเห็นแค่คำสั่งที่ขึ้นต้น / หรือ @ชื่อบอท — ใช้ `/short btc` แทนข้อความเปล่า
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
  * แนะนำตั้ง `TELEGRAM_WEBHOOK_SECRET` แล้วส่ง `secret_token` ใน setWebhook
  */
@@ -32,7 +50,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "TELEGRAM_BOT_TOKEN" }, { status: 503 });
   }
 
-  let update: { message?: { chat?: { id?: number }; text?: string } };
+  let update: {
+    message?: { chat?: { id?: number }; text?: string; message_thread_id?: number };
+  };
   try {
     update = (await req.json()) as typeof update;
   } catch {
@@ -41,7 +61,14 @@ export async function POST(req: NextRequest) {
 
   const text = update.message?.text?.trim() ?? "";
   const chatId = update.message?.chat?.id;
-  if (chatId != null && (text === "/start" || text.startsWith("/start "))) {
+  const replyThreadId = update.message?.message_thread_id;
+  const threadOpts =
+    replyThreadId != null && replyThreadId > 0 ? { messageThreadId: replyThreadId } : undefined;
+  if (chatId == null) {
+    return NextResponse.json({ ok: true });
+  }
+
+  if (text === "/start" || text.startsWith("/start ")) {
     const url = miniAppOpenUrl();
     const payload: Record<string, unknown> = {
       chat_id: chatId,
@@ -68,6 +95,53 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.error("[telegram/webhook] sendMessage", e);
     }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!text) {
+    return NextResponse.json({ ok: true });
+  }
+
+  const normalized = normalizeTelegramSlashCommand(text);
+
+  if (isSparkStatsQuery(text) || isSparkStatsQuery(normalized)) {
+    try {
+      const body = await formatSparkStatsMessage();
+      await sendTelegramMessageToChat(String(chatId), body, threadOpts);
+    } catch (e) {
+      console.error("[telegram/webhook] spark stats", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `อ่านสถิติ Spark ไม่สำเร็จ — ${detail.slice(0, 300)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] spark stats error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const checklist = parsePositionChecklist(normalized);
+  if (checklist) {
+    try {
+      const body = await buildPositionChecklistMessage(checklist);
+      await sendTelegramMessageToChat(String(chatId), body, threadOpts);
+    } catch (e) {
+      console.error("[telegram/webhook] position checklist", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `สร้าง checklist ไม่สำเร็จ — ${detail.slice(0, 300)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] checklist error reply", sendErr);
+      }
+    }
   }
 
   return NextResponse.json({ ok: true });
@@ -82,7 +156,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: "telegram_webhook",
-    hint: "Telegram จะส่งอัปเดตมาที่นี่ด้วย POST เท่านั้น — ต้องเรียก setWebhook ก่อน /start ถึงจะมีผล",
+    hint: "Telegram จะส่งอัปเดตมาที่นี่ด้วย POST เท่านั้น — ต้องเรียก setWebhook ก่อน /start ถึงจะมีผล · DM: short btc / long eth · สถิติ spark — ในกลุ่มใช้ /short btc ถ้าเปิด Group Privacy",
     miniAppBaseConfigured: Boolean(base),
     webhookSecretEnvSet: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET?.trim()),
     setWebhookDocs: "https://core.telegram.org/bots/api#setwebhook",
