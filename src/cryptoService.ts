@@ -7,6 +7,9 @@ export type CoinQuote = {
 };
 
 const MEXC = "https://api.mexc.com/api/v1/contract/ticker";
+/** fallback เมื่อ MEXC ไม่ตอบหรือไม่มีคู่ — ราคาใกล้เคียง perp USDT (ไม่เท่ากันทุกจุด) */
+const BINANCE_FAPI_PRICE = "https://fapi.binance.com/fapi/v1/ticker/price";
+const BINANCE_SPOT_PRICE = "https://api.binance.com/api/v3/ticker/price";
 
 type MexcTickerRow = {
   symbol: string;
@@ -59,6 +62,49 @@ function normalizeResponse(
   return out;
 }
 
+function isValidQuote(q: CoinQuote | undefined): boolean {
+  return q != null && q.usd != null && Number.isFinite(q.usd) && q.usd > 0;
+}
+
+/** MEXC perp เช่น BTC_USDT → Binance symbol BTCUSDT */
+function mexcContractToBinanceSymbol(contractSymbol: string): string | null {
+  const s = contractSymbol.trim().toUpperCase();
+  if (!s.endsWith("_USDT")) return null;
+  const inner = s.slice(0, -"_USDT".length).replace(/_/g, "");
+  if (!inner) return null;
+  return `${inner}USDT`;
+}
+
+async function fetchBinancePriceOnce(url: string, binanceSymbol: string): Promise<number | null> {
+  try {
+    const { data } = await axios.get<{ price?: string }>(url, {
+      params: { symbol: binanceSymbol },
+      timeout: 12_000,
+    });
+    const p = typeof data?.price === "string" ? Number(data.price) : Number(data?.price);
+    if (!Number.isFinite(p) || p <= 0) return null;
+    return p;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ดึงราคา USDT จาก Binance เมื่อ MEXC ล้ม — ลอง USDT-M futures ก่อน แล้วค่อย spot
+ * คืนคีย์เดิมตามที่ caller ใช้ (เช่น BTC_USDT)
+ */
+async function fetchBinanceFallbackForContract(wantedKey: string): Promise<Record<string, CoinQuote>> {
+  const bn = mexcContractToBinanceSymbol(wantedKey);
+  if (!bn) return {};
+
+  let p = await fetchBinancePriceOnce(BINANCE_FAPI_PRICE, bn);
+  if (p == null) {
+    p = await fetchBinancePriceOnce(BINANCE_SPOT_PRICE, bn);
+  }
+  if (p == null) return {};
+  return { [wantedKey]: { usd: p } };
+}
+
 async function fetchContractTickerSingleSymbol(symbol: string): Promise<Record<string, CoinQuote>> {
   const sym = symbol.trim();
   if (!sym) return {};
@@ -78,7 +124,8 @@ async function fetchContractTickerSingleSymbol(symbol: string): Promise<Record<s
 /**
  * ดึงราคา MEXC Futures ตามสัญญา เช่น BTC_USDT
  * - 1 สัญญา: GET พร้อม ?symbol=
- * - หลายสัญญา: GET ทั้งหมดแล้วกรอง — ถ้าไม่เจอในชุดใหญ่ (เช่น alt บางคู่) จะ GET ทีละสัญญาเป็น fallback
+ * - หลายสัญญา: GET ทั้งหมดแล้วกรอง — ถ้าไม่เจอในชุดใหญ่ (เช่น alt บางคู่) จะ GET ทีละสัญญา
+ * - ถ้ายังไม่มีราคา: fallback Binance USDT-M last แล้วค่อย Binance spot (สัญลักษณ์ BTC_USDT → BTCUSDT)
  */
 export async function fetchSimplePrices(contractSymbols: string[]): Promise<Record<string, CoinQuote>> {
   const unique = Array.from(
@@ -89,7 +136,12 @@ export async function fetchSimplePrices(contractSymbols: string[]): Promise<Reco
   const wanted = new Set(unique);
 
   if (unique.length === 1) {
-    return fetchContractTickerSingleSymbol(unique[0]!);
+    const sym = unique[0]!;
+    let out = await fetchContractTickerSingleSymbol(sym);
+    if (!isValidQuote(out[sym])) {
+      Object.assign(out, await fetchBinanceFallbackForContract(sym));
+    }
+    return out;
   }
 
   let out: Record<string, CoinQuote> = {};
@@ -106,9 +158,12 @@ export async function fetchSimplePrices(contractSymbols: string[]): Promise<Reco
 
   for (const sym of unique) {
     const q = out[sym];
-    if (q?.usd != null && Number.isFinite(q.usd) && q.usd > 0) continue;
+    if (isValidQuote(q)) continue;
     const single = await fetchContractTickerSingleSymbol(sym);
     Object.assign(out, single);
+    if (!isValidQuote(out[sym])) {
+      Object.assign(out, await fetchBinanceFallbackForContract(sym));
+    }
   }
 
   return out;

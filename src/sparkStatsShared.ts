@@ -54,8 +54,22 @@ export type SparkSymbolMatrixRow = {
   horizons: Record<SparkHorizonId, SparkHorizonCell>;
 };
 
+/**
+ * เมื่อ matrix ทุกช่องเป็น — อธิบายให้ผู้ใช้เข้าใจ (ไม่ใช่บั๊ก UI)
+ * - fire_log_only: มี Spark log แต่ยังไม่มีแถว follow-up จบครบ
+ * - history_without_momentum: มีแถว history แต่ทุกช่วง momentum เป็น null
+ */
+export type SparkMatrixEmptyHint = null | "fire_log_only" | "history_without_momentum";
+
 /** ค่าที่ส่งออกทาง API LIFF (ไม่รวม aggregates ภายในสำหรับข้อความ LINE) */
 export type SparkStatsApiPayload = {
+  /**
+   * false = โฮสต์บน Vercel แต่ยังไม่มี REDIS_URL / Vercel KV — ไม่บันทึก state Spark
+   * (แจ้งเตือน Spark ยังทำงาน แต่ log / matrix จะว่าง)
+   */
+  sparkStatsPersistenceEnabled: boolean;
+  /** ทำไม win-rate matrix จึงยังไม่มีตัวเลข (null = ไม่ต้องแสดงคำอธิบายพิเศษ) */
+  sparkMatrixEmptyHint: SparkMatrixEmptyHint;
   generatedAt: string;
   historyCount: number;
   pendingCount: number;

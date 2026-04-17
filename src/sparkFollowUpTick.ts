@@ -15,6 +15,13 @@ function enabled(): boolean {
   return true;
 }
 
+/** แจ้งเตือนเมื่อดึงราคา follow-up ไม่สำเร็จ — ปิดด้วย SPARK_FOLLOWUP_PRICE_FAIL_NOTIFY=0 */
+function priceFailNotifyEnabled(): boolean {
+  const raw = process.env.SPARK_FOLLOWUP_PRICE_FAIL_NOTIFY?.trim().toLowerCase();
+  if (raw === "0" || raw === "false" || raw === "off") return false;
+  return true;
+}
+
 function shortLabel(contractSymbol: string): string {
   const s = contractSymbol.replace(/_USDT$/i, "").trim();
   return s.replace(/_/g, "") || contractSymbol;
@@ -141,10 +148,34 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
     let cur: SparkFollowUpPending = { ...p };
     /** ราคา snapshot รอบเดียวต่อ 1 pending — ใช้ร่วม T+30m … T+4h ในรอบเดียวกัน */
     let rowPrice: number | null | undefined;
+    /** ส่งแจ้งเตือนดึงราคาไม่สำเร็จได้ครั้งเดียวต่อ 1 pending ต่อรอบ cron */
+    let priceFetchFailNotified = false;
 
     const snapUsd = async (): Promise<number | null> => {
       if (rowPrice !== undefined) return rowPrice;
       rowPrice = await usdForSymbol(cur.symbol, quoteCache);
+      if (
+        rowPrice == null &&
+        priceFailNotifyEnabled() &&
+        !priceFetchFailNotified &&
+        subs.length > 0
+      ) {
+        priceFetchFailNotified = true;
+        const base = shortLabel(cur.symbol);
+        const body = [
+          "⚠️ Spark follow-up: ดึงราคาไม่สำเร็จ",
+          `[${base}]/USDT`,
+          "สถิติจุดวัดในรอบ cron นี้จะเป็น null — รอบถัดไปจะลองดึงใหม่ (MEXC → Binance)",
+        ].join("\n");
+        for (const uid of subs) {
+          try {
+            await sendAlertNotification(client, uid, body);
+            notifiedPushes += 1;
+          } catch (e) {
+            console.error("[sparkFollowUpTick] price-fail notify", cur.symbol, uid, e);
+          }
+        }
+      }
       return rowPrice;
     };
 

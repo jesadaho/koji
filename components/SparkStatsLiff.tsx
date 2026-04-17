@@ -16,6 +16,10 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const MAX_API_DEBUG_BODY = 12_000;
 
+/** อธิบายท้ายตารางแยกเหรียญ: ตัวหารต่อช่วง ≠ n เมื่อดึงราคาไม่ได้บางจุด */
+const SPARK_SYMBOL_MATRIX_FOOTNOTE =
+  "แต่ละคอลัมน์คิด win จากเหตุการณ์ที่มีราคาตอนจุดวัดนั้น (wins/total) — total อาจน้อยกว่า n ถ้าบางครั้งดึงราคาไม่สำเร็จ; — = ไม่มีเหตุการณ์ใดมีผลชัดเจนในช่องนั้น แม้แถวจะจบครบแล้วก็ตาม";
+
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length <= max) return s;
   return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -554,12 +558,89 @@ export default function SparkStatsLiff() {
       </p>
 
       <div className="card">
+        {payload.sparkStatsPersistenceEnabled === false ? (
+          <div
+            className="sparkStatsPersistWarn"
+            role="alert"
+            style={{
+              marginBottom: "0.85rem",
+              padding: "0.65rem 0.75rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border)",
+              background: "color-mix(in srgb, var(--card) 85%, #c45c26)",
+              fontSize: "0.85rem",
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>ยังไม่มีที่เก็บถาวรสำหรับสถิติ Spark</strong>
+            <span className="liffTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
+              Vercel needs REDIS_URL or Vercel KV
+            </span>
+            <p style={{ margin: "0.5rem 0 0" }}>
+              แจ้งเตือน Spark ยังส่งได้ แต่ <strong>log / matrix จะไม่สะสม</strong> จนกว่าจะตั้ง{" "}
+              <code>REDIS_URL</code> หรือ <code>KV_REST_API_URL</code> แล้ว redeploy
+            </p>
+          </div>
+        ) : null}
+        {payload.sparkMatrixEmptyHint === "fire_log_only" ? (
+          <div
+            className="sparkStatsMatrixHint"
+            role="status"
+            style={{
+              marginBottom: "0.85rem",
+              padding: "0.65rem 0.75rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border)",
+              background: "color-mix(in srgb, var(--card) 88%, #2a6ea8)",
+              fontSize: "0.85rem",
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>Matrix ยังเป็น — เพราะยังไม่มี follow-up จบครบ</strong>
+            <span className="liffTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
+              Spark log counts fires; win-rate needs resolved T+15m…T+4h rows (~4h after signal).
+            </span>
+            <p style={{ margin: "0.5rem 0 0" }}>
+              ตาราง &quot;เหรียญใน Spark log&quot; นับทุกครั้งที่แจ้งแล้ว — แต่คอลัมน์ 15m–4h มาจากแถว &quot;follow-up จบแล้ว&quot; เท่านั้น (ครบ T+4h แล้วถึงเข้า history) แม้เวลาจะผ่าน 15 นาทีแล้ว matrix จึงยังเป็น — จนกว่าจะจบครบรอบ
+            </p>
+            <p style={{ margin: "0.45rem 0 0" }}>
+              หมายเหตุ: จุด T+15m เป็น<strong>สถิติเงียบ</strong> — ไม่ส่งข้อความ LINE (แจ้งเฉพาะ T+30m / T+1h) ดูคิว pending ด้านล่างถ้ามี
+            </p>
+          </div>
+        ) : null}
+        {payload.sparkMatrixEmptyHint === "history_without_momentum" ? (
+          <div
+            className="sparkStatsMatrixHint"
+            role="status"
+            style={{
+              marginBottom: "0.85rem",
+              padding: "0.65rem 0.75rem",
+              borderRadius: "8px",
+              border: "1px solid var(--border)",
+              background: "color-mix(in srgb, var(--card) 88%, #a86e2a)",
+              fontSize: "0.85rem",
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>มี follow-up จบแล้ว แต่ทุกช่วง momentum เป็น null</strong>
+            <span className="liffTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
+              Price fetch may have failed at checkpoints, or rows predate momentum fields.
+            </span>
+            <p style={{ margin: "0.5rem 0 0" }}>
+              Matrix จึงแสดง — จนกว่ารอบใหม่จะบันทึกผลชนะ/แพ้ได้ครบ — ลองเช็ค cron ดึงราคาและ log ล่าสุดใน &quot;follow-up จบแล้ว&quot;
+            </p>
+          </div>
+        ) : null}
         <p className="sub" style={{ marginTop: 0 }}>
           อัปเดต: {new Date(payload.generatedAt).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })} · Spark log{" "}
           {payload.fireLogCount} ครั้ง · follow-up จบแล้ว {payload.historyCount} · คิว {payload.pendingCount}
         </p>
         {payload.emptyGlobal ? (
-          <p>ยังไม่มี log Spark — หลังแจ้งเตือนสำเร็จจะบันทึกที่นี่ (ต้องมี Redis/KV บนโฮสต์)</p>
+          <p>
+            {payload.sparkStatsPersistenceEnabled === false
+              ? "ด้านบนคือสาเหตุที่เห็นเลข 0 — หลังตั้ง KV/Redis แล้ว สถิติจะเริ่มนับจากเหตุการณ์ถัดไป"
+              : "ยังไม่มี log Spark — หลังแจ้งเตือนสำเร็จจะบันทึกที่นี่ (โฮสต์ต้องมี Redis/KV ให้ state)"}
+          </p>
         ) : (
           <>
             <p className="sub">
@@ -603,7 +684,7 @@ export default function SparkStatsLiff() {
               <SymbolMatrixTable
                 title="แยกรายเหรียญ"
                 titleEn="Per-symbol matrix"
-                hint="แถวละสัญญา · n = จำนวนเหตุการณ์ในบล็อกนี้ · คอลัมน์ = T+15m … T+4h"
+                hint={`แถวละสัญญา · n = จำนวนเหตุการณ์ในบล็อกนี้ · คอลัมน์ = T+15m … T+4h · ${SPARK_SYMBOL_MATRIX_FOOTNOTE}`}
                 rows={payload.matrixBySymbol ?? []}
                 titleTag="h3"
               />
@@ -633,7 +714,7 @@ export default function SparkStatsLiff() {
               <SymbolMatrixTable
                 title="แยกรายเหรียญ"
                 titleEn="Per-symbol (Spark up)"
-                hint="เฉพาะเหตุการณ์ Spark ขึ้นในแต่ละสัญญา · n = จำนวนในบล็อกนี้"
+                hint={`เฉพาะเหตุการณ์ Spark ขึ้นในแต่ละสัญญา · n = จำนวนในบล็อกนี้ · ${SPARK_SYMBOL_MATRIX_FOOTNOTE}`}
                 rows={payload.matrixBySymbolSparkUp ?? []}
                 titleTag="h3"
               />
@@ -663,7 +744,7 @@ export default function SparkStatsLiff() {
               <SymbolMatrixTable
                 title="แยกรายเหรียญ"
                 titleEn="Per-symbol (Spark down)"
-                hint="เฉพาะเหตุการณ์ Spark ลงในแต่ละสัญญา · n = จำนวนในบล็อกนี้"
+                hint={`เฉพาะเหตุการณ์ Spark ลงในแต่ละสัญญา · n = จำนวนในบล็อกนี้ · ${SPARK_SYMBOL_MATRIX_FOOTNOTE}`}
                 rows={payload.matrixBySymbolSparkDown ?? []}
                 titleTag="h3"
               />

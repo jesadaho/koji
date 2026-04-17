@@ -5,6 +5,7 @@ import { mcapBandLabelTh, volBandLabelTh } from "./sparkTierContext";
 import type {
   SparkHorizonCell,
   SparkHorizonId,
+  SparkMatrixEmptyHint,
   SparkMatrixRowMcap,
   SparkMatrixRowVol,
   SparkStatsApiPayload,
@@ -12,10 +13,12 @@ import type {
   SparkSymbolMatrixRow,
 } from "./sparkStatsShared";
 import { SPARK_STATS_HORIZON_ORDER } from "./sparkStatsShared";
+import { useCloudStorage } from "./remoteJsonStore";
 
 export type {
   SparkHorizonCell,
   SparkHorizonId,
+  SparkMatrixEmptyHint,
   SparkMatrixRowMcap,
   SparkMatrixRowVol,
   SparkStatsApiPayload,
@@ -153,6 +156,23 @@ type AggregatedMatrices = {
   downSpark: number;
 };
 
+function historyHasAnyMomentumOutcome(history: SparkFollowUpHistoryRow[]): boolean {
+  for (const h of history) {
+    const outs = [
+      h.momentumWon15,
+      h.momentumWon30,
+      h.momentumWon60,
+      h.momentumWon2h,
+      h.momentumWon3h,
+      h.momentumWon4h,
+    ];
+    for (const o of outs) {
+      if (o === true || o === false) return true;
+    }
+  }
+  return false;
+}
+
 function aggregateHistory(history: SparkFollowUpHistoryRow[]): AggregatedMatrices {
   const total = emptyAgg();
   const totalLong = emptyLong();
@@ -244,6 +264,12 @@ export type SparkStatsPayload = SparkStatsApiPayload & {
 /**
  * สรุปสถิติ Spark + follow-up เป็น JSON (ใช้ LIFF / LINE ร่วมกัน)
  */
+/** บน Vercel ต้องมี Redis/KV ถึงจะ persist ได้ — โลคัลใช้ไฟล์ใน data/ */
+function sparkStatsPersistenceEnabledForHost(): boolean {
+  if (process.env.VERCEL !== "1") return true;
+  return useCloudStorage();
+}
+
 export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPayload {
   const { history, pending, recentSparks = [] } = state;
   const n = history.length;
@@ -275,6 +301,15 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
       : [];
 
   const emptyGlobal = fires === 0 && pendN === 0 && n === 0;
+
+  let sparkMatrixEmptyHint: SparkMatrixEmptyHint = null;
+  if (!emptyGlobal) {
+    if (n === 0 && fires > 0) {
+      sparkMatrixEmptyHint = "fire_log_only";
+    } else if (n > 0 && !historyHasAnyMomentumOutcome(history)) {
+      sparkMatrixEmptyHint = "history_without_momentum";
+    }
+  }
 
   const full = aggregateHistory(history);
   const upHist = history.filter((h) => h.sparkReturnPct > 0);
@@ -325,6 +360,8 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
   const matrixBySymbolSparkDown = buildMatrixRowsBySymbol(downHist);
 
   return {
+    sparkStatsPersistenceEnabled: sparkStatsPersistenceEnabledForHost(),
+    sparkMatrixEmptyHint,
     generatedAt: new Date().toISOString(),
     historyCount: n,
     pendingCount: pendN,
@@ -380,11 +417,21 @@ function formatSparkStatsFromPayload(p: SparkStatsPayload): string {
     );
   }
   if (p.emptyGlobal) {
+    if (!p.sparkStatsPersistenceEnabled) {
+      return [
+        ...headerParts,
+        "",
+        "⚠️ โหมดนี้ไม่บันทึกสถิติ Spark — บน Vercel ต้องตั้ง REDIS_URL หรือ Vercel KV (KV_REST_API_URL)",
+        "แจ้งเตือน Spark ยังส่งได้ แต่ log / matrix จะว่างจนกว่าจะมีที่เก็บถาวร",
+        "",
+        "หลังตั้ง env แล้ว redeploy — สถิติใหม่จะสะสมได้",
+      ].join("\n");
+    }
     return [
       ...headerParts,
       "",
       "ยังไม่มี log Spark — หลังแจ้งเตือนสำเร็จจะบันทึกที่นี่",
-      "(ต้องมี Redis/KV บน Vercel ให้ state เก็บได้)",
+      "(ถ้ามีแจ้งแล้วแต่ยังว่าง บน Vercel ให้เช็ค Redis/KV)",
     ].join("\n");
   }
 
@@ -402,8 +449,21 @@ function formatSparkStatsFromPayload(p: SparkStatsPayload): string {
       "",
       "— สรุป momentum (หลัง follow-up จบ) —",
       "ยังไม่มีเหตุการณ์ที่จบครบ T+30m … T+4h — รอเวลาหลังสัญญาณ",
+      ...(p.sparkMatrixEmptyHint === "fire_log_only"
+        ? [
+            "",
+            "💡 ตารางเหรียญ (Spark log) นับทุกครั้งที่แจ้งแล้ว — matrix win-rate ใช้เฉพาะเหตุการณ์ follow-up จบครบ",
+          ]
+        : []),
       ...(p.pendingLines.length > 0 ? ["", "— คิวติดตาม —", ...p.pendingLines] : []),
     ].join("\n");
+  }
+
+  if (p.sparkMatrixEmptyHint === "history_without_momentum") {
+    headerParts.push(
+      "",
+      "⚠️ แถว follow-up มีแต่ momentum ว่างทุกช่วง — matrix จะเป็น — จนกว่ารอบใหม่จะดึงราคาได้ครบ (หรือเป็นข้อมูลเก่าก่อนอัปเดต)"
+    );
   }
 
   const { total, totalLong, byVol, byVolLong, byMcap, byMcapLong } = p.lineFormatAggs;
