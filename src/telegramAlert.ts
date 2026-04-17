@@ -9,6 +9,13 @@ export function telegramAlertConfigured(): boolean {
   return Boolean(token && chatId);
 }
 
+/** Spark follow-up + System Change → กลุ่ม Telegram (ไม่ใช่ TELEGRAM_ALERT_CHAT_ID) */
+export function telegramSparkSystemGroupConfigured(): boolean {
+  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  const chatId = process.env.TELEGRAM_SPARK_SYSTEM_CHAT_ID?.trim();
+  return Boolean(token && chatId);
+}
+
 function chunkString(text: string, maxLen: number): string[] {
   if (text.length <= maxLen) return [text];
   const out: string[] = [];
@@ -19,14 +26,17 @@ function chunkString(text: string, maxLen: number): string[] {
 }
 
 /**
- * ส่งข้อความแจ้งเตือนไป Telegram (แบ่งยาวอัตโนมัติ)
- * ต้องมี TELEGRAM_BOT_TOKEN + TELEGRAM_ALERT_CHAT_ID (chat_id ได้จาก getUpdates หลังกด Start ที่บอท)
+ * ส่งข้อความไป Telegram chat ใดก็ได้ (ต้องมี TELEGRAM_BOT_TOKEN)
+ * @param chatId เช่น -1001234567890 สำหรับกลุ่ม/ช่อง
  */
-export async function sendTelegramAlertMessage(text: string): Promise<void> {
+export async function sendTelegramMessageToChat(chatId: string, text: string): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const chatId = process.env.TELEGRAM_ALERT_CHAT_ID?.trim();
-  if (!token || !chatId) {
-    throw new Error("TELEGRAM_BOT_TOKEN หรือ TELEGRAM_ALERT_CHAT_ID ไม่ได้ตั้ง");
+  if (!token) {
+    throw new Error("TELEGRAM_BOT_TOKEN ไม่ได้ตั้ง");
+  }
+  const cid = chatId.trim();
+  if (!cid) {
+    throw new Error("chat_id ว่าง");
   }
 
   const url = `${TG_API}/bot${encodeURIComponent(token)}/sendMessage`;
@@ -37,7 +47,7 @@ export async function sendTelegramAlertMessage(text: string): Promise<void> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: chatId,
+        chat_id: cid,
         text: t,
         disable_web_page_preview: true,
       }),
@@ -55,4 +65,16 @@ export async function sendTelegramAlertMessage(text: string): Promise<void> {
       );
     }
   }
+}
+
+/**
+ * ส่งข้อความแจ้งเตือนไป Telegram (แบ่งยาวอัตโนมัติ)
+ * ต้องมี TELEGRAM_BOT_TOKEN + TELEGRAM_ALERT_CHAT_ID (chat_id ได้จาก getUpdates หลังกด Start ที่บอท)
+ */
+export async function sendTelegramAlertMessage(text: string): Promise<void> {
+  const chatId = process.env.TELEGRAM_ALERT_CHAT_ID?.trim();
+  if (!process.env.TELEGRAM_BOT_TOKEN?.trim() || !chatId) {
+    throw new Error("TELEGRAM_BOT_TOKEN หรือ TELEGRAM_ALERT_CHAT_ID ไม่ได้ตั้ง");
+  }
+  await sendTelegramMessageToChat(chatId, text);
 }

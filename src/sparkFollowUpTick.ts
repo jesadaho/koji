@@ -1,6 +1,6 @@
 import type { Client } from "@line/bot-sdk";
-import { sendAlertNotification } from "./alertNotify";
-import { fetchSimplePrices, type CoinQuote } from "./cryptoService";
+import { sendSparkSystemAlert } from "./alertNotify";
+import { contractHasBinancePriceFallback, fetchSimplePrices, type CoinQuote } from "./cryptoService";
 import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
 import {
   loadSparkFollowUpState,
@@ -55,8 +55,7 @@ function outcomeLabel(won: boolean | null, sparkUp: boolean): string {
   return won ? "momentum (short) ชนะ" : "fade (long) ชนะ";
 }
 
-function buildCheckpointMessage(
-  which: "30m" | "1h",
+function buildCheckpoint30mMessage(
   symbol: string,
   refPrice: number,
   endPrice: number | null,
@@ -67,7 +66,7 @@ function buildCheckpointMessage(
   const sparkUp = sparkReturnPct > 0;
   const pctStr = `${sparkReturnPct >= 0 ? "+" : ""}${sparkReturnPct.toFixed(1)}%`;
   return [
-    `📍 Koji Spark follow-up (${which === "30m" ? "T+30m" : "T+1h"})`,
+    `📍 Koji Spark follow-up (T+30m)`,
     `[${base}]/USDT · Spark ${pctStr}`,
     `อ้างอิงราคา: ${formatPriceUsd(refPrice)} (last + timestamp จาก series — ไม่ใช่ TF กราฟ)`,
     `ราคาปัจจุบัน: ${endPrice != null ? formatPriceUsd(endPrice) : "—"}`,
@@ -195,6 +194,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       rowPrice = lookup.usd;
       if (
         rowPrice == null &&
+        contractHasBinancePriceFallback(cur.symbol) &&
         priceFailNotifyEnabled() &&
         !priceFetchFailNotified &&
         subs.length > 0
@@ -205,28 +205,24 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
           lookup.detailIfNull?.trim() ||
           "ไม่ทราบสาเหตุ (ไม่มีรายละเอียดจากการดึงราคา)";
         const body = [
-          "⚠️ Spark follow-up: ดึงราคาไม่สำเร็จ",
+          "⚠️ Spark follow-up: ดึงราคาไม่สำเร็จ (ลอง MEXC + Binance แล้ว)",
           `[${base}]/USDT`,
-          "สถิติจุดวัดในรอบ cron นี้จะเป็น null — รอบถัดไปจะลองดึงใหม่ (MEXC → Binance)",
+          "สถิติจุดวัดในรอบ cron นี้จะเป็น null — รอบถัดไปจะลองใหม่",
           `รายละเอียด: ${detail}`,
         ].join("\n");
-        for (const uid of subs) {
-          try {
-            await sendAlertNotification(client, uid, body);
-            notifiedPushes += 1;
-          } catch (e) {
-            console.error("[sparkFollowUpTick] price-fail notify", cur.symbol, uid, e);
-          }
+        try {
+          notifiedPushes += await sendSparkSystemAlert(client, subs, body);
+        } catch (e) {
+          console.error("[sparkFollowUpTick] price-fail notify", cur.symbol, e);
         }
       }
       return rowPrice;
     };
 
+    /** T+30m แจ้ง LINE · T+1h เก็บสถิติอย่างเดียว (ไม่ push) */
     const runCheckpoint = async (kind: "30" | "60"): Promise<void> => {
       const endPrice = await snapUsd();
       const won = momentumOutcome(cur.refPrice, cur.sparkReturnPct, endPrice);
-      const which: "30m" | "1h" = kind === "30" ? "30m" : "1h";
-      const body = buildCheckpointMessage(which, cur.symbol, cur.refPrice, endPrice, cur.sparkReturnPct, won);
 
       if (kind === "30") {
         cur = {
@@ -245,12 +241,12 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       }
       checkpoints += 1;
 
-      for (const uid of subs) {
+      if (kind === "30") {
+        const body = buildCheckpoint30mMessage(cur.symbol, cur.refPrice, endPrice, cur.sparkReturnPct, won);
         try {
-          await sendAlertNotification(client, uid, body);
-          notifiedPushes += 1;
+          notifiedPushes += await sendSparkSystemAlert(client, subs, body);
         } catch (e) {
-          console.error("[sparkFollowUpTick] notify", cur.symbol, uid, e);
+          console.error("[sparkFollowUpTick] notify", cur.symbol, e);
         }
       }
     };

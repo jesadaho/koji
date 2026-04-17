@@ -75,6 +75,11 @@ function mexcContractToBinanceSymbol(contractSymbol: string): string | null {
   return `${inner}USDT`;
 }
 
+/** มีคู่ Binance ให้ลอง fallback — ใช้ตัดว่าจะแจ้งเตือน “ดึงราคาไม่สำเร็จ” หลังสองแหล่งหรือไม่ */
+export function contractHasBinancePriceFallback(contractSymbol: string): boolean {
+  return mexcContractToBinanceSymbol(contractSymbol) != null;
+}
+
 async function fetchBinancePriceOnce(url: string, binanceSymbol: string): Promise<number | null> {
   try {
     const { data } = await axios.get<{ price?: string }>(url, {

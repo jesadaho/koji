@@ -70,7 +70,7 @@ function addMomentum(a: Agg, h: SparkFollowUpHistoryRow): void {
   }
 }
 
-/** สถิติเงียบ 2h / 3h / 4h (1h = ค่าเดียวกับ momentum ที่ T+1h แจ้งเตือน) */
+/** สถิติเงียบ 2h / 3h / 4h (1h = momentum ที่ T+1h — ไม่ push LINE) */
 type LongAgg = { t2: number; m2: number; t3: number; m3: number; t4: number; m4: number };
 
 function emptyLong(): LongAgg {

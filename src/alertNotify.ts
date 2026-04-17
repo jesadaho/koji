@@ -1,7 +1,12 @@
 import type { Client } from "@line/bot-sdk";
 import { discordWebhookConfigured, sendDiscordWebhookContent } from "./discordWebhook";
 import { linePushMessages } from "./linePush";
-import { sendTelegramAlertMessage, telegramAlertConfigured } from "./telegramAlert";
+import {
+  sendTelegramAlertMessage,
+  sendTelegramMessageToChat,
+  telegramAlertConfigured,
+  telegramSparkSystemGroupConfigured,
+} from "./telegramAlert";
 
 /**
  * LINE push สำหรับแจ้งเตือนอัตโนมัติ (ทั้งช่องหลักและ mirror) — ค่าเริ่มปิด
@@ -63,4 +68,41 @@ export async function sendAlertNotification(client: Client, lineUserId: string, 
     );
   }
   await linePushMessages(client, lineUserId, [{ type: "text", text }]);
+}
+
+/**
+ * Spark follow-up + System Change: Telegram ไปกลุ่ม TELEGRAM_SPARK_SYSTEM_CHAT_ID ครั้งเดียว (ไม่ยิงซ้ำตามจำนวน subscriber)
+ * ถ้าไม่ตั้งกลุ่ม → fallback เป็น sendAlertNotification ต่อ uid เหมือนเดิม
+ * @returns จำนวนช่องที่ส่งสำเร็จ (TG 1 + LINE mirror ต่อคน หรือจำนวน uid ใน fallback)
+ */
+export async function sendSparkSystemAlert(client: Client, lineUserIds: string[], text: string): Promise<number> {
+  const uids = lineUserIds.map((u) => u?.trim()).filter(Boolean);
+  if (uids.length === 0) return 0;
+
+  if (telegramSparkSystemGroupConfigured()) {
+    const gid = process.env.TELEGRAM_SPARK_SYSTEM_CHAT_ID!.trim();
+    await sendTelegramMessageToChat(gid, text);
+    let n = 1;
+    if (isAlertAlsoLinePush() && isLineAlertPushEnabled()) {
+      for (const u of uids) {
+        try {
+          await linePushMessages(client, u, [{ type: "text", text }]);
+          n += 1;
+        } catch (e) {
+          console.error("[sendSparkSystemAlert] line mirror", u, e);
+        }
+      }
+    }
+    return n;
+  }
+  let n = 0;
+  for (const uid of uids) {
+    try {
+      await sendAlertNotification(client, uid, text);
+      n += 1;
+    } catch (e) {
+      console.error("[sendSparkSystemAlert] fallback", uid, e);
+    }
+  }
+  return n;
 }

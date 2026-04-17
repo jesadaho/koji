@@ -20,7 +20,7 @@ import {
 } from "./mexcContractMeta";
 import { fetchSimplePrices } from "./cryptoService";
 import { formatFunding, formatUsd, maxVolContractWarnThreshold } from "./marketsFormat";
-import { sendAlertNotification } from "./alertNotify";
+import { sendSparkSystemAlert } from "./alertNotify";
 
 /**
  * แจ้ง funding เมื่อ |Δrate|×100 ≥ ค่านี้ (หน่วยเดียวกับความต่างของ % ที่โชว์ Markets)
@@ -268,6 +268,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
     }
   }
 
+  const bodyToUids = new Map<string, Set<string>>();
   for (const [uid, parts] of Array.from(pendingByUser.entries())) {
     if (parts.length === 0) continue;
     for (const single of parts) {
@@ -275,12 +276,16 @@ export async function runContractConditionTick(client: Client): Promise<void> {
       for (let bi = 0; bi < blobs.length; bi++) {
         const suffix = blobs.length > 1 ? `\n\n( ${bi + 1}/${blobs.length} )` : "";
         const body = `${blobs[bi]!}${suffix}`;
-        try {
-          await sendAlertNotification(client, uid, body);
-        } catch (e) {
-          console.error("[contractConditionTick] push system condition", uid, bi, e);
-        }
+        if (!bodyToUids.has(body)) bodyToUids.set(body, new Set());
+        bodyToUids.get(body)!.add(uid);
       }
+    }
+  }
+  for (const [body, uids] of bodyToUids.entries()) {
+    try {
+      await sendSparkSystemAlert(client, Array.from(uids), body);
+    } catch (e) {
+      console.error("[contractConditionTick] push system condition", e);
     }
   }
 
