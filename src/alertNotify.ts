@@ -106,8 +106,14 @@ export async function sendPublicIndicatorFeedToSparkGroup(text: string): Promise
  * LINE mirror ต่อ uid: เฉพาะเมื่อมี uids + ALERT_ALSO_LINE_PUSH + LINE_ALERT_PUSH_ENABLED
  * @returns จำนวนช่องที่ส่งสำเร็จ (TG 1 + LINE mirror ต่อคน หรือจำนวน uid ใน fallback)
  */
+/** placeholder ในรายการผู้รับ — ไม่ส่ง LINE mirror; ใช้ให้รอบรวมข้อความส่งกลุ่ม TG ได้แม้ไม่มี subscriber */
+export const SPARK_SYSTEM_BROADCAST_PLACEHOLDER_UID = "__spark_system_broadcast__";
+
 export async function sendSparkSystemAlert(client: Client, lineUserIds: string[], text: string): Promise<number> {
-  const uids = lineUserIds.map((u) => u?.trim()).filter(Boolean);
+  const uids = lineUserIds
+    .map((u) => u?.trim())
+    .filter(Boolean)
+    .filter((u) => u !== SPARK_SYSTEM_BROADCAST_PLACEHOLDER_UID);
 
   if (telegramSparkSystemGroupConfigured()) {
     const gid = process.env.TELEGRAM_SPARK_SYSTEM_CHAT_ID!.trim();

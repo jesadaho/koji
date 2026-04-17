@@ -72,3 +72,19 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+/** เปิดในเบราว์เซอร์เพื่อเช็คว่า route โหลดได้ — การรับ /start ต้องตั้ง webhook (POST) */
+export async function GET() {
+  const base =
+    process.env.TELEGRAM_MINI_APP_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  return NextResponse.json({
+    ok: true,
+    service: "telegram_webhook",
+    hint: "Telegram จะส่งอัปเดตมาที่นี่ด้วย POST เท่านั้น — ต้องเรียก setWebhook ก่อน /start ถึงจะมีผล",
+    miniAppBaseConfigured: Boolean(base),
+    webhookSecretEnvSet: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET?.trim()),
+    setWebhookDocs: "https://core.telegram.org/bots/api#setwebhook",
+  });
+}

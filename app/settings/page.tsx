@@ -5,7 +5,7 @@ const SettingsLiffApp = dynamic(() => import("@/components/SettingsLiffApp"), { 
 
 export const metadata: Metadata = {
   title: "Settings — Koji",
-  description: "ติดตาม System conditions (MEXC Futures)",
+  description: "Koji — Telegram Mini App",
 };
 
 export default function SettingsPage() {

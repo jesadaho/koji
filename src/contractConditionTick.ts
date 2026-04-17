@@ -20,7 +20,8 @@ import {
 } from "./mexcContractMeta";
 import { fetchSimplePrices } from "./cryptoService";
 import { formatFunding, formatUsd, maxVolContractWarnThreshold } from "./marketsFormat";
-import { sendSparkSystemAlert } from "./alertNotify";
+import { sendSparkSystemAlert, SPARK_SYSTEM_BROADCAST_PLACEHOLDER_UID } from "./alertNotify";
+import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 
 /**
  * แจ้ง funding เมื่อ |Δrate|×100 ≥ ค่านี้ (หน่วยเดียวกับความต่างของ % ที่โชว์ Markets)
@@ -175,7 +176,7 @@ function chunkLineTextBody(full: string, maxLen: number): string[] {
 export async function runContractConditionTick(client: Client): Promise<void> {
   const watches = await loadContractWatches();
   const systemUsers = await loadSystemChangeSubscribers();
-  if (watches.length === 0 && systemUsers.length === 0) return;
+  if (watches.length === 0 && systemUsers.length === 0 && !telegramSparkSystemGroupConfigured()) return;
 
   const topSample = await getFundingHistorySampleRows(50);
   let symbols = unionPollSymbols(uniqueWatchedSymbols(watches), topSample);
@@ -247,10 +248,16 @@ export async function runContractConditionTick(client: Client): Promise<void> {
       const orderBlock = notifyO && prevO && nextRow ? { prev: prevO, next: nextRow } : null;
       const lastPx = quoteBySymbol[symbol]?.usd;
       const text = buildMexcSystemConditionMessage(symbol, fundingBlock, orderBlock, peerMaxVolThreshold, lastPx);
-      for (const uid of Array.from(recipientsFor(symbol))) {
+      const rec = Array.from(recipientsFor(symbol));
+      for (const uid of rec) {
         const list = pendingByUser.get(uid) ?? [];
         list.push(text);
         pendingByUser.set(uid, list);
+      }
+      if (telegramSparkSystemGroupConfigured() && rec.length === 0) {
+        const list = pendingByUser.get(SPARK_SYSTEM_BROADCAST_PLACEHOLDER_UID) ?? [];
+        list.push(text);
+        pendingByUser.set(SPARK_SYSTEM_BROADCAST_PLACEHOLDER_UID, list);
       }
     }
 

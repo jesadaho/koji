@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   getTelegramInitData,
   getTelegramMiniAppDisplayName,
@@ -10,27 +10,6 @@ import {
 } from "@/lib/kojiTelegramWebApp";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
-
-const MAX_API_DEBUG_BODY = 12_000;
-
-function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
-  if (s.length <= max) return s;
-  return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
-}
-
-class ApiRequestError extends Error {
-  readonly status: number;
-  readonly bodyText: string;
-  readonly url: string;
-
-  constructor(message: string, status: number, bodyText: string, url: string) {
-    super(message);
-    this.name = "ApiRequestError";
-    this.status = status;
-    this.bodyText = bodyText;
-    this.url = url;
-  }
-}
 
 async function readApiResponse(res: Response): Promise<{ text: string; parsed: unknown }> {
   const text = await res.text();
@@ -47,6 +26,20 @@ function messageFromParsed(parsed: unknown, fallback: string): string {
     return String((parsed as { error: unknown }).error);
   }
   return fallback;
+}
+
+class ApiRequestError extends Error {
+  readonly status: number;
+  readonly bodyText: string;
+  readonly url: string;
+
+  constructor(message: string, status: number, bodyText: string, url: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.bodyText = bodyText;
+    this.url = url;
+  }
 }
 
 function ApiDebugBlock({ error }: { error: ApiRequestError }) {
@@ -72,26 +65,10 @@ function ApiDebugBlock({ error }: { error: ApiRequestError }) {
           wordBreak: "break-word",
         }}
       >
-        {truncateApiBody(error.bodyText)}
+        {error.bodyText.slice(0, 12_000)}
       </pre>
     </>
   );
-}
-
-function apiDebugSection(err: unknown): ReactNode {
-  if (err instanceof ApiRequestError) {
-    return <ApiDebugBlock error={err} />;
-  }
-  return null;
-}
-
-function reloadIfUnauthorized(status: number, hadInitData: boolean): void {
-  if (status !== 401 || !hadInitData) return;
-  try {
-    window.location.reload();
-  } catch {
-    /* ignore */
-  }
 }
 
 type TmaConfig = {
@@ -105,33 +82,6 @@ export default function SettingsLiffApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [titleLine, setTitleLine] = useState("ตั้งค่า");
-  const [subscribed, setSubscribed] = useState<boolean | null>(null);
-  const [subErr, setSubErr] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const api = useCallback(async (path: string, opts: RequestInit = {}) => {
-    const initData = getTelegramInitData();
-    const headers: HeadersInit = {
-      Accept: "application/json",
-      ...(opts.body ? { "Content-Type": "application/json" } : {}),
-      ...(initData ? { Authorization: `tma ${initData}` } : {}),
-      ...((opts.headers as Record<string, string>) ?? {}),
-    };
-    const url = `${apiBase}/api/tma${path}`;
-    const res = await fetch(url, { ...opts, headers });
-    const { text, parsed } = await readApiResponse(res);
-    if (!res.ok) {
-      const msg = messageFromParsed(parsed, res.statusText);
-      reloadIfUnauthorized(res.status, Boolean(initData));
-      throw new ApiRequestError(msg, res.status, text, url);
-    }
-    return parsed;
-  }, []);
-
-  const refreshSubscription = useCallback(async () => {
-    const data = (await api("/system-change-subscription")) as { subscribed?: boolean };
-    setSubscribed(Boolean(data.subscribed));
-  }, [api]);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,9 +126,6 @@ export default function SettingsLiffApp() {
             <>
               <p>โหลด config ไม่ได้ — เครือข่ายหรือ URL ผิด</p>
               <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
-              <p className="sub">
-                ตรวจ <code>NEXT_PUBLIC_API_BASE_URL</code> (บน Vercel เว้นว่างเพื่อ same-origin)
-              </p>
             </>
           );
           setPhase("setup");
@@ -220,62 +167,14 @@ export default function SettingsLiffApp() {
       const name = getTelegramMiniAppDisplayName();
       if (!cancelled) {
         setTitleLine(name ? `ตั้งค่า — ${name}` : "ตั้งค่า — Koji");
-      }
-
-      try {
-        await refreshSubscription();
-        if (!cancelled) {
-          setPhase("ready");
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setSetupBody(
-            <>
-              <p>เรียก API ไม่ได้</p>
-              <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
-              {apiDebugSection(e)}
-              <p className="sub" style={{ marginTop: "0.75rem" }}>
-                ตรวจ <code>TELEGRAM_BOT_TOKEN</code> ตรงกับบอทที่เปิด Mini App
-              </p>
-              <p className="sub">
-                เว้น <code>NEXT_PUBLIC_API_BASE_URL</code> ว่างบน Vercel เพื่อเรียก <code>/api/tma</code> แบบ
-                same-origin
-              </p>
-            </>
-          );
-          setPhase("setup");
-        }
+        setPhase("ready");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [refreshSubscription]);
-
-  const onToggle = async (next: boolean) => {
-    if (saving || subscribed === null) return;
-    if (next === subscribed) return;
-    setSubErr("");
-    setSaving(true);
-    try {
-      const data = (await api("/system-change-subscription", {
-        method: "PUT",
-        body: JSON.stringify({ subscribed: next }),
-      })) as { subscribed?: boolean };
-      setSubscribed(Boolean(data.subscribed));
-    } catch (e) {
-      if (e instanceof ApiRequestError) {
-        setSubErr(
-          `${e.message}\n\nHTTP ${e.status} ${e.url}\n\n${truncateApiBody(e.bodyText, 4000)}`
-        );
-      } else {
-        setSubErr(e instanceof Error ? e.message : "บันทึกไม่สำเร็จ");
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
+  }, []);
 
   if (phase === "loading") {
     return (
@@ -309,51 +208,14 @@ export default function SettingsLiffApp() {
       </p>
 
       <div className="card">
-        <h2>ติดตาม System conditions (MEXC)</h2>
+        <h2>System conditions (MEXC)</h2>
         <p className="sub" style={{ marginTop: 0 }}>
-          แจ้งเมื่อ funding rate / รอบชำระ / max order size เปลี่ยน (สัญญา Top 50 |funding|) — เซิร์ฟเวอร์เช็ครายชั่วโมง
-          (cron) รอบแรกบันทึกค่าอ้างอิง ยังไม่ส่งแจ้งเตือนจนกว่าค่าจะเปลี่ยนจริงจากรอบก่อน
+          แจ้งเตือน funding / รอบชำระ / max order size (สัญญา Top 50) ส่งไปที่{" "}
+          <strong>กลุ่ม Telegram</strong> (<code>TELEGRAM_SPARK_SYSTEM_CHAT_ID</code>) แบบสาธารณะ — ไม่ต้องเปิดรับรายคนในแอปแล้ว
         </p>
-        <p className="sub">
-          ยังใช้คำสั่งในแชทได้: <code>ติดตามระบบ</code> / <code>เลิกติดตามระบบ</code> /{" "}
-          <code>สถานะติดตามระบบ</code>
+        <p className="sub" style={{ marginTop: "0.75rem" }}>
+          รายการเตือนราคา / กลยุทธ์อื่นๆ ยังตั้งได้จากหน้าแรกตามเดิม
         </p>
-
-        {subscribed === null ? (
-          <p className="sub liffLoadingRow" role="status" aria-live="polite">
-            <span className="liffLoadingSpinner liffLoadingSpinner--sm" aria-hidden />
-            <span>กำลังโหลดสถานะ…</span>
-          </p>
-        ) : (
-          <div style={{ marginTop: "1rem" }}>
-            <label
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                cursor: saving ? "wait" : "pointer",
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={subscribed}
-                disabled={saving}
-                onChange={(e) => {
-                  void onToggle(e.target.checked);
-                }}
-              />
-              <span>
-                <strong>{subscribed ? "เปิดรับแจ้งเตือนอยู่" : "ปิดรับแจ้งเตือน"}</strong>
-              </span>
-            </label>
-          </div>
-        )}
-
-        {subErr ? (
-          <div className="err" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", marginTop: "0.75rem" }}>
-            {subErr}
-          </div>
-        ) : null}
       </div>
 
       <p style={{ marginTop: "1rem" }}>
