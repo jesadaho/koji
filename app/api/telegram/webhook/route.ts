@@ -149,6 +149,15 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
+type TelegramWebhookInfoResult = {
+  url?: string;
+  has_custom_certificate?: boolean;
+  pending_update_count?: number;
+  last_error_date?: number;
+  last_error_message?: string;
+  max_connections?: number;
+};
+
 /** เปิดในเบราว์เซอร์ — สุขภาพ route + ข้อมูลจาก Telegram getWebhookInfo (ช่วยเช็คว่าทำไมบอทไม่ตอบในแชท) */
 export async function GET() {
   const base =
@@ -157,14 +166,7 @@ export async function GET() {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
 
-  let telegramWebhook: {
-    url?: string;
-    has_custom_certificate?: boolean;
-    pending_update_count?: number;
-    last_error_date?: number;
-    last_error_message?: string;
-    max_connections?: number;
-  } | null = null;
+  let telegramWebhook: TelegramWebhookInfoResult | null = null;
 
   if (token) {
     try {
@@ -173,12 +175,13 @@ export async function GET() {
       );
       const j = (await r.json()) as {
         ok?: boolean;
-        result?: typeof telegramWebhook;
+        result?: TelegramWebhookInfoResult;
       };
-      if (j?.result && typeof j.result === "object") {
-        const le = j.result.last_error_message;
+      const raw = j?.result;
+      if (raw != null && typeof raw === "object" && !Array.isArray(raw)) {
+        const le = raw.last_error_message;
         telegramWebhook = {
-          ...j.result,
+          ...raw,
           last_error_message:
             typeof le === "string" && le.length > 400 ? `${le.slice(0, 400)}…` : le,
         };
