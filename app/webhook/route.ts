@@ -9,13 +9,13 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  let channelSecret: string;
-  let accessToken: string;
-  try {
-    channelSecret = config.lineChannelSecret;
-    accessToken = config.lineChannelAccessToken;
-  } catch {
-    return NextResponse.json({ error: "ตั้ง LINE_CHANNEL_SECRET และ LINE_CHANNEL_ACCESS_TOKEN" }, { status: 503 });
+  const channelSecret = config.lineChannelSecret;
+  const accessToken = config.lineChannelAccessToken;
+  if (!channelSecret || !accessToken) {
+    return NextResponse.json(
+      { error: "LINE OA ปิด — ไม่ได้ตั้ง LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN" },
+      { status: 503 }
+    );
   }
 
   const signature = req.headers.get("x-line-signature");

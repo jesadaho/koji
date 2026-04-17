@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { config } from "@/src/config";
 import { requireCronAuth } from "@/src/cronAuth";
-import { createLineClient } from "@/src/lineHandler";
+import { createLineClientForCron } from "@/src/lineHandler";
 import { runMarketPulseTick } from "@/src/marketPulseTick";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const started = Date.now();
   try {
-    const client = createLineClient(config.lineChannelAccessToken);
+    const client = createLineClientForCron();
     const r = await runMarketPulseTick(client);
     return NextResponse.json({
       ...r,

@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { config } from "@/src/config";
 import { requireCronAuth } from "@/src/cronAuth";
-import { createLineClient } from "@/src/lineHandler";
+import { createLineClientForCron } from "@/src/lineHandler";
 import { runPctStepTrailingPriceAlertTick } from "@/src/pctStepPriceAlertTick";
 import { runPriceSpike15mAlertTick } from "@/src/priceSpike15mAlertTick";
 import { runSparkFollowUpTick } from "@/src/sparkFollowUpTick";
@@ -21,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const started = Date.now();
   try {
-    const client = createLineClient(config.lineChannelAccessToken);
+    const client = createLineClientForCron();
     const r = await runPctStepTrailingPriceAlertTick(client);
     const spark = await runPriceSpike15mAlertTick(client);
     const follow = await runSparkFollowUpTick(client);

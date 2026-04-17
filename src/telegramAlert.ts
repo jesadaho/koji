@@ -3,6 +3,11 @@ export const TELEGRAM_SEND_MESSAGE_MAX = 4096;
 
 const TG_API = "https://api.telegram.org";
 
+/** มี bot token (ใช้ส่ง DM / Web App validation) */
+export function telegramBotTokenConfigured(): boolean {
+  return Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim());
+}
+
 export function telegramAlertConfigured(): boolean {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   const chatId = process.env.TELEGRAM_ALERT_CHAT_ID?.trim();

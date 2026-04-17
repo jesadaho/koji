@@ -5,6 +5,7 @@ import {
   sendTelegramAlertMessage,
   sendTelegramMessageToChat,
   telegramAlertConfigured,
+  telegramBotTokenConfigured,
   telegramSparkSystemGroupConfigured,
 } from "./telegramAlert";
 
@@ -35,11 +36,24 @@ export function isDiscordAlertAlsoLinePush(): boolean {
   return isAlertAlsoLinePush();
 }
 
+/** userId จาก Mini App — ส่ง DM ด้วย chat_id = telegram user id (แชทส่วนตัวกับบอท) */
+function telegramDmChatIdFromStoreUserId(userId: string): string | null {
+  const m = userId.trim().match(/^tg:(\d{1,20})$/);
+  return m ? m[1]! : null;
+}
+
 /**
  * แจ้งเตือนอัตโนมัติ: Telegram → Discord webhook → LINE push (เฉพาะเมื่อ LINE_ALERT_PUSH_ENABLED=1)
  * Mirror ไป LINE: ALERT_ALSO_LINE_PUSH + LINE_ALERT_PUSH_ENABLED + LINE user id
+ * ผู้ใช้จาก Telegram Mini App (`tg:<id>`): ส่ง DM ผ่าน TELEGRAM_BOT_TOKEN โดยไม่ต้องมี TELEGRAM_ALERT_CHAT_ID
  */
 export async function sendAlertNotification(client: Client, lineUserId: string, text: string): Promise<void> {
+  const tgChat = telegramDmChatIdFromStoreUserId(lineUserId);
+  if (tgChat && telegramBotTokenConfigured()) {
+    await sendTelegramMessageToChat(tgChat, text);
+    return;
+  }
+
   if (telegramAlertConfigured()) {
     await sendTelegramAlertMessage(text);
     if (isAlertAlsoLinePush() && isLineAlertPushEnabled()) {

@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { config } from "@/src/config";
 import { requireCronAuth } from "@/src/cronAuth";
-import { createLineClient } from "@/src/lineHandler";
+import { createLineClientForCron } from "@/src/lineHandler";
 import { sendAlertNotification, isAlertAlsoLinePush, isLineAlertPushEnabled } from "@/src/alertNotify";
 import { discordWebhookConfigured } from "@/src/discordWebhook";
 import { telegramAlertConfigured } from "@/src/telegramAlert";
@@ -80,7 +79,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const client = createLineClient(config.lineChannelAccessToken);
+    const client = createLineClientForCron();
     await sendAlertNotification(client, testLineUid, text);
 
     const primary = telegramAlertConfigured() ? "telegram" : discordWebhookConfigured() ? "discord" : "line";

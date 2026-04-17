@@ -1,24 +1,17 @@
 import "dotenv/config";
 
-function requireEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
 /**
- * อ่าน env แบบ lazy เพื่อไม่ให้ `next build` ล้มเมื่อยังไม่ใส่ secret ใน CI
- * (จะ error ตอน runtime เมื่อมีการเรียกใช้จริง)
+ * อ่าน env แบบ lazy — LINE OA เป็น optional เมื่อใช้ Telegram Mini App เป็นหลัก
  */
 export const config = {
   get port() {
     return Number(process.env.PORT) || 3000;
   },
-  get lineChannelSecret() {
-    return requireEnv("LINE_CHANNEL_SECRET");
+  get lineChannelSecret(): string | undefined {
+    return process.env.LINE_CHANNEL_SECRET?.trim() || undefined;
   },
-  get lineChannelAccessToken() {
-    return requireEnv("LINE_CHANNEL_ACCESS_TOKEN");
+  get lineChannelAccessToken(): string | undefined {
+    return process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim() || undefined;
   },
   get priceCheckCron() {
     return process.env.PRICE_CHECK_CRON || "*/2 * * * *";

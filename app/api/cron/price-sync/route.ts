@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { config } from "@/src/config";
 import { requireCronAuth } from "@/src/cronAuth";
-import { createLineClient } from "@/src/lineHandler";
+import { createLineClientForCron } from "@/src/lineHandler";
 import {
   savePriceSyncCronRecord,
   type CronStepResult,
@@ -51,7 +50,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const client = createLineClient(config.lineChannelAccessToken);
+  const client = createLineClientForCron();
 
   await runStep("priceAlerts", async () => {
     await runPriceAlertTick(client);

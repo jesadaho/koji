@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@line/bot-sdk": "^9.5.0",
-    "@line/liff": "^2.24.0",
     "@vercel/kv": "^3.0.0",
     "axios": "^1.7.9",
     "dotenv": "^16.4.7",

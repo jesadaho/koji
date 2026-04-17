@@ -42,6 +42,12 @@ export function createLineClient(channelAccessToken: string) {
   return new Client({ channelAccessToken });
 }
 
+/** เมื่อไม่มี LINE_CHANNEL_ACCESS_TOKEN (โหมด Telegram-only) ใช้ placeholder — อย่าเรียก LINE API จริง */
+export function createLineClientForCron(): Client {
+  const t = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
+  return createLineClient(t || "__LINE_CHANNEL_ACCESS_TOKEN_DISABLED__");
+}
+
 function textOf(e: MessageEvent): string | null {
   if (e.message.type !== "text") return null;
   return e.message.text.trim();

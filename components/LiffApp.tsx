@@ -2,8 +2,13 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import liff from "@line/liff";
 import IndicatorCoinPicker from "@/components/IndicatorCoinPicker";
+import {
+  getTelegramInitData,
+  getTelegramMiniAppDisplayName,
+  loadTelegramWebApp,
+  prepareTelegramMiniAppShell,
+} from "@/lib/kojiTelegramWebApp";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -81,20 +86,19 @@ function apiDebugSection(err: unknown): ReactNode {
   return null;
 }
 
-/** 401 + เคยส่ง Bearer แล้ว → สันนิษฐานว่าโทเคนใน SDK หมดอายุ ให้ล้าง session แล้วล็อกอินใหม่ */
-function reloginIfUnauthorized(status: number, hadIdToken: boolean): void {
-  if (status !== 401 || !hadIdToken) return;
+/** 401 + เคยส่ง initData แล้ว → รีโหลดเพื่อรับ initData ใหม่จาก Telegram */
+function reloadIfUnauthorized(status: number, hadInitData: boolean): void {
+  if (status !== 401 || !hadInitData) return;
   try {
-    liff.logout();
+    window.location.reload();
   } catch {
     /* ignore */
   }
-  liff.login();
 }
 
-type LiffConfig = {
-  liffId: string | null;
-  channelIdConfigured: boolean;
+type TmaConfig = {
+  mode: string;
+  botTokenConfigured: boolean;
 };
 
 type PriceAlert = {
@@ -227,31 +231,27 @@ export default function LiffApp() {
     return Array.from(s).sort();
   }, [volMeta?.topSymbols, techMeta?.topSymbols]);
 
-  const api = useCallback(
-    async (path: string, opts: RequestInit = {}) => {
-      // ดึงจาก SDK ทุกครั้งก่อนยิง request — ห้ามเก็บใน state/localStorage/global นาน
-      const idToken = liff.getIDToken();
-      const headers: HeadersInit = {
-        Accept: "application/json",
-        ...(opts.body ? { "Content-Type": "application/json" } : {}),
-        ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
-        ...((opts.headers as Record<string, string>) ?? {}),
-      };
-      const url = `${apiBase}/api/liff${path}`;
-      const res = await fetch(url, { ...opts, headers });
-      const { text, parsed } = await readApiResponse(res);
-      if (!res.ok) {
-        const msg = messageFromParsed(parsed, res.statusText);
-        reloginIfUnauthorized(res.status, Boolean(idToken));
-        throw new ApiRequestError(msg, res.status, text, url);
-      }
-      return parsed;
-    },
-    []
-  );
+  const api = useCallback(async (path: string, opts: RequestInit = {}) => {
+    const initData = getTelegramInitData();
+    const headers: HeadersInit = {
+      Accept: "application/json",
+      ...(opts.body ? { "Content-Type": "application/json" } : {}),
+      ...(initData ? { Authorization: `tma ${initData}` } : {}),
+      ...((opts.headers as Record<string, string>) ?? {}),
+    };
+    const url = `${apiBase}/api/tma${path}`;
+    const res = await fetch(url, { ...opts, headers });
+    const { text, parsed } = await readApiResponse(res);
+    if (!res.ok) {
+      const msg = messageFromParsed(parsed, res.statusText);
+      reloadIfUnauthorized(res.status, Boolean(initData));
+      throw new ApiRequestError(msg, res.status, text, url);
+    }
+    return parsed;
+  }, []);
 
   const loadMeta = useCallback(async () => {
-    const url = `${apiBase}/api/liff/meta`;
+    const url = `${apiBase}/api/tma/meta`;
     const res = await fetch(url);
     const { text, parsed } = await readApiResponse(res);
     if (!res.ok) {
@@ -273,7 +273,7 @@ export default function LiffApp() {
   }, [api]);
 
   const refreshVolMeta = useCallback(async () => {
-    const url = `${apiBase}/api/liff/volume-signal-meta`;
+    const url = `${apiBase}/api/tma/volume-signal-meta`;
     const res = await fetch(url);
     const { text, parsed } = await readApiResponse(res);
     if (!res.ok) {
@@ -304,7 +304,7 @@ export default function LiffApp() {
   }, [api]);
 
   const refreshTechMeta = useCallback(async () => {
-    const url = `${apiBase}/api/liff/indicator-meta`;
+    const url = `${apiBase}/api/tma/indicator-meta`;
     const res = await fetch(url);
     const { text, parsed } = await readApiResponse(res);
     if (!res.ok) {
@@ -398,9 +398,22 @@ export default function LiffApp() {
     let cancelled = false;
 
     (async () => {
-      let cfg: LiffConfig;
       try {
-        const configUrl = `${apiBase}/api/liff/config`;
+        await loadTelegramWebApp();
+        prepareTelegramMiniAppShell();
+      } catch (e) {
+        if (!cancelled) {
+          setSetupBody(
+            <p>โหลด Telegram Web App ไม่ได้: {e instanceof Error ? e.message : String(e)}</p>
+          );
+          setPhase("setup");
+        }
+        return;
+      }
+
+      let cfg: TmaConfig;
+      try {
+        const configUrl = `${apiBase}/api/tma/config`;
         const res = await fetch(configUrl);
         const { text, parsed } = await readApiResponse(res);
         if (!res.ok) {
@@ -417,7 +430,7 @@ export default function LiffApp() {
           }
           return;
         }
-        cfg = parsed as LiffConfig;
+        cfg = parsed as TmaConfig;
       } catch (e) {
         if (!cancelled) {
           setSetupBody(
@@ -434,15 +447,31 @@ export default function LiffApp() {
         return;
       }
 
-      if (!cfg.liffId) {
+      if (!cfg.botTokenConfigured) {
         if (!cancelled) {
           setSetupBody(
             <>
               <p>
-                <strong>ยังไม่ตั้งค่า LIFF</strong>
+                <strong>ยังไม่ตั้ง TELEGRAM_BOT_TOKEN</strong>
+              </p>
+              <p className="sub">ใส่ bot token ใน env ของเซิร์ฟเวอร์ (ยืนยัน initData)</p>
+            </>
+          );
+          setPhase("setup");
+        }
+        return;
+      }
+
+      const initData = getTelegramInitData();
+      if (!initData) {
+        if (!cancelled) {
+          setSetupBody(
+            <>
+              <p>
+                <strong>เปิดหน้านี้จาก Telegram Mini App</strong>
               </p>
               <p className="sub">
-                ใส่ <code>LIFF_ID</code> ใน <code>.env</code> ของเซิร์ฟเวอร์หลัก แล้วรีสตาร์ท
+                ตั้ง Web App URL ใน BotFather แล้วเปิดจากแอป Telegram — ไม่รองรับโหมด LIFF แล้ว
               </p>
             </>
           );
@@ -451,103 +480,40 @@ export default function LiffApp() {
         return;
       }
 
-      if (!cfg.channelIdConfigured) {
-        if (!cancelled) {
-          setSetupBody(
-            <>
-              <p>
-                <strong>ยังไม่ตั้งค่า Channel ID</strong>
-              </p>
-              <p className="sub">
-                ใส่ <code>LINE_CHANNEL_ID</code> ใน backend เพื่อยืนยันตัวตน LIFF
-              </p>
-            </>
-          );
-          setPhase("setup");
-        }
-        return;
+      const displayName = getTelegramMiniAppDisplayName();
+      if (!cancelled) {
+        setWelcome(`สวัสดี ${displayName || "Koji"} — MEXC Futures USDT`);
       }
 
       try {
-        await liff
-          .init({ liffId: cfg.liffId, withLoginOnExternalBrowser: true })
-          .then(async () => {
-            if (cancelled) return;
-
-            if (!liff.isLoggedIn()) {
-              liff.login();
-              return;
-            }
-
-            const freshToken = liff.getIDToken();
-            if (!freshToken) {
-              if (!cancelled) {
-                setSetupBody(
-                  <>
-                    <p>ล็อกอินแล้วแต่ไม่มี ID Token</p>
-                    <p className="sub">
-                      ใน LINE Developers → แท็บ LIFF ของแอปนี้ ให้เปิด scope <code>openid</code> (และ{" "}
-                      <code>profile</code>) แล้วลอง <strong>ปิดแอป LINE แล้วเปิด LIFF ใหม่</strong> หรือกดล็อกเอาต์แล้ว
-                      ล็อกอินใหม่
-                    </p>
-                  </>
-                );
-                setPhase("setup");
-              }
-              return;
-            }
-
-            try {
-              const p = await liff.getProfile();
-              if (!cancelled) {
-                setWelcome(`สวัสดี ${p.displayName || ""} — MEXC Futures USDT`);
-              }
-            } catch {
-              /* ignore */
-            }
-
-            try {
-              await loadMeta();
-              await refreshVolMeta();
-              await refreshTechMeta();
-              await refreshAlerts();
-              await refreshPctAlerts();
-              await refreshVolAlerts();
-              await refreshTechAlerts();
-              if (!cancelled) {
-                setPhase("ready");
-              }
-            } catch (e) {
-              if (!cancelled) {
-                setSetupBody(
-                  <>
-                    <p>ล็อกอินแล้วแต่เรียก API ไม่ได้</p>
-                    <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
-                    {apiDebugSection(e)}
-                    <p className="sub" style={{ marginTop: "0.75rem" }}>
-                      ตรวจสอบ <code>LINE_CHANNEL_ID</code> บน Vercel = Channel ID ของแท็บ <strong>LINE Login</strong>{" "}
-                      (เดียวกับ LIFF) — ไม่ใช่ Channel ID ของ Messaging API
-                    </p>
-                    <p className="sub">
-                      LIFF ต้องเปิด scope <code>openid</code> — ถ้าได้ 401 ระบบจะลอง{" "}
-                      <code>logout</code> + <code>login</code> ให้อัตโนมัติ
-                    </p>
-                    <p className="sub">
-                      เว้น <code>NEXT_PUBLIC_API_BASE_URL</code> ว่างบน Vercel เพื่อเรียก <code>/api/liff</code> แบบ
-                      same-origin
-                    </p>
-                  </>
-                );
-                setPhase("setup");
-              }
-            }
-          });
+        await loadMeta();
+        await refreshVolMeta();
+        await refreshTechMeta();
+        await refreshAlerts();
+        await refreshPctAlerts();
+        await refreshVolAlerts();
+        await refreshTechAlerts();
+        if (!cancelled) {
+          setPhase("ready");
+        }
       } catch (e) {
         if (!cancelled) {
-          setSetupBody(<p>LIFF init ล้มเหลว: {e instanceof Error ? e.message : String(e)}</p>);
+          setSetupBody(
+            <>
+              <p>เรียก API ไม่ได้</p>
+              <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
+              {apiDebugSection(e)}
+              <p className="sub" style={{ marginTop: "0.75rem" }}>
+                ตรวจ <code>TELEGRAM_BOT_TOKEN</code> ให้ตรงกับบอทที่เปิด Mini App
+              </p>
+              <p className="sub">
+                เว้น <code>NEXT_PUBLIC_API_BASE_URL</code> ว่างบน Vercel เพื่อเรียก <code>/api/tma</code> แบบ
+                same-origin
+              </p>
+            </>
+          );
           setPhase("setup");
         }
-        return;
       }
     })();
 
