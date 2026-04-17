@@ -71,11 +71,6 @@ export async function sendAlertNotification(client: Client, lineUserId: string, 
 }
 
 /**
- * Spark follow-up + System Change: Telegram ไปกลุ่ม TELEGRAM_SPARK_SYSTEM_CHAT_ID ครั้งเดียว (ไม่ยิงซ้ำตามจำนวน subscriber)
- * ถ้าไม่ตั้งกลุ่ม → fallback เป็น sendAlertNotification ต่อ uid เหมือนเดิม
- * @returns จำนวนช่องที่ส่งสำเร็จ (TG 1 + LINE mirror ต่อคน หรือจำนวน uid ใน fallback)
- */
-/**
  * Public indicator feed → Telegram กลุ่ม Spark/System อย่างเดียว (ไม่ต้องมี LINE subscriber)
  * @returns true เมื่อส่งสำเร็จ
  */
@@ -91,15 +86,20 @@ export async function sendPublicIndicatorFeedToSparkGroup(text: string): Promise
   return true;
 }
 
+/**
+ * Spark / System Change / สัญญาณสาธารณะที่ใช้กลุ่มเดียวกัน: Telegram → TELEGRAM_SPARK_SYSTEM_CHAT_ID ครั้งเดียว
+ * ไม่บังคับมี LINE user id — ถ้าไม่ตั้งกลุ่ม จะ fallback เป็น sendAlertNotification ต่อ uid (ต้องมี uids)
+ * LINE mirror ต่อ uid: เฉพาะเมื่อมี uids + ALERT_ALSO_LINE_PUSH + LINE_ALERT_PUSH_ENABLED
+ * @returns จำนวนช่องที่ส่งสำเร็จ (TG 1 + LINE mirror ต่อคน หรือจำนวน uid ใน fallback)
+ */
 export async function sendSparkSystemAlert(client: Client, lineUserIds: string[], text: string): Promise<number> {
   const uids = lineUserIds.map((u) => u?.trim()).filter(Boolean);
-  if (uids.length === 0) return 0;
 
   if (telegramSparkSystemGroupConfigured()) {
     const gid = process.env.TELEGRAM_SPARK_SYSTEM_CHAT_ID!.trim();
     await sendTelegramMessageToChat(gid, text);
     let n = 1;
-    if (isAlertAlsoLinePush() && isLineAlertPushEnabled()) {
+    if (uids.length > 0 && isAlertAlsoLinePush() && isLineAlertPushEnabled()) {
       for (const u of uids) {
         try {
           await linePushMessages(client, u, [{ type: "text", text }]);
@@ -111,6 +111,9 @@ export async function sendSparkSystemAlert(client: Client, lineUserIds: string[]
     }
     return n;
   }
+
+  if (uids.length === 0) return 0;
+
   let n = 0;
   for (const uid of uids) {
     try {

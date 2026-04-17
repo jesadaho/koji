@@ -281,7 +281,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
       }
     }
   }
-  for (const [body, uids] of bodyToUids.entries()) {
+  for (const [body, uids] of Array.from(bodyToUids.entries())) {
     try {
       await sendSparkSystemAlert(client, Array.from(uids), body);
     } catch (e) {

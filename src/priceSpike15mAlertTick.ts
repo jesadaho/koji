@@ -1,8 +1,7 @@
 import type { Client } from "@line/bot-sdk";
-import { sendAlertNotification } from "./alertNotify";
+import { sendSparkSystemAlert } from "./alertNotify";
 import { fetchContractTickerMetrics, getTopUsdtSymbolsByAmount24 } from "./mexcMarkets";
 import { classifySparkMcapBand, classifySparkVolBand } from "./sparkTierContext";
-import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
 import {
   loadPriceSpike15mAlertState,
   savePriceSpike15mAlertState,
@@ -122,11 +121,6 @@ export async function runPriceSpike15mAlertTick(
     return { notifiedPushes: 0, symbolsHit: 0 };
   }
 
-  const subs = await loadSystemChangeSubscribers();
-  if (subs.length === 0) {
-    return { notifiedPushes: 0, symbolsHit: 0 };
-  }
-
   const windowSec = signalWindowSec();
   const limit = topN();
   const symbols = await getTopUsdtSymbolsByAmount24(limit);
@@ -169,14 +163,14 @@ export async function runPriceSpike15mAlertTick(
 
     const body = buildSparkMessage(sym, returnPct, p, m.amount24Usdt, windowSec);
     let anyOk = false;
-    for (const uid of subs) {
-      try {
-        await sendAlertNotification(client, uid, body);
-        notifiedPushes += 1;
+    try {
+      const n = await sendSparkSystemAlert(client, [], body);
+      if (n > 0) {
+        notifiedPushes += n;
         anyOk = true;
-      } catch (e) {
-        console.error("[priceSpike15mAlertTick] notify", sym, uid, e);
       }
+    } catch (e) {
+      console.error("[priceSpike15mAlertTick] notify", sym, e);
     }
 
     state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };

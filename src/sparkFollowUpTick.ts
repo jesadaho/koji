@@ -1,7 +1,7 @@
 import type { Client } from "@line/bot-sdk";
 import { sendSparkSystemAlert } from "./alertNotify";
 import { contractHasBinancePriceFallback, fetchSimplePrices, type CoinQuote } from "./cryptoService";
-import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
+import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import {
   loadSparkFollowUpState,
   saveSparkFollowUpState,
@@ -157,8 +157,6 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
 
   let state = await loadSparkFollowUpState();
   const nowSec = Math.floor(Date.now() / 1000);
-  const subs = await loadSystemChangeSubscribers();
-
   let notifiedPushes = 0;
   let checkpoints = 0;
   let resolvedEvents = 0;
@@ -197,7 +195,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
         contractHasBinancePriceFallback(cur.symbol) &&
         priceFailNotifyEnabled() &&
         !priceFetchFailNotified &&
-        subs.length > 0
+        telegramSparkSystemGroupConfigured()
       ) {
         priceFetchFailNotified = true;
         const base = shortLabel(cur.symbol);
@@ -211,7 +209,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
           `รายละเอียด: ${detail}`,
         ].join("\n");
         try {
-          notifiedPushes += await sendSparkSystemAlert(client, subs, body);
+          notifiedPushes += await sendSparkSystemAlert(client, [], body);
         } catch (e) {
           console.error("[sparkFollowUpTick] price-fail notify", cur.symbol, e);
         }
@@ -244,7 +242,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       if (kind === "30") {
         const body = buildCheckpoint30mMessage(cur.symbol, cur.refPrice, endPrice, cur.sparkReturnPct, won);
         try {
-          notifiedPushes += await sendSparkSystemAlert(client, subs, body);
+          notifiedPushes += await sendSparkSystemAlert(client, [], body);
         } catch (e) {
           console.error("[sparkFollowUpTick] notify", cur.symbol, e);
         }
