@@ -2,6 +2,7 @@ import type { Client } from "@line/bot-sdk";
 import { runEma612ContractWatchAlertTick } from "./ema612ContractWatchAlertTick";
 import { fetchContractKlineForTf, type IndicatorChartTf } from "./indicatorKline";
 import { sendAlertNotification } from "./alertNotify";
+import { isIndicatorPublicFeedEnabled, runPublicIndicatorFeedInternal } from "./publicIndicatorFeed";
 import { emaLine, rsiWilder } from "./indicatorMath";
 import {
   loadActiveEmaCrossAlerts,
@@ -261,12 +262,15 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const now = Date.now();
   const rsiN = await runRsiInternal(client, now);
   const emaN = await runEmaCrossInternal(client, now);
+  const publicN = isIndicatorPublicFeedEnabled() ? await runPublicIndicatorFeedInternal(client, now) : 0;
   const watch612 = await runEma612ContractWatchAlertTick(client);
-  const total = rsiN + emaN + watch612;
-  const detail =
-    watch612 > 0
-      ? `แจ้ง ${total} ครั้ง (RSI/EMA indicator ${rsiN + emaN} · EMA6/12·15m ติดตาม ${watch612})`
-      : undefined;
+  const total = rsiN + emaN + publicN + watch612;
+
+  const parts: string[] = [`RSI/EMA (MEXC) ${rsiN + emaN}`];
+  if (publicN > 0) parts.push(`public Binance ${publicN}`);
+  if (watch612 > 0) parts.push(`EMA6/12·15m ติดตาม ${watch612}`);
+  const detail = total > 0 ? `แจ้ง ${total} ครั้ง (${parts.join(" · ")})` : undefined;
+
   return { notified: total, ...(detail ? { detail } : {}) };
 }
 

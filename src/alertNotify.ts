@@ -75,6 +75,22 @@ export async function sendAlertNotification(client: Client, lineUserId: string, 
  * ถ้าไม่ตั้งกลุ่ม → fallback เป็น sendAlertNotification ต่อ uid เหมือนเดิม
  * @returns จำนวนช่องที่ส่งสำเร็จ (TG 1 + LINE mirror ต่อคน หรือจำนวน uid ใน fallback)
  */
+/**
+ * Public indicator feed → Telegram กลุ่ม Spark/System อย่างเดียว (ไม่ต้องมี LINE subscriber)
+ * @returns true เมื่อส่งสำเร็จ
+ */
+export async function sendPublicIndicatorFeedToSparkGroup(text: string): Promise<boolean> {
+  if (!telegramSparkSystemGroupConfigured()) {
+    console.warn(
+      "[sendPublicIndicatorFeedToSparkGroup] ไม่มี TELEGRAM_BOT_TOKEN + TELEGRAM_SPARK_SYSTEM_CHAT_ID — ไม่ส่ง public indicator feed"
+    );
+    return false;
+  }
+  const gid = process.env.TELEGRAM_SPARK_SYSTEM_CHAT_ID!.trim();
+  await sendTelegramMessageToChat(gid, text);
+  return true;
+}
+
 export async function sendSparkSystemAlert(client: Client, lineUserIds: string[], text: string): Promise<number> {
   const uids = lineUserIds.map((u) => u?.trim()).filter(Boolean);
   if (uids.length === 0) return 0;
