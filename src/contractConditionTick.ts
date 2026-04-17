@@ -18,7 +18,8 @@ import {
   orderMetaFromDetail,
   type MexcDetailRow,
 } from "./mexcContractMeta";
-import { formatFunding, maxVolContractWarnThreshold } from "./marketsFormat";
+import { fetchSimplePrices } from "./cryptoService";
+import { formatFunding, formatUsd, maxVolContractWarnThreshold } from "./marketsFormat";
 import { sendAlertNotification } from "./alertNotify";
 
 /**
@@ -93,19 +94,34 @@ function peerMaxVolThresholdFromDetails(detailBySymbol: Map<string, MexcDetailRo
   return maxVolContractWarnThreshold(vols);
 }
 
+function formatMaxOrderLine(
+  order: { prev: OrderSnapshotRow; next: OrderSnapshotRow },
+  lastPriceUsd: number | null | undefined
+): string {
+  const prevC = order.prev.maxVol;
+  const nextC = order.next.maxVol;
+  const contracts = `${formatContractVol(prevC)} → ${formatContractVol(nextC)} สัญญา`;
+  if (lastPriceUsd == null || !Number.isFinite(lastPriceUsd) || lastPriceUsd <= 0) {
+    return `Max order ${contracts}`;
+  }
+  const prevU = prevC * lastPriceUsd;
+  const nextU = nextC * lastPriceUsd;
+  return `Max order ${contracts} (~${formatUsd(prevU)} → ~${formatUsd(nextU)} USDT โน้ตโดยประมาณ @ last, USDT-M linear)`;
+}
+
 /** ข้อความสั้น: หัว [System Change] + บรรทัด Symbol พร้อมสรุปใน () */
 function buildMexcSystemConditionMessage(
   symbol: string,
   funding: { prev: FundingSnapshotRow; next: FundingMetaLike } | null,
   order: { prev: OrderSnapshotRow; next: OrderSnapshotRow } | null,
-  peerMaxVolThreshold: number | null
+  peerMaxVolThreshold: number | null,
+  lastPriceUsd: number | null | undefined
 ): string {
   const sym = displaySymbol(symbol);
   const bits: string[] = [];
 
   if (order) {
-    const o = `${formatContractVol(order.prev.maxVol)} → ${formatContractVol(order.next.maxVol)}`;
-    bits.push(`Max order ${o}`);
+    bits.push(formatMaxOrderLine(order, lastPriceUsd));
   }
   if (funding) {
     const fr = `${formatFunding(funding.prev.fundingRate)} → ${formatFunding(funding.next.fundingRate)}`;
@@ -173,12 +189,13 @@ export async function runContractConditionTick(client: Client): Promise<void> {
 
   const now = new Date().toISOString();
 
-  const [fundingResults, detailBySymbol] = await Promise.all([
+  const [fundingResults, detailBySymbol, quoteBySymbol] = await Promise.all([
     mapPoolConcurrent(symbols, 12, async (symbol) => {
       const live = await fetchContractFunding(symbol);
       return { symbol, live };
     }),
     fetchAllContractDetails(),
+    fetchSimplePrices(symbols),
   ]);
 
   const liveBySymbol = new Map<string, FundingMetaLike | null>();
@@ -228,7 +245,8 @@ export async function runContractConditionTick(client: Client): Promise<void> {
       const fundingBlock =
         notifyF && live && prevF ? { prev: prevF, next: live } : null;
       const orderBlock = notifyO && prevO && nextRow ? { prev: prevO, next: nextRow } : null;
-      const text = buildMexcSystemConditionMessage(symbol, fundingBlock, orderBlock, peerMaxVolThreshold);
+      const lastPx = quoteBySymbol[symbol]?.usd;
+      const text = buildMexcSystemConditionMessage(symbol, fundingBlock, orderBlock, peerMaxVolThreshold, lastPx);
       for (const uid of Array.from(recipientsFor(symbol))) {
         const list = pendingByUser.get(uid) ?? [];
         list.push(text);
