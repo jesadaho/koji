@@ -89,12 +89,16 @@ function classifyFngLong(fng: number, minForLong: number): { emoji: string; labe
   return { emoji: "⚠️", label: `Fear-heavy (${fng}) — weak for long` };
 }
 
-/** Mcap / max position notional (USDT) — ยิ่งสูงยิ่งเสี่ยง (สภาพคล่องเทียบขนาดเหรียญต่ำ) */
-type LiqCapTier = "pass" | "high" | "extreme";
+/**
+ * Mcap / max position notional (USDT) — ยิ่ง ratio สูง ยิ่งเสี่ยง (สภาพคล่องเทียบขนาดเหรียญต่ำ)
+ * สอดคล้อง checkLiquidityHealth: SAFE ≤ watch · WATCH (watch, high] · HIGH (high, extreme] · TERMINATE > extreme
+ */
+type LiqCapTier = "safe" | "watch" | "high" | "extreme";
 
 function classifyLiquidityCapRatio(
   mcapUsd: number | null,
   maxNotionalUsd: number | null,
+  thWatch: number,
   thHigh: number,
   thExtreme: number
 ): { tier: LiqCapTier; ratio: number | null } {
@@ -106,12 +110,13 @@ function classifyLiquidityCapRatio(
     !Number.isFinite(maxNotionalUsd) ||
     maxNotionalUsd <= 0
   ) {
-    return { tier: "pass", ratio: null };
+    return { tier: "safe", ratio: null };
   }
   const ratio = mcapUsd / maxNotionalUsd;
   if (ratio > thExtreme) return { tier: "extreme", ratio };
   if (ratio > thHigh) return { tier: "high", ratio };
-  return { tier: "pass", ratio };
+  if (ratio > thWatch) return { tier: "watch", ratio };
+  return { tier: "safe", ratio };
 }
 
 export async function buildPositionChecklistMessage(
@@ -139,8 +144,10 @@ export async function buildPositionChecklistMessage(
   const maxLevCfg = envNum("KOJI_SCORE_MAX_LEVERAGE", 3);
   const emaPricePen = envNum("POSITION_CHECK_EMA_PRICE_PENALTY", 15);
   const emaAlignPen = envNum("POSITION_CHECK_EMA_ALIGN_PENALTY", 10);
-  const liqCapThHigh = envNum("POSITION_CHECK_LIQ_CAP_RATIO_HIGH", 100_000);
+  const liqCapThWatch = envNum("POSITION_CHECK_LIQ_CAP_RATIO_WATCH", 50_000);
+  const liqCapThHigh = envNum("POSITION_CHECK_LIQ_CAP_RATIO_HIGH", 150_000);
   const liqCapThExtreme = envNum("POSITION_CHECK_LIQ_CAP_RATIO_EXTREME", 500_000);
+  const liqCapPenWatch = envNum("POSITION_CHECK_LIQ_CAP_PENALTY_WATCH", 10);
   const liqCapPenHigh = envNum("POSITION_CHECK_LIQ_CAP_PENALTY_HIGH", 20);
   const liqCapPenExtreme = envNum("POSITION_CHECK_LIQ_CAP_PENALTY_EXTREME", 30);
 
@@ -171,7 +178,13 @@ export async function buildPositionChecklistMessage(
 
   const maxNotionalUsd =
     maxOrderContracts != null && maxOrderContracts > 0 ? maxOrderContracts * futPx : null;
-  const liqCapClass = classifyLiquidityCapRatio(mcapUsd, maxNotionalUsd, liqCapThHigh, liqCapThExtreme);
+  const liqCapClass = classifyLiquidityCapRatio(
+    mcapUsd,
+    maxNotionalUsd,
+    liqCapThWatch,
+    liqCapThHigh,
+    liqCapThExtreme,
+  );
 
   const ema6 = closes15m ? computeEmaLast(closes15m, 6) : null;
   const ema12 = closes15m ? computeEmaLast(closes15m, 12) : null;
@@ -252,14 +265,21 @@ export async function buildPositionChecklistMessage(
     penalties.push({
       key: "liqCapRatio",
       points: liqCapPenExtreme,
-      deductionLine: `❌ Liquidity–Cap ratio ${rStr}:1 (EXTREME / กำแพงเงินทิพย์): −${liqCapPenExtreme}`,
+      deductionLine: `❌ Liquidity–Cap ${rStr}:1 (TERMINATE / Fake Market Cap · RAVE trap): −${liqCapPenExtreme}`,
     });
   } else if (liqCapClass.tier === "high" && liqCapClass.ratio != null) {
     const rStr = Math.round(liqCapClass.ratio).toLocaleString("en-US");
     penalties.push({
       key: "liqCapRatio",
       points: liqCapPenHigh,
-      deductionLine: `❌ Liquidity–Cap ratio ${rStr}:1 (HIGH_RISK / Low Liquidity): −${liqCapPenHigh}`,
+      deductionLine: `❌ Liquidity–Cap ${rStr}:1 (HIGH_RISK / Low real liquidity): −${liqCapPenHigh}`,
+    });
+  } else if (liqCapClass.tier === "watch" && liqCapClass.ratio != null) {
+    const rStr = Math.round(liqCapClass.ratio).toLocaleString("en-US");
+    penalties.push({
+      key: "liqCapRatio",
+      points: liqCapPenWatch,
+      deductionLine: `❌ Liquidity–Cap ${rStr}:1 (WATCH / Medium risk liquidity gap): −${liqCapPenWatch}`,
     });
   }
 
@@ -404,12 +424,15 @@ export async function buildPositionChecklistMessage(
     const rStr = Math.round(liqCapClass.ratio).toLocaleString("en-US");
     const notionalStr = maxNotionalUsd != null ? formatUsd(maxNotionalUsd) : "—";
     if (liqCapClass.tier === "extreme") {
-      return `Liquidity–Cap ratio: 🔴 EXTREME — ${rStr}:1 (mcap / max pos USDT) — กำแพงเงินทิพย์ / สงสัย mcap เทียบสภาพคล่องจริง · max ~${notionalStr} USDT @ last`;
+      return `Liquidity–Cap ratio: 🔴 TERMINATE — ${rStr}:1 — Fake Market Cap (RAVE trap) · mcap / max pos USDT · max ~${notionalStr} @ last`;
     }
     if (liqCapClass.tier === "high") {
-      return `Liquidity–Cap ratio: ⚠️ HIGH_RISK (Low Liquidity) — ${rStr}:1 · max ~${notionalStr} USDT @ last`;
+      return `Liquidity–Cap ratio: ⚠️ HIGH_RISK — ${rStr}:1 — Low real liquidity (เจ้ามือคุม/ลากลม) · max ~${notionalStr} @ last`;
     }
-    return `Liquidity–Cap ratio: ✅ PASS — ${rStr}:1 (เกณฑ์เตือน >${liqCapThHigh.toLocaleString("en-US")}:1) · max ~${notionalStr} USDT @ last`;
+    if (liqCapClass.tier === "watch") {
+      return `Liquidity–Cap ratio: 👀 WATCH — ${rStr}:1 — Medium risk liquidity gap (${liqCapThWatch.toLocaleString("en-US")}–${liqCapThHigh.toLocaleString("en-US")}) · max ~${notionalStr} @ last`;
+    }
+    return `Liquidity–Cap ratio: ✅ SAFE_TO_TRADE — ${rStr}:1 (เหรียญหลัก/พื้นฐานดี · < ${liqCapThWatch.toLocaleString("en-US")}:1) · max ~${notionalStr} @ last`;
   })();
 
   const volLine =
