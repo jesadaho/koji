@@ -13,7 +13,7 @@ function normalizeTelegramSlashCommand(raw: string): string {
   const t = raw.trim();
   if (!t.startsWith("/")) return t;
   let rest = t.slice(1);
-  const m = rest.match(/^([a-zA-Z_]+)@\S+\s*(.*)$/s);
+  const m = rest.match(/^([a-zA-Z_]+)@\S+\s*([\s\S]*)$/);
   if (m) {
     rest = `${m[1]!} ${m[2] ?? ""}`.trim();
   }
@@ -31,8 +31,10 @@ function miniAppOpenUrl(): string {
 }
 
 /**
- * Telegram Bot webhook — /start → ปุ่ม Mini App · ข้อความอื่น: เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
- * ในกลุ่ม: ถ้า BotFather เปิด Group Privacy บอทจะเห็นแค่คำสั่งที่ขึ้นต้น / หรือ @ชื่อบอท — ใช้ `/short btc` แทนข้อความเปล่า
+ * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
+ * /start → ปุ่ม Mini App · อื่นๆ: เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
+ * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
+ * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
  * แนะนำตั้ง `TELEGRAM_WEBHOOK_SECRET` แล้วส่ง `secret_token` ใน setWebhook
  */
@@ -156,7 +158,7 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: "telegram_webhook",
-    hint: "Telegram จะส่งอัปเดตมาที่นี่ด้วย POST เท่านั้น — ต้องเรียก setWebhook ก่อน /start ถึงจะมีผล · DM: short btc / long eth · สถิติ spark — ในกลุ่มใช้ /short btc ถ้าเปิด Group Privacy",
+    hint: "POST เท่านั้น — ตั้ง setWebhook ก่อน · คำสั่ง (short btc, สถิติ spark, /start) ใช้ในแชทส่วนตัวกับบอท — กลุ่มรับแจ้งเตือนอย่างเดียว (ส่งจาก cron ไม่ผ่าน webhook นี้)",
     miniAppBaseConfigured: Boolean(base),
     webhookSecretEnvSet: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET?.trim()),
     setWebhookDocs: "https://core.telegram.org/bots/api#setwebhook",
