@@ -89,6 +89,31 @@ function classifyFngLong(fng: number, minForLong: number): { emoji: string; labe
   return { emoji: "⚠️", label: `Fear-heavy (${fng}) — weak for long` };
 }
 
+/** Mcap / max position notional (USDT) — ยิ่งสูงยิ่งเสี่ยง (สภาพคล่องเทียบขนาดเหรียญต่ำ) */
+type LiqCapTier = "pass" | "high" | "extreme";
+
+function classifyLiquidityCapRatio(
+  mcapUsd: number | null,
+  maxNotionalUsd: number | null,
+  thHigh: number,
+  thExtreme: number
+): { tier: LiqCapTier; ratio: number | null } {
+  if (
+    mcapUsd == null ||
+    !Number.isFinite(mcapUsd) ||
+    mcapUsd <= 0 ||
+    maxNotionalUsd == null ||
+    !Number.isFinite(maxNotionalUsd) ||
+    maxNotionalUsd <= 0
+  ) {
+    return { tier: "pass", ratio: null };
+  }
+  const ratio = mcapUsd / maxNotionalUsd;
+  if (ratio > thExtreme) return { tier: "extreme", ratio };
+  if (ratio > thHigh) return { tier: "high", ratio };
+  return { tier: "pass", ratio };
+}
+
 export async function buildPositionChecklistMessage(
   parsed: ParsedPositionChecklist
 ): Promise<string> {
@@ -114,6 +139,10 @@ export async function buildPositionChecklistMessage(
   const maxLevCfg = envNum("KOJI_SCORE_MAX_LEVERAGE", 3);
   const emaPricePen = envNum("POSITION_CHECK_EMA_PRICE_PENALTY", 15);
   const emaAlignPen = envNum("POSITION_CHECK_EMA_ALIGN_PENALTY", 10);
+  const liqCapThHigh = envNum("POSITION_CHECK_LIQ_CAP_RATIO_HIGH", 100_000);
+  const liqCapThExtreme = envNum("POSITION_CHECK_LIQ_CAP_RATIO_EXTREME", 500_000);
+  const liqCapPenHigh = envNum("POSITION_CHECK_LIQ_CAP_PENALTY_HIGH", 20);
+  const liqCapPenExtreme = envNum("POSITION_CHECK_LIQ_CAP_PENALTY_EXTREME", 30);
 
   const [ticker, klineHigh, mcapUsd, pulseResult, maxOrderContracts, closes15m] = await Promise.all([
     fetchContractTickerSingle(contractSymbol),
@@ -139,6 +168,10 @@ export async function buildPositionChecklistMessage(
   const amount24 =
     typeof ticker.amount24 === "number" && !Number.isNaN(ticker.amount24) ? ticker.amount24 : null;
   const funding = typeof ticker.fundingRate === "number" && !Number.isNaN(ticker.fundingRate) ? ticker.fundingRate : 0;
+
+  const maxNotionalUsd =
+    maxOrderContracts != null && maxOrderContracts > 0 ? maxOrderContracts * futPx : null;
+  const liqCapClass = classifyLiquidityCapRatio(mcapUsd, maxNotionalUsd, liqCapThHigh, liqCapThExtreme);
 
   const ema6 = closes15m ? computeEmaLast(closes15m, 6) : null;
   const ema12 = closes15m ? computeEmaLast(closes15m, 12) : null;
@@ -214,6 +247,22 @@ export async function buildPositionChecklistMessage(
     });
   }
 
+  if (liqCapClass.tier === "extreme" && liqCapClass.ratio != null) {
+    const rStr = Math.round(liqCapClass.ratio).toLocaleString("en-US");
+    penalties.push({
+      key: "liqCapRatio",
+      points: liqCapPenExtreme,
+      deductionLine: `❌ Liquidity–Cap ratio ${rStr}:1 (EXTREME / กำแพงเงินทิพย์): −${liqCapPenExtreme}`,
+    });
+  } else if (liqCapClass.tier === "high" && liqCapClass.ratio != null) {
+    const rStr = Math.round(liqCapClass.ratio).toLocaleString("en-US");
+    penalties.push({
+      key: "liqCapRatio",
+      points: liqCapPenHigh,
+      deductionLine: `❌ Liquidity–Cap ratio ${rStr}:1 (HIGH_RISK / Low Liquidity): −${liqCapPenHigh}`,
+    });
+  }
+
   /** EMA 15m: short ต้อง last < EMA12 และ EMA6 < EMA12 — long สลับทิศ */
   if (ema12 != null && ema6 != null) {
     if (dir === "short") {
@@ -255,11 +304,21 @@ export async function buildPositionChecklistMessage(
   const dirEmoji = dir === "short" ? "📉" : "📈";
   const header = `[${dir.toUpperCase()}] ${base} / USDT ${dirEmoji}`;
 
-  const statusOrder = ["sentiment", "liquidity", "newHigh", "ema15", "emaAlign", "weekend", "basis"] as const;
+  const statusOrder = [
+    "liqCapRatio",
+    "sentiment",
+    "liquidity",
+    "newHigh",
+    "ema15",
+    "emaAlign",
+    "weekend",
+    "basis",
+  ] as const;
   const statusReason = (() => {
     for (const k of statusOrder) {
       const hit = penalties.find((p) => p.key === k);
       if (hit) {
+        if (k === "liqCapRatio") return "Liquidity–Cap ratio";
         if (k === "sentiment") return "Market Sentiment";
         if (k === "liquidity") return "Liquidity";
         if (k === "newHigh") return "ATH Guard (48h)";
@@ -338,6 +397,21 @@ export async function buildPositionChecklistMessage(
     sentimentRuleLine = `Market Sentiment: ❓ No F&G (${err.slice(0, 80)})`;
   }
 
+  const liqCapRuleLine = (() => {
+    if (liqCapClass.ratio == null) {
+      return `Liquidity–Cap ratio (mcap / max pos USDT): ❓ N/A — ต้องมี Market Cap (CoinGecko) และ max order จากสัญญา`;
+    }
+    const rStr = Math.round(liqCapClass.ratio).toLocaleString("en-US");
+    const notionalStr = maxNotionalUsd != null ? formatUsd(maxNotionalUsd) : "—";
+    if (liqCapClass.tier === "extreme") {
+      return `Liquidity–Cap ratio: 🔴 EXTREME — ${rStr}:1 (mcap / max pos USDT) — กำแพงเงินทิพย์ / สงสัย mcap เทียบสภาพคล่องจริง · max ~${notionalStr} USDT @ last`;
+    }
+    if (liqCapClass.tier === "high") {
+      return `Liquidity–Cap ratio: ⚠️ HIGH_RISK (Low Liquidity) — ${rStr}:1 · max ~${notionalStr} USDT @ last`;
+    }
+    return `Liquidity–Cap ratio: ✅ PASS — ${rStr}:1 (เกณฑ์เตือน >${liqCapThHigh.toLocaleString("en-US")}:1) · max ~${notionalStr} USDT @ last`;
+  })();
+
   const volLine =
     amount24 != null
       ? `Vol 24h: ${formatUsd(amount24)} USDT${amount24 < minVolAdvisory ? " ⚠️ (below soft min)" : ""}`
@@ -373,6 +447,7 @@ export async function buildPositionChecklistMessage(
     athLine,
     ema15mLine,
     sentimentRuleLine,
+    liqCapRuleLine,
     "",
     `📊 Koji Score: ${score}/100`,
     "",

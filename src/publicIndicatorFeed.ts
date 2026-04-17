@@ -22,7 +22,7 @@ function envFlagOn(key: string, defaultOn: boolean): boolean {
 }
 
 export function isIndicatorPublicFeedEnabled(): boolean {
-  return envFlagOn("INDICATOR_PUBLIC_FEED_ENABLED", false);
+  return envFlagOn("INDICATOR_PUBLIC_FEED_ENABLED", true);
 }
 
 function publicCooldownMs(): number {
