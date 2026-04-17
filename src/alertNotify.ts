@@ -4,6 +4,7 @@ import { linePushMessages } from "./linePush";
 import {
   sendTelegramAlertMessage,
   sendTelegramMessageToChat,
+  sendTelegramPublicBroadcastMessage,
   telegramAlertConfigured,
   telegramBotTokenConfigured,
   telegramSparkSystemGroupConfigured,
@@ -91,17 +92,16 @@ export async function sendAlertNotification(client: Client, lineUserId: string, 
 export async function sendPublicIndicatorFeedToSparkGroup(text: string): Promise<boolean> {
   if (!telegramSparkSystemGroupConfigured()) {
     console.warn(
-      "[sendPublicIndicatorFeedToSparkGroup] ไม่มี TELEGRAM_BOT_TOKEN + TELEGRAM_SPARK_SYSTEM_CHAT_ID — ไม่ส่ง public indicator feed"
+      "[sendPublicIndicatorFeedToSparkGroup] ไม่มี TELEGRAM_BOT_TOKEN + TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID) — ไม่ส่ง public indicator feed"
     );
     return false;
   }
-  const gid = process.env.TELEGRAM_SPARK_SYSTEM_CHAT_ID!.trim();
-  await sendTelegramMessageToChat(gid, text);
+  await sendTelegramPublicBroadcastMessage(text);
   return true;
 }
 
 /**
- * Spark / System Change / สัญญาณสาธารณะที่ใช้กลุ่มเดียวกัน: Telegram → TELEGRAM_SPARK_SYSTEM_CHAT_ID ครั้งเดียว
+ * Spark / System Change / สัญญาณสาธารณะที่ใช้กลุ่มเดียวกัน: Telegram → TELEGRAM_PUBLIC_CHAT_ID (+ optional topic) ครั้งเดียว
  * ไม่บังคับมี LINE user id — ถ้าไม่ตั้งกลุ่ม จะ fallback เป็น sendAlertNotification ต่อ uid (ต้องมี uids)
  * LINE mirror ต่อ uid: เฉพาะเมื่อมี uids + ALERT_ALSO_LINE_PUSH + LINE_ALERT_PUSH_ENABLED
  * @returns จำนวนช่องที่ส่งสำเร็จ (TG 1 + LINE mirror ต่อคน หรือจำนวน uid ใน fallback)
@@ -116,8 +116,7 @@ export async function sendSparkSystemAlert(client: Client, lineUserIds: string[]
     .filter((u) => u !== SPARK_SYSTEM_BROADCAST_PLACEHOLDER_UID);
 
   if (telegramSparkSystemGroupConfigured()) {
-    const gid = process.env.TELEGRAM_SPARK_SYSTEM_CHAT_ID!.trim();
-    await sendTelegramMessageToChat(gid, text);
+    await sendTelegramPublicBroadcastMessage(text);
     let n = 1;
     if (uids.length > 0 && isAlertAlsoLinePush() && isLineAlertPushEnabled()) {
       for (const u of uids) {

@@ -188,7 +188,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
   if (!isIndicatorPublicFeedEnabled()) return 0;
   if (!telegramSparkSystemGroupConfigured()) {
     console.warn(
-      "[indicatorPublicFeed] ไม่มี TELEGRAM_BOT_TOKEN + TELEGRAM_SPARK_SYSTEM_CHAT_ID — ข้าม public indicator feed"
+      "[indicatorPublicFeed] ไม่มี TELEGRAM_BOT_TOKEN + TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID) — ข้าม public indicator feed"
     );
     return 0;
   }

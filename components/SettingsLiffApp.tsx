@@ -211,7 +211,9 @@ export default function SettingsLiffApp() {
         <h2>System conditions (MEXC)</h2>
         <p className="sub" style={{ marginTop: 0 }}>
           แจ้งเตือน funding / รอบชำระ / max order size (สัญญา Top 50) ส่งไปที่{" "}
-          <strong>กลุ่ม Telegram</strong> (<code>TELEGRAM_SPARK_SYSTEM_CHAT_ID</code>) แบบสาธารณะ — ไม่ต้องเปิดรับรายคนในแอปแล้ว
+          <strong>กลุ่ม Telegram</strong> (<code>TELEGRAM_PUBLIC_CHAT_ID</code>
+          {", "}
+          <code>TELEGRAM_PUBLIC_MESSAGE_THREAD_ID</code> ถ้าใช้หัวข้อในกลุ่ม Forum) แบบสาธารณะ — ไม่ต้องเปิดรับรายคนในแอปแล้ว
         </p>
         <p className="sub" style={{ marginTop: "0.75rem" }}>
           รายการเตือนราคา / กลยุทธ์อื่นๆ ยังตั้งได้จากหน้าแรกตามเดิม

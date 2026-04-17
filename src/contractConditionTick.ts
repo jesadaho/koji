@@ -180,9 +180,12 @@ export async function runContractConditionTick(client: Client): Promise<void> {
 
   const topSample = await getFundingHistorySampleRows(50);
   let symbols = unionPollSymbols(uniqueWatchedSymbols(watches), topSample);
-  if (symbols.length === 0 && systemUsers.length > 0) {
+  if (
+    symbols.length === 0 &&
+    (systemUsers.length > 0 || telegramSparkSystemGroupConfigured())
+  ) {
     console.error(
-      "[contractConditionTick] getFundingHistorySampleRows returned no symbols but system subscribers exist — using fallback",
+      "[contractConditionTick] getFundingHistorySampleRows returned no symbols — using fallback poll (subscribers and/or public TG group)",
     );
     symbols = Array.from(FALLBACK_POLL_SYMBOLS);
   }
