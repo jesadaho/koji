@@ -86,6 +86,25 @@ function isFollowUpComplete(cur: SparkFollowUpPending): boolean {
   );
 }
 
+const FETCH_DETAIL_MAX = 200;
+
+function truncateFetchDetail(s: string): string {
+  const oneLine = s.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= FETCH_DETAIL_MAX) return oneLine;
+  return `${oneLine.slice(0, FETCH_DETAIL_MAX)}…`;
+}
+
+function formatFetchError(e: unknown): string {
+  if (e instanceof Error && e.message) return truncateFetchDetail(e.message);
+  return truncateFetchDetail(String(e));
+}
+
+type UsdLookupResult = {
+  usd: number | null;
+  /** ตั้งเมื่อ usd เป็น null — สำหรับแจ้งเตือน (ไม่ใส่ stack) */
+  detailIfNull?: string;
+};
+
 /** มี checkpoint ใดถึงกำหนดในรอบนี้ (ต้องดึงราคา) */
 function pendingHasDueCheckpoint(p: SparkFollowUpPending, nowSec: number): boolean {
   if (!p.silent15 && nowSec >= p.due15Sec) return true;
@@ -97,17 +116,34 @@ function pendingHasDueCheckpoint(p: SparkFollowUpPending, nowSec: number): boole
   return false;
 }
 
-async function usdForSymbol(symbol: string, cache: Record<string, CoinQuote>): Promise<number | null> {
+async function usdForSymbol(
+  symbol: string,
+  cache: Record<string, CoinQuote>,
+  batchFailDetail?: string
+): Promise<UsdLookupResult> {
   const q = cache[symbol];
-  if (q?.usd != null && Number.isFinite(q.usd)) return q.usd;
+  if (q?.usd != null && Number.isFinite(q.usd)) {
+    return { usd: q.usd };
+  }
   try {
     const r = await fetchSimplePrices([symbol]);
     Object.assign(cache, r);
     const q2 = cache[symbol];
-    return q2?.usd != null && Number.isFinite(q2.usd) ? q2.usd : null;
+    if (q2?.usd != null && Number.isFinite(q2.usd)) {
+      return { usd: q2.usd };
+    }
+    const base =
+      "ไม่มีราคาใน response (MEXC/Binance ไม่คืนคู่นี้หรือทุกแหล่งว่าง)";
+    if (batchFailDetail?.trim()) {
+      return {
+        usd: null,
+        detailIfNull: `${base} · batch ก่อนหน้า: ${truncateFetchDetail(batchFailDetail)}`,
+      };
+    }
+    return { usd: null, detailIfNull: base };
   } catch (e) {
     console.error("[sparkFollowUpTick] price fetch", symbol, e);
-    return null;
+    return { usd: null, detailIfNull: formatFetchError(e) };
   }
 }
 
@@ -134,11 +170,13 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
   }
 
   let quoteCache: Record<string, CoinQuote> = {};
+  let batchFetchFailDetail: string | undefined;
   if (symbolsThisTick.size > 0) {
     try {
       quoteCache = await fetchSimplePrices(Array.from(symbolsThisTick));
     } catch (e) {
       console.error("[sparkFollowUpTick] batch price fetch", e);
+      batchFetchFailDetail = formatFetchError(e);
     }
   }
 
@@ -153,7 +191,8 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
 
     const snapUsd = async (): Promise<number | null> => {
       if (rowPrice !== undefined) return rowPrice;
-      rowPrice = await usdForSymbol(cur.symbol, quoteCache);
+      const lookup = await usdForSymbol(cur.symbol, quoteCache, batchFetchFailDetail);
+      rowPrice = lookup.usd;
       if (
         rowPrice == null &&
         priceFailNotifyEnabled() &&
@@ -162,10 +201,14 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       ) {
         priceFetchFailNotified = true;
         const base = shortLabel(cur.symbol);
+        const detail =
+          lookup.detailIfNull?.trim() ||
+          "ไม่ทราบสาเหตุ (ไม่มีรายละเอียดจากการดึงราคา)";
         const body = [
           "⚠️ Spark follow-up: ดึงราคาไม่สำเร็จ",
           `[${base}]/USDT`,
           "สถิติจุดวัดในรอบ cron นี้จะเป็น null — รอบถัดไปจะลองดึงใหม่ (MEXC → Binance)",
+          `รายละเอียด: ${detail}`,
         ].join("\n");
         for (const uid of subs) {
           try {
