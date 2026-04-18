@@ -2,6 +2,7 @@ import type { Client } from "@line/bot-sdk";
 import { listAllSpotFutBasisRows, type SpotFutBasisRow } from "./mexcMarkets";
 import { formatPrice } from "./marketsFormat";
 import { sendAlertNotification } from "./alertNotify";
+import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
 import {
   loadSpotFutBasisAlertState,
@@ -88,14 +89,14 @@ function removeSymbol(state: SpotFutBasisAlertState, sym: string): SpotFutBasisA
 }
 
 /**
- * แจ้งผู้ติดตาม system conditions เมื่อ |spot–perp basis| อยู่ระดับ Warning/Extreme ตามเกณฑ์และ state
+ * แจ้งผู้ติดตาม system conditions + กลุ่ม Telegram สาธารณะ (เมื่อตั้ง TELEGRAM_PUBLIC_*) เมื่อ |spot–perp basis| Warning/Extreme
  * เรียกจาก /api/cron/price-sync (~15 นาที) — ไม่ใช่ pct-trailing
  */
 export async function runSpotFutBasisAlertTick(
   client: Client,
 ): Promise<{ notifiedPushes: number; symbolsAlerted: number }> {
   const subscribers = await loadSystemChangeSubscribers();
-  if (subscribers.length === 0) {
+  if (subscribers.length === 0 && !telegramSparkSystemGroupConfigured()) {
     return { notifiedPushes: 0, symbolsAlerted: 0 };
   }
 
@@ -122,6 +123,15 @@ export async function runSpotFutBasisAlertTick(
 
     const body = buildSpotFutBasisMessage(row, tier);
     let anyOk = false;
+    if (telegramSparkSystemGroupConfigured()) {
+      try {
+        await sendTelegramPublicBroadcastMessage(body);
+        notifiedPushes += 1;
+        anyOk = true;
+      } catch (e) {
+        console.error("[spotFutBasisAlertTick] telegram public group", sym, e);
+      }
+    }
     for (const uid of subscribers) {
       try {
         await sendAlertNotification(client, uid, body);
