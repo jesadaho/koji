@@ -49,13 +49,6 @@ function shortLabel(contractSymbol: string): string {
   return s.replace(/_/g, "") || contractSymbol;
 }
 
-function formatPriceUsd(p: number): string {
-  if (!Number.isFinite(p) || p <= 0) return "—";
-  if (p < 1) return `$${p.toFixed(4)}`;
-  if (p < 1000) return `$${p.toFixed(2)}`;
-  return `$${p.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-}
-
 function momentumOutcome(
   refPrice: number,
   sparkReturnPct: number,
@@ -67,33 +60,6 @@ function momentumOutcome(
   if (sparkReturnPct < 0) return endPrice < refPrice - eps;
   /** Spark แท่งอ้างอิง return 0% — ไม่มีทิศ momentum จากสัญญาณ; ใช้ราคาหลังจุดอ้างอิง > ref เป็นตัวแทน “ต่อเนื่องขึ้น” เพื่อให้สถิติ T+15m นับได้ */
   return endPrice > refPrice + eps;
-}
-
-function outcomeLabel(won: boolean | null, sparkUp: boolean): string {
-  if (won === null) return "ไม่มีข้อมูลราคา";
-  if (sparkUp) {
-    return won ? "momentum (long) ชนะ" : "fade (short) ชนะ";
-  }
-  return won ? "momentum (short) ชนะ" : "fade (long) ชนะ";
-}
-
-function buildCheckpoint30mMessage(
-  symbol: string,
-  refPrice: number,
-  endPrice: number | null,
-  sparkReturnPct: number,
-  won: boolean | null
-): string {
-  const base = shortLabel(symbol);
-  const sparkUp = sparkReturnPct > 0;
-  const pctStr = `${sparkReturnPct >= 0 ? "+" : ""}${sparkReturnPct.toFixed(1)}%`;
-  return [
-    `📍 Koji Spark follow-up (T+30m)`,
-    `[${base}]/USDT · Spark ${pctStr}`,
-    `อ้างอิงราคา: ${formatPriceUsd(refPrice)} (last + timestamp จาก series — ไม่ใช่ TF กราฟ)`,
-    `ราคาปัจจุบัน: ${endPrice != null ? formatPriceUsd(endPrice) : "—"}`,
-    `ผล: ${outcomeLabel(won, sparkUp)}`,
-  ].join("\n");
 }
 
 function isFollowUpComplete(cur: SparkFollowUpPending): boolean {
@@ -272,7 +238,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       return rowPrice;
     };
 
-    /** T+30m แจ้ง LINE · T+1h เก็บสถิติอย่างเดียว (ไม่ push) */
+    /** T+30m / T+1h — เก็บสถิติใน state เท่านั้น ไม่ push Telegram (ทั้งกรณีมีราคาและไม่มีราคา) */
     const runCheckpoint = async (kind: "30" | "60"): Promise<void> => {
       const endPrice = await snapUsd();
       const won = momentumOutcome(cur.refPrice, cur.sparkReturnPct, endPrice);
@@ -293,20 +259,6 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
         };
       }
       checkpoints += 1;
-
-      /** แจ้ง T+30m เฉพาะเมื่อดึงราคาไม่สำเร็จ — ถ้ามีราคาและคำนวณผลได้แล้วไม่ส่ง (เก็บสถิติใน state อย่างเดียว) */
-      if (kind === "30") {
-        const priceMissing =
-          endPrice == null || !Number.isFinite(endPrice) || endPrice <= 0 || won === null;
-        if (priceMissing) {
-          const body = buildCheckpoint30mMessage(cur.symbol, cur.refPrice, endPrice, cur.sparkReturnPct, won);
-          try {
-            notifiedPushes += await sendSparkSystemAlert(client, [], body);
-          } catch (e) {
-            console.error("[sparkFollowUpTick] notify", cur.symbol, e);
-          }
-        }
-      }
     };
 
     /** สถิติเงียบ T+15m — ไม่แจ้งเตือน */

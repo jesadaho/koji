@@ -590,7 +590,7 @@ export default function SparkStatsLiff() {
               ตาราง &quot;เหรียญใน Spark log&quot; นับทุกครั้งที่แจ้งแล้ว — แต่คอลัมน์ 15m–4h มาจากแถว &quot;follow-up จบแล้ว&quot; เท่านั้น (ครบ T+4h แล้วถึงเข้า history) แม้เวลาจะผ่าน 15 นาทีแล้ว matrix จึงยังเป็น — จนกว่าจะจบครบรอบ
             </p>
             <p style={{ margin: "0.45rem 0 0" }}>
-              หมายเหตุ: จุด T+15m / T+1h เป็น<strong>สถิติเงียบ</strong> — ไม่ส่ง LINE (แจ้งเฉพาะ T+30m) ดูคิว pending ด้านล่างถ้ามี
+              หมายเหตุ: จุด T+15m / T+30m / T+1h … เป็น<strong>สถิติเงียบ</strong> — ไม่ส่ง LINE/Telegram ที่ checkpoint (บันทึกใน state เท่านั้น) ดูคิว pending ด้านล่างถ้ามี
             </p>
           </div>
         ) : null}
