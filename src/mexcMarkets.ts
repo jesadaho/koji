@@ -4,6 +4,7 @@ import { fetchContractFunding } from "./mexcContractMeta";
 const MEXC_TICKER = "https://api.mexc.com/api/v1/contract/ticker";
 const MEXC_DETAIL = "https://api.mexc.com/api/v1/contract/detail";
 const MEXC_SPOT_TICKER_PRICE = "https://api.mexc.com/api/v3/ticker/price";
+const MEXC_SPOT_TICKER_24HR = "https://api.mexc.com/api/v3/ticker/24hr";
 const MEXC_SPOT_KLINES = "https://api.mexc.com/api/v3/klines";
 
 /** แท่ง 1h สำหรับสถิติ basis ย้อนหลัง ~24 ชม. (spot + perp) */
@@ -49,6 +50,9 @@ type RiskTier = {
 type MexcDetailRow = {
   symbol?: string;
   state?: number;
+  /** ชื่อโชว์จาก MEXC (มักมีภาษาจีน + คำว่า 永续 ฯลฯ) */
+  displayName?: string;
+  displayNameEn?: string;
   riskLimitCustom?: RiskTier[];
   limitMaxVol?: number;
   maxVol?: number;
@@ -186,6 +190,14 @@ export async function fetchContractTickerMetrics(contractSymbol: string): Promis
 
 type MexcSpotPriceRow = { symbol?: string; price?: string };
 
+/** MEXC spot /api/v3/ticker/24hr — สนใจ quote volume (USDT) */
+type MexcSpot24hrRow = {
+  symbol?: string;
+  quoteVolume?: string;
+  volume?: string;
+  lastPrice?: string;
+};
+
 /** แปลงสัญญา perp BTC_USDT → คู่ spot BTCUSDT */
 export function perpSymbolToSpotSymbol(contractSymbol: string): string {
   return contractSymbol.trim().replace(/_/g, "");
@@ -215,6 +227,22 @@ async function fetchContractDetails(): Promise<MexcDetailRow[]> {
   const { data } = await axios.get<MexcDetailResponse>(MEXC_DETAIL, { timeout: 60_000 });
   if (!data.success || data.data === undefined) return [];
   return asArray(data.data);
+}
+
+export type ContractDisplayMeta = { displayName?: string; displayNameEn?: string };
+
+/** symbol สัญญา (เช่น BIAN_REN_SHENG_USDT) → displayName / displayNameEn จาก GET contract/detail */
+export async function fetchContractDisplayMetaBySymbol(): Promise<Map<string, ContractDisplayMeta>> {
+  const rows = await fetchContractDetails();
+  const map = new Map<string, ContractDisplayMeta>();
+  for (const d of rows) {
+    const sym = d.symbol?.trim();
+    if (!sym) continue;
+    const displayName = typeof d.displayName === "string" ? d.displayName.trim() || undefined : undefined;
+    const displayNameEn = typeof d.displayNameEn === "string" ? d.displayNameEn.trim() || undefined : undefined;
+    map.set(sym, { displayName, displayNameEn });
+  }
+  return map;
 }
 
 function parseKlineArrays(raw: KlineApiResponse["data"]): KlineArrays | null {
@@ -863,6 +891,29 @@ export async function fetchSpotPriceSingle(spotSymbol: string): Promise<number |
     const row = Array.isArray(data) ? data[0] : data;
     const p = Number(row?.price);
     return Number.isFinite(p) && p > 0 ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ปริมาณเทิร์นโอเวอร์ 24h ฝั่ง spot เป็นสกุล quote (USDT) — ใช้เทียบกับ perp amount24
+ * ลอง quoteVolume ก่อน แล้วค่อย volume × lastPrice
+ */
+export async function fetchSpot24hrQuoteVolumeUsdt(spotSymbol: string): Promise<number | null> {
+  const sym = spotSymbol.trim().toUpperCase();
+  if (!sym) return null;
+  try {
+    const { data } = await axios.get<MexcSpot24hrRow>(MEXC_SPOT_TICKER_24HR, {
+      params: { symbol: sym },
+      timeout: 12_000,
+    });
+    const qv = Number(data?.quoteVolume);
+    if (Number.isFinite(qv) && qv > 0) return qv;
+    const vol = Number(data?.volume);
+    const lp = Number(data?.lastPrice);
+    if (Number.isFinite(vol) && vol > 0 && Number.isFinite(lp) && lp > 0) return vol * lp;
+    return null;
   } catch {
     return null;
   }

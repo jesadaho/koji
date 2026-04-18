@@ -7,6 +7,7 @@ import {
   fetchMaxOrderContractsForSymbol,
   fetchPerp15mClosesForChecklist,
   fetchPerpHourlyClosesForNearHigh,
+  fetchSpot24hrQuoteVolumeUsdt,
   fetchSpotPriceSingle,
   perpSymbolToSpotSymbol,
 } from "./mexcMarkets";
@@ -119,6 +120,34 @@ function classifyLiquidityCapRatio(
   return { tier: "safe", ratio };
 }
 
+/** R = Futures amount24 ÷ Spot quote turnover 24h (USDT) — ยิ่งสูงยิ่งเสี่ยง (เก็งกำไรเกินถือจริง) */
+type SpotFutVolTier = 1 | 2 | 3 | 4 | "unknown";
+
+function classifySpotFutVolRatio(
+  futAmount24Usdt: number | null,
+  spotQuoteVol24Usdt: number | null,
+  t2Min: number,
+  t3Min: number,
+  t4Min: number
+): { tier: SpotFutVolTier; ratio: number | null } {
+  if (
+    futAmount24Usdt == null ||
+    !Number.isFinite(futAmount24Usdt) ||
+    futAmount24Usdt <= 0 ||
+    spotQuoteVol24Usdt == null ||
+    !Number.isFinite(spotQuoteVol24Usdt) ||
+    spotQuoteVol24Usdt <= 0
+  ) {
+    return { tier: "unknown", ratio: null };
+  }
+  const R = futAmount24Usdt / spotQuoteVol24Usdt;
+  if (!Number.isFinite(R) || R <= 0) return { tier: "unknown", ratio: null };
+  if (R >= t4Min) return { tier: 4, ratio: R };
+  if (R >= t3Min) return { tier: 3, ratio: R };
+  if (R >= t2Min) return { tier: 2, ratio: R };
+  return { tier: 1, ratio: R };
+}
+
 export async function buildPositionChecklistMessage(
   parsed: ParsedPositionChecklist
 ): Promise<string> {
@@ -151,6 +180,13 @@ export async function buildPositionChecklistMessage(
   const liqCapPenHigh = envNum("POSITION_CHECK_LIQ_CAP_PENALTY_HIGH", 20);
   const liqCapPenExtreme = envNum("POSITION_CHECK_LIQ_CAP_PENALTY_EXTREME", 30);
 
+  const spotFutT2Min = envNum("POSITION_CHECK_SPOT_FUT_VOL_T2_MIN", 11);
+  const spotFutT3Min = envNum("POSITION_CHECK_SPOT_FUT_VOL_T3_MIN", 41);
+  const spotFutT4Min = envNum("POSITION_CHECK_SPOT_FUT_VOL_T4_MIN", 81);
+  const spotFutPenT2 = envNum("POSITION_CHECK_SPOT_FUT_VOL_PENALTY_T2", 8);
+  const spotFutPenT3 = envNum("POSITION_CHECK_SPOT_FUT_VOL_PENALTY_T3", 18);
+  const spotFutPenT4 = envNum("POSITION_CHECK_SPOT_FUT_VOL_PENALTY_T4", 35);
+
   const [ticker, klineHigh, mcapUsd, pulseResult, maxOrderContracts, closes15m] = await Promise.all([
     fetchContractTickerSingle(contractSymbol),
     fetchPerpHourlyClosesForNearHigh(contractSymbol),
@@ -165,7 +201,10 @@ export async function buildPositionChecklistMessage(
   }
 
   const spotSym = perpSymbolToSpotSymbol(contractSymbol);
-  const spotPx = await fetchSpotPriceSingle(spotSym);
+  const [spotPx, spotQuoteVol24] = await Promise.all([
+    fetchSpotPriceSingle(spotSym),
+    fetchSpot24hrQuoteVolumeUsdt(spotSym),
+  ]);
   const futPx = ticker.lastPrice;
   let basisPct: number | null = null;
   if (spotPx != null && spotPx > 0) {
@@ -184,6 +223,14 @@ export async function buildPositionChecklistMessage(
     liqCapThWatch,
     liqCapThHigh,
     liqCapThExtreme,
+  );
+
+  const spotFutVolClass = classifySpotFutVolRatio(
+    amount24,
+    spotQuoteVol24,
+    spotFutT2Min,
+    spotFutT3Min,
+    spotFutT4Min,
   );
 
   const ema6 = closes15m ? computeEmaLast(closes15m, 6) : null;
@@ -283,6 +330,29 @@ export async function buildPositionChecklistMessage(
     });
   }
 
+  if (spotFutVolClass.tier === 4 && spotFutVolClass.ratio != null) {
+    const rDisp = spotFutVolClass.ratio >= 100 ? spotFutVolClass.ratio.toFixed(0) : spotFutVolClass.ratio.toFixed(1);
+    penalties.push({
+      key: "spotFutVolRatio",
+      points: spotFutPenT4,
+      deductionLine: `❌ Spot/Perp vol R=${rDisp} (Tier 4 Casino/RAVE · TERMINATE): −${spotFutPenT4}`,
+    });
+  } else if (spotFutVolClass.tier === 3 && spotFutVolClass.ratio != null) {
+    const rDisp = spotFutVolClass.ratio >= 100 ? spotFutVolClass.ratio.toFixed(0) : spotFutVolClass.ratio.toFixed(1);
+    penalties.push({
+      key: "spotFutVolRatio",
+      points: spotFutPenT3,
+      deductionLine: `❌ Spot/Perp vol R=${rDisp} (Tier 3 Manipulation / High squeeze risk): −${spotFutPenT3}`,
+    });
+  } else if (spotFutVolClass.tier === 2 && spotFutVolClass.ratio != null) {
+    const rDisp = spotFutVolClass.ratio >= 100 ? spotFutVolClass.ratio.toFixed(0) : spotFutVolClass.ratio.toFixed(1);
+    penalties.push({
+      key: "spotFutVolRatio",
+      points: spotFutPenT2,
+      deductionLine: `❌ Spot/Perp vol R=${rDisp} (Tier 2 Speculator · ลดเลเวอเรจ): −${spotFutPenT2}`,
+    });
+  }
+
   /** EMA 15m: short ต้อง last < EMA12 และ EMA6 < EMA12 — long สลับทิศ */
   if (ema12 != null && ema6 != null) {
     if (dir === "short") {
@@ -326,6 +396,7 @@ export async function buildPositionChecklistMessage(
 
   const statusOrder = [
     "liqCapRatio",
+    "spotFutVolRatio",
     "sentiment",
     "liquidity",
     "newHigh",
@@ -339,6 +410,7 @@ export async function buildPositionChecklistMessage(
       const hit = penalties.find((p) => p.key === k);
       if (hit) {
         if (k === "liqCapRatio") return "Liquidity–Cap ratio";
+        if (k === "spotFutVolRatio") return "Spot/Perp volume (Fut÷Spot)";
         if (k === "sentiment") return "Market Sentiment";
         if (k === "liquidity") return "Liquidity";
         if (k === "newHigh") return "ATH Guard (48h)";
@@ -435,6 +507,40 @@ export async function buildPositionChecklistMessage(
     return `Liquidity–Cap ratio: ✅ SAFE_TO_TRADE — ${rStr}:1 (เหรียญหลัก/พื้นฐานดี · < ${liqCapThWatch.toLocaleString("en-US")}:1) · max ~${notionalStr} @ last`;
   })();
 
+  const spotFutVolRuleLine = (() => {
+    if (spotFutVolClass.tier === "unknown" || spotFutVolClass.ratio == null) {
+      const perpOk = amount24 != null && amount24 > 0;
+      const spotOk = spotQuoteVol24 != null && spotQuoteVol24 > 0;
+      return `Spot/Perp Volume (Fut÷Spot 24h USDT): ❓ ไม่มี R — perp 24h: ${perpOk ? "มี" : "ไม่มี"} · spot quote 24h: ${spotOk ? "มี" : "ไม่มี"} (${spotSym})`;
+    }
+    const R = spotFutVolClass.ratio;
+    const rDisp = R >= 100 ? R.toFixed(0) : R.toFixed(1);
+    if (spotFutVolClass.tier === 4) {
+      return [
+        `Spot/Perp Volume (Fut÷Spot 24h): ☠️ Tier 4 "Casino / RAVE" — R=${rDisp} (≥${spotFutT4Min})`,
+        `สถานะ: TERMINATE — เก็งฟิวเจอร์เทียบของถือจริงสูงผิดปกติ · ควรเลี่ยงคู่นี้ (คำแนะอัตโนมัติ ไม่ล็อกคำสั่ง)`,
+      ].join("\n");
+    }
+    if (spotFutVolClass.tier === 3) {
+      const fundHint =
+        dir === "short" && funding < 0 ? " · Short + funding ติดลบ: เสี่ยง squeeze — พิจารณาเลี่ยง" : "";
+      return [
+        `Spot/Perp Volume (Fut÷Spot 24h): 🔴 Tier 3 "Manipulation Zone" — R=${rDisp} (${spotFutT3Min}≤R<${spotFutT4Min})`,
+        `สถานะ: ความผันสูง · แพทเทิร์นกราฟเสี่ยงใช้ไม่ค่อยได้${fundHint}`,
+      ].join("\n");
+    }
+    if (spotFutVolClass.tier === 2) {
+      return [
+        `Spot/Perp Volume (Fut÷Spot 24h): 🟡 Tier 2 "The Speculator" — R=${rDisp} (${spotFutT2Min}≤R<${spotFutT3Min})`,
+        `สถานะ: Watch — พิจารณาลดเลเวอเรจ (เช่น 10x→5x) กันสะบัดกิน SL`,
+      ].join("\n");
+    }
+    return [
+      `Spot/Perp Volume (Fut÷Spot 24h): ✅ Tier 1 "The Fair Game" — R=${rDisp} (R<${spotFutT2Min})`,
+      `สถานะ: Volume Health ดี — โครงสร้าง supply/demand อ่านง่ายเมื่อ R ต่ำ`,
+    ].join("\n");
+  })();
+
   const volLine =
     amount24 != null
       ? `Vol 24h: ${formatUsd(amount24)} USDT${amount24 < minVolAdvisory ? " ⚠️ (below soft min)" : ""}`
@@ -464,13 +570,14 @@ export async function buildPositionChecklistMessage(
     "",
     statusLine,
     "",
-    "🛡️ Trade Rules Check",
+    "🛡️ การประเมินความเสี่ยง",
     "",
     weekendLine,
     athLine,
     ema15mLine,
     sentimentRuleLine,
     liqCapRuleLine,
+    spotFutVolRuleLine,
     "",
     `📊 Koji Score: ${score}/100`,
     "",

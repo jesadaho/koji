@@ -1,6 +1,11 @@
 import type { Client } from "@line/bot-sdk";
 import { sendSparkSystemAlert } from "./alertNotify";
-import { fetchContractTickerMetrics, getTopUsdtSymbolsByAmount24 } from "./mexcMarkets";
+import {
+  fetchContractDisplayMetaBySymbol,
+  fetchContractTickerMetrics,
+  getTopUsdtSymbolsByAmount24,
+  type ContractDisplayMeta,
+} from "./mexcMarkets";
 import { classifySparkMcapBand, classifySparkVolBand } from "./sparkTierContext";
 import {
   loadPriceSpike15mAlertState,
@@ -87,7 +92,8 @@ function buildSparkMessage(
   returnPct: number,
   lastPrice: number,
   amount24Usdt: number,
-  windowSec: number
+  windowSec: number,
+  displayMeta?: ContractDisplayMeta
 ): string {
   const base = shortLabel(contractSymbol);
   const pctStr = `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%`;
@@ -100,14 +106,18 @@ function buildSparkMessage(
     amount24Usdt > 0
       ? `📊 Vol 24h (เทิร์นโอเวอร์): ${formatUsdNotional(amount24Usdt)}`
       : "📊 Vol 24h: —";
-  return [
-    `⚡️ Koji Spark Alert: [${base}]/USDT`,
-    "",
-    moveLine,
-    `⏱ เทียบช่วง ~${wm} นาที (ticker ไม่อิงแท่งเทียน)`,
-    `💰 Price: ${formatPriceUsd(lastPrice)}`,
-    volLine,
-  ].join("\n");
+
+  const head: string[] = [`⚡️ Koji Spark Alert: [${base}]/USDT`, `Contract: ${contractSymbol}`];
+  const dn = displayMeta?.displayName?.trim();
+  const dne = displayMeta?.displayNameEn?.trim();
+  if (dn) {
+    head.push(`📛 ${dn}`);
+  }
+  if (dne && dne.toLowerCase() !== (dn ?? "").toLowerCase()) {
+    head.push(`(${dne})`);
+  }
+  head.push("", moveLine, `⏱ เทียบช่วง ~${wm} นาที (ticker ไม่อิงแท่งเทียน)`, `💰 Price: ${formatPriceUsd(lastPrice)}`, volLine);
+  return head.join("\n");
 }
 
 /**
@@ -123,7 +133,10 @@ export async function runPriceSpike15mAlertTick(
 
   const windowSec = signalWindowSec();
   const limit = topN();
-  const symbols = await getTopUsdtSymbolsByAmount24(limit);
+  const [symbols, displayBySymbol] = await Promise.all([
+    getTopUsdtSymbolsByAmount24(limit),
+    fetchContractDisplayMetaBySymbol(),
+  ]);
   if (symbols.length === 0) {
     return { notifiedPushes: 0, symbolsHit: 0 };
   }
@@ -161,7 +174,7 @@ export async function runPriceSpike15mAlertTick(
       continue;
     }
 
-    const body = buildSparkMessage(sym, returnPct, p, m.amount24Usdt, windowSec);
+    const body = buildSparkMessage(sym, returnPct, p, m.amount24Usdt, windowSec, displayBySymbol.get(sym));
     let anyOk = false;
     try {
       const n = await sendSparkSystemAlert(client, [], body);
