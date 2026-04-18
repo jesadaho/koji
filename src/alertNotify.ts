@@ -8,7 +8,10 @@ import {
   telegramAlertConfigured,
   telegramBotTokenConfigured,
   telegramSparkSystemGroupConfigured,
+  type PublicBroadcastKind,
 } from "./telegramAlert";
+
+export type { PublicBroadcastKind } from "./telegramAlert";
 
 /**
  * LINE push สำหรับแจ้งเตือนอัตโนมัติ (ทั้งช่องหลักและ mirror) — ค่าเริ่มปิด
@@ -96,12 +99,12 @@ export async function sendPublicIndicatorFeedToSparkGroup(text: string): Promise
     );
     return false;
   }
-  await sendTelegramPublicBroadcastMessage(text);
+  await sendTelegramPublicBroadcastMessage(text, "technical");
   return true;
 }
 
 /**
- * Spark / System Change / สัญญาณสาธารณะที่ใช้กลุ่มเดียวกัน: Telegram → TELEGRAM_PUBLIC_CHAT_ID (+ optional topic) ครั้งเดียว
+ * Spark / System Change / สัญญาณสาธารณะที่ใช้กลุ่มเดียวกัน: Telegram → TELEGRAM_PUBLIC_CHAT_ID (+ topic ตาม kind)
  * ไม่บังคับมี LINE user id — ถ้าไม่ตั้งกลุ่ม จะ fallback เป็น sendAlertNotification ต่อ uid (ต้องมี uids)
  * LINE mirror ต่อ uid: เฉพาะเมื่อมี uids + ALERT_ALSO_LINE_PUSH + LINE_ALERT_PUSH_ENABLED
  * @returns จำนวนช่องที่ส่งสำเร็จ (TG 1 + LINE mirror ต่อคน หรือจำนวน uid ใน fallback)
@@ -109,14 +112,19 @@ export async function sendPublicIndicatorFeedToSparkGroup(text: string): Promise
 /** placeholder ในรายการผู้รับ — ไม่ส่ง LINE mirror; ใช้ให้รอบรวมข้อความส่งกลุ่ม TG ได้แม้ไม่มี subscriber */
 export const SPARK_SYSTEM_BROADCAST_PLACEHOLDER_UID = "__spark_system_broadcast__";
 
-export async function sendSparkSystemAlert(client: Client, lineUserIds: string[], text: string): Promise<number> {
+export async function sendSparkSystemAlert(
+  client: Client,
+  lineUserIds: string[],
+  text: string,
+  kind: PublicBroadcastKind
+): Promise<number> {
   const uids = lineUserIds
     .map((u) => u?.trim())
     .filter(Boolean)
     .filter((u) => u !== SPARK_SYSTEM_BROADCAST_PLACEHOLDER_UID);
 
   if (telegramSparkSystemGroupConfigured()) {
-    await sendTelegramPublicBroadcastMessage(text);
+    await sendTelegramPublicBroadcastMessage(text, kind);
     let n = 1;
     if (uids.length > 0 && isAlertAlsoLinePush() && isLineAlertPushEnabled()) {
       for (const u of uids) {

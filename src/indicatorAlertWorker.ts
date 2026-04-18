@@ -164,7 +164,7 @@ async function runRsiInternal(client: Client, now: number): Promise<number> {
       await sendAlertNotification(client, a.userId, msg);
       if (telegramSparkSystemGroupConfigured()) {
         try {
-          await sendTelegramPublicBroadcastMessage(msg);
+          await sendTelegramPublicBroadcastMessage(msg, "technical");
         } catch (e) {
           console.error("[indicatorAlertWorker] RSI public group mirror", a.id, e);
         }
@@ -255,7 +255,7 @@ async function runEmaCrossInternal(client: Client, now: number): Promise<number>
       await sendAlertNotification(client, a.userId, msg);
       if (telegramSparkSystemGroupConfigured()) {
         try {
-          await sendTelegramPublicBroadcastMessage(msg);
+          await sendTelegramPublicBroadcastMessage(msg, "technical");
         } catch (e) {
           console.error("[indicatorAlertWorker] EMA public group mirror", a.id, e);
         }

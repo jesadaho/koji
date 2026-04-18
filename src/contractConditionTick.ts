@@ -7,6 +7,7 @@ import {
   saveOrderSnapshots,
   userIdsForSymbol,
   uniqueWatchedSymbols,
+  type ContractWatch,
   type FundingSnapshotRow,
   type OrderSnapshotRow,
 } from "./contractWatchStore";
@@ -174,8 +175,21 @@ function chunkLineTextBody(full: string, maxLen: number): string[] {
  * รายชั่วโมง: เทียบ funding + order limits กับ snapshot → แจ้งทีละสัญญา (ข้อความแยกต่อเหรียญ)
  */
 export async function runContractConditionTick(client: Client): Promise<void> {
-  const watches = await loadContractWatches();
-  const systemUsers = await loadSystemChangeSubscribers();
+  let watches: ContractWatch[] = [];
+  try {
+    watches = await loadContractWatches();
+  } catch (e) {
+    console.warn("[contractConditionTick] loadContractWatches failed — continue without per-user watches", e);
+  }
+  let systemUsers: string[] = [];
+  try {
+    systemUsers = await loadSystemChangeSubscribers();
+  } catch (e) {
+    console.warn(
+      "[contractConditionTick] loadSystemChangeSubscribers failed — continue without LINE subscribers (กลุ่ม Telegram public ยังแจ้งได้ถ้ามีการเปลี่ยน)",
+      e
+    );
+  }
   if (watches.length === 0 && systemUsers.length === 0 && !telegramSparkSystemGroupConfigured()) return;
 
   const topSample = await getFundingHistorySampleRows(50);
@@ -293,7 +307,7 @@ export async function runContractConditionTick(client: Client): Promise<void> {
   }
   for (const [body, uids] of Array.from(bodyToUids.entries())) {
     try {
-      await sendSparkSystemAlert(client, Array.from(uids), body);
+      await sendSparkSystemAlert(client, Array.from(uids), body, "condition");
     } catch (e) {
       console.error("[contractConditionTick] push system condition", e);
     }

@@ -182,7 +182,7 @@ export async function runVolumeSignalAlertTick(client: Client): Promise<{ notifi
         await sendAlertNotification(client, a.userId, msg);
         if (telegramSparkSystemGroupConfigured()) {
           try {
-            await sendTelegramPublicBroadcastMessage(msg);
+            await sendTelegramPublicBroadcastMessage(msg, "technical");
           } catch (e) {
             console.error("[volumeSignalAlertTick] public group mirror", a.id, e);
           }

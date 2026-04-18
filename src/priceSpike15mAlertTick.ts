@@ -179,7 +179,7 @@ export async function runPriceSpike15mAlertTick(
     const body = buildSparkMessage(sym, returnPct, p, m.amount24Usdt, windowSec, displayBySymbol.get(sym));
     let anyOk = false;
     try {
-      const n = await sendSparkSystemAlert(client, [], body);
+      const n = await sendSparkSystemAlert(client, [], body, "spark");
       if (n > 0) {
         notifiedPushes += n;
         anyOk = true;

@@ -125,7 +125,7 @@ export async function runSpotFutBasisAlertTick(
     let anyOk = false;
     if (telegramSparkSystemGroupConfigured()) {
       try {
-        await sendTelegramPublicBroadcastMessage(body);
+        await sendTelegramPublicBroadcastMessage(body, "condition");
         notifiedPushes += 1;
         anyOk = true;
       } catch (e) {

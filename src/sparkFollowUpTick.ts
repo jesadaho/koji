@@ -230,7 +230,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
             `รายละเอียด: ${detail}`,
           ].join("\n");
           try {
-            notifiedPushes += await sendSparkSystemAlert(client, [], body);
+            notifiedPushes += await sendSparkSystemAlert(client, [], body, "spark");
           } catch (e) {
             console.error("[sparkFollowUpTick] price-fail notify", cur.symbol, e);
           }

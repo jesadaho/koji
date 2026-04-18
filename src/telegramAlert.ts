@@ -23,13 +23,33 @@ export function resolvePublicBroadcastChatId(): string | undefined {
   return pub || legacy || undefined;
 }
 
-/** Forum topic — ส่งเป็น message_thread_id ใน sendMessage (กลุ่มแบบ Topics) */
-export function resolvePublicBroadcastMessageThreadId(): number | undefined {
-  const raw = process.env.TELEGRAM_PUBLIC_MESSAGE_THREAD_ID?.trim();
-  if (!raw) return undefined;
-  const n = Number(raw);
+/** ชนิดแจ้งเตือนกลุ่มสาธารณะ → Forum topic คนละหัวข้อ (เมื่อตั้ง env แยก) */
+export type PublicBroadcastKind = "spark" | "condition" | "technical";
+
+function parsePositiveIntegerMessageThreadId(raw: string | undefined): number | undefined {
+  if (!raw?.trim()) return undefined;
+  const n = Number(raw.trim());
   if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) return undefined;
   return n;
+}
+
+/** Forum topic เดียว (legacy) — ส่งเป็น message_thread_id ใน sendMessage */
+export function resolvePublicBroadcastMessageThreadId(): number | undefined {
+  return parsePositiveIntegerMessageThreadId(process.env.TELEGRAM_PUBLIC_MESSAGE_THREAD_ID);
+}
+
+/**
+ * topic ตามชนิดสัญญาณ → ถ้าไม่ตั้ง TELEGRAM_PUBLIC_*_MESSAGE_THREAD_ID ของชนิดนั้น ใช้ TELEGRAM_PUBLIC_MESSAGE_THREAD_ID
+ */
+export function resolvePublicBroadcastMessageThreadIdForKind(kind: PublicBroadcastKind): number | undefined {
+  const envKey: Record<PublicBroadcastKind, string> = {
+    spark: "TELEGRAM_PUBLIC_SPARK_MESSAGE_THREAD_ID",
+    condition: "TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID",
+    technical: "TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID",
+  };
+  const specific = parsePositiveIntegerMessageThreadId(process.env[envKey[kind]]);
+  if (specific != null) return specific;
+  return resolvePublicBroadcastMessageThreadId();
 }
 
 /** Spark follow-up + System Change → กลุ่ม Telegram (ไม่ใช่ TELEGRAM_ALERT_CHAT_ID) */
@@ -115,12 +135,19 @@ export async function sendTelegramAlertMessage(text: string): Promise<void> {
   await sendTelegramMessageToChat(chatId, text);
 }
 
-/** ส่งไปกลุ่มสาธารณะตาม env (chat + optional topic) */
-export async function sendTelegramPublicBroadcastMessage(text: string): Promise<void> {
+/**
+ * ส่งไปกลุ่มสาธารณะตาม env (chat + optional topic)
+ * @param kind เมื่อระบุ → ใช้ topic แยกตามชนิด (fallback ไป TELEGRAM_PUBLIC_MESSAGE_THREAD_ID); เมื่อไม่ระบุ → ใช้แค่ TELEGRAM_PUBLIC_MESSAGE_THREAD_ID เหมือนเดิม
+ */
+export async function sendTelegramPublicBroadcastMessage(
+  text: string,
+  kind?: PublicBroadcastKind
+): Promise<void> {
   const chatId = resolvePublicBroadcastChatId();
   if (!chatId) {
     throw new Error("TELEGRAM_PUBLIC_CHAT_ID หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID ไม่ได้ตั้ง");
   }
-  const tid = resolvePublicBroadcastMessageThreadId();
+  const tid =
+    kind == null ? resolvePublicBroadcastMessageThreadId() : resolvePublicBroadcastMessageThreadIdForKind(kind);
   await sendTelegramMessageToChat(chatId, text, tid != null ? { messageThreadId: tid } : undefined);
 }

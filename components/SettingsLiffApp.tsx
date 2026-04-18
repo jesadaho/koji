@@ -213,7 +213,13 @@ export default function SettingsLiffApp() {
           แจ้งเตือน funding / รอบชำระ / max order size (สัญญา Top 50) ส่งไปที่{" "}
           <strong>กลุ่ม Telegram</strong> (<code>TELEGRAM_PUBLIC_CHAT_ID</code>
           {", "}
-          <code>TELEGRAM_PUBLIC_MESSAGE_THREAD_ID</code> ถ้าใช้หัวข้อในกลุ่ม Forum) แบบสาธารณะ — ไม่ต้องเปิดรับรายคนในแอปแล้ว
+          topic ระบบ: <code>TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID</code>
+          {"; "}
+          Spark: <code>TELEGRAM_PUBLIC_SPARK_MESSAGE_THREAD_ID</code>
+          {"; "}
+          เทคนิค: <code>TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID</code>
+          {"; "}
+          fallback: <code>TELEGRAM_PUBLIC_MESSAGE_THREAD_ID</code>) แบบสาธารณะ — ไม่ต้องเปิดรับรายคนในแอปแล้ว
         </p>
         <p className="sub" style={{ marginTop: "0.75rem" }}>
           รายการเตือนราคา / กลยุทธ์อื่นๆ ยังตั้งได้จากหน้าแรกตามเดิม
