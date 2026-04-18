@@ -99,27 +99,36 @@ function buildSparkMessage(
 ): string {
   const base = shortLabel(contractSymbol);
   const pctStr = `${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%`;
-  const moveLine =
-    returnPct >= 0
-      ? `Price jumped ${pctStr} (สัญญาณจากราคา last)`
-      : `Price dropped ${pctStr} (สัญญาณจากราคา last)`;
   const wm = Math.round(windowSec / 60);
   const volLine =
     amount24Usdt > 0
       ? `📊 Vol 24h (เทิร์นโอเวอร์): ${formatUsdNotional(amount24Usdt)}`
       : "📊 Vol 24h: —";
 
-  const head: string[] = [`⚡️ Koji Spark Alert: [${base}]/USDT`, `Contract: ${contractSymbol}`];
+  const lines: string[] = [
+    `⚡️ Spark Alert: [${base}]/USDT (${pctStr})`,
+    `Contract: ${contractSymbol}`,
+  ];
   const dn = displayMeta?.displayName?.trim();
   const dne = displayMeta?.displayNameEn?.trim();
   if (dn) {
-    head.push(`📛 ${dn}`);
+    lines.push(`📛 ${dn}`);
   }
-  if (dne && dne.toLowerCase() !== (dn ?? "").toLowerCase()) {
-    head.push(`(${dne})`);
+  if (dne) {
+    const dup = dn != null && dne.toLowerCase() === dn.toLowerCase();
+    if (!dup) {
+      lines.push(`(${dne})`);
+    }
   }
-  head.push("", moveLine, `⏱ เทียบช่วง ~${wm} นาที (ticker ไม่อิงแท่งเทียน)`, `💰 Price: ${formatPriceUsd(lastPrice)}`, volLine);
-  return head.join("\n");
+  lines.push(
+    "",
+    returnPct >= 0
+      ? `📈 สัญญาณขึ้น — เทียบราคา last ย้อน ~${wm} นาที (ticker · ไม่อิงแท่งเทียน)`
+      : `📉 สัญญาณลง — เทียบราคา last ย้อน ~${wm} นาที (ticker · ไม่อิงแท่งเทียน)`,
+    `💰 Price: ${formatPriceUsd(lastPrice)}`,
+    volLine
+  );
+  return lines.join("\n");
 }
 
 /**
