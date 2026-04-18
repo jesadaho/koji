@@ -59,58 +59,45 @@ export async function GET(req: NextRequest) {
     console.error("[cron pct-trailing] trailing", e);
   }
 
-  if (steps.trailingPct.ok) {
-    const tSpark = Date.now();
-    try {
-      spark = await runPriceSpike15mAlertTick(client);
-      const sparkOn = isPriceSpike15mSparkCronEnabled();
-      steps.sparkTicker = {
-        ok: true,
-        ms: Date.now() - tSpark,
-        detail: sparkOn
-          ? `จับสัญญาณ ${spark.symbolsHit} คู่ · ส่ง Spark ${spark.notifiedPushes} push`
-          : "ปิด (PRICE_SPIKE_15M_ENABLED=0)",
-      };
-    } catch (e) {
-      steps.sparkTicker = {
-        ok: false,
-        ms: Date.now() - tSpark,
-        error: errMsg(e),
-      };
-      console.error("[cron pct-trailing] spark", e);
-    }
-  } else {
+  /** Spark / follow-up ไม่พึ่งผล trailing — อย่าข้ามเมื่อล็อกเตือน% ล้มเหลว (เคยทำให้ไม่มี Spark ทั้งรอบ) */
+  const tSpark = Date.now();
+  try {
+    spark = await runPriceSpike15mAlertTick(client);
+    const sparkOn = isPriceSpike15mSparkCronEnabled();
+    steps.sparkTicker = {
+      ok: true,
+      ms: Date.now() - tSpark,
+      detail: sparkOn
+        ? `จับสัญญาณ ${spark.symbolsHit} คู่ · ส่ง Spark ${spark.notifiedPushes} push`
+        : "ปิด (PRICE_SPIKE_15M_ENABLED=0)",
+    };
+  } catch (e) {
     steps.sparkTicker = {
       ok: false,
-      detail: "ข้าม — เตือน% trailing ไม่สำเร็จ",
+      ms: Date.now() - tSpark,
+      error: errMsg(e),
     };
+    console.error("[cron pct-trailing] spark", e);
   }
 
-  if (steps.trailingPct.ok && steps.sparkTicker.ok) {
-    const tFollow = Date.now();
-    try {
-      follow = await runSparkFollowUpTick(client);
-      const followOn = isSparkFollowUpCronEnabled();
-      steps.sparkFollowUp = {
-        ok: true,
-        ms: Date.now() - tFollow,
-        detail: followOn
-          ? `checkpoint ${follow.checkpoints} · จบเหตุการณ์ ${follow.resolvedEvents} · push ${follow.notifiedPushes}`
-          : "ปิด (SPARK_FOLLOWUP_ENABLED=0)",
-      };
-    } catch (e) {
-      steps.sparkFollowUp = {
-        ok: false,
-        ms: Date.now() - tFollow,
-        error: errMsg(e),
-      };
-      console.error("[cron pct-trailing] follow-up", e);
-    }
-  } else {
+  const tFollow = Date.now();
+  try {
+    follow = await runSparkFollowUpTick(client);
+    const followOn = isSparkFollowUpCronEnabled();
+    steps.sparkFollowUp = {
+      ok: true,
+      ms: Date.now() - tFollow,
+      detail: followOn
+        ? `checkpoint ${follow.checkpoints} · จบเหตุการณ์ ${follow.resolvedEvents} · push ${follow.notifiedPushes}`
+        : "ปิด (SPARK_FOLLOWUP_ENABLED=0)",
+    };
+  } catch (e) {
     steps.sparkFollowUp = {
       ok: false,
-      detail: "ข้าม — ขั้นตอนก่อนหน้าไม่สำเร็จ",
+      ms: Date.now() - tFollow,
+      error: errMsg(e),
     };
+    console.error("[cron pct-trailing] follow-up", e);
   }
 
   try {

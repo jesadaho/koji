@@ -1,5 +1,6 @@
 import type { Client } from "@line/bot-sdk";
 import { sendSparkSystemAlert } from "./alertNotify";
+import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import {
   fetchContractDisplayMetaBySymbol,
   fetchContractTickerMetrics,
@@ -182,6 +183,11 @@ export async function runPriceSpike15mAlertTick(
       if (n > 0) {
         notifiedPushes += n;
         anyOk = true;
+      } else if (!telegramSparkSystemGroupConfigured()) {
+        console.warn(
+          "[priceSpike15mAlertTick] Spark ผ่านเกณฑ์แต่ส่ง 0 push — ตั้ง TELEGRAM_BOT_TOKEN + TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID)",
+          sym
+        );
       }
     } catch (e) {
       console.error("[priceSpike15mAlertTick] notify", sym, e);
