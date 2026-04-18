@@ -126,7 +126,13 @@ export async function sendSparkSystemAlert(
   if (telegramSparkSystemGroupConfigured()) {
     await sendTelegramPublicBroadcastMessage(text, kind);
     let n = 1;
-    if (uids.length > 0 && isAlertAlsoLinePush() && isLineAlertPushEnabled()) {
+    /* System change (condition): ส่งแค่กลุ่ม Telegram สาธารณะ — ไม่ mirror ไป LINE */
+    if (
+      kind !== "condition" &&
+      uids.length > 0 &&
+      isAlertAlsoLinePush() &&
+      isLineAlertPushEnabled()
+    ) {
       for (const u of uids) {
         try {
           await linePushMessages(client, u, [{ type: "text", text }]);

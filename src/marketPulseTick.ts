@@ -1,5 +1,6 @@
 import type { Client } from "@line/bot-sdk";
 import { sendAlertNotification } from "./alertNotify";
+import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import {
   fetchMarketPulseData,
   MarketPulseFetchError,
@@ -135,7 +136,9 @@ export async function getMarketPulseStatusMessage(): Promise<string> {
 
 /**
  * ดึง F&G + ตลาด, คำนวณ Vol% เทียบ snapshot ~24 ชม.
- * แจ้งผู้ติดตามระบบเมื่อ |Δ Fear & Greed| จากครั้งแจ้งล่าสุด ≥ MARKET_PULSE_ALERT_DELTA_FNG (ค่าเริ่ม 3)
+ * เมื่อ |Δ Fear & Greed| จากครั้งแจ้งล่าสุด ≥ MARKET_PULSE_ALERT_DELTA_FNG (ค่าเริ่ม 3):
+ * — ถ้าตั้งกลุ่ม Telegram สาธารณะ → ส่งแค่กลุ่ม (topic condition)
+ * — ถ้าไม่ตั้ง → แจ้งผู้ติดตามระบบ (LINE / Telegram ช่องหลัก ตาม sendAlertNotification)
  */
 export async function runMarketPulseTick(client: Client): Promise<MarketPulseTickResult> {
   if (!marketPulseEnabled()) {
@@ -185,18 +188,6 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
     console.error("[marketPulseTick] appendVolumeSnapshot", e);
   }
 
-  if (subscribers.length === 0) {
-    return {
-      ok: true,
-      skipped: "NO_SUBSCRIBERS",
-      notifiedPushes: 0,
-      subscribers: 0,
-      fngValue: fngVal,
-      skippedDelta: !shouldPush,
-      lastNotifiedFng: prevFng,
-    };
-  }
-
   if (!shouldPush) {
     return {
       ok: true,
@@ -210,12 +201,33 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
   }
 
   let notifiedPushes = 0;
-  for (const uid of subscribers) {
+
+  if (telegramSparkSystemGroupConfigured()) {
     try {
-      await sendAlertNotification(client, uid, body);
-      notifiedPushes += 1;
+      await sendTelegramPublicBroadcastMessage(body, "condition");
+      notifiedPushes = 1;
     } catch (e) {
-      console.error("[marketPulseTick] notify", uid, e);
+      console.error("[marketPulseTick] telegram public group", e);
+    }
+  } else {
+    if (subscribers.length === 0) {
+      return {
+        ok: true,
+        skipped: "NO_SUBSCRIBERS",
+        notifiedPushes: 0,
+        subscribers: 0,
+        fngValue: fngVal,
+        skippedDelta: false,
+        lastNotifiedFng: prevFng,
+      };
+    }
+    for (const uid of subscribers) {
+      try {
+        await sendAlertNotification(client, uid, body);
+        notifiedPushes += 1;
+      } catch (e) {
+        console.error("[marketPulseTick] notify", uid, e);
+      }
     }
   }
 

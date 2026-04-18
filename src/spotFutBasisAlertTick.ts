@@ -131,14 +131,15 @@ export async function runSpotFutBasisAlertTick(
       } catch (e) {
         console.error("[spotFutBasisAlertTick] telegram public group", sym, e);
       }
-    }
-    for (const uid of subscribers) {
-      try {
-        await sendAlertNotification(client, uid, body);
-        notifiedPushes += 1;
-        anyOk = true;
-      } catch (e) {
-        console.error("[spotFutBasisAlertTick] notify", sym, uid, e);
+    } else {
+      for (const uid of subscribers) {
+        try {
+          await sendAlertNotification(client, uid, body);
+          notifiedPushes += 1;
+          anyOk = true;
+        } catch (e) {
+          console.error("[spotFutBasisAlertTick] notify", sym, uid, e);
+        }
       }
     }
 
