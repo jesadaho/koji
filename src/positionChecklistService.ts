@@ -120,8 +120,26 @@ function classifyLiquidityCapRatio(
   return { tier: "safe", ratio };
 }
 
-/** R = Futures amount24 ÷ Spot quote turnover 24h (USDT) — ยิ่งสูงยิ่งเสี่ยง (เก็งกำไรเกินถือจริง) */
+/**
+ * Spot/Perp volume ratio (Fut÷Spot) — ใช้เฉพาะข้อมูล **MEXC** คู่เดียวกับสัญญา checklist
+ *
+ * - **ตัวเศษ (Fut):** `ticker.amount24` จาก perp (USDT notional 24h)
+ * - **ตัวส่วน (Spot):** `quoteVolume` จาก spot 24h ticker ของ `perpSymbolToSpotSymbol`
+ * - **R = Fut ÷ Spot**
+ *
+ * **กลุ่มพิเศษ (ปรับขอบเขตด้วย env POSITION_CHECK_SPOT_FUT_VOL_*_SAFE_MAX / *_CAUTION_MAX):**
+ * - **Blue-chip (BTC, ETH):** Tier1 R≤SAFE_MAX (ดีฟอลต์ 150) · Tier2 R ช่วงถัดไปจนถึง CAUTION_MAX (151–300) · Tier3 R>CAUTION_MAX
+ * - **Major alt (ZEC, SOL, ADA, NEAR):** Tier1 R≤80 · Tier2 81–150 · Tier3 R>150
+ *
+ * **เหรียญอื่น — เกณฑ์เดิม (env POSITION_CHECK_SPOT_FUT_VOL_T*_MIN):**
+ * Tier1 R<T2_MIN · Tier2 T2_MIN≤R<T3_MIN · Tier3 T3_MIN≤R<T4_MIN · Tier4 R≥T4_MIN
+ */
 type SpotFutVolTier = 1 | 2 | 3 | 4 | "unknown";
+
+type SpotFutVolBand = "default" | "blue_chip" | "major_alt";
+
+const SPOT_FUT_VOL_BLUE_CHIP_BASES = new Set(["BTC", "ETH"]);
+const SPOT_FUT_VOL_MAJOR_ALT_BASES = new Set(["ZEC", "SOL", "ADA", "NEAR"]);
 
 function classifySpotFutVolRatio(
   futAmount24Usdt: number | null,
@@ -146,6 +164,69 @@ function classifySpotFutVolRatio(
   if (R >= t3Min) return { tier: 3, ratio: R };
   if (R >= t2Min) return { tier: 2, ratio: R };
   return { tier: 1, ratio: R };
+}
+
+type SpotFutVolClass = {
+  tier: SpotFutVolTier;
+  ratio: number | null;
+  band: SpotFutVolBand;
+  /** ใช้โชว์ข้อความ — blue_chip / major_alt เท่านั้น */
+  safeMax: number | null;
+  cautionMax: number | null;
+};
+
+function classifySpotFutVolRatioForBase(
+  base: string,
+  futAmount24Usdt: number | null,
+  spotQuoteVol24Usdt: number | null,
+  defaultT2Min: number,
+  defaultT3Min: number,
+  defaultT4Min: number,
+  blueSafeMax: number,
+  blueCautionMax: number,
+  majorSafeMax: number,
+  majorCautionMax: number
+): SpotFutVolClass {
+  if (
+    futAmount24Usdt == null ||
+    !Number.isFinite(futAmount24Usdt) ||
+    futAmount24Usdt <= 0 ||
+    spotQuoteVol24Usdt == null ||
+    !Number.isFinite(spotQuoteVol24Usdt) ||
+    spotQuoteVol24Usdt <= 0
+  ) {
+    return { tier: "unknown", ratio: null, band: "default", safeMax: null, cautionMax: null };
+  }
+  const R = futAmount24Usdt / spotQuoteVol24Usdt;
+  if (!Number.isFinite(R) || R <= 0) {
+    return { tier: "unknown", ratio: null, band: "default", safeMax: null, cautionMax: null };
+  }
+
+  const b = base.trim().toUpperCase();
+  const blueLo = Math.min(blueSafeMax, blueCautionMax);
+  const blueHi = Math.max(blueSafeMax, blueCautionMax);
+  const majLo = Math.min(majorSafeMax, majorCautionMax);
+  const majHi = Math.max(majorSafeMax, majorCautionMax);
+
+  if (SPOT_FUT_VOL_BLUE_CHIP_BASES.has(b)) {
+    if (R > blueHi) return { tier: 3, ratio: R, band: "blue_chip", safeMax: blueLo, cautionMax: blueHi };
+    if (R > blueLo) return { tier: 2, ratio: R, band: "blue_chip", safeMax: blueLo, cautionMax: blueHi };
+    return { tier: 1, ratio: R, band: "blue_chip", safeMax: blueLo, cautionMax: blueHi };
+  }
+  if (SPOT_FUT_VOL_MAJOR_ALT_BASES.has(b)) {
+    if (R > majHi) return { tier: 3, ratio: R, band: "major_alt", safeMax: majLo, cautionMax: majHi };
+    if (R > majLo) return { tier: 2, ratio: R, band: "major_alt", safeMax: majLo, cautionMax: majHi };
+    return { tier: 1, ratio: R, band: "major_alt", safeMax: majLo, cautionMax: majHi };
+  }
+
+  const d = classifySpotFutVolRatio(
+    futAmount24Usdt,
+    spotQuoteVol24Usdt,
+    defaultT2Min,
+    defaultT3Min,
+    defaultT4Min
+  );
+  return { ...d, band: "default", safeMax: null, cautionMax: null };
 }
 
 export async function buildPositionChecklistMessage(
@@ -183,6 +264,10 @@ export async function buildPositionChecklistMessage(
   const spotFutT2Min = envNum("POSITION_CHECK_SPOT_FUT_VOL_T2_MIN", 11);
   const spotFutT3Min = envNum("POSITION_CHECK_SPOT_FUT_VOL_T3_MIN", 41);
   const spotFutT4Min = envNum("POSITION_CHECK_SPOT_FUT_VOL_T4_MIN", 81);
+  const spotFutBlueSafeMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_BLUE_SAFE_MAX", 150);
+  const spotFutBlueCautionMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_BLUE_CAUTION_MAX", 300);
+  const spotFutMajorSafeMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_MAJOR_SAFE_MAX", 80);
+  const spotFutMajorCautionMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_MAJOR_CAUTION_MAX", 150);
   const spotFutPenT2 = envNum("POSITION_CHECK_SPOT_FUT_VOL_PENALTY_T2", 8);
   const spotFutPenT3 = envNum("POSITION_CHECK_SPOT_FUT_VOL_PENALTY_T3", 18);
   const spotFutPenT4 = envNum("POSITION_CHECK_SPOT_FUT_VOL_PENALTY_T4", 35);
@@ -225,12 +310,17 @@ export async function buildPositionChecklistMessage(
     liqCapThExtreme,
   );
 
-  const spotFutVolClass = classifySpotFutVolRatio(
+  const spotFutVolClass = classifySpotFutVolRatioForBase(
+    base,
     amount24,
     spotQuoteVol24,
     spotFutT2Min,
     spotFutT3Min,
     spotFutT4Min,
+    spotFutBlueSafeMax,
+    spotFutBlueCautionMax,
+    spotFutMajorSafeMax,
+    spotFutMajorCautionMax
   );
 
   const ema6 = closes15m ? computeEmaLast(closes15m, 6) : null;
@@ -339,17 +429,30 @@ export async function buildPositionChecklistMessage(
     });
   } else if (spotFutVolClass.tier === 3 && spotFutVolClass.ratio != null) {
     const rDisp = spotFutVolClass.ratio >= 100 ? spotFutVolClass.ratio.toFixed(0) : spotFutVolClass.ratio.toFixed(1);
+    const spotFutVolTag =
+      spotFutVolClass.band === "blue_chip"
+        ? "Blue-chip Tier 3 (Risk · Fut÷Spot สูง)"
+        : spotFutVolClass.band === "major_alt"
+          ? "Major alt Tier 3 (Risk · Fut÷Spot สูง)"
+          : "Tier 3 Manipulation / High squeeze risk";
     penalties.push({
       key: "spotFutVolRatio",
       points: spotFutPenT3,
-      deductionLine: `❌ Spot/Perp vol R=${rDisp} (Tier 3 Manipulation / High squeeze risk): −${spotFutPenT3}`,
+      deductionLine: `❌ Spot/Perp vol R=${rDisp} (${spotFutVolTag}): −${spotFutPenT3}`,
     });
   } else if (spotFutVolClass.tier === 2 && spotFutVolClass.ratio != null) {
     const rDisp = spotFutVolClass.ratio >= 100 ? spotFutVolClass.ratio.toFixed(0) : spotFutVolClass.ratio.toFixed(1);
+    const { band, safeMax, cautionMax } = spotFutVolClass;
+    const spotFutVolTag =
+      band === "blue_chip" && safeMax != null && cautionMax != null
+        ? `Blue-chip Tier 2 (Caution · ${safeMax + 1}–${cautionMax})`
+        : band === "major_alt" && safeMax != null && cautionMax != null
+          ? `Major alt Tier 2 (Caution · ${safeMax + 1}–${cautionMax})`
+          : "Tier 2 Speculator · ลดเลเวอเรจ";
     penalties.push({
       key: "spotFutVolRatio",
       points: spotFutPenT2,
-      deductionLine: `❌ Spot/Perp vol R=${rDisp} (Tier 2 Speculator · ลดเลเวอเรจ): −${spotFutPenT2}`,
+      deductionLine: `❌ Spot/Perp vol R=${rDisp} (${spotFutVolTag}): −${spotFutPenT2}`,
     });
   }
 
@@ -529,6 +632,46 @@ export async function buildPositionChecklistMessage(
     }
     const R = spotFutVolClass.ratio;
     const rDisp = R >= 100 ? R.toFixed(0) : R.toFixed(1);
+    const { band, safeMax, cautionMax } = spotFutVolClass;
+
+    if (band === "blue_chip" && safeMax != null && cautionMax != null) {
+      if (spotFutVolClass.tier === 3) {
+        return [
+          `Vol Ratio (Fut÷Spot): 🔴 Tier 3 [R=${rDisp}]${spotFutAmtSuffix} (Blue-chip · R>${cautionMax}) — Risk`,
+          `สถานะ: ลดขนาดหรือเลเวอเรจ — Fut÷Spot สูงเกินกรอบคู่หลัก`,
+        ].join("\n");
+      }
+      if (spotFutVolClass.tier === 2) {
+        return [
+          `Vol Ratio (Fut÷Spot): 🟡 Tier 2 [R=${rDisp}]${spotFutAmtSuffix} (Blue-chip · ${safeMax + 1}–${cautionMax}) — Caution`,
+          `สถานะ: Watch — พิจารณาลดเลเวอเรจ`,
+        ].join("\n");
+      }
+      return [
+        `Vol Ratio (Fut÷Spot): ✅ Tier 1 [R=${rDisp}]${spotFutAmtSuffix} (Blue-chip · R≤${safeMax}) — Safe`,
+        `สถานะ: กรอบ Blue-chip — สภาพคล่องหนา เทียบสปอตในเกณฑ์ปลอดภัย`,
+      ].join("\n");
+    }
+
+    if (band === "major_alt" && safeMax != null && cautionMax != null) {
+      if (spotFutVolClass.tier === 3) {
+        return [
+          `Vol Ratio (Fut÷Spot): 🔴 Tier 3 [R=${rDisp}]${spotFutAmtSuffix} (Major alt · R>${cautionMax}) — Risk`,
+          `สถานะ: ลดขนาดหรือเลเวอเรจ — สัดส่วนฟิวเจอร์หนาเกินกรอบเหรียญกลุ่มนี้`,
+        ].join("\n");
+      }
+      if (spotFutVolClass.tier === 2) {
+        return [
+          `Vol Ratio (Fut÷Spot): 🟡 Tier 2 [R=${rDisp}]${spotFutAmtSuffix} (Major alt · ${safeMax + 1}–${cautionMax}) — Caution`,
+          `สถานะ: Watch — พิจารณาลดเลเวอเรจ`,
+        ].join("\n");
+      }
+      return [
+        `Vol Ratio (Fut÷Spot): ✅ Tier 1 [R=${rDisp}]${spotFutAmtSuffix} (Major alt · R≤${safeMax}) — Safe`,
+        `สถานะ: กรอบ Major alt — Fut÷Spot อยู่ในเกณฑ์ปลอดภัย`,
+      ].join("\n");
+    }
+
     if (spotFutVolClass.tier === 4) {
       return [
         `Vol Ratio (Fut÷Spot): ☠️ Tier 4 [R=${rDisp}]${spotFutAmtSuffix} (≥${spotFutT4Min}) — Casino/RAVE`,
