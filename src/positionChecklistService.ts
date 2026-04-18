@@ -392,7 +392,7 @@ export async function buildPositionChecklistMessage(
   const score = Math.max(0, 100 - totalPen);
 
   const dirEmoji = dir === "short" ? "📉" : "📈";
-  const header = `[${dir.toUpperCase()}] ${base} / USDT ${dirEmoji}`;
+  const headerTitle = `🛡️ การประเมินความเสี่ยง: [${dir.toUpperCase()}] ${base} / USDT ${dirEmoji}`;
 
   const statusOrder = [
     "liqCapRatio",
@@ -423,17 +423,24 @@ export async function buildPositionChecklistMessage(
     return null;
   })();
 
+  const terminateVisual =
+    liqCapClass.tier === "extreme" || spotFutVolClass.tier === 4;
+
   let statusLine: string;
   if (score >= 85) {
-    statusLine = "Status: ✅ OK";
+    statusLine = "สถานะ: ✅ OK";
   } else if (score >= 60) {
     statusLine = statusReason
-      ? `Status: ⚠️ WARNING (${statusReason})`
-      : "Status: ⚠️ WARNING";
+      ? `สถานะ: ⚠️ WARNING (${statusReason})`
+      : "สถานะ: ⚠️ WARNING";
+  } else if (terminateVisual) {
+    statusLine = statusReason
+      ? `สถานะ: ⛔ TERMINATE (${statusReason})`
+      : "สถานะ: ⛔ TERMINATE";
   } else {
     statusLine = statusReason
-      ? `Status: 🔴 RISK (${statusReason})`
-      : "Status: 🔴 HIGH RISK";
+      ? `สถานะ: 🔴 RISK (${statusReason})`
+      : "สถานะ: 🔴 HIGH RISK";
   }
 
   const weekendRuleBad = dir === "short" && weekend;
@@ -507,37 +514,42 @@ export async function buildPositionChecklistMessage(
     return `Liquidity–Cap ratio: ✅ SAFE_TO_TRADE — ${rStr}:1 (เหรียญหลัก/พื้นฐานดี · < ${liqCapThWatch.toLocaleString("en-US")}:1) · max ~${notionalStr} @ last`;
   })();
 
+  const spotFutAmtSuffix =
+    amount24 != null && spotQuoteVol24 != null && spotQuoteVol24 > 0
+      ? ` — Spot ${formatUsd(spotQuoteVol24)} / Fut ${formatUsd(amount24)}`
+      : "";
+
   const spotFutVolRuleLine = (() => {
     if (spotFutVolClass.tier === "unknown" || spotFutVolClass.ratio == null) {
       const perpOk = amount24 != null && amount24 > 0;
       const spotOk = spotQuoteVol24 != null && spotQuoteVol24 > 0;
-      return `Spot/Perp Volume (Fut÷Spot 24h USDT): ❓ ไม่มี R — perp 24h: ${perpOk ? "มี" : "ไม่มี"} · spot quote 24h: ${spotOk ? "มี" : "ไม่มี"} (${spotSym})`;
+      return `Vol Ratio (Fut÷Spot 24h USDT): ❓ ไม่มี R — perp 24h: ${perpOk ? "มี" : "ไม่มี"} · spot quote 24h: ${spotOk ? "มี" : "ไม่มี"} (${spotSym})`;
     }
     const R = spotFutVolClass.ratio;
     const rDisp = R >= 100 ? R.toFixed(0) : R.toFixed(1);
     if (spotFutVolClass.tier === 4) {
       return [
-        `Spot/Perp Volume (Fut÷Spot 24h): ☠️ Tier 4 "Casino / RAVE" — R=${rDisp} (≥${spotFutT4Min})`,
-        `สถานะ: TERMINATE — เก็งฟิวเจอร์เทียบของถือจริงสูงผิดปกติ · ควรเลี่ยงคู่นี้ (คำแนะอัตโนมัติ ไม่ล็อกคำสั่ง)`,
+        `Vol Ratio (Fut÷Spot): ☠️ Tier 4 [R=${rDisp}]${spotFutAmtSuffix} (≥${spotFutT4Min}) — Casino/RAVE`,
+        `สถานะ: TERMINATE — เก็งฟิวเจอร์เทียบของถือจริงสูงผิดปกติ · ควรเลี่ยงคู่นี้`,
       ].join("\n");
     }
     if (spotFutVolClass.tier === 3) {
       const fundHint =
-        dir === "short" && funding < 0 ? " · Short + funding ติดลบ: เสี่ยง squeeze — พิจารณาเลี่ยง" : "";
+        dir === "short" && funding < 0 ? " · Short + funding ติดลบ: เสี่ยง squeeze" : "";
       return [
-        `Spot/Perp Volume (Fut÷Spot 24h): 🔴 Tier 3 "Manipulation Zone" — R=${rDisp} (${spotFutT3Min}≤R<${spotFutT4Min})`,
+        `Vol Ratio (Fut÷Spot): 🔴 Tier 3 [R=${rDisp}]${spotFutAmtSuffix} (${spotFutT3Min}≤R<${spotFutT4Min}) — Manipulation`,
         `สถานะ: ความผันสูง · แพทเทิร์นกราฟเสี่ยงใช้ไม่ค่อยได้${fundHint}`,
       ].join("\n");
     }
     if (spotFutVolClass.tier === 2) {
       return [
-        `Spot/Perp Volume (Fut÷Spot 24h): 🟡 Tier 2 "The Speculator" — R=${rDisp} (${spotFutT2Min}≤R<${spotFutT3Min})`,
+        `Vol Ratio (Fut÷Spot): 🟡 Tier 2 [R=${rDisp}]${spotFutAmtSuffix} (${spotFutT2Min}≤R<${spotFutT3Min}) — Speculator`,
         `สถานะ: Watch — พิจารณาลดเลเวอเรจ (เช่น 10x→5x) กันสะบัดกิน SL`,
       ].join("\n");
     }
     return [
-      `Spot/Perp Volume (Fut÷Spot 24h): ✅ Tier 1 "The Fair Game" — R=${rDisp} (R<${spotFutT2Min})`,
-      `สถานะ: Volume Health ดี — โครงสร้าง supply/demand อ่านง่ายเมื่อ R ต่ำ`,
+      `Vol Ratio (Fut÷Spot): ✅ Tier 1 [R=${rDisp}]${spotFutAmtSuffix} (R<${spotFutT2Min}) — Fair game`,
+      `สถานะ: Volume Health ดี — supply/demand อ่านง่ายเมื่อ R ต่ำ`,
     ].join("\n");
   })();
 
@@ -565,36 +577,82 @@ export async function buildPositionChecklistMessage(
       ? `Basis: ${basisPct >= 0 ? "+" : ""}${basisPct.toFixed(4)}%${Math.abs(basisPct) > basisAbsPct ? " ⚠️" : ""}`
       : `Basis: ❓ No spot pair on MEXC`;
 
+  /** แปลงหลายบรรทัดเป็น bullet หลัก + บรรทัดรองขยับเข้า */
+  function bulletBlock(text: string, indentSub = "  ▸ "): string {
+    const parts = text.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (parts.length === 0) return "";
+    return parts.map((l, i) => (i === 0 ? `• ${l}` : `${indentSub}${l}`)).join("\n");
+  }
+
+  const spotFutVolBlock = bulletBlock(spotFutVolRuleLine);
+  const emaBlock = bulletBlock(ema15mLine);
+
+  const maxOrderShort =
+    maxOrderContracts != null && maxOrderContracts > 0
+      ? `Max order: ~${formatUsd(maxOrderContracts * futPx)} USDT @ last (${maxOrderContracts.toLocaleString("en-US")} contracts)`
+      : maxOrderLine;
+
+  const criticalSection = [
+    "🚨 สภาพคล่อง & ขนาดกรง (Critical)",
+    "",
+    `• ${liqCapRuleLine}`,
+    spotFutVolBlock,
+    `• ${maxOrderShort}`,
+  ].join("\n");
+
+  const trendSection = [
+    "📈 เทรนด์ & Sentiment",
+    "",
+    `• ${sentimentRuleLine}`,
+    emaBlock,
+    `• ${weekendLine}`,
+    `• ${athLine}`,
+  ].join("\n");
+
+  const deductionsBlock =
+    penalties.length === 0
+      ? "• หักคะแนน: ไม่มี (✅)"
+      : ["• หักคะแนน:", ...penalties.map((p) => `  ◦ ${p.deductionLine}`)].join("\n");
+
+  const scoreSection = ["📊 Koji Score", "", `• คะแนน: ${score}/100`, "", deductionsBlock].join("\n");
+
+  const metricsSection = [
+    "⛓️ ตัวเลขตลาด & On-chain",
+    "",
+    `• ${volLine}`,
+    `• ${capLine}`,
+    `• ${fundingLine}`,
+    `• ${basisLine}`,
+  ].join("\n");
+
+  const verdictLine = (() => {
+    if (score < 40 && dir === "short" && (liqCapClass.tier === "extreme" || spotFutVolClass.tier === 4)) {
+      return [
+        "",
+        "⛔ คำเตือนสรุป",
+        `• ห้าม Short ง่ายๆ ในสภาพนี้: สภาพคล่อง Spot เทียบ Futures ต่ำผิดปกติ — เจ้ามือใช้เงินน้อยลากกินพอร์ตได้ง่าย (คำแนะอัตโนมัติ ไม่ใช่คำสั่งล็อก)`,
+      ].join("\n");
+    }
+    return "";
+  })();
+
   const lines: string[] = [
-    header,
+    headerTitle,
     "",
-    statusLine,
+    `• ${statusLine}`,
     "",
-    "🛡️ การประเมินความเสี่ยง",
+    criticalSection,
     "",
-    weekendLine,
-    athLine,
-    ema15mLine,
-    sentimentRuleLine,
-    liqCapRuleLine,
-    spotFutVolRuleLine,
+    trendSection,
     "",
-    `📊 Koji Score: ${score}/100`,
+    scoreSection,
+    verdictLine,
     "",
-    "Deductions:",
-    penalties.length === 0 ? "✅ No deductions" : penalties.map((p) => p.deductionLine).join("\n"),
-    "",
-    "⛓️ On-Chain & Market Metrics",
-    "",
-    volLine,
-    maxOrderLine,
-    capLine,
-    fundingLine,
-    basisLine,
+    metricsSection,
     "",
     "—",
     "Not financial advice · automated snapshot",
   ];
 
-  return lines.join("\n");
+  return lines.filter((x) => x !== "").join("\n");
 }

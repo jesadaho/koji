@@ -44,8 +44,35 @@ type MexcTickerRow = {
 type MexcTickerResponse = {
   success: boolean;
   code: number;
+  message?: string;
   data?: MexcTickerRow | MexcTickerRow[];
 };
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** หน่วงระหว่าง MEXC GET รายคู่เมื่อดึงหลาย symbol (ลด 510) — 0 = ปิด */
+function mexcInterSymbolDelayMs(): number {
+  const n = Number(process.env.MEXC_TICKER_INTER_SYMBOL_DELAY_MS?.trim());
+  return Number.isFinite(n) && n >= 0 && n <= 5000 ? Math.floor(n) : 0;
+}
+
+/** เปิด Binance เป็น fallback ราคา (ปิดเมื่อโฮสต์โดน 451 geo) — ค่าเริ่มเปิด */
+function binancePriceFallbackEnabled(): boolean {
+  const v = process.env.CRYPTO_BINANCE_PRICE_FALLBACK?.trim().toLowerCase();
+  if (v === "0" || v === "false" || v === "off" || v === "no") return false;
+  return true;
+}
+
+function isMexcThrottleResponse(data: MexcTickerResponse, httpStatus: number): boolean {
+  if (httpStatus === 429) return true;
+  if (data?.success !== false) return false;
+  const c = Number(data.code);
+  if (c === 510 || c === 429) return true;
+  const m = typeof data.message === "string" ? data.message.toLowerCase() : "";
+  return m.includes("too frequent") || m.includes("rate limit") || m.includes("try again later");
+}
 
 function parseLastPrice(row: MexcTickerRow): number | null {
   const raw = row.lastPrice as unknown;
@@ -145,6 +172,13 @@ async function fetchBinanceFallbackForContractWithDiag(wantedKey: string): Promi
   quotes: Record<string, CoinQuote>;
   diagParts: string[];
 }> {
+  if (!binancePriceFallbackEnabled()) {
+    return {
+      quotes: {},
+      diagParts: ["Binance: fallback ปิด (CRYPTO_BINANCE_PRICE_FALLBACK=0) — ใช้เฉพาะ MEXC"],
+    };
+  }
+
   const bn = mexcContractToBinanceSymbol(wantedKey);
   if (!bn) {
     return { quotes: {}, diagParts: ["Binance: แมปสัญญาเป็น symbol ไม่ได้ (ไม่ลงท้าย _USDT หรือฐานว่าง)"] };
@@ -178,30 +212,49 @@ async function fetchContractTickerSingleSymbolWithDiag(symbol: string): Promise<
   const sym = symbol.trim();
   if (!sym) return { quotes: {} };
   const wanted = new Set([sym]);
-  try {
-    const { data, status } = await axios.get<MexcTickerResponse>(MEXC, {
-      params: { symbol: sym },
-      timeout: 15_000,
-      validateStatus: () => true,
-    });
-    if (!data.success || data.data === undefined) {
-      return {
-        quotes: {},
-        diag: `MEXC contract/ticker?symbol=${sym} HTTP ${status} success=${data.success} code=${data.code} body=${jsonSnippetForDebug(data)}`,
-      };
+  const maxAttempts = 3;
+  let lastDiag: string | undefined;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const { data, status } = await axios.get<MexcTickerResponse>(MEXC, {
+        params: { symbol: sym },
+        timeout: 15_000,
+        validateStatus: () => true,
+      });
+
+      if (data.success && data.data !== undefined) {
+        const out = normalizeResponse(wanted, data.data);
+        if (isValidQuote(out[sym])) {
+          return { quotes: out };
+        }
+        const row = Array.isArray(data.data) ? data.data[0] : data.data;
+        return {
+          quotes: out,
+          diag: `MEXC contract/ticker?symbol=${sym} success แต่ parse lastPrice ไม่ได้ row=${jsonSnippetForDebug(row)}`,
+        };
+      }
+
+      lastDiag = `MEXC contract/ticker?symbol=${sym} HTTP ${status} success=${data.success} code=${data.code} body=${jsonSnippetForDebug(data)}`;
+
+      if (isMexcThrottleResponse(data, status) && attempt < maxAttempts - 1) {
+        const backoff = 450 + attempt * 750 + Math.floor(Math.random() * 450);
+        await sleepMs(backoff);
+        continue;
+      }
+
+      return { quotes: {}, diag: lastDiag };
+    } catch (e) {
+      lastDiag = `MEXC contract/ticker?symbol=${sym} ${describeAxiosError(e)}`;
+      if (axios.isAxiosError(e) && e.response?.status === 429 && attempt < maxAttempts - 1) {
+        await sleepMs(600 + attempt * 600);
+        continue;
+      }
+      return { quotes: {}, diag: lastDiag };
     }
-    const out = normalizeResponse(wanted, data.data);
-    if (!isValidQuote(out[sym])) {
-      const row = Array.isArray(data.data) ? data.data[0] : data.data;
-      return {
-        quotes: out,
-        diag: `MEXC contract/ticker?symbol=${sym} success แต่ parse lastPrice ไม่ได้ row=${jsonSnippetForDebug(row)}`,
-      };
-    }
-    return { quotes: out };
-  } catch (e) {
-    return { quotes: {}, diag: `MEXC contract/ticker?symbol=${sym} ${describeAxiosError(e)}` };
   }
+
+  return { quotes: {}, diag: lastDiag };
 }
 
 export type FetchSimplePricesDiagnostics = {
@@ -267,8 +320,14 @@ export async function fetchSimplePricesWithDiagnostics(
     bulkParts.push(`MEXC contract/ticker (bulk) ${describeAxiosError(e)}`);
   }
 
+  let didMexcSingleFetch = false;
   for (const sym of unique) {
     if (isValidQuote(out[sym])) continue;
+    if (didMexcSingleFetch) {
+      const gap = mexcInterSymbolDelayMs();
+      if (gap > 0) await sleepMs(gap);
+    }
+    didMexcSingleFetch = true;
     const parts: string[] = [...bulkParts];
     const mexc = await fetchContractTickerSingleSymbolWithDiag(sym);
     Object.assign(out, mexc.quotes);

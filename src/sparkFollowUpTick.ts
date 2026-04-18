@@ -26,6 +26,24 @@ function priceFailNotifyEnabled(): boolean {
   return true;
 }
 
+/** ไม่ส่ง Telegram เมื่อล้มเหลวแบบชั่วคราว (MEXC 510/429, Binance 451 geo) — ค่าเริ่มปิดการแจ้ง */
+function priceFailSuppressTransientTelegram(): boolean {
+  const raw = process.env.SPARK_FOLLOWUP_PRICE_FAIL_SUPPRESS_TRANSIENT?.trim().toLowerCase();
+  if (raw === "0" || raw === "false" || raw === "off") return false;
+  return true;
+}
+
+function isTransientSparkFollowUpPriceDetail(detail: string): boolean {
+  const d = detail.toLowerCase();
+  if (d.includes("too frequent") || d.includes("try again later")) return true;
+  if (d.includes('"code":510') || d.includes("code=510")) return true;
+  if (d.includes("http 429") || d.includes(" 429 ") || d.includes('"code":429') || d.includes("code=429")) {
+    return true;
+  }
+  if (d.includes("451") && d.includes("restricted location")) return true;
+  return false;
+}
+
 function shortLabel(contractSymbol: string): string {
   const s = contractSymbol.replace(/_USDT$/i, "").trim();
   return s.replace(/_/g, "") || contractSymbol;
@@ -229,16 +247,26 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
         const detail =
           lookup.detailIfNull?.trim() ||
           "ไม่ทราบสาเหตุ (ไม่มีรายละเอียดจากการดึงราคา)";
-        const body = [
-          "⚠️ Spark follow-up: ดึงราคาไม่สำเร็จ (ลอง MEXC + Binance แล้ว)",
-          `[${base}]/USDT`,
-          "สถิติจุดวัดในรอบ cron นี้จะเป็น null — รอบถัดไปจะลองใหม่",
-          `รายละเอียด: ${detail}`,
-        ].join("\n");
-        try {
-          notifiedPushes += await sendSparkSystemAlert(client, [], body);
-        } catch (e) {
-          console.error("[sparkFollowUpTick] price-fail notify", cur.symbol, e);
+        const suppressTg =
+          priceFailSuppressTransientTelegram() && isTransientSparkFollowUpPriceDetail(detail);
+        if (suppressTg) {
+          console.warn(
+            "[sparkFollowUpTick] price fetch fail (transient, skip TG)",
+            cur.symbol,
+            truncateFetchDetail(detail)
+          );
+        } else {
+          const body = [
+            "⚠️ Spark follow-up: ดึงราคาไม่สำเร็จ (ลอง MEXC + Binance แล้ว)",
+            `[${base}]/USDT`,
+            "สถิติจุดวัดในรอบ cron นี้จะเป็น null — รอบถัดไปจะลองใหม่",
+            `รายละเอียด: ${detail}`,
+          ].join("\n");
+          try {
+            notifiedPushes += await sendSparkSystemAlert(client, [], body);
+          } catch (e) {
+            console.error("[sparkFollowUpTick] price-fail notify", cur.symbol, e);
+          }
         }
       }
       return rowPrice;
