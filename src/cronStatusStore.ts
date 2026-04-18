@@ -4,11 +4,13 @@ import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 
 const KV_KEY_HOURLY = "koji:cron_status_hourly";
 const KV_KEY_PRICE_SYNC = "koji:cron_status_price_sync";
+const KV_KEY_PCT_TRAILING = "koji:cron_status_pct_trailing";
 /** รูปแบบเก่า (รวมทุก step ใน record เดียว) */
 const KV_KEY_LEGACY = "koji:cron_status";
 
 const fileHourly = join(process.cwd(), "data", "cron_status_hourly.json");
 const filePriceSync = join(process.cwd(), "data", "cron_status_price_sync.json");
+const filePctTrailing = join(process.cwd(), "data", "cron_status_pct_trailing.json");
 
 function isVercel(): boolean {
   return process.env.VERCEL === "1";
@@ -39,7 +41,18 @@ export type HourlyCronRecord = {
   };
 };
 
-/** ~15 นาที: แจ้งเตือนราคาเป้า + เตือน% รายวัน + volume signal + RSI 1h + spot–perp basis (Spark / follow-up → pct-trailing ทุก ~5 นาที) */
+/** ~5 นาที: เตือน% trailing + Spark (ticker last) + Spark follow-up — บันทึกจาก /api/cron/pct-trailing */
+export type PctTrailingCronRecord = {
+  at: string;
+  durationMs: number;
+  steps: {
+    trailingPct: CronStepResult;
+    sparkTicker: CronStepResult;
+    sparkFollowUp: CronStepResult;
+  };
+};
+
+/** ~15 นาที: แจ้งเตือนราคาเป้า + เตือน% รายวัน + volume signal + RSI 1h + spot–perp basis */
 export type PriceSyncCronRecord = {
   at: string;
   durationMs: number;
@@ -122,6 +135,29 @@ export async function savePriceSyncCronRecord(record: PriceSyncCronRecord): Prom
   await writeFile(filePriceSync, JSON.stringify(record, null, 2), "utf-8");
 }
 
+export async function loadPctTrailingCronRecord(): Promise<PctTrailingCronRecord | null> {
+  if (useCloudStorage()) {
+    const data = await cloudGet<PctTrailingCronRecord>(KV_KEY_PCT_TRAILING);
+    if (data && typeof data === "object" && typeof data.at === "string" && data.steps) {
+      return data;
+    }
+    return null;
+  }
+  if (isVercel()) return null;
+  await mkdir(dirname(filePctTrailing), { recursive: true });
+  return readJsonFile<PctTrailingCronRecord>(filePctTrailing);
+}
+
+export async function savePctTrailingCronRecord(record: PctTrailingCronRecord): Promise<void> {
+  if (useCloudStorage()) {
+    await cloudSet(KV_KEY_PCT_TRAILING, record);
+    return;
+  }
+  assertWritableStorage();
+  await mkdir(dirname(filePctTrailing), { recursive: true });
+  await writeFile(filePctTrailing, JSON.stringify(record, null, 2), "utf-8");
+}
+
 export async function loadLegacyCronRunRecord(): Promise<LegacyCronRunRecord | null> {
   if (useCloudStorage()) {
     const data = await cloudGet<LegacyCronRunRecord>(KV_KEY_LEGACY);
@@ -134,18 +170,20 @@ export async function loadLegacyCronRunRecord(): Promise<LegacyCronRunRecord | n
   return readJsonFile<LegacyCronRunRecord>(legacyPath);
 }
 
-/** สำหรับ LINE / สถานะ cron — รวม hourly + price-sync + legacy */
+/** สำหรับ LINE / สถานะ cron — รวม pct-trailing + hourly + price-sync + legacy */
 export async function loadCronStatusBundle(): Promise<{
+  pctTrailing: PctTrailingCronRecord | null;
   hourly: HourlyCronRecord | null;
   priceSync: PriceSyncCronRecord | null;
   legacy: LegacyCronRunRecord | null;
 }> {
-  const [hourly, priceSync, legacy] = await Promise.all([
+  const [pctTrailing, hourly, priceSync, legacy] = await Promise.all([
+    loadPctTrailingCronRecord(),
     loadHourlyCronRecord(),
     loadPriceSyncCronRecord(),
     loadLegacyCronRunRecord(),
   ]);
-  return { hourly, priceSync, legacy };
+  return { pctTrailing, hourly, priceSync, legacy };
 }
 
 const fmt = (s: CronStepResult, label: string) => {
@@ -156,27 +194,37 @@ const fmt = (s: CronStepResult, label: string) => {
 };
 
 export function formatCronStatusForLine(bundle: {
+  pctTrailing: PctTrailingCronRecord | null;
   hourly: HourlyCronRecord | null;
   priceSync: PriceSyncCronRecord | null;
   legacy: LegacyCronRunRecord | null;
 }): string {
-  const { hourly, priceSync, legacy } = bundle;
+  const { pctTrailing, hourly, priceSync, legacy } = bundle;
 
-  if (!hourly && !priceSync && !legacy) {
+  if (!pctTrailing && !hourly && !priceSync && !legacy) {
     return [
       "🗓 สถานะ cron",
       "",
       "ยังไม่มีบันทึกรอบล่าสุด — มักเกิดเมื่อ:",
-      "• ยังไม่เคยรัน /api/cron/price-sync หรือ /api/cron/price-alerts สำเร็จ",
+      "• ยังไม่เคยรัน /api/cron/pct-trailing หรือ /api/cron/price-sync สำเร็จ",
       "• บน Vercel ยังไม่ได้ตั้ง REDIS_URL หรือ KV",
       "• CRON_SECRET ไม่ตรง (cron ได้ 401)",
       "",
-      "กำหนดการ: pct-trailing ~ทุก 5 นาที (UTC) · market-pulse ~ทุกชั่วโมง (UTC; แจ้งเมื่อ ΔF&G ถึงเกณฑ์) · price-sync ~ทุก 15 นาที (UTC; รวม spot–perp basis) · price-alerts ทุกชั่วโมง (UTC)",
+      "กำหนดการ: pct-trailing ~ทุก 5 นาที (UTC; Spark ticker + follow-up) · market-pulse ~ทุกชั่วโมง (UTC) · price-sync ~ทุก 15 นาที (UTC) · price-alerts ทุกชั่วโมง (UTC)",
       "ดู log: Vercel → Project → Logs",
     ].join("\n");
   }
 
   const parts: string[] = ["🗓 สถานะ cron", ""];
+
+  if (pctTrailing) {
+    parts.push("— รอบล่าสุด: pct-trailing (~5 นาที; เตือน% + Spark ticker + follow-up) —");
+    parts.push(`เวลา: ${pctTrailing.at} · รวม ${pctTrailing.durationMs}ms`);
+    parts.push(fmt(pctTrailing.steps.trailingPct, "เตือน% trailing"));
+    parts.push(fmt(pctTrailing.steps.sparkTicker, "Spark (ราคา last / ticker)"));
+    parts.push(fmt(pctTrailing.steps.sparkFollowUp, "Spark follow-up"));
+    parts.push("");
+  }
 
   if (priceSync) {
     parts.push("— รอบล่าสุด: price-sync (~15 นาที; เตือน% trailing อยู่ cron อื่น) —");
@@ -203,7 +251,7 @@ export function formatCronStatusForLine(bundle: {
     parts.push("");
   }
 
-  if (!priceSync && !hourly && legacy) {
+  if (!pctTrailing && !priceSync && !hourly && legacy) {
     parts.push("— บันทึกแบบเก่า (ก่อนแยก cron) —");
     parts.push(`เวลา: ${legacy.at} · รวม ${legacy.durationMs}ms`);
     parts.push(fmt(legacy.steps.priceAlerts, "แจ้งเตือนราคา"));
@@ -212,7 +260,8 @@ export function formatCronStatusForLine(bundle: {
     parts.push("");
   }
 
-  parts.push("หมายเหตุ: ประวัติ funding เก็บชั่วโมงละจุดเฉพาะ Top 50 |funding|");
+  parts.push("หมายเหตุ: Spark สัญญาณจาก ticker อยู่ที่ pct-trailing — ไม่ใช่ price-sync");
+  parts.push("ประวัติ funding เก็บชั่วโมงละจุดเฉพาะ Top 50 |funding|");
   return parts.join("\n");
 }
 
@@ -224,7 +273,7 @@ export async function loadCronRunRecord(): Promise<LegacyCronRunRecord | null> {
 /** @deprecated */
 export function formatCronRunForLine(r: LegacyCronRunRecord | null): string {
   if (!r) {
-    return formatCronStatusForLine({ hourly: null, priceSync: null, legacy: null });
+    return formatCronStatusForLine({ pctTrailing: null, hourly: null, priceSync: null, legacy: null });
   }
-  return formatCronStatusForLine({ hourly: null, priceSync: null, legacy: r });
+  return formatCronStatusForLine({ pctTrailing: null, hourly: null, priceSync: null, legacy: r });
 }

@@ -17,7 +17,8 @@ import { appendSparkFireLog, enqueueSparkFollowUp } from "./sparkFollowUpStore";
 /** ให้สอดคล้องกับ follow-up scheduler (anchor: barOpen + SPARK_BAR_SEC วินาที — ไม่ใช่ TF chart) */
 const SPARK_SIGNAL_BAR_SEC = 300;
 
-function enabled(): boolean {
+/** เปิดรอบ Spark (ticker last) ใน cron pct-trailing — ปิด: PRICE_SPIKE_15M_ENABLED=0 */
+export function isPriceSpike15mSparkCronEnabled(): boolean {
   const raw = process.env.PRICE_SPIKE_15M_ENABLED?.trim();
   if (raw === "0" || raw === "false") return false;
   return true;
@@ -127,7 +128,7 @@ function buildSparkMessage(
 export async function runPriceSpike15mAlertTick(
   client: Client
 ): Promise<{ notifiedPushes: number; symbolsHit: number }> {
-  if (!enabled()) {
+  if (!isPriceSpike15mSparkCronEnabled()) {
     return { notifiedPushes: 0, symbolsHit: 0 };
   }
 

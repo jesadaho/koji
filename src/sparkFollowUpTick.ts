@@ -13,7 +13,8 @@ import {
   type SparkFollowUpPending,
 } from "./sparkFollowUpStore";
 
-function enabled(): boolean {
+/** เปิดคิว Spark follow-up หลังสัญญาณ — ปิด: SPARK_FOLLOWUP_ENABLED=0 */
+export function isSparkFollowUpCronEnabled(): boolean {
   const raw = process.env.SPARK_FOLLOWUP_ENABLED?.trim();
   if (raw === "0" || raw === "false") return false;
   return true;
@@ -159,7 +160,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
   resolvedEvents: number;
   checkpoints: number;
 }> {
-  if (!enabled()) {
+  if (!isSparkFollowUpCronEnabled()) {
     return { notifiedPushes: 0, resolvedEvents: 0, checkpoints: 0 };
   }
 

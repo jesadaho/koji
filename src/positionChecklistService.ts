@@ -393,6 +393,8 @@ export async function buildPositionChecklistMessage(
 
   const dirEmoji = dir === "short" ? "📉" : "📈";
   const headerTitle = `🛡️ การประเมินความเสี่ยง: [${dir.toUpperCase()}] ${base} / USDT ${dirEmoji}`;
+  /** หัวข้อย่อยใน snapshot — emoji อ่านชัดกว่า bullet • ในหลายฟอนต์/แอป */
+  const listBullet = "🔹";
 
   const statusOrder = [
     "liqCapRatio",
@@ -581,7 +583,7 @@ export async function buildPositionChecklistMessage(
   function bulletBlock(text: string, indentSub = "  ▸ "): string {
     const parts = text.split("\n").map((l) => l.trim()).filter(Boolean);
     if (parts.length === 0) return "";
-    return parts.map((l, i) => (i === 0 ? `• ${l}` : `${indentSub}${l}`)).join("\n");
+    return parts.map((l, i) => (i === 0 ? `${listBullet} ${l}` : `${indentSub}${l}`)).join("\n");
   }
 
   const spotFutVolBlock = bulletBlock(spotFutVolRuleLine);
@@ -595,34 +597,34 @@ export async function buildPositionChecklistMessage(
   const criticalSection = [
     "🚨 สภาพคล่อง & ขนาดกรง (Critical)",
     "",
-    `• ${liqCapRuleLine}`,
+    `${listBullet} ${liqCapRuleLine}`,
     spotFutVolBlock,
-    `• ${maxOrderShort}`,
+    `${listBullet} ${maxOrderShort}`,
   ].join("\n");
 
   const trendSection = [
     "📈 เทรนด์ & Sentiment",
     "",
-    `• ${sentimentRuleLine}`,
+    `${listBullet} ${sentimentRuleLine}`,
     emaBlock,
-    `• ${weekendLine}`,
-    `• ${athLine}`,
+    `${listBullet} ${weekendLine}`,
+    `${listBullet} ${athLine}`,
   ].join("\n");
 
   const deductionsBlock =
     penalties.length === 0
-      ? "• หักคะแนน: ไม่มี (✅)"
-      : ["• หักคะแนน:", ...penalties.map((p) => `  ◦ ${p.deductionLine}`)].join("\n");
+      ? `${listBullet} หักคะแนน: ไม่มี (✅)`
+      : [`${listBullet} หักคะแนน:`, ...penalties.map((p) => `  ◦ ${p.deductionLine}`)].join("\n");
 
-  const scoreSection = ["📊 Koji Score", "", `• คะแนน: ${score}/100`, "", deductionsBlock].join("\n");
+  const scoreSection = ["📊 Koji Score", "", `${listBullet} คะแนน: ${score}/100`, "", deductionsBlock].join("\n");
 
   const metricsSection = [
     "⛓️ ตัวเลขตลาด & On-chain",
     "",
-    `• ${volLine}`,
-    `• ${capLine}`,
-    `• ${fundingLine}`,
-    `• ${basisLine}`,
+    `${listBullet} ${volLine}`,
+    `${listBullet} ${capLine}`,
+    `${listBullet} ${fundingLine}`,
+    `${listBullet} ${basisLine}`,
   ].join("\n");
 
   const verdictLine = (() => {
@@ -630,7 +632,7 @@ export async function buildPositionChecklistMessage(
       return [
         "",
         "⛔ คำเตือนสรุป",
-        `• ห้าม Short ง่ายๆ ในสภาพนี้: สภาพคล่อง Spot เทียบ Futures ต่ำผิดปกติ — เจ้ามือใช้เงินน้อยลากกินพอร์ตได้ง่าย (คำแนะอัตโนมัติ ไม่ใช่คำสั่งล็อก)`,
+        `${listBullet} ห้าม Short ง่ายๆ ในสภาพนี้: สภาพคล่อง Spot เทียบ Futures ต่ำผิดปกติ — เจ้ามือใช้เงินน้อยลากกินพอร์ตได้ง่าย (คำแนะอัตโนมัติ ไม่ใช่คำสั่งล็อก)`,
       ].join("\n");
     }
     return "";
@@ -639,7 +641,7 @@ export async function buildPositionChecklistMessage(
   const lines: string[] = [
     headerTitle,
     "",
-    `• ${statusLine}`,
+    `${listBullet} ${statusLine}`,
     "",
     criticalSection,
     "",

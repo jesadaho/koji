@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * ดูบันทึก cron (JSON) — hourly + price-sync + legacy
+ * ดูบันทึก cron (JSON) — pct-trailing + hourly + price-sync + legacy
  * curl -sH "Authorization: Bearer $CRON_SECRET" https://<host>/api/cron/status
  */
 export async function GET(req: NextRequest) {
