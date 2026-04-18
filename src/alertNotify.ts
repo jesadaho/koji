@@ -99,7 +99,8 @@ export async function sendPublicIndicatorFeedToSparkGroup(text: string): Promise
     );
     return false;
   }
-  await sendTelegramPublicBroadcastMessage(text, "technical", { monospaceHtml: true });
+  /** ไม่ใช้ HTML pre (monospace) — บางไคลเอนต์ Telegram แสดง emoji ผิดเพี้ยนใน pre block; RSI/EMA ใช้ข้อความธรรมดาเหมือน alert อื่น */
+  await sendTelegramPublicBroadcastMessage(text, "technical");
   return true;
 }
 
