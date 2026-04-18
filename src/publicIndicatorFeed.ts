@@ -86,10 +86,11 @@ function formatClosedCandleBkk(barTimeSec: number): string {
   return `${datePart} | ${timePart} (BKK)`;
 }
 
+/** ลูกศร BMP เท่านั้น — หลีกเลี่ยง emoji นอก BMP ที่บางช่องทาง Telegram แสดงเป็น \\u.... */
 function emaDeltaCue(now: number, prev: number): string {
-  if (now > prev) return "↗️ ดีดจาก";
-  if (now < prev) return "↘️ ร่วงจาก";
-  return "➡️ เทียบกับ";
+  if (now > prev) return "\u2191 ดีดจาก";
+  if (now < prev) return "\u2193 ร่วงจาก";
+  return "\u2192 เทียบกับ";
 }
 
 function rsiCrossMatch(
@@ -168,15 +169,15 @@ function buildPublicRsiMessage(
     crossLine = `ข้ามเกณฑ์ (${cmp} ${threshold})`;
   }
   return [
-    "📈 Public feed · Binance USDT-M · default params",
+    "[RSI] Public feed · Binance USDT-M · default params",
     "RSI · 1h · USDT-M perpetual",
-    `🪙 ${sym}`,
+    `Pair: ${sym}`,
     "",
-    `📊 RSI(${period}) ${crossLine}`,
+    `RSI(${period}) ${crossLine}`,
     `   แท่งก่อน: ${rPrev.toFixed(2)} → ล่าสุด: ${rNow.toFixed(2)}`,
     `   แท่งปิด (UTC): ${barIso}`,
     "",
-    "สัญญาณจากแท่งปิดล่าสุด — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน",
+    "[!] สัญญาณจากแท่งปิดล่าสุด — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน",
   ].join("\n");
 }
 
