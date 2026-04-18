@@ -67,9 +67,24 @@ function chunkString(text: string, maxLen: number): string[] {
   return out;
 }
 
+/** สำหรับ parse_mode=HTML — ต้อง escape ก่อนใส่ใน <pre> / ข้อความทั่วไป */
+export function escapeTelegramHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** ครอบทั้งข้อความเป็น monospace ใน Telegram (HTML) — คืน null ถ้ายาวเกิน limit หลัง wrap */
+export function wrapTelegramPreMonospace(plain: string): string | null {
+  const escaped = escapeTelegramHtml(plain);
+  const wrapped = `<pre>${escaped}</pre>`;
+  if (wrapped.length > TELEGRAM_SEND_MESSAGE_MAX) return null;
+  return wrapped;
+}
+
 export type SendTelegramMessageOptions = {
   /** กลุ่ม Forum — id ของหัวข้อ (topic) */
   messageThreadId?: number;
+  /** เมื่อตั้ง → ส่ง parse_mode ไป Telegram (ข้อความต้องถูกต้องตามรูปแบบนั้น) */
+  parseMode?: "HTML";
 };
 
 /**
@@ -93,6 +108,7 @@ export async function sendTelegramMessageToChat(
   const url = `${TG_API}/bot${encodeURIComponent(token)}/sendMessage`;
   const parts = chunkString(text, TELEGRAM_SEND_MESSAGE_MAX);
   const threadId = options?.messageThreadId;
+  const parseMode = options?.parseMode;
 
   for (const t of parts) {
     const body: Record<string, unknown> = {
@@ -100,6 +116,9 @@ export async function sendTelegramMessageToChat(
       text: t,
       disable_web_page_preview: true,
     };
+    if (parseMode != null) {
+      body.parse_mode = parseMode;
+    }
     if (threadId != null) {
       body.message_thread_id = threadId;
     }
@@ -135,13 +154,19 @@ export async function sendTelegramAlertMessage(text: string): Promise<void> {
   await sendTelegramMessageToChat(chatId, text);
 }
 
+export type SendTelegramPublicBroadcastOptions = {
+  /** ครอบข้อความด้วย &lt;pre&gt; + parse_mode HTML — monospace ใน Telegram (เฉพาะเมื่อความยาวพอดี) */
+  monospaceHtml?: boolean;
+};
+
 /**
  * ส่งไปกลุ่มสาธารณะตาม env (chat + optional topic)
  * @param kind เมื่อระบุ → ใช้ topic แยกตามชนิด (fallback ไป TELEGRAM_PUBLIC_MESSAGE_THREAD_ID); เมื่อไม่ระบุ → ใช้แค่ TELEGRAM_PUBLIC_MESSAGE_THREAD_ID เหมือนเดิม
  */
 export async function sendTelegramPublicBroadcastMessage(
   text: string,
-  kind?: PublicBroadcastKind
+  kind?: PublicBroadcastKind,
+  options?: SendTelegramPublicBroadcastOptions
 ): Promise<void> {
   const chatId = resolvePublicBroadcastChatId();
   if (!chatId) {
@@ -149,5 +174,15 @@ export async function sendTelegramPublicBroadcastMessage(
   }
   const tid =
     kind == null ? resolvePublicBroadcastMessageThreadId() : resolvePublicBroadcastMessageThreadIdForKind(kind);
-  await sendTelegramMessageToChat(chatId, text, tid != null ? { messageThreadId: tid } : undefined);
+
+  let payload = text;
+  const chatOpts: SendTelegramMessageOptions = tid != null ? { messageThreadId: tid } : {};
+  if (options?.monospaceHtml) {
+    const wrapped = wrapTelegramPreMonospace(text);
+    if (wrapped != null) {
+      payload = wrapped;
+      chatOpts.parseMode = "HTML";
+    }
+  }
+  await sendTelegramMessageToChat(chatId, payload, chatOpts);
 }

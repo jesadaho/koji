@@ -99,7 +99,7 @@ export async function sendPublicIndicatorFeedToSparkGroup(text: string): Promise
     );
     return false;
   }
-  await sendTelegramPublicBroadcastMessage(text, "technical");
+  await sendTelegramPublicBroadcastMessage(text, "technical", { monospaceHtml: true });
   return true;
 }
 

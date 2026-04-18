@@ -167,9 +167,8 @@ function buildPublicRsiMessage(
     const cmp = direction === "above" ? ">" : "<";
     crossLine = `ข้ามเกณฑ์ (${cmp} ${threshold})`;
   }
-  /* RSI: บรรทัดแรกไม่ใส่ 📈 — เคยแสดงเป็น \\uD83D\\uDCC8 บาง Telegram client */
   return [
-    "[RSI] Public feed · Binance USDT-M · default params",
+    "📈 Public feed · Binance USDT-M · default params",
     "RSI · 1h · USDT-M perpetual",
     `🪙 ${sym}`,
     "",
@@ -177,7 +176,7 @@ function buildPublicRsiMessage(
     `   แท่งก่อน: ${rPrev.toFixed(2)} → ล่าสุด: ${rNow.toFixed(2)}`,
     `   แท่งปิด (UTC): ${barIso}`,
     "",
-    "⚠️ สัญญาณจากแท่งปิดล่าสุด — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน",
+    "สัญญาณจากแท่งปิดล่าสุด — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน",
   ].join("\n");
 }
 
@@ -202,7 +201,6 @@ function buildPublicEmaMessage(
         ? `EMA ${fast} อยู่ใต้ EMA ${slow} ที่แท่งปิดล่าสุด`
         : `EMA ${fast} อยู่เหนือ EMA ${slow} ที่แท่งปิดล่าสุด`;
 
-  /* EMA: คง emoji ที่เคยโอเค (🔴🟢🔹↗️↘️⚠️); ไม่ใส่ 📊 หัวข้อ Technical / ไม่ใส่ 📈📉 หน้า Action — เคยแตกเป็น \\u.... */
   if (kind === "death") {
     return [
       `🔴 SIGNAL: DEATH CROSS (${pair})`,
@@ -214,9 +212,9 @@ function buildPublicEmaMessage(
       "",
       `🔹 Closed Candle: ${bkk}`,
       "",
-      "Technical detail:",
+      "📊 Technical Detail:",
       "",
-      "🔹 Action: [DOWN] CROSS DOWN (สัญญาณกดลง)",
+      "🔹 Action: 📉 CROSS DOWN (สัญญาณกดลง)",
       "",
       `🔹 EMA ${fast}: ${fastNow.toFixed(4)} (${emaDeltaCue(fastNow, fastPrev)} ${fastPrev.toFixed(4)})`,
       "",
@@ -238,9 +236,9 @@ function buildPublicEmaMessage(
     "",
     `🔹 Closed Candle: ${bkk}`,
     "",
-    "Technical detail:",
+    "📊 Technical Detail:",
     "",
-    "🔹 Action: [UP] CROSS UP (สัญญาณเร่งตัว)",
+    "🔹 Action: 📈 CROSS UP (สัญญาณเร่งตัว)",
     "",
     `🔹 EMA ${fast}: ${fastNow.toFixed(4)} (${emaDeltaCue(fastNow, fastPrev)} ${fastPrev.toFixed(4)})`,
     "",
