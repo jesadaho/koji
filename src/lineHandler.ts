@@ -34,8 +34,8 @@ import {
   removeSystemChangeSubscriber,
 } from "./systemChangeSubscribersStore";
 import { sendAlertNotification } from "./alertNotify";
-import { parsePositionChecklist } from "./positionChecklistLineCommands";
-import { buildPositionChecklistMessage } from "./positionChecklistService";
+import { parseMarketCheck, parsePositionChecklist } from "./positionChecklistLineCommands";
+import { buildMarketCheckMessage, buildPositionChecklistMessage } from "./positionChecklistService";
 import { resetSparkFollowUpState } from "./sparkFollowUpStore";
 
 export function createLineClient(channelAccessToken: string) {
@@ -112,6 +112,8 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis / EMA6·12 บน 15m)
   ตัวอย่าง: short btc · long eth · ชอต btc 5x
   (EN: short btc, long eth)
+• Market check — สรุปสภาพคล่อง + โมเมนตัม 15m + funding/F&G (ค่าเริ่มทิศ long)
+  ตัวอย่าง: check btc · check sol short
 
 • ทดสอบแจ้งเตือน — ส่งไป Telegram / Discord / LINE ตาม env (LINE ต้อง LINE_ALERT_PUSH_ENABLED=1) แล้วตอบยืนยันในแชท
   (EN: test push, #testpush)
@@ -322,6 +324,21 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
           : "สถานะ: ยังไม่ได้เปิดรับ — พิมพ์ ติดตามระบบ เพื่อเปิด",
       },
     ]);
+    return;
+  }
+
+  const marketCheck = parseMarketCheck(text);
+  if (marketCheck) {
+    try {
+      const body = await buildMarketCheckMessage(marketCheck);
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: body }]);
+    } catch (e) {
+      console.error("[lineHandler] market check", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: `Market check ไม่สำเร็จ — ${detail.slice(0, 300)}` },
+      ]);
+    }
     return;
   }
 

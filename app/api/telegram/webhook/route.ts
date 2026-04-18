@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendTelegramMessageToChat } from "@/src/telegramAlert";
-import { parsePositionChecklist } from "@/src/positionChecklistLineCommands";
-import { buildPositionChecklistMessage } from "@/src/positionChecklistService";
+import { parseMarketCheck, parsePositionChecklist } from "@/src/positionChecklistLineCommands";
+import { buildMarketCheckMessage, buildPositionChecklistMessage } from "@/src/positionChecklistService";
 import { isSparkStatsQuery } from "@/src/sparkFollowUpLineCommands";
 import { formatSparkStatsMessage } from "@/src/sparkFollowUpStats";
 
@@ -115,6 +115,27 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] spark stats error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const marketCheck = parseMarketCheck(normalized);
+  if (marketCheck) {
+    try {
+      const body = await buildMarketCheckMessage(marketCheck);
+      await sendTelegramMessageToChat(String(chatId), body, threadOpts);
+    } catch (e) {
+      console.error("[telegram/webhook] market check", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `Market check ไม่สำเร็จ — ${detail.slice(0, 300)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] market check error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

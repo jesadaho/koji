@@ -2,6 +2,7 @@ import axios from "axios";
 import { resolveContractSymbol } from "./coinMap";
 import { fetchMarketPulseData, MarketPulseFetchError } from "./marketPulseFetch";
 import { computeEmaLast } from "./emaUtils";
+import { rsiWilder } from "./indicatorMath";
 import {
   fetchContractTickerSingle,
   fetchMaxOrderContractsForSymbol,
@@ -11,7 +12,7 @@ import {
   fetchSpotPriceSingle,
   perpSymbolToSpotSymbol,
 } from "./mexcMarkets";
-import type { ParsedPositionChecklist } from "./positionChecklistLineCommands";
+import type { ParsedMarketCheck, ParsedPositionChecklist } from "./positionChecklistLineCommands";
 
 function envNum(name: string, def: number): number {
   const v = process.env[name]?.trim();
@@ -229,6 +230,125 @@ function classifySpotFutVolRatioForBase(
   return { ...d, band: "default", safeMax: null, cautionMax: null };
 }
 
+type ChecklistMarketCore = {
+  contractSymbol: string;
+  base: string;
+  futPx: number;
+  amount24: number | null;
+  spotQuoteVol24: number | null;
+  spotPx: number | null;
+  spotSym: string;
+  mcapUsd: number | null;
+  maxOrderContracts: number | null;
+  closes15m: number[] | null;
+  ema6: number | null;
+  ema12: number | null;
+  funding: number;
+  basisPct: number | null;
+  maxNotionalUsd: number | null;
+  liqCapClass: ReturnType<typeof classifyLiquidityCapRatio>;
+  spotFutVolClass: ReturnType<typeof classifySpotFutVolRatioForBase>;
+  klineHigh: Awaited<ReturnType<typeof fetchPerpHourlyClosesForNearHigh>>;
+  weekend: boolean;
+  pulseResult: Awaited<ReturnType<typeof fetchMarketPulseData>> | { error: unknown };
+};
+
+async function loadChecklistMarketCore(
+  contractSymbol: string,
+  base: string
+): Promise<{ ok: false; message: string } | { ok: true; core: ChecklistMarketCore }> {
+  const liqCapThWatch = envNum("POSITION_CHECK_LIQ_CAP_RATIO_WATCH", 50_000);
+  const liqCapThHigh = envNum("POSITION_CHECK_LIQ_CAP_RATIO_HIGH", 150_000);
+  const liqCapThExtreme = envNum("POSITION_CHECK_LIQ_CAP_RATIO_EXTREME", 500_000);
+  const spotFutT2Min = envNum("POSITION_CHECK_SPOT_FUT_VOL_T2_MIN", 11);
+  const spotFutT3Min = envNum("POSITION_CHECK_SPOT_FUT_VOL_T3_MIN", 41);
+  const spotFutT4Min = envNum("POSITION_CHECK_SPOT_FUT_VOL_T4_MIN", 81);
+  const spotFutBlueSafeMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_BLUE_SAFE_MAX", 150);
+  const spotFutBlueCautionMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_BLUE_CAUTION_MAX", 300);
+  const spotFutMajorSafeMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_MAJOR_SAFE_MAX", 80);
+  const spotFutMajorCautionMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_MAJOR_CAUTION_MAX", 150);
+
+  const [ticker, klineHigh, mcapUsd, pulseResult, maxOrderContracts, closes15m] = await Promise.all([
+    fetchContractTickerSingle(contractSymbol),
+    fetchPerpHourlyClosesForNearHigh(contractSymbol),
+    fetchCoinGeckoMarketCapUsd(base),
+    fetchMarketPulseData().catch((e: unknown) => ({ error: e })),
+    fetchMaxOrderContractsForSymbol(contractSymbol),
+    fetchPerp15mClosesForChecklist(contractSymbol),
+  ]);
+
+  if (!ticker?.lastPrice || typeof ticker.lastPrice !== "number" || ticker.lastPrice <= 0) {
+    return { ok: false, message: `ดึงข้อมูลสัญญา ${contractSymbol} ไม่สำเร็จ — ลองใหม่ภายหลัง` };
+  }
+
+  const spotSym = perpSymbolToSpotSymbol(contractSymbol);
+  const [spotPx, spotQuoteVol24] = await Promise.all([
+    fetchSpotPriceSingle(spotSym),
+    fetchSpot24hrQuoteVolumeUsdt(spotSym),
+  ]);
+  const futPx = ticker.lastPrice;
+  let basisPct: number | null = null;
+  if (spotPx != null && spotPx > 0) {
+    basisPct = ((futPx - spotPx) / spotPx) * 100;
+  }
+
+  const amount24 =
+    typeof ticker.amount24 === "number" && !Number.isNaN(ticker.amount24) ? ticker.amount24 : null;
+  const funding = typeof ticker.fundingRate === "number" && !Number.isNaN(ticker.fundingRate) ? ticker.fundingRate : 0;
+
+  const maxNotionalUsd =
+    maxOrderContracts != null && maxOrderContracts > 0 ? maxOrderContracts * futPx : null;
+  const liqCapClass = classifyLiquidityCapRatio(
+    mcapUsd,
+    maxNotionalUsd,
+    liqCapThWatch,
+    liqCapThHigh,
+    liqCapThExtreme,
+  );
+
+  const spotFutVolClass = classifySpotFutVolRatioForBase(
+    base,
+    amount24,
+    spotQuoteVol24,
+    spotFutT2Min,
+    spotFutT3Min,
+    spotFutT4Min,
+    spotFutBlueSafeMax,
+    spotFutBlueCautionMax,
+    spotFutMajorSafeMax,
+    spotFutMajorCautionMax,
+  );
+
+  const ema6 = closes15m ? computeEmaLast(closes15m, 6) : null;
+  const ema12 = closes15m ? computeEmaLast(closes15m, 12) : null;
+
+  return {
+    ok: true,
+    core: {
+      contractSymbol,
+      base,
+      futPx,
+      amount24,
+      spotQuoteVol24,
+      spotPx,
+      spotSym,
+      mcapUsd,
+      maxOrderContracts,
+      closes15m,
+      ema6,
+      ema12,
+      funding,
+      basisPct,
+      maxNotionalUsd,
+      liqCapClass,
+      spotFutVolClass,
+      klineHigh,
+      weekend: isBangkokWeekend(new Date()),
+      pulseResult,
+    },
+  };
+}
+
 export async function buildPositionChecklistMessage(
   parsed: ParsedPositionChecklist
 ): Promise<string> {
@@ -272,66 +392,34 @@ export async function buildPositionChecklistMessage(
   const spotFutPenT3 = envNum("POSITION_CHECK_SPOT_FUT_VOL_PENALTY_T3", 18);
   const spotFutPenT4 = envNum("POSITION_CHECK_SPOT_FUT_VOL_PENALTY_T4", 35);
 
-  const [ticker, klineHigh, mcapUsd, pulseResult, maxOrderContracts, closes15m] = await Promise.all([
-    fetchContractTickerSingle(contractSymbol),
-    fetchPerpHourlyClosesForNearHigh(contractSymbol),
-    fetchCoinGeckoMarketCapUsd(base),
-    fetchMarketPulseData().catch((e: unknown) => ({ error: e })),
-    fetchMaxOrderContractsForSymbol(contractSymbol),
-    fetchPerp15mClosesForChecklist(contractSymbol),
-  ]);
-
-  if (!ticker?.lastPrice || typeof ticker.lastPrice !== "number" || ticker.lastPrice <= 0) {
-    return `ดึงข้อมูลสัญญา ${contractSymbol} ไม่สำเร็จ — ลองใหม่ภายหลัง`;
-  }
-
-  const spotSym = perpSymbolToSpotSymbol(contractSymbol);
-  const [spotPx, spotQuoteVol24] = await Promise.all([
-    fetchSpotPriceSingle(spotSym),
-    fetchSpot24hrQuoteVolumeUsdt(spotSym),
-  ]);
-  const futPx = ticker.lastPrice;
-  let basisPct: number | null = null;
-  if (spotPx != null && spotPx > 0) {
-    basisPct = ((futPx - spotPx) / spotPx) * 100;
-  }
-
-  const amount24 =
-    typeof ticker.amount24 === "number" && !Number.isNaN(ticker.amount24) ? ticker.amount24 : null;
-  const funding = typeof ticker.fundingRate === "number" && !Number.isNaN(ticker.fundingRate) ? ticker.fundingRate : 0;
-
-  const maxNotionalUsd =
-    maxOrderContracts != null && maxOrderContracts > 0 ? maxOrderContracts * futPx : null;
-  const liqCapClass = classifyLiquidityCapRatio(
-    mcapUsd,
-    maxNotionalUsd,
-    liqCapThWatch,
-    liqCapThHigh,
-    liqCapThExtreme,
-  );
-
-  const spotFutVolClass = classifySpotFutVolRatioForBase(
-    base,
+  const loaded = await loadChecklistMarketCore(contractSymbol, base);
+  if (!loaded.ok) return loaded.message;
+  const {
+    futPx,
     amount24,
     spotQuoteVol24,
-    spotFutT2Min,
-    spotFutT3Min,
-    spotFutT4Min,
-    spotFutBlueSafeMax,
-    spotFutBlueCautionMax,
-    spotFutMajorSafeMax,
-    spotFutMajorCautionMax
-  );
-
-  const ema6 = closes15m ? computeEmaLast(closes15m, 6) : null;
-  const ema12 = closes15m ? computeEmaLast(closes15m, 12) : null;
+    spotPx,
+    spotSym,
+    mcapUsd,
+    maxOrderContracts,
+    closes15m,
+    ema6,
+    ema12,
+    funding,
+    basisPct,
+    maxNotionalUsd,
+    liqCapClass,
+    spotFutVolClass,
+    klineHigh,
+    weekend,
+    pulseResult,
+  } = loaded.core;
 
   let nearHigh = false;
   if (klineHigh && klineHigh.maxClose > 0) {
     nearHigh = nearHighFromMaxClose(futPx, klineHigh.maxClose, nearHighPct);
   }
 
-  const weekend = isBangkokWeekend(new Date());
   let fngVal: number | null = null;
   let fngCls: string | null = null;
   if (pulseResult && !("error" in pulseResult)) {
@@ -738,7 +826,7 @@ export async function buildPositionChecklistMessage(
       : maxOrderLine;
 
   const criticalSection = [
-    "🚨 สภาพคล่อง & ขนาดกรง (Critical)",
+    "สภาพคล่อง",
     "",
     `${listBullet} ${liqCapRuleLine}`,
     spotFutVolBlock,
@@ -800,4 +888,219 @@ export async function buildPositionChecklistMessage(
   ];
 
   return lines.filter((x) => x !== "").join("\n");
+}
+
+const MARKET_CHECK_DIV = "------------------------------";
+
+function rsiStrengthLabel(rsi: number): string {
+  if (rsi >= 70) return "(Overbought)";
+  if (rsi >= 55) return "(Bullish bias)";
+  if (rsi >= 45) return "(Neutral)";
+  if (rsi >= 30) return "(Slightly Weak)";
+  return "(Oversold)";
+}
+
+function spotFutTierFace(tier: SpotFutVolTier): string {
+  if (tier === "unknown") return "❓";
+  if (tier === 1) return "✅";
+  if (tier === 2) return "⚠️";
+  return "🔴";
+}
+
+function spotFutRatioHealth(tier: SpotFutVolTier): string {
+  if (tier === "unknown") return "N/A";
+  if (tier === 1) return "Healthy";
+  if (tier === 2) return "Mixed / Caution";
+  return "Stressed";
+}
+
+function volTierTitle(spot: ReturnType<typeof classifySpotFutVolRatioForBase>): string {
+  if (spot.tier === "unknown") return "Unknown";
+  const band =
+    spot.band === "blue_chip" ? "Blue-chip" : spot.band === "major_alt" ? "Major alt" : "Standard";
+  return `Tier ${spot.tier} (${band})`;
+}
+
+function fundingBiasLabel(pct: number): string {
+  const a = Math.abs(pct);
+  if (pct < -0.05) return "(Strong Short Bias)";
+  if (pct < -0.01) return "(Short Bias)";
+  if (pct < 0) return "(Slightly Short Bias)";
+  if (pct > 0.05) return "(Strong Long Bias)";
+  if (pct > 0.01) return "(Long Bias)";
+  if (pct > 0) return "(Slightly Long Bias)";
+  return "(Neutral)";
+}
+
+/**
+ * คำสั่ง `check btc` / `check eth long` — สรุปสภาพคล่อง + โมเมนตัม 15m + on-chain แบบย่อ
+ */
+export async function buildMarketCheckMessage(parsed: ParsedMarketCheck): Promise<string> {
+  const resolved = resolveContractSymbol(parsed.rawSymbol);
+  if (!resolved) {
+    return "ไม่รู้จักคู่นี้ — ลองเช่น check btc หรือ check ETH_USDT short";
+  }
+  const { contractSymbol, label: base } = resolved;
+  const dir = parsed.direction;
+
+  const loaded = await loadChecklistMarketCore(contractSymbol, base);
+  if (!loaded.ok) return loaded.message;
+  const c = loaded.core;
+  const {
+    futPx,
+    amount24,
+    spotQuoteVol24,
+    ema6,
+    ema12,
+    funding,
+    closes15m,
+    liqCapClass,
+    spotFutVolClass,
+    weekend,
+    pulseResult,
+  } = c;
+
+  const rsiPeriod = envNum("MARKET_CHECK_RSI_PERIOD", 14);
+
+  let rsiLast: number | null = null;
+  if (closes15m && closes15m.length > rsiPeriod + 1) {
+    const rsiArr = rsiWilder(closes15m, rsiPeriod);
+    const v = rsiArr[closes15m.length - 1];
+    if (typeof v === "number" && Number.isFinite(v)) rsiLast = v;
+  }
+
+  let trendLabel = "NEUTRAL";
+  let trendIcon = "➖";
+  let priceVsEma12 = "(ข้อมูล EMA ไม่พร้อม)";
+  if (ema6 != null && ema12 != null) {
+    if (futPx < ema12) {
+      priceVsEma12 = "(Under EMA12)";
+      trendLabel = ema6 <= ema12 ? "BEARISH" : "MIXED";
+      trendIcon = ema6 <= ema12 ? "📉" : "⚖️";
+    } else if (futPx > ema12) {
+      priceVsEma12 = "(Over EMA12)";
+      trendLabel = ema6 >= ema12 ? "BULLISH" : "MIXED";
+      trendIcon = ema6 >= ema12 ? "📈" : "⚖️";
+    } else {
+      priceVsEma12 = "(At EMA12)";
+    }
+  }
+
+  const emaCrossLine =
+    ema6 != null && ema12 != null
+      ? ema6 < ema12
+        ? "[ Dead Cross ] (6 < 12)"
+        : ema6 > ema12
+          ? "[ Golden Cross ] (6 > 12)"
+          : "[ Flat ] (6 = 12)"
+      : "[ — ]";
+
+  const R = spotFutVolClass.ratio;
+  const rDisp =
+    R != null && Number.isFinite(R) ? (R >= 100 ? R.toFixed(0) : R.toFixed(1)) : "—";
+  const tierBracket = `[ ${volTierTitle(spotFutVolClass)} ] ${spotFutTierFace(spotFutVolClass.tier)}`;
+  const ratioBracket = R != null && Number.isFinite(R) ? `[ 1 : ${rDisp} ] (${spotFutRatioHealth(spotFutVolClass.tier)})` : "[ — ] (N/A)";
+
+  let lcapBracket = "[ N/A ] (ไม่มี mcap / max order)";
+  if (liqCapClass.ratio != null && Number.isFinite(liqCapClass.ratio)) {
+    const rRounded = Math.round(liqCapClass.ratio).toLocaleString("en-US");
+    const note =
+      liqCapClass.tier === "safe"
+        ? "(Very Deep)"
+        : liqCapClass.tier === "watch"
+          ? "(Moderate)"
+          : liqCapClass.tier === "high"
+            ? "(Tight)"
+            : "(Extreme)";
+    lcapBracket = `[ 1 : ${rRounded} ] ${note}`;
+  }
+
+  const volSummary =
+    spotFutVolClass.tier === 1 && liqCapClass.tier === "safe"
+      ? "สรุป: สภาพคล่องมหาศาล เล่นได้ทุกขนาดไม้ ไม่มีความเสี่ยงเรื่องกรง"
+      : spotFutVolClass.tier !== "unknown" && typeof spotFutVolClass.tier === "number" && spotFutVolClass.tier >= 3
+        ? "สรุป: Fut÷Spot หรือ L-Cap อยู่ในโซนเสี่ยง — ลดไม้ / ระวังสวน"
+        : "สรุป: สภาพคล่องอยู่ในเกณฑ์รับได้ — ดูทิศ 15m ประกอบ";
+
+  let momentumSummary = "สรุป: รอข้อมูล EMA 15m";
+  if (ema6 != null && ema12 != null) {
+    if (trendLabel === "BEARISH") momentumSummary = "สรุป: ระยะสั้นเสียทรงขาขึ้น แรงซื้อยังไม่กลับมา";
+    else if (trendLabel === "BULLISH") momentumSummary = "สรุป: ระยะสั้นโมเมนตัมขาขึ้น แรงซื้อนำ";
+    else momentumSummary = "สรุป: ระยะสั้นยังไม่ชัด — รอยืนยันทิศ";
+  }
+
+  const fp = fundingPct(funding);
+  const fundBracket = `[ ${fp >= 0 ? "+" : ""}${fp.toFixed(4)}% ] ${fundingBiasLabel(fp)}`;
+
+  let fngBracket = "[ — ]";
+  if (pulseResult && !("error" in pulseResult)) {
+    const v = pulseResult.fng.value;
+    const cls = pulseResult.fng.valueClassification?.trim();
+    const zone =
+      cls && cls.length > 0
+        ? cls
+        : v >= 60
+          ? "Greed"
+          : v >= 45
+            ? "Neutral"
+            : "Fear-heavy";
+    fngBracket = `[ ${v} (${zone}) ]`;
+  }
+
+  const weekendBracket = weekend ? "[ ⚠️ BKK weekend ]" : "[ ✅ Pass ]";
+
+  const liqDeep = liqCapClass.tier === "safe" && spotFutVolClass.tier === 1;
+  let verdictBody: string;
+  if (dir === "long" && liqDeep && trendLabel === "BEARISH") {
+    verdictBody =
+      '"Wait for Rebound - สภาพคล่องดีมากแต่เทรนด์ระยะสั้นยังกดตัว \nแนะนำให้รอราคาข้ามยืนเหนือ EMA12 ก่อนพิจารณาเข้าเล่น"';
+  } else if (dir === "short" && liqDeep && trendLabel === "BULLISH") {
+    verdictBody =
+      '"Fade strength - สภาพคล่องลึกแต่เทรนด์สั้นยังหนุน\nรอ breakdown / ยืนใต้ EMA12 ชัดก่อนพิจารณา short"';
+  } else if (liqDeep && trendLabel === "BULLISH" && dir === "long") {
+    verdictBody = '"Trend aligned long — สภาพคล่องดี; คุมสเกลตามแผนและจุดตัดขาทุน"';
+  } else if (liqDeep && trendLabel === "BEARISH" && dir === "short") {
+    verdictBody = '"Trend aligned short — สภาพคล่องดี; ระวัง overshoot / funding"';
+  } else {
+    verdictBody =
+      dir === "long"
+        ? '"สรุปภาพรวมด้านบน — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน"'
+        : '"สรุปภาพรวมด้านบน — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน"';
+  }
+
+  const rsiLine =
+    rsiLast != null
+      ? `🔹 RSI:      [ ${rsiLast.toFixed(1)} ] ${rsiStrengthLabel(rsiLast)}`
+      : "🔹 RSI:      [ — ] (ไม่มีข้อมูล 15m พอสำหรับ RSI)";
+
+  const dirEmoji = dir === "short" ? "📉" : "📈";
+  const lines = [
+    `🔍 MARKET CHECK: ${base} / USDT ${dirEmoji}`,
+    MARKET_CHECK_DIV,
+    "🛡️ VOLUME INTEGRITY",
+    `🔹 Tier:     ${tierBracket}`,
+    `🔹 Ratio:    ${ratioBracket}`,
+    `🔹 L-Cap:    ${lcapBracket}`,
+    `▸ ${volSummary}`,
+    "",
+    "📊 MOMENTUM (15m)",
+    `🔹 Trend:    [ ${trendLabel} ] ${trendIcon}`,
+    `🔹 Price:    [ ${futPx.toFixed(1)} ] ${priceVsEma12}`,
+    `🔹 EMA Cross: ${emaCrossLine}`,
+    rsiLine,
+    `▸ ${momentumSummary}`,
+    "",
+    "⛓️ ON-CHAIN & SENTIMENT",
+    `🔹 Funding:  ${fundBracket}`,
+    `🔹 F&G Index: ${fngBracket}`,
+    `🔹 Weekend:  ${weekendBracket}`,
+    "",
+    MARKET_CHECK_DIV,
+    "📊 KOJI VERDICT:",
+    verdictBody,
+    MARKET_CHECK_DIV,
+    "Not financial advice · automated snapshot",
+  ];
+
+  return lines.join("\n");
 }

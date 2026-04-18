@@ -7,6 +7,12 @@ export type ParsedPositionChecklist = {
   leverage: number | null;
 };
 
+/** เช่น `check btc` · `check eth long` — ไม่มีเลเวอเรจ */
+export type ParsedMarketCheck = {
+  rawSymbol: string;
+  direction: PositionDirection;
+};
+
 function normalizeDirection(s: string): PositionDirection | null {
   const x = s.trim().toLowerCase();
   if (x === "short" || x === "ชอต" || x === "shot") return "short";
@@ -35,4 +41,17 @@ export function parsePositionChecklist(text: string): ParsedPositionChecklist | 
   }
 
   return { direction: dir, rawSymbol, leverage };
+}
+
+/** `check btc` · `check BTC_USDT short` — ค่าเริ่มทิศ long */
+export function parseMarketCheck(text: string): ParsedMarketCheck | null {
+  const t = text.trim();
+  if (!t) return null;
+  const m = t.match(/^check\s+(\S+)(?:\s+(long|short))?\s*$/i);
+  if (!m) return null;
+  const rawSymbol = m[1]!.trim();
+  if (!rawSymbol) return null;
+  const side = m[2]?.trim().toLowerCase();
+  const direction: PositionDirection = side === "short" ? "short" : "long";
+  return { rawSymbol, direction };
 }
