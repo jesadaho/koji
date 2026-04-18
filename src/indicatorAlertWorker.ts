@@ -2,6 +2,7 @@ import type { Client } from "@line/bot-sdk";
 import { runEma612ContractWatchAlertTick } from "./ema612ContractWatchAlertTick";
 import { fetchContractKlineForTf, type IndicatorChartTf } from "./indicatorKline";
 import { sendAlertNotification } from "./alertNotify";
+import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import { isIndicatorPublicFeedEnabled, runPublicIndicatorFeedInternal } from "./publicIndicatorFeed";
 import { emaLine, rsiWilder } from "./indicatorMath";
 import {
@@ -161,6 +162,13 @@ async function runRsiInternal(client: Client, now: number): Promise<number> {
 
     try {
       await sendAlertNotification(client, a.userId, msg);
+      if (telegramSparkSystemGroupConfigured()) {
+        try {
+          await sendTelegramPublicBroadcastMessage(msg);
+        } catch (e) {
+          console.error("[indicatorAlertWorker] RSI public group mirror", a.id, e);
+        }
+      }
       await updateIndicatorAlertAfterFire(a.id, iso, barTimeSec);
       notified += 1;
     } catch (e) {
@@ -245,6 +253,13 @@ async function runEmaCrossInternal(client: Client, now: number): Promise<number>
 
     try {
       await sendAlertNotification(client, a.userId, msg);
+      if (telegramSparkSystemGroupConfigured()) {
+        try {
+          await sendTelegramPublicBroadcastMessage(msg);
+        } catch (e) {
+          console.error("[indicatorAlertWorker] EMA public group mirror", a.id, e);
+        }
+      }
       await updateIndicatorAlertAfterFire(a.id, iso, barTimeSec);
       notified += 1;
     } catch (e) {

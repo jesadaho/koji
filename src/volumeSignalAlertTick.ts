@@ -1,6 +1,7 @@
 import type { Client } from "@line/bot-sdk";
 import { sendAlertNotification } from "./alertNotify";
 import { getTopUsdtSymbolsByAmount24 } from "./mexcMarkets";
+import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import { formatScore } from "./marketsFormat";
 import {
   loadVolumeSignalAlerts,
@@ -179,6 +180,13 @@ export async function runVolumeSignalAlertTick(client: Client): Promise<{ notifi
 
       try {
         await sendAlertNotification(client, a.userId, msg);
+        if (telegramSparkSystemGroupConfigured()) {
+          try {
+            await sendTelegramPublicBroadcastMessage(msg);
+          } catch (e) {
+            console.error("[volumeSignalAlertTick] public group mirror", a.id, e);
+          }
+        }
         await setVolumeSignalLastNotified(a.id, iso, {
           volRatio: hit.volRatio,
           returnPct: hit.returnPct,
