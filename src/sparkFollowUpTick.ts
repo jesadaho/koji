@@ -1,6 +1,10 @@
 import type { Client } from "@line/bot-sdk";
 import { sendSparkSystemAlert } from "./alertNotify";
-import { contractHasBinancePriceFallback, fetchSimplePrices, type CoinQuote } from "./cryptoService";
+import {
+  contractHasBinancePriceFallback,
+  fetchSimplePricesWithDiagnostics,
+  type CoinQuote,
+} from "./cryptoService";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import {
   loadSparkFollowUpState,
@@ -85,7 +89,8 @@ function isFollowUpComplete(cur: SparkFollowUpPending): boolean {
   );
 }
 
-const FETCH_DETAIL_MAX = 200;
+/** รายละเอียด API ในแจ้งเตือน — ยาวขึ้นเพื่อ debug (Telegram ~4k) */
+const FETCH_DETAIL_MAX = 1400;
 
 function truncateFetchDetail(s: string): string {
   const oneLine = s.replace(/\s+/g, " ").trim();
@@ -115,31 +120,50 @@ function pendingHasDueCheckpoint(p: SparkFollowUpPending, nowSec: number): boole
   return false;
 }
 
+function isValidCachedQuote(q: CoinQuote | undefined): boolean {
+  return q != null && q.usd != null && Number.isFinite(q.usd) && q.usd > 0;
+}
+
 async function usdForSymbol(
   symbol: string,
   cache: Record<string, CoinQuote>,
-  batchFailDetail?: string
+  batchMissingDiag: Record<string, string> | undefined,
+  batchFailDetail: string | undefined
 ): Promise<UsdLookupResult> {
   const q = cache[symbol];
-  if (q?.usd != null && Number.isFinite(q.usd)) {
-    return { usd: q.usd };
+  if (isValidCachedQuote(q)) {
+    return { usd: q!.usd };
   }
-  try {
-    const r = await fetchSimplePrices([symbol]);
-    Object.assign(cache, r);
-    const q2 = cache[symbol];
-    if (q2?.usd != null && Number.isFinite(q2.usd)) {
-      return { usd: q2.usd };
+
+  const pre = batchMissingDiag?.[symbol]?.trim();
+  if (pre) {
+    if (batchFailDetail?.trim()) {
+      return {
+        usd: null,
+        detailIfNull: `${truncateFetchDetail(pre)} · batch cron: ${truncateFetchDetail(batchFailDetail)}`,
+      };
     }
+    return { usd: null, detailIfNull: truncateFetchDetail(pre) };
+  }
+
+  try {
+    const { quotes, missingDetailBySymbol } = await fetchSimplePricesWithDiagnostics([symbol]);
+    Object.assign(cache, quotes);
+    const q2 = cache[symbol];
+    if (isValidCachedQuote(q2)) {
+      return { usd: q2!.usd };
+    }
+    const fromDiag = missingDetailBySymbol[symbol]?.trim();
     const base =
+      fromDiag ||
       "ไม่มีราคาใน response (MEXC/Binance ไม่คืนคู่นี้หรือทุกแหล่งว่าง)";
     if (batchFailDetail?.trim()) {
       return {
         usd: null,
-        detailIfNull: `${base} · batch ก่อนหน้า: ${truncateFetchDetail(batchFailDetail)}`,
+        detailIfNull: `${truncateFetchDetail(base)} · batch cron: ${truncateFetchDetail(batchFailDetail)}`,
       };
     }
-    return { usd: null, detailIfNull: base };
+    return { usd: null, detailIfNull: truncateFetchDetail(base) };
   } catch (e) {
     console.error("[sparkFollowUpTick] price fetch", symbol, e);
     return { usd: null, detailIfNull: formatFetchError(e) };
@@ -167,10 +191,13 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
   }
 
   let quoteCache: Record<string, CoinQuote> = {};
+  let batchMissingDiag: Record<string, string> = {};
   let batchFetchFailDetail: string | undefined;
   if (symbolsThisTick.size > 0) {
     try {
-      quoteCache = await fetchSimplePrices(Array.from(symbolsThisTick));
+      const r = await fetchSimplePricesWithDiagnostics(Array.from(symbolsThisTick));
+      quoteCache = r.quotes;
+      batchMissingDiag = r.missingDetailBySymbol;
     } catch (e) {
       console.error("[sparkFollowUpTick] batch price fetch", e);
       batchFetchFailDetail = formatFetchError(e);
@@ -188,7 +215,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
 
     const snapUsd = async (): Promise<number | null> => {
       if (rowPrice !== undefined) return rowPrice;
-      const lookup = await usdForSymbol(cur.symbol, quoteCache, batchFetchFailDetail);
+      const lookup = await usdForSymbol(cur.symbol, quoteCache, batchMissingDiag, batchFetchFailDetail);
       rowPrice = lookup.usd;
       if (
         rowPrice == null &&
@@ -239,12 +266,17 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       }
       checkpoints += 1;
 
+      /** แจ้ง T+30m เฉพาะเมื่อดึงราคาไม่สำเร็จ — ถ้ามีราคาและคำนวณผลได้แล้วไม่ส่ง (เก็บสถิติใน state อย่างเดียว) */
       if (kind === "30") {
-        const body = buildCheckpoint30mMessage(cur.symbol, cur.refPrice, endPrice, cur.sparkReturnPct, won);
-        try {
-          notifiedPushes += await sendSparkSystemAlert(client, [], body);
-        } catch (e) {
-          console.error("[sparkFollowUpTick] notify", cur.symbol, e);
+        const priceMissing =
+          endPrice == null || !Number.isFinite(endPrice) || endPrice <= 0 || won === null;
+        if (priceMissing) {
+          const body = buildCheckpoint30mMessage(cur.symbol, cur.refPrice, endPrice, cur.sparkReturnPct, won);
+          try {
+            notifiedPushes += await sendSparkSystemAlert(client, [], body);
+          } catch (e) {
+            console.error("[sparkFollowUpTick] notify", cur.symbol, e);
+          }
         }
       }
     };
