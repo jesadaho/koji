@@ -2,6 +2,8 @@ import type { Client } from "@line/bot-sdk";
 import {
   fetchBinanceUsdmKlines,
   fetchTopUsdmUsdtSymbolsByQuoteVolume,
+  isBinanceIndicatorFapiEnabled,
+  resetBinanceIndicatorFapi451LogDedupe,
   type BinanceIndicatorTf,
 } from "./binanceIndicatorKline";
 import { sendPublicIndicatorFeedToSparkGroup } from "./alertNotify";
@@ -186,6 +188,8 @@ function buildPublicEmaMessage(
 export async function runPublicIndicatorFeedInternal(_client: Client, now: number): Promise<number> {
   void _client;
   if (!isIndicatorPublicFeedEnabled()) return 0;
+  resetBinanceIndicatorFapi451LogDedupe();
+  if (!isBinanceIndicatorFapiEnabled()) return 0;
   if (!telegramSparkSystemGroupConfigured()) {
     console.warn(
       "[indicatorPublicFeed] ไม่มี TELEGRAM_BOT_TOKEN + TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID) — ข้าม public indicator feed"

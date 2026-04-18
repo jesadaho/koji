@@ -1,7 +1,44 @@
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
 
 /** Binance USDT-M perpetual — เดียวกันทั้ง ticker และ kline */
 const FAPI = "https://fapi.binance.com";
+
+/** ปิดการเรียก Binance FAPI ทั้งหมด (klines + ticker 24hr) — ใช้เมื่อโฮสต์ได้ HTTP 451 geo (เช่น Vercel us-east) */
+export function isBinanceIndicatorFapiEnabled(): boolean {
+  const raw = process.env.BINANCE_INDICATOR_FAPI_ENABLED?.trim().toLowerCase();
+  if (raw === "0" || raw === "false" || raw === "off") return false;
+  return true;
+}
+
+/** เรียกก่อนแต่ละรอบที่ดึงหลายสัญลักษณ์ — ให้ log 451 ได้ครั้งเดียวต่อรอบ */
+export function resetBinanceIndicatorFapi451LogDedupe(): void {
+  geo451LoggedThisBatch = false;
+}
+
+let geo451LoggedThisBatch = false;
+
+function isBinance451Geo(e: unknown): boolean {
+  return isAxiosError(e) && e.response?.status === 451;
+}
+
+function axiosBrief(e: unknown): string {
+  if (!isAxiosError(e)) return e instanceof Error ? e.message : String(e);
+  const st = e.response?.status;
+  const data = e.response?.data as { msg?: string } | undefined;
+  const msg = typeof data?.msg === "string" ? data.msg : e.message;
+  const tail = msg.length > 180 ? `${msg.slice(0, 180)}…` : msg;
+  return st != null ? `HTTP ${st}: ${tail}` : tail;
+}
+
+function logBinance451Once(ctx: string, sym: string): void {
+  if (geo451LoggedThisBatch) return;
+  geo451LoggedThisBatch = true;
+  console.warn(
+    `[binanceIndicatorKline] ${ctx} ${sym}: Binance FAPI HTTP 451 (geo-restricted host). ` +
+      "Set BINANCE_INDICATOR_FAPI_ENABLED=0 or deploy to a region Binance allows. " +
+      "Further 451s in this run are silent."
+  );
+}
 
 export type BinanceKlinePack = {
   close: number[];
@@ -43,6 +80,7 @@ export async function fetchBinanceUsdmKlines(
 ): Promise<BinanceKlinePack | null> {
   const sym = symbol.trim().toUpperCase();
   if (!sym) return null;
+  if (!isBinanceIndicatorFapiEnabled()) return null;
   try {
     const { data } = await axios.get<unknown[]>(`${FAPI}/fapi/v1/klines`, {
       timeout: 20_000,
@@ -54,7 +92,11 @@ export async function fetchBinanceUsdmKlines(
     });
     return parseKlineRows(data);
   } catch (e) {
-    console.error("[binanceIndicatorKline] klines", sym, e);
+    if (isBinance451Geo(e)) {
+      logBinance451Once("klines", sym);
+    } else {
+      console.error("[binanceIndicatorKline] klines", sym, axiosBrief(e));
+    }
     return null;
   }
 }
@@ -83,6 +125,7 @@ const EXCLUDED_TOP_SYMBOLS = new Set([
  */
 export async function fetchTopUsdmUsdtSymbolsByQuoteVolume(topN: number): Promise<string[]> {
   if (topN <= 0) return [];
+  if (!isBinanceIndicatorFapiEnabled()) return [];
   try {
     const { data } = await axios.get<Ticker24hRow[]>(`${FAPI}/fapi/v1/ticker/24hr`, {
       timeout: 45_000,
@@ -111,7 +154,11 @@ export async function fetchTopUsdmUsdtSymbolsByQuoteVolume(topN: number): Promis
     }
     return out;
   } catch (e) {
-    console.error("[binanceIndicatorKline] ticker 24hr", e);
+    if (isBinance451Geo(e)) {
+      logBinance451Once("ticker/24hr", "—");
+    } else {
+      console.error("[binanceIndicatorKline] ticker 24hr", axiosBrief(e));
+    }
     return [];
   }
 }
