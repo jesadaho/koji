@@ -50,22 +50,16 @@ function inCloseWindow(min: number): boolean {
   return min >= CLOSE_START && min <= CLOSE_END;
 }
 
-function buildOpenMessage(now: Date): string {
-  const timeBkk = new Intl.DateTimeFormat("en-GB", {
-    timeZone: BKK,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(now);
+function buildOpenMessage(_now: Date): string {
   return [
-    "🔔 Market Status: US Session Open",
-    "🇺🇸 Wall Street is now Active",
+    "[ 🌐 EVENT: US MARKET OPEN ]",
     "",
-    `Time: ${timeBkk} BKK (window ~19:30–20:30)`,
+    "🇺🇸 Wall Street Active",
+    "🕒 Time: 19:30 BKK",
+    "🚨 Impact: High Volatility (30–60m)",
     "",
-    "Impact: High Volatility Expected",
-    "",
-    `Koji's Note: "ระวังการสะบัดของราคาใน 30 นาทีแรก แนะนำให้รอดูทรงกราฟก่อนเข้าออเดอร์ครับ"`,
+    "🦉 Koji's Note:",
+    '"ระวังความผันผวนช่วงเปิดตลาด แนะนำรอการคอนเฟิร์มโครงสร้างราคา (Market Structure) ก่อนเทรดครับ"',
     "",
     "⚠️ Not financial advice",
   ].join("\n");
@@ -79,14 +73,14 @@ function buildCloseMessage(now: Date): string {
     hour12: false,
   }).format(now);
   return [
-    "🔔 Market Status: US Session Close Window",
-    "🇺🇸 ช่วงปิดตลาดสหรัฐฯ — มักมี rebalance / ทำราคาปิด",
+    "[ 🌐 MARKET SESSION: US CLOSE ]",
     "",
-    `Time: ${timeBkk} BKK (window ~03:00–04:00)`,
+    "🇺🇸 US Regular Close / Rebalance Window",
+    `🕒 Time: ${timeBkk} BKK (Volatility Window: 60m)`,
+    "📊 Impact: Liquidity Shift / Close Auction & Rebalance",
     "",
-    "Impact: Liquidity & Volatility — watch whipsaw / gaps",
-    "",
-    `Koji's Note: "ระวังการสะบัดและสเปรดกว้าง — โปรดจัดการขนาดออเดอร์และสต็อปครับ"`,
+    "🦉 Koji's Note:",
+    '"ระวังการสะบัดและสเปรดกว้าง — โปรดจัดการขนาดออเดอร์และสต็อปครับ"',
     "",
     "⚠️ Not financial advice",
   ].join("\n");

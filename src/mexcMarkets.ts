@@ -356,40 +356,69 @@ export async function fetchPerp15mClosesForChecklist(contractSymbol: string): Pr
   return closed.length >= 14 ? closed : null;
 }
 
+/**
+ * แปลง close[] จาก kline เป็นแท่งปิดสำหรับ EMA — ไม่ใช้ parseKlineArrays (ไม่บังคับ vol/open)
+ */
+function closedClosesForEmaFromKlineCloseArray(closeRaw: number[] | undefined): number[] | null {
+  if (!closeRaw?.length) return null;
+  const raw = closeRaw.map((c) => Number(c)).filter((c) => Number.isFinite(c) && c > 0);
+  if (raw.length < 14) return null;
+  const n = raw.length;
+  const closed = n >= 3 ? raw.slice(0, n - 1) : raw;
+  return closed.length >= 14 ? closed : null;
+}
+
+/**
+ * 1hr / 4hr สำหรับ checklist — ใช้ limit ก่อน (สอดคล้อง fetchContractKline60m) แล้วค่อย fallback start/end
+ */
 async function fetchContractKlineClosesForEmaChecklist(
   contractSymbol: string,
-  interval: "Min60" | "Min240",
-  lookbackSec: number
+  interval: "Min60" | "Min240"
 ): Promise<number[] | null> {
-  const end = Math.floor(Date.now() / 1000);
-  const start = end - lookbackSec;
-  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(contractSymbol.trim())}`;
-  try {
-    const { data } = await axios.get<KlineApiResponse>(url, {
-      timeout: 14_000,
-      params: { interval, start, end },
-    });
-    if (!data.success || !data.data) return null;
-    const k = parseKlineArrays(data.data);
-    if (!k?.close.length) return null;
-    const raw = k.close.map((c) => Number(c)).filter((c) => Number.isFinite(c) && c > 0);
-    if (raw.length < 14) return null;
-    const n = raw.length;
-    const closed = n >= 3 ? raw.slice(0, n - 1) : raw;
-    return closed.length >= 14 ? closed : null;
-  } catch {
-    return null;
-  }
+  const sym = contractSymbol.trim();
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(sym)}`;
+  const limit = interval === "Min60" ? 120 : 150;
+
+  const withLimit = async (): Promise<number[] | null> => {
+    try {
+      const { data } = await axios.get<KlineApiResponse>(url, {
+        timeout: 14_000,
+        params: { interval, limit },
+      });
+      if (!data.success || !data.data?.close?.length) return null;
+      return closedClosesForEmaFromKlineCloseArray(data.data.close);
+    } catch {
+      return null;
+    }
+  };
+
+  const withRange = async (): Promise<number[] | null> => {
+    const end = Math.floor(Date.now() / 1000);
+    const lookbackSec = interval === "Min60" ? 80 * 3600 : 40 * 24 * 3600;
+    const start = end - lookbackSec;
+    try {
+      const { data } = await axios.get<KlineApiResponse>(url, {
+        timeout: 14_000,
+        params: { interval, start, end },
+      });
+      if (!data.success || !data.data?.close?.length) return null;
+      return closedClosesForEmaFromKlineCloseArray(data.data.close);
+    } catch {
+      return null;
+    }
+  };
+
+  return (await withLimit()) ?? (await withRange());
 }
 
 /** close 1h (เก่า→ใหม่) สำหรับ EMA6/12 — ตัดแท่งท้ายที่อาจยังไม่ปิด */
 export async function fetchPerp1hClosesForChecklist(contractSymbol: string): Promise<number[] | null> {
-  return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Min60", 80 * 3600);
+  return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Min60");
 }
 
-/** close 4h — lookback ยาวพอสำหรับ EMA12 */
+/** close 4h — สำหรับ EMA12 */
 export async function fetchPerp4hClosesForChecklist(contractSymbol: string): Promise<number[] | null> {
-  return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Min240", 40 * 24 * 3600);
+  return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Min240");
 }
 
 /** แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด — return เป็น % จาก open→close */
