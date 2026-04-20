@@ -7,12 +7,14 @@ import {
   fetchContractTickerSingle,
   fetchMaxOrderContractsForSymbol,
   fetchPerp15mClosesForChecklist,
+  fetchPerp1hClosesForChecklist,
+  fetchPerp4hClosesForChecklist,
   fetchPerpHourlyClosesForNearHigh,
   fetchSpot24hrQuoteVolumeUsdt,
   fetchSpotPriceSingle,
   perpSymbolToSpotSymbol,
 } from "./mexcMarkets";
-import type { ParsedMarketCheck, ParsedPositionChecklist } from "./positionChecklistLineCommands";
+import type { ParsedMarketCheck, ParsedPositionChecklist, PositionDirection } from "./positionChecklistLineCommands";
 
 function envNum(name: string, def: number): number {
   const v = process.env[name]?.trim();
@@ -243,6 +245,10 @@ type ChecklistMarketCore = {
   closes15m: number[] | null;
   ema6: number | null;
   ema12: number | null;
+  ema6_1h: number | null;
+  ema12_1h: number | null;
+  ema6_4h: number | null;
+  ema12_4h: number | null;
   funding: number;
   basisPct: number | null;
   maxNotionalUsd: number | null;
@@ -268,14 +274,17 @@ async function loadChecklistMarketCore(
   const spotFutMajorSafeMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_MAJOR_SAFE_MAX", 80);
   const spotFutMajorCautionMax = envNum("POSITION_CHECK_SPOT_FUT_VOL_MAJOR_CAUTION_MAX", 150);
 
-  const [ticker, klineHigh, mcapUsd, pulseResult, maxOrderContracts, closes15m] = await Promise.all([
-    fetchContractTickerSingle(contractSymbol),
-    fetchPerpHourlyClosesForNearHigh(contractSymbol),
-    fetchCoinGeckoMarketCapUsd(base),
-    fetchMarketPulseData().catch((e: unknown) => ({ error: e })),
-    fetchMaxOrderContractsForSymbol(contractSymbol),
-    fetchPerp15mClosesForChecklist(contractSymbol),
-  ]);
+  const [ticker, klineHigh, mcapUsd, pulseResult, maxOrderContracts, closes15m, closes1h, closes4h] =
+    await Promise.all([
+      fetchContractTickerSingle(contractSymbol),
+      fetchPerpHourlyClosesForNearHigh(contractSymbol),
+      fetchCoinGeckoMarketCapUsd(base),
+      fetchMarketPulseData().catch((e: unknown) => ({ error: e })),
+      fetchMaxOrderContractsForSymbol(contractSymbol),
+      fetchPerp15mClosesForChecklist(contractSymbol),
+      fetchPerp1hClosesForChecklist(contractSymbol),
+      fetchPerp4hClosesForChecklist(contractSymbol),
+    ]);
 
   if (!ticker?.lastPrice || typeof ticker.lastPrice !== "number" || ticker.lastPrice <= 0) {
     return { ok: false, message: `ดึงข้อมูลสัญญา ${contractSymbol} ไม่สำเร็จ — ลองใหม่ภายหลัง` };
@@ -321,6 +330,10 @@ async function loadChecklistMarketCore(
 
   const ema6 = closes15m ? computeEmaLast(closes15m, 6) : null;
   const ema12 = closes15m ? computeEmaLast(closes15m, 12) : null;
+  const ema6_1h = closes1h ? computeEmaLast(closes1h, 6) : null;
+  const ema12_1h = closes1h ? computeEmaLast(closes1h, 12) : null;
+  const ema6_4h = closes4h ? computeEmaLast(closes4h, 6) : null;
+  const ema12_4h = closes4h ? computeEmaLast(closes4h, 12) : null;
 
   return {
     ok: true,
@@ -337,6 +350,10 @@ async function loadChecklistMarketCore(
       closes15m,
       ema6,
       ema12,
+      ema6_1h,
+      ema12_1h,
+      ema6_4h,
+      ema12_4h,
       funding,
       basisPct,
       maxNotionalUsd,
@@ -932,13 +949,190 @@ function fundingBiasLabel(pct: number): string {
   return "(Neutral)";
 }
 
+type CheckEmaMomentumTf = "15m" | "1hr" | "4hr";
+
+type EmaMomentumSnapshot = {
+  trendLabel: "BEARISH" | "BULLISH" | "MIXED" | "NEUTRAL";
+  trendIcon: string;
+  priceVsEma12: string;
+  emaCrossLine: string;
+  summary: string;
+};
+
+function snapshotMarketCheckMomentum(
+  futPx: number,
+  ema6: number | null,
+  ema12: number | null,
+  tf: CheckEmaMomentumTf
+): EmaMomentumSnapshot {
+  let trendLabel: EmaMomentumSnapshot["trendLabel"] = "NEUTRAL";
+  let trendIcon = "➖";
+  let priceVsEma12 = "(ข้อมูล EMA ไม่พร้อม)";
+  let emaCrossLine = "[ — ]";
+
+  if (ema6 != null && ema12 != null) {
+    emaCrossLine =
+      ema6 < ema12
+        ? "[ Dead Cross ] (6 < 12)"
+        : ema6 > ema12
+          ? "[ Golden Cross ] (6 > 12)"
+          : "[ Flat ] (6 = 12)";
+    if (futPx < ema12) {
+      priceVsEma12 = "(Under EMA12)";
+      trendLabel = ema6 <= ema12 ? "BEARISH" : "MIXED";
+      trendIcon = ema6 <= ema12 ? "📉" : "⚖️";
+    } else if (futPx > ema12) {
+      priceVsEma12 = "(Over EMA12)";
+      trendLabel = ema6 >= ema12 ? "BULLISH" : "MIXED";
+      trendIcon = ema6 >= ema12 ? "📈" : "⚖️";
+    } else {
+      priceVsEma12 = "(At EMA12)";
+    }
+  }
+
+  const scope =
+    tf === "15m" ? "ระยะสั้น (15m)" : tf === "1hr" ? "ระยะ 1 ชม." : "ระยะ 4 ชม.";
+  let summary = "สรุป: รอข้อมูล EMA";
+  if (ema6 != null && ema12 != null) {
+    if (trendLabel === "BEARISH") summary = `สรุป (${scope}): เสียทรงขาขึ้น — แรงซื้อยังไม่กลับมา`;
+    else if (trendLabel === "BULLISH") summary = `สรุป (${scope}): โมเมนตัมขาขึ้น — แรงซื้อนำ`;
+    else if (trendLabel === "MIXED") summary = `สรุป (${scope}): ยังไม่ชัด — รอยืนยันทิศ`;
+    else summary = `สรุป (${scope}): ราคาแนบ EMA — รอทิศชัด`;
+  }
+
+  return { trendLabel, trendIcon, priceVsEma12, emaCrossLine, summary };
+}
+
+/** เทียบ Trend กับเป้า Long / Short ของคำสั่ง */
+function lineVsDirectionTarget(dir: PositionDirection, snap: EmaMomentumSnapshot): string {
+  const { trendLabel } = snap;
+  const target = dir === "long" ? "Long" : "Short";
+  if (trendLabel === "BULLISH") {
+    if (dir === "long") return `🔹 vs เป้า ${target}: ✅ โครงสร้างหนุน long`;
+    return `🔹 vs เป้า ${target}: ⚠️ ทิศสั้นสวน short — ระวัง squeeze`;
+  }
+  if (trendLabel === "BEARISH") {
+    if (dir === "short") return `🔹 vs เป้า ${target}: ✅ โครงสร้างหนุน short`;
+    return `🔹 vs เป้า ${target}: ⚠️ ทิศสั้นสวน long — รอ rebound / ยืนเหนือ EMA`;
+  }
+  if (trendLabel === "MIXED") return `🔹 vs เป้า ${target}: ➖ ยังไม่ชัด — ไม่จับทิศชัด`;
+  return `🔹 vs เป้า ${target}: ➖ แนบ EMA / พักตัว`;
+}
+
+function linesMarketCheckMomentumTf(
+  tfLabel: CheckEmaMomentumTf,
+  futPx: number,
+  ema6: number | null,
+  ema12: number | null,
+  rsiLine: string | null,
+  dir: PositionDirection
+): string[] {
+  const snap = snapshotMarketCheckMomentum(futPx, ema6, ema12, tfLabel);
+  const header =
+    tfLabel === "15m"
+      ? "📊 MOMENTUM (15m · EMA6/12 · RSI)"
+      : tfLabel === "1hr"
+        ? "📊 MOMENTUM (1hr · EMA6/12)"
+        : "📊 MOMENTUM (4hr · EMA6/12)";
+
+  if (ema6 == null || ema12 == null) {
+    const miss =
+      tfLabel === "15m"
+        ? "ไม่มีข้อมูล kline 15m เพียงพอ"
+        : tfLabel === "1hr"
+          ? "ไม่มีข้อมูล kline 1hr เพียงพอ"
+          : "ไม่มีข้อมูล kline 4hr เพียงพอ";
+    return [header, `🔹 Trend:    [ — ] (${miss})`];
+  }
+
+  const out = [
+    header,
+    `🔹 Trend:    [ ${snap.trendLabel} ] ${snap.trendIcon}`,
+    `🔹 Price:    [ ${futPx.toFixed(1)} ] ${snap.priceVsEma12}`,
+    `🔹 EMA Cross: ${snap.emaCrossLine}`,
+  ];
+  if (rsiLine) out.push(rsiLine);
+  out.push(lineVsDirectionTarget(dir, snap));
+  out.push(`▸ ${snap.summary}`);
+  return out;
+}
+
+function tfQuickVsTargetEmoji(dir: PositionDirection, t: EmaMomentumSnapshot["trendLabel"]): string {
+  if (dir === "long") {
+    if (t === "BULLISH") return "✅";
+    if (t === "BEARISH") return "⚠️";
+    return "➖";
+  }
+  if (t === "BEARISH") return "✅";
+  if (t === "BULLISH") return "⚠️";
+  return "➖";
+}
+
+function buildMarketCheckVerdictBody(
+  dir: PositionDirection,
+  liqDeep: boolean,
+  s15: EmaMomentumSnapshot,
+  s1h: EmaMomentumSnapshot,
+  s4h: EmaMomentumSnapshot
+): string {
+  const t15 = s15.trendLabel;
+  const t1h = s1h.trendLabel;
+  const t4 = s4h.trendLabel;
+
+  const bullishCount = [t15, t1h, t4].filter((x) => x === "BULLISH").length;
+  const bearishCount = [t15, t1h, t4].filter((x) => x === "BEARISH").length;
+
+  if (dir === "long") {
+    if (liqDeep && t15 === "BEARISH" && (t1h === "BULLISH" || t4 === "BULLISH")) {
+      return '"Wait for Rebound - สภาพคล่องดีมากแต่ 15m ยังกด · 1hr/4hr บางส่วนยังหนุน long\nแนะนำรอราคายืนเหนือ EMA12 (15m) หรือสอดคล้องทุก TF ก่อน"';
+    }
+    if (liqDeep && bullishCount >= 2 && t4 === "BULLISH" && t15 === "BULLISH") {
+      return '"Trend aligned long — สั้นและใหญ่ (15m·4hr) หนุน; คุมสเกลและจุดตัดขาทุน"';
+    }
+    if (liqDeep && bullishCount >= 2 && t15 === "BULLISH") {
+      return '"Trend aligned long — สภาพคล่องดี; โครงสร้างหลาย TF หนุน long"';
+    }
+    if (liqDeep && t15 === "BEARISH") {
+      return '"Wait for Rebound - สภาพคล่องดีมากแต่เทรนด์ 15m ยังกดตัว \nแนะนำให้รอราคาข้ามยืนเหนือ EMA12 ก่อนพิจารณาเข้าเล่น"';
+    }
+    if (liqDeep && t15 === "BULLISH" && bearishCount >= 2) {
+      return '"สั้นหนุน long แต่ 1hr/4hr บางส่วนยังกด — ระวัง mean reversion / ลดไม้"';
+    }
+    if (liqDeep && t15 === "BULLISH") {
+      return '"Trend aligned long — สภาพคล่องดี; คุมสเกลตามแผนและจุดตัดขาทุน"';
+    }
+    return '"สรุปภาพรวมด้านบน — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน"';
+  }
+
+  // short
+  if (liqDeep && t15 === "BULLISH" && (t1h === "BEARISH" || t4 === "BEARISH")) {
+    return '"Fade strength - สภาพคล่องลึกแต่ 15m ยังแรง · ใหญ่บางส่วนเริ่มกด\nรอ breakdown / ยืนใต้ EMA ชัดก่อนพิจารณา short"';
+  }
+  if (liqDeep && bearishCount >= 2 && t4 === "BEARISH" && t15 === "BEARISH") {
+    return '"Trend aligned short — สั้นและใหญ่หนุน short; ระวัง overshoot / funding"';
+  }
+  if (liqDeep && bearishCount >= 2 && t15 === "BEARISH") {
+    return '"Trend aligned short — สภาพคล่องดี; โครงสร้างหลาย TF หนุน short"';
+  }
+  if (liqDeep && t15 === "BULLISH") {
+    return '"Fade strength - สภาพคล่องลึกแต่เทรนด์สั้นยังหนุน\nรอ breakdown / ยืนใต้ EMA12 ชัดก่อนพิจารณา short"';
+  }
+  if (liqDeep && t15 === "BEARISH" && bullishCount >= 2) {
+    return '"สั้นหนุน short แต่ 1hr/4hr บางส่วนยังแรง — ระวัง rebound"';
+  }
+  if (liqDeep && t15 === "BEARISH") {
+    return '"Trend aligned short — สภาพคล่องดี; ระวัง overshoot / funding"';
+  }
+  return '"สรุปภาพรวมด้านบน — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน"';
+}
+
 /**
- * คำสั่ง `check btc` / `check eth long` — สรุปสภาพคล่อง + โมเมนตัม 15m + on-chain แบบย่อ
+ * คำสั่ง `check btc` · `check eth long` · `check sol short` — สภาพคล่อง + โมเมนตัม 15m/1hr/4hr (เทียบ long/short) + on-chain
  */
 export async function buildMarketCheckMessage(parsed: ParsedMarketCheck): Promise<string> {
   const resolved = resolveContractSymbol(parsed.rawSymbol);
   if (!resolved) {
-    return "ไม่รู้จักคู่นี้ — ลองเช่น check btc หรือ check ETH_USDT short";
+    return "ไม่รู้จักคู่นี้ — ลองเช่น check btc · check eth long · check BTC_USDT short";
   }
   const { contractSymbol, label: base } = resolved;
   const dir = parsed.direction;
@@ -948,10 +1142,12 @@ export async function buildMarketCheckMessage(parsed: ParsedMarketCheck): Promis
   const c = loaded.core;
   const {
     futPx,
-    amount24,
-    spotQuoteVol24,
     ema6,
     ema12,
+    ema6_1h,
+    ema12_1h,
+    ema6_4h,
+    ema12_4h,
     funding,
     closes15m,
     liqCapClass,
@@ -969,31 +1165,9 @@ export async function buildMarketCheckMessage(parsed: ParsedMarketCheck): Promis
     if (typeof v === "number" && Number.isFinite(v)) rsiLast = v;
   }
 
-  let trendLabel = "NEUTRAL";
-  let trendIcon = "➖";
-  let priceVsEma12 = "(ข้อมูล EMA ไม่พร้อม)";
-  if (ema6 != null && ema12 != null) {
-    if (futPx < ema12) {
-      priceVsEma12 = "(Under EMA12)";
-      trendLabel = ema6 <= ema12 ? "BEARISH" : "MIXED";
-      trendIcon = ema6 <= ema12 ? "📉" : "⚖️";
-    } else if (futPx > ema12) {
-      priceVsEma12 = "(Over EMA12)";
-      trendLabel = ema6 >= ema12 ? "BULLISH" : "MIXED";
-      trendIcon = ema6 >= ema12 ? "📈" : "⚖️";
-    } else {
-      priceVsEma12 = "(At EMA12)";
-    }
-  }
-
-  const emaCrossLine =
-    ema6 != null && ema12 != null
-      ? ema6 < ema12
-        ? "[ Dead Cross ] (6 < 12)"
-        : ema6 > ema12
-          ? "[ Golden Cross ] (6 > 12)"
-          : "[ Flat ] (6 = 12)"
-      : "[ — ]";
+  const snap15 = snapshotMarketCheckMomentum(futPx, ema6, ema12, "15m");
+  const snap1h = snapshotMarketCheckMomentum(futPx, ema6_1h, ema12_1h, "1hr");
+  const snap4h = snapshotMarketCheckMomentum(futPx, ema6_4h, ema12_4h, "4hr");
 
   const R = spotFutVolClass.ratio;
   const rDisp =
@@ -1020,14 +1194,7 @@ export async function buildMarketCheckMessage(parsed: ParsedMarketCheck): Promis
       ? "สรุป: สภาพคล่องมหาศาล เล่นได้ทุกขนาดไม้ ไม่มีความเสี่ยงเรื่องกรง"
       : spotFutVolClass.tier !== "unknown" && typeof spotFutVolClass.tier === "number" && spotFutVolClass.tier >= 3
         ? "สรุป: Fut÷Spot หรือ L-Cap อยู่ในโซนเสี่ยง — ลดไม้ / ระวังสวน"
-        : "สรุป: สภาพคล่องอยู่ในเกณฑ์รับได้ — ดูทิศ 15m ประกอบ";
-
-  let momentumSummary = "สรุป: รอข้อมูล EMA 15m";
-  if (ema6 != null && ema12 != null) {
-    if (trendLabel === "BEARISH") momentumSummary = "สรุป: ระยะสั้นเสียทรงขาขึ้น แรงซื้อยังไม่กลับมา";
-    else if (trendLabel === "BULLISH") momentumSummary = "สรุป: ระยะสั้นโมเมนตัมขาขึ้น แรงซื้อนำ";
-    else momentumSummary = "สรุป: ระยะสั้นยังไม่ชัด — รอยืนยันทิศ";
-  }
+        : "สรุป: สภาพคล่องอยู่ในเกณฑ์รับได้ — ดูทิศ 15m / 1hr / 4hr ประกอบ";
 
   const fp = fundingPct(funding);
   const fundBracket = `[ ${fp >= 0 ? "+" : ""}${fp.toFixed(4)}% ] ${fundingBiasLabel(fp)}`;
@@ -1050,32 +1217,30 @@ export async function buildMarketCheckMessage(parsed: ParsedMarketCheck): Promis
   const weekendBracket = weekend ? "[ ⚠️ BKK weekend ]" : "[ ✅ Pass ]";
 
   const liqDeep = liqCapClass.tier === "safe" && spotFutVolClass.tier === 1;
-  let verdictBody: string;
-  if (dir === "long" && liqDeep && trendLabel === "BEARISH") {
-    verdictBody =
-      '"Wait for Rebound - สภาพคล่องดีมากแต่เทรนด์ระยะสั้นยังกดตัว \nแนะนำให้รอราคาข้ามยืนเหนือ EMA12 ก่อนพิจารณาเข้าเล่น"';
-  } else if (dir === "short" && liqDeep && trendLabel === "BULLISH") {
-    verdictBody =
-      '"Fade strength - สภาพคล่องลึกแต่เทรนด์สั้นยังหนุน\nรอ breakdown / ยืนใต้ EMA12 ชัดก่อนพิจารณา short"';
-  } else if (liqDeep && trendLabel === "BULLISH" && dir === "long") {
-    verdictBody = '"Trend aligned long — สภาพคล่องดี; คุมสเกลตามแผนและจุดตัดขาทุน"';
-  } else if (liqDeep && trendLabel === "BEARISH" && dir === "short") {
-    verdictBody = '"Trend aligned short — สภาพคล่องดี; ระวัง overshoot / funding"';
-  } else {
-    verdictBody =
-      dir === "long"
-        ? '"สรุปภาพรวมด้านบน — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน"'
-        : '"สรุปภาพรวมด้านบน — ใช้เป็นแนวทาง ไม่ใช่คำแนะนำลงทุน"';
-  }
+  const verdictBody = buildMarketCheckVerdictBody(dir, liqDeep, snap15, snap1h, snap4h);
 
   const rsiLine =
     rsiLast != null
       ? `🔹 RSI:      [ ${rsiLast.toFixed(1)} ] ${rsiStrengthLabel(rsiLast)}`
       : "🔹 RSI:      [ — ] (ไม่มีข้อมูล 15m พอสำหรับ RSI)";
 
+  const momentumSection = [
+    ...linesMarketCheckMomentumTf("15m", futPx, ema6, ema12, rsiLine, dir),
+    "",
+    ...linesMarketCheckMomentumTf("1hr", futPx, ema6_1h, ema12_1h, null, dir),
+    "",
+    ...linesMarketCheckMomentumTf("4hr", futPx, ema6_4h, ema12_4h, null, dir),
+  ];
+
+  const quickVsLine = `🎯 Quick vs เป้า ${dir === "short" ? "SHORT" : "LONG"}: 15m ${tfQuickVsTargetEmoji(
+    dir,
+    snap15.trendLabel
+  )} · 1hr ${tfQuickVsTargetEmoji(dir, snap1h.trendLabel)} · 4hr ${tfQuickVsTargetEmoji(dir, snap4h.trendLabel)}  (✅=หนุนเป้า · ⚠️=สวน · ➖=ไม่ชัด)`;
+
   const dirEmoji = dir === "short" ? "📉" : "📈";
+  const dirLabel = dir === "short" ? "SHORT" : "LONG";
   const lines = [
-    `🔍 MARKET CHECK: ${base} / USDT ${dirEmoji}`,
+    `🔍 MARKET CHECK: ${base} / USDT · เป้า: ${dirLabel} ${dirEmoji}`,
     MARKET_CHECK_DIV,
     "🛡️ VOLUME INTEGRITY",
     `🔹 Tier:     ${tierBracket}`,
@@ -1083,12 +1248,9 @@ export async function buildMarketCheckMessage(parsed: ParsedMarketCheck): Promis
     `🔹 L-Cap:    ${lcapBracket}`,
     `▸ ${volSummary}`,
     "",
-    "📊 MOMENTUM (15m)",
-    `🔹 Trend:    [ ${trendLabel} ] ${trendIcon}`,
-    `🔹 Price:    [ ${futPx.toFixed(1)} ] ${priceVsEma12}`,
-    `🔹 EMA Cross: ${emaCrossLine}`,
-    rsiLine,
-    `▸ ${momentumSummary}`,
+    ...momentumSection,
+    "",
+    quickVsLine,
     "",
     "⛓️ ON-CHAIN & SENTIMENT",
     `🔹 Funding:  ${fundBracket}`,

@@ -43,15 +43,15 @@ export function parsePositionChecklist(text: string): ParsedPositionChecklist | 
   return { direction: dir, rawSymbol, leverage };
 }
 
-/** `check btc` · `check BTC_USDT short` — ค่าเริ่มทิศ long */
+/** `check btc` · `check btc long` · `check BTC_USDT short` · `check eth ชอต` — ค่าเริ่มทิศ long */
 export function parseMarketCheck(text: string): ParsedMarketCheck | null {
   const t = text.trim();
   if (!t) return null;
-  const m = t.match(/^check\s+(\S+)(?:\s+(long|short))?\s*$/i);
+  const m = t.match(/^check\s+(\S+)(?:\s+(long|short|ชอต))?\s*$/i);
   if (!m) return null;
   const rawSymbol = m[1]!.trim();
   if (!rawSymbol) return null;
   const side = m[2]?.trim().toLowerCase();
-  const direction: PositionDirection = side === "short" ? "short" : "long";
+  const direction: PositionDirection = side === "short" || side === "ชอต" ? "short" : "long";
   return { rawSymbol, direction };
 }

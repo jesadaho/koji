@@ -356,6 +356,42 @@ export async function fetchPerp15mClosesForChecklist(contractSymbol: string): Pr
   return closed.length >= 14 ? closed : null;
 }
 
+async function fetchContractKlineClosesForEmaChecklist(
+  contractSymbol: string,
+  interval: "Min60" | "Min240",
+  lookbackSec: number
+): Promise<number[] | null> {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - lookbackSec;
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(contractSymbol.trim())}`;
+  try {
+    const { data } = await axios.get<KlineApiResponse>(url, {
+      timeout: 14_000,
+      params: { interval, start, end },
+    });
+    if (!data.success || !data.data) return null;
+    const k = parseKlineArrays(data.data);
+    if (!k?.close.length) return null;
+    const raw = k.close.map((c) => Number(c)).filter((c) => Number.isFinite(c) && c > 0);
+    if (raw.length < 14) return null;
+    const n = raw.length;
+    const closed = n >= 3 ? raw.slice(0, n - 1) : raw;
+    return closed.length >= 14 ? closed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** close 1h (เก่า→ใหม่) สำหรับ EMA6/12 — ตัดแท่งท้ายที่อาจยังไม่ปิด */
+export async function fetchPerp1hClosesForChecklist(contractSymbol: string): Promise<number[] | null> {
+  return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Min60", 80 * 3600);
+}
+
+/** close 4h — lookback ยาวพอสำหรับ EMA12 */
+export async function fetchPerp4hClosesForChecklist(contractSymbol: string): Promise<number[] | null> {
+  return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Min240", 40 * 24 * 3600);
+}
+
 /** แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด — return เป็น % จาก open→close */
 export type LastClosed15mBarResult = {
   returnPct: number;
