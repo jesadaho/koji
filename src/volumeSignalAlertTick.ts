@@ -11,6 +11,28 @@ import {
 } from "./volumeSignalAlertsStore";
 import { computeVolumeSpikeRatio, fetchContractKlineVolumeSignal } from "./volumeSignalKline";
 
+function parseNonNegativeEnv(key: string): number | null {
+  const raw = process.env[key]?.trim();
+  if (raw === undefined || raw === "") return null;
+  const v = Number(raw);
+  if (!Number.isFinite(v) || v < 0) return null;
+  return v;
+}
+
+/**
+ * |momentumScore| ขั้นต่ำตาม TF — ใช้ VOLUME_SIGNAL_MIN_ABS_MOMENTUM_1H / _4H ถ้าตั้ง;
+ * ไม่เช่นนั้น fallback VOLUME_SIGNAL_MIN_ABS_MOMENTUM (เดิมใช้ร่วมกันทั้งคู่)
+ */
+export function minAbsMomentumForTimeframe(tf: VolumeSignalTimeframe): number {
+  const specific =
+    tf === "1h"
+      ? parseNonNegativeEnv("VOLUME_SIGNAL_MIN_ABS_MOMENTUM_1H")
+      : parseNonNegativeEnv("VOLUME_SIGNAL_MIN_ABS_MOMENTUM_4H");
+  if (specific !== null) return specific;
+  const v = Number(process.env.VOLUME_SIGNAL_MIN_ABS_MOMENTUM?.trim());
+  return Number.isFinite(v) && v >= 0 ? v : 0;
+}
+
 const TOP_N = 30;
 
 function minVolRatio(): number {
@@ -26,12 +48,6 @@ function cooldownMs(): number {
 /** เฟส 2: |% เปลี่ยนราคาแท่ง| ขั้นต่ำ — 0 = ปิดเกณฑ์นี้ */
 function minAbsReturnPctEnv(): number {
   const v = Number(process.env.VOLUME_SIGNAL_MIN_ABS_RETURN_PCT);
-  return Number.isFinite(v) && v >= 0 ? v : 0;
-}
-
-/** เฟส 2: |momentumScore| ขั้นต่ำ — 0 = ปิด */
-function minAbsMomentumEnv(): number {
-  const v = Number(process.env.VOLUME_SIGNAL_MIN_ABS_MOMENTUM);
   return Number.isFinite(v) && v >= 0 ? v : 0;
 }
 
@@ -79,7 +95,7 @@ function passesQualityGates(hit: Hit, a: VolumeSignalAlert): boolean {
   const minRet = effectiveMinAbsReturnPct(a);
   if (minRet > 0 && Math.abs(hit.returnPct) < minRet) return false;
 
-  const minMom = minAbsMomentumEnv();
+  const minMom = minAbsMomentumForTimeframe(a.timeframe);
   if (minMom > 0 && Math.abs(hit.momentumScore) < minMom) return false;
 
   return true;
@@ -100,7 +116,7 @@ function buildVolumeSignalLineMessage(
   const dir = directionEmoji(hit.returnPct);
   const minV = effectiveMinVolRatio(a);
   const minRet = effectiveMinAbsReturnPct(a);
-  const momFloor = minAbsMomentumEnv();
+  const momFloor = minAbsMomentumForTimeframe(a.timeframe);
 
   const lines = [
     `📊 Koji — Volume + Momentum (Top ${TOP_N} vol)`,
@@ -215,6 +231,14 @@ export function getVolumeSignalMinAbsReturnPctDisplay(): number {
   return minAbsReturnPctEnv();
 }
 
+/** ค่าเริ่มของ 1h หลัง fallback (เข้ากันกับ LIFF เดิมที่ใช้ฟิลด์เดียว) */
 export function getVolumeSignalMinAbsMomentumDisplay(): number {
-  return minAbsMomentumEnv();
+  return minAbsMomentumForTimeframe("1h");
+}
+
+export function getVolumeSignalMinAbsMomentumByTfDisplay(): Record<VolumeSignalTimeframe, number> {
+  return {
+    "1h": minAbsMomentumForTimeframe("1h"),
+    "4h": minAbsMomentumForTimeframe("4h"),
+  };
 }

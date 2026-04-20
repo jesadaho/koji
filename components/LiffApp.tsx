@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import IndicatorCoinPicker from "@/components/IndicatorCoinPicker";
+import { formatScore } from "@/src/marketsFormat";
 import {
   getTelegramInitData,
   getTelegramMiniAppDisplayName,
@@ -191,6 +192,7 @@ export default function LiffApp() {
     minVolRatio: number;
     minAbsReturnPct: number;
     minAbsMomentum: number;
+    minAbsMomentumByTf: { "1h": number; "4h": number };
     cooldownMs: number;
     maxAlertsPerUser: number;
   } | null>(null);
@@ -285,14 +287,21 @@ export default function LiffApp() {
       minVolRatio?: number;
       minAbsReturnPct?: number;
       minAbsMomentum?: number;
+      minAbsMomentumByTf?: { "1h"?: number; "4h"?: number };
       cooldownMs?: number;
       maxAlertsPerUser?: number;
+    };
+    const byTf = data.minAbsMomentumByTf;
+    const minAbsMomentumByTf = {
+      "1h": typeof byTf?.["1h"] === "number" ? byTf["1h"] : typeof data.minAbsMomentum === "number" ? data.minAbsMomentum : 0,
+      "4h": typeof byTf?.["4h"] === "number" ? byTf["4h"] : typeof data.minAbsMomentum === "number" ? data.minAbsMomentum : 0,
     };
     setVolMeta({
       topSymbols: Array.isArray(data.topSymbols) ? data.topSymbols : [],
       minVolRatio: typeof data.minVolRatio === "number" ? data.minVolRatio : 3,
       minAbsReturnPct: typeof data.minAbsReturnPct === "number" ? data.minAbsReturnPct : 0,
-      minAbsMomentum: typeof data.minAbsMomentum === "number" ? data.minAbsMomentum : 0,
+      minAbsMomentum: typeof data.minAbsMomentum === "number" ? data.minAbsMomentum : minAbsMomentumByTf["1h"],
+      minAbsMomentumByTf,
       cooldownMs: typeof data.cooldownMs === "number" ? data.cooldownMs : 4 * 3600 * 1000,
       maxAlertsPerUser: typeof data.maxAlertsPerUser === "number" ? data.maxAlertsPerUser : 10,
     });
@@ -1006,6 +1015,13 @@ export default function LiffApp() {
                 <p style={{ margin: "0 0 0.45rem" }}>
                   <strong>Vol</strong> (Top 30 vol 24h): ratio เริ่มต้น ≥ {volMeta.minVolRatio.toFixed(2)}× · สูงสุด{" "}
                   {volMeta.maxAlertsPerUser} รายการ/คน · cooldown ~{Math.round(volMeta.cooldownMs / 3600000)} ชม.
+                  {(volMeta.minAbsMomentumByTf["1h"] > 0 || volMeta.minAbsMomentumByTf["4h"] > 0) && (
+                    <>
+                      {" "}
+                      · |momentum score| ขั้นต่ำ 1h ≥ {formatScore(volMeta.minAbsMomentumByTf["1h"])} · 4h ≥{" "}
+                      {formatScore(volMeta.minAbsMomentumByTf["4h"])}
+                    </>
+                  )}
                 </p>
               ) : null}
               {techMeta ? (

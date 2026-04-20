@@ -39,6 +39,7 @@ import {
 import { getIndicatorCooldownMsDisplay } from "./indicatorAlertWorker";
 import {
   getVolumeSignalCooldownMsDisplay,
+  getVolumeSignalMinAbsMomentumByTfDisplay,
   getVolumeSignalMinAbsMomentumDisplay,
   getVolumeSignalMinAbsReturnPctDisplay,
   getVolumeSignalMinVolRatioDisplay,
@@ -276,22 +277,26 @@ export async function liffListVolumeSignalAlerts(userId: string) {
 export async function liffGetVolumeSignalMeta() {
   try {
     const topSymbols = await getTopUsdtSymbolsByAmount24(VOLUME_SIGNAL_TOP_N);
+    const minAbsMomentumByTf = getVolumeSignalMinAbsMomentumByTfDisplay();
     return {
       topSymbols,
       topN: VOLUME_SIGNAL_TOP_N,
       minVolRatio: getVolumeSignalMinVolRatioDisplay(),
       minAbsReturnPct: getVolumeSignalMinAbsReturnPctDisplay(),
       minAbsMomentum: getVolumeSignalMinAbsMomentumDisplay(),
+      minAbsMomentumByTf,
       cooldownMs: getVolumeSignalCooldownMsDisplay(),
       maxAlertsPerUser: MAX_VOLUME_SIGNAL_ALERTS_PER_USER,
     };
   } catch {
+    const minAbsMomentumByTf = getVolumeSignalMinAbsMomentumByTfDisplay();
     return {
       topSymbols: [] as string[],
       topN: VOLUME_SIGNAL_TOP_N,
       minVolRatio: getVolumeSignalMinVolRatioDisplay(),
       minAbsReturnPct: getVolumeSignalMinAbsReturnPctDisplay(),
       minAbsMomentum: getVolumeSignalMinAbsMomentumDisplay(),
+      minAbsMomentumByTf,
       cooldownMs: getVolumeSignalCooldownMsDisplay(),
       maxAlertsPerUser: MAX_VOLUME_SIGNAL_ALERTS_PER_USER,
     };
