@@ -23,6 +23,14 @@
     {
       "path": "/api/cron/market-pulse",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/upcoming-events",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/upcoming-events-weekly",
+      "schedule": "0 0 * * 1"
     }
   ]
 }

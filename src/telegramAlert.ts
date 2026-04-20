@@ -24,7 +24,13 @@ export function resolvePublicBroadcastChatId(): string | undefined {
 }
 
 /** ชนิดแจ้งเตือนกลุ่มสาธารณะ → Forum topic คนละหัวข้อ (เมื่อตั้ง env แยก) */
-export type PublicBroadcastKind = "spark" | "condition" | "technical";
+export type PublicBroadcastKind =
+  | "spark"
+  | "condition"
+  | "technical"
+  | "events_weekly"
+  | "events_pre"
+  | "events_result";
 
 function parsePositiveIntegerMessageThreadId(raw: string | undefined): number | undefined {
   if (!raw?.trim()) return undefined;
@@ -41,14 +47,24 @@ export function resolvePublicBroadcastMessageThreadId(): number | undefined {
 /**
  * topic ตามชนิดสัญญาณ → ถ้าไม่ตั้ง TELEGRAM_PUBLIC_*_MESSAGE_THREAD_ID ของชนิดนั้น ใช้ TELEGRAM_PUBLIC_MESSAGE_THREAD_ID
  */
+const KIND_TO_THREAD_ENV: Record<PublicBroadcastKind, string> = {
+  spark: "TELEGRAM_PUBLIC_SPARK_MESSAGE_THREAD_ID",
+  condition: "TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID",
+  technical: "TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID",
+  events_weekly: "TELEGRAM_PUBLIC_EVENTS_WEEKLY_MESSAGE_THREAD_ID",
+  events_pre: "TELEGRAM_PUBLIC_EVENTS_PRE_MESSAGE_THREAD_ID",
+  events_result: "TELEGRAM_PUBLIC_EVENTS_RESULT_MESSAGE_THREAD_ID",
+};
+
 export function resolvePublicBroadcastMessageThreadIdForKind(kind: PublicBroadcastKind): number | undefined {
-  const envKey: Record<PublicBroadcastKind, string> = {
-    spark: "TELEGRAM_PUBLIC_SPARK_MESSAGE_THREAD_ID",
-    condition: "TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID",
-    technical: "TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID",
-  };
-  const specific = parsePositiveIntegerMessageThreadId(process.env[envKey[kind]]);
+  const specific = parsePositiveIntegerMessageThreadId(process.env[KIND_TO_THREAD_ENV[kind]]);
   if (specific != null) return specific;
+  if (kind === "events_result") {
+    return (
+      parsePositiveIntegerMessageThreadId(process.env.TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID) ??
+      resolvePublicBroadcastMessageThreadId()
+    );
+  }
   return resolvePublicBroadcastMessageThreadId();
 }
 

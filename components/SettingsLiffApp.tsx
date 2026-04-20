@@ -205,6 +205,10 @@ export default function SettingsLiffApp() {
           |
         </span>
         <Link href="/spark-stats">สถิติ Spark · Matrix</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/upcoming-events">ปฏิทินเหตุการณ์</Link>
       </p>
 
       <div className="card">
@@ -218,6 +222,12 @@ export default function SettingsLiffApp() {
           Spark: <code>TELEGRAM_PUBLIC_SPARK_MESSAGE_THREAD_ID</code>
           {"; "}
           เทคนิค: <code>TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID</code>
+          {"; "}
+          Events weekly: <code>TELEGRAM_PUBLIC_EVENTS_WEEKLY_MESSAGE_THREAD_ID</code>
+          {"; "}
+          Pre-event: <code>TELEGRAM_PUBLIC_EVENTS_PRE_MESSAGE_THREAD_ID</code>
+          {"; "}
+          Event result: <code>TELEGRAM_PUBLIC_EVENTS_RESULT_MESSAGE_THREAD_ID</code> (หรือ fallback topic เดียวกับ condition)
           {"; "}
           fallback: <code>TELEGRAM_PUBLIC_MESSAGE_THREAD_ID</code>) แบบสาธารณะ — ไม่ต้องเปิดรับรายคนในแอปแล้ว
         </p>

@@ -32,6 +32,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <span className="siteNavSep" aria-hidden>
             |
           </span>
+          <Link href="/upcoming-events">Events</Link>
+          <span className="siteNavSep" aria-hidden>
+            |
+          </span>
           <Link href="/settings">Settings</Link>
         </nav>
         {children}

@@ -128,8 +128,13 @@ export async function sendSparkSystemAlert(
     await sendTelegramPublicBroadcastMessage(text, kind);
     let n = 1;
     /* System change (condition): ส่งแค่กลุ่ม Telegram สาธารณะ — ไม่ mirror ไป LINE */
+    const skipLineMirror =
+      kind === "condition" ||
+      kind === "events_weekly" ||
+      kind === "events_pre" ||
+      kind === "events_result";
     if (
-      kind !== "condition" &&
+      !skipLineMirror &&
       uids.length > 0 &&
       isAlertAlsoLinePush() &&
       isLineAlertPushEnabled()
