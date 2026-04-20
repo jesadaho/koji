@@ -18,7 +18,6 @@ export async function GET(req: NextRequest) {
   try {
     const r = await runUpcomingEventsAlertsTick(started);
     return NextResponse.json({
-      ok: r.ok,
       ...r,
       at: new Date().toISOString(),
       durationMs: Date.now() - started,

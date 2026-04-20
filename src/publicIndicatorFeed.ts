@@ -7,7 +7,7 @@ import {
   type BinanceIndicatorTf,
 } from "./binanceIndicatorKline";
 import { sendPublicIndicatorFeedToSparkGroup } from "./alertNotify";
-import { emaLine, rsiWilder } from "./indicatorMath";
+import { emaLine, rsiWilder, smaLine } from "./indicatorMath";
 import {
   loadIndicatorPublicFeedState,
   updatePublicFeedFiredKey,
@@ -49,6 +49,39 @@ function divergenceStrongRsiDelta(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_DIV_STRONG_RSI_DELTA);
   if (Number.isFinite(v) && v >= 3 && v <= 40) return v;
   return 8;
+}
+
+/** จำนวนแท่งย้อนหลังสำหรับหา Wave1 / Wave2 (peak/valley) */
+function divergenceLookbackBars(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_DIV_LOOKBACK);
+  if (Number.isFinite(v) && v >= 40 && v <= 150) return Math.floor(v);
+  return 80;
+}
+
+function divergenceOversoldThreshold(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_DIV_OVERSOLD);
+  if (Number.isFinite(v) && v > 0 && v < 45) return v;
+  return 30;
+}
+
+function divergenceOverboughtThreshold(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_DIV_OVERBOUGHT);
+  if (Number.isFinite(v) && v > 55 && v < 100) return v;
+  return 70;
+}
+
+/** SMA บน RSI สำหรับเงื่อนไขยืนยัน "RSI ตัด MA ขึ้น/ลง" */
+function divergenceRsiMaPeriod(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_DIV_RSI_MA_PERIOD);
+  if (Number.isFinite(v) && v >= 3 && v <= 21) return Math.floor(v);
+  return 9;
+}
+
+/** |RSI wave2 − RSI wave1| ขั้นต่ำ (bull: wave2 สูงกว่า wave1 ชัดเจน) */
+function divergenceWaveMinRsiDelta(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_DIV_WAVE_MIN_RSI_DELTA);
+  if (Number.isFinite(v) && v >= 0 && v <= 25) return v;
+  return 3;
 }
 
 function publicCooldownMs(): number {
@@ -367,84 +400,129 @@ function maxInRange(arr: number[], a: number, b: number): number {
 
 type RsiDivKind = "bearish" | "bullish";
 
+type RsiDivTriggerKind = "rsi_ma_cross" | "price_break_prev";
+
 type RsiDivergenceHit = {
   kind: RsiDivKind;
-  p1: number;
-  p2: number;
-  price1: number;
-  price2: number;
-  rsi1: number;
-  rsi2: number;
+  wave1Idx: number;
+  wave2Idx: number;
+  priceW1: number;
+  priceW2: number;
+  rsiW1: number;
+  rsiW2: number;
+  trigger: RsiDivTriggerKind;
   refLevel: number;
 };
 
+/**
+ * 2 Waves + Confirmation (Koji filter)
+ * Bull: W1 = fractal low + RSI โซน oversold · W2 = low ต่ำกว่า W1 แต่ RSI สูงกว่า W1 ชัดเจน
+ * ยืนยันที่แท่งปิดล่าสุด: RSI ตัด SMA(RSI) ขึ้น หรือ close > high แท่งก่อนหน้า
+ * Bear: สมมาตร (overbought · lower high RSI · ยืนยัน: ตัด MA ลง หรือ close < low แท่งก่อน)
+ */
 function detectRsiDivergence(
   high: number[],
   low: number[],
+  close: number[],
   rsi: number[],
   lastClosedIdx: number,
   rsiPeriod: number,
   wing: number,
   minGap: number
 ): RsiDivergenceHit | null {
-  const minIdx = rsiPeriod;
-  if (lastClosedIdx < minIdx) return null;
+  if (lastClosedIdx < rsiPeriod) return null;
 
-  const highs = collectFractalHighIndices(high, lastClosedIdx, wing);
-  if (highs.length >= 2) {
-    const p2 = highs[highs.length - 1]!;
-    const p1 = highs[highs.length - 2]!;
-    if (p2 - p1 >= minGap) {
-      const ph1 = high[p1]!;
-      const ph2 = high[p2]!;
-      const r1 = rsi[p1]!;
-      const r2 = rsi[p2]!;
-      if (
-        Number.isFinite(r1) &&
-        Number.isFinite(r2) &&
-        ph2 > ph1 &&
-        r2 < r1
-      ) {
-        return {
-          kind: "bearish",
-          p1,
-          p2,
-          price1: ph1,
-          price2: ph2,
-          rsi1: r1,
-          rsi2: r2,
-          refLevel: minInRange(low, p1, p2),
-        };
-      }
+  const lookback = divergenceLookbackBars();
+  const oversold = divergenceOversoldThreshold();
+  const overbought = divergenceOverboughtThreshold();
+  const rsiMaLen = divergenceRsiMaPeriod();
+  const minWaveDelta = divergenceWaveMinRsiDelta();
+
+  const startIdx = Math.max(rsiPeriod, wing, lastClosedIdx - lookback + 1);
+  const highs = collectFractalHighIndices(high, lastClosedIdx, wing).filter((p) => p >= startIdx);
+  const lows = collectFractalLowIndices(low, lastClosedIdx, wing).filter((p) => p >= startIdx);
+
+  const rsiMa = smaLine(rsi, rsiMaLen);
+  const iNow = lastClosedIdx;
+  const iPrev = lastClosedIdx - 1;
+  if (iPrev < 0) return null;
+
+  const rNow = rsi[iNow];
+  const rPrev = rsi[iPrev];
+  const maNow = rsiMa[iNow];
+  const maPrev = rsiMa[iPrev];
+  if (!Number.isFinite(rNow) || !Number.isFinite(rPrev) || !Number.isFinite(maNow) || !Number.isFinite(maPrev)) {
+    return null;
+  }
+
+  const crossUp = rNow > maNow && rPrev <= maPrev;
+  const crossDown = rNow < maNow && rPrev >= maPrev;
+  const bullPriceBreak = close[iNow]! > high[iPrev]!;
+  const bearPriceBreak = close[iNow]! < low[iPrev]!;
+
+  for (let wi = lows.length - 1; wi >= 1; wi--) {
+    const i2 = lows[wi]!;
+    if (i2 + wing > lastClosedIdx) continue;
+    if (i2 >= iNow) continue;
+    for (let wj = wi - 1; wj >= 0; wj--) {
+      const i1 = lows[wj]!;
+      if (i2 - i1 < minGap) continue;
+      const r1 = rsi[i1];
+      const r2 = rsi[i2];
+      if (!Number.isFinite(r1) || !Number.isFinite(r2)) continue;
+      if (r1 >= oversold) continue;
+      if (low[i2]! >= low[i1]!) continue;
+      if (r2 <= r1 + minWaveDelta) continue;
+
+      let trigger: RsiDivTriggerKind | null = null;
+      if (crossUp) trigger = "rsi_ma_cross";
+      else if (bullPriceBreak) trigger = "price_break_prev";
+      if (!trigger) continue;
+
+      return {
+        kind: "bullish",
+        wave1Idx: i1,
+        wave2Idx: i2,
+        priceW1: low[i1]!,
+        priceW2: low[i2]!,
+        rsiW1: r1,
+        rsiW2: r2,
+        trigger,
+        refLevel: maxInRange(high, i1, i2),
+      };
     }
   }
 
-  const lows = collectFractalLowIndices(low, lastClosedIdx, wing);
-  if (lows.length >= 2) {
-    const p2 = lows[lows.length - 1]!;
-    const p1 = lows[lows.length - 2]!;
-    if (p2 - p1 >= minGap) {
-      const pl1 = low[p1]!;
-      const pl2 = low[p2]!;
-      const r1 = rsi[p1]!;
-      const r2 = rsi[p2]!;
-      if (
-        Number.isFinite(r1) &&
-        Number.isFinite(r2) &&
-        pl2 < pl1 &&
-        r2 > r1
-      ) {
-        return {
-          kind: "bullish",
-          p1,
-          p2,
-          price1: pl1,
-          price2: pl2,
-          rsi1: r1,
-          rsi2: r2,
-          refLevel: maxInRange(high, p1, p2),
-        };
-      }
+  for (let wi = highs.length - 1; wi >= 1; wi--) {
+    const i2 = highs[wi]!;
+    if (i2 + wing > lastClosedIdx) continue;
+    if (i2 >= iNow) continue;
+    for (let wj = wi - 1; wj >= 0; wj--) {
+      const i1 = highs[wj]!;
+      if (i2 - i1 < minGap) continue;
+      const r1 = rsi[i1];
+      const r2 = rsi[i2];
+      if (!Number.isFinite(r1) || !Number.isFinite(r2)) continue;
+      if (r1 <= overbought) continue;
+      if (high[i2]! <= high[i1]!) continue;
+      if (r2 >= r1 - minWaveDelta) continue;
+
+      let trigger: RsiDivTriggerKind | null = null;
+      if (crossDown) trigger = "rsi_ma_cross";
+      else if (bearPriceBreak) trigger = "price_break_prev";
+      if (!trigger) continue;
+
+      return {
+        kind: "bearish",
+        wave1Idx: i1,
+        wave2Idx: i2,
+        priceW1: high[i1]!,
+        priceW2: high[i2]!,
+        rsiW1: r1,
+        rsiW2: r2,
+        trigger,
+        refLevel: minInRange(low, i1, i2),
+      };
     }
   }
 
@@ -456,42 +534,48 @@ function buildRsiDivergenceMessage(
   tfLabel: string,
   period: number,
   hit: RsiDivergenceHit,
-  strongDelta: number
+  strongDelta: number,
+  rsiMaPeriod: number
 ): string {
   const pair = pairSlashNoDollar(symbol);
-  const rsiDelta = Math.abs(hit.rsi1 - hit.rsi2);
+  const rsiDelta = Math.abs(hit.rsiW1 - hit.rsiW2);
   const strong = rsiDelta >= strongDelta;
   const typeLine =
     hit.kind === "bearish"
-      ? `Type: 🔴 Bearish Divergence (RSI)`
-      : `Type: 🟢 Bullish Divergence (RSI)`;
+      ? `Type: 🔴 Bearish Divergence (RSI) — 2 Waves + Confirm`
+      : `Type: 🟢 Bullish Divergence (RSI) — 2 Waves + Confirm`;
+
+  const triggerLine =
+    hit.trigger === "rsi_ma_cross"
+      ? `Confirm: RSI ตัด SMA(RSI, ${rsiMaPeriod}) ${hit.kind === "bullish" ? "ขึ้น" : "ลง"} ที่แท่งปิดล่าสุด`
+      : `Confirm: ราคาปิด ${hit.kind === "bullish" ? "เหนือ high" : "ใต้ low"} แท่งก่อนหน้า`;
 
   const statusLabel = strong ? "Strong Warning" : "Warning";
   const statusTh =
     hit.kind === "bearish"
       ? strong
-        ? "แรงซื้อแผ่วลงชัดเจน"
+        ? "แรงซื้อแผ่วลงชัดเจน (2 wave)"
         : "แรงซื้ออ่อนลงเทียบจุดสูงก่อนหน้า"
       : strong
-        ? "แรงขายแผ่วลงชัดเจน"
+        ? "แรงขายแผ่วลงชัดเจน (2 wave)"
         : "แรงขายอ่อนลงเทียบจุดต่ำก่อนหน้า";
 
-  const p2s = formatUsdPrice(hit.price2);
+  const p2s = formatUsdPrice(hit.priceW2);
   const priceBlock =
     hit.kind === "bearish"
-      ? `Price: Making Higher High ($${p2s})`
-      : `Price: Making Lower Low ($${p2s})`;
+      ? `Price: Higher High vs Wave1 ($${p2s} vs ${formatUsdPrice(hit.priceW1)})`
+      : `Price: Lower Low vs Wave1 ($${p2s} vs ${formatUsdPrice(hit.priceW1)})`;
 
   const rsiBlock =
     hit.kind === "bearish"
-      ? `RSI: Making Lower High (${hit.rsi2.toFixed(0)} vs ${hit.rsi1.toFixed(0)})`
-      : `RSI: Making Higher Low (${hit.rsi2.toFixed(0)} vs ${hit.rsi1.toFixed(0)})`;
+      ? `RSI: Lower High at Wave2 (${hit.rsiW2.toFixed(0)} vs ${hit.rsiW1.toFixed(0)} — Wave1 โซน overbought)`
+      : `RSI: Higher Low at Wave2 (${hit.rsiW2.toFixed(0)} vs ${hit.rsiW1.toFixed(0)} — Wave1 โซน oversold)`;
 
   const refS = formatUsdPrice(hit.refLevel);
   const insight =
     hit.kind === "bearish"
-      ? `ราคาพุ่งขึ้นแต่ RSI สวนทาง (Lower High) — ระวังการย่อตัว หากหลุดแนวอ้างอิง ~ $${refS} ครับ`
-      : `ราคากดลงแต่ RSI สวนทาง (Higher Low) — สังเกต rebound หากยืนเหนือแนวอ้างอิง ~ $${refS} ครับ`;
+      ? `สัญญาณ 2 wave + ยืนยันแล้ว — ระวังแรงเท หากหลุดแนวอ้างอิง ~ $${refS}`
+      : `สัญญาณ 2 wave + ยืนยันแล้ว — สังเกตกลับตัว หากยืนเหนือโซน ~ $${refS}`;
 
   return [
     `[ ⚠️ Momentum Divergence ]`,
@@ -500,9 +584,13 @@ function buildRsiDivergenceMessage(
     "",
     "Analysis:",
     "",
+    `Wave1 (anchor) / Wave2 (divergence) — lookback + fractal wing ตาม env`,
+    "",
     priceBlock,
     "",
     rsiBlock,
+    "",
+    triggerLine,
     "",
     `Status: ${statusLabel} (${statusTh})`,
     "",
@@ -667,7 +755,9 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const minGap = divergenceMinPivotGapBars();
       const strongD = divergenceStrongRsiDelta();
       const period = rsiP.period;
-      const minBars = period + wing * 4 + 8;
+      const rsiMaP = divergenceRsiMaPeriod();
+      const lb = divergenceLookbackBars();
+      const minBars = period + lb + rsiMaP + wing + 12;
 
       for (const divTf of DIVERGENCE_TFS) {
         const divPack = divTf === "1h" ? pack : packs4h[idx];
@@ -679,20 +769,20 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         if (lastClosed < period) continue;
 
         const rsiArr = rsiWilder(dc, period);
-        const hit = detectRsiDivergence(dh, dl, rsiArr, lastClosed, period, wing, minGap);
+        const hit = detectRsiDivergence(dh, dl, dc, rsiArr, lastClosed, period, wing, minGap);
         if (!hit) continue;
 
         const divKey = `${symbol}|RSI_DIV|${divTf}|${hit.kind.toUpperCase()}`;
-        const pivotBarSec = dts[hit.p2];
-        if (typeof pivotBarSec !== "number" || !Number.isFinite(pivotBarSec)) continue;
-        if (state.lastFiredBarSec[divKey] === pivotBarSec) continue;
+        const confirmBarSec = dts[lastClosed];
+        if (typeof confirmBarSec !== "number" || !Number.isFinite(confirmBarSec)) continue;
+        if (state.lastFiredBarSec[divKey] === confirmBarSec) continue;
         if (inCooldown(state, divKey, now)) continue;
 
-        const msg = buildRsiDivergenceMessage(symbol, divTf, period, hit, strongD);
+        const msg = buildRsiDivergenceMessage(symbol, divTf, period, hit, strongD, rsiMaP);
         try {
           const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
           if (ok) {
-            await updatePublicFeedFiredKey(state, divKey, pivotBarSec, iso, now);
+            await updatePublicFeedFiredKey(state, divKey, confirmBarSec, iso, now);
             notified += 1;
           }
         } catch (e) {

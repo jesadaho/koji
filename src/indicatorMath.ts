@@ -35,6 +35,26 @@ export function rsiWilder(closes: number[], period: number): number[] {
   return result;
 }
 
+/** SMA — ทุกค่าในหน้าต่างต้องเป็น finite */
+export function smaLine(values: number[], period: number): number[] {
+  const n = values.length;
+  const result: number[] = new Array(n).fill(Number.NaN);
+  if (period < 1 || n < period) return result;
+  for (let i = period - 1; i < n; i++) {
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      const v = values[j];
+      if (!Number.isFinite(v)) {
+        sum = Number.NaN;
+        break;
+      }
+      sum += v!;
+    }
+    if (Number.isFinite(sum)) result[i] = sum / period;
+  }
+  return result;
+}
+
 /**
  * EMA — seed ด้วย SMA ที่ index period-1 แล้วใช้ multiplier k = 2/(period+1)
  */
