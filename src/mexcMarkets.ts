@@ -362,22 +362,24 @@ export async function fetchPerp15mClosesForChecklist(contractSymbol: string): Pr
 function closedClosesForEmaFromKlineCloseArray(closeRaw: number[] | undefined): number[] | null {
   if (!closeRaw?.length) return null;
   const raw = closeRaw.map((c) => Number(c)).filter((c) => Number.isFinite(c) && c > 0);
-  if (raw.length < 14) return null;
+  /** ตัดแท่งท้ายที่อาจยังไม่ปิด → ต้องมีอย่างน้อย 15 แท่งดิบเพื่อให้ได้ 14 แท่งปิด */
+  if (raw.length < 15) return null;
   const n = raw.length;
   const closed = n >= 3 ? raw.slice(0, n - 1) : raw;
   return closed.length >= 14 ? closed : null;
 }
 
 /**
- * 1hr / 4hr สำหรับ checklist — ใช้ limit ก่อน (สอดคล้อง fetchContractKline60m) แล้วค่อย fallback start/end
+ * 1hr / 4hr สำหรับ checklist — ใช้ limit ก่อน แล้วค่อย fallback start/end
+ * MEXC contract kline: interval 4h ต้องใช้ `Hour4` (ไม่ใช่ Min240); limit สูงสุด 100
  */
 async function fetchContractKlineClosesForEmaChecklist(
   contractSymbol: string,
-  interval: "Min60" | "Min240"
+  interval: "Min60" | "Hour4"
 ): Promise<number[] | null> {
   const sym = contractSymbol.trim();
   const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(sym)}`;
-  const limit = interval === "Min60" ? 120 : 150;
+  const limit = 100;
 
   const withLimit = async (): Promise<number[] | null> => {
     try {
@@ -394,7 +396,7 @@ async function fetchContractKlineClosesForEmaChecklist(
 
   const withRange = async (): Promise<number[] | null> => {
     const end = Math.floor(Date.now() / 1000);
-    const lookbackSec = interval === "Min60" ? 80 * 3600 : 40 * 24 * 3600;
+    const lookbackSec = interval === "Min60" ? 80 * 3600 : 45 * 24 * 3600;
     const start = end - lookbackSec;
     try {
       const { data } = await axios.get<KlineApiResponse>(url, {
@@ -418,7 +420,7 @@ export async function fetchPerp1hClosesForChecklist(contractSymbol: string): Pro
 
 /** close 4h — สำหรับ EMA12 */
 export async function fetchPerp4hClosesForChecklist(contractSymbol: string): Promise<number[] | null> {
-  return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Min240");
+  return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Hour4");
 }
 
 /** แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด — return เป็น % จาก open→close */

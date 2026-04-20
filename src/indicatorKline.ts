@@ -25,7 +25,7 @@ const BAR_COUNT = 100;
 
 const INTERVAL: Record<IndicatorChartTf, string> = {
   "1h": "Min60",
-  "4h": "Min240",
+  "4h": "Hour4",
 };
 
 const LOOKBACK_SEC: Record<IndicatorChartTf, number> = {

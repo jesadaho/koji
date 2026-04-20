@@ -26,7 +26,7 @@ const MOMENTUM_W_P = 1;
 
 const INTERVAL: Record<VolumeSignalTimeframe, string> = {
   "1h": "Min60",
-  "4h": "Min240",
+  "4h": "Hour4",
 };
 
 const LOOKBACK_SEC: Record<VolumeSignalTimeframe, number> = {
