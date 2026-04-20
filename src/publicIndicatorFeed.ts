@@ -17,6 +17,8 @@ import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 
 const TF: BinanceIndicatorTf = "1h";
 
+const DIVERGENCE_TFS: BinanceIndicatorTf[] = ["1h", "4h"];
+
 function envFlagOn(key: string, defaultOn: boolean): boolean {
   const raw = process.env[key]?.trim().toLowerCase();
   if (raw === undefined || raw === "") return defaultOn;
@@ -25,6 +27,28 @@ function envFlagOn(key: string, defaultOn: boolean): boolean {
 
 export function isIndicatorPublicFeedEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_FEED_ENABLED", true);
+}
+
+function isPublicRsiDivergenceEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_RSI_DIVERGENCE_ENABLED", true);
+}
+
+function divergencePivotWing(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_DIV_PIVOT_WING);
+  if (Number.isFinite(v) && v >= 1 && v <= 5) return Math.floor(v);
+  return 2;
+}
+
+function divergenceMinPivotGapBars(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_DIV_MIN_PIVOT_GAP);
+  if (Number.isFinite(v) && v >= 1 && v <= 50) return Math.floor(v);
+  return 4;
+}
+
+function divergenceStrongRsiDelta(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_DIV_STRONG_RSI_DELTA);
+  if (Number.isFinite(v) && v >= 3 && v <= 40) return v;
+  return 8;
 }
 
 function publicCooldownMs(): number {
@@ -44,7 +68,7 @@ function symbolListTtlMs(): number {
 function topAltsCount(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_TOP_ALTS);
   if (Number.isFinite(v) && v >= 0 && v <= 50) return Math.floor(v);
-  return 10;
+  return 15;
 }
 
 let topAltsCache: { symbols: string[]; at: number } | null = null;
@@ -278,8 +302,220 @@ function buildPublicEmaMessage(
   ].join("\n");
 }
 
+function formatUsdPrice(p: number): string {
+  const abs = Math.abs(p);
+  const opts: Intl.NumberFormatOptions =
+    abs >= 1000
+      ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+      : abs >= 1
+        ? { minimumFractionDigits: 2, maximumFractionDigits: 4 }
+        : { minimumFractionDigits: 4, maximumFractionDigits: 8 };
+  return p.toLocaleString("en-US", opts);
+}
+
+function williamsFractalHigh(high: number[], i: number, wing: number): boolean {
+  if (i < wing || i + wing >= high.length) return false;
+  const h = high[i]!;
+  for (let k = -wing; k <= wing; k++) {
+    if (k === 0) continue;
+    if (h <= high[i + k]!) return false;
+  }
+  return true;
+}
+
+function williamsFractalLow(low: number[], i: number, wing: number): boolean {
+  if (i < wing || i + wing >= low.length) return false;
+  const x = low[i]!;
+  for (let k = -wing; k <= wing; k++) {
+    if (k === 0) continue;
+    if (x >= low[i + k]!) return false;
+  }
+  return true;
+}
+
+function collectFractalHighIndices(high: number[], lastClosedIdx: number, wing: number): number[] {
+  const out: number[] = [];
+  for (let p = wing; p <= lastClosedIdx - wing; p++) {
+    if (williamsFractalHigh(high, p, wing)) out.push(p);
+  }
+  return out;
+}
+
+function collectFractalLowIndices(low: number[], lastClosedIdx: number, wing: number): number[] {
+  const out: number[] = [];
+  for (let p = wing; p <= lastClosedIdx - wing; p++) {
+    if (williamsFractalLow(low, p, wing)) out.push(p);
+  }
+  return out;
+}
+
+function minInRange(arr: number[], a: number, b: number): number {
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  let m = Infinity;
+  for (let j = lo; j <= hi; j++) m = Math.min(m, arr[j]!);
+  return m;
+}
+
+function maxInRange(arr: number[], a: number, b: number): number {
+  const lo = Math.min(a, b);
+  const hi = Math.max(a, b);
+  let m = -Infinity;
+  for (let j = lo; j <= hi; j++) m = Math.max(m, arr[j]!);
+  return m;
+}
+
+type RsiDivKind = "bearish" | "bullish";
+
+type RsiDivergenceHit = {
+  kind: RsiDivKind;
+  p1: number;
+  p2: number;
+  price1: number;
+  price2: number;
+  rsi1: number;
+  rsi2: number;
+  refLevel: number;
+};
+
+function detectRsiDivergence(
+  high: number[],
+  low: number[],
+  rsi: number[],
+  lastClosedIdx: number,
+  rsiPeriod: number,
+  wing: number,
+  minGap: number
+): RsiDivergenceHit | null {
+  const minIdx = rsiPeriod;
+  if (lastClosedIdx < minIdx) return null;
+
+  const highs = collectFractalHighIndices(high, lastClosedIdx, wing);
+  if (highs.length >= 2) {
+    const p2 = highs[highs.length - 1]!;
+    const p1 = highs[highs.length - 2]!;
+    if (p2 - p1 >= minGap) {
+      const ph1 = high[p1]!;
+      const ph2 = high[p2]!;
+      const r1 = rsi[p1]!;
+      const r2 = rsi[p2]!;
+      if (
+        Number.isFinite(r1) &&
+        Number.isFinite(r2) &&
+        ph2 > ph1 &&
+        r2 < r1
+      ) {
+        return {
+          kind: "bearish",
+          p1,
+          p2,
+          price1: ph1,
+          price2: ph2,
+          rsi1: r1,
+          rsi2: r2,
+          refLevel: minInRange(low, p1, p2),
+        };
+      }
+    }
+  }
+
+  const lows = collectFractalLowIndices(low, lastClosedIdx, wing);
+  if (lows.length >= 2) {
+    const p2 = lows[lows.length - 1]!;
+    const p1 = lows[lows.length - 2]!;
+    if (p2 - p1 >= minGap) {
+      const pl1 = low[p1]!;
+      const pl2 = low[p2]!;
+      const r1 = rsi[p1]!;
+      const r2 = rsi[p2]!;
+      if (
+        Number.isFinite(r1) &&
+        Number.isFinite(r2) &&
+        pl2 < pl1 &&
+        r2 > r1
+      ) {
+        return {
+          kind: "bullish",
+          p1,
+          p2,
+          price1: pl1,
+          price2: pl2,
+          rsi1: r1,
+          rsi2: r2,
+          refLevel: maxInRange(high, p1, p2),
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function buildRsiDivergenceMessage(
+  symbol: string,
+  tfLabel: string,
+  period: number,
+  hit: RsiDivergenceHit,
+  strongDelta: number
+): string {
+  const pair = pairSlashNoDollar(symbol);
+  const rsiDelta = Math.abs(hit.rsi1 - hit.rsi2);
+  const strong = rsiDelta >= strongDelta;
+  const typeLine =
+    hit.kind === "bearish"
+      ? `Type: 🔴 Bearish Divergence (RSI)`
+      : `Type: 🟢 Bullish Divergence (RSI)`;
+
+  const statusLabel = strong ? "Strong Warning" : "Warning";
+  const statusTh =
+    hit.kind === "bearish"
+      ? strong
+        ? "แรงซื้อแผ่วลงชัดเจน"
+        : "แรงซื้ออ่อนลงเทียบจุดสูงก่อนหน้า"
+      : strong
+        ? "แรงขายแผ่วลงชัดเจน"
+        : "แรงขายอ่อนลงเทียบจุดต่ำก่อนหน้า";
+
+  const p2s = formatUsdPrice(hit.price2);
+  const priceBlock =
+    hit.kind === "bearish"
+      ? `Price: Making Higher High ($${p2s})`
+      : `Price: Making Lower Low ($${p2s})`;
+
+  const rsiBlock =
+    hit.kind === "bearish"
+      ? `RSI: Making Lower High (${hit.rsi2.toFixed(0)} vs ${hit.rsi1.toFixed(0)})`
+      : `RSI: Making Higher Low (${hit.rsi2.toFixed(0)} vs ${hit.rsi1.toFixed(0)})`;
+
+  const refS = formatUsdPrice(hit.refLevel);
+  const insight =
+    hit.kind === "bearish"
+      ? `ราคาพุ่งขึ้นแต่ RSI สวนทาง (Lower High) — ระวังการย่อตัว หากหลุดแนวอ้างอิง ~ $${refS} ครับ`
+      : `ราคากดลงแต่ RSI สวนทาง (Higher Low) — สังเกต rebound หากยืนเหนือแนวอ้างอิง ~ $${refS} ครับ`;
+
+  return [
+    `[ ⚠️ Momentum Divergence ]`,
+    `Symbol: ${pair} (${tfLabel})`,
+    typeLine,
+    "",
+    "Analysis:",
+    "",
+    priceBlock,
+    "",
+    rsiBlock,
+    "",
+    `Status: ${statusLabel} (${statusTh})`,
+    "",
+    `Indicator: RSI (${period})`,
+    "",
+    `Koji's Insight: "${insight}"`,
+    "",
+    "⚠️ Signal generated by Koji Bot — Not Financial Advice",
+  ].join("\n");
+}
+
 /**
- * Feed สาธารณะ RSI + EMA จาก Binance USDT-M (1h) → Telegram กลุ่ม Spark/System
+ * Feed สาธารณะ RSI + EMA จาก Binance USDT-M (1h) + RSI divergence (1h / 4h) → Telegram กลุ่ม Spark/System
  */
 export async function runPublicIndicatorFeedInternal(_client: Client, now: number): Promise<number> {
   void _client;
@@ -295,7 +531,8 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
   const rsiOn = envFlagOn("INDICATOR_PUBLIC_RSI_ENABLED", true);
   const emaOn = envFlagOn("INDICATOR_PUBLIC_EMA_ENABLED", true);
-  if (!rsiOn && !emaOn) return 0;
+  const divOn = isPublicRsiDivergenceEnabled();
+  if (!rsiOn && !emaOn && !divOn) return 0;
 
   const symbols = await getUniverseSymbols();
   if (symbols.length === 0) return 0;
@@ -307,11 +544,16 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
   }
 
   const concurrency = 8;
-  const packs: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
+  const packs1h: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
+  const packs4h: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   for (let i = 0; i < symbols.length; i += concurrency) {
     const chunk = symbols.slice(i, i + concurrency);
-    const part = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, TF)));
-    packs.push(...part);
+    const part1h = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, TF)));
+    packs1h.push(...part1h);
+    if (divOn) {
+      const part4h = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, "4h")));
+      packs4h.push(...part4h);
+    }
   }
 
   let state = await loadIndicatorPublicFeedState();
@@ -319,7 +561,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
   for (let idx = 0; idx < symbols.length; idx++) {
     const symbol = symbols[idx]!;
-    const pack = packs[idx];
+    const pack = packs1h[idx];
     if (!pack) continue;
 
     const { close, timeSec } = pack;
@@ -416,6 +658,45 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           }
         } catch (e) {
           console.error("[indicatorPublicFeed] EMA Telegram", symbol, kind, e);
+        }
+      }
+    }
+
+    if (divOn) {
+      const wing = divergencePivotWing();
+      const minGap = divergenceMinPivotGapBars();
+      const strongD = divergenceStrongRsiDelta();
+      const period = rsiP.period;
+      const minBars = period + wing * 4 + 8;
+
+      for (const divTf of DIVERGENCE_TFS) {
+        const divPack = divTf === "1h" ? pack : packs4h[idx];
+        if (!divPack) continue;
+        const { close: dc, high: dh, low: dl, timeSec: dts } = divPack;
+        const nn = dc.length;
+        if (nn < minBars) continue;
+        const lastClosed = nn - 2;
+        if (lastClosed < period) continue;
+
+        const rsiArr = rsiWilder(dc, period);
+        const hit = detectRsiDivergence(dh, dl, rsiArr, lastClosed, period, wing, minGap);
+        if (!hit) continue;
+
+        const divKey = `${symbol}|RSI_DIV|${divTf}|${hit.kind.toUpperCase()}`;
+        const pivotBarSec = dts[hit.p2];
+        if (typeof pivotBarSec !== "number" || !Number.isFinite(pivotBarSec)) continue;
+        if (state.lastFiredBarSec[divKey] === pivotBarSec) continue;
+        if (inCooldown(state, divKey, now)) continue;
+
+        const msg = buildRsiDivergenceMessage(symbol, divTf, period, hit, strongD);
+        try {
+          const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
+          if (ok) {
+            await updatePublicFeedFiredKey(state, divKey, pivotBarSec, iso, now);
+            notified += 1;
+          }
+        } catch (e) {
+          console.error("[indicatorPublicFeed] RSI divergence Telegram", symbol, divTf, hit.kind, e);
         }
       }
     }

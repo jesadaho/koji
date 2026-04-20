@@ -24,7 +24,7 @@ async function ensureFile(): Promise<void> {
   }
 }
 
-/** key = เช่น "BTCUSDT|RSI" | "SOLUSDT|EMA_GOLDEN" | "SOLUSDT|EMA_DEATH" → bar open time sec ล่าสุดที่แจ้งแล้ว */
+/** key = เช่น "BTCUSDT|RSI" | "SOLUSDT|EMA_GOLDEN" | "ETHUSDT|RSI_DIV|1h|BEARISH" → bar open time sec ของแท่งที่อ้างอิง (divergence = pivot แท่งที่สอง) */
 export type IndicatorPublicFeedState = {
   lastFiredBarSec: Record<string, number>;
   /** cooldown ต่อ key (wall clock ms) */
