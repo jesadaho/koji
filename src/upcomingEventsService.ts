@@ -1,6 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
+import { applyEventFeedFilter } from "./eventFilters";
+import { fetchCryptoMarketEvents } from "./cryptoMarketEventsFetch";
 import { fetchFinnhubEconomicCalendar, finnhubCalendarConfigured } from "./finnhubEconomicCalendar";
 import { fetchTokenUnlockEvents } from "./tokenUnlocksFetch";
 import type { UnifiedEvent, UpcomingEventsSnapshot } from "./upcomingEventsTypes";
@@ -42,15 +44,16 @@ function addDaysUtc(d: Date, days: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days));
 }
 
-/** รวม macro + unlock ในช่วง */
+/** รวม macro + unlock + crypto infra แล้วกรองเฉพาะ high-impact */
 export async function fetchUnifiedEventsRange(from: Date, to: Date): Promise<UnifiedEvent[]> {
-  const [macro, unlocks] = await Promise.all([
+  const [macro, unlocks, cryptoInfra] = await Promise.all([
     fetchFinnhubEconomicCalendar(from, to),
     fetchTokenUnlockEvents(from, to),
+    fetchCryptoMarketEvents(from, to),
   ]);
-  const merged = [...macro, ...unlocks];
+  const merged = [...macro, ...unlocks, ...cryptoInfra];
   merged.sort((a, b) => a.startsAtUtc - b.startsAtUtc);
-  return merged;
+  return applyEventFeedFilter(merged);
 }
 
 /** ดึงข้อมูลสด (ใช้ใน cron / เมื่อไม่มี snapshot) */
@@ -120,7 +123,11 @@ export async function getUpcomingEventsForDisplay(): Promise<UpcomingEventsSnaps
   const days = Number(process.env.UPCOMING_EVENTS_RANGE_DAYS);
   const d = Number.isFinite(days) && days >= 1 && days <= 60 ? Math.floor(days) : DEFAULT_DAYS;
 
-  if (!finnhubCalendarConfigured() && !process.env.TOKEN_UNLOCKS_API_URL?.trim()) {
+  const hasAnySource =
+    finnhubCalendarConfigured() ||
+    Boolean(process.env.TOKEN_UNLOCKS_API_URL?.trim()) ||
+    Boolean(process.env.CRYPTO_MARKET_EVENTS_API_URL?.trim());
+  if (!hasAnySource) {
     if (cached) return cached;
     return {
       fetchedAtIso: new Date().toISOString(),

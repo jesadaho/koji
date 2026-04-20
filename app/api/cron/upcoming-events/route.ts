@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/src/cronAuth";
 import { runUpcomingEventsAlertsTick } from "@/src/upcomingEventsTick";
+import { runUsMarketSessionAlerts } from "@/src/usMarketSessionAlert";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -16,9 +17,12 @@ export async function GET(req: NextRequest) {
 
   const started = Date.now();
   try {
+    const session = await runUsMarketSessionAlerts(started);
     const r = await runUpcomingEventsAlertsTick(started);
     return NextResponse.json({
       ...r,
+      sessionSent: session.sent,
+      sessionSkipped: session.skipped,
       at: new Date().toISOString(),
       durationMs: Date.now() - started,
     });

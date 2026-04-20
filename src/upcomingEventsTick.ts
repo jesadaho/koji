@@ -40,18 +40,6 @@ function addDaysUtc(d: Date, days: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days));
 }
 
-/** กรอง macro ที่น่าสนใจกับ crypto (ไม่ครัดมาก) */
-export function isCryptoRelevantMacro(e: UnifiedEvent): boolean {
-  if (e.category !== "macro") return false;
-  if (e.importance === "high") return true;
-  const c = (e.country ?? "").toUpperCase();
-  if (["US", "EU", "GB", "UK", "JP", "DE", "CN", "EZ"].some((x) => c === x || c.includes(x))) return true;
-  const t = e.title;
-  return /\b(CPI|PCE|FOMC|Fed|NFP|Non-?farm|GDP|Retail|PMI|Unemployment|Jobless|ECB|BOJ|BOE|rate decision|interest)\b/i.test(
-    t
-  );
-}
-
 function fmtEventLine(e: UnifiedEvent): string {
   const t = new Date(e.startsAtUtc).toISOString().replace("T", " ").slice(0, 16);
   const z = e.country ? `${e.country} · ` : "";
@@ -60,19 +48,23 @@ function fmtEventLine(e: UnifiedEvent): string {
 }
 
 function buildWeeklyMessage(weekMondayYmd: string, events: UnifiedEvent[]): string {
-  const macro = events.filter((e) => e.category === "macro" && isCryptoRelevantMacro(e));
+  const macro = events.filter((e) => e.category === "macro");
   const unlocks = events.filter((e) => e.category === "unlock");
+  const infra = events.filter((e) => e.category === "crypto_infra");
   const lines = [
-    "📅 Koji — Weekly outlook (macro + unlocks)",
+    "📅 Koji — Weekly outlook (high-impact only)",
     `สัปดาห์เริ่มจันทร์ (UTC): ${weekMondayYmd}`,
     "",
-    "Macro (คัดเฉพาะที่เกี่ยวกับสภาวะตลาด / ดอกเบี้ย / เงินเฟ้อ):",
+    "US Macro (CPI / PPI / PCE · FOMC · NFP):",
   ];
-  if (macro.length === 0) lines.push("— ไม่มีรายการในช่วงที่ดึงได้ (หรือยังไม่มี FINNHUB_API_KEY)");
+  if (macro.length === 0) lines.push("— ไม่มีรายการ (หรือยังไม่มี FINNHUB / ไม่มีเหตุการณ์ในช่วง)");
   else macro.slice(0, 40).forEach((e) => lines.push(`• ${fmtEventLine(e)}`));
-  lines.push("", "Token unlocks:");
-  if (unlocks.length === 0) lines.push("— ไม่มีรายการ (หรือยังไม่ตั้ง TOKEN_UNLOCKS_API_URL)");
+  lines.push("", `Token unlocks (≥ เกณฑ์ % circ.):`);
+  if (unlocks.length === 0) lines.push("— ไม่มีรายการที่ผ่านเกณฑ์ (หรือ API ไม่ส่ง % supply)");
   else unlocks.slice(0, 30).forEach((e) => lines.push(`• ${fmtEventLine(e)}`));
+  lines.push("", "Network / listing (crypto infra):");
+  if (infra.length === 0) lines.push("— ไม่มี (หรือยังไม่ตั้ง CRYPTO_MARKET_EVENTS_API_URL)");
+  else infra.slice(0, 25).forEach((e) => lines.push(`• ${fmtEventLine(e)}`));
   lines.push("", "ข้อมูลจากแหล่ง API — ไม่ใช่คำแนะนำลงทุน");
   return lines.join("\n");
 }
@@ -118,7 +110,7 @@ function buildResultMessage(e: UnifiedEvent): string {
   ].join("\n");
 }
 
-/** Cron 5 นาที: อัปเดต snapshot + pre-alert + ผลจริง */
+/** Cron 5 นาที: อัปเดต snapshot + pre-alert + ผลจริง (US session แยกเรียกใน route) */
 export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   ok: boolean;
   preSent: number;
@@ -131,7 +123,12 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   if (!telegramSparkSystemGroupConfigured()) {
     return { ok: true, preSent: 0, resultSent: 0, skipped: "no_telegram_public_chat" };
   }
-  if (!finnhubCalendarConfigured() && !process.env.TOKEN_UNLOCKS_API_URL?.trim()) {
+
+  const hasAnySource =
+    finnhubCalendarConfigured() ||
+    Boolean(process.env.TOKEN_UNLOCKS_API_URL?.trim()) ||
+    Boolean(process.env.CRYPTO_MARKET_EVENTS_API_URL?.trim());
+  if (!hasAnySource) {
     return { ok: true, preSent: 0, resultSent: 0, skipped: "no_data_sources" };
   }
 
@@ -143,8 +140,8 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   let resultSent = 0;
   const now = new Date(nowMs);
 
-  const relevantMacro = snap.events.filter((e) => e.category === "macro" && isCryptoRelevantMacro(e));
-  const allMacro = snap.events.filter((e) => e.category === "macro");
+  const relevantMacro = snap.events.filter((e) => e.category === "macro");
+  const allMacro = relevantMacro;
 
   if (preAlertEnabled()) {
     for (const e of relevantMacro) {
@@ -222,7 +219,11 @@ export async function runUpcomingEventsWeeklyDigest(nowMs: number): Promise<{
   if (!telegramSparkSystemGroupConfigured()) {
     return { ok: true, sent: false, reason: "no_telegram_public_chat" };
   }
-  if (!finnhubCalendarConfigured() && !process.env.TOKEN_UNLOCKS_API_URL?.trim()) {
+  const hasAnySource =
+    finnhubCalendarConfigured() ||
+    Boolean(process.env.TOKEN_UNLOCKS_API_URL?.trim()) ||
+    Boolean(process.env.CRYPTO_MARKET_EVENTS_API_URL?.trim());
+  if (!hasAnySource) {
     return { ok: true, sent: false, reason: "no_data_sources" };
   }
 
@@ -252,7 +253,11 @@ export async function runUpcomingEventsWeeklyDigest(nowMs: number): Promise<{
 
 /** ให้ cron อัปเดต snapshot อย่างเดียว (ถ้าไม่ต้องการส่งแจ้งเตือน) */
 export async function refreshUpcomingEventsSnapshotOnly(): Promise<void> {
-  if (!finnhubCalendarConfigured() && !process.env.TOKEN_UNLOCKS_API_URL?.trim()) return;
+  const hasAnySource =
+    finnhubCalendarConfigured() ||
+    Boolean(process.env.TOKEN_UNLOCKS_API_URL?.trim()) ||
+    Boolean(process.env.CRYPTO_MARKET_EVENTS_API_URL?.trim());
+  if (!hasAnySource) return;
   const snap = await buildUpcomingEventsSnapshot(daysForward());
   await saveSnapshot(snap);
 }

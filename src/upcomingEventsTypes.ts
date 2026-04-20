@@ -1,6 +1,14 @@
-/** รายการเหตุการณ์รวม (macro + unlock) — ใช้ทั้งหน้าเว็บและ cron */
+/** รายการเหตุการณ์รวม — ใช้ทั้งหน้าเว็บและ cron */
 
-export type UnifiedEventCategory = "macro" | "unlock";
+export type UnifiedEventCategory = "macro" | "unlock" | "crypto_infra";
+
+export type UnifiedEventMeta = {
+  /** % ของ circulating supply ที่ปลดล็อก (ใช้กรอง unlock ≥ เกณฑ์) */
+  pctCirculating?: number;
+  eventSubtype?: "upgrade" | "listing" | "delisting" | "unlock";
+  exchange?: string;
+  network?: string;
+};
 
 export type UnifiedEvent = {
   id: string;
@@ -15,6 +23,7 @@ export type UnifiedEvent = {
   actual?: string;
   category: UnifiedEventCategory;
   importance?: "high" | "medium" | "low";
+  meta?: UnifiedEventMeta;
 };
 
 export type UpcomingEventsSnapshot = {

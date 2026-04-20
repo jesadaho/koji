@@ -57,14 +57,33 @@ export async function fetchTokenUnlockEvents(from: Date, to: Date): Promise<Unif
             ? String(o.value_usd)
             : undefined;
 
+      /** เปอร์เซ็นต์ของ circulating (เช่น 1.2 = 1.2%) */
+      let pctCirc: number | undefined;
+      const rawPct =
+        o.pct_circulating ?? o.pct_of_supply ?? o.percent_circulating ?? o.unlock_pct_supply ?? o.pct_supply;
+      if (typeof rawPct === "number" && Number.isFinite(rawPct)) {
+        pctCirc = rawPct > 0 && rawPct <= 1 ? rawPct * 100 : rawPct;
+      } else if (typeof rawPct === "string") {
+        const n = parseFloat(rawPct.replace(/%/g, "").trim());
+        if (Number.isFinite(n)) pctCirc = n > 0 && n <= 1 ? n * 100 : n;
+      }
+
       const id = `unlock:${project}:${sym}:${startsAtUtc}`;
+      const titleBase = amt ? `${project} (${sym}) — unlock ~${amt}` : `${project} (${sym}) — unlock`;
+      const title = pctCirc != null ? `${titleBase} (~${pctCirc.toFixed(2)}% circ.)` : titleBase;
+
       out.push({
         id,
         source: "Token unlocks",
-        title: amt ? `${project} (${sym}) — unlock ~${amt}` : `${project} (${sym}) — unlock`,
+        title,
         startsAtUtc,
         category: "unlock",
         forecast: amt,
+        importance: pctCirc != null && pctCirc >= 1 ? "high" : undefined,
+        meta:
+          pctCirc != null
+            ? { pctCirculating: pctCirc, eventSubtype: "unlock" }
+            : { eventSubtype: "unlock" },
       });
     }
 

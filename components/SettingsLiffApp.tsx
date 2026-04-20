@@ -229,6 +229,8 @@ export default function SettingsLiffApp() {
           {"; "}
           Event result: <code>TELEGRAM_PUBLIC_EVENTS_RESULT_MESSAGE_THREAD_ID</code> (หรือ fallback topic เดียวกับ condition)
           {"; "}
+          US session: <code>TELEGRAM_PUBLIC_EVENTS_SESSION_MESSAGE_THREAD_ID</code> (หรือ fallback weekly)
+          {"; "}
           fallback: <code>TELEGRAM_PUBLIC_MESSAGE_THREAD_ID</code>) แบบสาธารณะ — ไม่ต้องเปิดรับรายคนในแอปแล้ว
         </p>
         <p className="sub" style={{ marginTop: "0.75rem" }}>
