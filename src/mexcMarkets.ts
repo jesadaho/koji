@@ -370,12 +370,12 @@ function closedClosesForEmaFromKlineCloseArray(closeRaw: number[] | undefined): 
 }
 
 /**
- * 1hr / 4hr สำหรับ checklist — ใช้ limit ก่อน แล้วค่อย fallback start/end
- * MEXC contract kline: interval 4h ต้องใช้ `Hour4` (ไม่ใช่ Min240); limit สูงสุด 100
+ * 1hr / 4hr / 1D สำหรับ checklist — ใช้ limit ก่อน แล้วค่อย fallback start/end
+ * MEXC contract kline: 4h = `Hour4` (ไม่ใช่ Min240); รายวัน = `Day1`; limit สูงสุด 100
  */
 async function fetchContractKlineClosesForEmaChecklist(
   contractSymbol: string,
-  interval: "Min60" | "Hour4"
+  interval: "Min60" | "Hour4" | "Day1"
 ): Promise<number[] | null> {
   const sym = contractSymbol.trim();
   const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(sym)}`;
@@ -396,7 +396,12 @@ async function fetchContractKlineClosesForEmaChecklist(
 
   const withRange = async (): Promise<number[] | null> => {
     const end = Math.floor(Date.now() / 1000);
-    const lookbackSec = interval === "Min60" ? 80 * 3600 : 45 * 24 * 3600;
+    const lookbackSec =
+      interval === "Min60"
+        ? 80 * 3600
+        : interval === "Hour4"
+          ? 45 * 24 * 3600
+          : 400 * 24 * 3600;
     const start = end - lookbackSec;
     try {
       const { data } = await axios.get<KlineApiResponse>(url, {
@@ -421,6 +426,11 @@ export async function fetchPerp1hClosesForChecklist(contractSymbol: string): Pro
 /** close 4h — สำหรับ EMA12 */
 export async function fetchPerp4hClosesForChecklist(contractSymbol: string): Promise<number[] | null> {
   return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Hour4");
+}
+
+/** close รายวัน (Day1) — สำหรับ EMA6/12 ภาพ macro */
+export async function fetchPerp1dClosesForChecklist(contractSymbol: string): Promise<number[] | null> {
+  return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Day1");
 }
 
 /** แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด — return เป็น % จาก open→close */

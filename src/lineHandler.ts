@@ -112,7 +112,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis / EMA6·12 บน 15m)
   ตัวอย่าง: short btc · long eth · ชอต btc 5x
   (EN: short btc, long eth)
-• Market check — สภาพคล่อง + โมเมนตัม 15m / 1hr / 4hr (เทียบเป้า long หรือ short) + funding/F&G
+• Market check — สภาพคล่อง + โมเมนตัม 15m / 1hr / 4hr / 1D (เทียบเป้า long หรือ short) + funding/F&G
   ตัวอย่าง: check btc · check eth long · check sol short · check btc ชอต
 
 • ทดสอบแจ้งเตือน — ส่งไป Telegram / Discord / LINE ตาม env (LINE ต้อง LINE_ALERT_PUSH_ENABLED=1) แล้วตอบยืนยันในแชท
