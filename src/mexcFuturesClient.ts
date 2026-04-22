@@ -242,7 +242,7 @@ export async function verifyMexcFuturesApiForUser(
     const rows = Array.isArray(posRes.data) ? posRes.data : [];
     const actives = rows.filter((p) => p.state === 1 && Number(p.holdVol) > 0);
     openPositionsCount = actives.length;
-    openSymbolsSample = [...new Set(actives.map((p) => p.symbol))].slice(0, 8);
+    openSymbolsSample = Array.from(new Set(actives.map((p) => p.symbol))).slice(0, 8);
   } catch (e) {
     return {
       ok: false,
