@@ -118,6 +118,14 @@ export async function POST(req: NextRequest) {
     try {
       const userId = tgUserIdToStoreKey(fromUserId);
       const row = await ensureTradingViewMexcUserRow(userId);
+      if (!row.mexcApiKey?.trim() || !row.mexcSecret?.trim()) {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          "ยังขอ Webhook JSON ไม่ได้ — กรอก MEXC API Key และ Secret ที่หน้า Settings ใน Mini App แล้วกดบันทึกก่อน",
+          threadOpts,
+        );
+        return NextResponse.json({ ok: true });
+      }
       const json = formatTradingViewMexcWebhookJson(userId, row.webhookToken);
       const pre = wrapTelegramPreMonospace(json);
       const msg = pre

@@ -703,6 +703,7 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
   const webhookUrl = origin ? `${origin}${path}` : path;
   const mexcKeyLast4 =
     row.mexcApiKey && row.mexcApiKey.length >= 4 ? row.mexcApiKey.slice(-4) : null;
+  const mexcCredsComplete = Boolean(row.mexcApiKey?.trim() && row.mexcSecret?.trim());
   return {
     status: 200,
     json: {
@@ -714,8 +715,8 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
       mexcApiKeySet: Boolean(row.mexcApiKey),
       mexcApiKeyLast4: mexcKeyLast4,
       mexcSecretSet: Boolean(row.mexcSecret),
-      mexcCredsComplete: Boolean(row.mexcApiKey && row.mexcSecret),
-      exampleJson: tradingViewMexcExamplePayload(userId, row.webhookToken),
+      mexcCredsComplete,
+      exampleJson: mexcCredsComplete ? tradingViewMexcExamplePayload(userId, row.webhookToken) : null,
     },
   };
 }
@@ -748,6 +749,7 @@ export async function liffSetTradingViewMexcSettings(
   const webhookUrl = origin ? `${origin}${path}` : path;
   const mexcKeyLast4 =
     row.mexcApiKey && row.mexcApiKey.length >= 4 ? row.mexcApiKey.slice(-4) : null;
+  const mexcCredsComplete = Boolean(row.mexcApiKey?.trim() && row.mexcSecret?.trim());
   return {
     status: 200,
     json: {
@@ -759,8 +761,8 @@ export async function liffSetTradingViewMexcSettings(
       mexcApiKeySet: Boolean(row.mexcApiKey),
       mexcApiKeyLast4: mexcKeyLast4,
       mexcSecretSet: Boolean(row.mexcSecret),
-      mexcCredsComplete: Boolean(row.mexcApiKey && row.mexcSecret),
-      exampleJson: tradingViewMexcExamplePayload(userId, row.webhookToken),
+      mexcCredsComplete,
+      exampleJson: mexcCredsComplete ? tradingViewMexcExamplePayload(userId, row.webhookToken) : null,
     },
   };
 }

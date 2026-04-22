@@ -436,7 +436,7 @@ export default function SettingsLiffApp() {
             <h3 className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
               Webhook JSON สำหรับวางใน TradingView
             </h3>
-            {exampleJsonText ? (
+            {tvSettings.mexcCredsComplete && exampleJsonText ? (
               <>
                 <pre
                   style={{
@@ -468,9 +468,13 @@ export default function SettingsLiffApp() {
                   </button>
                 </p>
               </>
-            ) : null}
+            ) : (
+              <p className="sub" style={{ marginTop: "0.5rem" }}>
+                กรอก MEXC API key และ Secret แล้วกด <strong>บันทึก API</strong> ก่อน — จึงจะแสดง JSON คัดลอกได้ และพิมพ์ขอจากบอทได้
+              </p>
+            )}
             <p className="sub" style={{ marginTop: "0.5rem" }}>
-              หรือพิมพ์ <strong>ขอรับ Webhook JSON MEXC</strong> หรือ <code>/webhook_json</code> ในแชทบอท Telegram
+              หลังตั้ง MEXC แล้ว: พิมพ์ <strong>ขอรับ Webhook JSON MEXC</strong> หรือ <code>/webhook_json</code> ในแชทบอท Telegram
             </p>
           </>
         ) : tvLoadErr ? null : (
