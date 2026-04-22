@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendTelegramMessageToChat, wrapTelegramPreMonospace } from "@/src/telegramAlert";
 import { formatTradingViewMexcWebhookJson } from "@/src/liffService";
-import { ensureTradingViewMexcUserRow } from "@/src/tradingViewCloseSettingsStore";
+import { ensureTradingViewMexcUserRow, getTradingViewMexcRowOptional } from "@/src/tradingViewCloseSettingsStore";
+import { mexcFuturesBaseUrl, verifyMexcFuturesApiForUser } from "@/src/mexcFuturesClient";
 import { tgUserIdToStoreKey } from "@/src/telegramMiniAppAuth";
 import { parseMarketCheck, parsePositionChecklist } from "@/src/positionChecklistLineCommands";
 import { buildMarketCheckMessage, buildPositionChecklistMessage } from "@/src/positionChecklistService";
@@ -37,7 +38,7 @@ function miniAppOpenUrl(): string {
 
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
- * /start → ปุ่ม Mini App · อื่นๆ: เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
+ * /start → ปุ่ม Mini App · ขอ Webhook JSON MEXC / เช็ค MEXC API · เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
@@ -142,6 +143,63 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] webhook json reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const wantsMexcApiCheck =
+    trimmedText === "เช็ค MEXC API" || /^\/?mexc_api(@\S+)?\s*$/i.test(normalized);
+
+  if (wantsMexcApiCheck && typeof fromUserId === "number" && fromUserId > 0) {
+    try {
+      const userId = tgUserIdToStoreKey(fromUserId);
+      const row = await getTradingViewMexcRowOptional(userId);
+      if (!row?.mexcApiKey?.trim() || !row.mexcSecret?.trim()) {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          "ยังเช็ค MEXC API ไม่ได้ — กรอก MEXC API Key และ Secret ที่หน้า Settings ใน Mini App แล้วกดบันทึกก่อน",
+          threadOpts,
+        );
+        return NextResponse.json({ ok: true });
+      }
+      const r = await verifyMexcFuturesApiForUser({ apiKey: row.mexcApiKey.trim(), secret: row.mexcSecret.trim() });
+      if (!r.ok) {
+        const stepTh =
+          r.step === "account_assets"
+            ? "อ่านทรัพย์สินฟิวเจอร์"
+            : r.step === "position_mode"
+              ? "อ่านโหมด position"
+              : r.step === "open_positions"
+                ? "อ่าน position ที่เปิด"
+                : "เครือข่าย/เซิร์ฟเวอร์";
+        const codePart = r.code != null ? `\nรหัส MEXC: ${r.code}` : "";
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `MEXC API — เช็คแล้ว ❌\nขั้น ${stepTh} ไม่ผ่าน${codePart}\n${r.message.slice(0, 800)}\n\nลอง: สิทธิ์ API (View + Order ถ้าต้องสั่งปิด) / IP whitelist / เวลาเครื่อง / host ${mexcFuturesBaseUrl()}`,
+          threadOpts,
+        );
+        return NextResponse.json({ ok: true });
+      }
+      const symLine =
+        r.openSymbolsSample.length > 0
+          ? `\nสัญญาที่เปิดอยู่ (ตัวอย่าง): ${r.openSymbolsSample.join(", ")}`
+          : "";
+      await sendTelegramMessageToChat(
+        String(chatId),
+        `MEXC API — เช็คแล้ว ✅\n• USDT ใช้ได้ (ฟิวเจอร์): ${r.usdtAvailable}\n• โหมด position: ${r.positionModeLabel}\n• จำนวน position เปิด: ${r.openPositionsCount}${symLine}`,
+        threadOpts,
+      );
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `เช็ค MEXC API ไม่สำเร็จ — ${detail.slice(0, 500)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] mexc api check reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

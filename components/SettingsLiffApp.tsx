@@ -474,7 +474,8 @@ export default function SettingsLiffApp() {
               </p>
             )}
             <p className="sub" style={{ marginTop: "0.5rem" }}>
-              หลังตั้ง MEXC แล้ว: พิมพ์ <strong>ขอรับ Webhook JSON MEXC</strong> หรือ <code>/webhook_json</code> ในแชทบอท Telegram
+              หลังตั้ง MEXC แล้ว: <strong>ขอรับ Webhook JSON MEXC</strong> / <code>/webhook_json</code> — หรือ{" "}
+              <strong>เช็ค MEXC API</strong> / <code>/mexc_api</code> เพื่อลองเรียกข้อมูลฟิวเจอร์จริงจาก MEXC
             </p>
           </>
         ) : tvLoadErr ? null : (

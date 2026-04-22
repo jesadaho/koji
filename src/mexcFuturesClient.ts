@@ -138,6 +138,128 @@ export async function getOpenPositions(
   return res.data;
 }
 
+export type MexcFuturesAssetRow = {
+  currency?: string;
+  availableBalance?: number | string;
+  equity?: number | string;
+};
+
+export type MexcApiVerifyOk = {
+  ok: true;
+  usdtAvailable: string;
+  positionModeLabel: string;
+  openPositionsCount: number;
+  openSymbolsSample: string[];
+};
+
+export type MexcApiVerifyFail = {
+  ok: false;
+  step: "network" | "account_assets" | "position_mode" | "open_positions";
+  code?: number;
+  message: string;
+};
+
+/**
+ * ลองเรียก futures private จริง: ทรัพย์สิน → โหมด position → รายการ position เปิด
+ */
+export async function verifyMexcFuturesApiForUser(
+  creds: MexcCredentials
+): Promise<MexcApiVerifyOk | MexcApiVerifyFail> {
+  let assets: MexcOk<MexcFuturesAssetRow[]>;
+  try {
+    assets = await mexcPrivateGet<MexcFuturesAssetRow[]>(creds, "/api/v1/private/account/assets");
+  } catch (e) {
+    return {
+      ok: false,
+      step: "network",
+      message: e instanceof Error ? e.message : String(e),
+    };
+  }
+  if (!assets.success) {
+    return {
+      ok: false,
+      step: "account_assets",
+      code: assets.code,
+      message: typeof assets.message === "string" && assets.message.trim()
+        ? assets.message
+        : `code ${assets.code}`,
+    };
+  }
+  const list = Array.isArray(assets.data) ? assets.data : [];
+  const usdt = list.find((r) => String(r.currency ?? "").toUpperCase() === "USDT");
+  const usdtAvail =
+    usdt?.availableBalance != null && usdt.availableBalance !== ""
+      ? String(usdt.availableBalance)
+      : "—";
+
+  let positionModeLabel = "—";
+  try {
+    const modeRes = await mexcPrivateGet<{ positionMode?: number }>(
+      creds,
+      "/api/v1/private/position/position_mode"
+    );
+    if (!modeRes.success) {
+      return {
+        ok: false,
+        step: "position_mode",
+        code: modeRes.code,
+        message:
+          typeof modeRes.message === "string" && modeRes.message.trim()
+            ? modeRes.message
+            : `code ${modeRes.code}`,
+      };
+    }
+    const d = modeRes.data;
+    if (d && typeof d === "object" && d !== null && "positionMode" in d) {
+      const pm = Number((d as { positionMode: unknown }).positionMode);
+      positionModeLabel = pm === 2 ? "one-way" : pm === 1 ? "dual-side" : String(pm);
+    } else {
+      positionModeLabel = "dual-side";
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      step: "network",
+      message: e instanceof Error ? e.message : String(e),
+    };
+  }
+
+  let openPositionsCount = 0;
+  let openSymbolsSample: string[] = [];
+  try {
+    const posRes = await mexcPrivateGet<OpenPositionRow[]>(creds, "/api/v1/private/position/open_positions");
+    if (!posRes.success) {
+      return {
+        ok: false,
+        step: "open_positions",
+        code: posRes.code,
+        message:
+          typeof posRes.message === "string" && posRes.message.trim()
+            ? posRes.message
+            : `code ${posRes.code}`,
+      };
+    }
+    const rows = Array.isArray(posRes.data) ? posRes.data : [];
+    const actives = rows.filter((p) => p.state === 1 && Number(p.holdVol) > 0);
+    openPositionsCount = actives.length;
+    openSymbolsSample = [...new Set(actives.map((p) => p.symbol))].slice(0, 8);
+  } catch (e) {
+    return {
+      ok: false,
+      step: "open_positions",
+      message: e instanceof Error ? e.message : String(e),
+    };
+  }
+
+  return {
+    ok: true,
+    usdtAvailable: usdtAvail,
+    positionModeLabel,
+    openPositionsCount,
+    openSymbolsSample,
+  };
+}
+
 /** ราคา last จาก public ticker สำหรับ market order (contract symbol เช่น BTC_USDT) */
 export async function getContractLastPricePublic(symbol: string): Promise<number | null> {
   const url = `${mexcFuturesBaseUrl()}/api/v1/contract/ticker`;

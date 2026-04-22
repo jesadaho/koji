@@ -86,6 +86,15 @@ export async function getTradingViewMexcSettings(
   return { ...row };
 }
 
+/** อ่านแถวตาม userId ถ้ามี (ไม่บังคับ webhookToken) — ใช้เช็คสถานะ MEXC API */
+export async function getTradingViewMexcRowOptional(
+  userId: string
+): Promise<TradingViewMexcUserSettings | null> {
+  const m = await loadMap();
+  const row = m[userId];
+  return row ? { ...row } : null;
+}
+
 /** สร้างแถว+webhookToken ตั้งแต่ยังไม่เคยบันทึก (ไม่รวม MEXC key) */
 export async function ensureTradingViewMexcUserRow(
   userId: string
