@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendTelegramMessageToChat, wrapTelegramPreMonospace } from "@/src/telegramAlert";
-import { formatTradingViewMexcWebhookJson } from "@/src/liffService";
+import { escapeTelegramHtml, sendTelegramMessageToChat, wrapTelegramPreMonospace } from "@/src/telegramAlert";
+import { formatTradingViewMexcWebhookJson, getTradingViewMexcWebhookCloseUrl } from "@/src/liffService";
 import { ensureTradingViewMexcUserRow, getTradingViewMexcRowOptional } from "@/src/tradingViewCloseSettingsStore";
 import { mexcFuturesBaseUrl, verifyMexcFuturesApiForUser } from "@/src/mexcFuturesClient";
 import { tgUserIdToStoreKey } from "@/src/telegramMiniAppAuth";
@@ -129,9 +129,11 @@ export async function POST(req: NextRequest) {
       }
       const json = formatTradingViewMexcWebhookJson(userId, row.webhookToken);
       const pre = wrapTelegramPreMonospace(json);
+      const webhookUrl = getTradingViewMexcWebhookCloseUrl();
+      const urlLine = `<b>Webhook URL</b> (TradingView → URL)\n<code>${escapeTelegramHtml(webhookUrl)}</code>`;
       const msg = pre
-        ? `Koji — <b>Webhook JSON</b> (วางใน TradingView Alert เป็น body)\n\n${pre}`
-        : `Koji — <b>Webhook JSON</b>\n\n(ข้อความยาว) — ใช้หน้า Settings ใน Mini App แทน\n\n${json.slice(0, 2000)}`;
+        ? `Koji — MEXC\n${urlLine}\n\n<b>Webhook JSON</b> (TradingView → Message / body)\n\n${pre}`
+        : `Koji — MEXC\n${urlLine}\n\n<b>Webhook JSON</b>\n\n(ข้อความยาว) — ใช้หน้า Settings ใน Mini App แทน\n\n${escapeTelegramHtml(json.slice(0, 2000))}`;
       await sendTelegramMessageToChat(String(chatId), msg, { parseMode: "HTML" });
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);

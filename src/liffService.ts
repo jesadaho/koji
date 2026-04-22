@@ -671,9 +671,18 @@ export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
 }
 
 function publicAppBaseForTvWebhook(): { origin: string; path: string } {
-  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim() || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  const raw =
+    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+    process.env.TELEGRAM_MINI_APP_URL?.trim() ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
   const origin = raw.replace(/\/$/, "");
   return { origin, path: "/api/webhooks/tv/close" };
+}
+
+/** URL เต็มสำหรับ TradingView Webhook (เช่น https://koji-five.vercel.app/api/webhooks/tv/close) */
+export function getTradingViewMexcWebhookCloseUrl(): string {
+  const { origin, path } = publicAppBaseForTvWebhook();
+  return origin ? `${origin}${path}` : path;
 }
 
 export function tradingViewMexcExamplePayload(userId: string, token: string): Record<string, string> {
