@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendTelegramMessageToChat } from "@/src/telegramAlert";
+import { sendTelegramMessageToChat, wrapTelegramPreMonospace } from "@/src/telegramAlert";
+import { formatTradingViewMexcWebhookJson } from "@/src/liffService";
+import { ensureTradingViewMexcUserRow } from "@/src/tradingViewCloseSettingsStore";
+import { tgUserIdToStoreKey } from "@/src/telegramMiniAppAuth";
 import { parseMarketCheck, parsePositionChecklist } from "@/src/positionChecklistLineCommands";
 import { buildMarketCheckMessage, buildPositionChecklistMessage } from "@/src/positionChecklistService";
 import { isSparkStatsQuery } from "@/src/sparkFollowUpLineCommands";
@@ -47,7 +50,12 @@ export async function POST(req: NextRequest) {
   }
 
   let update: {
-    message?: { chat?: { id?: number }; text?: string; message_thread_id?: number };
+    message?: {
+      chat?: { id?: number };
+      text?: string;
+      message_thread_id?: number;
+      from?: { id?: number };
+    };
   };
   try {
     update = (await req.json()) as typeof update;
@@ -99,6 +107,37 @@ export async function POST(req: NextRequest) {
   }
 
   const normalized = normalizeTelegramSlashCommand(text);
+  const fromUserId = update.message?.from?.id;
+
+  const trimmedText = text.trim();
+  const wantsWebhookJson =
+    trimmedText === "ขอรับ Webhook JSON MEXC" ||
+    /^\/?webhook_json(@\S+)?\s*$/i.test(normalized);
+
+  if (wantsWebhookJson && typeof fromUserId === "number" && fromUserId > 0) {
+    try {
+      const userId = tgUserIdToStoreKey(fromUserId);
+      const row = await ensureTradingViewMexcUserRow(userId);
+      const json = formatTradingViewMexcWebhookJson(userId, row.webhookToken);
+      const pre = wrapTelegramPreMonospace(json);
+      const msg = pre
+        ? `Koji — <b>Webhook JSON</b> (วางใน TradingView Alert เป็น body)\n\n${pre}`
+        : `Koji — <b>Webhook JSON</b>\n\n(ข้อความยาว) — ใช้หน้า Settings ใน Mini App แทน\n\n${json.slice(0, 2000)}`;
+      await sendTelegramMessageToChat(String(chatId), msg, { parseMode: "HTML" });
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `Webhooks JSON: อ่านการตั้งค่าไม่สำเร็จ — ${detail.slice(0, 500)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] webhook json reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   if (isSparkStatsQuery(text) || isSparkStatsQuery(normalized)) {
     try {

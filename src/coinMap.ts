@@ -46,3 +46,19 @@ export function resolveContractSymbol(input: string): { contractSymbol: string; 
 
   return null;
 }
+
+/**
+ * แปลง label จาก TradingView ({{ticker}}) เช่น `BINANCE:BTCUSDT.P` → สัญญา MEXC
+ */
+export function normalizeSymbolFromTradingView(input: string): { contractSymbol: string; label: string } | null {
+  let t = input.trim();
+  if (!t) return null;
+  const c = t.indexOf(":");
+  if (c >= 0) t = t.slice(c + 1).trim();
+  t = t.replace(/\.P$/i, "").replace(/-PERP$/i, "");
+  if (/^[A-Z0-9]+USDT$/i.test(t)) {
+    const base = t.replace(/USDT$/i, "");
+    return resolveContractSymbol(base);
+  }
+  return resolveContractSymbol(t);
+}

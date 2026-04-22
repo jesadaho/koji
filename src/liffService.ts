@@ -46,6 +46,7 @@ import {
 } from "./volumeSignalAlertTick";
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
+import { ensureTradingViewMexcUserRow, saveTradingViewMexcSettings } from "./tradingViewCloseSettingsStore";
 
 export function getLiffConfig() {
   return {
@@ -667,4 +668,99 @@ export async function liffDeleteIndicatorAlert(
 export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
   const state = await loadSparkFollowUpState();
   return buildSparkStatsApiPayload(state);
+}
+
+function publicAppBaseForTvWebhook(): { origin: string; path: string } {
+  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim() || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  const origin = raw.replace(/\/$/, "");
+  return { origin, path: "/api/webhooks/tv/close" };
+}
+
+export function tradingViewMexcExamplePayload(userId: string, token: string): Record<string, string> {
+  return {
+    id: userId,
+    token,
+    symbol: "{{ticker}}",
+    price: "{{close}}",
+    cmd: "CLOSE_POSITION",
+    remark: "Break Trendline",
+  };
+}
+
+export function formatTradingViewMexcWebhookJson(userId: string, token: string): string {
+  return `${JSON.stringify(tradingViewMexcExamplePayload(userId, token), null, 2)}\n`;
+}
+
+/**
+ * ตั้งค่า MEXC + token สำหรับ Webhook ปิด position
+ */
+export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
+  status: number;
+  json: Record<string, unknown>;
+}> {
+  const { origin, path } = publicAppBaseForTvWebhook();
+  const row = await ensureTradingViewMexcUserRow(userId);
+  const webhookUrl = origin ? `${origin}${path}` : path;
+  const mexcKeyLast4 =
+    row.mexcApiKey && row.mexcApiKey.length >= 4 ? row.mexcApiKey.slice(-4) : null;
+  return {
+    status: 200,
+    json: {
+      exchange: "mexc",
+      userId,
+      webhookUrl,
+      webhookPath: path,
+      webhookToken: row.webhookToken,
+      mexcApiKeySet: Boolean(row.mexcApiKey),
+      mexcApiKeyLast4: mexcKeyLast4,
+      mexcSecretSet: Boolean(row.mexcSecret),
+      mexcCredsComplete: Boolean(row.mexcApiKey && row.mexcSecret),
+      exampleJson: tradingViewMexcExamplePayload(userId, row.webhookToken),
+    },
+  };
+}
+
+export async function liffSetTradingViewMexcSettings(
+  userId: string,
+  body: unknown
+): Promise<{
+  status: number;
+  json: Record<string, unknown>;
+}> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const rotate = Boolean(b.rotateWebhookToken);
+  const clearMexc = Boolean(b.clearMexcCreds);
+  const key = typeof b.mexcApiKey === "string" ? b.mexcApiKey.trim() : "";
+  const sec = typeof b.mexcSecret === "string" ? b.mexcSecret.trim() : "";
+
+  if (key && /[\s]/.test(key)) {
+    return { status: 400, json: { error: "MEXC API key ห้ามมีช่องว่าง" } };
+  }
+
+  const row = await saveTradingViewMexcSettings(userId, {
+    mexcApiKey: key,
+    mexcSecret: sec,
+    rotateWebhookToken: rotate,
+    clearMexcCreds: clearMexc,
+  });
+
+  const { origin, path } = publicAppBaseForTvWebhook();
+  const webhookUrl = origin ? `${origin}${path}` : path;
+  const mexcKeyLast4 =
+    row.mexcApiKey && row.mexcApiKey.length >= 4 ? row.mexcApiKey.slice(-4) : null;
+  return {
+    status: 200,
+    json: {
+      exchange: "mexc",
+      userId,
+      webhookUrl,
+      webhookPath: path,
+      webhookToken: row.webhookToken,
+      mexcApiKeySet: Boolean(row.mexcApiKey),
+      mexcApiKeyLast4: mexcKeyLast4,
+      mexcSecretSet: Boolean(row.mexcSecret),
+      mexcCredsComplete: Boolean(row.mexcApiKey && row.mexcSecret),
+      exampleJson: tradingViewMexcExamplePayload(userId, row.webhookToken),
+    },
+  };
 }
