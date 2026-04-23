@@ -8,6 +8,18 @@ export function tgUserIdToStoreKey(telegramUserId: number): string {
   return `tg:${Math.floor(telegramUserId)}`;
 }
 
+/** `tg:123…` → chat_id สำหรับส่ง DM (ตัวเลขสตริง) — ไม่ใช่รูปแบบนี้ได้ null */
+export function tgStoreKeyToTelegramDmChatId(userId: string): string | null {
+  const m = userId.trim().match(/^tg:(\d{1,20})$/);
+  return m ? m[1]! : null;
+}
+
+/** `tg:123` → `123` สำหรับส่ง DM (sendMessage chat_id) — ไม่ใช่รูปแบบนี้ → null */
+export function tgStoreKeyToTelegramUserIdString(userId: string): string | null {
+  const m = userId.trim().match(/^tg:(\d{1,20})$/);
+  return m ? m[1]! : null;
+}
+
 export type TmaAuthResult =
   | { ok: true; userId: string; telegramUserId: number }
   | { ok: false; status: number; error: string };

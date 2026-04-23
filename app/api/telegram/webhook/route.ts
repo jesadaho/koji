@@ -39,7 +39,7 @@ function miniAppOpenUrl(): string {
 
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
- * /start → ปุ่ม Mini App · ขอ Webhook JSON MEXC / เช็ค MEXC API · เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
+ * /start → ปุ่ม Mini App · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
@@ -129,8 +129,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const tvClosePhraseNorm = trimmedText.replace(/\s+/g, " ").trim().toLowerCase();
   const wantsWebhookJsonClose =
     trimmedText === "ขอรับ Webhook JSON MEXC" ||
+    tvClosePhraseNorm === "ขอรับ webhook json close" ||
     (normalized === "webhook_json" && !normalized.startsWith("webhook_json_open"));
 
   if (wantsWebhookJsonClose && typeof fromUserId === "number" && fromUserId > 0) {

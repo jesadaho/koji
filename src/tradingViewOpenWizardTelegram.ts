@@ -13,6 +13,7 @@ import {
 import {
   isGenericOpenWizardRequest,
   isWebhookJsonOpenSlash,
+  isWebhookJsonOpenThaiRequest,
   isWizardCancel,
   parseLeverageAnswer,
   parseMarginAnswer,
@@ -53,7 +54,10 @@ export async function handleTvOpenWizardTelegramMessage(input: {
   }
 
   const existing = await getTvOpenWizard(userId);
-  const wantStart = isGenericOpenWizardRequest(trimmedText) || isWebhookJsonOpenSlash(normalized);
+  const wantStart =
+    isGenericOpenWizardRequest(trimmedText) ||
+    isWebhookJsonOpenThaiRequest(trimmedText) ||
+    isWebhookJsonOpenSlash(normalized);
 
   if (!existing && !wantStart) {
     return false;

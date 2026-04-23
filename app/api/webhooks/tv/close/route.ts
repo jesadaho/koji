@@ -4,6 +4,11 @@ import { closeAllOpenForSymbol, createOpenMarketOrder } from "@/src/mexcFuturesC
 import { getTradingViewMexcSettings, verifyUserWebhookToken } from "@/src/tradingViewCloseSettingsStore";
 import { normalizeTradingViewUserId } from "@/src/tradingViewWebhookUserId";
 import { isTvWebhookNonceUsed, markTvWebhookNonceUsed } from "@/src/tradingViewWebhookNonceStore";
+import {
+  notifyTvWebhookCloseNoOpen,
+  notifyTvWebhookCloseOk,
+  notifyTvWebhookOpenOk,
+} from "@/src/tradingViewWebhookTelegramNotify";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -127,6 +132,13 @@ export async function POST(req: NextRequest) {
       }
       if (r.message === "no_open_position") {
         if (nonce) await markTvWebhookNonceUsed(userId, nonce);
+        await notifyTvWebhookCloseNoOpen({
+          userId,
+          label: resolved.label,
+          contractSymbol: resolved.contractSymbol,
+          priceNote,
+          remark,
+        });
         return NextResponse.json(
           {
             ok: true,
@@ -140,6 +152,14 @@ export async function POST(req: NextRequest) {
         );
       }
       if (nonce) await markTvWebhookNonceUsed(userId, nonce);
+      await notifyTvWebhookCloseOk({
+        userId,
+        label: resolved.label,
+        contractSymbol: resolved.contractSymbol,
+        closed: r.closed,
+        priceNote,
+        remark,
+      });
       return NextResponse.json(
         {
           ok: true,
@@ -232,6 +252,17 @@ export async function POST(req: NextRequest) {
         ? String((d as { orderId: unknown }).orderId)
         : undefined;
     if (nonce) await markTvWebhookNonceUsed(userId, nonce);
+    await notifyTvWebhookOpenOk({
+      userId,
+      label: resolved.label,
+      contractSymbol: resolved.contractSymbol,
+      long: sideParsed.long,
+      marginUsdt: margin,
+      leverage: lev,
+      orderId,
+      priceNote,
+      remark,
+    });
     return NextResponse.json(
       {
         ok: true,

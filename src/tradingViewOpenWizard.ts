@@ -10,6 +10,13 @@ export function isWebhookJsonOpenSlash(normalized: string): boolean {
   return n === "webhook_json_open" || n.startsWith("webhook_json_open ");
 }
 
+/** ขอรับ Webhook JSON open — ชัดว่าเปิด position (เทียบหลัง normalize + lowercase) */
+export function isWebhookJsonOpenThaiRequest(trimmedText: string): boolean {
+  const n = trimmedText.replace(/\s+/g, " ").trim().toLowerCase();
+  if (/mexc/i.test(n)) return false;
+  return n === "ขอรับ webhook json open";
+}
+
 export function parseSideAnswer(text: string): "LONG" | "SHORT" | null {
   const t = text.trim().toLowerCase();
   if (/^(long|l|ซื้อ|ลอง)$/.test(t)) return "LONG";
