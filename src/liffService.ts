@@ -47,6 +47,7 @@ import {
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
 import { ensureTradingViewMexcUserRow, saveTradingViewMexcSettings } from "./tradingViewCloseSettingsStore";
+import { newTvWebhookNonce } from "./tradingViewWebhookNonceStore";
 
 export function getLiffConfig() {
   return {
@@ -692,12 +693,44 @@ export function tradingViewMexcExamplePayload(userId: string, token: string): Re
     symbol: "{{ticker}}",
     price: "{{close}}",
     cmd: "CLOSE_POSITION",
+    nonce: newTvWebhookNonce(),
     remark: "Break Trendline",
   };
 }
 
 export function formatTradingViewMexcWebhookJson(userId: string, token: string): string {
   return `${JSON.stringify(tradingViewMexcExamplePayload(userId, token), null, 2)}\n`;
+}
+
+export function tradingViewMexcExampleOpenPayload(
+  userId: string,
+  token: string,
+  side: "LONG" | "SHORT",
+  marginUsdt: number,
+  leverage: number
+): Record<string, string | number> {
+  return {
+    id: userId,
+    token,
+    symbol: "{{ticker}}",
+    price: "{{close}}",
+    cmd: "OPEN_POSITION",
+    side,
+    marginUsdt,
+    leverage,
+    nonce: newTvWebhookNonce(),
+    remark: "Trend signal",
+  };
+}
+
+export function formatTradingViewMexcOpenWebhookJson(
+  userId: string,
+  token: string,
+  side: "LONG" | "SHORT",
+  marginUsdt: number,
+  leverage: number
+): string {
+  return `${JSON.stringify(tradingViewMexcExampleOpenPayload(userId, token, side, marginUsdt, leverage), null, 2)}\n`;
 }
 
 /**
@@ -726,6 +759,9 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
       mexcSecretSet: Boolean(row.mexcSecret),
       mexcCredsComplete,
       exampleJson: mexcCredsComplete ? tradingViewMexcExamplePayload(userId, row.webhookToken) : null,
+      exampleOpenJson: mexcCredsComplete
+        ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
+        : null,
     },
   };
 }
@@ -772,6 +808,9 @@ export async function liffSetTradingViewMexcSettings(
       mexcSecretSet: Boolean(row.mexcSecret),
       mexcCredsComplete,
       exampleJson: mexcCredsComplete ? tradingViewMexcExamplePayload(userId, row.webhookToken) : null,
+      exampleOpenJson: mexcCredsComplete
+        ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
+        : null,
     },
   };
 }

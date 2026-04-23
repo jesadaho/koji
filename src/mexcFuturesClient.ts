@@ -288,6 +288,136 @@ export async function getContractLastPricePublic(symbol: string): Promise<number
 
 export type OrderCreateData = { orderId?: string; ts?: number };
 
+/** จาก public GET /api/v1/contract/detail?symbol= */
+export type MexcContractDetailPublic = {
+  symbol?: string;
+  contractSize?: number;
+  minVol?: number;
+  maxVol?: number;
+  volUnit?: number;
+  volScale?: number;
+  minLeverage?: number;
+  maxLeverage?: number;
+};
+
+export async function fetchContractDetailPublic(
+  contractSymbol: string
+): Promise<MexcContractDetailPublic | null> {
+  const url = `${mexcFuturesBaseUrl()}/api/v1/contract/detail`;
+  try {
+    const { data } = await axios.get<MexcOk<MexcContractDetailPublic | MexcContractDetailPublic[]>>(url, {
+      params: { symbol: contractSymbol.trim() },
+      timeout: 30_000,
+      validateStatus: () => true,
+    });
+    if (!data?.success || data.data === undefined || data.data === null) return null;
+    const d = data.data;
+    if (Array.isArray(d)) {
+      const one = d.find((x) => x.symbol === contractSymbol.trim()) ?? d[0];
+      return one ?? null;
+    }
+    return d as MexcContractDetailPublic;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * notional USDT ≈ vol * contractSize * price (linear USDT-M)
+ */
+export function computeOpenVolFromNotionalUsdt(
+  notionalUsdt: number,
+  markPrice: number,
+  detail: MexcContractDetailPublic
+): { vol: number } | { error: string } {
+  const cs = Number(detail.contractSize);
+  const minV = Number(detail.minVol);
+  const maxV = Number(detail.maxVol);
+  const volScale = Number.isFinite(Number(detail.volScale)) ? Math.max(0, Math.floor(Number(detail.volScale))) : 0;
+  if (!(notionalUsdt > 0) || !(markPrice > 0) || !(cs > 0)) {
+    return { error: "ราคา/สัญญา/notional ไม่ถูกต้อง" };
+  }
+  const rawVol = notionalUsdt / (cs * markPrice);
+  const factor = 10 ** volScale;
+  let vol = Math.floor(rawVol * factor + 1e-12) / factor;
+  if (!Number.isFinite(vol) || vol <= 0) {
+    return { error: "คำนวณ vol ไม่ได้" };
+  }
+  if (Number.isFinite(minV) && vol < minV) {
+    return { error: `vol น้อยกว่าขั้นต่ำของสัญญา (minVol ${minV})` };
+  }
+  if (Number.isFinite(maxV) && vol > maxV) {
+    vol = maxV;
+  }
+  const vu = Number(detail.volUnit);
+  if (Number.isFinite(vu) && vu > 0) {
+    vol = Math.floor(vol / vu) * vu;
+    if (vol < (Number.isFinite(minV) ? minV : 1)) {
+      return { error: "vol หลังปัดตาม volUnit ต่ำเกินไป" };
+    }
+  }
+  return { vol };
+}
+
+/**
+ * เปิด market: side 1 long, 3 short — notionalUsdt = marginUsdt * leverage (ประมาณมูลค่า position)
+ */
+export async function createOpenMarketOrder(
+  creds: MexcCredentials,
+  p: {
+    contractSymbol: string;
+    long: boolean;
+    marginUsdt: number;
+    leverage: number;
+    openType?: 1 | 2;
+  }
+): Promise<MexcOk<OrderCreateData>> {
+  const symbol = p.contractSymbol.trim();
+  const margin = p.marginUsdt;
+  const levIn = Math.floor(p.leverage);
+  if (!(margin > 0) || levIn < 1) {
+    return { success: false, code: -1, message: "margin หรือ leverage ไม่ถูกต้อง" };
+  }
+
+  const detail = await fetchContractDetailPublic(symbol);
+  if (!detail) {
+    return { success: false, code: -1, message: "ดึง contract detail ไม่ได้" };
+  }
+
+  const minLev = Number(detail.minLeverage) || 1;
+  const maxLev = Number(detail.maxLeverage) || 500;
+  const lev = Math.min(maxLev, Math.max(minLev, levIn));
+
+  const mark = await getContractLastPricePublic(symbol);
+  if (mark == null || !(mark > 0)) {
+    return { success: false, code: -1, message: "ดึงราคาไม่ได้" };
+  }
+
+  const notionalUsdt = margin * lev;
+  const volResult = computeOpenVolFromNotionalUsdt(notionalUsdt, mark, detail);
+  if ("error" in volResult) {
+    return { success: false, code: -1, message: volResult.error };
+  }
+  const vol = volResult.vol;
+
+  const positionMode = await getFuturesUserPositionMode(creds);
+  const openType: 1 | 2 = p.openType === 1 ? 1 : 2;
+  const side = p.long ? 1 : 3;
+
+  const body: Record<string, unknown> = {
+    symbol,
+    price: mark,
+    vol,
+    side,
+    type: 5,
+    openType,
+    leverage: lev,
+    positionMode,
+  };
+
+  return mexcPrivatePost<OrderCreateData>(creds, "/api/v1/private/order/create", body);
+}
+
 /**
  * ปิด position: side 2 = close short, 4 = close long; type 5 = market; flashClose ลด slippageตาม platform
  */

@@ -474,8 +474,9 @@ export default function SettingsLiffApp() {
               </p>
             )}
             <p className="sub" style={{ marginTop: "0.5rem" }}>
-              หลังตั้ง MEXC แล้ว: <strong>ขอรับ Webhook JSON MEXC</strong> / <code>/webhook_json</code> — หรือ{" "}
-              <strong>เช็ค MEXC API</strong> / <code>/mexc_api</code> เพื่อลองเรียกข้อมูลฟิวเจอร์จริงจาก MEXC
+              หลังตั้ง MEXC แล้ว: <strong>ขอรับ Webhook JSON MEXC</strong> / <code>/webhook_json</code> (ปิด) —{" "}
+              <strong>ขอรับ Webhook JSON</strong> / <code>/webhook_json_open</code> (เปิด — บอทถาม Long/Short, margin, leverage) —{" "}
+              <strong>เช็ค MEXC API</strong> / <code>/mexc_api</code>
             </p>
           </>
         ) : tvLoadErr ? null : (

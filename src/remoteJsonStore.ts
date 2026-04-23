@@ -113,3 +113,31 @@ export async function releasePctStepAlertsLock(): Promise<void> {
     await kv.del(PCT_STEP_ALERTS_LOCK_KEY);
   }
 }
+
+/** ตั้ง string พร้อม TTL (nonce / dedupe) — ต้องมี Redis หรือ KV */
+export async function cloudSetStringWithTtl(key: string, value: string, ttlSec: number): Promise<void> {
+  if (useRedisUrl()) {
+    const r = await getRedis();
+    await r.set(key, value, { EX: ttlSec });
+    return;
+  }
+  if (useKvRest()) {
+    await kv.set(key, value, { ex: ttlSec });
+    return;
+  }
+  throw new Error("ไม่มี cloud storage (ตั้ง REDIS_URL หรือ KV_REST_API_URL)");
+}
+
+/** อ่าน string key (ไม่ parse JSON) */
+export async function cloudGetString(key: string): Promise<string | null> {
+  if (useRedisUrl()) {
+    const r = await getRedis();
+    const v = await r.get(key);
+    return v ?? null;
+  }
+  if (useKvRest()) {
+    const v = await kv.get<string>(key);
+    return v ?? null;
+  }
+  return null;
+}

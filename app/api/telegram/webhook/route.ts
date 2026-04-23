@@ -8,6 +8,7 @@ import { parseMarketCheck, parsePositionChecklist } from "@/src/positionChecklis
 import { buildMarketCheckMessage, buildPositionChecklistMessage } from "@/src/positionChecklistService";
 import { isSparkStatsQuery } from "@/src/sparkFollowUpLineCommands";
 import { formatSparkStatsMessage } from "@/src/sparkFollowUpStats";
+import { handleTvOpenWizardTelegramMessage } from "@/src/tradingViewOpenWizardTelegram";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
 
   let update: {
     message?: {
-      chat?: { id?: number };
+      chat?: { id?: number; type?: string };
       text?: string;
       message_thread_id?: number;
       from?: { id?: number };
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
   }
 
   const text = update.message?.text?.trim() ?? "";
+  const chatType = update.message?.chat?.type;
   const chatId = update.message?.chat?.id;
   const replyThreadId = update.message?.message_thread_id;
   const threadOpts =
@@ -111,11 +113,27 @@ export async function POST(req: NextRequest) {
   const fromUserId = update.message?.from?.id;
 
   const trimmedText = text.trim();
-  const wantsWebhookJson =
-    trimmedText === "ขอรับ Webhook JSON MEXC" ||
-    /^\/?webhook_json(@\S+)?\s*$/i.test(normalized);
 
-  if (wantsWebhookJson && typeof fromUserId === "number" && fromUserId > 0) {
+  if (typeof fromUserId === "number" && fromUserId > 0 && chatId != null) {
+    const wizardHandled = await handleTvOpenWizardTelegramMessage({
+      text,
+      trimmedText,
+      normalized,
+      chatType,
+      fromUserId,
+      chatId,
+      threadOpts,
+    });
+    if (wizardHandled) {
+      return NextResponse.json({ ok: true });
+    }
+  }
+
+  const wantsWebhookJsonClose =
+    trimmedText === "ขอรับ Webhook JSON MEXC" ||
+    (normalized === "webhook_json" && !normalized.startsWith("webhook_json_open"));
+
+  if (wantsWebhookJsonClose && typeof fromUserId === "number" && fromUserId > 0) {
     try {
       const userId = tgUserIdToStoreKey(fromUserId);
       const row = await ensureTradingViewMexcUserRow(userId);
@@ -131,9 +149,11 @@ export async function POST(req: NextRequest) {
       const pre = wrapTelegramPreMonospace(json);
       const webhookUrl = getTradingViewMexcWebhookCloseUrl();
       const urlLine = `<b>Webhook URL</b> (TradingView → URL)\n<code>${escapeTelegramHtml(webhookUrl)}</code>`;
+      const nonceHint =
+        "\n\n<i>nonce ใน JSON ใช้ครั้งเดียว — ถ้า TV ส่งซ้ำด้วย body เดิมจะถูกปฏิเสธ แนะนำตั้งเป็น \"nonce\": \"{{timenow}}\" ใน TradingView</i>";
       const msg = pre
-        ? `Koji — MEXC\n${urlLine}\n\n<b>Webhook JSON</b> (TradingView → Message / body)\n\n${pre}`
-        : `Koji — MEXC\n${urlLine}\n\n<b>Webhook JSON</b>\n\n(ข้อความยาว) — ใช้หน้า Settings ใน Mini App แทน\n\n${escapeTelegramHtml(json.slice(0, 2000))}`;
+        ? `Koji — MEXC\n${urlLine}\n\n<b>Webhook JSON</b> (TradingView → Message / body)\n\n${pre}${nonceHint}`
+        : `Koji — MEXC\n${urlLine}\n\n<b>Webhook JSON</b>\n\n(ข้อความยาว) — ใช้หน้า Settings ใน Mini App แทน\n\n${escapeTelegramHtml(json.slice(0, 2000))}${nonceHint}`;
       await sendTelegramMessageToChat(String(chatId), msg, { parseMode: "HTML" });
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
