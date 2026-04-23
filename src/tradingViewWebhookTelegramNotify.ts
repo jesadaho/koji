@@ -58,7 +58,7 @@ export async function notifyTvWebhookCloseNoOpen(input: {
     `ราคา (จาก alert): ${input.priceNote ?? "-"}`,
   ];
   if (input.remark?.trim()) lines.push(`หมายเหตุ: ${input.remark.trim().slice(0, 200)}`);
-  await notifyTradingViewWebhookTelegram(userId, lines.join("\n"));
+  await notifyTradingViewWebhookTelegram(input.userId, lines.join("\n"));
 }
 
 export async function notifyTvWebhookOpenOk(input: {
@@ -82,5 +82,5 @@ export async function notifyTvWebhookOpenOk(input: {
     `ราคา (จาก alert): ${input.priceNote ?? "-"}`,
   ];
   if (input.remark?.trim()) lines.push(`หมายเหตุ: ${input.remark.trim().slice(0, 200)}`);
-  await notifyTradingViewWebhookTelegram(userId, lines.join("\n"));
+  await notifyTradingViewWebhookTelegram(input.userId, lines.join("\n"));
 }
