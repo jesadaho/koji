@@ -61,6 +61,10 @@ function marketsHref(sort: MarketsSortMode, debug: boolean): string {
   return q ? `/markets?${q}` : "/markets";
 }
 
+function marketsLosersHref(debug: boolean): string {
+  return debug ? "/markets/losers?debug=1" : "/markets/losers";
+}
+
 function sortIntro(sort: MarketsSortMode, showDebugColumns: boolean): string {
   if (sort === "basis") {
     return `Top ${BASIS_TOP_LIMIT} USDT perpetual เรียงตาม |basis| มากสุดก่อน — basis = (ราคา perp − ราคา spot) / spot × 100 — ${VOL_FILTER_LABEL} · คู่ที่ไม่มี spot บน MEXC จะไม่แสดง`;
@@ -132,6 +136,7 @@ export default async function MarketsPage({
         <Link href={marketsHref("basis", showDebugColumns)} aria-current={sort === "basis" ? "page" : undefined}>
           Spot–Perp basis
         </Link>
+        <Link href={marketsLosersHref(showDebugColumns)}>Top loser (24h) by vol</Link>
       </nav>
       <p className="sub">{sortIntro(sort, showDebugColumns)}</p>
       {!errorMessage && sort !== "basis" ? (

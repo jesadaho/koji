@@ -26,6 +26,10 @@ const MIN_BASELINE_BARS = 32;
 /** กรองเฉพาะสัญญาที่มูลค่าเทิร์นโอเวอร์ 24h (amount24) มากกว่านี้ (USDT) */
 export const MIN_AMOUNT24_USDT = 5_000_000;
 
+/** 24h ติดลบ — กรอง Top loser by vol (รวมขอบเขต -1% … -15%) */
+export const TOP_LOSER_24H_PCT_MIN = -15;
+export const TOP_LOSER_24H_PCT_MAX = -1;
+
 export type MexcTickerRow = {
   symbol?: string;
   lastPrice?: number;
@@ -660,6 +664,11 @@ function fundingRateNum(t: MexcTickerRow): number {
   return typeof fr === "number" && !Number.isNaN(fr) ? fr : 0;
 }
 
+function change24hPercentFromTicker(t: MexcTickerRow): number {
+  const r = t.riseFallRate;
+  return typeof r === "number" && !Number.isNaN(r) ? r * 100 : 0;
+}
+
 function toTopMarketRow(
   t: MexcTickerRow,
   detailBySymbol: Map<string, MexcDetailRow>,
@@ -796,6 +805,42 @@ export async function getTopUsdtMarkets(options: GetTopUsdtMarketsOptions): Prom
 /** ใช้ getTopUsdtMarkets({ sort: "momentum", limit }) แทนได้ */
 export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarketRow[]> {
   return getTopUsdtMarkets({ sort: "momentum", limit });
+}
+
+/**
+ * USDT perpetual: 24h ติดลบในช่วง [TOP_LOSER_24H_PCT_MIN, TOP_LOSER_24H_PCT_MAX] — เรียงตาม amount24
+ * ไม่เรียก kline; momentum / 15m ในแถว = 0 (placeholder)
+ */
+export async function getTopUsdtMarketsLoserByVolume(options?: { limit?: number }): Promise<TopMarketRow[]> {
+  const limit = options?.limit ?? 50;
+  const [tickers, details] = await Promise.all([fetchContractTickers(), fetchContractDetails()]);
+
+  const detailBySymbol = new Map<string, MexcDetailRow>();
+  for (const d of details) {
+    if (d.symbol) detailBySymbol.set(d.symbol, d);
+  }
+
+  const usdtPerp = tickers.filter((t) => {
+    const sym = t.symbol?.trim();
+    if (!sym || !sym.endsWith("_USDT")) return false;
+    const amt = t.amount24;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= MIN_AMOUNT24_USDT) return false;
+    const price = t.lastPrice;
+    if (typeof price !== "number" || Number.isNaN(price) || price <= 0) return false;
+    const d = detailBySymbol.get(sym);
+    if (d && typeof d.state === "number" && d.state !== 0) return false;
+    return true;
+  });
+
+  const losers = usdtPerp.filter((t) => {
+    const ch = change24hPercentFromTicker(t);
+    return ch >= TOP_LOSER_24H_PCT_MIN && ch <= TOP_LOSER_24H_PCT_MAX;
+  });
+
+  losers.sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
+  const picked = losers.slice(0, limit);
+  const built = picked.map((t) => toTopMarketRow(t, detailBySymbol, EMPTY_MOM));
+  return enrichFundingMeta(built);
 }
 
 /**
