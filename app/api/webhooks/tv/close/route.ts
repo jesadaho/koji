@@ -7,6 +7,7 @@ import { isTvWebhookNonceUsed, markTvWebhookNonceUsed } from "@/src/tradingViewW
 import {
   notifyTvWebhookCloseNoOpen,
   notifyTvWebhookCloseOk,
+  notifyTvWebhookError,
   notifyTvWebhookOpenOk,
 } from "@/src/tradingViewWebhookTelegramNotify";
 
@@ -108,12 +109,19 @@ export async function POST(req: NextRequest) {
   const okToken = await verifyUserWebhookToken(userId, token.trim());
   if (!okToken) {
     logTvWebhook({ status: 401, result: "unauthorized", userId, cmd });
+    await notifyTvWebhookError(userId, "unauthorized", [
+      "Token ไม่ตรงกับที่บันทึก",
+      "ขอ Webhook JSON ใหม่จากบอทหรือ Mini App แล้วอัปเดต alert",
+    ]);
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   const settings = await getTradingViewMexcSettings(userId);
   if (!settings?.mexcApiKey || !settings.mexcSecret) {
     logTvWebhook({ status: 503, result: "mexc_creds_not_configured", userId, cmd });
+    await notifyTvWebhookError(userId, "mexc_creds_not_configured", [
+      "ยังไม่ได้กรอก MEXC API Key/Secret ใน Settings (Mini App)",
+    ]);
     return NextResponse.json(
       { ok: false, error: "mexc_creds_not_configured" },
       { status: 503 }
@@ -123,6 +131,10 @@ export async function POST(req: NextRequest) {
   const nonce = parseWebhookNonce(body);
   if (nonce && (await isTvWebhookNonceUsed(userId, nonce))) {
     logTvWebhook({ status: 409, result: "duplicate_nonce", userId, cmd, message: "nonce ซ้ำ" });
+    await notifyTvWebhookError(userId, "duplicate_nonce", [
+      "ค่า nonce นี้ใช้ไปแล้ว (ส่งซ้ำ)",
+      "สร้าง JSON ใหม่ หรือตั้ง \"nonce\": \"{{timenow}}\" ใน TradingView",
+    ]);
     return NextResponse.json(
       {
         ok: false,
@@ -136,7 +148,9 @@ export async function POST(req: NextRequest) {
 
   const resolved = normalizeSymbolFromTradingView(symbolRaw.trim());
   if (!resolved) {
-    logTvWebhook({ status: 400, result: "symbol_unknown", userId, cmd, symbolIn: symbolRaw.trim().slice(0, 80) });
+    const sym = symbolRaw.trim().slice(0, 80);
+    logTvWebhook({ status: 400, result: "symbol_unknown", userId, cmd, symbolIn: sym });
+    await notifyTvWebhookError(userId, "symbol_unknown", [`symbol ไม่รู้จัก: ${sym}`, "ตรวจสอบ {{ticker}} ใน alert กับ coin map ของ Koji"]);
     return NextResponse.json({ ok: false, error: "symbol_unknown" }, { status: 400 });
   }
 
@@ -171,6 +185,15 @@ export async function POST(req: NextRequest) {
           message: r.message,
           detail: r.closed,
         });
+        const closeErrLines = [
+          `คำสั่ง: ปิด position`,
+          `${resolved.label} · ${resolved.contractSymbol}`,
+          r.message ? `สาเหตุ: ${r.message}` : "",
+          r.closed?.length
+            ? `รายละเอียด: ${JSON.stringify(r.closed).slice(0, 800)}`
+            : "",
+        ].filter(Boolean) as string[];
+        await notifyTvWebhookError(userId, "close_failed", closeErrLines);
         return NextResponse.json(
           {
             ok: false,
@@ -255,6 +278,11 @@ export async function POST(req: NextRequest) {
         detail: e instanceof Error ? e.stack?.slice(0, 500) : undefined,
       });
       console.error(TV_WH_LOG, "close exception", e);
+      await notifyTvWebhookError(userId, "close_mexc_error", [
+        "คำสั่ง: ปิด position",
+        `${resolved.label} · ${resolved.contractSymbol}`,
+        `ข้อผิดพลาด: ${em}`,
+      ]);
       return NextResponse.json(
         { ok: false, error: "mexc_error", message: e instanceof Error ? e.message : String(e) },
         { status: 502 }
@@ -273,6 +301,16 @@ export async function POST(req: NextRequest) {
       contract: resolved.contractSymbol,
       message: "side ต้อง LONG/SHORT/1/3",
     });
+    const sideRaw =
+      body.side === undefined
+        ? "(ไม่ระบุ)"
+        : String(body.side).slice(0, 40);
+    await notifyTvWebhookError(userId, "open_side_invalid", [
+      "คำสั่ง: เปิด position",
+      `${resolved.label} · ${resolved.contractSymbol}`,
+      `side ใน JSON: ${sideRaw}`,
+      "ต้องเป็น LONG / SHORT / 1 (long) / 3 (short)",
+    ]);
     return NextResponse.json(
       { ok: false, error: "open_side_invalid", hint: "side ต้องเป็น LONG หรือ SHORT (หรือ 1 / 3)" },
       { status: 400 }
@@ -301,6 +339,11 @@ export async function POST(req: NextRequest) {
       cmd: "OPEN_POSITION",
       contract: resolved.contractSymbol,
     });
+    await notifyTvWebhookError(userId, "open_params_invalid", [
+      "คำสั่ง: เปิด position",
+      `${resolved.label} · ${resolved.contractSymbol}`,
+      "ต้องมี marginUsdt + leverage (หรือ notionalUsdt + leverage) ที่ถูกต้อง",
+    ]);
     return NextResponse.json(
       {
         ok: false,
@@ -329,6 +372,7 @@ export async function POST(req: NextRequest) {
       openType,
     });
     if (!r.success) {
+      const om = r.message ?? `code ${r.code}`;
       logTvWebhook({
         status: 502,
         result: "open_failed",
@@ -336,9 +380,14 @@ export async function POST(req: NextRequest) {
         cmd: "OPEN_POSITION",
         label: resolved.label,
         contract: resolved.contractSymbol,
-        message: r.message ?? `code ${r.code}`,
+        message: om,
         detail: r.code,
       });
+      await notifyTvWebhookError(userId, "open_failed", [
+        "คำสั่ง: เปิด position",
+        `${resolved.label} · ${resolved.contractSymbol}`,
+        `MEXC: ${om}`,
+      ]);
       return NextResponse.json(
         {
           ok: false,
@@ -402,6 +451,11 @@ export async function POST(req: NextRequest) {
       detail: e instanceof Error ? e.stack?.slice(0, 500) : undefined,
     });
     console.error(TV_WH_LOG, "open exception", e);
+    await notifyTvWebhookError(userId, "open_mexc_error", [
+      "คำสั่ง: เปิด position",
+      `${resolved.label} · ${resolved.contractSymbol}`,
+      `ข้อผิดพลาด: ${em}`,
+    ]);
     return NextResponse.json(
       { ok: false, error: "mexc_error", message: e instanceof Error ? e.message : String(e) },
       { status: 502 }

@@ -1,5 +1,22 @@
-import { sendTelegramMessageToChat, telegramBotTokenConfigured } from "./telegramAlert";
+import { sendTelegramMessageToChat, telegramBotTokenConfigured, TELEGRAM_SEND_MESSAGE_MAX } from "./telegramAlert";
 import { tgStoreKeyToTelegramDmChatId } from "./telegramMiniAppAuth";
+
+/**
+ * แจ้ง DM เมื่อ webhook ล้มเหลว — ไม่ส่งถ้าไม่ใช่ `tg:…` หรือไม่มี bot token
+ */
+export async function notifyTvWebhookError(userId: string, errorCode: string, lines: string[]): Promise<void> {
+  if (!tgStoreKeyToTelegramDmChatId(userId)) return;
+  const text = [
+    "Koji — MEXC",
+    "❌ TradingView webhook ไม่สำเร็จ",
+    `รหัส: ${errorCode}`,
+    ...lines,
+  ]
+    .filter((x) => x && String(x).trim())
+    .join("\n")
+    .slice(0, TELEGRAM_SEND_MESSAGE_MAX);
+  await notifyTradingViewWebhookTelegram(userId, text);
+}
 
 /**
  * แจ้ง Telegram DM หลัง MEXC webhook จาก TradingView สำเร็จ — เฉพาะ user id แบบ `tg:123`
