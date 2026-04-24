@@ -13,6 +13,30 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const TV_WH_LOG = "[webhooks/tv]";
+
+type TvWhLog = {
+  status: number;
+  result: string;
+  userId?: string;
+  cmd?: string;
+  symbolIn?: string;
+  label?: string;
+  contract?: string;
+  message?: string;
+  detail?: unknown;
+};
+
+function logTvWebhook(entry: TvWhLog): void {
+  const { status, result, ...rest } = entry;
+  const line = { result, status, ...rest };
+  if (status >= 400) {
+    console.error(TV_WH_LOG, line);
+  } else {
+    console.info(TV_WH_LOG, line);
+  }
+}
+
 function parseOpenSide(raw: unknown): { long: boolean } | null {
   if (typeof raw === "number" && raw === 1) return { long: true };
   if (typeof raw === "number" && raw === 3) return { long: false };
@@ -49,6 +73,7 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
+    logTvWebhook({ status: 400, result: "invalid_json" });
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
 
@@ -58,30 +83,37 @@ export async function POST(req: NextRequest) {
   const cmd = typeof body.cmd === "string" ? body.cmd.trim().toUpperCase() : "";
 
   if (cmd !== "CLOSE_POSITION" && cmd !== "OPEN_POSITION") {
+    logTvWebhook({ status: 400, result: "unsupported_cmd", cmd: cmd || "(empty)", message: "cmd must be CLOSE_POSITION or OPEN_POSITION" });
     return NextResponse.json({ ok: false, error: "unsupported_cmd" }, { status: 400 });
   }
   if (typeof id !== "string" && typeof id !== "number") {
+    logTvWebhook({ status: 400, result: "id_required", cmd });
     return NextResponse.json({ ok: false, error: "id_required" }, { status: 400 });
   }
   if (typeof token !== "string" || !token.trim()) {
+    logTvWebhook({ status: 400, result: "token_required", cmd });
     return NextResponse.json({ ok: false, error: "token_required" }, { status: 400 });
   }
   if (typeof symbolRaw !== "string" || !symbolRaw.trim()) {
+    logTvWebhook({ status: 400, result: "symbol_required", cmd });
     return NextResponse.json({ ok: false, error: "symbol_required" }, { status: 400 });
   }
 
   const userId = normalizeTradingViewUserId(id);
   if (!userId) {
+    logTvWebhook({ status: 400, result: "id_invalid", cmd, message: "id ต้องเป็นตัวเลขหรือ tg:<ตัวเลข>" });
     return NextResponse.json({ ok: false, error: "id_invalid" }, { status: 400 });
   }
 
   const okToken = await verifyUserWebhookToken(userId, token.trim());
   if (!okToken) {
+    logTvWebhook({ status: 401, result: "unauthorized", userId, cmd });
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   const settings = await getTradingViewMexcSettings(userId);
   if (!settings?.mexcApiKey || !settings.mexcSecret) {
+    logTvWebhook({ status: 503, result: "mexc_creds_not_configured", userId, cmd });
     return NextResponse.json(
       { ok: false, error: "mexc_creds_not_configured" },
       { status: 503 }
@@ -90,6 +122,7 @@ export async function POST(req: NextRequest) {
 
   const nonce = parseWebhookNonce(body);
   if (nonce && (await isTvWebhookNonceUsed(userId, nonce))) {
+    logTvWebhook({ status: 409, result: "duplicate_nonce", userId, cmd, message: "nonce ซ้ำ" });
     return NextResponse.json(
       {
         ok: false,
@@ -103,6 +136,7 @@ export async function POST(req: NextRequest) {
 
   const resolved = normalizeSymbolFromTradingView(symbolRaw.trim());
   if (!resolved) {
+    logTvWebhook({ status: 400, result: "symbol_unknown", userId, cmd, symbolIn: symbolRaw.trim().slice(0, 80) });
     return NextResponse.json({ ok: false, error: "symbol_unknown" }, { status: 400 });
   }
 
@@ -113,10 +147,30 @@ export async function POST(req: NextRequest) {
       : String(body.price);
   const remark = typeof body.remark === "string" ? body.remark : undefined;
 
+  console.info(TV_WH_LOG, {
+    result: "request_ok",
+    userId,
+    cmd,
+    label: resolved.label,
+    contract: resolved.contractSymbol,
+    symbolIn: String(symbolRaw).trim().slice(0, 80),
+    hasNonce: Boolean(nonce),
+  });
+
   if (cmd === "CLOSE_POSITION") {
     try {
       const r = await closeAllOpenForSymbol(creds, resolved.contractSymbol);
       if (!r.success) {
+        logTvWebhook({
+          status: 502,
+          result: "close_failed",
+          userId,
+          cmd: "CLOSE_POSITION",
+          label: resolved.label,
+          contract: resolved.contractSymbol,
+          message: r.message,
+          detail: r.closed,
+        });
         return NextResponse.json(
           {
             ok: false,
@@ -132,6 +186,14 @@ export async function POST(req: NextRequest) {
       }
       if (r.message === "no_open_position") {
         if (nonce) await markTvWebhookNonceUsed(userId, nonce);
+        logTvWebhook({
+          status: 200,
+          result: "close_no_open_position",
+          userId,
+          cmd: "CLOSE_POSITION",
+          label: resolved.label,
+          contract: resolved.contractSymbol,
+        });
         await notifyTvWebhookCloseNoOpen({
           userId,
           label: resolved.label,
@@ -152,6 +214,15 @@ export async function POST(req: NextRequest) {
         );
       }
       if (nonce) await markTvWebhookNonceUsed(userId, nonce);
+      logTvWebhook({
+        status: 200,
+        result: "close_ok",
+        userId,
+        cmd: "CLOSE_POSITION",
+        label: resolved.label,
+        contract: resolved.contractSymbol,
+        detail: r.closed,
+      });
       await notifyTvWebhookCloseOk({
         userId,
         label: resolved.label,
@@ -173,7 +244,17 @@ export async function POST(req: NextRequest) {
         { status: 200 }
       );
     } catch (e) {
-      console.error("[webhooks/tv/close]", e);
+      const em = e instanceof Error ? e.message : String(e);
+      logTvWebhook({
+        status: 502,
+        result: "close_mexc_error",
+        userId,
+        cmd: "CLOSE_POSITION",
+        contract: resolved.contractSymbol,
+        message: em,
+        detail: e instanceof Error ? e.stack?.slice(0, 500) : undefined,
+      });
+      console.error(TV_WH_LOG, "close exception", e);
       return NextResponse.json(
         { ok: false, error: "mexc_error", message: e instanceof Error ? e.message : String(e) },
         { status: 502 }
@@ -184,6 +265,14 @@ export async function POST(req: NextRequest) {
   // OPEN_POSITION
   const sideParsed = parseOpenSide(body.side);
   if (!sideParsed) {
+    logTvWebhook({
+      status: 400,
+      result: "open_side_invalid",
+      userId,
+      cmd: "OPEN_POSITION",
+      contract: resolved.contractSymbol,
+      message: "side ต้อง LONG/SHORT/1/3",
+    });
     return NextResponse.json(
       { ok: false, error: "open_side_invalid", hint: "side ต้องเป็น LONG หรือ SHORT (หรือ 1 / 3)" },
       { status: 400 }
@@ -205,6 +294,13 @@ export async function POST(req: NextRequest) {
     margin = notionalUsdt / lev;
   }
   if (margin == null || !Number.isFinite(lev) || lev < 1) {
+    logTvWebhook({
+      status: 400,
+      result: "open_params_invalid",
+      userId,
+      cmd: "OPEN_POSITION",
+      contract: resolved.contractSymbol,
+    });
     return NextResponse.json(
       {
         ok: false,
@@ -233,6 +329,16 @@ export async function POST(req: NextRequest) {
       openType,
     });
     if (!r.success) {
+      logTvWebhook({
+        status: 502,
+        result: "open_failed",
+        userId,
+        cmd: "OPEN_POSITION",
+        label: resolved.label,
+        contract: resolved.contractSymbol,
+        message: r.message ?? `code ${r.code}`,
+        detail: r.code,
+      });
       return NextResponse.json(
         {
           ok: false,
@@ -252,6 +358,15 @@ export async function POST(req: NextRequest) {
         ? String((d as { orderId: unknown }).orderId)
         : undefined;
     if (nonce) await markTvWebhookNonceUsed(userId, nonce);
+    logTvWebhook({
+      status: 200,
+      result: "open_ok",
+      userId,
+      cmd: "OPEN_POSITION",
+      label: resolved.label,
+      contract: resolved.contractSymbol,
+      message: `side=${sideParsed.long ? "long" : "short"} orderId=${orderId ?? "-"}`,
+    });
     await notifyTvWebhookOpenOk({
       userId,
       label: resolved.label,
@@ -276,7 +391,17 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (e) {
-    console.error("[webhooks/tv/close] open", e);
+    const em = e instanceof Error ? e.message : String(e);
+    logTvWebhook({
+      status: 502,
+      result: "open_mexc_error",
+      userId,
+      cmd: "OPEN_POSITION",
+      contract: resolved.contractSymbol,
+      message: em,
+      detail: e instanceof Error ? e.stack?.slice(0, 500) : undefined,
+    });
+    console.error(TV_WH_LOG, "open exception", e);
     return NextResponse.json(
       { ok: false, error: "mexc_error", message: e instanceof Error ? e.message : String(e) },
       { status: 502 }
