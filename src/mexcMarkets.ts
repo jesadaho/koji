@@ -17,7 +17,7 @@ const MOMENTUM_W_V = 1;
 const MOMENTUM_W_P = 1;
 
 /** ดึง kline แค่ candidate อันดับต้น ๆ ตาม amount24 เพื่อจำกัด request */
-const KLINE_CANDIDATE_CAP = 120;
+export const KLINE_CANDIDATE_CAP = 120;
 /** เรียก kline พร้อมกันต่อรอบ */
 const KLINE_CONCURRENCY = 14;
 /** แท่ง 15m ย้อนหลังขั้นต่ำสำหรับค่าเฉลี่ย volume */
@@ -442,6 +442,44 @@ export async function fetchPerp4hClosesForChecklist(contractSymbol: string): Pro
 /** close รายวัน (Day1) — สำหรับ EMA6/12 ภาพ macro */
 export async function fetchPerp1dClosesForChecklist(contractSymbol: string): Promise<number[] | null> {
   return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Day1");
+}
+
+/** Day1 ดิบ — ให้ได้อย่างน้อย 3 แท่งปิด + แท่งท้ายที่อาจยังไม่ปิด */
+const THREE_GREEN_DAY1_KLINE_LIMIT = 10;
+
+async function fetchContractKlineDay1OpenClose(symbol: string): Promise<KlineArrays | null> {
+  const sym = symbol.trim();
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(sym)}`;
+  try {
+    const { data } = await axios.get<KlineApiResponse>(url, {
+      timeout: 14_000,
+      params: { interval: "Day1", limit: THREE_GREEN_DAY1_KLINE_LIMIT },
+    });
+    if (!data.success || !data.data) return null;
+    return parseKlineArrays(data.data);
+  } catch {
+    return null;
+  }
+}
+
+/** แท่งรายวันที่ปิดแล้ว 3 แท่งล่าสุดเขียวครบ (close > open) — ข้อมูลเก่า→ใหม่; ตัดแท่งสุดท้ายที่อาจยังไม่ปิด */
+function lastThreeClosedDailyBarsAllGreen(k: KlineArrays): boolean {
+  const { open, close } = k;
+  const n = open.length;
+  if (n < 4 || close.length !== n) return false;
+  const closedEnd = n - 1;
+  const o = open.slice(0, closedEnd);
+  const c = close.slice(0, closedEnd);
+  const m = o.length;
+  if (m < 3) return false;
+  for (let i = m - 3; i < m; i++) {
+    const oi = o[i];
+    const ci = c[i];
+    if (typeof oi !== "number" || typeof ci !== "number" || Number.isNaN(oi) || Number.isNaN(ci)) return false;
+    if (oi <= 0 || ci <= 0) return false;
+    if (ci <= oi) return false;
+  }
+  return true;
 }
 
 /** แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด — return เป็น % จาก open→close */
@@ -873,6 +911,50 @@ export async function getTopUsdtMarketsLoserByVolume(options?: { limit?: number 
   losers.sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
   const picked = losers.slice(0, limit);
   const built = picked.map((t) => toTopMarketRow(t, detailBySymbol, EMPTY_MOM));
+  return enrichFundingMeta(built);
+}
+
+/**
+ * USDT perpetual ที่ผ่าน Vol หลัก (MIN_AMOUNT24_USDT) — สแกนเฉพาะอันดับต้น ๆ ตาม amount24 จำนวน KLINE_CANDIDATE_CAP
+ * แท่ง Day1 ที่ปิดแล้ว 3 วันล่าสุดเขียวทุกแท่ง (close > open)
+ */
+export async function getUsdtPerpsThreeGreenDailyCloses(): Promise<TopMarketRow[]> {
+  const [tickers, details] = await Promise.all([fetchContractTickers(), fetchContractDetails()]);
+
+  const detailBySymbol = new Map<string, MexcDetailRow>();
+  for (const d of details) {
+    if (d.symbol) detailBySymbol.set(d.symbol, d);
+  }
+
+  const usdtPerp = tickers.filter((t) => {
+    const sym = t.symbol?.trim();
+    if (!sym || !sym.endsWith("_USDT")) return false;
+    const amt = t.amount24;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= MIN_AMOUNT24_USDT) return false;
+    const price = t.lastPrice;
+    if (typeof price !== "number" || Number.isNaN(price) || price <= 0) return false;
+    const d = detailBySymbol.get(sym);
+    if (d && typeof d.state === "number" && d.state !== 0) return false;
+    return true;
+  });
+
+  const ranked = [...usdtPerp].sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
+  const candidates = ranked.slice(0, KLINE_CANDIDATE_CAP);
+
+  const okFlags = await mapPoolConcurrent(candidates, KLINE_CONCURRENCY, async (t) => {
+    const sym = t.symbol!.trim();
+    const k = await fetchContractKlineDay1OpenClose(sym);
+    if (!k) return false;
+    return lastThreeClosedDailyBarsAllGreen(k);
+  });
+
+  const matched: MexcTickerRow[] = [];
+  for (let i = 0; i < candidates.length; i++) {
+    if (okFlags[i]) matched.push(candidates[i]!);
+  }
+  matched.sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
+
+  const built = matched.map((t) => toTopMarketRow(t, detailBySymbol, EMPTY_MOM));
   return enrichFundingMeta(built);
 }
 

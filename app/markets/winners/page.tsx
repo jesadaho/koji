@@ -2,18 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import MarketsTableWithSearch from "@/components/MarketsTableWithSearch";
 import {
-  getTopUsdtMarketsLoserByVolume,
-  TOP_LOSER_24H_PCT_MAX,
-  TOP_LOSER_24H_PCT_MIN,
-  TOP_LOSER_MIN_AMOUNT24_USDT,
+  getUsdtPerpsThreeGreenDailyCloses,
+  KLINE_CANDIDATE_CAP,
+  MIN_AMOUNT24_USDT,
 } from "@/src/mexcMarkets";
 
 export const revalidate = 60;
 
-const TOP_LIMIT = 50;
-
-const VOL_FILTER_LABEL = `Vol 24h > ${TOP_LOSER_MIN_AMOUNT24_USDT / 1e6}M USDT`;
-const PCT_RANGE_HUMAN = `${Math.abs(TOP_LOSER_24H_PCT_MAX)}% ถึง ${Math.abs(TOP_LOSER_24H_PCT_MIN)}%`;
+const VOL_FILTER_LABEL = `Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT`;
+const SCAN_CAP_LABEL = `สแกน ${KLINE_CANDIDATE_CAP} สัญญาที่มี amount24 สูงสุดก่อน (เหมือน candidate ของ Momentum)`;
 
 function parseMarketsDebugFlag(sp: { debug?: string } | undefined): boolean {
   const d = sp?.debug?.trim().toLowerCase();
@@ -31,28 +28,32 @@ function marketsMainHref(sort: "momentum" | "funding" | "basis", debug: boolean)
   return q ? `/markets?${q}` : "/markets";
 }
 
+function marketsLosersHref(debug: boolean): string {
+  return debug ? "/markets/losers?debug=1" : "/markets/losers";
+}
+
 function marketsWinnersHref(debug: boolean): string {
   return debug ? "/markets/winners?debug=1" : "/markets/winners";
 }
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    title: "Markets — Top loser by vol (24h -1% … -15%)",
-    description: `USDT perpetual บน MEXC — 24h ติดลบ ${PCT_RANGE_HUMAN} — เรียง Vol 24h สูงสุดก่อน — ${VOL_FILTER_LABEL}`,
+    title: "Markets — 3 วันเขียวติด (Day1)",
+    description: `USDT perpetual บน MEXC — แท่งรายวันปิดแล้ว 3 วันล่าสุดเขียวทุกแท่ง (close > open) — ${VOL_FILTER_LABEL} — ${SCAN_CAP_LABEL}`,
   };
 }
 
-export default async function MarketsLosersPage({
+export default async function MarketsWinnersPage({
   searchParams,
 }: {
   searchParams: { debug?: string };
 }) {
   const showDebugColumns = parseMarketsDebugFlag(searchParams);
-  let rows: Awaited<ReturnType<typeof getTopUsdtMarketsLoserByVolume>> = [];
+  let rows: Awaited<ReturnType<typeof getUsdtPerpsThreeGreenDailyCloses>> = [];
   let errorMessage: string | null = null;
 
   try {
-    rows = await getTopUsdtMarketsLoserByVolume({ limit: TOP_LIMIT });
+    rows = await getUsdtPerpsThreeGreenDailyCloses();
   } catch {
     errorMessage = "โหลดข้อมูลจาก MEXC ไม่ได้ ลองใหม่ภายหลัง";
   }
@@ -61,22 +62,22 @@ export default async function MarketsLosersPage({
 
   return (
     <main className="marketsPage">
-      <h1>Top loser by vol (24h)</h1>
+      <h1>3 วันเขียวติด (Day1)</h1>
       <nav className="marketsSortNav" aria-label="เพจ Markets">
         <Link href={marketsMainHref("momentum", showDebugColumns)}>Momentum</Link>
         <Link href={marketsMainHref("funding", showDebugColumns)}>|Funding| สูงสุด</Link>
         <Link href={marketsMainHref("basis", showDebugColumns)}>Spot–Perp basis</Link>
-        <Link href={showDebugColumns ? "/markets/losers?debug=1" : "/markets/losers"} aria-current="page">
-          Top loser (24h) by vol
+        <Link href={marketsLosersHref(showDebugColumns)}>Top loser (24h) by vol</Link>
+        <Link href={marketsWinnersHref(showDebugColumns)} aria-current="page">
+          3 วันเขียวติด (Day1)
         </Link>
-        <Link href={marketsWinnersHref(showDebugColumns)}>3 วันเขียวติด (Day1)</Link>
       </nav>
       <p className="sub">
-        สัญญาที่ราคา 24h <strong>ติดลบ {PCT_RANGE_HUMAN}</strong> เรียงตาม <strong>Vol 24h (amount24)</strong> มากสุดก่อน
-        — {VOL_FILTER_LABEL}
+        สัญญาที่ <strong>แท่งรายวัน (Day1) ปิดแล้ว 3 วันล่าสุด</strong>เป็นแท่งเขียวครบทุกวัน (<strong>{`close > open`}</strong> ต่อแท่ง) — เรียงตาม{" "}
+        <strong>Vol 24h (amount24)</strong> มากสุดก่อน — {VOL_FILTER_LABEL}
       </p>
       <p className="sub marketsMetricLegend">
-        ไม่รวม 24h ลงน้อยกว่า 1% ลงมากกว่า 15% หรือราคาขึ้น · คอลัมน์ Score / Vol× / 15m ในหน้านี้เป็นค่า placeholder — ดู{" "}
+        {SCAN_CAP_LABEL} · แท่งสุดท้ายของชุดดิบที่อาจยังไม่ปิดจะถูกตัดออกก่อนตรวจ — คอลัมน์ Score / Vol× / 15m เป็นค่า placeholder — ดู{" "}
         <Link href={marketsMainHref("momentum", showDebugColumns)}>หน้า Momentum</Link> สำหรับ score จริง
       </p>
 
@@ -89,16 +90,14 @@ export default async function MarketsLosersPage({
       ) : empty ? (
         <div className="card">
           <p className="sub" style={{ marginBottom: 0 }}>
-            ไม่มีสัญญาในช่วง 24h นี้ที่ตรงเงื่อนไข (ลง 1%–15% + Vol มากกว่าเกณฑ์)
+            ไม่มีสัญญาในชุดที่สแกนที่ตรงเงื่อนไข 3 วันเขียวติด (หรือไม่มีข้อมูล Day1)
           </p>
         </div>
       ) : (
         <div className="card marketsCard">
           <MarketsTableWithSearch rows={rows} showDebugColumns={showDebugColumns} marketsSort="momentum" />
           <p className="sub marketsFootnote">
-            {VOL_FILTER_LABEL} · %24h ตาม MEXC API (riseFallRates.r / riseFallRate) — ถ้าไม่ตรงกับเว็บ: ลอง{" "}
-            <code>MEXC_24H_FUTURES_CHANGE_TZ_INDEX=0</code> หรือ <code>1</code> / <code>2</code> ให้ตรง 24h timezone
-            บน mexc.com
+            {VOL_FILTER_LABEL} · kline Day1 จาก MEXC contract/kline · %24h จาก ticker — {SCAN_CAP_LABEL}
           </p>
         </div>
       )}
