@@ -3,16 +3,16 @@ import Link from "next/link";
 import MarketsTableWithSearch from "@/components/MarketsTableWithSearch";
 import {
   getTopUsdtMarketsLoserByVolume,
-  MIN_AMOUNT24_USDT,
   TOP_LOSER_24H_PCT_MAX,
   TOP_LOSER_24H_PCT_MIN,
+  TOP_LOSER_MIN_AMOUNT24_USDT,
 } from "@/src/mexcMarkets";
 
 export const revalidate = 60;
 
 const TOP_LIMIT = 50;
 
-const VOL_FILTER_LABEL = `Vol 24h > ${MIN_AMOUNT24_USDT / 1e6}M USDT`;
+const VOL_FILTER_LABEL = `Vol 24h > ${TOP_LOSER_MIN_AMOUNT24_USDT / 1e6}M USDT`;
 const PCT_RANGE_HUMAN = `${Math.abs(TOP_LOSER_24H_PCT_MAX)}% ถึง ${Math.abs(TOP_LOSER_24H_PCT_MIN)}%`;
 
 function parseMarketsDebugFlag(sp: { debug?: string } | undefined): boolean {
@@ -91,7 +91,9 @@ export default async function MarketsLosersPage({
         <div className="card marketsCard">
           <MarketsTableWithSearch rows={rows} showDebugColumns={showDebugColumns} marketsSort="momentum" />
           <p className="sub marketsFootnote">
-            {VOL_FILTER_LABEL} · ราคา 24h จาก <code>riseFallRate</code> บน contract/ticker
+            {VOL_FILTER_LABEL} · %24h ตาม MEXC API (riseFallRates.r / riseFallRate) — ถ้าไม่ตรงกับเว็บ: ลอง{" "}
+            <code>MEXC_24H_FUTURES_CHANGE_TZ_INDEX=0</code> หรือ <code>1</code> / <code>2</code> ให้ตรง 24h timezone
+            บน mexc.com
           </p>
         </div>
       )}

@@ -59,7 +59,7 @@ function momentumOutcome(
   const eps = Math.max(refPrice * 1e-9, 1e-12);
   if (sparkReturnPct > 0) return endPrice > refPrice + eps;
   if (sparkReturnPct < 0) return endPrice < refPrice - eps;
-  /** Spark แท่งอ้างอิง return 0% — ไม่มีทิศ momentum จากสัญญาณ; ใช้ราคาหลังจุดอ้างอิง > ref เป็นตัวแทน “ต่อเนื่องขึ้น” เพื่อให้สถิติ T+15m นับได้ */
+  /** Spark แท่งอ้างอิง return 0% — ไม่มีทิศ momentum จากสัญญาณ; ใช้ราคาหลังจุดอ้างอิง > ref เป็นตัวแทน “ต่อเนื่องขึ้น” เพื่อให้สถิติ T+10m นับได้ */
   return endPrice > refPrice + eps;
 }
 
@@ -262,7 +262,7 @@ export async function runSparkFollowUpTick(client: Client): Promise<{
       checkpoints += 1;
     };
 
-    /** สถิติเงียบ T+15m — ไม่แจ้งเตือน */
+    /** สถิติเงียบ T+10m — ไม่แจ้งเตือน */
     const runSilent15 = async (): Promise<void> => {
       const endPrice = await snapUsd();
       const won = momentumOutcome(cur.refPrice, cur.sparkReturnPct, endPrice);

@@ -99,7 +99,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • สถานะ cron — บันทึกรอบล่าสุด: pct-trailing ~5 นาที (เตือน% + Spark ticker + follow-up) · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI + EMA6/12·15m + spot–perp basis) · ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus — Spark ticker: สถานะ spark, spark cron, #sparkCron)
 
-• สถิติ spark — สรุปผลติดตาม Spark หลัง T+30m … T+4h (momentum vs fade) ในแชท
+• สถิติ spark — สรุปผลติดตาม Spark หลัง T+10m … T+4h (momentum vs fade) ในแชท
   เปิด LIFF หน้า «สถิติ Spark» เพื่อดู Win-rate matrix แยก Vol / มาร์ก. (พร็อกซี)
   (EN: spark stats, #sparkStats)
 

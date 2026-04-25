@@ -4,12 +4,15 @@
  */
 import type { SparkMcapBand, SparkVolBand } from "./sparkTierContext";
 
-export type SparkHorizonId = "m15m" | "m30m" | "m1h" | "m2h" | "m3h" | "m4h";
+/** จุดวัดผลสถิติเงียบแรกหลัง refClose (นาที) — follow-up แรก = T+นาทีนี้ (เดิม 15) */
+export const SPARK_FIRST_FOLLOWUP_MINUTES = 10;
 
-export const SPARK_STATS_HORIZON_ORDER: SparkHorizonId[] = ["m15m", "m30m", "m1h", "m2h", "m3h", "m4h"];
+export type SparkHorizonId = "m10m" | "m30m" | "m1h" | "m2h" | "m3h" | "m4h";
+
+export const SPARK_STATS_HORIZON_ORDER: SparkHorizonId[] = ["m10m", "m30m", "m1h", "m2h", "m3h", "m4h"];
 
 export const SPARK_STATS_HORIZON_LABELS: Record<SparkHorizonId, string> = {
-  m15m: "15m",
+  m10m: "10m",
   m30m: "30m",
   m1h: "1h",
   m2h: "2h",

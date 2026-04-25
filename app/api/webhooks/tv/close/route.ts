@@ -38,6 +38,15 @@ function logTvWebhook(entry: TvWhLog): void {
   }
 }
 
+/** ตัด preview ล็อก + บัง token ใน JSON text */
+function logSafeWebhookBodyPreview(raw: string, max = 200): string {
+  const t = raw.replace(/\s+/g, " ").trim();
+  if (!t) return "(empty)";
+  return t
+    .replace(/"token"\s*:\s*"[^"]*"/gi, '"token":"(redacted)"')
+    .slice(0, max);
+}
+
 function parseOpenSide(raw: unknown): { long: boolean } | null {
   if (typeof raw === "number" && raw === 1) return { long: true };
   if (typeof raw === "number" && raw === 3) return { long: false };
@@ -70,12 +79,59 @@ function parseWebhookNonce(body: Record<string, unknown>): string | undefined {
  * OPEN: cmd OPEN_POSITION + side (LONG|SHORT|1|3) + marginUsdt + leverage (+ optional notionalUsdt+leverage)
  */
 export async function POST(req: NextRequest) {
+  const contentType = req.headers.get("content-type") ?? "";
+  const raw = await req.text();
   let body: Record<string, unknown>;
   try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    logTvWebhook({ status: 400, result: "invalid_json" });
-    return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
+    if (!raw.trim()) {
+      logTvWebhook({
+        status: 400,
+        result: "empty_body",
+        message: "body ว่าง — ตั้ง Webhook message ใน TradingView ให้เป็นข้อความ JSON ไม่ใช่ค่า default",
+        detail: { contentType, bodyLength: 0 },
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "empty_body",
+          hint: "Alert → Webhook URL ต้องใส่ Message เป็น JSON (body ต้องไม่ว่าง)",
+        },
+        { status: 400 }
+      );
+    }
+    body = JSON.parse(raw) as Record<string, unknown>;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    logTvWebhook({
+      status: 400,
+      result: "invalid_json",
+      message: msg,
+      detail: {
+        contentType: contentType || "(no Content-Type)",
+        bodyLength: raw.length,
+        preview: logSafeWebhookBodyPreview(raw, 300),
+      },
+    });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "invalid_json",
+        hint: "Message ต้องเป็น JSON สมบูรณ์ — ตรวจเครื่องหมาย , \" {{ }} ใน TradingView; ลอง Test ใน bar แอลเทิร์ต",
+      },
+      { status: 400 }
+    );
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    logTvWebhook({
+      status: 400,
+      result: "invalid_json",
+      message: "JSON ต้องเป็น object ที่ราก",
+      detail: { preview: logSafeWebhookBodyPreview(raw, 200) },
+    });
+    return NextResponse.json(
+      { ok: false, error: "invalid_json", hint: "Message ต้องเป็น { ... } ไม่ใช่ [ ] หรือตัวเลข" },
+      { status: 400 }
+    );
   }
 
   const id = body.id;

@@ -289,7 +289,7 @@ function SymbolMatrixTable({
 }
 
 const WIN_RATE_MATRIX_DEFAULT_HINT =
-  "Momentum win rate ตามจุดวัดผลหลังจุดอ้างอิงเวลา (แถว = กลุ่ม · คอลัมน์ = T+15m … T+4h; 15m = สถิติเงียบ · อ้าง last + timestamp / series ไม่ใช่ TF)";
+  "Momentum win rate ตามจุดวัดผลหลังจุดอ้างอิงเวลา (แถว = กลุ่ม · คอลัมน์ = T+10m … T+4h; 10m = สถิติเงียบ · อ้าง last + timestamp / series ไม่ใช่ TF)";
 
 function WinRateMatrixTable({
   title,
@@ -584,13 +584,13 @@ export default function SparkStatsLiff() {
           >
             <strong>Matrix ยังเป็น — เพราะยังไม่มี follow-up จบครบ</strong>
             <span className="liffTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
-              Spark log counts fires; win-rate needs resolved T+15m…T+4h rows (~4h after signal).
+              Spark log counts fires; win-rate needs resolved T+10m…T+4h rows (~4h after signal).
             </span>
             <p style={{ margin: "0.5rem 0 0" }}>
-              ตาราง &quot;เหรียญใน Spark log&quot; นับทุกครั้งที่แจ้งแล้ว — แต่คอลัมน์ 15m–4h มาจากแถว &quot;follow-up จบแล้ว&quot; เท่านั้น (ครบ T+4h แล้วถึงเข้า history) แม้เวลาจะผ่าน 15 นาทีแล้ว matrix จึงยังเป็น — จนกว่าจะจบครบรอบ
+              ตาราง &quot;เหรียญใน Spark log&quot; นับทุกครั้งที่แจ้งแล้ว — แต่คอลัมน์ 10m–4h มาจากแถว &quot;follow-up จบแล้ว&quot; เท่านั้น (ครบ T+4h แล้วถึงเข้า history) แม้เวลาจะผ่าน 10 นาทีแล้ว matrix จึงยังเป็น — จนกว่าจะจบครบรอบ
             </p>
             <p style={{ margin: "0.45rem 0 0" }}>
-              หมายเหตุ: จุด T+15m / T+30m / T+1h … เป็น<strong>สถิติเงียบ</strong> — ไม่ส่ง LINE/Telegram ที่ checkpoint (บันทึกใน state เท่านั้น) ดูคิว pending ด้านล่างถ้ามี
+              หมายเหตุ: จุด T+10m / T+30m / T+1h … เป็น<strong>สถิติเงียบ</strong> — ไม่ส่ง LINE/Telegram ที่ checkpoint (บันทึกใน state เท่านั้น) ดูคิว pending ด้านล่างถ้ามี
             </p>
           </div>
         ) : null}
@@ -670,7 +670,7 @@ export default function SparkStatsLiff() {
               <SymbolMatrixTable
                 title="แยกรายเหรียญ"
                 titleEn="Per-symbol matrix"
-                hint={`แถวละสัญญา · n = จำนวนเหตุการณ์ในบล็อกนี้ · คอลัมน์ = T+15m … T+4h · ${SPARK_SYMBOL_MATRIX_FOOTNOTE}`}
+                hint={`แถวละสัญญา · n = จำนวนเหตุการณ์ในบล็อกนี้ · คอลัมน์ = T+10m … T+4h · ${SPARK_SYMBOL_MATRIX_FOOTNOTE}`}
                 rows={payload.matrixBySymbol ?? []}
                 titleTag="h3"
               />

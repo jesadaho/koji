@@ -25,7 +25,11 @@ export type {
   SparkSymbolCount,
   SparkSymbolMatrixRow,
 } from "./sparkStatsShared";
-export { SPARK_STATS_HORIZON_LABELS, SPARK_STATS_HORIZON_ORDER } from "./sparkStatsShared";
+export {
+  SPARK_FIRST_FOLLOWUP_MINUTES,
+  SPARK_STATS_HORIZON_LABELS,
+  SPARK_STATS_HORIZON_ORDER,
+} from "./sparkStatsShared";
 
 function shortLabel(contractSymbol: string): string {
   const s = contractSymbol.replace(/_USDT$/i, "").trim();
@@ -93,7 +97,7 @@ function addLong(a: LongAgg, h: SparkFollowUpHistoryRow): void {
 }
 
 function fmtAggLine(label: string, a: Agg): string {
-  return `• ${label}: 15m ${a.m15}/${a.t15} (${rate(a.m15, a.t15)}) · 30m ${a.m30}/${a.t30} (${rate(a.m30, a.t30)}) · 1h ${a.m60}/${a.t60} (${rate(a.m60, a.t60)})`;
+  return `• ${label}: 10m ${a.m15}/${a.t15} (${rate(a.m15, a.t15)}) · 30m ${a.m30}/${a.t30} (${rate(a.m30, a.t30)}) · 1h ${a.m60}/${a.t60} (${rate(a.m60, a.t60)})`;
 }
 
 function fmtLongLine(label: string, a: LongAgg): string {
@@ -136,7 +140,7 @@ function horizonCell(wins: number, total: number): SparkHorizonCell {
 
 function horizonsFromAgg(a: Agg, l: LongAgg): Record<SparkHorizonId, SparkHorizonCell> {
   return {
-    m15m: horizonCell(a.m15, a.t15),
+    m10m: horizonCell(a.m15, a.t15),
     m30m: horizonCell(a.m30, a.t30),
     m1h: horizonCell(a.m60, a.t60),
     m2h: horizonCell(l.m2, l.t2),
@@ -331,7 +335,7 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
     const dt = h.resolvedAtIso.slice(0, 16).replace("T", " ");
     const vTag = volTag(h.volBand ?? "unknown");
     const mTag = mcapTag(h.mcapBand ?? "unknown");
-    return `${dt} [${base}] V${vTag}·M${mTag} 15m:${w15} 30m:${w30} 1h:${w1} 2h:${w2} 3h:${w3} 4h:${w4} (${h.sparkReturnPct >= 0 ? "+" : ""}${h.sparkReturnPct.toFixed(1)}%)`;
+    return `${dt} [${base}] V${vTag}·M${mTag} 10m:${w15} 30m:${w30} 1h:${w1} 2h:${w2} 3h:${w3} 4h:${w4} (${h.sparkReturnPct >= 0 ? "+" : ""}${h.sparkReturnPct.toFixed(1)}%)`;
   });
 
   const matrixFrom = (agg: AggregatedMatrices): { vol: SparkMatrixRowVol[]; mcap: SparkMatrixRowMcap[]; totalH: Record<SparkHorizonId, SparkHorizonCell> } => ({
@@ -486,7 +490,7 @@ function formatSparkStatsFromPayload(p: SparkStatsPayload): string {
     "",
     `— สรุป momentum (follow-up จบแล้ว ${p.historyCount} เหตุการณ์ · Spark ขึ้น ${p.upSpark} · ลง ${p.downSpark}) —`,
     "",
-    "— รวม (สถิติเงียบ 15m · แจ้งเตือน 30m / 1h) —",
+    "— รวม (สถิติเงียบ 10m · แจ้งเตือน 30m / 1h) —",
     fmtAggLine("ทั้งหมด", total),
     "",
     "— รวม (สถิติเงียบ 2h / 3h / 4h; 1h ดูจากแถวบน) —",

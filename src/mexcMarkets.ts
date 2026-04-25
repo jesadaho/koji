@@ -30,10 +30,17 @@ export const MIN_AMOUNT24_USDT = 5_000_000;
 export const TOP_LOSER_24H_PCT_MIN = -15;
 export const TOP_LOSER_24H_PCT_MAX = -1;
 
+/** Vol 24h ขั้นต่ำสำหรับ Top loser (amount24, USDT) — อ่อนกว่า MIN_AMOUNT24_USDT ของ markets หลัก */
+export const TOP_LOSER_MIN_AMOUNT24_USDT = 2_000_000;
+
 export type MexcTickerRow = {
   symbol?: string;
   lastPrice?: number;
   riseFallRate?: number;
+  /** ค่า 24h ตาม zone (มัก zone ตรงกับ `riseFallRate` / UTC+8) */
+  riseFallRates?: { zone?: string; r?: number; v?: number };
+  /** อัตรา 24h หลายเขตเวลา — อินดีซ์ 0/1/2 ต่างกัน; เทียบกับคอลัมน์ 24h บน mexc.com ที่สลับ timezone */
+  riseFallRatesOfTimezone?: number[];
   volume24?: number;
   amount24?: number;
   fundingRate?: number;
@@ -664,9 +671,35 @@ function fundingRateNum(t: MexcTickerRow): number {
   return typeof fr === "number" && !Number.isNaN(fr) ? fr : 0;
 }
 
-function change24hPercentFromTicker(t: MexcTickerRow): number {
+/**
+ * อัตราเปลี่ยน 24h แบบทศนิยม (เช่น -0.0066) — ตรง MEXC contract/ticker
+ * ค่า default: `riseFallRates.r` ถ้ามี (zone ตาม MEXC) ไม่งั้น `riseFallRate`
+ * ตั้ง `MEXC_24H_FUTURES_CHANGE_TZ_INDEX=0|1|2` เพื่อใช้ `riseFallRatesOfTimezone[ดัชนี]` ให้ตรงกับ 24h บนเว็บ (สลับ timezone ได้)
+ */
+export function mexcFutures24hChangeRateDecimal(t: MexcTickerRow): number {
+  const idxRaw = process.env.MEXC_24H_FUTURES_CHANGE_TZ_INDEX?.trim();
+  if (idxRaw === "0" || idxRaw === "1" || idxRaw === "2") {
+    const i = Number(idxRaw);
+    const arr = t.riseFallRatesOfTimezone;
+    if (Array.isArray(arr) && arr.length > i && typeof arr[i] === "number" && !Number.isNaN(arr[i]!)) {
+      return arr[i] as number;
+    }
+  }
+  const nest = t.riseFallRates?.r;
+  if (typeof nest === "number" && !Number.isNaN(nest)) {
+    return nest;
+  }
   const r = t.riseFallRate;
-  return typeof r === "number" && !Number.isNaN(r) ? r * 100 : 0;
+  return typeof r === "number" && !Number.isNaN(r) ? r : 0;
+}
+
+/** % เปลี่ยน 24h (เช่น -0.66) — ใช้ filter Top loser + ตาราง Markets */
+export function mexcFutures24hChangePercent(t: MexcTickerRow): number {
+  return mexcFutures24hChangeRateDecimal(t) * 100;
+}
+
+function change24hPercentFromTicker(t: MexcTickerRow): number {
+  return mexcFutures24hChangePercent(t);
 }
 
 function toTopMarketRow(
@@ -676,8 +709,7 @@ function toTopMarketRow(
 ): TopMarketRow {
   const sym = t.symbol!.trim();
   const detail = detailBySymbol.get(sym);
-  const r = t.riseFallRate;
-  const changePct = typeof r === "number" && !Number.isNaN(r) ? r * 100 : 0;
+  const changePct = change24hPercentFromTicker(t);
   const funding = fundingRateNum(t);
   const maxContracts = detail ? maxFromRiskTiers(detail) : null;
   const maxUsdt = maxContracts != null && maxContracts > 0 ? maxContracts * t.lastPrice! : null;
@@ -809,6 +841,7 @@ export async function getTopUsdtMarketsByMomentum(limit = 50): Promise<TopMarket
 
 /**
  * USDT perpetual: 24h ติดลบในช่วง [TOP_LOSER_24H_PCT_MIN, TOP_LOSER_24H_PCT_MAX] — เรียงตาม amount24
+ * กรอง amount24 > TOP_LOSER_MIN_AMOUNT24_USDT
  * ไม่เรียก kline; momentum / 15m ในแถว = 0 (placeholder)
  */
 export async function getTopUsdtMarketsLoserByVolume(options?: { limit?: number }): Promise<TopMarketRow[]> {
@@ -824,7 +857,7 @@ export async function getTopUsdtMarketsLoserByVolume(options?: { limit?: number 
     const sym = t.symbol?.trim();
     if (!sym || !sym.endsWith("_USDT")) return false;
     const amt = t.amount24;
-    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= MIN_AMOUNT24_USDT) return false;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= TOP_LOSER_MIN_AMOUNT24_USDT) return false;
     const price = t.lastPrice;
     if (typeof price !== "number" || Number.isNaN(price) || price <= 0) return false;
     const d = detailBySymbol.get(sym);
@@ -885,8 +918,7 @@ export async function listAllSpotFutBasisRows(): Promise<SpotFutBasisRow[]> {
     const detail = detailBySymbol.get(sym);
     const maxContracts = detail ? maxFromRiskTiers(detail) : null;
     const maxUsdt = maxContracts != null && maxContracts > 0 ? maxContracts * fut : null;
-    const r = t.riseFallRate;
-    const changePct = typeof r === "number" && !Number.isNaN(r) ? r * 100 : 0;
+    const changePct = change24hPercentFromTicker(t);
 
     rows.push({
       symbol: sym,

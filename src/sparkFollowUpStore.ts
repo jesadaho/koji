@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
+import { SPARK_FIRST_FOLLOWUP_MINUTES } from "./sparkStatsShared";
 import type { SparkMcapBand, SparkVolBand } from "./sparkTierContext";
 
 const KV_KEY = "koji:spark_follow_up_state";
@@ -39,7 +40,7 @@ export type SparkFollowUpPending = {
   amount24Usdt: number | null;
   volBand: SparkVolBand;
   mcapBand: SparkMcapBand;
-  /** T+15m หลัง refClose — เก็บสถิติอย่างเดียว (ไม่แจ้งเตือน LINE) */
+  /** T+SPARK_FIRST_FOLLOWUP_MINUTES หลัง refClose — เก็บสถิติอย่างเดียว (ไม่แจ้งเตือน LINE) — ฟิลด์เดิมชื่อ due15Sec */
   due15Sec: number;
   due30Sec: number;
   due60Sec: number;
@@ -47,7 +48,7 @@ export type SparkFollowUpPending = {
   due2hSec: number;
   due3hSec: number;
   due4hSec: number;
-  /** สถิติเงียบ T+15m — ไม่แจ้งเตือน LINE */
+  /** สถิติเงียบ T+10m (เดิม 15m) — ไม่แจ้งเตือน LINE */
   silent15: boolean;
   sent30: boolean;
   sent60: boolean;
@@ -181,7 +182,7 @@ function normalizePending(raw: unknown): SparkFollowUpPending[] {
     ) {
       continue;
     }
-    const due15Sec = Number.isFinite(due15Raw) ? due15Raw : refCloseSec + 15 * 60;
+    const due15Sec = Number.isFinite(due15Raw) ? due15Raw : refCloseSec + SPARK_FIRST_FOLLOWUP_MINUTES * 60;
     const d2 = Number.isFinite(due2hSec) ? due2hSec : refCloseSec + 2 * 3600;
     const d3 = Number.isFinite(due3hSec) ? due3hSec : refCloseSec + 3 * 3600;
     const d4 = Number.isFinite(due4hSec) ? due4hSec : refCloseSec + 4 * 3600;
@@ -390,7 +391,7 @@ export async function enqueueSparkFollowUp(input: {
   if (!symbol || !Number.isFinite(barOpen) || !Number.isFinite(refPrice) || refPrice <= 0) return;
 
   const refCloseSec = barOpen + SPARK_BAR_SEC;
-  const due15Sec = refCloseSec + 15 * 60;
+  const due15Sec = refCloseSec + SPARK_FIRST_FOLLOWUP_MINUTES * 60;
   const due30Sec = refCloseSec + 30 * 60;
   const due60Sec = refCloseSec + 60 * 60;
   const due2hSec = refCloseSec + 2 * 3600;
