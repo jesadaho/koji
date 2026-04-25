@@ -1,3 +1,6 @@
+import type { Client } from "@line/bot-sdk";
+import { sendAlertNotification } from "./alertNotify";
+import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
 import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import { loadUpcomingEventsState, saveUpcomingEventsState } from "./upcomingEventsState";
 
@@ -87,14 +90,37 @@ function buildCloseMessage(now: Date): string {
 }
 
 /**
+ * กลุ่มสาธารณะ (events_session topic) ถ้าตั้งครบ; ไม่งั้นส่งหาผู้ติดตาม «ระบบ» (LINE/Telegram/DISCORD ตาม sendAlertNotification)
+ * ถ้า Telegram กลุ่มล้มเหลว → ลองผู้ติดตามระบบต่อ
+ */
+async function deliverUsSessionMessage(client: Client, text: string): Promise<number> {
+  if (telegramSparkSystemGroupConfigured()) {
+    try {
+      await sendTelegramPublicBroadcastMessage(text, "events_session");
+      return 1;
+    } catch (e) {
+      console.error("[usMarketSessionAlert] telegram public group failed", e);
+    }
+  }
+  const subscribers = await loadSystemChangeSubscribers();
+  let ok = 0;
+  for (const uid of subscribers) {
+    try {
+      await sendAlertNotification(client, uid, text);
+      ok += 1;
+    } catch (e) {
+      console.error("[usMarketSessionAlert] notify", uid, e);
+    }
+  }
+  return ok;
+}
+
+/**
  * แจ้งเตือนช่วง US session (BKK) — ส่งอย่างละครั้งต่อวันปฏิทินไทยเมื่อเข้า window
  */
-export async function runUsMarketSessionAlerts(nowMs: number): Promise<{ sent: number; skipped: string }> {
+export async function runUsMarketSessionAlerts(client: Client, nowMs: number): Promise<{ sent: number; skipped: string }> {
   if (!usSessionAlertsEnabled()) {
     return { sent: 0, skipped: "US_SESSION_ALERTS_ENABLED=0" };
-  }
-  if (!telegramSparkSystemGroupConfigured()) {
-    return { sent: 0, skipped: "no_telegram_public_chat" };
   }
 
   const now = new Date(nowMs);
@@ -103,14 +129,19 @@ export async function runUsMarketSessionAlerts(nowMs: number): Promise<{ sent: n
 
   let state = await loadUpcomingEventsState();
   let sent = 0;
+  let skipped = "";
 
   if (inOpenWindow(min)) {
     if (state.lastUsOpenAlertBkkYmd !== ymd) {
       try {
-        await sendTelegramPublicBroadcastMessage(buildOpenMessage(now), "events_session");
-        state.lastUsOpenAlertBkkYmd = ymd;
-        sent += 1;
-        await saveUpcomingEventsState(state);
+        const n = await deliverUsSessionMessage(client, buildOpenMessage(now));
+        if (n > 0) {
+          state.lastUsOpenAlertBkkYmd = ymd;
+          sent += 1;
+          await saveUpcomingEventsState(state);
+        } else {
+          skipped = "no_recipients";
+        }
       } catch (e) {
         console.error("[usMarketSessionAlert] open", e);
       }
@@ -120,15 +151,19 @@ export async function runUsMarketSessionAlerts(nowMs: number): Promise<{ sent: n
   if (inCloseWindow(min)) {
     if (state.lastUsCloseAlertBkkYmd !== ymd) {
       try {
-        await sendTelegramPublicBroadcastMessage(buildCloseMessage(now), "events_session");
-        state.lastUsCloseAlertBkkYmd = ymd;
-        sent += 1;
-        await saveUpcomingEventsState(state);
+        const n = await deliverUsSessionMessage(client, buildCloseMessage(now));
+        if (n > 0) {
+          state.lastUsCloseAlertBkkYmd = ymd;
+          sent += 1;
+          await saveUpcomingEventsState(state);
+        } else {
+          skipped = "no_recipients";
+        }
       } catch (e) {
         console.error("[usMarketSessionAlert] close", e);
       }
     }
   }
 
-  return { sent, skipped: "" };
+  return { sent, skipped };
 }

@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { requireCronAuth } from "@/src/cronAuth";
+import { createLineClientForCron } from "@/src/lineHandler";
 import { runUpcomingEventsAlertsTick } from "@/src/upcomingEventsTick";
 import { runUsMarketSessionAlerts } from "@/src/usMarketSessionAlert";
 
@@ -17,7 +18,8 @@ export async function GET(req: NextRequest) {
 
   const started = Date.now();
   try {
-    const session = await runUsMarketSessionAlerts(started);
+    const lineClient = createLineClientForCron();
+    const session = await runUsMarketSessionAlerts(lineClient, started);
     const r = await runUpcomingEventsAlertsTick(started);
     return NextResponse.json({
       ...r,

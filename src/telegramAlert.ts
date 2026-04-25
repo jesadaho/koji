@@ -15,12 +15,22 @@ export function telegramAlertConfigured(): boolean {
 }
 
 /**
- * กลุ่มสาธารณะ (Spark / System / indicator feed) — ใช้ TELEGRAM_PUBLIC_CHAT_ID ก่อน แล้วค่อย TELEGRAM_SPARK_SYSTEM_CHAT_ID (legacy)
+ * กลุ่มสาธารณะหลัก (Spark / events / technical / …) — TELEGRAM_PUBLIC_CHAT_ID ก่อน แล้ว TELEGRAM_SPARK_SYSTEM_CHAT_ID (legacy)
+ * ข้อความ kind `condition` (Market Pulse, spot–perp basis) ใช้กลุ่มนี้เว้นแต่ตั้ง TELEGRAM_MARKET_PULSE_CHAT_ID
  */
 export function resolvePublicBroadcastChatId(): string | undefined {
   const pub = process.env.TELEGRAM_PUBLIC_CHAT_ID?.trim();
   const legacy = process.env.TELEGRAM_SPARK_SYSTEM_CHAT_ID?.trim();
   return pub || legacy || undefined;
+}
+
+/** chat_id สำหรับ sendMessage — condition ไปกลุ่ม Market Pulse แยกได้เมื่อตั้ง TELEGRAM_MARKET_PULSE_CHAT_ID */
+export function resolvePublicBroadcastChatIdForKind(kind?: PublicBroadcastKind): string | undefined {
+  if (kind === "condition") {
+    const pulse = process.env.TELEGRAM_MARKET_PULSE_CHAT_ID?.trim();
+    if (pulse) return pulse;
+  }
+  return resolvePublicBroadcastChatId();
 }
 
 /** ชนิดแจ้งเตือนกลุ่มสาธารณะ → Forum topic คนละหัวข้อ (เมื่อตั้ง env แยก) */
@@ -78,10 +88,11 @@ export function resolvePublicBroadcastMessageThreadIdForKind(kind: PublicBroadca
   return resolvePublicBroadcastMessageThreadId();
 }
 
-/** Spark follow-up + System Change → กลุ่ม Telegram (ไม่ใช่ TELEGRAM_ALERT_CHAT_ID) */
+/** มีที่ส่ง public broadcast ได้อย่างน้อยหนึ่งที่: กลุ่มหลัก หรือกลุ่ม Market Pulse แยก (condition) */
 export function telegramSparkSystemGroupConfigured(): boolean {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  return Boolean(token && resolvePublicBroadcastChatId());
+  const pulse = process.env.TELEGRAM_MARKET_PULSE_CHAT_ID?.trim();
+  return Boolean(token && (resolvePublicBroadcastChatId() || pulse));
 }
 
 function chunkString(text: string, maxLen: number): string[] {
@@ -194,9 +205,11 @@ export async function sendTelegramPublicBroadcastMessage(
   kind?: PublicBroadcastKind,
   options?: SendTelegramPublicBroadcastOptions
 ): Promise<void> {
-  const chatId = resolvePublicBroadcastChatId();
+  const chatId = resolvePublicBroadcastChatIdForKind(kind);
   if (!chatId) {
-    throw new Error("TELEGRAM_PUBLIC_CHAT_ID หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID ไม่ได้ตั้ง");
+    throw new Error(
+      "ไม่มี chat ปลายทาง: ตั้ง TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID) สำหรับ Spark/events/technical — หรือ TELEGRAM_MARKET_PULSE_CHAT_ID อย่างน้อยหนึ่งค่า",
+    );
   }
   const tid =
     kind == null ? resolvePublicBroadcastMessageThreadId() : resolvePublicBroadcastMessageThreadIdForKind(kind);
