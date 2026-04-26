@@ -447,19 +447,48 @@ export async function fetchPerp1dClosesForChecklist(contractSymbol: string): Pro
 /** Day1 ดิบ — ให้ได้อย่างน้อย 3 แท่งปิด + แท่งท้ายที่อาจยังไม่ปิด */
 const THREE_GREEN_DAY1_KLINE_LIMIT = 10;
 
+/** สแกน 3 เขียว: ยิง kline พร้อมกันน้อยลง + retry 510 — ลดโอกาส MEXC "too frequent" ทำให้เหรียญหลุดลิสต์ */
+const THREE_GREEN_KLINE_CONCURRENCY = 4;
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isMexcKlineThrottleResponse(data: KlineApiResponse | undefined): boolean {
+  if (!data || data.success !== false) return false;
+  const c = Number(data.code);
+  if (c === 510 || c === 429) return true;
+  const m = typeof data.message === "string" ? data.message.toLowerCase() : "";
+  return m.includes("too frequent") || m.includes("rate limit") || m.includes("try again later");
+}
+
 async function fetchContractKlineDay1OpenClose(symbol: string): Promise<KlineArrays | null> {
   const sym = symbol.trim();
   const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(sym)}`;
-  try {
-    const { data } = await axios.get<KlineApiResponse>(url, {
-      timeout: 14_000,
-      params: { interval: "Day1", limit: THREE_GREEN_DAY1_KLINE_LIMIT },
-    });
-    if (!data.success || !data.data) return null;
-    return parseKlineArrays(data.data);
-  } catch {
-    return null;
+  const maxAttempts = 5;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const { data } = await axios.get<KlineApiResponse>(url, {
+        timeout: 14_000,
+        params: { interval: "Day1", limit: THREE_GREEN_DAY1_KLINE_LIMIT },
+      });
+      if (data?.success && data.data) {
+        return parseKlineArrays(data.data);
+      }
+      if (isMexcKlineThrottleResponse(data) && attempt < maxAttempts - 1) {
+        await sleepMs(300 * Math.pow(2, attempt));
+        continue;
+      }
+      return null;
+    } catch {
+      if (attempt < maxAttempts - 1) {
+        await sleepMs(300 * Math.pow(2, attempt));
+        continue;
+      }
+      return null;
+    }
   }
+  return null;
 }
 
 /** แท่งรายวันที่ปิดแล้ว 3 แท่งล่าสุดเขียวครบ (close > open) — ข้อมูลเก่า→ใหม่; ตัดแท่งสุดท้ายที่อาจยังไม่ปิด */
@@ -941,7 +970,7 @@ export async function getUsdtPerpsThreeGreenDailyCloses(): Promise<TopMarketRow[
   const ranked = [...usdtPerp].sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
   const candidates = ranked.slice(0, KLINE_CANDIDATE_CAP);
 
-  const okFlags = await mapPoolConcurrent(candidates, KLINE_CONCURRENCY, async (t) => {
+  const okFlags = await mapPoolConcurrent(candidates, THREE_GREEN_KLINE_CONCURRENCY, async (t) => {
     const sym = t.symbol!.trim();
     const k = await fetchContractKlineDay1OpenClose(sym);
     if (!k) return false;
