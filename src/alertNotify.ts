@@ -130,6 +130,7 @@ export async function sendSparkSystemAlert(
     /* System change (condition): ส่งแค่กลุ่ม Telegram สาธารณะ — ไม่ mirror ไป LINE */
     const skipLineMirror =
       kind === "condition" ||
+      kind === "market_pulse" ||
       kind === "events_weekly" ||
       kind === "events_pre" ||
       kind === "events_result" ||

@@ -16,7 +16,6 @@ export function telegramAlertConfigured(): boolean {
 
 /**
  * กลุ่มสาธารณะหลัก (Spark / events / technical / …) — TELEGRAM_PUBLIC_CHAT_ID ก่อน แล้ว TELEGRAM_SPARK_SYSTEM_CHAT_ID (legacy)
- * ข้อความ kind `condition` (Market Pulse, spot–perp basis) ใช้กลุ่มนี้เว้นแต่ตั้ง TELEGRAM_MARKET_PULSE_CHAT_ID
  */
 export function resolvePublicBroadcastChatId(): string | undefined {
   const pub = process.env.TELEGRAM_PUBLIC_CHAT_ID?.trim();
@@ -24,19 +23,21 @@ export function resolvePublicBroadcastChatId(): string | undefined {
   return pub || legacy || undefined;
 }
 
-/** chat_id สำหรับ sendMessage — condition ไปกลุ่ม Market Pulse แยกได้เมื่อตั้ง TELEGRAM_MARKET_PULSE_CHAT_ID */
-export function resolvePublicBroadcastChatIdForKind(kind?: PublicBroadcastKind): string | undefined {
-  if (kind === "condition") {
-    const pulse = process.env.TELEGRAM_MARKET_PULSE_CHAT_ID?.trim();
-    if (pulse) return pulse;
-  }
-  return resolvePublicBroadcastChatId();
+/**
+ * chat_id สำหรับ sendMessage — ทุก kind ใช้กลุ่มหลักเดียวกัน
+ * ถ้ายังไม่มี TELEGRAM_PUBLIC_CHAT_ID จะ fallback ไป TELEGRAM_MARKET_PULSE_CHAT_ID (legacy)
+ */
+export function resolvePublicBroadcastChatIdForKind(_kind?: PublicBroadcastKind): string | undefined {
+  const pub = resolvePublicBroadcastChatId();
+  if (pub) return pub;
+  return process.env.TELEGRAM_MARKET_PULSE_CHAT_ID?.trim() || undefined;
 }
 
 /** ชนิดแจ้งเตือนกลุ่มสาธารณะ → Forum topic คนละหัวข้อ (เมื่อตั้ง env แยก) */
 export type PublicBroadcastKind =
   | "spark"
   | "condition"
+  | "market_pulse"
   | "technical"
   | "events_weekly"
   | "events_pre"
@@ -61,6 +62,7 @@ export function resolvePublicBroadcastMessageThreadId(): number | undefined {
 const KIND_TO_THREAD_ENV: Record<PublicBroadcastKind, string> = {
   spark: "TELEGRAM_PUBLIC_SPARK_MESSAGE_THREAD_ID",
   condition: "TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID",
+  market_pulse: "TELEGRAM_PUBLIC_MARKET_PULSE_MESSAGE_THREAD_ID",
   technical: "TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID",
   events_weekly: "TELEGRAM_PUBLIC_EVENTS_WEEKLY_MESSAGE_THREAD_ID",
   events_pre: "TELEGRAM_PUBLIC_EVENTS_PRE_MESSAGE_THREAD_ID",
@@ -85,10 +87,16 @@ export function resolvePublicBroadcastMessageThreadIdForKind(kind: PublicBroadca
       resolvePublicBroadcastMessageThreadId()
     );
   }
+  if (kind === "market_pulse") {
+    return (
+      parsePositiveIntegerMessageThreadId(process.env.TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID) ??
+      resolvePublicBroadcastMessageThreadId()
+    );
+  }
   return resolvePublicBroadcastMessageThreadId();
 }
 
-/** มีที่ส่ง public broadcast ได้อย่างน้อยหนึ่งที่: กลุ่มหลัก หรือกลุ่ม Market Pulse แยก (condition) */
+/** มีที่ส่ง public broadcast ได้อย่างน้อยหนึ่งที่: กลุ่มหลัก (หรือ legacy TELEGRAM_MARKET_PULSE_CHAT_ID) */
 export function telegramSparkSystemGroupConfigured(): boolean {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   const pulse = process.env.TELEGRAM_MARKET_PULSE_CHAT_ID?.trim();
@@ -198,7 +206,7 @@ export type SendTelegramPublicBroadcastOptions = {
 
 /**
  * ส่งไปกลุ่มสาธารณะตาม env (chat + optional topic)
- * @param kind เมื่อระบุ → ใช้ topic แยกตามชนิด (fallback ไป TELEGRAM_PUBLIC_MESSAGE_THREAD_ID); เมื่อไม่ระบุ → ใช้แค่ TELEGRAM_PUBLIC_MESSAGE_THREAD_ID เหมือนเดิม
+ * @param kind เมื่อระบุ → ใช้ topic ตามชนิด (เช่น market_pulse → TELEGRAM_PUBLIC_MARKET_PULSE_MESSAGE_THREAD_ID); เมื่อไม่ระบุ → TELEGRAM_PUBLIC_MESSAGE_THREAD_ID
  */
 export async function sendTelegramPublicBroadcastMessage(
   text: string,
@@ -208,7 +216,7 @@ export async function sendTelegramPublicBroadcastMessage(
   const chatId = resolvePublicBroadcastChatIdForKind(kind);
   if (!chatId) {
     throw new Error(
-      "ไม่มี chat ปลายทาง: ตั้ง TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID) สำหรับ Spark/events/technical — หรือ TELEGRAM_MARKET_PULSE_CHAT_ID อย่างน้อยหนึ่งค่า",
+      "ไม่มี chat ปลายทาง: ตั้ง TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID) — หรือ legacy TELEGRAM_MARKET_PULSE_CHAT_ID",
     );
   }
   const tid =

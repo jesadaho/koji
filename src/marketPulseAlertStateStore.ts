@@ -22,21 +22,39 @@ async function ensureJsonFile(): Promise<void> {
     await readFile(filePath, "utf-8");
   } catch {
     await mkdir(dirname(filePath), { recursive: true });
-    await writeFile(filePath, JSON.stringify({ lastNotifiedFngValue: null }, null, 2), "utf-8");
+    await writeFile(
+      filePath,
+      JSON.stringify({ lastNotifiedFngValue: null, lastPushAtIso: null }, null, 2),
+      "utf-8"
+    );
   }
 }
 
 export type MarketPulseAlertState = {
   /** ค่า Fear & Greed (0–100) ตอนที่แจ้ง push ล่าสุด */
   lastNotifiedFngValue: number | null;
+  /** ISO เวลา — push สำเร็จล่าสุด (ใช้เกณฑ์อย่างน้อยวันละครั้ง) */
+  lastPushAtIso?: string | null;
 };
 
 function normalize(raw: unknown): MarketPulseAlertState {
-  if (!raw || typeof raw !== "object") return { lastNotifiedFngValue: null };
-  const v = (raw as MarketPulseAlertState).lastNotifiedFngValue;
-  if (v === null || v === undefined) return { lastNotifiedFngValue: null };
-  const n = Number(v);
-  return { lastNotifiedFngValue: Number.isFinite(n) ? n : null };
+  if (!raw || typeof raw !== "object") {
+    return { lastNotifiedFngValue: null, lastPushAtIso: null };
+  }
+  const o = raw as MarketPulseAlertState;
+  const v = o.lastNotifiedFngValue;
+  let fng: number | null = null;
+  if (v !== null && v !== undefined) {
+    const n = Number(v);
+    if (Number.isFinite(n)) fng = n;
+  }
+  const isoRaw = o.lastPushAtIso;
+  let lastPushAtIso: string | null = null;
+  if (typeof isoRaw === "string" && isoRaw.trim()) {
+    const t = Date.parse(isoRaw.trim());
+    lastPushAtIso = Number.isFinite(t) ? isoRaw.trim() : null;
+  }
+  return { lastNotifiedFngValue: fng, lastPushAtIso };
 }
 
 export async function loadMarketPulseAlertState(): Promise<MarketPulseAlertState> {
@@ -50,13 +68,13 @@ export async function loadMarketPulseAlertState(): Promise<MarketPulseAlertState
       throw new Error(`อ่าน market_pulse_alert_state ไม่สำเร็จ (${hint})`);
     }
   }
-  if (isVercel()) return { lastNotifiedFngValue: null };
+  if (isVercel()) return { lastNotifiedFngValue: null, lastPushAtIso: null };
   await ensureJsonFile();
   const raw = await readFile(filePath, "utf-8");
   try {
     return normalize(JSON.parse(raw) as unknown);
   } catch {
-    return { lastNotifiedFngValue: null };
+    return { lastNotifiedFngValue: null, lastPushAtIso: null };
   }
 }
 

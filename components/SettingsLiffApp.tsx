@@ -315,7 +315,9 @@ export default function SettingsLiffApp() {
           แจ้งเตือน funding / รอบชำระ / max order size (สัญญา Top 50) ส่งไปที่{" "}
           <strong>กลุ่ม Telegram</strong> (<code>TELEGRAM_PUBLIC_CHAT_ID</code>
           {", "}
-          topic ระบบ: <code>TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID</code>
+          topic ระบบ / basis: <code>TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID</code>
+          {"; "}
+          Market Pulse: <code>TELEGRAM_PUBLIC_MARKET_PULSE_MESSAGE_THREAD_ID</code>
           {"; "}
           Spark: <code>TELEGRAM_PUBLIC_SPARK_MESSAGE_THREAD_ID</code>
           {"; "}

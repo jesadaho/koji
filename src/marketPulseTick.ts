@@ -23,6 +23,34 @@ function marketPulseEnabled(): boolean {
   return true;
 }
 
+/** ส่งทุกรอบ cron ที่ดึงข้อมูลได้ (ไม่กรอง ΔF&G) — ปิด: ไม่ตั้ง หรือ =0 */
+function marketPulseAlwaysNotify(): boolean {
+  const v = process.env.MARKET_PULSE_ALWAYS_NOTIFY?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+/** อย่างน้อยหนึ่งครั้งต่อช่วง (ดีฟอลต์ ~24 ชม. หลัง push สำเร็จล่าสุด) — ปิด: MARKET_PULSE_DAILY_MIN=0 */
+function marketPulseDailyMinEnabled(): boolean {
+  const v = process.env.MARKET_PULSE_DAILY_MIN?.trim().toLowerCase();
+  if (v === "0" || v === "false" || v === "no") return false;
+  return true;
+}
+
+/** ช่วงห่างขั้นต่ำระหว่าง push สำเร็จ (วินาที) — ดีฟอลต์ 86400 */
+function marketPulseDailyMinIntervalSec(): number {
+  const n = Number(process.env.MARKET_PULSE_DAILY_MIN_SEC?.trim());
+  if (Number.isFinite(n) && n >= 3600 && n <= 172_800) return Math.floor(n);
+  return 86_400;
+}
+
+function secondsSinceLastSuccessfulPushSec(state: { lastPushAtIso?: string | null }): number | null {
+  const iso = state.lastPushAtIso?.trim();
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  return (Date.now() - t) / 1000;
+}
+
 /** แจ้งซ้ำเมื่อ |Δ ค่า Fear & Greed| จากครั้งแจ้งล่าสุด ≥ จุดนี้ (ค่าเริ่ม 3) */
 function marketPulseAlertDeltaFng(): number {
   const n = Number(process.env.MARKET_PULSE_ALERT_DELTA_FNG?.trim());
@@ -112,6 +140,8 @@ export type MarketPulseTickResult = {
   /** ไม่แจ้งเพราะ |ΔF&G| ต่ำกว่าเกณฑ์ */
   skippedDelta?: boolean;
   lastNotifiedFng?: number | null;
+  /** รอบนี้ส่งเพราะครบช่วงขั้นต่ำ (ไม่ใช่แค่ ΔF&G) */
+  dailyMinApplied?: boolean;
 };
 
 /**
@@ -136,8 +166,10 @@ export async function getMarketPulseStatusMessage(): Promise<string> {
 
 /**
  * ดึง F&G + ตลาด, คำนวณ Vol% เทียบ snapshot ~24 ชม.
- * เมื่อ |Δ Fear & Greed| จากครั้งแจ้งล่าสุด ≥ MARKET_PULSE_ALERT_DELTA_FNG (ค่าเริ่ม 3):
- * — ถ้าตั้งกลุ่ม Telegram สาธารณะ → ส่งแค่กลุ่ม (topic condition)
+ * เมื่อ |Δ Fear & Greed| จากครั้งแจ้งล่าสุด ≥ MARKET_PULSE_ALERT_DELTA_FNG (ค่าเริ่ม 3)
+ * หรือเมื่อครบช่วงหลัง push สำเร็จล่าสุด (ดีฟอลต์ ~24 ชม.; ปิด MARKET_PULSE_DAILY_MIN=0)
+ * หรือเมื่อตั้ง MARKET_PULSE_ALWAYS_NOTIFY=1 (ส่งทุกรอบ cron):
+ * — ถ้าตั้งกลุ่ม Telegram สาธารณะ → ส่งแค่กลุ่ม (topic market_pulse → TELEGRAM_PUBLIC_MARKET_PULSE_MESSAGE_THREAD_ID)
  * — ถ้าไม่ตั้ง → แจ้งผู้ติดตามระบบ (LINE / Telegram ช่องหลัก ตาม sendAlertNotification)
  */
 export async function runMarketPulseTick(client: Client): Promise<MarketPulseTickResult> {
@@ -163,9 +195,34 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
 
   const fngVal = data.fng.value;
   let alertState = await loadMarketPulseAlertState();
+
+  if (
+    marketPulseDailyMinEnabled() &&
+    alertState.lastNotifiedFngValue != null &&
+    !alertState.lastPushAtIso?.trim()
+  ) {
+    const iso = new Date(
+      Date.now() - marketPulseDailyMinIntervalSec() * 1000 - 120_000
+    ).toISOString();
+    alertState = { ...alertState, lastPushAtIso: iso };
+    try {
+      await saveMarketPulseAlertState(alertState);
+    } catch (e) {
+      console.error("[marketPulseTick] backfill lastPushAtIso", e);
+    }
+  }
+
   const prevFng = alertState.lastNotifiedFngValue;
   const deltaMin = marketPulseAlertDeltaFng();
-  const shouldPush = shouldNotifyMarketPulseFng(prevFng, fngVal);
+  const pushFromAlways = marketPulseAlwaysNotify();
+  const pushFromDelta = shouldNotifyMarketPulseFng(prevFng, fngVal);
+  const secSincePush = secondsSinceLastSuccessfulPushSec(alertState);
+  const intervalSec = marketPulseDailyMinIntervalSec();
+  const pushFromDaily =
+    marketPulseDailyMinEnabled() &&
+    secSincePush != null &&
+    secSincePush >= intervalSec;
+  const shouldPush = pushFromAlways || pushFromDelta || pushFromDaily;
 
   const nowIso = new Date().toISOString();
   const volBlob = await loadMarketPulseVolumeBlob();
@@ -175,12 +232,16 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
     data.global.totalVolumeUsd,
   );
 
-  const body = buildMarketPulseMessage({
+  let body = buildMarketPulseMessage({
     fngValue: data.fng.value,
     fngClassification: data.fng.valueClassification,
     btcDominancePct: data.global.btcDominancePct,
     volumeChangePct24hApprox: volChange,
   });
+  if (pushFromDaily && !pushFromDelta && !pushFromAlways) {
+    const h = Math.round(intervalSec / 3600);
+    body += `\n\n📌 รอบนี้: ส่งตามเกณฑ์อย่างน้อย ~${h} ชม./ครั้ง (ΔF&G ยังไม่ถึง ${deltaMin} จุด)`;
+  }
 
   try {
     await appendVolumeSnapshot(nowIso, data.global.totalVolumeUsd);
@@ -204,7 +265,7 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
 
   if (telegramSparkSystemGroupConfigured()) {
     try {
-      await sendTelegramPublicBroadcastMessage(body, "condition");
+      await sendTelegramPublicBroadcastMessage(body, "market_pulse");
       notifiedPushes = 1;
     } catch (e) {
       console.error("[marketPulseTick] telegram public group", e);
@@ -233,7 +294,11 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
 
   if (notifiedPushes > 0) {
     try {
-      alertState = { ...alertState, lastNotifiedFngValue: fngVal };
+      alertState = {
+        ...alertState,
+        lastNotifiedFngValue: fngVal,
+        lastPushAtIso: new Date().toISOString(),
+      };
       await saveMarketPulseAlertState(alertState);
     } catch (e) {
       console.error("[marketPulseTick] saveMarketPulseAlertState", e);
@@ -247,5 +312,6 @@ export async function runMarketPulseTick(client: Client): Promise<MarketPulseTic
     fngValue: fngVal,
     skippedDelta: false,
     lastNotifiedFng: prevFng,
+    dailyMinApplied: Boolean(pushFromDaily && !pushFromAlways),
   };
 }
