@@ -8,6 +8,7 @@ import {
   notifyTvWebhookCloseNoOpen,
   notifyTvWebhookCloseOk,
   notifyTvWebhookError,
+  notifyTvWebhookMalformedBodyRaw,
   notifyTvWebhookOpenOk,
 } from "@/src/tradingViewWebhookTelegramNotify";
 
@@ -90,6 +91,10 @@ export async function POST(req: NextRequest) {
         message: "body ว่าง — ตั้ง Webhook message ใน TradingView ให้เป็นข้อความ JSON ไม่ใช่ค่า default",
         detail: { contentType, bodyLength: 0 },
       });
+      await notifyTvWebhookMalformedBodyRaw(raw, "empty_body", [
+        "body ว่าง — ใส่ Message เป็น JSON ใน TradingView alert",
+        `Content-Type: ${contentType || "(ไม่มี)"}`,
+      ]);
       return NextResponse.json(
         {
           ok: false,
@@ -112,6 +117,10 @@ export async function POST(req: NextRequest) {
         preview: logSafeWebhookBodyPreview(raw, 300),
       },
     });
+    await notifyTvWebhookMalformedBodyRaw(raw, "invalid_json", [
+      `parse: ${msg.slice(0, 200)}`,
+      `preview: ${logSafeWebhookBodyPreview(raw, 400)}`,
+    ]);
     return NextResponse.json(
       {
         ok: false,
@@ -128,6 +137,10 @@ export async function POST(req: NextRequest) {
       message: "JSON ต้องเป็น object ที่ราก",
       detail: { preview: logSafeWebhookBodyPreview(raw, 200) },
     });
+    await notifyTvWebhookMalformedBodyRaw(raw, "invalid_json_not_object", [
+      "ราก JSON ต้องเป็น { … } ไม่ใช่ [ ] หรือตัวเลขอย่างเดียว",
+      `preview: ${logSafeWebhookBodyPreview(raw, 400)}`,
+    ]);
     return NextResponse.json(
       { ok: false, error: "invalid_json", hint: "Message ต้องเป็น { ... } ไม่ใช่ [ ] หรือตัวเลข" },
       { status: 400 }
