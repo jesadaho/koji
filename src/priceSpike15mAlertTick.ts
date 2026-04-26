@@ -54,7 +54,7 @@ function signalWindowSec(): number {
 
 function topN(): number {
   const n = Number(process.env.PRICE_SPIKE_15M_TOP_N?.trim());
-  return Number.isFinite(n) && n >= 5 && n <= 200 ? Math.floor(n) : 50;
+  return Number.isFinite(n) && n >= 5 && n <= 200 ? Math.floor(n) : 100;
 }
 
 const FETCH_CONCURRENCY = 8;
@@ -89,10 +89,27 @@ function formatUsdNotional(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/** เวลา checkpoint (จุดอ้างอิงราคาก่อนหน้า) แสดงเป็น Asia/Bangkok */
+function formatCheckpointTimeBkk(checkpointSec: number): string {
+  const d = new Date(checkpointSec * 1000);
+  return d.toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
 function buildSparkMessage(
   contractSymbol: string,
   returnPct: number,
   lastPrice: number,
+  checkpointPrice: number,
+  checkpointSec: number,
   amount24Usdt: number,
   windowSec: number,
   displayMeta?: ContractDisplayMeta
@@ -125,7 +142,8 @@ function buildSparkMessage(
     returnPct >= 0
       ? `📈 สัญญาณขึ้น — เทียบราคา last ย้อน ~${wm} นาที (ticker · ไม่อิงแท่งเทียน)`
       : `📉 สัญญาณลง — เทียบราคา last ย้อน ~${wm} นาที (ticker · ไม่อิงแท่งเทียน)`,
-    `💰 Price: ${formatPriceUsd(lastPrice)}`,
+    `📌 ก่อนหน้า: ${formatPriceUsd(checkpointPrice)} · ${formatCheckpointTimeBkk(checkpointSec)} (เวลาไทย)`,
+    `💰 ปัจจุบัน: ${formatPriceUsd(lastPrice)}`,
     volLine
   );
   return lines.join("\n");
@@ -185,7 +203,16 @@ export async function runPriceSpike15mAlertTick(
       continue;
     }
 
-    const body = buildSparkMessage(sym, returnPct, p, m.amount24Usdt, windowSec, displayBySymbol.get(sym));
+    const body = buildSparkMessage(
+      sym,
+      returnPct,
+      p,
+      st.checkpointPrice,
+      st.checkpointSec,
+      m.amount24Usdt,
+      windowSec,
+      displayBySymbol.get(sym)
+    );
     let anyOk = false;
     try {
       const n = await sendSparkSystemAlert(client, [], body, "spark");
