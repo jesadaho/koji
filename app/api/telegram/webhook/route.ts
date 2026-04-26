@@ -15,6 +15,21 @@ export const runtime = "nodejs";
 /** เช็คลิสต์ดึงหลาย API — บน Vercel Pro ใช้ได้ถึง 60s; แพลนฟรีอาจ timeout ที่ 10s */
 export const maxDuration = 60;
 
+/** ปิดคำสั่ง /chatid — ค่าเริ่มเปิด */
+function telegramWebhookChatIdCommandEnabled(): boolean {
+  const v = process.env.TELEGRAM_WEBHOOK_CHATID_CMD_ENABLED?.trim().toLowerCase();
+  if (v === "0" || v === "false" || v === "no") return false;
+  return true;
+}
+
+/** /chatid · #chatid · chat id · ไอดีแชท */
+function wantsTelegramChatIdCommand(trimmed: string, normalized: string): boolean {
+  if (!telegramWebhookChatIdCommandEnabled()) return false;
+  const t = trimmed.toLowerCase();
+  const n = normalized.toLowerCase().trim();
+  return n === "chatid" || t === "#chatid" || t === "chat id" || t === "ไอดีแชท";
+}
+
 /** `/short@bot btc` → `short btc` — ให้ตรงกับพาร์สเซอร์แบบ LINE */
 function normalizeTelegramSlashCommand(raw: string): string {
   const t = raw.trim();
@@ -39,7 +54,7 @@ function miniAppOpenUrl(): string {
 
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
- * /start → ปุ่ม Mini App · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
+ * /start → ปุ่ม Mini App · /chatid → แสดง chat_id / topic (ใส่ env) · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
@@ -113,6 +128,29 @@ export async function POST(req: NextRequest) {
   const fromUserId = update.message?.from?.id;
 
   const trimmedText = text.trim();
+
+  if (wantsTelegramChatIdCommand(trimmedText, normalized)) {
+    const lines = [
+      "Koji — chat / topic (สำหรับใส่ .env)",
+      `chat_id: ${chatId}`,
+      `ประเภทแชท: ${chatType ?? "—"}`,
+      replyThreadId != null && replyThreadId > 0
+        ? `message_thread_id (Forum topic): ${replyThreadId}`
+        : "message_thread_id: — (ไม่ใช่ข้อความใน topic / แชทธรรมดา)",
+      typeof fromUserId === "number" && fromUserId > 0 ? `จากผู้ใช้ (from id): ${fromUserId}` : "",
+      "",
+      "ตัวอย่าง:",
+      "• DM / แชทส่วนตัว → TELEGRAM_ALERT_CHAT_ID",
+      "• กลุ่มสาธารณะ → TELEGRAM_PUBLIC_CHAT_ID (มักขึ้นต้น -100…)",
+      "• หัวข้อในกลุ่ม Forum → TELEGRAM_PUBLIC_*_MESSAGE_THREAD_ID ตามชนิด",
+    ].filter(Boolean);
+    try {
+      await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
+    } catch (e) {
+      console.error("[telegram/webhook] chatid reply", e);
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   if (typeof fromUserId === "number" && fromUserId > 0 && chatId != null) {
     const wizardHandled = await handleTvOpenWizardTelegramMessage({
