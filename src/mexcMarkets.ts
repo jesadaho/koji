@@ -84,6 +84,8 @@ type KlineArrays = {
 type KlineApiResponse = {
   success: boolean;
   code: number;
+  /** MEXC ส่งเมื่อ success=false เช่น rate limit */
+  message?: string;
   data?: {
     open?: number[];
     close?: number[];

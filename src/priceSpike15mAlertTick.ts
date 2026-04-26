@@ -52,6 +52,16 @@ function signalWindowSec(): number {
   return Number.isFinite(n) && n >= 60 && n <= 3600 ? Math.floor(n) : 300;
 }
 
+/**
+ * ถ้าไม่ได้สแกน symbol นาน (หลุด Top N) checkpoint จะค้าง — เกินเกณฑ์นี้ให้รีเซ็ตโดยไม่ยิง Spark
+ * default ≥15 นาที และ ≥ 3× หน้าต่างสัญญาณ — ปรับ: SPARK_CHECKPOINT_MAX_STALE_SEC
+ */
+function checkpointMaxStaleSec(windowSec: number): number {
+  const n = Number(process.env.SPARK_CHECKPOINT_MAX_STALE_SEC?.trim());
+  if (Number.isFinite(n) && n >= 120 && n <= 7200) return Math.floor(n);
+  return Math.max(900, windowSec * 3);
+}
+
 function topN(): number {
   const n = Number(process.env.PRICE_SPIKE_15M_TOP_N?.trim());
   return Number.isFinite(n) && n >= 5 && n <= 200 ? Math.floor(n) : 100;
@@ -194,6 +204,12 @@ export async function runPriceSpike15mAlertTick(
 
     const elapsed = nowSec - st.checkpointSec;
     if (elapsed < windowSec) {
+      continue;
+    }
+
+    const maxStale = checkpointMaxStaleSec(windowSec);
+    if (elapsed > maxStale) {
+      state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };
       continue;
     }
 
