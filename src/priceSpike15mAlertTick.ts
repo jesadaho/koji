@@ -54,12 +54,12 @@ function signalWindowSec(): number {
 
 /**
  * ถ้าไม่ได้สแกน symbol นาน (หลุด Top N) checkpoint จะค้าง — เกินเกณฑ์นี้ให้รีเซ็ตโดยไม่ยิง Spark
- * default ≥15 นาที และ ≥ 3× หน้าต่างสัญญาณ — ปรับ: SPARK_CHECKPOINT_MAX_STALE_SEC
+ * ดีฟอลต์ไม่เกิน ~15 นาที (900s) แต่ต้อง ≥ หน้าต่างสัญญาณ ไม่งั้นจะยิง Spark ไม่ได้ — ปรับ: SPARK_CHECKPOINT_MAX_STALE_SEC (120–7200)
  */
 function checkpointMaxStaleSec(windowSec: number): number {
   const n = Number(process.env.SPARK_CHECKPOINT_MAX_STALE_SEC?.trim());
-  if (Number.isFinite(n) && n >= 120 && n <= 7200) return Math.floor(n);
-  return Math.max(900, windowSec * 3);
+  const cap = Number.isFinite(n) && n >= 120 && n <= 7200 ? Math.floor(n) : 900;
+  return Math.max(windowSec, cap);
 }
 
 function topN(): number {
