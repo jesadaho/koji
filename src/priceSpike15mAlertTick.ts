@@ -25,19 +25,19 @@ export function isPriceSpike15mSparkCronEnabled(): boolean {
   return true;
 }
 
-/** ขาขึ้น: ต้อง ≥ นี้ (default 10%) */
+/** ขาขึ้น: ต้อง ≥ นี้ (default 5%) */
 function minPctUp(): number {
   const n = Number(process.env.PRICE_SPIKE_MIN_PCT_UP?.trim());
   if (Number.isFinite(n) && n > 0) return n;
   const legacy = Number(process.env.PRICE_SPIKE_15M_MIN_PCT?.trim());
   if (Number.isFinite(legacy) && legacy > 0) return legacy;
-  return 10;
+  return 5;
 }
 
-/** ขาลง: |%| ต้อง ≥ นี้ (default 7%) */
+/** ขาลง: |%| ต้อง ≥ นี้ (default 5%) */
 function minPctDown(): number {
   const n = Number(process.env.PRICE_SPIKE_MIN_PCT_DOWN?.trim());
-  return Number.isFinite(n) && n > 0 ? n : 7;
+  return Number.isFinite(n) && n > 0 ? n : 5;
 }
 
 function sparkReturnPassesThreshold(returnPct: number): boolean {
@@ -46,20 +46,23 @@ function sparkReturnPassesThreshold(returnPct: number): boolean {
   return false;
 }
 
-/** ช่วงเทียบ % ระหว่างราคา last สองครั้ง (วินาที) — default 300 = 5 นาที */
+/** ช่วงเทียบ % ระหว่างราคา last สองครั้ง (วินาที) — default 3600 = 1 ชั่วโมง (สูงสุด 3600) */
 function signalWindowSec(): number {
   const n = Number(process.env.SPARK_SIGNAL_WINDOW_SEC?.trim());
-  return Number.isFinite(n) && n >= 60 && n <= 3600 ? Math.floor(n) : 300;
+  return Number.isFinite(n) && n >= 60 && n <= 3600 ? Math.floor(n) : 3600;
 }
 
 /**
  * ถ้าไม่ได้สแกน symbol นาน (หลุด Top N) checkpoint จะค้าง — เกินเกณฑ์นี้ให้รีเซ็ตโดยไม่ยิง Spark
- * ดีฟอลต์ไม่เกิน ~15 นาที (900s) แต่ต้อง ≥ หน้าต่างสัญญาณ ไม่งั้นจะยิง Spark ไม่ได้ — ปรับ: SPARK_CHECKPOINT_MAX_STALE_SEC (120–7200)
+ * ต้องมากกว่า window อย่างน้อยช่วงหนึ่ง (เผื่อ cron ~5m) ไม่ให้ช่วง [window, maxStale] แคบจนแทบไม่มีทางยิง
+ * ปรับ: SPARK_CHECKPOINT_MAX_STALE_SEC (120–7200)
  */
 function checkpointMaxStaleSec(windowSec: number): number {
   const n = Number(process.env.SPARK_CHECKPOINT_MAX_STALE_SEC?.trim());
   const cap = Number.isFinite(n) && n >= 120 && n <= 7200 ? Math.floor(n) : 900;
-  return Math.max(windowSec, cap);
+  const baseline = Math.max(windowSec, cap);
+  const minUpper = windowSec + 600; // ~10 นาทีเหนือขอบล่าง — cron ไม่พลาดจุดยิง
+  return Math.max(baseline, minUpper);
 }
 
 function topN(): number {
@@ -161,7 +164,7 @@ function buildSparkMessage(
 
 /**
  * Spark — |% เปลี่ยน| ของราคา last เทียบจุดอ้างอิงก่อนหน้า ≥ เกณฑ์ (ไม่อิงแท่งเทียน)
- * ควรเรียกจาก cron ~ทุก 5 นาที ให้สอดคล้องกับ SPARK_SIGNAL_WINDOW_SEC
+ * ควรเรียกจาก cron ~ทุก 5 นาที (หน้าต่าง 1h ยังใช้ได้ — มีเผื่อช่วง stale เหนือ window)
  */
 export async function runPriceSpike15mAlertTick(
   client: Client
