@@ -27,9 +27,16 @@ async function ensureJsonFile(): Promise<void> {
 }
 
 /** จุดอ้างอิงราคา last (ticker) — ไม่อิงแท่งเทียน */
+export type SparkPriceSample = {
+  tsSec: number;
+  lastPrice: number;
+};
+
 export type SparkSignalCheckpointState = {
   checkpointPrice: number;
   checkpointSec: number;
+  /** ราคา last ย้อนหลังแบบ sample จากรอบ cron (โดยทั่วไปทุก ~5 นาที) */
+  priceSamples?: SparkPriceSample[];
 };
 
 export type PriceSpike15mAlertState = Record<string, SparkSignalCheckpointState>;
@@ -45,7 +52,20 @@ function normalizeState(raw: unknown): PriceSpike15mAlertState {
       const cp = Number(o.checkpointPrice);
       const cs = Number(o.checkpointSec);
       if (!Number.isFinite(cp) || cp <= 0 || !Number.isFinite(cs) || cs <= 0) continue;
-      out[k.trim()] = { checkpointPrice: cp, checkpointSec: cs };
+      const samplesRaw = Array.isArray(o.priceSamples) ? o.priceSamples : [];
+      const samples: SparkPriceSample[] = [];
+      for (const it of samplesRaw) {
+        if (!it || typeof it !== "object") continue;
+        const row = it as Record<string, unknown>;
+        const ts = Number(row.tsSec);
+        const lp = Number(row.lastPrice);
+        if (!Number.isFinite(ts) || ts <= 0 || !Number.isFinite(lp) || lp <= 0) continue;
+        samples.push({ tsSec: Math.floor(ts), lastPrice: lp });
+      }
+      out[k.trim()] =
+        samples.length > 0
+          ? { checkpointPrice: cp, checkpointSec: cs, priceSamples: samples }
+          : { checkpointPrice: cp, checkpointSec: cs };
     }
   }
   return out;

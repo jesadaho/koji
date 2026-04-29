@@ -70,6 +70,36 @@ function topN(): number {
   return Number.isFinite(n) && n >= 5 && n <= 200 ? Math.floor(n) : 100;
 }
 
+/** เก็บราคาย้อนหลังสำหรับ debug Spark (วินาที) — default 3600 = 1 ชั่วโมง */
+function priceHistoryKeepSec(): number {
+  const n = Number(process.env.SPARK_PRICE_HISTORY_KEEP_SEC?.trim());
+  return Number.isFinite(n) && n >= 900 && n <= 86_400 ? Math.floor(n) : 3600;
+}
+
+function appendPriceSample(
+  st: PriceSpike15mAlertState[string] | undefined,
+  lastPrice: number,
+  nowSec: number,
+  keepSec: number
+): PriceSpike15mAlertState[string] {
+  const prev = st?.priceSamples ?? [];
+  const minTs = nowSec - keepSec;
+  const next = prev.filter((x) => Number.isFinite(x.tsSec) && x.tsSec >= minTs && Number.isFinite(x.lastPrice) && x.lastPrice > 0);
+  const last = next[next.length - 1];
+  if (last && last.tsSec === nowSec) {
+    next[next.length - 1] = { tsSec: nowSec, lastPrice };
+  } else {
+    next.push({ tsSec: nowSec, lastPrice });
+  }
+  const maxPoints = Math.max(12, Math.ceil(keepSec / 60));
+  const capped = next.length > maxPoints ? next.slice(next.length - maxPoints) : next;
+  return {
+    checkpointPrice: st?.checkpointPrice ?? lastPrice,
+    checkpointSec: st?.checkpointSec ?? nowSec,
+    priceSamples: capped,
+  };
+}
+
 const FETCH_CONCURRENCY = 8;
 
 async function mapPoolConcurrent<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -174,6 +204,7 @@ export async function runPriceSpike15mAlertTick(
   }
 
   const windowSec = signalWindowSec();
+  const keepSec = priceHistoryKeepSec();
   const limit = topN();
   const [symbols, displayBySymbol] = await Promise.all([
     getTopUsdtSymbolsByAmount24(limit),
@@ -198,10 +229,12 @@ export async function runPriceSpike15mAlertTick(
     if (!m || !Number.isFinite(m.lastPrice) || m.lastPrice <= 0) continue;
 
     const p = m.lastPrice;
-    const st = state[sym];
+    const sampled = appendPriceSample(state[sym], p, nowSec, keepSec);
+    state[sym] = sampled;
+    const st = sampled;
 
-    if (!st) {
-      state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };
+    if (st.checkpointSec <= 0 || st.checkpointPrice <= 0) {
+      state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec };
       continue;
     }
 
@@ -212,13 +245,13 @@ export async function runPriceSpike15mAlertTick(
 
     const maxStale = checkpointMaxStaleSec(windowSec);
     if (elapsed > maxStale) {
-      state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };
+      state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec };
       continue;
     }
 
     const returnPct = ((p - st.checkpointPrice) / st.checkpointPrice) * 100;
     if (!sparkReturnPassesThreshold(returnPct)) {
-      state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };
+      state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec };
       continue;
     }
 
@@ -248,7 +281,7 @@ export async function runPriceSpike15mAlertTick(
       console.error("[priceSpike15mAlertTick] notify", sym, e);
     }
 
-    state = { ...state, [sym]: { checkpointPrice: p, checkpointSec: nowSec } };
+    state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec };
 
     if (anyOk) {
       symbolsHit += 1;
