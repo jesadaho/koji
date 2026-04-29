@@ -38,6 +38,11 @@ import { parseMarketCheck, parsePositionChecklist } from "./positionChecklistLin
 import { buildMarketCheckMessage, buildPositionChecklistMessage } from "./positionChecklistService";
 import { resetSparkFollowUpState } from "./sparkFollowUpStore";
 import { loadPriceSpike15mAlertState } from "./priceSpike15mAlertStateStore";
+import {
+  fetchContractTickerMetrics,
+  getTopUsdtSymbolsByAmount24,
+  sparkMinAmount24Usdt,
+} from "./mexcMarkets";
 
 export function createLineClient(channelAccessToken: string) {
   return new Client({ channelAccessToken });
@@ -71,6 +76,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 
 • spark log <เหรียญ> — กาง “ราคา last” ที่ Spark เก็บไว้ย้อนหลัง 1 ชม. (จากรอบ cron)
   ตัวอย่าง: spark log bsb
+
+• spark rank <เหรียญ> — เช็คว่าเหรียญอยู่ใน universe ที่ Spark sample ตอนนี้ไหม (Top N + Vol filter)
+  ตัวอย่าง: spark rank bsb
 
 • เตือน <เหรียญ> เกิน <ราคา> — แจ้งเมื่อราคา ≥ เป้า (USDT)
 • เตือน <เหรียญ> ต่ำกว่า <ราคา> — แจ้งเมื่อราคา ≤ เป้า
@@ -137,6 +145,19 @@ function parseSparkLogCmd(t: string): string | null {
     s.match(/^(?:spark\s*(?:log|logs|history)|sparklog|price\s*logs)\s+(\S+)\s*$/i) ||
     s.match(/^(?:สปาร์ค\s*log|สปาร์ค\s*logs|ราคาย้อนหลัง\s*spark)\s+(\S+)\s*$/i);
   return m?.[1]?.trim() ?? null;
+}
+
+function parseSparkRankCmd(t: string): string | null {
+  const s = t.trim();
+  const m =
+    s.match(/^(?:spark\s*(?:rank|universe|u))\s+(\S+)\s*$/i) ||
+    s.match(/^(?:สปาร์ค\s*(?:rank|แรงค์|ยูนิเวิร์ส))\s+(\S+)\s*$/i);
+  return m?.[1]?.trim() ?? null;
+}
+
+function sparkTopNConfigured(): number {
+  const n = Number(process.env.PRICE_SPIKE_15M_TOP_N?.trim());
+  return Number.isFinite(n) && n >= 5 && n <= 200 ? Math.floor(n) : 100;
 }
 
 function formatBkkFromSec(tsSec: number): string {
@@ -355,6 +376,45 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       console.error("[lineHandler] spark log", e);
       await client.replyMessage(msgEvent.replyToken, [
         { type: "text", text: "ดึง spark price logs ไม่สำเร็จ — บน Vercel ต้องมี REDIS_URL หรือ Vercel KV" },
+      ]);
+    }
+    return;
+  }
+
+  const sparkRankSym = parseSparkRankCmd(text);
+  if (sparkRankSym) {
+    const resolved = resolveContractSymbol(sparkRankSym);
+    if (!resolved) {
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: "ไม่รู้จักคู่นี้ (ลอง bsb หรือ BSB_USDT)" },
+      ]);
+      return;
+    }
+    try {
+      const limit = sparkTopNConfigured();
+      const [syms, m] = await Promise.all([
+        getTopUsdtSymbolsByAmount24(limit),
+        fetchContractTickerMetrics(resolved.contractSymbol),
+      ]);
+      const rank = syms.indexOf(resolved.contractSymbol);
+      const amount24 = m?.amount24Usdt;
+      const lastPrice = m?.lastPrice;
+
+      const lines: string[] = [
+        `⚡️ Spark universe — [${resolved.label}]/USDT`,
+        `Contract: ${resolved.contractSymbol}`,
+        "",
+        `Top N: ${limit}`,
+        `Min amount24 (USDT): ${sparkMinAmount24Usdt().toLocaleString()}`,
+        "",
+        `Now: price ${lastPrice != null ? formatPriceMaybe(lastPrice) : "—"} · amount24 ${amount24 != null ? amount24.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}`,
+        rank >= 0 ? `Status: ✅ อยู่ใน universe (rank ${rank + 1}/${syms.length})` : "Status: ❌ ไม่อยู่ใน universe ตอนนี้",
+      ];
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: lines.join("\n") }]);
+    } catch (e) {
+      console.error("[lineHandler] spark rank", e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: "เช็ค spark universe ไม่สำเร็จ — บน Vercel ต้องมี REDIS_URL หรือ Vercel KV" },
       ]);
     }
     return;

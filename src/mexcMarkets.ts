@@ -26,6 +26,15 @@ const MIN_BASELINE_BARS = 32;
 /** กรองเฉพาะสัญญาที่มูลค่าเทิร์นโอเวอร์ 24h (amount24) มากกว่านี้ (USDT) */
 export const MIN_AMOUNT24_USDT = 5_000_000;
 
+/** Spark universe: override liquidity filter (default = 1,000,000 USDT) */
+export function sparkMinAmount24Usdt(): number {
+  const raw = process.env.SPARK_MIN_AMOUNT24_USDT?.trim();
+  if (!raw) return 1_000_000;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 1_000_000;
+  return Math.floor(n);
+}
+
 /** 24h ติดลบ — กรอง Top loser by vol (รวมขอบเขต -1% … -15%) */
 export const TOP_LOSER_24H_PCT_MIN = -15;
 export const TOP_LOSER_24H_PCT_MAX = -1;
@@ -1076,12 +1085,13 @@ export async function getTopUsdtSymbolsByAmount24(limit: number): Promise<string
   for (const d of details) {
     if (d.symbol) detailBySymbol.set(d.symbol, d);
   }
+  const minAmount24Usdt = sparkMinAmount24Usdt();
 
   const usdtPerp = tickers.filter((t) => {
     const sym = t.symbol?.trim();
     if (!sym || !sym.endsWith("_USDT")) return false;
     const amt = t.amount24;
-    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= MIN_AMOUNT24_USDT) return false;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= minAmount24Usdt) return false;
     const price = t.lastPrice;
     if (typeof price !== "number" || Number.isNaN(price) || price <= 0) return false;
     const d = detailBySymbol.get(sym);

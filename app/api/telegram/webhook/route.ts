@@ -11,6 +11,11 @@ import { formatSparkStatsMessage } from "@/src/sparkFollowUpStats";
 import { handleTvOpenWizardTelegramMessage } from "@/src/tradingViewOpenWizardTelegram";
 import { resolveContractSymbol } from "@/src/coinMap";
 import { loadPriceSpike15mAlertState } from "@/src/priceSpike15mAlertStateStore";
+import {
+  fetchContractTickerMetrics,
+  getTopUsdtSymbolsByAmount24,
+  sparkMinAmount24Usdt,
+} from "@/src/mexcMarkets";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,6 +65,19 @@ function parseSparkLogCmd(t: string): string | null {
     s.match(/^(?:spark\s*(?:log|logs|history)|sparklog|price\s*logs)\s+(\S+)\s*$/i) ||
     s.match(/^(?:สปาร์ค\s*log|สปาร์ค\s*logs|ราคาย้อนหลัง\s*spark)\s+(\S+)\s*$/i);
   return m?.[1]?.trim() ?? null;
+}
+
+function parseSparkRankCmd(t: string): string | null {
+  const s = t.trim();
+  const m =
+    s.match(/^(?:spark\s*(?:rank|universe|u))\s+(\S+)\s*$/i) ||
+    s.match(/^(?:สปาร์ค\s*(?:rank|แรงค์|ยูนิเวิร์ส))\s+(\S+)\s*$/i);
+  return m?.[1]?.trim() ?? null;
+}
+
+function sparkTopNConfigured(): number {
+  const n = Number(process.env.PRICE_SPIKE_15M_TOP_N?.trim());
+  return Number.isFinite(n) && n >= 5 && n <= 200 ? Math.floor(n) : 100;
 }
 
 function formatBkkFromSec(tsSec: number): string {
@@ -334,6 +352,55 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] market check error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const sparkRankSym = parseSparkRankCmd(normalized) || parseSparkRankCmd(text);
+  if (sparkRankSym) {
+    const resolved = resolveContractSymbol(sparkRankSym);
+    if (!resolved) {
+      try {
+        await sendTelegramMessageToChat(String(chatId), "ไม่รู้จักคู่นี้ (ลอง bsb หรือ BSB_USDT)", threadOpts);
+      } catch (e) {
+        console.error("[telegram/webhook] spark rank unknown symbol reply", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const limit = sparkTopNConfigured();
+      const [syms, m] = await Promise.all([
+        getTopUsdtSymbolsByAmount24(limit),
+        fetchContractTickerMetrics(resolved.contractSymbol),
+      ]);
+      const rank = syms.indexOf(resolved.contractSymbol);
+      const amount24 = m?.amount24Usdt;
+      const lastPrice = m?.lastPrice;
+      const lines: string[] = [
+        `⚡️ Spark universe — [${resolved.label}]/USDT`,
+        `Contract: ${resolved.contractSymbol}`,
+        "",
+        `Top N: ${limit}`,
+        `Min amount24 (USDT): ${sparkMinAmount24Usdt().toLocaleString()}`,
+        "",
+        `Now: price ${lastPrice != null ? formatPriceMaybe(lastPrice) : "—"} · amount24 ${
+          amount24 != null ? amount24.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"
+        }`,
+        rank >= 0 ? `Status: ✅ อยู่ใน universe (rank ${rank + 1}/${syms.length})` : "Status: ❌ ไม่อยู่ใน universe ตอนนี้",
+      ];
+      await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
+    } catch (e) {
+      console.error("[telegram/webhook] spark rank", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `เช็ค spark universe ไม่สำเร็จ — ${detail.slice(0, 300)}`,
+          threadOpts
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] spark rank error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });
