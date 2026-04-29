@@ -12,11 +12,12 @@ import { runPriceAlertTick } from "@/src/priceAlertTick";
 import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
 import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
 import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
+import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เตือน% รายวัน (07:00 ไทย) + Volume signal + RSI 1h + spot–perp basis (ราคาผิดปกติ)
+ * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เตือน% รายวัน (07:00 ไทย) + Volume signal + RSI 1h + spot–perp basis + 3 เขียว Day1 (คู่ใหม่ → technical)
  * เตือน% trailing → /api/cron/pct-trailing ทุก ~5 นาที
  * GET + Authorization: Bearer CRON_SECRET
  */
@@ -31,6 +32,7 @@ export async function GET(req: NextRequest) {
     volumeSignalAlerts: { ok: false },
     indicatorAlerts: { ok: false },
     spotFutBasisAlerts: { ok: false },
+    threeGreenDailyTechnical: { ok: false },
   };
 
   async function runStep(
@@ -71,6 +73,10 @@ export async function GET(req: NextRequest) {
     const r = await runSpotFutBasisAlertTick(client);
     return `แจ้ง ${r.symbolsAlerted} สัญญา · ${r.notifiedPushes} push`;
   });
+  await runStep("threeGreenDailyTechnical", async () => {
+    const r = await runThreeGreenDailyTechnicalAlertTick();
+    return r.detail;
+  });
 
   const record: PriceSyncCronRecord = {
     at: new Date().toISOString(),
@@ -89,6 +95,7 @@ export async function GET(req: NextRequest) {
     steps.pctStepAlerts.ok &&
     steps.volumeSignalAlerts?.ok !== false &&
     steps.indicatorAlerts?.ok !== false &&
-    steps.spotFutBasisAlerts?.ok !== false;
+    steps.spotFutBasisAlerts?.ok !== false &&
+    steps.threeGreenDailyTechnical?.ok !== false;
   return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }

@@ -65,6 +65,8 @@ export type PriceSyncCronRecord = {
     indicatorAlerts?: CronStepResult;
     /** บันทึกเก่าอาจไม่มีฟิลด์นี้ — แจ้งเมื่อ |spot–perp basis| ผิดปกติ */
     spotFutBasisAlerts?: CronStepResult;
+    /** 3 เขียว Day1 รายวัน — คู่ใหม่ใน list → Telegram technical (หลัง 07:00 ไทย) */
+    threeGreenDailyTechnical?: CronStepResult;
   };
 };
 
@@ -239,6 +241,9 @@ export function formatCronStatusForLine(bundle: {
     }
     if (priceSync.steps.spotFutBasisAlerts) {
       parts.push(fmt(priceSync.steps.spotFutBasisAlerts, "Spot–perp basis (ราคาผิดปกติ)"));
+    }
+    if (priceSync.steps.threeGreenDailyTechnical) {
+      parts.push(fmt(priceSync.steps.threeGreenDailyTechnical, "3 เขียว Day1 (คู่ใหม่ → technical)"));
     }
     parts.push("");
   }
