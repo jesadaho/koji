@@ -47,6 +47,22 @@ function fmtEventLine(e: UnifiedEvent): string {
   return `${imp}${z}${e.title} — ${t} UTC`;
 }
 
+function fmtUtcYmdHm(tsUtcMs: number): string {
+  return new Date(tsUtcMs).toISOString().replace("T", " ").slice(0, 16);
+}
+
+function fmtBkkYmdHm(tsUtcMs: number): string {
+  const d = new Date(tsUtcMs);
+  const datePart = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const timePart = d.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${datePart} ${timePart}`;
+}
+
 function buildWeeklyMessage(weekMondayYmd: string, events: UnifiedEvent[]): string {
   const macro = events.filter((e) => e.category === "macro");
   const unlocks = events.filter((e) => e.category === "unlock");
@@ -70,12 +86,14 @@ function buildWeeklyMessage(weekMondayYmd: string, events: UnifiedEvent[]): stri
 }
 
 function buildPreMessage(minutes: 60 | 30, e: UnifiedEvent): string {
-  const t = new Date(e.startsAtUtc).toISOString().replace("T", " ").slice(0, 16);
+  const utc = fmtUtcYmdHm(e.startsAtUtc);
+  const bkk = fmtBkkYmdHm(e.startsAtUtc);
   return [
     `⏰ Koji — Pre-event (${minutes} นาที)`,
     "",
     `${e.title}${e.country ? ` (${e.country})` : ""}`,
-    `เวลา: ${t} UTC`,
+    `เวลา: ${utc} UTC`,
+    `เวลาไทย: ${bkk} (BKK)`,
     "",
     "แนะนำ: เช็ค position / stop loss ก่อนข่าว — ความผันผวนอาจสูง",
     "",
