@@ -16,6 +16,16 @@ import {
   getTopUsdtSymbolsByAmount24,
   sparkMinAmount24Usdt,
 } from "@/src/mexcMarkets";
+import { createLineClientForCron } from "@/src/lineHandler";
+import { runPctStepTrailingPriceAlertTick } from "@/src/pctStepPriceAlertTick";
+import { runPriceSpike15mAlertTick } from "@/src/priceSpike15mAlertTick";
+import { runSparkFollowUpTick } from "@/src/sparkFollowUpTick";
+import { runPriceAlertTick } from "@/src/priceAlertTick";
+import { runPctStepDailyPriceAlertTick } from "@/src/pctStepPriceAlertTick";
+import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
+import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
+import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
+import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -101,6 +111,41 @@ function formatPriceMaybe(p: number): string {
   return p.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+function telegramCronRunAllowedUserIds(): number[] {
+  const raw = process.env.TELEGRAM_CRON_RUN_ALLOWED_USER_IDS?.trim();
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0 && Number.isInteger(n));
+}
+
+function isTelegramCronRunAllowed(fromUserId: number | undefined): boolean {
+  if (fromUserId == null || !Number.isFinite(fromUserId) || fromUserId <= 0) return false;
+  const ids = telegramCronRunAllowedUserIds();
+  if (ids.length === 0) return false;
+  return ids.includes(fromUserId);
+}
+
+type CronRunScope = "pct-trailing" | "price-sync";
+
+function parseRunCronCmd(t: string): CronRunScope | null {
+  const s = t.trim().replace(/\s+/g, " ");
+  let m = s.match(/^(?:run\s+cron|cron\s+run|runc|runcron)\s+(pct-trailing|pct_trailing|spark|price-sync|price_sync)\s*$/i);
+  if (m) {
+    const key = m[1]!.toLowerCase();
+    if (key === "spark" || key === "pct-trailing" || key === "pct_trailing") return "pct-trailing";
+    if (key === "price-sync" || key === "price_sync") return "price-sync";
+  }
+  m = s.match(/^(?:รัน\s*cron|สั่งรัน\s*cron|รันcron)\s+(spark|pct-trailing|price-sync)\s*$/i);
+  if (m) {
+    const key = m[1]!.toLowerCase();
+    if (key === "spark" || key === "pct-trailing") return "pct-trailing";
+    if (key === "price-sync") return "price-sync";
+  }
+  return null;
+}
+
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
  * /start → ปุ่ม Mini App · /chatid → แสดง chat_id / topic (ใส่ env) · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
@@ -177,6 +222,78 @@ export async function POST(req: NextRequest) {
   const fromUserId = update.message?.from?.id;
 
   const trimmedText = text.trim();
+
+  const runScope = parseRunCronCmd(normalized) || parseRunCronCmd(trimmedText);
+  if (runScope) {
+    if (!isTelegramCronRunAllowed(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          "คำสั่งรัน cron ถูกปิดหรือไม่ได้รับอนุญาต — ตั้ง TELEGRAM_CRON_RUN_ALLOWED_USER_IDS=<telegram user id> ก่อน",
+          threadOpts
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] run cron deny reply", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    const started = Date.now();
+    const atIso = new Date().toISOString();
+    const client = createLineClientForCron();
+    try {
+      if (runScope === "pct-trailing") {
+        const [trailing, spark, follow] = await Promise.allSettled([
+          runPctStepTrailingPriceAlertTick(client),
+          runPriceSpike15mAlertTick(client),
+          runSparkFollowUpTick(client),
+        ]);
+        const lines = [
+          "🟦 Koji — run cron (pct-trailing)",
+          `UTC: ${atIso}`,
+          `durationMs: ${Date.now() - started}`,
+          "",
+          `trailingPct: ${trailing.status === "fulfilled" ? `ok (notified ${trailing.value.notified})` : `fail — ${(trailing.reason as Error)?.message ?? String(trailing.reason)}`}`,
+          `sparkTicker: ${spark.status === "fulfilled" ? `ok (hit ${spark.value.symbolsHit}, push ${spark.value.notifiedPushes})` : `fail — ${(spark.reason as Error)?.message ?? String(spark.reason)}`}`,
+          `sparkFollowUp: ${follow.status === "fulfilled" ? `ok (checkpoints ${follow.value.checkpoints}, resolved ${follow.value.resolvedEvents})` : `fail — ${(follow.reason as Error)?.message ?? String(follow.reason)}`}`,
+        ];
+        await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
+      } else {
+        const steps = await Promise.allSettled([
+          (async () => runPriceAlertTick(client))(),
+          runPctStepDailyPriceAlertTick(client),
+          runVolumeSignalAlertTick(client),
+          runIndicatorAlertTick(client),
+          runSpotFutBasisAlertTick(client),
+          runThreeGreenDailyTechnicalAlertTick(),
+        ]);
+        const fmt = (name: string, r: PromiseSettledResult<unknown>) =>
+          `${name}: ${r.status === "fulfilled" ? "ok" : `fail — ${(r.reason as Error)?.message ?? String(r.reason)}`}`;
+        const lines = [
+          "🟩 Koji — run cron (price-sync)",
+          `UTC: ${atIso}`,
+          `durationMs: ${Date.now() - started}`,
+          "",
+          fmt("priceAlerts", steps[0]!),
+          fmt("pctStepAlerts", steps[1]!),
+          fmt("volumeSignalAlerts", steps[2]!),
+          fmt("indicatorAlerts", steps[3]!),
+          fmt("spotFutBasisAlerts", steps[4]!),
+          fmt("threeGreenDailyTechnical", steps[5]!),
+        ];
+        await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
+      }
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      console.error("[telegram/webhook] run cron", e);
+      try {
+        await sendTelegramMessageToChat(String(chatId), `run cron ไม่สำเร็จ — ${detail.slice(0, 800)}`, threadOpts);
+      } catch (sendErr) {
+        console.error("[telegram/webhook] run cron error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   if (wantsTelegramChatIdCommand(trimmedText, normalized)) {
     const lines = [
