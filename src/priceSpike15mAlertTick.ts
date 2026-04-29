@@ -18,6 +18,11 @@ import { appendSparkFireLog, enqueueSparkFollowUp } from "./sparkFollowUpStore";
 /** ให้สอดคล้องกับ follow-up scheduler (anchor: barOpen + SPARK_BAR_SEC วินาที — ไม่ใช่ TF chart) */
 const SPARK_SIGNAL_BAR_SEC = 300;
 
+function sparkAlertCooldownSec(): number {
+  const n = Number(process.env.SPARK_ALERT_COOLDOWN_SEC?.trim());
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 15 * 60;
+}
+
 /** เปิดรอบ Spark (ticker last) ใน cron pct-trailing — ปิด: PRICE_SPIKE_15M_ENABLED=0 */
 export function isPriceSpike15mSparkCronEnabled(): boolean {
   const raw = process.env.PRICE_SPIKE_15M_ENABLED?.trim();
@@ -303,6 +308,12 @@ export async function runPriceSpike15mAlertTick(
     }
 
     const { ref, returnPct, windowSec } = signal;
+    const cooldown = sparkAlertCooldownSec();
+    if (cooldown > 0 && st.lastNotifiedSec != null && nowSec - st.lastNotifiedSec < cooldown) {
+      // อยู่ใน cooldown: ยังเก็บ sample + อัปเดต checkpoint แต่ไม่ส่งแจ้งเตือน/ไม่ enqueue follow-up
+      state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec };
+      continue;
+    }
     const body = buildSparkMessage(
       sym,
       returnPct,
@@ -329,7 +340,7 @@ export async function runPriceSpike15mAlertTick(
       console.error("[priceSpike15mAlertTick] notify", sym, e);
     }
 
-    state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec };
+    state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec, lastNotifiedSec: anyOk ? nowSec : st.lastNotifiedSec };
 
     if (anyOk) {
       symbolsHit += 1;

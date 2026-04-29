@@ -37,6 +37,8 @@ export type SparkSignalCheckpointState = {
   checkpointSec: number;
   /** ราคา last ย้อนหลังแบบ sample จากรอบ cron (โดยทั่วไปทุก ~5 นาที) */
   priceSamples?: SparkPriceSample[];
+  /** เวลา (epoch seconds) ที่ส่ง Spark alert ล่าสุดสำเร็จ — ใช้ทำ cooldown */
+  lastNotifiedSec?: number;
 };
 
 export type PriceSpike15mAlertState = Record<string, SparkSignalCheckpointState>;
@@ -52,6 +54,9 @@ function normalizeState(raw: unknown): PriceSpike15mAlertState {
       const cp = Number(o.checkpointPrice);
       const cs = Number(o.checkpointSec);
       if (!Number.isFinite(cp) || cp <= 0 || !Number.isFinite(cs) || cs <= 0) continue;
+      const ln = Number(o.lastNotifiedSec);
+      const lastNotifiedSec =
+        Number.isFinite(ln) && ln > 0 ? Math.floor(ln) : undefined;
       const samplesRaw = Array.isArray(o.priceSamples) ? o.priceSamples : [];
       const samples: SparkPriceSample[] = [];
       for (const it of samplesRaw) {
@@ -64,8 +69,8 @@ function normalizeState(raw: unknown): PriceSpike15mAlertState {
       }
       out[k.trim()] =
         samples.length > 0
-          ? { checkpointPrice: cp, checkpointSec: cs, priceSamples: samples }
-          : { checkpointPrice: cp, checkpointSec: cs };
+          ? { checkpointPrice: cp, checkpointSec: cs, priceSamples: samples, lastNotifiedSec }
+          : { checkpointPrice: cp, checkpointSec: cs, lastNotifiedSec };
     }
   }
   return out;
