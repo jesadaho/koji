@@ -244,7 +244,11 @@ export async function runPriceSpike15mAlertTick(
     fetchContractDisplayMetaBySymbol(),
   ]);
   if (symbols.length === 0) {
-    return { notifiedPushes: 0, symbolsHit: 0 };
+    // ถ้า universe ว่าง แปลว่าดึง ticker list ไม่ได้/โดน rate limit/หรือ filter เข้มเกินไป
+    // ให้ถือเป็นความล้มเหลวของ cron เพื่อให้มี alert เข้า TELEGRAM_ALERT_CHAT_ID (cronFailureNotify)
+    throw new Error(
+      `Spark universe empty (topN=${limit}) — MEXC contract ticker list อาจว่าง/ถูกจำกัด หรือ filter (SPARK_MIN_AMOUNT24_USDT) เข้มเกินไป`
+    );
   }
 
   let state: PriceSpike15mAlertState = await loadPriceSpike15mAlertState();
