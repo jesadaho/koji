@@ -257,6 +257,18 @@ export async function runPriceSpike15mAlertTick(
     const m = await fetchContractTickerMetrics(sym);
     return { sym, m };
   });
+  const okMetrics = metricsList.reduce((acc, it) => {
+    const m = it.m;
+    if (!m || !Number.isFinite(m.lastPrice) || m.lastPrice <= 0) return acc;
+    return acc + 1;
+  }, 0);
+  if (okMetrics === 0) {
+    // ถ้าดึง ticker metrics ไม่ได้เลยทั้งชุด มักเป็นปัญหา API/เครือข่าย/ถูกจำกัด (แต่ fetchContractTickerMetrics จะ swallow error)
+    // ให้ถือเป็นความล้มเหลวของ cron เพื่อส่งแจ้งเตือนเข้า TELEGRAM_ALERT_CHAT_ID
+    throw new Error(
+      `Spark ticker metrics empty (0/${symbols.length}) — MEXC /contract/ticker อาจล้มเหลว/ถูกจำกัด; ตรวจ Project Logs และลอง curl MEXC API จาก server`
+    );
+  }
 
   let notifiedPushes = 0;
   let symbolsHit = 0;
