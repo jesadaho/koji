@@ -37,6 +37,7 @@ import { sendAlertNotification } from "./alertNotify";
 import { parseMarketCheck, parsePositionChecklist } from "./positionChecklistLineCommands";
 import { buildMarketCheckMessage, buildPositionChecklistMessage } from "./positionChecklistService";
 import { resetSparkFollowUpState } from "./sparkFollowUpStore";
+import { loadPriceSpike15mAlertState } from "./priceSpike15mAlertStateStore";
 
 export function createLineClient(channelAccessToken: string) {
   return new Client({ channelAccessToken });
@@ -67,6 +68,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • ราคา <เหรียญ> — ราคา last บนสัญญา + %24h
   ตัวอย่าง: ราคา btc
   (พิมพ์สัญญาเต็มได้ เช่น BTC_USDT)
+
+• spark log <เหรียญ> — กาง “ราคา last” ที่ Spark เก็บไว้ย้อนหลัง 1 ชม. (จากรอบ cron)
+  ตัวอย่าง: spark log bsb
 
 • เตือน <เหรียญ> เกิน <ราคา> — แจ้งเมื่อราคา ≥ เป้า (USDT)
 • เตือน <เหรียญ> ต่ำกว่า <ราคา> — แจ้งเมื่อราคา ≤ เป้า
@@ -125,6 +129,35 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 function parsePriceCmd(t: string): string | null {
   const m = t.match(/^(?:ราคา|price)\s+(.+)$/i);
   return m?.[1]?.trim() ?? null;
+}
+
+function parseSparkLogCmd(t: string): string | null {
+  const s = t.trim();
+  const m =
+    s.match(/^(?:spark\s*(?:log|logs|history)|sparklog|price\s*logs)\s+(\S+)\s*$/i) ||
+    s.match(/^(?:สปาร์ค\s*log|สปาร์ค\s*logs|ราคาย้อนหลัง\s*spark)\s+(\S+)\s*$/i);
+  return m?.[1]?.trim() ?? null;
+}
+
+function formatBkkFromSec(tsSec: number): string {
+  const d = new Date(tsSec * 1000);
+  const datePart = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const timePart = d.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  return `${datePart} ${timePart} (BKK)`;
+}
+
+function formatPriceMaybe(p: number): string {
+  if (!Number.isFinite(p) || p <= 0) return "—";
+  if (p < 1) return p.toFixed(6);
+  if (p < 100) return p.toFixed(4);
+  if (p < 1000) return p.toFixed(2);
+  return p.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function parseAlertCmd(t: string): {
@@ -270,6 +303,58 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       console.error("[lineHandler] cron status", e);
       await client.replyMessage(msgEvent.replyToken, [
         { type: "text", text: "อ่านสถานะ cron ไม่สำเร็จ — บน Vercel ต้องมี REDIS_URL หรือ Vercel KV" },
+      ]);
+    }
+    return;
+  }
+
+  const sparkLogSym = parseSparkLogCmd(text);
+  if (sparkLogSym) {
+    const resolved = resolveContractSymbol(sparkLogSym);
+    if (!resolved) {
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: "ไม่รู้จักคู่นี้ (ลอง bsb หรือ BSB_USDT)" },
+      ]);
+      return;
+    }
+    try {
+      const state = await loadPriceSpike15mAlertState();
+      const st = state[resolved.contractSymbol];
+      if (!st) {
+        await client.replyMessage(msgEvent.replyToken, [
+          {
+            type: "text",
+            text: [
+              `⚡️ Spark price logs — [${resolved.label}]/USDT`,
+              `Contract: ${resolved.contractSymbol}`,
+              "",
+              "ยังไม่มี price samples ใน state (มักเกิดเมื่อยังไม่เคยรอบ cron วิ่ง/หรือเหรียญไม่ได้อยู่ใน universe topN ตอนนั้น)",
+            ].join("\n"),
+          },
+        ]);
+        return;
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+      const minTs = nowSec - 3600;
+      const samples = (st.priceSamples ?? [])
+        .filter((x) => Number.isFinite(x.tsSec) && x.tsSec >= minTs)
+        .sort((a, b) => a.tsSec - b.tsSec);
+
+      const lines: string[] = [
+        `⚡️ Spark price logs — [${resolved.label}]/USDT (ย้อนหลัง 1 ชม.)`,
+        `Contract: ${resolved.contractSymbol}`,
+        "",
+        `Checkpoint: ${formatPriceMaybe(st.checkpointPrice)} @ ${formatBkkFromSec(st.checkpointSec)}`,
+        `Samples: ${samples.length}`,
+      ];
+      if (samples.length > 0) {
+        lines.push("", ...samples.map((x) => `${formatBkkFromSec(x.tsSec)}  ${formatPriceMaybe(x.lastPrice)}`));
+      }
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: lines.join("\n") }]);
+    } catch (e) {
+      console.error("[lineHandler] spark log", e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: "ดึง spark price logs ไม่สำเร็จ — บน Vercel ต้องมี REDIS_URL หรือ Vercel KV" },
       ]);
     }
     return;
