@@ -31,6 +31,10 @@ export type SpotFutBasisTier = "warning" | "extreme";
 export type SpotFutBasisAlertEntry = {
   lastNotifiedBasisPct: number;
   lastTier: SpotFutBasisTier;
+  /** วันที่ (เวลาไทย) ที่นับโควต้าการแจ้งล่าสุด เช่น 2026-04-29 */
+  dailyKeyBkk?: string;
+  /** จำนวนครั้งที่แจ้งใน dailyKeyBkk นั้น */
+  dailyNotifiedCount?: number;
 };
 
 export type SpotFutBasisAlertState = Record<string, SpotFutBasisAlertEntry>;
@@ -40,11 +44,20 @@ function normalizeState(raw: unknown): SpotFutBasisAlertState {
   const out: SpotFutBasisAlertState = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!k?.trim()) continue;
-    const o = v as { lastNotifiedBasisPct?: unknown; lastTier?: unknown };
+    const o = v as {
+      lastNotifiedBasisPct?: unknown;
+      lastTier?: unknown;
+      dailyKeyBkk?: unknown;
+      dailyNotifiedCount?: unknown;
+    };
     const p = Number(o?.lastNotifiedBasisPct);
     const t = o?.lastTier === "extreme" || o?.lastTier === "warning" ? o.lastTier : null;
     if (!Number.isFinite(p) || !t) continue;
-    out[k.trim()] = { lastNotifiedBasisPct: p, lastTier: t };
+    const dailyKeyBkk = typeof o.dailyKeyBkk === "string" && o.dailyKeyBkk.trim() ? o.dailyKeyBkk.trim() : undefined;
+    const cntRaw = Number(o.dailyNotifiedCount);
+    const dailyNotifiedCount =
+      Number.isFinite(cntRaw) && cntRaw >= 0 ? Math.floor(cntRaw) : undefined;
+    out[k.trim()] = { lastNotifiedBasisPct: p, lastTier: t, dailyKeyBkk, dailyNotifiedCount };
   }
   return out;
 }

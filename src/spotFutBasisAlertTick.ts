@@ -14,6 +14,15 @@ import {
 /** |spot−perp basis| ไม่เกินค่านี้ = ไม่แจ้งเตือน — ต่ำสุด 2% (ไม่ถึง 2% ไม่แจ้ง) */
 const SPOT_FUT_BASIS_NOTIFY_FLOOR_PCT = 2;
 
+function dailyMaxPerSymbol(): number {
+  const n = Number(process.env.SPOT_FUT_BASIS_DAILY_MAX_PER_SYMBOL?.trim());
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 3;
+}
+
+function bkkDayKeyNow(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+}
+
 function warningMinPct(): number {
   const n = Number(process.env.SPOT_FUT_BASIS_WARNING_MIN?.trim());
   const configured = Number.isFinite(n) && n > 0 ? n : SPOT_FUT_BASIS_NOTIFY_FLOOR_PCT;
@@ -105,6 +114,8 @@ export async function runSpotFutBasisAlertTick(
 
   let notifiedPushes = 0;
   let symbolsAlerted = 0;
+  const dayKey = bkkDayKeyNow();
+  const cap = dailyMaxPerSymbol();
 
   for (const row of rows) {
     const abs = row.absBasisPct;
@@ -118,6 +129,23 @@ export async function runSpotFutBasisAlertTick(
 
     const prev = state[sym];
     if (!shouldNotifyBasis(prev, row.basisPct, tier)) {
+      continue;
+    }
+
+    const prevDay = prev?.dailyKeyBkk;
+    const prevCnt = prev?.dailyNotifiedCount ?? 0;
+    const cntToday = prevDay === dayKey ? prevCnt : 0;
+    if (cap > 0 && cntToday >= cap) {
+      // suppress after daily cap; still update lastNotified to avoid re-check spam each tick
+      state = {
+        ...state,
+        [sym]: {
+          lastNotifiedBasisPct: row.basisPct,
+          lastTier: tier,
+          dailyKeyBkk: dayKey,
+          dailyNotifiedCount: cntToday,
+        },
+      };
       continue;
     }
 
@@ -145,9 +173,15 @@ export async function runSpotFutBasisAlertTick(
 
     if (anyOk) {
       symbolsAlerted += 1;
+      const nextCnt = cap > 0 ? cntToday + 1 : cntToday;
       state = {
         ...state,
-        [sym]: { lastNotifiedBasisPct: row.basisPct, lastTier: tier },
+        [sym]: {
+          lastNotifiedBasisPct: row.basisPct,
+          lastTier: tier,
+          dailyKeyBkk: dayKey,
+          dailyNotifiedCount: nextCnt,
+        },
       };
     }
   }
