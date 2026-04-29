@@ -178,6 +178,11 @@ async function fetchContractTickers(): Promise<MexcTickerRow[]> {
   return asArray(data.data);
 }
 
+/** ดึง ticker ทั้งตลาด (list) — ใช้ทำ snapshot / ลดจำนวน request */
+export async function fetchAllContractTickers(): Promise<MexcTickerRow[]> {
+  return fetchContractTickers();
+}
+
 /** ดึง amount24 / volume24 / last ต่อสัญญา — ใช้ตอนเก็บสถิติ Spark (แยก Vol / mcap proxy) */
 export async function fetchContractTickerMetrics(contractSymbol: string): Promise<{
   amount24Usdt: number;

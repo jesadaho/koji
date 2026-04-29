@@ -3,7 +3,7 @@ import { sendSparkSystemAlert } from "./alertNotify";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import {
   fetchContractDisplayMetaBySymbol,
-  fetchContractTickerMetrics,
+  fetchAllContractTickers,
   getTopUsdtSymbolsByAmount24,
   type ContractDisplayMeta,
 } from "./mexcMarkets";
@@ -253,20 +253,29 @@ export async function runPriceSpike15mAlertTick(
 
   let state: PriceSpike15mAlertState = await loadPriceSpike15mAlertState();
 
-  const metricsList = await mapPoolConcurrent(symbols, FETCH_CONCURRENCY, async (sym) => {
-    const m = await fetchContractTickerMetrics(sym);
-    return { sym, m };
-  });
-  const okMetrics = metricsList.reduce((acc, it) => {
-    const m = it.m;
-    if (!m || !Number.isFinite(m.lastPrice) || m.lastPrice <= 0) return acc;
-    return acc + 1;
-  }, 0);
+  const allTickers = await fetchAllContractTickers();
+  const bySym = new Map<string, { lastPrice: number; amount24Usdt: number; volume24: number }>();
+  for (const t of allTickers) {
+    const sym = t.symbol?.trim();
+    if (!sym) continue;
+    const lp = t.lastPrice;
+    const amt = t.amount24;
+    if (typeof lp !== "number" || Number.isNaN(lp) || lp <= 0) continue;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt < 0) continue;
+    const vol = t.volume24;
+    bySym.set(sym, {
+      lastPrice: lp,
+      amount24Usdt: amt,
+      volume24: typeof vol === "number" && !Number.isNaN(vol) ? vol : 0,
+    });
+  }
+  let okMetrics = 0;
+  for (const sym of symbols) {
+    if (bySym.get(sym)) okMetrics += 1;
+  }
   if (okMetrics === 0) {
-    // ถ้าดึง ticker metrics ไม่ได้เลยทั้งชุด มักเป็นปัญหา API/เครือข่าย/ถูกจำกัด (แต่ fetchContractTickerMetrics จะ swallow error)
-    // ให้ถือเป็นความล้มเหลวของ cron เพื่อส่งแจ้งเตือนเข้า TELEGRAM_ALERT_CHAT_ID
     throw new Error(
-      `Spark ticker metrics empty (0/${symbols.length}) — MEXC /contract/ticker อาจล้มเหลว/ถูกจำกัด; ตรวจ Project Logs และลอง curl MEXC API จาก server`
+      `Spark ticker metrics empty (0/${symbols.length}) — MEXC /contract/ticker list อาจว่าง/ผิดปกติ; ตรวจ Project Logs และลอง curl MEXC API จาก server`
     );
   }
 
@@ -274,9 +283,9 @@ export async function runPriceSpike15mAlertTick(
   let symbolsHit = 0;
   const nowSec = Math.floor(Date.now() / 1000);
 
-  for (const { sym, m } of metricsList) {
-    if (!m || !Number.isFinite(m.lastPrice) || m.lastPrice <= 0) continue;
-
+  for (const sym of symbols) {
+    const m = bySym.get(sym);
+    if (!m) continue;
     const p = m.lastPrice;
     const sampled = appendPriceSample(state[sym], p, nowSec, keepSec);
     state[sym] = sampled;
