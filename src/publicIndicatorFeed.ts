@@ -189,6 +189,10 @@ function rsiParams(): { period: number; threshold: number; direction: "above" | 
   };
 }
 
+function isNeutralRsi50Threshold(threshold: number): boolean {
+  return Math.abs(threshold - 50) < 1e-9;
+}
+
 function emaParams(): { fast: number; slow: number } {
   const fast = Number(process.env.INDICATOR_PUBLIC_EMA_FAST);
   const slow = Number(process.env.INDICATOR_PUBLIC_EMA_SLOW);
@@ -638,7 +642,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
     const iso = new Date().toISOString();
 
-    if (rsiOn) {
+    if (rsiOn && !isNeutralRsi50Threshold(rsiP.threshold)) {
       const period = rsiP.period;
       if (n >= period + 3) {
         const rsi = rsiWilder(close, period);

@@ -59,6 +59,10 @@ function rsiCrossMatch(
   return rPrev >= threshold && rNow < threshold;
 }
 
+function isNeutralRsi50Threshold(threshold: number): boolean {
+  return Math.abs(threshold - 50) < 1e-9;
+}
+
 function rsiTfLabel(tf: RsiIndicatorAlert["timeframe"]): string {
   return tf === "4h" ? "4 ชม." : "1 ชม.";
 }
@@ -152,6 +156,7 @@ async function runRsiInternal(client: Client, now: number): Promise<number> {
     const barTimeSec = timeSec[i];
     if (typeof barTimeSec !== "number" || !Number.isFinite(barTimeSec)) continue;
 
+    if (isNeutralRsi50Threshold(a.threshold)) continue;
     if (!rsiCrossMatch(rPrev, rNow, a.threshold, a.direction)) continue;
     if (a.lastFiredBarTimeSec === barTimeSec) continue;
     if (inCooldown(a, now)) continue;
