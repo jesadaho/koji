@@ -9,6 +9,8 @@ import { buildMarketCheckMessage, buildPositionChecklistMessage } from "@/src/po
 import { isSparkStatsQuery } from "@/src/sparkFollowUpLineCommands";
 import { formatSparkStatsMessage } from "@/src/sparkFollowUpStats";
 import { handleTvOpenWizardTelegramMessage } from "@/src/tradingViewOpenWizardTelegram";
+import { resolveContractSymbol } from "@/src/coinMap";
+import { loadPriceSpike15mAlertState } from "@/src/priceSpike15mAlertStateStore";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -50,6 +52,35 @@ function miniAppOpenUrl(): string {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
   const base = raw.replace(/\/$/, "");
   return base ? `${base}/` : "";
+}
+
+function parseSparkLogCmd(t: string): string | null {
+  const s = t.trim();
+  const m =
+    s.match(/^(?:spark\s*(?:log|logs|history)|sparklog|price\s*logs)\s+(\S+)\s*$/i) ||
+    s.match(/^(?:สปาร์ค\s*log|สปาร์ค\s*logs|ราคาย้อนหลัง\s*spark)\s+(\S+)\s*$/i);
+  return m?.[1]?.trim() ?? null;
+}
+
+function formatBkkFromSec(tsSec: number): string {
+  const d = new Date(tsSec * 1000);
+  const datePart = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const timePart = d.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  return `${datePart} ${timePart} (BKK)`;
+}
+
+function formatPriceMaybe(p: number): string {
+  if (!Number.isFinite(p) || p <= 0) return "—";
+  if (p < 1) return p.toFixed(6);
+  if (p < 100) return p.toFixed(4);
+  if (p < 1000) return p.toFixed(2);
+  return p.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 /**
@@ -303,6 +334,66 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] market check error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const sparkLogSym = parseSparkLogCmd(normalized) || parseSparkLogCmd(text);
+  if (sparkLogSym) {
+    const resolved = resolveContractSymbol(sparkLogSym);
+    if (!resolved) {
+      try {
+        await sendTelegramMessageToChat(String(chatId), "ไม่รู้จักคู่นี้ (ลอง bsb หรือ BSB_USDT)", threadOpts);
+      } catch (e) {
+        console.error("[telegram/webhook] spark log unknown symbol reply", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const state = await loadPriceSpike15mAlertState();
+      const st = state[resolved.contractSymbol];
+      if (!st) {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          [
+            `⚡️ Spark price logs — [${resolved.label}]/USDT`,
+            `Contract: ${resolved.contractSymbol}`,
+            "",
+            "ยังไม่มี price samples ใน state (มักเกิดเมื่อยังไม่เคยรอบ cron วิ่ง/หรือเหรียญไม่ได้อยู่ใน universe topN ตอนนั้น)",
+          ].join("\n"),
+          threadOpts
+        );
+        return NextResponse.json({ ok: true });
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+      const minTs = nowSec - 3600;
+      const samples = (st.priceSamples ?? [])
+        .filter((x) => Number.isFinite(x.tsSec) && x.tsSec >= minTs)
+        .sort((a, b) => a.tsSec - b.tsSec);
+
+      const lines: string[] = [
+        `⚡️ Spark price logs — [${resolved.label}]/USDT (ย้อนหลัง 1 ชม.)`,
+        `Contract: ${resolved.contractSymbol}`,
+        "",
+        `Checkpoint: ${formatPriceMaybe(st.checkpointPrice)} @ ${formatBkkFromSec(st.checkpointSec)}`,
+        `Samples: ${samples.length}`,
+      ];
+      if (samples.length > 0) {
+        lines.push("", ...samples.map((x) => `${formatBkkFromSec(x.tsSec)}  ${formatPriceMaybe(x.lastPrice)}`));
+      }
+      await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
+    } catch (e) {
+      console.error("[telegram/webhook] spark log", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `ดึง spark price logs ไม่สำเร็จ — ${detail.slice(0, 300)}`,
+          threadOpts
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] spark log error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });
