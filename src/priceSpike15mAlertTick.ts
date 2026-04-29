@@ -46,23 +46,56 @@ function sparkReturnPassesThreshold(returnPct: number): boolean {
   return false;
 }
 
-/** ช่วงเทียบ % ระหว่างราคา last สองครั้ง (วินาที) — default 3600 = 1 ชั่วโมง (สูงสุด 3600) */
-function signalWindowSec(): number {
-  const n = Number(process.env.SPARK_SIGNAL_WINDOW_SEC?.trim());
-  return Number.isFinite(n) && n >= 60 && n <= 3600 ? Math.floor(n) : 3600;
+type RefSample = { tsSec: number; lastPrice: number };
+type WindowSignal = { windowSec: number; ref: RefSample; returnPct: number };
+
+/** ช่วงเวลาเทียบราคาหลายช่วง (วินาที) — default: 5m, 10m, 15m */
+function signalWindowsSec(): number[] {
+  const raw = process.env.SPARK_SIGNAL_WINDOWS_SEC?.trim();
+  if (raw) {
+    const parsed = raw
+      .split(",")
+      .map((x) => Number(x.trim()))
+      .filter((x) => Number.isFinite(x) && x >= 60 && x <= 3600)
+      .map((x) => Math.floor(x));
+    const uniq = Array.from(new Set(parsed)).sort((a, b) => a - b);
+    if (uniq.length > 0) return uniq;
+  }
+  const legacy = Number(process.env.SPARK_SIGNAL_WINDOW_SEC?.trim());
+  if (Number.isFinite(legacy) && legacy >= 60 && legacy <= 3600) return [Math.floor(legacy)];
+  return [300, 600, 900];
 }
 
-/**
- * ถ้าไม่ได้สแกน symbol นาน (หลุด Top N) checkpoint จะค้าง — เกินเกณฑ์นี้ให้รีเซ็ตโดยไม่ยิง Spark
- * ต้องมากกว่า window อย่างน้อยช่วงหนึ่ง (เผื่อ cron ~5m) ไม่ให้ช่วง [window, maxStale] แคบจนแทบไม่มีทางยิง
- * ปรับ: SPARK_CHECKPOINT_MAX_STALE_SEC (120–7200)
- */
-function checkpointMaxStaleSec(windowSec: number): number {
-  const n = Number(process.env.SPARK_CHECKPOINT_MAX_STALE_SEC?.trim());
-  const cap = Number.isFinite(n) && n >= 120 && n <= 7200 ? Math.floor(n) : 900;
-  const baseline = Math.max(windowSec, cap);
-  const minUpper = windowSec + 600; // ~10 นาทีเหนือขอบล่าง — cron ไม่พลาดจุดยิง
-  return Math.max(baseline, minUpper);
+function pickReferenceSample(samples: RefSample[], nowSec: number, windowSec: number): RefSample | null {
+  if (samples.length === 0) return null;
+  const targetTs = nowSec - windowSec;
+  let best: RefSample | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const s of samples) {
+    if (!Number.isFinite(s.tsSec) || !Number.isFinite(s.lastPrice) || s.lastPrice <= 0) continue;
+    if (s.tsSec >= nowSec) continue;
+    const dist = Math.abs(s.tsSec - targetTs);
+    if (dist < bestDist) {
+      best = s;
+      bestDist = dist;
+    }
+  }
+  // cron ปกติทุก ~5 นาที จึงยอมรับ sample ที่คลาดเป้าหมายได้ไม่เกิน 10 นาที
+  return best && bestDist <= 600 ? best : null;
+}
+
+function pickBestWindowSignal(samples: RefSample[], nowSec: number, windowsSec: number[]): WindowSignal | null {
+  let best: WindowSignal | null = null;
+  for (const windowSec of windowsSec) {
+    const ref = pickReferenceSample(samples, nowSec, windowSec);
+    if (!ref) continue;
+    const returnPct = ((samples[samples.length - 1]!.lastPrice - ref.lastPrice) / ref.lastPrice) * 100;
+    if (!sparkReturnPassesThreshold(returnPct)) continue;
+    if (!best || Math.abs(returnPct) > Math.abs(best.returnPct)) {
+      best = { windowSec, ref, returnPct };
+    }
+  }
+  return best;
 }
 
 function topN(): number {
@@ -194,7 +227,7 @@ function buildSparkMessage(
 
 /**
  * Spark — |% เปลี่ยน| ของราคา last เทียบจุดอ้างอิงก่อนหน้า ≥ เกณฑ์ (ไม่อิงแท่งเทียน)
- * ควรเรียกจาก cron ~ทุก 5 นาที (หน้าต่าง 1h ยังใช้ได้ — มีเผื่อช่วง stale เหนือ window)
+ * ควรเรียกจาก cron ~ทุก 5 นาที (เทียบราคาย้อนหลังจาก sample history)
  */
 export async function runPriceSpike15mAlertTick(
   client: Client
@@ -203,7 +236,7 @@ export async function runPriceSpike15mAlertTick(
     return { notifiedPushes: 0, symbolsHit: 0 };
   }
 
-  const windowSec = signalWindowSec();
+  const windowsSec = signalWindowsSec();
   const keepSec = priceHistoryKeepSec();
   const limit = topN();
   const [symbols, displayBySymbol] = await Promise.all([
@@ -238,29 +271,19 @@ export async function runPriceSpike15mAlertTick(
       continue;
     }
 
-    const elapsed = nowSec - st.checkpointSec;
-    if (elapsed < windowSec) {
-      continue;
-    }
-
-    const maxStale = checkpointMaxStaleSec(windowSec);
-    if (elapsed > maxStale) {
+    const signal = pickBestWindowSignal(st.priceSamples ?? [], nowSec, windowsSec);
+    if (!signal) {
       state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec };
       continue;
     }
 
-    const returnPct = ((p - st.checkpointPrice) / st.checkpointPrice) * 100;
-    if (!sparkReturnPassesThreshold(returnPct)) {
-      state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec };
-      continue;
-    }
-
+    const { ref, returnPct, windowSec } = signal;
     const body = buildSparkMessage(
       sym,
       returnPct,
       p,
-      st.checkpointPrice,
-      st.checkpointSec,
+      ref.lastPrice,
+      ref.tsSec,
       m.amount24Usdt,
       windowSec,
       displayBySymbol.get(sym)
