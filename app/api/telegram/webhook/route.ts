@@ -26,6 +26,7 @@ import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
 import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
 import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
 import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
+import { isAdminTelegramUserId } from "@/src/adminIds";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -111,20 +112,8 @@ function formatPriceMaybe(p: number): string {
   return p.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function telegramCronRunAllowedUserIds(): number[] {
-  const raw = process.env.TELEGRAM_CRON_RUN_ALLOWED_USER_IDS?.trim();
-  if (!raw) return [];
-  return raw
-    .split(",")
-    .map((s) => Number(s.trim()))
-    .filter((n) => Number.isFinite(n) && n > 0 && Number.isInteger(n));
-}
-
 function isTelegramCronRunAllowed(fromUserId: number | undefined): boolean {
-  if (fromUserId == null || !Number.isFinite(fromUserId) || fromUserId <= 0) return false;
-  const ids = telegramCronRunAllowedUserIds();
-  if (ids.length === 0) return false;
-  return ids.includes(fromUserId);
+  return isAdminTelegramUserId(fromUserId);
 }
 
 type CronRunScope = "pct-trailing" | "price-sync";
@@ -229,7 +218,7 @@ export async function POST(req: NextRequest) {
       try {
         await sendTelegramMessageToChat(
           String(chatId),
-          "คำสั่งรัน cron ถูกปิดหรือไม่ได้รับอนุญาต — ตั้ง TELEGRAM_CRON_RUN_ALLOWED_USER_IDS=<telegram user id> ก่อน",
+          "คำสั่งรัน cron ถูกปิดหรือไม่ได้รับอนุญาต — ตั้ง KOJI_ADMIN_IDS=<telegram user id> ก่อน",
           threadOpts
         );
       } catch (e) {

@@ -115,10 +115,10 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
   เปิด LIFF หน้า «สถิติ Spark» เพื่อดู Win-rate matrix แยก Vol / มาร์ก. (พร็อกซี)
   (EN: spark stats, #sparkStats)
 
-• ล้างสถิติ spark — ล้างข้อมูล matrix (pending / history / fire log) เพื่อเก็บใหม่ — ต้องตั้ง env SPARK_MATRIX_RESET_ALLOWED_USER_IDS=LINE_user_id ของคุณ
+• ล้างสถิติ spark — ล้างข้อมูล matrix (pending / history / fire log) เพื่อเก็บใหม่ — ต้องตั้ง env KOJI_ADMIN_IDS=LINE_user_id ของคุณ
   (EN: reset spark matrix, cleanup spark matrix, #sparkreset)
 
-• ไอดีไลน์ — แสดง LINE user id ของคุณ (ใช้ใส่ env เช่น SPARK_MATRIX_RESET_ALLOWED_USER_IDS) — เฉพาะแชท 1:1 กับบอท
+• ไอดีไลน์ — แสดง LINE user id ของคุณ (ใช้ใส่ env เช่น KOJI_ADMIN_IDS) — เฉพาะแชท 1:1 กับบอท
   (EN: line id, my line id, #lineid)
 
 • เช็คลิสต์เปิด position — short/long + เหรียญ + Koji Score (weekend / New High / สภาพคล่อง / F&G / basis / EMA6·12 บน 15m)
@@ -307,7 +307,7 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
           "",
           uid,
           "",
-          "ตัวอย่าง: SPARK_MATRIX_RESET_ALLOWED_USER_IDS=" + uid,
+          "ตัวอย่าง: KOJI_ADMIN_IDS=" + uid,
         ].join("\n"),
       },
     ]);
@@ -524,7 +524,7 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
           text: [
             "ไม่ได้รับอนุญาตให้ล้างสถิติ Spark",
             "",
-            "ตั้งค่า env: SPARK_MATRIX_RESET_ALLOWED_USER_IDS=<LINE user id ของคุณ>",
+            "ตั้งค่า env: KOJI_ADMIN_IDS=<LINE user id ของคุณ>",
             "(หลายคนคั่นด้วยจุลภาค) แล้ว redeploy — หรือใช้ GET /api/cron/reset-spark-state + Bearer CRON_SECRET",
           ].join("\n"),
         },

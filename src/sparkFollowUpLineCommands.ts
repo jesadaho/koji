@@ -1,3 +1,5 @@
+import { isAdminLineUserId } from "./adminIds";
+
 /** สอบถามสถิติ Spark follow-up */
 export function isSparkStatsQuery(text: string): boolean {
   const t = text.trim();
@@ -26,8 +28,5 @@ export function isSparkMatrixResetCommand(text: string): boolean {
 
 /** อนุญาตเฉพาะ userId ที่ระบุใน env (คั่นด้วยจุลภาค) */
 export function isSparkMatrixResetAllowed(userId: string): boolean {
-  const raw = process.env.SPARK_MATRIX_RESET_ALLOWED_USER_IDS?.trim();
-  if (!raw) return false;
-  const ids = raw.split(",").map((s) => s.trim()).filter(Boolean);
-  return ids.includes(userId);
+  return isAdminLineUserId(userId);
 }
