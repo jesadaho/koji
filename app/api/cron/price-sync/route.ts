@@ -13,6 +13,7 @@ import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
 import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
 import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
 import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
+import { notifyCronFailure } from "@/src/cronFailureNotify";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   const started = Date.now();
+  const atIso = new Date().toISOString();
   const steps: PriceSyncCronRecord["steps"] = {
     priceAlerts: { ok: false },
     pctStepAlerts: { ok: false },
@@ -79,7 +81,7 @@ export async function GET(req: NextRequest) {
   });
 
   const record: PriceSyncCronRecord = {
-    at: new Date().toISOString(),
+    at: atIso,
     durationMs: Date.now() - started,
     steps,
   };
@@ -97,5 +99,13 @@ export async function GET(req: NextRequest) {
     steps.indicatorAlerts?.ok !== false &&
     steps.spotFutBasisAlerts?.ok !== false &&
     steps.threeGreenDailyTechnical?.ok !== false;
+  if (!allOk) {
+    await notifyCronFailure({
+      scope: "price-sync",
+      atIso,
+      durationMs: record.durationMs,
+      steps,
+    });
+  }
   return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }

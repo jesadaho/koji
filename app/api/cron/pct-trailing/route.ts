@@ -10,6 +10,7 @@ import {
   runPriceSpike15mAlertTick,
 } from "@/src/priceSpike15mAlertTick";
 import { isSparkFollowUpCronEnabled, runSparkFollowUpTick } from "@/src/sparkFollowUpTick";
+import { notifyCronFailure } from "@/src/cronFailureNotify";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -114,6 +115,12 @@ export async function GET(req: NextRequest) {
     steps.trailingPct.ok && steps.sparkTicker.ok && steps.sparkFollowUp.ok;
 
   if (!allOk) {
+    await notifyCronFailure({
+      scope: "pct-trailing",
+      atIso,
+      durationMs: Date.now() - started,
+      steps,
+    });
     return NextResponse.json(
       {
         ok: false,

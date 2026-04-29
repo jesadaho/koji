@@ -9,6 +9,7 @@ import {
 } from "@/src/cronStatusStore";
 import { runContractConditionTick } from "@/src/contractConditionTick";
 import { runFundingHistoryTick } from "@/src/fundingHistoryTick";
+import { notifyCronFailure } from "@/src/cronFailureNotify";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,6 +22,7 @@ export async function GET(req: NextRequest) {
   if (denied) return denied;
 
   const started = Date.now();
+  const atIso = new Date().toISOString();
   const steps: HourlyCronRecord["steps"] = {
     contractCondition: { ok: false },
     fundingHistory: { ok: false },
@@ -54,7 +56,7 @@ export async function GET(req: NextRequest) {
   });
 
   const record: HourlyCronRecord = {
-    at: new Date().toISOString(),
+    at: atIso,
     durationMs: Date.now() - started,
     steps,
   };
@@ -65,5 +67,13 @@ export async function GET(req: NextRequest) {
   }
 
   const allOk = steps.contractCondition.ok && steps.fundingHistory.ok;
+  if (!allOk) {
+    await notifyCronFailure({
+      scope: "price-alerts",
+      atIso,
+      durationMs: record.durationMs,
+      steps,
+    });
+  }
   return NextResponse.json({ ok: allOk, steps, at: record.at, durationMs: record.durationMs });
 }
