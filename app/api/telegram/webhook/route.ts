@@ -118,19 +118,23 @@ function isTelegramCronRunAllowed(fromUserId: number | undefined): boolean {
 
 type CronRunScope = "pct-trailing" | "price-sync";
 
-function parseRunCronCmd(t: string): CronRunScope | null {
+function parseRunCronCmd(t: string): { scope: CronRunScope; verbose: boolean } | null {
   const s = t.trim().replace(/\s+/g, " ");
-  let m = s.match(/^(?:run\s+cron|cron\s+run|runc|runcron)\s+(pct-trailing|pct_trailing|spark|price-sync|price_sync)\s*$/i);
+  let m = s.match(
+    /^(?:run\s+cron|cron\s+run|runc|runcron)\s+(pct-trailing|pct_trailing|spark|price-sync|price_sync)(?:\s+(v|verbose))?\s*$/i
+  );
   if (m) {
     const key = m[1]!.toLowerCase();
-    if (key === "spark" || key === "pct-trailing" || key === "pct_trailing") return "pct-trailing";
-    if (key === "price-sync" || key === "price_sync") return "price-sync";
+    const verbose = Boolean(m[2]);
+    if (key === "spark" || key === "pct-trailing" || key === "pct_trailing") return { scope: "pct-trailing", verbose };
+    if (key === "price-sync" || key === "price_sync") return { scope: "price-sync", verbose };
   }
-  m = s.match(/^(?:รัน\s*cron|สั่งรัน\s*cron|รันcron)\s+(spark|pct-trailing|price-sync)\s*$/i);
+  m = s.match(/^(?:รัน\s*cron|สั่งรัน\s*cron|รันcron)\s+(spark|pct-trailing|price-sync)(?:\s+(v|verbose))?\s*$/i);
   if (m) {
     const key = m[1]!.toLowerCase();
-    if (key === "spark" || key === "pct-trailing") return "pct-trailing";
-    if (key === "price-sync") return "price-sync";
+    const verbose = Boolean(m[2]);
+    if (key === "spark" || key === "pct-trailing") return { scope: "pct-trailing", verbose };
+    if (key === "price-sync") return { scope: "price-sync", verbose };
   }
   return null;
 }
@@ -212,8 +216,8 @@ export async function POST(req: NextRequest) {
 
   const trimmedText = text.trim();
 
-  const runScope = parseRunCronCmd(normalized) || parseRunCronCmd(trimmedText);
-  if (runScope) {
+  const runReq = parseRunCronCmd(normalized) || parseRunCronCmd(trimmedText);
+  if (runReq) {
     if (!isTelegramCronRunAllowed(fromUserId)) {
       try {
         await sendTelegramMessageToChat(
@@ -231,12 +235,50 @@ export async function POST(req: NextRequest) {
     const atIso = new Date().toISOString();
     const client = createLineClientForCron();
     try {
-      if (runScope === "pct-trailing") {
+      if (runReq.scope === "pct-trailing") {
+        const verbose = runReq.verbose;
+        const topN = sparkTopNConfigured();
+        const minAmt = sparkMinAmount24Usdt();
+
+        // step 1: universe snapshot (same source as spark tick)
+        const universe = await getTopUsdtSymbolsByAmount24(topN);
+        const target = "BSB_USDT";
+        const targetRank = universe.indexOf(target);
+        const sampleSyms = Array.from(
+          new Set([target, universe[0], universe[1], universe[2], universe[3]].filter(Boolean))
+        ) as string[];
+
+        // step 2: probe ticker metrics (to see nulls)
+        const probe = await Promise.all(
+          sampleSyms.map(async (sym) => {
+            const m = await fetchContractTickerMetrics(sym);
+            return {
+              sym,
+              ok: m != null && Number.isFinite(m.lastPrice) && m.lastPrice > 0,
+              lastPrice: m?.lastPrice ?? null,
+              amount24: m?.amount24Usdt ?? null,
+            };
+          })
+        );
+
+        // step 3: state before
+        const before = await loadPriceSpike15mAlertState();
+        const beforeRow = before[target];
+
         const [trailing, spark, follow] = await Promise.allSettled([
           runPctStepTrailingPriceAlertTick(client),
           runPriceSpike15mAlertTick(client),
           runSparkFollowUpTick(client),
         ]);
+
+        // step 4: state after
+        const after = await loadPriceSpike15mAlertState();
+        const afterRow = after[target];
+        const beforeCp = beforeRow?.checkpointSec ?? null;
+        const afterCp = afterRow?.checkpointSec ?? null;
+        const beforeSamples = beforeRow?.priceSamples?.length ?? 0;
+        const afterSamples = afterRow?.priceSamples?.length ?? 0;
+
         const lines = [
           "🟦 Koji — run cron (pct-trailing)",
           `UTC: ${atIso}`,
@@ -246,6 +288,20 @@ export async function POST(req: NextRequest) {
           `sparkTicker: ${spark.status === "fulfilled" ? `ok (hit ${spark.value.symbolsHit}, push ${spark.value.notifiedPushes})` : `fail — ${(spark.reason as Error)?.message ?? String(spark.reason)}`}`,
           `sparkFollowUp: ${follow.status === "fulfilled" ? `ok (checkpoints ${follow.value.checkpoints}, resolved ${follow.value.resolvedEvents})` : `fail — ${(follow.reason as Error)?.message ?? String(follow.reason)}`}`,
         ];
+        if (verbose) {
+          lines.push(
+            "",
+            "— spark debug (step-by-step) —",
+            `topN=${topN} · minAmount24=${minAmt.toLocaleString()}`,
+            `universeCount=${universe.length} · ${target} rank=${targetRank >= 0 ? `${targetRank + 1}/${universe.length}` : "not in list"}`,
+            `probe: ${probe
+              .map((p) => `${p.sym}=${p.ok ? "ok" : "null"}(p:${p.lastPrice ?? "—"},a24:${p.amount24 ?? "—"})`)
+              .join(" · ")}`,
+            `state ${target} before: checkpointSec=${beforeCp ?? "—"} samplesTotal=${beforeSamples}`,
+            `state ${target} after:  checkpointSec=${afterCp ?? "—"} samplesTotal=${afterSamples}`,
+            beforeCp != null && afterCp != null ? `stateChanged: ${afterCp > beforeCp ? "yes" : "no"}` : "stateChanged: —"
+          );
+        }
         await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
       } else {
         const steps = await Promise.allSettled([
