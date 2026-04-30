@@ -29,6 +29,19 @@ function cleanGeminiText(s: string): string {
     .trim();
 }
 
+function looksTruncatedSummary(s: string): boolean {
+  const t = s.trim();
+  if (!t) return true;
+  // Too short to be useful
+  if (t.length < 40) return true;
+  // Ends with an obviously incomplete token
+  if (/[,$\u0E00-\u0E7F]\s*$/.test(t) && /[$,]$/.test(t)) return true;
+  // If it starts with our bullet template but has < 2 bullets, it's likely cut
+  const bulletCount = (t.match(/^\s*-\s+/gm) ?? []).length;
+  if (bulletCount >= 1 && bulletCount < 2) return true;
+  return false;
+}
+
 export async function geminiSummarizePortfolioFromText(input: {
   text: string;
   maxLines?: number;
@@ -76,7 +89,7 @@ export async function geminiSummarizePortfolioFromTextResult(input: {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), geminiTimeoutMs());
   try {
-    for (const model of fallbackModels) {
+    const tryOnce = async (model: string, maxOutputTokens: number): Promise<GeminiSummaryResult> => {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
         model
       )}:generateContent?key=${encodeURIComponent(key)}`;
@@ -87,26 +100,41 @@ export async function geminiSummarizePortfolioFromTextResult(input: {
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 256,
+            maxOutputTokens,
           },
         }),
         signal: controller.signal,
       });
       if (!res.ok) {
-        // 404 มักเกิดจาก model ถูก retire/alias ไม่รองรับ — ลองตัวถัดไป
-        if (res.status === 404) continue;
+        if (res.status === 404) return { ok: false, status: 404, error: `gemini model not found (model ${model})` };
         return { ok: false, status: res.status, error: `gemini HTTP ${res.status} (model ${model})` };
       }
       const data = (await res.json()) as GeminiGenerateResponse;
-      const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-      const cleaned = cleanGeminiText(text);
-      if (!cleaned) {
-        return { ok: false, error: `empty gemini response (model ${model})` };
-      }
+      const rawText = data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+      const cleaned = cleanGeminiText(rawText);
+      if (!cleaned) return { ok: false, error: `empty gemini response (model ${model})` };
       const lines = cleaned.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, maxLines);
       const joined = lines.join("\n").trim();
       if (!joined) return { ok: false, error: `empty gemini response (model ${model})` };
+      if (looksTruncatedSummary(joined)) return { ok: false, error: `truncated gemini response (model ${model})` };
       return { ok: true, text: joined };
+    };
+
+    for (const model of fallbackModels) {
+      // pass 1: compact output
+      const first = await tryOnce(model, 256);
+      if (first.ok) return first;
+      // retry only when it looks like truncation (or empty) and not model-not-found
+      if (first.status === 404) continue;
+      if (typeof first.error === "string" && first.error.includes("truncated")) {
+        const second = await tryOnce(model, 512);
+        if (second.ok) return second;
+        if (second.status === 404) continue;
+        // if still truncated, keep trying other models
+        continue;
+      }
+      // other non-404 errors: bail early
+      if (first.status && first.status !== 404) return first;
     }
     return { ok: false, status: 404, error: `gemini model not found (tried ${fallbackModels.join(", ")})` };
   } catch (e) {
