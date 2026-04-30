@@ -32,8 +32,10 @@ function looksTruncatedSummary(s: string): boolean {
   const t = s.trim();
   if (!t) return true;
   if (t.length < 40) return true;
-  const bulletCount = (t.match(/^\s*-\s+/gm) ?? []).length;
-  if (bulletCount >= 1 && bulletCount < 2) return true;
+  // common truncation patterns: ends with dangling comma/currency
+  if (/[,$]\s*$/.test(t)) return true;
+  // if it looks like it started a bullet but got cut mid-line
+  if (/^\s*-\s+.*\s*$/.test(t) && t.includes("Equity") && /[$,]\s*$/.test(t)) return true;
   return false;
 }
 
@@ -47,7 +49,7 @@ export async function openRouterSummarizePortfolioFromTextResult(input: {
   const maxLines =
     Number.isFinite(input.maxLines) && (input.maxLines as number) >= 2 ? (input.maxLines as number) : 6;
 
-  const prompt = [
+  const basePromptLines = [
     "You are Koji, a crypto futures portfolio assistant.",
     "Summarize the portfolio status based ONLY on the provided message.",
     "Requirements:",
@@ -66,54 +68,79 @@ export async function openRouterSummarizePortfolioFromTextResult(input: {
     "",
     "Message:",
     input.text,
+  ];
+
+  const prompt = basePromptLines.join("\n");
+
+  const strictPrompt = [
+    ...basePromptLines.slice(0, basePromptLines.indexOf("Message:")),
+    "Additional strict formatting:",
+    "- Return exactly 4 lines.",
+    "- Each line MUST start with '- ' (dash+space).",
+    "",
+    "Message:",
+    input.text,
   ].join("\n");
 
-  const controller = new AbortController();
-  const timeoutMs = openRouterTimeoutMs();
-  const t = setTimeout(() => controller.abort(), timeoutMs);
   const model = openRouterModel();
   try {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-        // optional but recommended by OpenRouter for attribution/limits
-        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://koji.local",
-        "X-Title": "Koji",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
+    const callOnce = async (content: string, maxTokens: number): Promise<OpenRouterSummaryResult> => {
+      const controller = new AbortController();
+      const timeoutMs = openRouterTimeoutMs();
+      const t = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+            // optional but recommended by OpenRouter for attribution/limits
+            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://koji.local",
+            "X-Title": "Koji",
           },
-        ],
-        temperature: 0.3,
-        max_tokens: 300,
-      }),
-      signal: controller.signal,
-    });
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content }],
+            temperature: 0.3,
+            max_tokens: maxTokens,
+          }),
+          signal: controller.signal,
+        });
 
-    if (!res.ok) {
-      return { ok: false, status: res.status, error: `openrouter HTTP ${res.status} (model ${model})` };
+        if (!res.ok) {
+          return { ok: false, status: res.status, error: `openrouter HTTP ${res.status} (model ${model})` };
+        }
+        const data = (await res.json()) as OpenRouterChatResponse;
+        const raw = data?.choices?.[0]?.message?.content ?? "";
+        const cleaned = cleanText(raw);
+        if (!cleaned) return { ok: false, error: `empty openrouter response (model ${model})` };
+        const lines = cleaned.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, maxLines);
+        const joined = lines.join("\n").trim();
+        if (!joined) return { ok: false, error: `empty openrouter response (model ${model})` };
+        if (looksTruncatedSummary(joined)) {
+          return { ok: false, error: `truncated openrouter response (model ${model})` };
+        }
+        return { ok: true, text: joined };
+      } catch (e) {
+        const msg =
+          e instanceof Error ? (e.name === "AbortError" ? `timeout (${timeoutMs}ms)` : e.message) : String(e);
+        return { ok: false, error: `openrouter request failed: ${msg} (model ${model})` };
+      } finally {
+        clearTimeout(t);
+      }
+    };
+
+    const first = await callOnce(prompt, 300);
+    if (first.ok) return first;
+    if (typeof first.error === "string" && first.error.includes("truncated")) {
+      const second = await callOnce(strictPrompt, 500);
+      if (second.ok) return second;
+      return second;
     }
-    const data = (await res.json()) as OpenRouterChatResponse;
-    const raw = data?.choices?.[0]?.message?.content ?? "";
-    const cleaned = cleanText(raw);
-    if (!cleaned) return { ok: false, error: `empty openrouter response (model ${model})` };
-    const lines = cleaned.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, maxLines);
-    const joined = lines.join("\n").trim();
-    if (!joined) return { ok: false, error: `empty openrouter response (model ${model})` };
-    if (looksTruncatedSummary(joined)) return { ok: false, error: `truncated openrouter response (model ${model})` };
-    return { ok: true, text: joined };
+    return first;
   } catch (e) {
-    const msg =
-      e instanceof Error ? (e.name === "AbortError" ? `timeout (${timeoutMs}ms)` : e.message) : String(e);
+    const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, error: `openrouter request failed: ${msg} (model ${model})` };
-  } finally {
-    clearTimeout(t);
   }
 }
 
