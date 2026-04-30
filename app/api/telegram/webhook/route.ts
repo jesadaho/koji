@@ -3,6 +3,7 @@ import { escapeTelegramHtml, sendTelegramMessageToChat, wrapTelegramPreMonospace
 import { formatTradingViewMexcWebhookJson, getTradingViewMexcWebhookCloseUrl } from "@/src/liffService";
 import { ensureTradingViewMexcUserRow, getTradingViewMexcRowOptional } from "@/src/tradingViewCloseSettingsStore";
 import { mexcFuturesBaseUrl, verifyMexcFuturesApiForUser } from "@/src/mexcFuturesClient";
+import { buildTelegramPortfolioStatusMessages } from "@/src/portfolioStatusService";
 import { tgUserIdToStoreKey } from "@/src/telegramMiniAppAuth";
 import { parseMarketCheck, parsePositionChecklist } from "@/src/positionChecklistLineCommands";
 import { buildMarketCheckMessage, buildPositionChecklistMessage } from "@/src/positionChecklistService";
@@ -91,6 +92,23 @@ function sparkTopNConfigured(): number {
   return Number.isFinite(n) && n >= 5 && n <= 200 ? Math.floor(n) : 100;
 }
 
+/** portfolio · portfolio status · พอร์ต · สรุปพอร์ต — slash เช่น /portfolio */
+function wantsPortfolioStatusCommand(trimmed: string, normalized: string): boolean {
+  const collapse = (s: string) => s.trim().replace(/\s+/g, " ").toLowerCase();
+  const raw = trimmed.trim();
+  if (/^\/?portfolio(?:@\S+)?\s*$/i.test(raw)) return true;
+  if (/^\/?portfolio\s+status(?:@\S+)?\s*$/i.test(raw)) return true;
+  const cand = collapse(normalized) || collapse(trimmed);
+  return (
+    cand === "portfolio" ||
+    cand === "portfolio status" ||
+    cand === "port status" ||
+    cand === "พอร์ต" ||
+    cand === "สรุปพอร์ต" ||
+    cand === "สถานะพอร์ต"
+  );
+}
+
 function formatBkkFromSec(tsSec: number): string {
   const d = new Date(tsSec * 1000);
   const datePart = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -141,7 +159,7 @@ function parseRunCronCmd(t: string): { scope: CronRunScope; verbose: boolean } |
 
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
- * /start → ปุ่ม Mini App · /chatid → แสดง chat_id / topic (ใส่ env) · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
+ * /start → ปุ่ม Mini App · /chatid → แสดง chat_id / topic (ใส่ env) · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · portfolio / portfolio status (สรุปพอร์ตฟิวเจอร์) · เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
@@ -473,6 +491,40 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] mexc api check reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (wantsPortfolioStatusCommand(trimmedText, normalized) && typeof fromUserId === "number" && fromUserId > 0) {
+    try {
+      const userId = tgUserIdToStoreKey(fromUserId);
+      const row = await getTradingViewMexcRowOptional(userId);
+      if (!row?.mexcApiKey?.trim() || !row.mexcSecret?.trim()) {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          "ยังดูสถานะพอร์ตไม่ได้ — กรอก MEXC API Key และ Secret ที่หน้า Settings ใน Mini App แล้วกดบันทึกก่อน",
+          threadOpts,
+        );
+        return NextResponse.json({ ok: true });
+      }
+      const msgs = await buildTelegramPortfolioStatusMessages({
+        apiKey: row.mexcApiKey.trim(),
+        secret: row.mexcSecret.trim(),
+      });
+      for (const part of msgs) {
+        await sendTelegramMessageToChat(String(chatId), part, threadOpts);
+      }
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `สถานะพอร์ตไม่สำเร็จ — ${detail.slice(0, 500)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] portfolio status reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

@@ -105,12 +105,24 @@ export async function mexcPrivatePost<T>(
 export type OpenPositionRow = {
   positionId: number;
   symbol: string;
+  /** 1 = long, 2 = short (MEXC futures) */
   positionType: number;
+  /** 1 = isolated, 2 = cross */
   openType: number;
   state: number;
   holdVol: number;
   holdAvgPrice?: number;
+  openAvgPrice?: number;
   leverage?: number;
+  liquidatePrice?: number;
+  im?: number;
+  oim?: number;
+  /** API: current position margin ratio (often a small decimal, e.g. 0.0027) */
+  marginRatio?: number;
+  realised?: number;
+  profitRatio?: number;
+  holdFee?: number;
+  closeProfitLoss?: number;
 };
 
 /**
@@ -142,7 +154,44 @@ export type MexcFuturesAssetRow = {
   currency?: string;
   availableBalance?: number | string;
   equity?: number | string;
+  unrealized?: number | string;
+  positionMargin?: number | string;
+  cashBalance?: number | string;
+  frozenBalance?: number | string;
 };
+
+export async function fetchFuturesAccountAssetList(
+  creds: MexcCredentials
+): Promise<{ ok: true; rows: MexcFuturesAssetRow[] } | { ok: false; code?: number; message: string }> {
+  const res = await mexcPrivateGet<MexcFuturesAssetRow[]>(creds, "/api/v1/private/account/assets");
+  if (!res.success) {
+    return {
+      ok: false,
+      code: res.code,
+      message:
+        typeof res.message === "string" && res.message.trim() ? res.message.trim() : `code ${res.code}`,
+    };
+  }
+  return { ok: true, rows: Array.isArray(res.data) ? res.data : [] };
+}
+
+/**
+ * ทุกสัญญาที่เปิด — ไม่ส่ง symbol filter (ตาม MEXC GET open_positions)
+ */
+export async function fetchAllOpenPositions(
+  creds: MexcCredentials
+): Promise<{ ok: true; rows: OpenPositionRow[] } | { ok: false; code?: number; message: string }> {
+  const res = await mexcPrivateGet<OpenPositionRow[]>(creds, "/api/v1/private/position/open_positions");
+  if (!res.success) {
+    return {
+      ok: false,
+      code: res.code,
+      message:
+        typeof res.message === "string" && res.message.trim() ? res.message.trim() : `code ${res.code}`,
+    };
+  }
+  return { ok: true, rows: Array.isArray(res.data) ? res.data : [] };
+}
 
 export type MexcApiVerifyOk = {
   ok: true;
