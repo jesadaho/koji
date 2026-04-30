@@ -420,10 +420,19 @@ function formatPositionBlock(m: PositionMetrics): string {
       : `EMA12: ${emaCompact.status === "Below" ? "✅ Below" : "✅ Above"} (Dist: +${(emaCompact.distPct ?? 0).toFixed(2)}%)`;
 
   const struct = m.structureLine.replace(" (heuristic)", "");
-  const structShort =
-    struct.includes("Lower high") || struct.includes("Lower low") ? "🟢 Bearish (LH/LL)" :
-    struct.includes("Higher high") || struct.includes("Higher low") ? "🟢 Bullish (HH/HL)" :
-    "🟡 Range";
+  const isBear = struct.includes("Lower high") || struct.includes("Lower low");
+  const isBull = struct.includes("Higher high") || struct.includes("Higher low");
+  const structShort = (() => {
+    if (isBear) {
+      // bearish structure is good for SHORT, bad for LONG
+      return m.long ? "🔴 Bearish (LH/LL)" : "🟢 Bearish (LH/LL)";
+    }
+    if (isBull) {
+      // bullish structure is good for LONG, bad for SHORT
+      return m.long ? "🟢 Bullish (HH/HL)" : "🔴 Bullish (HH/HL)";
+    }
+    return "🟡 Range";
+  })();
 
   const liq = m.row.openType === 1 && m.liqDistPct != null ? `${m.liqDistPct.toFixed(2)}%` : "—";
   const mr = formatMarginRatioDisplay(numFromUnknown(m.row.marginRatio));
@@ -436,9 +445,9 @@ function formatPositionBlock(m: PositionMetrics): string {
     `Risk: Liq: ${liq} | MarginRatio: ${mr}`,
   ];
 
-  if (m.concerns.length > 0) {
-    lines.push(`⚠️ Concern: ${m.concerns[0]!.slice(0, 220)}`);
-  }
+  const structureAdverse = (m.long && isBear) || (!m.long && isBull);
+  const concern = structureAdverse ? "โครงสร้างสวนทางกับ position (structure adverse)" : m.concerns[0];
+  if (concern) lines.push(`⚠️ Concern: ${concern.slice(0, 220)}`);
 
   return lines.join("\n");
 }
