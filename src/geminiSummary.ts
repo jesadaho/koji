@@ -18,7 +18,8 @@ function geminiModel(): string {
 
 function geminiTimeoutMs(): number {
   const n = Number(process.env.GEMINI_TIMEOUT_MS?.trim());
-  return Number.isFinite(n) && n >= 3000 && n <= 60000 ? Math.floor(n) : 12_000;
+  // AI summary บางช่วงตอบช้า — default เผื่อ latency ให้มากขึ้น
+  return Number.isFinite(n) && n >= 3000 && n <= 60000 ? Math.floor(n) : 20_000;
 }
 
 function cleanGeminiText(s: string): string {
@@ -86,45 +87,54 @@ export async function geminiSummarizePortfolioFromTextResult(input: {
     new Set([primary, "gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-pro"])
   );
 
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), geminiTimeoutMs());
   try {
     const tryOnce = async (model: string, maxOutputTokens: number): Promise<GeminiSummaryResult> => {
+      const controller = new AbortController();
+      const timeoutMs = geminiTimeoutMs();
+      const t = setTimeout(() => controller.abort(), timeoutMs);
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
         model
       )}:generateContent?key=${encodeURIComponent(key)}`;
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens,
-          },
-        }),
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        if (res.status === 404) return { ok: false, status: 404, error: `gemini model not found (model ${model})` };
-        return { ok: false, status: res.status, error: `gemini HTTP ${res.status} (model ${model})` };
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens,
+            },
+          }),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          if (res.status === 404) return { ok: false, status: 404, error: `gemini model not found (model ${model})` };
+          return { ok: false, status: res.status, error: `gemini HTTP ${res.status} (model ${model})` };
+        }
+        const data = (await res.json()) as GeminiGenerateResponse;
+        const rawText = data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+        const cleaned = cleanGeminiText(rawText);
+        if (!cleaned) return { ok: false, error: `empty gemini response (model ${model})` };
+        const lines = cleaned.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, maxLines);
+        const joined = lines.join("\n").trim();
+        if (!joined) return { ok: false, error: `empty gemini response (model ${model})` };
+        if (looksTruncatedSummary(joined)) return { ok: false, error: `truncated gemini response (model ${model})` };
+        return { ok: true, text: joined };
+      } catch (e) {
+        const msg =
+          e instanceof Error ? (e.name === "AbortError" ? `timeout (${timeoutMs}ms)` : e.message) : String(e);
+        return { ok: false, error: `gemini request failed: ${msg} (model ${model})` };
+      } finally {
+        clearTimeout(t);
       }
-      const data = (await res.json()) as GeminiGenerateResponse;
-      const rawText = data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-      const cleaned = cleanGeminiText(rawText);
-      if (!cleaned) return { ok: false, error: `empty gemini response (model ${model})` };
-      const lines = cleaned.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, maxLines);
-      const joined = lines.join("\n").trim();
-      if (!joined) return { ok: false, error: `empty gemini response (model ${model})` };
-      if (looksTruncatedSummary(joined)) return { ok: false, error: `truncated gemini response (model ${model})` };
-      return { ok: true, text: joined };
     };
 
     for (const model of fallbackModels) {
       // pass 1: compact output
       const first = await tryOnce(model, 256);
       if (first.ok) return first;
-      // retry only when it looks like truncation (or empty) and not model-not-found
+      // retry only when it looks like truncation and not model-not-found/timeout
       if (first.status === 404) continue;
       if (typeof first.error === "string" && first.error.includes("truncated")) {
         const second = await tryOnce(model, 512);
@@ -140,8 +150,6 @@ export async function geminiSummarizePortfolioFromTextResult(input: {
   } catch (e) {
     const msg = e instanceof Error ? e.name === "AbortError" ? "timeout" : e.message : String(e);
     return { ok: false, error: `gemini request failed: ${msg}` };
-  } finally {
-    clearTimeout(t);
   }
 }
 
