@@ -8,7 +8,7 @@ import {
   type OpenPositionRow,
 } from "./mexcFuturesClient";
 import { fetchPerp1hClosesForChecklist, fetchPerp1hHlcForSar } from "./mexcMarkets";
-import { openRouterSummarizePortfolioFromTextResult } from "./openRouterSummary";
+import { openAiSummarizePortfolioFromTextResult } from "./openAiSummary";
 
 function numFromUnknown(v: unknown): number | null {
   if (v == null) return null;
@@ -72,7 +72,7 @@ function formatAiDebug(ai: { debug?: { curl: string; raw?: string } }): string |
   if (!curl) return null;
   const raw = ai.debug?.raw ? `\n\nRAW (truncated):\n${ai.debug.raw}` : "";
   // Keep curl small so raw can fit into Telegram message
-  return `AI Debug (OpenRouter)\n\nCURL:\n${curl}${raw}`.slice(0, 3800);
+  return `AI Debug (AI Summary)\n\nCURL:\n${curl}${raw}`.slice(0, 3800);
 }
 
 function buildAiInputForSummary(headerLines: string[], metricsList: PositionMetrics[]): string {
@@ -613,7 +613,7 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
     const out = splitForTelegram(base);
     if (!portfolioAiSummaryEnabled()) return out;
     const aiInput = buildAiInputForSummary(headerLines, metricsList);
-    const ai = await openRouterSummarizePortfolioFromTextResult({ text: aiInput, maxLines: 4 });
+    const ai = await openAiSummarizePortfolioFromTextResult({ text: aiInput, maxLines: 4 });
     const aiMsg = ai.ok
       ? `AI Summary\n${ai.text}`
       : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
@@ -630,7 +630,7 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
   const out = splitForTelegram(base);
   if (!portfolioAiSummaryEnabled()) return out;
   const aiInput = buildAiInputForSummary(headerLines, metricsList);
-  const ai = await openRouterSummarizePortfolioFromTextResult({ text: aiInput, maxLines: 4 });
+  const ai = await openAiSummarizePortfolioFromTextResult({ text: aiInput, maxLines: 4 });
   const aiMsg = ai.ok
     ? `AI Summary\n${ai.text}`
     : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
