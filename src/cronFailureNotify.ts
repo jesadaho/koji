@@ -18,6 +18,13 @@ function fmtMs(ms: number | undefined): string {
   return ` (${Math.round(ms)}ms)`;
 }
 
+function parsePositiveInt(raw: string | undefined): number | undefined {
+  if (!raw?.trim()) return undefined;
+  const n = Number(raw.trim());
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) return undefined;
+  return n;
+}
+
 export async function notifyCronFailure(opts: {
   scope: string;
   atIso: string;
@@ -26,8 +33,12 @@ export async function notifyCronFailure(opts: {
   error?: string;
 }): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const chatId = process.env.TELEGRAM_ALERT_CHAT_ID?.trim();
+  const chatId =
+    process.env.TELEGRAM_SYSTEM_ERROR_CHAT_ID?.trim() ||
+    process.env.TELEGRAM_ALERT_CHAT_ID?.trim();
   if (!token || !chatId) return;
+  const threadId = parsePositiveInt(process.env.TELEGRAM_SYSTEM_ERROR_MESSAGE_THREAD_ID);
+  const threadOpts = threadId ? { messageThreadId: threadId } : undefined;
 
   const lines: string[] = [
     "⚠️ Koji cron failed",
@@ -61,7 +72,7 @@ export async function notifyCronFailure(opts: {
   }
 
   try {
-    await sendTelegramMessageToChat(chatId, lines.join("\n"));
+    await sendTelegramMessageToChat(chatId, lines.join("\n"), threadOpts);
   } catch (e) {
     console.error("[cronFailureNotify] telegram send failed", e);
   }
