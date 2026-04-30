@@ -8,6 +8,7 @@ import {
   type OpenPositionRow,
 } from "./mexcFuturesClient";
 import { fetchPerp15mClosesForChecklist, fetchPerp15mHlcForSar } from "./mexcMarkets";
+import { geminiSummarizePortfolioFromText } from "./geminiSummary";
 
 function numFromUnknown(v: unknown): number | null {
   if (v == null) return null;
@@ -52,6 +53,12 @@ function portfolioInterSymbolDelayMs(): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function portfolioAiSummaryEnabled(): boolean {
+  const v = process.env.PORTFOLIO_AI_SUMMARY_ENABLED?.trim().toLowerCase();
+  if (v === "0" || v === "false" || v === "off" || v === "no") return false;
+  return true;
 }
 
 /** Display MEXC marginRatio: small decimals become %, larger values treated as already %-like */
@@ -525,11 +532,17 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
   ];
 
   if (actives.length === 0) {
-    const body = headerLines.join("\n");
+    const base = headerLines.join("\n");
+    if (!portfolioAiSummaryEnabled()) return splitForTelegram(base);
+    const ai = await geminiSummarizePortfolioFromText({ text: base, maxLines: 5 });
+    const body = ai ? `${base}\n\nAI Summary\n${ai}` : base;
     return splitForTelegram(body);
   }
 
   const blocks = metricsList.map(formatPositionBlock);
-  const body = [...headerLines, "", "Positions:", "", blocks.join("\n\n")].join("\n");
+  const base = [...headerLines, "", "Positions:", "", blocks.join("\n\n")].join("\n");
+  if (!portfolioAiSummaryEnabled()) return splitForTelegram(base);
+  const ai = await geminiSummarizePortfolioFromText({ text: base, maxLines: 6 });
+  const body = ai ? `${base}\n\nAI Summary\n${ai}` : base;
   return splitForTelegram(body);
 }
