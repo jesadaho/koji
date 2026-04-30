@@ -12,7 +12,8 @@ function geminiApiKey(): string {
 
 function geminiModel(): string {
   const m = process.env.GEMINI_MODEL?.trim();
-  return m && m.length <= 80 ? m : "gemini-1.5-flash";
+  // gemini-1.5-* ถูก retire ไปแล้ว (2025) → default ใช้รุ่น 2.5
+  return m && m.length <= 80 ? m : "gemini-2.5-flash";
 }
 
 function geminiTimeoutMs(): number {
@@ -60,36 +61,47 @@ export async function geminiSummarizePortfolioFromTextResult(input: {
     input.text,
   ].join("\n");
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
-    geminiModel()
-  )}:generateContent?key=${encodeURIComponent(key)}`;
+  const primary = geminiModel();
+  const fallbackModels = Array.from(
+    new Set([primary, "gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-pro"])
+  );
 
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), geminiTimeoutMs());
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 256,
-        },
-      }),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      return { ok: false, status: res.status, error: `gemini HTTP ${res.status}` };
+    for (const model of fallbackModels) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+        model
+      )}:generateContent?key=${encodeURIComponent(key)}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 256,
+          },
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        // 404 มักเกิดจาก model ถูก retire/alias ไม่รองรับ — ลองตัวถัดไป
+        if (res.status === 404) continue;
+        return { ok: false, status: res.status, error: `gemini HTTP ${res.status} (model ${model})` };
+      }
+      const data = (await res.json()) as GeminiGenerateResponse;
+      const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
+      const cleaned = cleanGeminiText(text);
+      if (!cleaned) {
+        return { ok: false, error: `empty gemini response (model ${model})` };
+      }
+      const lines = cleaned.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, maxLines);
+      const joined = lines.join("\n").trim();
+      if (!joined) return { ok: false, error: `empty gemini response (model ${model})` };
+      return { ok: true, text: joined };
     }
-    const data = (await res.json()) as GeminiGenerateResponse;
-    const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-    const cleaned = cleanGeminiText(text);
-    if (!cleaned) return { ok: false, error: "empty gemini response" };
-    const lines = cleaned.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, maxLines);
-    const joined = lines.join("\n").trim();
-    if (!joined) return { ok: false, error: "empty gemini response" };
-    return { ok: true, text: joined };
+    return { ok: false, status: 404, error: `gemini model not found (tried ${fallbackModels.join(", ")})` };
   } catch (e) {
     const msg = e instanceof Error ? e.name === "AbortError" ? "timeout" : e.message : String(e);
     return { ok: false, error: `gemini request failed: ${msg}` };
