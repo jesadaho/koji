@@ -7,7 +7,7 @@ import {
   type MexcCredentials,
   type OpenPositionRow,
 } from "./mexcFuturesClient";
-import { fetchPerp15mClosesForChecklist, fetchPerp15mHlcForSar } from "./mexcMarkets";
+import { fetchPerp1hClosesForChecklist, fetchPerp1hHlcForSar } from "./mexcMarkets";
 import { openRouterSummarizePortfolioFromTextResult } from "./openRouterSummary";
 
 function numFromUnknown(v: unknown): number | null {
@@ -59,6 +59,19 @@ function portfolioAiSummaryEnabled(): boolean {
   const v = process.env.PORTFOLIO_AI_SUMMARY_ENABLED?.trim().toLowerCase();
   if (v === "0" || v === "false" || v === "off" || v === "no") return false;
   return true;
+}
+
+function portfolioAiDebugEnabled(): boolean {
+  const v = process.env.PORTFOLIO_AI_DEBUG?.trim().toLowerCase();
+  if (!v) return false;
+  return v === "1" || v === "true" || v === "on" || v === "yes";
+}
+
+function formatAiDebug(ai: { debug?: { curl: string; raw?: string } }): string | null {
+  const curl = ai.debug?.curl;
+  if (!curl) return null;
+  const raw = ai.debug?.raw ? `\n\nRAW (truncated):\n${ai.debug.raw}` : "";
+  return `AI Debug (OpenRouter)\n\nCURL:\n${curl}${raw}`.slice(0, 3800);
 }
 
 /** Display MEXC marginRatio: small decimals become %, larger values treated as already %-like */
@@ -303,8 +316,8 @@ async function buildPositionMetrics(
   const [detail, markPx, closes, hlcSar] = await Promise.all([
     fetchContractDetailPublic(symbol),
     getContractTickerPublic(symbol),
-    fetchPerp15mClosesForChecklist(symbol),
-    fetchPerp15mHlcForSar(symbol),
+    fetchPerp1hClosesForChecklist(symbol),
+    fetchPerp1hHlcForSar(symbol),
   ]);
 
   const cs = detail?.contractSize != null ? Number(detail.contractSize) : NaN;
@@ -348,8 +361,8 @@ async function buildPositionMetrics(
   const ema6 = closes ? computeEmaLast(closes, 6) : null;
   const emaDesc = describeEma12Proxy(long, mark ?? avg ?? 1, ema12);
   if (mark != null && ema12 != null) {
-    if (long && mark < ema12) concerns.push("ราคาใต้ EMA12 — งาน long กดแรง (proxy)");
-    if (!long && mark > ema12) concerns.push("ราคาเหนือ EMA12 — งาน short กดแรง (proxy)");
+    if (long && mark < ema12) concerns.push("ราคาใต้ EMA12 (1h) — งาน long กดแรง (proxy)");
+    if (!long && mark > ema12) concerns.push("ราคาเหนือ EMA12 (1h) — งาน short กดแรง (proxy)");
   }
 
   let psar: number | null = null;
@@ -367,10 +380,10 @@ async function buildPositionMetrics(
       }
       if (psar != null && mark != null) {
         const bullish = mark > psar;
-        if (long && !bullish) concerns.push("PSAR เป็นขาลง/ราคาใต้ SAR — งาน long เสี่ยงโดนกด");
-        if (!long && bullish) concerns.push("PSAR เป็นขาขึ้น/ราคาเหนือ SAR — งาน short เสี่ยงโดน squeeze");
+        if (long && !bullish) concerns.push("PSAR(1h) เป็นขาลง/ราคาใต้ SAR — งาน long เสี่ยงโดนกด");
+        if (!long && bullish) concerns.push("PSAR(1h) เป็นขาขึ้น/ราคาเหนือ SAR — งาน short เสี่ยงโดน squeeze");
       }
-      if (psarFlipped) concerns.push("PSAR เพิ่ง flip (แท่งล่าสุด) — ระวัง whipsaw");
+      if (psarFlipped) concerns.push("PSAR(1h) เพิ่ง flip (แท่งล่าสุด) — ระวัง whipsaw");
     }
   }
 
@@ -423,15 +436,15 @@ function formatPositionBlock(m: PositionMetrics): string {
     if (emaCompact.status === "—") return "EMA12: —";
     const adverse = (m.long && emaCompact.status === "Below") || (!m.long && emaCompact.status === "Above");
     const icon = adverse ? "🔴" : "🟢";
-    return `EMA12: ${icon} ${emaCompact.status} (Dist: +${(emaCompact.distPct ?? 0).toFixed(2)}%)`;
+    return `EMA12(1h): ${icon} ${emaCompact.status} (Dist: +${(emaCompact.distPct ?? 0).toFixed(2)}%)`;
   })();
 
   const psarLine = (() => {
-    if (m.psar == null) return "PSAR(15m): —";
+    if (m.psar == null) return "PSAR(1h): —";
     const bias = m.mark != null && m.mark > m.psar ? "bull" : m.mark != null && m.mark < m.psar ? "bear" : "flat";
     const dist = m.psarDistPct != null ? ` · Dist: +${m.psarDistPct.toFixed(2)}%` : "";
     const flip = m.psarFlipped ? " · flip" : "";
-    return `PSAR(15m): ${bias}${dist}${flip}`;
+    return `PSAR(1h): ${bias}${dist}${flip}`;
   })();
 
   const struct = m.structureLine.replace(" (heuristic)", "");
@@ -574,6 +587,10 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
       ? `AI Summary\n${ai.text}`
       : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
     out.push(aiMsg);
+    if (!ai.ok && portfolioAiDebugEnabled()) {
+      const dbg = formatAiDebug(ai);
+      if (dbg) out.push(dbg);
+    }
     return out;
   }
 
@@ -586,5 +603,9 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
     ? `AI Summary\n${ai.text}`
     : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
   out.push(aiMsg);
+  if (!ai.ok && portfolioAiDebugEnabled()) {
+    const dbg = formatAiDebug(ai);
+    if (dbg) out.push(dbg);
+  }
   return out;
 }

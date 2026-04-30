@@ -1,6 +1,6 @@
 export type OpenRouterSummaryResult =
   | { ok: true; text: string }
-  | { ok: false; error: string; status?: number };
+  | { ok: false; error: string; status?: number; debug?: { curl: string; raw?: string } };
 
 type OpenRouterChatResponse = {
   choices?: { message?: { content?: string } }[];
@@ -102,6 +102,21 @@ export async function openRouterSummarizePortfolioFromTextResult(input: {
       const timeoutMs = openRouterTimeoutMs();
       const t = setTimeout(() => controller.abort(), timeoutMs);
       try {
+        const requestBody = {
+          model,
+          messages: [{ role: "user", content }],
+          temperature: 0.3,
+          max_tokens: maxTokens,
+        };
+        const curl = [
+          "curl -sS https://openrouter.ai/api/v1/chat/completions \\",
+          "  -H \"Authorization: Bearer $OPENROUTER_API_KEY\" \\",
+          "  -H \"Content-Type: application/json\" \\",
+          `  -H \"HTTP-Referer: ${process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://koji.local"}\" \\`,
+          "  -H \"X-Title: Koji\" \\",
+          `  -d '${JSON.stringify(requestBody)}'`,
+        ].join("\n");
+
         const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
           method: "POST",
           headers: {
@@ -111,37 +126,67 @@ export async function openRouterSummarizePortfolioFromTextResult(input: {
             "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://koji.local",
             "X-Title": "Koji",
           },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: "user", content }],
-            temperature: 0.3,
-            max_tokens: maxTokens,
-          }),
+          body: JSON.stringify(requestBody),
           signal: controller.signal,
         });
 
         if (!res.ok) {
-          return { ok: false, status: res.status, error: `openrouter HTTP ${res.status} (model ${model})` };
+          const raw = (await res.text()).slice(0, 3500);
+          return {
+            ok: false,
+            status: res.status,
+            error: `openrouter HTTP ${res.status} (model ${model})`,
+            debug: { curl, raw },
+          };
         }
-        const data = (await res.json()) as OpenRouterChatResponse;
+        const rawJsonText = await res.text();
+        const data = JSON.parse(rawJsonText) as OpenRouterChatResponse;
         const raw = data?.choices?.[0]?.message?.content ?? "";
         const cleaned = cleanText(raw);
-        if (!cleaned) return { ok: false, error: `empty openrouter response (model ${model})` };
+        if (!cleaned) {
+          return {
+            ok: false,
+            error: `empty openrouter response (model ${model})`,
+            debug: { curl, raw: rawJsonText.slice(0, 3500) },
+          };
+        }
         // Only accept dash-bullets; drop any \"Alternative Draft\" noise.
         const bullets = extractDashBullets(cleaned, 4);
         const joined = bullets.join("\n").trim();
-        if (!joined) return { ok: false, error: `empty openrouter response (model ${model})` };
+        if (!joined) {
+          return {
+            ok: false,
+            error: `empty openrouter response (model ${model})`,
+            debug: { curl, raw: rawJsonText.slice(0, 3500) },
+          };
+        }
         if (bullets.length < 4) {
-          return { ok: false, error: `truncated openrouter response (model ${model})` };
+          return {
+            ok: false,
+            error: `truncated openrouter response (model ${model})`,
+            debug: { curl, raw: rawJsonText.slice(0, 3500) },
+          };
         }
         if (looksTruncatedSummary(joined)) {
-          return { ok: false, error: `truncated openrouter response (model ${model})` };
+          return {
+            ok: false,
+            error: `truncated openrouter response (model ${model})`,
+            debug: { curl, raw: rawJsonText.slice(0, 3500) },
+          };
         }
         return { ok: true, text: joined };
       } catch (e) {
         const msg =
           e instanceof Error ? (e.name === "AbortError" ? `timeout (${timeoutMs}ms)` : e.message) : String(e);
-        return { ok: false, error: `openrouter request failed: ${msg} (model ${model})` };
+        const curl = [
+          "curl -sS https://openrouter.ai/api/v1/chat/completions \\",
+          "  -H \"Authorization: Bearer $OPENROUTER_API_KEY\" \\",
+          "  -H \"Content-Type: application/json\" \\",
+          `  -H \"HTTP-Referer: ${process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://koji.local"}\" \\`,
+          "  -H \"X-Title: Koji\" \\",
+          "  -d '<request_body omitted>'",
+        ].join("\n");
+        return { ok: false, error: `openrouter request failed: ${msg} (model ${model})`, debug: { curl } };
       } finally {
         clearTimeout(t);
       }

@@ -428,6 +428,52 @@ export async function fetchPerp15mHlcForSar(contractSymbol: string): Promise<Per
   return { high: closedHigh, low: closedLow, close: closedClose };
 }
 
+export type Perp1hHlcForSar = {
+  high: number[];
+  low: number[];
+  close: number[];
+};
+
+/**
+ * ดึง high/low/close 1h (เก่า→ใหม่) สำหรับ Parabolic SAR — ตัดแท่งท้ายที่อาจยังไม่ปิด
+ */
+export async function fetchPerp1hHlcForSar(contractSymbol: string): Promise<Perp1hHlcForSar | null> {
+  const sym = contractSymbol.trim();
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(sym)}`;
+  const limit = 100;
+  try {
+    const { data } = await axios.get<KlineApiResponse>(url, {
+      timeout: 14_000,
+      params: { interval: "Min60", limit },
+    });
+    if (!data.success || !data.data) return null;
+    const raw = data.data;
+    const highRaw = raw.high;
+    const lowRaw = raw.low;
+    const closeRaw = raw.close;
+    if (!highRaw?.length || !lowRaw?.length || !closeRaw?.length) return null;
+    const n = closeRaw.length;
+    if (highRaw.length !== n || lowRaw.length !== n) return null;
+
+    const high = highRaw.map((v) => Number(v));
+    const low = lowRaw.map((v) => Number(v));
+    const close = closeRaw.map((v) => Number(v));
+    const ok =
+      high.every((x) => Number.isFinite(x) && x > 0) &&
+      low.every((x) => Number.isFinite(x) && x > 0) &&
+      close.every((x) => Number.isFinite(x) && x > 0);
+    if (!ok) return null;
+
+    const closedHigh = n >= 3 ? high.slice(0, n - 1) : high;
+    const closedLow = n >= 3 ? low.slice(0, n - 1) : low;
+    const closedClose = n >= 3 ? close.slice(0, n - 1) : close;
+    if (closedHigh.length < 20 || closedLow.length < 20 || closedClose.length < 20) return null;
+    return { high: closedHigh, low: closedLow, close: closedClose };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * แปลง close[] จาก kline เป็นแท่งปิดสำหรับ EMA — ไม่ใช้ parseKlineArrays (ไม่บังคับ vol/open)
  */
