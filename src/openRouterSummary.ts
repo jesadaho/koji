@@ -20,6 +20,12 @@ function openRouterTimeoutMs(): number {
   return Number.isFinite(n) && n >= 3000 && n <= 90000 ? Math.floor(n) : 25_000;
 }
 
+function openRouterDebugCurlEnabled(): boolean {
+  const v = process.env.PORTFOLIO_AI_DEBUG_CURL?.trim().toLowerCase();
+  if (!v) return false;
+  return v === "1" || v === "true" || v === "on" || v === "yes";
+}
+
 function cleanText(s: string): string {
   return s
     .replace(/\r/g, "")
@@ -108,13 +114,19 @@ export async function openRouterSummarizePortfolioFromTextResult(input: {
           temperature: 0.3,
           max_tokens: maxTokens,
         };
+        const curlBody = openRouterDebugCurlEnabled()
+          ? JSON.stringify(requestBody)
+          : JSON.stringify({
+              ...requestBody,
+              messages: [{ role: "user", content: "<omitted: portfolio text too long>" }],
+            });
         const curl = [
           "curl -sS https://openrouter.ai/api/v1/chat/completions \\",
           "  -H \"Authorization: Bearer $OPENROUTER_API_KEY\" \\",
           "  -H \"Content-Type: application/json\" \\",
           `  -H \"HTTP-Referer: ${process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://koji.local"}\" \\`,
           "  -H \"X-Title: Koji\" \\",
-          `  -d '${JSON.stringify(requestBody)}'`,
+          `  -d '${curlBody}'`,
         ].join("\n");
 
         const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {

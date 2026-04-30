@@ -71,7 +71,37 @@ function formatAiDebug(ai: { debug?: { curl: string; raw?: string } }): string |
   const curl = ai.debug?.curl;
   if (!curl) return null;
   const raw = ai.debug?.raw ? `\n\nRAW (truncated):\n${ai.debug.raw}` : "";
+  // Keep curl small so raw can fit into Telegram message
   return `AI Debug (OpenRouter)\n\nCURL:\n${curl}${raw}`.slice(0, 3800);
+}
+
+function buildAiInputForSummary(headerLines: string[], metricsList: PositionMetrics[]): string {
+  const top = metricsList
+    .slice()
+    .sort((a, b) => {
+      const aRisk = Math.max(0, 100 - (a.liqDistPct ?? 100)) + (a.marginPctEquity ?? 0) * 2 + (a.concerns.length > 0 ? 10 : 0);
+      const bRisk = Math.max(0, 100 - (b.liqDistPct ?? 100)) + (b.marginPctEquity ?? 0) * 2 + (b.concerns.length > 0 ? 10 : 0);
+      return bRisk - aRisk;
+    })
+    .slice(0, 5);
+
+  const posLines = top.map((m) => {
+    const side = m.long ? "LONG" : "SHORT";
+    const pnl = m.pnlPctOnMargin != null ? formatPctSigned(m.pnlPctOnMargin) : "—";
+    const liq = m.row.openType === 1 && m.liqDistPct != null ? `${m.liqDistPct.toFixed(2)}%` : "—";
+    const margin = m.marginUsdt != null ? `${formatUsd(m.marginUsdt)}${m.marginPctEquity != null ? ` (${m.marginPctEquity.toFixed(2)}%)` : ""}` : "—";
+    const ema = ema12StatusCompact(m.long, m.mark, m.ema12);
+    const emaTag = ema.status === "—" ? "EMA12(1h): —" : `EMA12(1h): ${ema.status}`;
+    const psarTag = m.psar != null && m.mark != null ? `PSAR(1h): ${m.mark > m.psar ? "bull" : "bear"}` : "PSAR(1h): —";
+    const c = m.concerns[0] ? ` | Concern: ${m.concerns[0]}` : "";
+    return `- ${side} ${m.symbol} PnL ${pnl} | Margin ${margin} | Liq ${liq} | ${emaTag} | ${psarTag}${c}`;
+  });
+
+  const header = headerLines
+    .filter((l) => l.includes("Balance") || l.includes("Floating PnL") || l.includes("Margin use") || l.includes("Max position") || l.includes("Open positions"))
+    .join("\n");
+
+  return [`🛡️ PORTFOLIO HEALTH (summary input)`, header, "", "Top positions (risk-first):", ...posLines].join("\n");
 }
 
 /** Display MEXC marginRatio: small decimals become %, larger values treated as already %-like */
@@ -582,7 +612,8 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
     const base = headerLines.join("\n");
     const out = splitForTelegram(base);
     if (!portfolioAiSummaryEnabled()) return out;
-    const ai = await openRouterSummarizePortfolioFromTextResult({ text: base, maxLines: 4 });
+    const aiInput = buildAiInputForSummary(headerLines, metricsList);
+    const ai = await openRouterSummarizePortfolioFromTextResult({ text: aiInput, maxLines: 4 });
     const aiMsg = ai.ok
       ? `AI Summary\n${ai.text}`
       : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
@@ -598,7 +629,8 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
   const base = [...headerLines, "", "Positions:", "", blocks.join("\n\n")].join("\n");
   const out = splitForTelegram(base);
   if (!portfolioAiSummaryEnabled()) return out;
-  const ai = await openRouterSummarizePortfolioFromTextResult({ text: base, maxLines: 4 });
+  const aiInput = buildAiInputForSummary(headerLines, metricsList);
+  const ai = await openRouterSummarizePortfolioFromTextResult({ text: aiInput, maxLines: 4 });
   const aiMsg = ai.ok
     ? `AI Summary\n${ai.text}`
     : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
