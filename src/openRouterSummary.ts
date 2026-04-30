@@ -28,6 +28,15 @@ function cleanText(s: string): string {
     .trim();
 }
 
+function extractDashBullets(s: string, want = 4): string[] {
+  const lines = s
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const bullets = lines.filter((ln) => ln.startsWith("- "));
+  return bullets.slice(0, want);
+}
+
 function looksTruncatedSummary(s: string): boolean {
   const t = s.trim();
   if (!t) return true;
@@ -51,7 +60,7 @@ export async function openRouterSummarizePortfolioFromTextResult(input: {
   if (!key) return { ok: false, error: "missing OPENROUTER_API_KEY" };
 
   const maxLines =
-    Number.isFinite(input.maxLines) && (input.maxLines as number) >= 2 ? (input.maxLines as number) : 6;
+    Number.isFinite(input.maxLines) && (input.maxLines as number) >= 2 ? (input.maxLines as number) : 4;
 
   const basePromptLines = [
     "You are Koji, a crypto futures portfolio assistant.",
@@ -118,9 +127,13 @@ export async function openRouterSummarizePortfolioFromTextResult(input: {
         const raw = data?.choices?.[0]?.message?.content ?? "";
         const cleaned = cleanText(raw);
         if (!cleaned) return { ok: false, error: `empty openrouter response (model ${model})` };
-        const lines = cleaned.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, maxLines);
-        const joined = lines.join("\n").trim();
+        // Only accept dash-bullets; drop any \"Alternative Draft\" noise.
+        const bullets = extractDashBullets(cleaned, 4);
+        const joined = bullets.join("\n").trim();
         if (!joined) return { ok: false, error: `empty openrouter response (model ${model})` };
+        if (bullets.length < 4) {
+          return { ok: false, error: `truncated openrouter response (model ${model})` };
+        }
         if (looksTruncatedSummary(joined)) {
           return { ok: false, error: `truncated openrouter response (model ${model})` };
         }

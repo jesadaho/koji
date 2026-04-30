@@ -419,10 +419,12 @@ function formatPositionBlock(m: PositionMetrics): string {
       : "Margin: —";
 
   const emaCompact = ema12StatusCompact(m.long, m.mark, m.ema12);
-  const emaLine =
-    emaCompact.status === "—"
-      ? "EMA12: —"
-      : `EMA12: ${emaCompact.status === "Below" ? "✅ Below" : "✅ Above"} (Dist: +${(emaCompact.distPct ?? 0).toFixed(2)}%)`;
+  const emaLine = (() => {
+    if (emaCompact.status === "—") return "EMA12: —";
+    const adverse = (m.long && emaCompact.status === "Below") || (!m.long && emaCompact.status === "Above");
+    const icon = adverse ? "🔴" : "🟢";
+    return `EMA12: ${icon} ${emaCompact.status} (Dist: +${(emaCompact.distPct ?? 0).toFixed(2)}%)`;
+  })();
 
   const psarLine = (() => {
     if (m.psar == null) return "PSAR(15m): —";
@@ -567,7 +569,7 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
     const base = headerLines.join("\n");
     const out = splitForTelegram(base);
     if (!portfolioAiSummaryEnabled()) return out;
-    const ai = await openRouterSummarizePortfolioFromTextResult({ text: base, maxLines: 6 });
+    const ai = await openRouterSummarizePortfolioFromTextResult({ text: base, maxLines: 4 });
     const aiMsg = ai.ok
       ? `AI Summary\n${ai.text}`
       : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
@@ -579,7 +581,7 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
   const base = [...headerLines, "", "Positions:", "", blocks.join("\n\n")].join("\n");
   const out = splitForTelegram(base);
   if (!portfolioAiSummaryEnabled()) return out;
-  const ai = await openRouterSummarizePortfolioFromTextResult({ text: base, maxLines: 6 });
+  const ai = await openRouterSummarizePortfolioFromTextResult({ text: base, maxLines: 4 });
   const aiMsg = ai.ok
     ? `AI Summary\n${ai.text}`
     : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
