@@ -38,6 +38,25 @@ function extractDashBullets(s: string, want = 4): string[] {
   return bullets.slice(0, want);
 }
 
+function extractKojiEmojiSummary(s: string): string | null {
+  const lines = s
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (lines.length < 5) return null;
+  const head = lines[0]!;
+  if (!head.toLowerCase().includes("koji") || !head.toLowerCase().includes("summary")) return null;
+  const body = lines.slice(1);
+  const pick = (prefix: string) => body.find((ln) => ln.startsWith(prefix)) ?? null;
+  const pnl = pick("PnL");
+  const risk = pick("⚠️ Risk:");
+  const critical = pick("🚨 Critical:");
+  const focus = pick("👀 Focus:");
+  if (!pnl || !risk || !critical || !focus) return null;
+  return [head, "", pnl, "", risk, "", critical, "", focus].join("\n");
+}
+
 function looksTruncatedSummary(s: string): boolean {
   const t = s.trim();
   if (!t) return true;
@@ -61,17 +80,20 @@ export async function openAiSummarizePortfolioFromTextResult(input: {
   const prompt = [
     "สรุปสถานะพอร์ตจากข้อความที่ให้มาเท่านั้น",
     "ข้อกำหนด:",
-    `- ตอบ ${wantLines} บรรทัดเท่านั้น`,
+    "- ตอบเป็น 5 บรรทัดเท่านั้น (ห้ามเกิน/ห้ามขาด)",
     "- ภาษาไทยล้วน",
     "- ห้ามสร้างตัวเลข/ข้อมูลใหม่ นอกเหนือจากที่มีในข้อความ",
     "- ห้ามให้คำแนะนำลงทุน เช่น ควรซื้อ/ขาย/เพิ่ม/ลด",
-    "- แต่ละบรรทัดต้องขึ้นต้นด้วย '- '",
-    "- ต้องใช้เทมเพลตนี้ตามลำดับ:",
-    "  - ภาพรวม: <อ้าง equity + floating PnL ที่มี>",
-    "  - ความเสี่ยงหลัก: <1 ประเด็นจาก Risk/Margin/Liq/EMA/PSAR/structure ที่เด่นสุด พร้อมตัวเลขที่มี>",
-    "  - สวนทาง/เตือน: <1 ประเด็นที่สวนทาง position หรือ concern ที่รุนแรงสุด พร้อมตัวเลขที่มี>",
-    "  - โฟกัสต่อไป: <1 สิ่งที่ควร monitor เช่น EMA12/PSAR/Liq distance/position margin size พร้อมตัวเลขที่มี>",
-    "- ถ้าข้อมูลไม่พอ ให้ใส่ '—' ในส่วนนั้น",
+    "- ใช้ emoji ตามหัวข้อให้เหมือนตัวอย่าง (อย่าใส่คำว่า Alternative Draft / reasoning)",
+    "",
+    "รูปแบบที่ต้องการ (ห้ามเพิ่ม/ลดหัวข้อ):",
+    "🤖 Koji AI Summary",
+    "PnL รวม: <ตัวเลขจากข้อความ> (<emoji สื่อดี/แย่>)",
+    "⚠️ Risk: <1 ประเด็น risk สำคัญพร้อมตัวเลขจากข้อความ>",
+    "🚨 Critical: <1 ประเด็นที่ critical ที่สุดพร้อมตัวเลขจากข้อความ> (ถ้าไม่มีให้ใส่ '—')",
+    "👀 Focus: <1 สิ่งที่ต้อง monitor ต่อไปพร้อมอ้างอิงจากข้อความ>",
+    "",
+    "- ถ้าไม่มีข้อมูลหัวข้อนั้น ให้ใส่ '—' แต่ยังต้องมีบรรทัดนั้น",
     "",
     "ข้อความ:",
     input.text,
@@ -87,7 +109,7 @@ export async function openAiSummarizePortfolioFromTextResult(input: {
     model,
     messages: [{ role: "user", content: prompt }],
     temperature: 0.2,
-    max_tokens: 220,
+    max_tokens: 260,
   };
 
   const curl = [
@@ -126,9 +148,8 @@ export async function openAiSummarizePortfolioFromTextResult(input: {
     const cleaned = cleanText(content);
     if (!cleaned) return { ok: false, error: `empty openai response (model ${model})`, debug: { curl, raw: rawText.slice(0, 3500) } };
 
-    const bullets = extractDashBullets(cleaned, 4);
-    const joined = bullets.join("\n").trim();
-    if (bullets.length < 4 || !joined || looksTruncatedSummary(joined)) {
+    const emojiSummary = extractKojiEmojiSummary(cleaned);
+    if (!emojiSummary || looksTruncatedSummary(emojiSummary)) {
       // Retry once with more tokens (sometimes model truncates)
       const retryBody = { ...requestBody, max_tokens: 420 };
       const res2 = await fetch(url, {
@@ -149,15 +170,14 @@ export async function openAiSummarizePortfolioFromTextResult(input: {
       const data2 = JSON.parse(raw2) as OpenAiChatResponse;
       const content2 = data2?.choices?.[0]?.message?.content ?? "";
       const cleaned2 = cleanText(content2);
-      const bullets2 = extractDashBullets(cleaned2, 4);
-      const joined2 = bullets2.join("\n").trim();
-      if (bullets2.length < 4 || !joined2 || looksTruncatedSummary(joined2)) {
+      const emoji2 = extractKojiEmojiSummary(cleaned2);
+      if (!emoji2 || looksTruncatedSummary(emoji2)) {
         return { ok: false, error: `truncated openai response (model ${model})`, debug: { curl, raw: raw2.slice(0, 3500) } };
       }
-      return { ok: true, text: joined2 };
+      return { ok: true, text: emoji2 };
     }
 
-    return { ok: true, text: joined };
+    return { ok: true, text: emojiSummary };
   } catch (e) {
     const msg =
       e instanceof Error ? (e.name === "AbortError" ? `timeout (${timeoutMs}ms)` : e.message) : String(e);
