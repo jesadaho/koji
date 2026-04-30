@@ -8,7 +8,7 @@ import {
   type OpenPositionRow,
 } from "./mexcFuturesClient";
 import { fetchPerp15mClosesForChecklist, fetchPerp15mHlcForSar } from "./mexcMarkets";
-import { geminiSummarizePortfolioFromTextResult } from "./geminiSummary";
+import { openRouterSummarizePortfolioFromTextResult } from "./openRouterSummary";
 
 function numFromUnknown(v: unknown): number | null {
   if (v == null) return null;
@@ -544,7 +544,7 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
     const base = headerLines.join("\n");
     const out = splitForTelegram(base);
     if (!portfolioAiSummaryEnabled()) return out;
-    const ai = await geminiSummarizePortfolioFromTextResult({ text: base, maxLines: 6 });
+    const ai = await openRouterSummarizePortfolioFromTextResult({ text: base, maxLines: 6 });
     const aiMsg = ai.ok
       ? `AI Summary\n${ai.text}`
       : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
@@ -556,7 +556,7 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
   const base = [...headerLines, "", "Positions:", "", blocks.join("\n\n")].join("\n");
   const out = splitForTelegram(base);
   if (!portfolioAiSummaryEnabled()) return out;
-  const ai = await geminiSummarizePortfolioFromTextResult({ text: base, maxLines: 6 });
+  const ai = await openRouterSummarizePortfolioFromTextResult({ text: base, maxLines: 6 });
   const aiMsg = ai.ok
     ? `AI Summary\n${ai.text}`
     : `AI Summary\n(⚠️ ${ai.error}${ai.status != null ? `, status=${ai.status}` : ""})`;
