@@ -88,6 +88,8 @@ type KlineArrays = {
   open: number[];
   close: number[];
   vol: number[];
+  high?: number[];
+  low?: number[];
 };
 
 type KlineApiResponse = {
@@ -98,6 +100,8 @@ type KlineApiResponse = {
   data?: {
     open?: number[];
     close?: number[];
+    high?: number[];
+    low?: number[];
     vol?: number[];
     time?: number[];
   };
@@ -276,10 +280,14 @@ function parseKlineArrays(raw: KlineApiResponse["data"]): KlineArrays | null {
   if (!raw?.vol?.length || !raw.open?.length || !raw.close?.length) return null;
   const n = raw.vol.length;
   if (raw.open.length !== n || raw.close.length !== n) return null;
+  const high = raw.high?.length === n ? raw.high.map((v) => Number(v)) : undefined;
+  const low = raw.low?.length === n ? raw.low.map((v) => Number(v)) : undefined;
   return {
     vol: raw.vol.map((v) => Number(v)),
     open: raw.open.map((v) => Number(v)),
     close: raw.close.map((v) => Number(v)),
+    high,
+    low,
   };
 }
 
@@ -381,6 +389,43 @@ export async function fetchPerp15mClosesForChecklist(contractSymbol: string): Pr
   const n = raw.length;
   const closed = n >= 3 ? raw.slice(0, n - 1) : raw;
   return closed.length >= 14 ? closed : null;
+}
+
+export type Perp15mHlcForSar = {
+  high: number[];
+  low: number[];
+  close: number[];
+};
+
+/**
+ * ดึง high/low/close 15m (เก่า→ใหม่) สำหรับ Parabolic SAR — ตัดแท่งท้ายที่อาจยังไม่ปิด
+ */
+export async function fetchPerp15mHlcForSar(contractSymbol: string): Promise<Perp15mHlcForSar | null> {
+  const k = await fetchContractKline15m(contractSymbol.trim());
+  const highRaw = k?.high;
+  const lowRaw = k?.low;
+  const closeRaw = k?.close;
+  if (!highRaw?.length || !lowRaw?.length || !closeRaw?.length) return null;
+  const n = closeRaw.length;
+  if (highRaw.length !== n || lowRaw.length !== n) return null;
+
+  const high = highRaw.map((v) => Number(v));
+  const low = lowRaw.map((v) => Number(v));
+  const close = closeRaw.map((v) => Number(v));
+
+  const ok =
+    high.every((x) => Number.isFinite(x) && x > 0) &&
+    low.every((x) => Number.isFinite(x) && x > 0) &&
+    close.every((x) => Number.isFinite(x) && x > 0);
+  if (!ok) return null;
+
+  /** ตัดแท่งท้ายที่อาจยังไม่ปิด */
+  const closedHigh = n >= 3 ? high.slice(0, n - 1) : high;
+  const closedLow = n >= 3 ? low.slice(0, n - 1) : low;
+  const closedClose = n >= 3 ? close.slice(0, n - 1) : close;
+  if (closedHigh.length < 20 || closedLow.length < 20 || closedClose.length < 20) return null;
+
+  return { high: closedHigh, low: closedLow, close: closedClose };
 }
 
 /**

@@ -7,7 +7,7 @@ import {
   type MexcCredentials,
   type OpenPositionRow,
 } from "./mexcFuturesClient";
-import { fetchPerp15mClosesForChecklist } from "./mexcMarkets";
+import { fetchPerp15mClosesForChecklist, fetchPerp15mHlcForSar } from "./mexcMarkets";
 
 function numFromUnknown(v: unknown): number | null {
   if (v == null) return null;
@@ -97,6 +97,80 @@ export function describeSwingStructureFromCloses(closes: number[]): string {
   return `${parts.join(" · ")} (heuristic)`;
 }
 
+type PsarResult = {
+  sar: number;
+  trend: "up" | "down";
+  flipped: boolean;
+};
+
+/**
+ * Parabolic SAR (classic) using high/low arrays (old→new).
+ * step=0.02 max=0.2 เป็นค่ามาตรฐานทั่วไป
+ */
+export function computeParabolicSarLast(
+  high: number[],
+  low: number[],
+  step = 0.02,
+  maxAf = 0.2
+): PsarResult | null {
+  const n = Math.min(high.length, low.length);
+  if (n < 5) return null;
+  const h = high.slice(-n);
+  const l = low.slice(-n);
+  const valid =
+    h.every((x) => Number.isFinite(x) && x > 0) && l.every((x) => Number.isFinite(x) && x > 0);
+  if (!valid) return null;
+
+  // initial trend from first 2 bars
+  let trend: "up" | "down" = h[1]! >= h[0]! ? "up" : "down";
+  let ep = trend === "up" ? Math.max(h[0]!, h[1]!) : Math.min(l[0]!, l[1]!);
+  let sar = trend === "up" ? Math.min(l[0]!, l[1]!) : Math.max(h[0]!, h[1]!);
+  let af = step;
+
+  let flipped = false;
+  for (let i = 2; i < n; i++) {
+    flipped = false;
+    const prevSar = sar;
+    sar = prevSar + af * (ep - prevSar);
+
+    if (trend === "up") {
+      // SAR cannot be above prior lows (classic clamp)
+      sar = Math.min(sar, l[i - 1]!, l[i - 2]!);
+      // flip
+      if (l[i]! <= sar) {
+        trend = "down";
+        flipped = true;
+        sar = ep; // on flip, SAR becomes prior EP
+        ep = l[i]!;
+        af = step;
+      } else {
+        // update EP + AF
+        if (h[i]! > ep) {
+          ep = h[i]!;
+          af = Math.min(maxAf, af + step);
+        }
+      }
+    } else {
+      // downtrend clamp
+      sar = Math.max(sar, h[i - 1]!, h[i - 2]!);
+      if (h[i]! >= sar) {
+        trend = "up";
+        flipped = true;
+        sar = ep;
+        ep = h[i]!;
+        af = step;
+      } else {
+        if (l[i]! < ep) {
+          ep = l[i]!;
+          af = Math.min(maxAf, af + step);
+        }
+      }
+    }
+  }
+
+  return { sar, trend, flipped };
+}
+
 function describeEma12Proxy(long: boolean, mark: number, ema12: number | null): { line: string; distPct: number | null } {
   if (ema12 == null || !(mark > 0)) {
     return { line: "EMA12: —", distPct: null };
@@ -126,6 +200,17 @@ function describeEma12Proxy(long: boolean, mark: number, ema12: number | null): 
   };
 }
 
+function ema12StatusCompact(
+  long: boolean,
+  mark: number | null,
+  ema12: number | null
+): { status: "Above" | "Below" | "—"; distPct: number | null } {
+  if (mark == null || !(mark > 0) || ema12 == null || !(ema12 > 0)) return { status: "—", distPct: null };
+  const distAbs = (Math.abs(ema12 - mark) / mark) * 100;
+  if (long) return { status: mark >= ema12 ? "Above" : "Below", distPct: distAbs };
+  return { status: mark <= ema12 ? "Below" : "Above", distPct: distAbs };
+}
+
 type PositionMetrics = {
   row: OpenPositionRow;
   symbol: string;
@@ -137,9 +222,15 @@ type PositionMetrics = {
   unrealized: number | null;
   pnlPctOnMargin: number | null;
   liqDistPct: number | null;
+  marginUsdt: number | null;
+  marginPctEquity: number | null;
   ema12: number | null;
   ema6: number | null;
   emaLine: string;
+  psar: number | null;
+  psarTrend: "up" | "down" | null;
+  psarFlipped: boolean | null;
+  psarDistPct: number | null;
   structureLine: string;
   concerns: string[];
 };
@@ -191,7 +282,8 @@ function splitForTelegram(body: string, maxLen = 4096): string[] {
 
 async function buildPositionMetrics(
   p: OpenPositionRow,
-  leadDelayMs: number
+  leadDelayMs: number,
+  equity: number | null
 ): Promise<PositionMetrics> {
   if (leadDelayMs > 0) await sleep(leadDelayMs);
 
@@ -200,10 +292,11 @@ async function buildPositionMetrics(
   const long = isLongPosition(p);
   const concerns: string[] = [];
 
-  const [detail, markPx, closes] = await Promise.all([
+  const [detail, markPx, closes, hlcSar] = await Promise.all([
     fetchContractDetailPublic(symbol),
     getContractLastPricePublic(symbol),
     fetchPerp15mClosesForChecklist(symbol),
+    fetchPerp15mHlcForSar(symbol),
   ]);
 
   const cs = detail?.contractSize != null ? Number(detail.contractSize) : NaN;
@@ -222,6 +315,12 @@ async function buildPositionMetrics(
   }
 
   const im = numFromUnknown(p.im) ?? numFromUnknown(p.oim);
+  const marginUsdt = im != null && Number.isFinite(im) && im > 0 ? im : null;
+  const marginPctEquity =
+    marginUsdt != null && equity != null && Number.isFinite(equity) && equity > 0
+      ? (marginUsdt / equity) * 100
+      : null;
+
   let pnlPctOnMargin: number | null = null;
   if (unrealized != null && im != null && im > 0) {
     pnlPctOnMargin = (unrealized / im) * 100;
@@ -243,6 +342,28 @@ async function buildPositionMetrics(
     if (!long && mark > ema12) concerns.push("ราคาเหนือ EMA12 — งาน short กดแรง (proxy)");
   }
 
+  let psar: number | null = null;
+  let psarTrend: "up" | "down" | null = null;
+  let psarFlipped: boolean | null = null;
+  let psarDistPct: number | null = null;
+  if (hlcSar) {
+    const r = computeParabolicSarLast(hlcSar.high, hlcSar.low);
+    if (r) {
+      psar = Number.isFinite(r.sar) && r.sar > 0 ? r.sar : null;
+      psarTrend = r.trend;
+      psarFlipped = r.flipped;
+      if (psar != null && mark != null && mark > 0) {
+        psarDistPct = (Math.abs(mark - psar) / mark) * 100;
+      }
+      if (psar != null && mark != null) {
+        const bullish = mark > psar;
+        if (long && !bullish) concerns.push("PSAR เป็นขาลง/ราคาใต้ SAR — งาน long เสี่ยงโดนกด");
+        if (!long && bullish) concerns.push("PSAR เป็นขาขึ้น/ราคาเหนือ SAR — งาน short เสี่ยงโดน squeeze");
+      }
+      if (psarFlipped) concerns.push("PSAR เพิ่ง flip (แท่งล่าสุด) — ระวัง whipsaw");
+    }
+  }
+
   const structureLine = closes ? describeSwingStructureFromCloses(closes) : "—";
 
   return {
@@ -256,9 +377,15 @@ async function buildPositionMetrics(
     unrealized,
     pnlPctOnMargin,
     liqDistPct,
+    marginUsdt,
+    marginPctEquity,
     ema12,
     ema6,
     emaLine: emaDesc.line,
+    psar,
+    psarTrend,
+    psarFlipped,
+    psarDistPct,
     structureLine,
     concerns,
   };
@@ -267,33 +394,43 @@ async function buildPositionMetrics(
 function formatPositionBlock(m: PositionMetrics): string {
   const side = m.long ? "LONG" : "SHORT";
   const icon = m.unrealized != null && m.unrealized >= 0 ? "🟢" : "🔴";
-  const pnlPart =
-    m.pnlPctOnMargin != null ? `PnL: ${formatPctSigned(m.pnlPctOnMargin)} (บนมาร์จ)` : "PnL: —";
   const symCompact = m.label.replace("/", "");
+  const pnlPart = m.pnlPctOnMargin != null ? formatPctSigned(m.pnlPctOnMargin) : "—";
   const head = `${icon} ${side} ${symCompact} | ${pnlPart}`;
 
-  const lines: string[] = [head, `📉 Position Health: [${side}] ${m.label}`];
+  const pricePart =
+    m.mark != null ? `${formatPriceCompact(m.mark)}` : "—";
+  const entryPart = m.avg != null ? ` (Entry: ${formatPriceCompact(m.avg)})` : "";
+  const marginPart =
+    m.marginUsdt != null
+      ? `Margin: ${formatUsd(m.marginUsdt)}${m.marginPctEquity != null ? ` (${m.marginPctEquity.toFixed(2)}%)` : ""}`
+      : "Margin: —";
 
-  lines.push(`Current Price: ${m.mark != null ? formatPriceCompact(m.mark) : "—"}`);
-  if (m.avg != null) lines.push(`Avg entry: ${formatPriceCompact(m.avg)}`);
-  if (m.row.leverage != null) lines.push(`Leverage: ${m.row.leverage}x`);
-  lines.push(`EMA12 (15m proxy, ไม่ใช่เส้น TV): ${m.emaLine}`);
-  if (m.ema6 != null && m.ema12 != null) {
-    lines.push(`EMA6 / EMA12: ${formatPriceCompact(m.ema6)} / ${formatPriceCompact(m.ema12)}`);
-  }
-  lines.push(`Structure: ${m.structureLine}`);
-  if (m.row.openType === 1 && m.liqDistPct != null) {
-    lines.push(`Distance to liq. (isolated): ~${m.liqDistPct.toFixed(2)}%`);
-  } else if (m.row.openType === 2) {
-    lines.push(`Mode: cross margin (ไม่มี liq เดี่ยวในแถวนี้)`);
-  }
-  lines.push(`Position margin ratio: ${formatMarginRatioDisplay(numFromUnknown(m.row.marginRatio))}`);
-  if (m.unrealized != null) lines.push(`Unrealized (est.): ${formatUsd(m.unrealized)}`);
+  const emaCompact = ema12StatusCompact(m.long, m.mark, m.ema12);
+  const emaLine =
+    emaCompact.status === "—"
+      ? "EMA12: —"
+      : `EMA12: ${emaCompact.status === "Below" ? "✅ Below" : "✅ Above"} (Dist: +${(emaCompact.distPct ?? 0).toFixed(2)}%)`;
+
+  const struct = m.structureLine.replace(" (heuristic)", "");
+  const structShort =
+    struct.includes("Lower high") || struct.includes("Lower low") ? "🟢 Bearish (LH/LL)" :
+    struct.includes("Higher high") || struct.includes("Higher low") ? "🟢 Bullish (HH/HL)" :
+    "🟡 Range";
+
+  const liq = m.row.openType === 1 && m.liqDistPct != null ? `${m.liqDistPct.toFixed(2)}%` : "—";
+  const mr = formatMarginRatioDisplay(numFromUnknown(m.row.marginRatio));
+
+  const lines: string[] = [
+    head,
+    `Price: ${pricePart}${entryPart} · ${marginPart}${m.row.leverage != null ? ` · Lev: ${m.row.leverage}x` : ""}`,
+    `${emaLine}`,
+    `Structure: ${structShort}`,
+    `Risk: Liq: ${liq} | MarginRatio: ${mr}`,
+  ];
 
   if (m.concerns.length > 0) {
-    lines.push("");
-    lines.push("⚠️ Concern:");
-    for (const c of m.concerns) lines.push(`• ${c}`);
+    lines.push(`⚠️ Concern: ${m.concerns[0]!.slice(0, 220)}`);
   }
 
   return lines.join("\n");
@@ -339,7 +476,7 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
 
   const metricsList: PositionMetrics[] = [];
   for (let i = 0; i < actives.length; i++) {
-    const m = await buildPositionMetrics(actives[i]!, i === 0 ? 0 : delayMs);
+    const m = await buildPositionMetrics(actives[i]!, i === 0 ? 0 : delayMs, equity);
     metricsList.push(m);
   }
 
