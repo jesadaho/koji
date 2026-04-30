@@ -30,19 +30,19 @@ export function isPriceSpike15mSparkCronEnabled(): boolean {
   return true;
 }
 
-/** ขาขึ้น: ต้อง ≥ นี้ (default 5%) */
+/** ขาขึ้น: ต้อง ≥ นี้ (default 9%) */
 function minPctUp(): number {
   const n = Number(process.env.PRICE_SPIKE_MIN_PCT_UP?.trim());
   if (Number.isFinite(n) && n > 0) return n;
   const legacy = Number(process.env.PRICE_SPIKE_15M_MIN_PCT?.trim());
   if (Number.isFinite(legacy) && legacy > 0) return legacy;
-  return 5;
+  return 9;
 }
 
-/** ขาลง: |%| ต้อง ≥ นี้ (default 5%) */
+/** ขาลง: |%| ต้อง ≥ นี้ (default 9%) */
 function minPctDown(): number {
   const n = Number(process.env.PRICE_SPIKE_MIN_PCT_DOWN?.trim());
-  return Number.isFinite(n) && n > 0 ? n : 5;
+  return Number.isFinite(n) && n > 0 ? n : 9;
 }
 
 function sparkReturnPassesThreshold(returnPct: number): boolean {
