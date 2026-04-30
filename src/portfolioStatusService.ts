@@ -3,7 +3,7 @@ import {
   fetchAllOpenPositions,
   fetchContractDetailPublic,
   fetchFuturesAccountAssetList,
-  getContractLastPricePublic,
+  getContractTickerPublic,
   type MexcCredentials,
   type OpenPositionRow,
 } from "./mexcFuturesClient";
@@ -224,6 +224,7 @@ type PositionMetrics = {
   label: string;
   long: boolean;
   mark: number | null;
+  change24hPct: number | null;
   avg: number | null;
   contractSize: number | null;
   unrealized: number | null;
@@ -301,7 +302,7 @@ async function buildPositionMetrics(
 
   const [detail, markPx, closes, hlcSar] = await Promise.all([
     fetchContractDetailPublic(symbol),
-    getContractLastPricePublic(symbol),
+    getContractTickerPublic(symbol),
     fetchPerp15mClosesForChecklist(symbol),
     fetchPerp15mHlcForSar(symbol),
   ]);
@@ -309,7 +310,9 @@ async function buildPositionMetrics(
   const cs = detail?.contractSize != null ? Number(detail.contractSize) : NaN;
   const contractSize = Number.isFinite(cs) && cs > 0 ? cs : null;
 
-  const mark = markPx != null && markPx > 0 ? markPx : null;
+  const mark = markPx?.lastPrice != null && markPx.lastPrice > 0 ? markPx.lastPrice : null;
+  const change24hPct =
+    markPx?.change24hPercent != null && Number.isFinite(markPx.change24hPercent) ? markPx.change24hPercent : null;
   const avgRaw = numFromUnknown(p.holdAvgPrice) ?? numFromUnknown(p.openAvgPrice);
   const avg = avgRaw != null && avgRaw > 0 ? avgRaw : null;
   const vol = Number(p.holdVol);
@@ -379,6 +382,7 @@ async function buildPositionMetrics(
     label,
     long,
     mark,
+    change24hPct,
     avg,
     contractSize,
     unrealized,
@@ -407,6 +411,7 @@ function formatPositionBlock(m: PositionMetrics): string {
 
   const pricePart =
     m.mark != null ? `${formatPriceCompact(m.mark)}` : "—";
+  const chgPart = m.change24hPct != null ? ` (${formatPctSigned(m.change24hPct)}/24h)` : "";
   const entryPart = m.avg != null ? ` (Entry: ${formatPriceCompact(m.avg)})` : "";
   const marginPart =
     m.marginUsdt != null
@@ -418,6 +423,14 @@ function formatPositionBlock(m: PositionMetrics): string {
     emaCompact.status === "—"
       ? "EMA12: —"
       : `EMA12: ${emaCompact.status === "Below" ? "✅ Below" : "✅ Above"} (Dist: +${(emaCompact.distPct ?? 0).toFixed(2)}%)`;
+
+  const psarLine = (() => {
+    if (m.psar == null) return "PSAR(15m): —";
+    const bias = m.mark != null && m.mark > m.psar ? "bull" : m.mark != null && m.mark < m.psar ? "bear" : "flat";
+    const dist = m.psarDistPct != null ? ` · Dist: +${m.psarDistPct.toFixed(2)}%` : "";
+    const flip = m.psarFlipped ? " · flip" : "";
+    return `PSAR(15m): ${bias}${dist}${flip}`;
+  })();
 
   const struct = m.structureLine.replace(" (heuristic)", "");
   const isBear = struct.includes("Lower high") || struct.includes("Lower low");
@@ -439,15 +452,25 @@ function formatPositionBlock(m: PositionMetrics): string {
 
   const lines: string[] = [
     head,
-    `Price: ${pricePart}${entryPart} · ${marginPart}${m.row.leverage != null ? ` · Lev: ${m.row.leverage}x` : ""}`,
+    `Price: ${pricePart}${chgPart}${entryPart} · ${marginPart}${m.row.leverage != null ? ` · Lev: ${m.row.leverage}x` : ""}`,
     `${emaLine}`,
+    `${psarLine}`,
     `Structure: ${structShort}`,
     `Risk: Liq: ${liq} | MarginRatio: ${mr}`,
   ];
 
   const structureAdverse = (m.long && isBear) || (!m.long && isBull);
-  const concern = structureAdverse ? "โครงสร้างสวนทางกับ position (structure adverse)" : m.concerns[0];
-  if (concern) lines.push(`⚠️ Concern: ${concern.slice(0, 220)}`);
+  const topConcerns: string[] = [];
+  if (structureAdverse) topConcerns.push("โครงสร้างสวนทางกับ position (structure adverse)");
+  // Prefer EMA adverse next if present
+  const emaAdverse = m.concerns.find((c) => c.includes("EMA12"));
+  if (emaAdverse) topConcerns.push(emaAdverse);
+  for (const c of m.concerns) {
+    if (topConcerns.length >= 2) break;
+    if (c === emaAdverse) continue;
+    topConcerns.push(c);
+  }
+  if (topConcerns.length > 0) lines.push(`⚠️ Concern: ${topConcerns.join(" · ").slice(0, 220)}`);
 
   return lines.join("\n");
 }

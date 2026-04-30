@@ -315,7 +315,9 @@ export async function getContractLastPricePublic(symbol: string): Promise<number
   try {
     const { data } = await axios.get<{
       success: boolean;
-      data?: { symbol?: string; lastPrice?: number; fairPrice?: number } | { symbol?: string; lastPrice?: number; fairPrice?: number }[];
+      data?:
+        | { symbol?: string; lastPrice?: number; fairPrice?: number; riseFallRate?: number; change24hPercent?: number }
+        | { symbol?: string; lastPrice?: number; fairPrice?: number; riseFallRate?: number; change24hPercent?: number }[];
     }>(url, { params: { symbol }, timeout: 15_000, validateStatus: () => true });
     if (!data?.success) return null;
     const row = data.data;
@@ -333,6 +335,34 @@ export async function getContractLastPricePublic(symbol: string): Promise<number
     return null;
   }
   return null;
+}
+
+export async function getContractTickerPublic(symbol: string): Promise<{ lastPrice: number; change24hPercent: number | null } | null> {
+  const url = `${mexcFuturesBaseUrl()}/api/v1/contract/ticker`;
+  try {
+    const { data } = await axios.get<{
+      success: boolean;
+      data?:
+        | { symbol?: string; lastPrice?: number; fairPrice?: number; riseFallRate?: number; change24hPercent?: number }
+        | { symbol?: string; lastPrice?: number; fairPrice?: number; riseFallRate?: number; change24hPercent?: number }[];
+    }>(url, { params: { symbol }, timeout: 15_000, validateStatus: () => true });
+    if (!data?.success) return null;
+    const row = data.data;
+    const one = Array.isArray(row) ? (row.find((r) => r.symbol === symbol) ?? row[0]) : row;
+    if (!one || typeof one !== "object") return null;
+    const lp = (one as { lastPrice?: number; fairPrice?: number }).lastPrice ?? (one as { fairPrice?: number }).fairPrice;
+    const lastPrice = typeof lp === "number" && Number.isFinite(lp) && lp > 0 ? lp : null;
+    if (lastPrice == null) return null;
+    const rf = (one as { riseFallRate?: number }).riseFallRate;
+    const ch = (one as { change24hPercent?: number }).change24hPercent;
+    const pct =
+      typeof rf === "number" && Number.isFinite(rf) ? rf * 100 :
+      typeof ch === "number" && Number.isFinite(ch) ? ch :
+      null;
+    return { lastPrice, change24hPercent: pct };
+  } catch {
+    return null;
+  }
 }
 
 export type OrderCreateData = { orderId?: string; ts?: number };

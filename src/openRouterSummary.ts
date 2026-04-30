@@ -34,6 +34,10 @@ function looksTruncatedSummary(s: string): boolean {
   if (t.length < 40) return true;
   // common truncation patterns: ends with dangling comma/currency
   if (/[,$]\s*$/.test(t)) return true;
+  // ends mid-word / mid-token often indicates cutoff
+  if (/[A-Za-z]\s*$/.test(t) && !/[.!?)]\s*$/.test(t)) return true;
+  const bulletCount = (t.match(/^\s*-\s+/gm) ?? []).length;
+  if (bulletCount > 0 && bulletCount < 4) return true;
   // if it looks like it started a bullet but got cut mid-line
   if (/^\s*-\s+.*\s*$/.test(t) && t.includes("Equity") && /[$,]\s*$/.test(t)) return true;
   return false;
@@ -130,10 +134,11 @@ export async function openRouterSummarizePortfolioFromTextResult(input: {
       }
     };
 
-    const first = await callOnce(prompt, 300);
+    // Prefer strict format to make parsing predictable
+    const first = await callOnce(strictPrompt, 650);
     if (first.ok) return first;
     if (typeof first.error === "string" && first.error.includes("truncated")) {
-      const second = await callOnce(strictPrompt, 500);
+      const second = await callOnce(strictPrompt, 1100);
       if (second.ok) return second;
       return second;
     }
