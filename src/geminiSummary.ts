@@ -2,6 +2,10 @@ type GeminiGenerateResponse = {
   candidates?: { content?: { parts?: { text?: string }[] } }[];
 };
 
+export type GeminiSummaryResult =
+  | { ok: true; text: string }
+  | { ok: false; error: string; status?: number };
+
 function geminiApiKey(): string {
   return process.env.GEMINI_API_KEY?.trim() ?? "";
 }
@@ -28,10 +32,19 @@ export async function geminiSummarizePortfolioFromText(input: {
   text: string;
   maxLines?: number;
 }): Promise<string | null> {
-  const key = geminiApiKey();
-  if (!key) return null;
+  const r = await geminiSummarizePortfolioFromTextResult(input);
+  return r.ok ? r.text : null;
+}
 
-  const maxLines = Number.isFinite(input.maxLines) && (input.maxLines as number) >= 2 ? (input.maxLines as number) : 6;
+export async function geminiSummarizePortfolioFromTextResult(input: {
+  text: string;
+  maxLines?: number;
+}): Promise<GeminiSummaryResult> {
+  const key = geminiApiKey();
+  if (!key) return { ok: false, error: "missing GEMINI_API_KEY" };
+
+  const maxLines =
+    Number.isFinite(input.maxLines) && (input.maxLines as number) >= 2 ? (input.maxLines as number) : 6;
 
   const prompt = [
     "You are Koji, a crypto futures portfolio assistant.",
@@ -66,15 +79,20 @@ export async function geminiSummarizePortfolioFromText(input: {
       }),
       signal: controller.signal,
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      return { ok: false, status: res.status, error: `gemini HTTP ${res.status}` };
+    }
     const data = (await res.json()) as GeminiGenerateResponse;
     const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
     const cleaned = cleanGeminiText(text);
-    if (!cleaned) return null;
+    if (!cleaned) return { ok: false, error: "empty gemini response" };
     const lines = cleaned.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, maxLines);
-    return lines.join("\n");
-  } catch {
-    return null;
+    const joined = lines.join("\n").trim();
+    if (!joined) return { ok: false, error: "empty gemini response" };
+    return { ok: true, text: joined };
+  } catch (e) {
+    const msg = e instanceof Error ? e.name === "AbortError" ? "timeout" : e.message : String(e);
+    return { ok: false, error: `gemini request failed: ${msg}` };
   } finally {
     clearTimeout(t);
   }
