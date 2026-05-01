@@ -529,7 +529,7 @@ function formatPriceCompact(p: number): string {
 }
 
 /**
- * สรุปพอร์ตฟิวเจอร์ MEXC + context EMA15m (proxy) ต่อ position
+ * สรุปพอร์ตฟิวเจอร์ MEXC + context EMA/PSAR บน 1h (proxy) ต่อ position
  * คืนหลายข้อความถ้ายาวเกิน Telegram 4096
  */
 export async function buildTelegramPortfolioStatusMessages(creds: MexcCredentials): Promise<string[]> {
@@ -597,7 +597,7 @@ export async function buildTelegramPortfolioStatusMessages(creds: MexcCredential
   const headerLines = [
     "🛡️ PORTFOLIO HEALTH",
     `⏱ ${formatBkkNow()}`,
-    "(i) EMA / structure = proxy จากแท่ง 15m — ไม่ใช่เส้น Trendline ใน TradingView",
+    "(i) EMA / PSAR / structure = proxy จากแท่ง 1h — ไม่ใช่เส้น Trendline ใน TradingView",
     "",
     `💰 Balance (equity): ${formatUsd(equity)}`,
     `💵 Available: ${formatUsd(available)}`,
