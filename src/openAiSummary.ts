@@ -45,12 +45,25 @@ function extractDailyBrief(s: string): string | null {
     return block.length ? block : null;
   };
 
-  const head = raw.split("\n").map((x) => x.trim()).find((ln) => /koji\s+daily\s+brief/i.test(ln));
+  // รองรับทั้ง "KOJI Daily Brief" และ "KOJI AI Daily Brief" (ตาม prompt)
+  const head = raw
+    .split("\n")
+    .map((x) => x.trim())
+    .find((ln) => /koji\s+(?:ai\s+)?daily\s+brief/i.test(ln));
   if (!head) return null;
 
+  const q = '["\u201c]'; // straight or curly double quote
+  const qe = '["\u201d]';
+
   const overview = takeBetween(/📊\s*ภาพรวมวันนี้\s*:/i, /⚠️\s*จุดที่ต้อง/i);
-  const risk = takeBetween(/⚠️\s*จุดที่ต้อง\s*"ทำใจนิ่งๆ"\s*\(High Risk\)\s*:/i, /🚨\s*จุด\s*"ไฟไหม้"/i);
-  const critical = takeBetween(/🚨\s*จุด\s*"ไฟไหม้"\s*ต้องรีบตัดสินใจ\s*\(Critical\)\s*:/i, /👀\s*มุมมองเชิงเทคนิค\s*:/i);
+  const risk = takeBetween(
+    new RegExp(`⚠️\\s*จุดที่ต้อง\\s*${q}ทำใจนิ่งๆ${qe}\\s*\\(High Risk\\)\\s*:`, "i"),
+    new RegExp(`🚨\\s*จุด\\s*${q}ไฟไหม้`, "i"),
+  );
+  const critical = takeBetween(
+    new RegExp(`🚨\\s*จุด\\s*${q}ไฟไหม้${qe}\\s*ต้องรีบตัดสินใจ\\s*\\(Critical\\)\\s*:`, "i"),
+    /👀\s*มุมมองเชิงเทคนิค\s*:/i,
+  );
   const mmHeader = /📐\s*วินัย\s*MM\s*\((?:เช็ก|เช็ค)ลิสต์\)\s*:/i;
   const focus = takeBetween(/👀\s*มุมมองเชิงเทคนิค\s*:/i, mmHeader);
   const mm = takeBetween(mmHeader, /\Z/);
