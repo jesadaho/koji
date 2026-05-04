@@ -25,7 +25,7 @@ async function ensureJsonFile(): Promise<void> {
     await writeFile(
       filePath,
       JSON.stringify(
-        { lastProcessedSessionId: null, symbolSnapshot: [] } satisfies ThreeGreenDailyAlertState,
+        { lastProcessedSessionId: null, symbolSnapshot: [], streakDays: 3 } satisfies ThreeGreenDailyAlertState,
         null,
         2
       ),
@@ -35,10 +35,12 @@ async function ensureJsonFile(): Promise<void> {
 }
 
 export type ThreeGreenDailyAlertState = {
-  /** bkkTradingSessionId ล่าสุดที่รับรอบ 3 เขียว + อัปเดต snapshot แล้ว */
+  /** bkkTradingSessionId ล่าสุดที่รับรอบเขียว Day1 + อัปเดต snapshot แล้ว */
   lastProcessedSessionId: string | null;
   /** รายชื่อ symbol ครั้งรันสุดท้าย (สำหรับ diff วันถัดไป) */
   symbolSnapshot: string[];
+  /** เกณฑ์ minDays (2–5) ที่ใช้สร้าง snapshot — ถ้าไม่ตรง env จะ reset baseline */
+  streakDays?: number;
 };
 
 function normalizeState(raw: unknown): ThreeGreenDailyAlertState {
@@ -57,7 +59,13 @@ function normalizeState(raw: unknown): ThreeGreenDailyAlertState {
     }
   }
   symbolSnapshot.sort();
-  return { lastProcessedSessionId, symbolSnapshot };
+  let streakDays: number | undefined;
+  const sd = o.streakDays;
+  if (typeof sd === "number" && Number.isFinite(sd)) {
+    const f = Math.floor(sd);
+    if (f >= 2 && f <= 5) streakDays = f;
+  }
+  return { lastProcessedSessionId, symbolSnapshot, streakDays };
 }
 
 export async function loadThreeGreenDailyAlertState(): Promise<ThreeGreenDailyAlertState> {

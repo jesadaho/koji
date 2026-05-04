@@ -69,7 +69,7 @@ export default async function MarketsLosersPage({
         <Link href={showDebugColumns ? "/markets/losers?debug=1" : "/markets/losers"} aria-current="page">
           Top loser (24h) by vol
         </Link>
-        <Link href={marketsWinnersHref(showDebugColumns)}>3 วันเขียวติด (Day1)</Link>
+        <Link href={marketsWinnersHref(showDebugColumns)}>Day1 เขียวติด</Link>
       </nav>
       <p className="sub">
         สัญญาที่ราคา 24h <strong>ติดลบ {PCT_RANGE_HUMAN}</strong> เรียงตาม <strong>Vol 24h (amount24)</strong> มากสุดก่อน

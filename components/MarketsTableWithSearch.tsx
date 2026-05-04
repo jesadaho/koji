@@ -17,6 +17,8 @@ type Props = {
   rows: TopMarketRow[];
   showDebugColumns: boolean;
   marketsSort: MarketsSortMode;
+  /** หน้า winners — แสดงจำนวนวันเขียวติด (Day1) */
+  showGreenStreakColumn?: boolean;
 };
 
 function symbolMatches(symbol: string, q: string): boolean {
@@ -25,7 +27,12 @@ function symbolMatches(symbol: string, q: string): boolean {
   return symbol.toLowerCase().includes(t);
 }
 
-export default function MarketsTableWithSearch({ rows, showDebugColumns, marketsSort }: Props) {
+export default function MarketsTableWithSearch({
+  rows,
+  showDebugColumns,
+  marketsSort,
+  showGreenStreakColumn = false,
+}: Props) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(
     () => rows.filter((r) => symbolMatches(r.symbol, query)),
@@ -71,6 +78,11 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns, markets
             <thead>
               <tr>
                 <th>สัญญา</th>
+                {showGreenStreakColumn ? (
+                  <th className="num" title="แท่ง Day1 ที่ปิดแล้ว เขียวติดกันกี่วัน (ย้อนจากล่าสุด)">
+                    เขียวติด
+                  </th>
+                ) : null}
                 {showDebugColumns ? (
                   <>
                     <th className="num" title="(V_recent/V_avg)×(ΔP/P)">
@@ -122,6 +134,15 @@ export default function MarketsTableWithSearch({ rows, showDebugColumns, markets
                     <td data-label="สัญญา" className="marketsCellSymbol">
                       <code>{r.symbol}</code>
                     </td>
+                    {showGreenStreakColumn ? (
+                      <td className="num" data-label="เขียวติด">
+                        {typeof r.greenDayStreak === "number" && r.greenDayStreak > 0 ? (
+                          <>{r.greenDayStreak} วัน</>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    ) : null}
                     {showDebugColumns ? (
                       <>
                         <td className="num" data-label="Score">

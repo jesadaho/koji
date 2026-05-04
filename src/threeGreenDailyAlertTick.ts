@@ -1,5 +1,5 @@
 import { bkkTradingSessionId, bkkYmdh } from "./bkkSession";
-import { getUsdtPerpsThreeGreenDailyCloses, type TopMarketRow } from "./mexcMarkets";
+import { getUsdtPerpsGreenDailyCloses, parseThreeGreenDailyStreakDaysFromEnv, type TopMarketRow } from "./mexcMarkets";
 import {
   loadThreeGreenDailyAlertState,
   saveThreeGreenDailyAlertState,
@@ -22,9 +22,14 @@ function shortSymbol(contractSymbol: string): string {
   return s.replace(/_/g, "") || contractSymbol;
 }
 
-function buildMessage(sessionId: string, rows: TopMarketRow[], newSyms: string[]): string {
+function buildMessage(
+  sessionId: string,
+  rows: TopMarketRow[],
+  newSyms: string[],
+  minDays: number
+): string {
   const lines: string[] = [
-    "📊 Koji — 3 เขียว Day1 ติดกัน (MEXC USDT-M)",
+    `📊 Koji — อย่างน้อย ${minDays} เขียว Day1 ติดกัน (MEXC USDT-M)`,
     `เซสชัน BKK: ${sessionId}`,
     "",
     `คู่ที่เพิ่งเข้า list (${newSyms.length}):`,
@@ -38,14 +43,18 @@ function buildMessage(sessionId: string, rows: TopMarketRow[], newSyms: string[]
       row && Number.isFinite(row.change24hPercent)
         ? ` (${row.change24hPercent >= 0 ? "+" : ""}${row.change24hPercent.toFixed(2)}% 24h)`
         : "";
-    lines.push(`• ${label}/USDT${ch}`);
+    const streak =
+      row && typeof row.greenDayStreak === "number" && row.greenDayStreak > 0
+        ? ` · เขียวติด ${row.greenDayStreak} วัน`
+        : "";
+    lines.push(`• ${label}/USDT${ch}${streak}`);
   }
   if (newSyms.length > max) {
     lines.push(`… และอีก ${newSyms.length - max} คู่`);
   }
   lines.push(
     "",
-    "เงื่อนไข: แท่ง Day1 ปิดแล้ว 3 วันล่าสุดเขียวทุกแท่ง (close > open) · ข้อมูลอ้างอิง"
+    `เงื่อนไข: แท่ง Day1 ปิดแล้วอย่างน้อย ${minDays} วันล่าสุดเขียวทุกแท่ง (close > open) · แต่ละคู่แสดงเขียวติดจริงย้อนหลัง · ข้อมูลอ้างอิง`
   );
   return lines.join("\n");
 }
@@ -60,7 +69,7 @@ export type ThreeGreenDailyAlertTickResult = {
 };
 
 /**
- * ครั้งเดียวต่อเซสชัน BKK (หลัง 07:00): แจ้งเฉพาะคู่ที่เพิ่งเข้า list 3 เขียว — Telegram technical เท่านั้น
+ * ครั้งเดียวต่อเซสชัน BKK (หลัง 07:00): แจ้งเฉพาะคู่ที่เพิ่งเข้า list ตามเกณฑ์ minDays (env) — Telegram technical เท่านั้น
  */
 export async function runThreeGreenDailyTechnicalAlertTick(): Promise<ThreeGreenDailyAlertTickResult> {
   if (!isThreeGreenDailyTechnicalEnabled()) {
@@ -98,8 +107,17 @@ export async function runThreeGreenDailyTechnicalAlertTick(): Promise<ThreeGreen
     };
   }
 
+  const configuredN = parseThreeGreenDailyStreakDaysFromEnv();
   const sessionId = bkkTradingSessionId(now);
   let state = await loadThreeGreenDailyAlertState();
+
+  if (state.streakDays !== configuredN) {
+    state = {
+      lastProcessedSessionId: null,
+      symbolSnapshot: [],
+      streakDays: configuredN,
+    };
+  }
 
   if (state.lastProcessedSessionId === sessionId) {
     return {
@@ -112,7 +130,7 @@ export async function runThreeGreenDailyTechnicalAlertTick(): Promise<ThreeGreen
     };
   }
 
-  const rows = await getUsdtPerpsThreeGreenDailyCloses();
+  const rows = await getUsdtPerpsGreenDailyCloses({ minDays: configuredN });
   const currentSet = new Set(rows.map((r) => r.symbol.trim()).filter(Boolean));
   const currentSorted = Array.from(currentSet).sort();
 
@@ -126,6 +144,7 @@ export async function runThreeGreenDailyTechnicalAlertTick(): Promise<ThreeGreen
     state = {
       lastProcessedSessionId: sessionId,
       symbolSnapshot: currentSorted,
+      streakDays: configuredN,
     };
     await saveThreeGreenDailyAlertState(state);
     return {
@@ -139,13 +158,14 @@ export async function runThreeGreenDailyTechnicalAlertTick(): Promise<ThreeGreen
   }
 
   if (newSyms.length > 0) {
-    const msg = buildMessage(sessionId, rows, newSyms);
+    const msg = buildMessage(sessionId, rows, newSyms, configuredN);
     await sendTelegramPublicBroadcastMessage(msg, "technical");
   }
 
   state = {
     lastProcessedSessionId: sessionId,
     symbolSnapshot: currentSorted,
+    streakDays: configuredN,
   };
   await saveThreeGreenDailyAlertState(state);
 

@@ -159,6 +159,8 @@ export type TopMarketRow = {
   fundingCycleHours: number | null;
   /** ms epoch เวลาตัด funding ถัดไป */
   nextFundingSettleMs: number | null;
+  /** แท่ง Day1 ปิดแล้ว เขียวติดกันกี่วัน (ย้อนจากล่าสุด) — เติมในหน้า winners / alert เท่านั้น */
+  greenDayStreak?: number;
 };
 
 function maxFromRiskTiers(detail: MexcDetailRow): number | null {
@@ -551,10 +553,10 @@ export async function fetchPerp1dClosesForChecklist(contractSymbol: string): Pro
   return fetchContractKlineClosesForEmaChecklist(contractSymbol, "Day1");
 }
 
-/** Day1 ดิบ — ให้ได้อย่างน้อย 3 แท่งปิด + แท่งท้ายที่อาจยังไม่ปิด */
-const THREE_GREEN_DAY1_KLINE_LIMIT = 10;
+/** Day1 ดิบ — แท่งปิดพอนับสตรีคยาว + แท่งท้ายที่อาจยังไม่ปิด */
+const THREE_GREEN_DAY1_KLINE_LIMIT = 18;
 
-/** สแกน 3 เขียว: ยิง kline พร้อมกันน้อยลง + retry 510 — ลดโอกาส MEXC "too frequent" ทำให้เหรียญหลุดลิสต์ */
+/** สแกน Day1 เขียวติด: ยิง kline พร้อมกันน้อยลง + retry 510 — ลดโอกาส MEXC "too frequent" ทำให้เหรียญหลุดลิสต์ */
 const THREE_GREEN_KLINE_CONCURRENCY = 4;
 
 function sleepMs(ms: number): Promise<void> {
@@ -598,17 +600,17 @@ async function fetchContractKlineDay1OpenClose(symbol: string): Promise<KlineArr
   return null;
 }
 
-/** แท่งรายวันที่ปิดแล้ว 3 แท่งล่าสุดเขียวครบ (close > open) — ข้อมูลเก่า→ใหม่; ตัดแท่งสุดท้ายที่อาจยังไม่ปิด */
-function lastThreeClosedDailyBarsAllGreen(k: KlineArrays): boolean {
+/** แท่งรายวันที่ปิดแล้ว n แท่งล่าสุดเขียวครบ (close > open) — ข้อมูลเก่า→ใหม่; ตัดแท่งสุดท้ายที่อาจยังไม่ปิด */
+function lastNClosedDailyBarsAllGreen(k: KlineArrays, n: number): boolean {
   const { open, close } = k;
-  const n = open.length;
-  if (n < 4 || close.length !== n) return false;
-  const closedEnd = n - 1;
+  const len = open.length;
+  if (n < 2 || len < 4 || close.length !== len) return false;
+  const closedEnd = len - 1;
   const o = open.slice(0, closedEnd);
   const c = close.slice(0, closedEnd);
   const m = o.length;
-  if (m < 3) return false;
-  for (let i = m - 3; i < m; i++) {
+  if (m < n) return false;
+  for (let i = m - n; i < m; i++) {
     const oi = o[i];
     const ci = c[i];
     if (typeof oi !== "number" || typeof ci !== "number" || Number.isNaN(oi) || Number.isNaN(ci)) return false;
@@ -616,6 +618,43 @@ function lastThreeClosedDailyBarsAllGreen(k: KlineArrays): boolean {
     if (ci <= oi) return false;
   }
   return true;
+}
+
+/** นับแท่ง Day1 ที่ปิดแล้ว เขียวติดกันย้อนจากล่าสุด */
+function countTrailingGreenClosedBars(k: KlineArrays): number {
+  const { open, close } = k;
+  const n = open.length;
+  if (n < 4 || close.length !== n) return 0;
+  const closedEnd = n - 1;
+  const o = open.slice(0, closedEnd);
+  const c = close.slice(0, closedEnd);
+  const m = o.length;
+  let streak = 0;
+  for (let i = m - 1; i >= 0; i--) {
+    const oi = o[i];
+    const ci = c[i];
+    if (typeof oi !== "number" || typeof ci !== "number" || Number.isNaN(oi) || Number.isNaN(ci)) break;
+    if (oi <= 0 || ci <= 0) break;
+    if (ci <= oi) break;
+    streak++;
+  }
+  return streak;
+}
+
+export const GREEN_DAILY_STREAK_MIN_DAYS = 2;
+export const GREEN_DAILY_STREAK_MAX_DAYS = 5;
+
+export function clampGreenDailyMinDays(n: number): number {
+  if (!Number.isFinite(n)) return 3;
+  const f = Math.floor(n);
+  return Math.min(GREEN_DAILY_STREAK_MAX_DAYS, Math.max(GREEN_DAILY_STREAK_MIN_DAYS, f));
+}
+
+/** เกณฑ์สำหรับ Telegram cron — default 3, clamp 2–5 */
+export function parseThreeGreenDailyStreakDaysFromEnv(): number {
+  const raw = process.env.THREE_GREEN_DAILY_STREAK_DAYS?.trim();
+  if (!raw) return 3;
+  return clampGreenDailyMinDays(Number(raw));
 }
 
 /** แท่ง index n-2 = แท่ง 15 นาทีที่ปิดล่าสุด — return เป็น % จาก open→close */
@@ -1052,9 +1091,10 @@ export async function getTopUsdtMarketsLoserByVolume(options?: { limit?: number 
 
 /**
  * USDT perpetual ที่ผ่าน Vol หลัก (MIN_AMOUNT24_USDT) — สแกนเฉพาะอันดับต้น ๆ ตาม amount24 จำนวน KLINE_CANDIDATE_CAP
- * แท่ง Day1 ที่ปิดแล้ว 3 วันล่าสุดเขียวทุกแท่ง (close > open)
+ * แท่ง Day1 ที่ปิดแล้วอย่างน้อย minDays วันล่าสุดเขียวทุกแท่ง (close > open) — แต่ละแถวมี greenDayStreak = เขียวติดจริง
  */
-export async function getUsdtPerpsThreeGreenDailyCloses(): Promise<TopMarketRow[]> {
+export async function getUsdtPerpsGreenDailyCloses(options: { minDays: number }): Promise<TopMarketRow[]> {
+  const minDays = clampGreenDailyMinDays(options.minDays);
   const [tickers, details] = await Promise.all([fetchContractTickers(), fetchContractDetails()]);
 
   const detailBySymbol = new Map<string, MexcDetailRow>();
@@ -1077,21 +1117,27 @@ export async function getUsdtPerpsThreeGreenDailyCloses(): Promise<TopMarketRow[
   const ranked = [...usdtPerp].sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
   const candidates = ranked.slice(0, KLINE_CANDIDATE_CAP);
 
-  const okFlags = await mapPoolConcurrent(candidates, THREE_GREEN_KLINE_CONCURRENCY, async (t) => {
+  const rowsWithMeta = await mapPoolConcurrent(candidates, THREE_GREEN_KLINE_CONCURRENCY, async (t) => {
     const sym = t.symbol!.trim();
     const k = await fetchContractKlineDay1OpenClose(sym);
-    if (!k) return false;
-    return lastThreeClosedDailyBarsAllGreen(k);
+    if (!k || !lastNClosedDailyBarsAllGreen(k, minDays)) return null;
+    const streak = countTrailingGreenClosedBars(k);
+    const base = toTopMarketRow(t, detailBySymbol, EMPTY_MOM);
+    return { ...base, greenDayStreak: streak };
   });
 
-  const matched: MexcTickerRow[] = [];
-  for (let i = 0; i < candidates.length; i++) {
-    if (okFlags[i]) matched.push(candidates[i]!);
+  const matched: TopMarketRow[] = [];
+  for (const r of rowsWithMeta) {
+    if (r) matched.push(r);
   }
-  matched.sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
+  matched.sort((a, b) => (b.amount24Usdt ?? 0) - (a.amount24Usdt ?? 0));
 
-  const built = matched.map((t) => toTopMarketRow(t, detailBySymbol, EMPTY_MOM));
-  return enrichFundingMeta(built);
+  return enrichFundingMeta(matched);
+}
+
+/** เกณฑ์ 3 วัน — alias เพื่อ call site เดิม */
+export async function getUsdtPerpsThreeGreenDailyCloses(): Promise<TopMarketRow[]> {
+  return getUsdtPerpsGreenDailyCloses({ minDays: 3 });
 }
 
 /**

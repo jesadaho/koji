@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เตือน% รายวัน (07:00 ไทย) + Volume signal + RSI 1h + spot–perp basis + 3 เขียว Day1 (คู่ใหม่ → technical)
+ * Vercel Cron ~15 นาที — แจ้งเตือนเป้าราคา + เตือน% รายวัน (07:00 ไทย) + Volume signal + RSI 1h + spot–perp basis + Day1 เขียวติด (คู่ใหม่ → technical, เกณฑ์ env THREE_GREEN_DAILY_STREAK_DAYS)
  * เตือน% trailing → /api/cron/pct-trailing ทุก ~5 นาที
  * GET + Authorization: Bearer CRON_SECRET
  */

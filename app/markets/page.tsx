@@ -141,7 +141,7 @@ export default async function MarketsPage({
           Spot–Perp basis
         </Link>
         <Link href={marketsLosersHref(showDebugColumns)}>Top loser (24h) by vol</Link>
-        <Link href={marketsWinnersHref(showDebugColumns)}>3 วันเขียวติด (Day1)</Link>
+        <Link href={marketsWinnersHref(showDebugColumns)}>Day1 เขียวติด</Link>
       </nav>
       <p className="sub">{sortIntro(sort, showDebugColumns)}</p>
       {!errorMessage && sort !== "basis" ? (
