@@ -7,7 +7,12 @@ import { buildTelegramPortfolioStatusMessages } from "@/src/portfolioStatusServi
 import { tgUserIdToStoreKey } from "@/src/telegramMiniAppAuth";
 import { parseMarketCheck, parsePositionChecklist } from "@/src/positionChecklistLineCommands";
 import { buildMarketCheckMessage, buildPositionChecklistMessage } from "@/src/positionChecklistService";
-import { isSparkStatsQuery } from "@/src/sparkFollowUpLineCommands";
+import {
+  isSparkMatrixResetCommand,
+  isSparkMatrixResetAllowed,
+  isSparkStatsQuery,
+} from "@/src/sparkFollowUpLineCommands";
+import { resetSparkFollowUpState } from "@/src/sparkFollowUpStore";
 import { formatSparkStatsMessage } from "@/src/sparkFollowUpStats";
 import { handleTvOpenWizardTelegramMessage } from "@/src/tradingViewOpenWizardTelegram";
 import { resolveContractSymbol } from "@/src/coinMap";
@@ -159,7 +164,7 @@ function parseRunCronCmd(t: string): { scope: CronRunScope; verbose: boolean } |
 
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
- * /start → ปุ่ม Mini App · /chatid → แสดง chat_id / topic (ใส่ env) · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · portfolio / portfolio status (สรุปพอร์ตฟิวเจอร์) · เช็คลิสต์ position (short/long …) · สถิติ Spark (คำสั่งเดียวกับ LINE)
+ * /start → ปุ่ม Mini App · /chatid → แสดง chat_id / topic (ใส่ env) · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · portfolio / portfolio status (สรุปพอร์ตฟิวเจอร์) · เช็คลิสต์ position (short/long …) · สถิติ Spark / ล้างสถิติ spark (admin — KOJI_ADMIN_IDS)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
@@ -545,6 +550,55 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] spark stats error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (isSparkMatrixResetCommand(text) || isSparkMatrixResetCommand(normalized)) {
+    const uidStr = fromUserId != null && fromUserId > 0 ? String(fromUserId) : "";
+    if (!uidStr || !isSparkMatrixResetAllowed(uidStr)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          [
+            "ไม่ได้รับอนุญาตให้ล้างสถิติ Spark",
+            "",
+            "ตั้งค่า env: KOJI_ADMIN_IDS=<Telegram user id ของคุณ>",
+            "(หลายคนคั่นด้วยจุลภาค) แล้ว redeploy — หรือใช้ GET /api/cron/reset-spark-state + Bearer CRON_SECRET",
+          ].join("\n"),
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] spark matrix reset deny reply", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      await resetSparkFollowUpState();
+      await sendTelegramMessageToChat(
+        String(chatId),
+        [
+          "✅ ล้างข้อมูล Spark matrix แล้ว",
+          "",
+          "ล้าง: คิว follow-up · history (win-rate) · recentSparks (fire log)",
+          "ไม่แตะ: price spike state อื่น",
+          "",
+          "เปิด LIFF «สถิติ Spark» จะเห็นข้อมูลว่างจนมี Spark ใหม่",
+        ].join("\n"),
+        threadOpts,
+      );
+    } catch (e) {
+      console.error("[telegram/webhook] spark matrix reset", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `ล้างไม่สำเร็จ — ${detail.slice(0, 300)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] spark matrix reset error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });
