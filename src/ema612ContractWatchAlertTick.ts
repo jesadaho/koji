@@ -14,6 +14,7 @@ import {
 } from "./ema612WatchCrossStateStore";
 import { emaLine } from "./indicatorMath";
 import { fetchContractKline15mIndicatorPack } from "./mexcMarkets";
+import { useCloudStorage } from "./remoteJsonStore";
 
 function featureEnabled(): boolean {
   const raw = process.env.EMA612_15M_WATCH_ALERTS_ENABLED?.trim().toLowerCase();
@@ -110,6 +111,14 @@ function validKeysFromWatches(watches: ContractWatch[]): Set<string> {
  */
 export async function runEma612ContractWatchAlertTick(client: Client): Promise<number> {
   if (!featureEnabled()) return 0;
+  // IMPORTANT: On Vercel, local FS state is not reliable; without Redis/KV the dedupe state resets
+  // and can cause repeated notifications every cron run for the same closed bar.
+  if (process.env.VERCEL === "1" && !useCloudStorage()) {
+    console.warn(
+      "[ema612ContractWatchAlertTick] skip: missing cloud storage on Vercel (set REDIS_URL or KV_REST_API_URL)"
+    );
+    return 0;
+  }
 
   const watches = await loadContractWatches();
   if (watches.length === 0) return 0;

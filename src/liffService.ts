@@ -677,13 +677,19 @@ function publicAppBaseForTvWebhook(): { origin: string; path: string } {
     process.env.TELEGRAM_MINI_APP_URL?.trim() ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
   const origin = raw.replace(/\/$/, "");
-  return { origin, path: "/api/webhooks/tv/close" };
+  // Recommended stable endpoint (supports both OPEN_POSITION and CLOSE_POSITION).
+  return { origin, path: "/api/webhooks/tv" };
 }
 
-/** URL เต็มสำหรับ TradingView Webhook (เช่น https://koji-five.vercel.app/api/webhooks/tv/close) */
+/** URL เต็มสำหรับ TradingView Webhook (เช่น https://koji-five.vercel.app/api/webhooks/tv) */
 export function getTradingViewMexcWebhookCloseUrl(): string {
   const { origin, path } = publicAppBaseForTvWebhook();
   return origin ? `${origin}${path}` : path;
+}
+
+/** Alias ที่ชื่อสื่อความหมายมากกว่า (แนะนำให้ใช้) */
+export function getTradingViewMexcWebhookUrl(): string {
+  return getTradingViewMexcWebhookCloseUrl();
 }
 
 export function tradingViewMexcExamplePayload(userId: string, token: string): Record<string, string> {
