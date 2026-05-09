@@ -6,12 +6,36 @@ import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 const KV_KEY = "koji:trading_view_mexc_settings";
 const filePath = join(process.cwd(), "data", "trading_view_mexc_settings.json");
 
+export type SparkAutoTradeVolBandKey = "high" | "mid" | "low" | "unknown";
+
+export type SparkAutoTradeVolBandPreset = {
+  /** false = ปิดเล่น tier นี้เท่านั้น — ว่าง/true = เล่น (ถ้ามีข้อมูลครบมาร์จิ้นเลเวเรจตาม resolve) */
+  enabledBand?: boolean;
+  marginUsdt?: number;
+  leverage?: number;
+  tpPct?: number;
+};
+
+export type SparkAutoTradeDirection = "both" | "long_only" | "short_only";
+
+export type SparkAutoTradeByVol = Partial<Record<SparkAutoTradeVolBandKey, SparkAutoTradeVolBandPreset>>;
+
 export type TradingViewMexcUserSettings = {
   mexcApiKey: string;
   mexcSecret: string;
   webhookToken: string;
   /** Optional label for UI */
   updatedAt: string;
+
+  sparkAutoTradeEnabled?: boolean;
+  sparkAutoTradeDirection?: SparkAutoTradeDirection;
+  /** default เมื่อ band ไม่ override */
+  sparkAutoTradeMarginUsdt?: number;
+  sparkAutoTradeLeverage?: number;
+  /** เป้ากำไร % จากราคาประมาณการเข้า — 0 หรือไม่มี = ไม่ตั้ง TP บนคำสั่ง */
+  sparkAutoTradeTpPct?: number;
+
+  sparkAutoTradeByVol?: SparkAutoTradeByVol;
 };
 
 type SettingsMap = Record<string, TradingViewMexcUserSettings>;
@@ -111,6 +135,17 @@ export type SaveTradingViewMexcInput = {
   clearMexcCreds?: boolean;
   /** true = สร้าง webhook token ใหม่ */
   rotateWebhookToken?: boolean;
+
+  /** ไม่กระทบฟิลด์ spark auto-trade (บันทึก MEXC/webhook เท่านั้น) */
+  preserveSparkAutoTrade?: boolean;
+
+  sparkAutoTradeEnabled?: boolean;
+  sparkAutoTradeDirection?: SparkAutoTradeDirection;
+  /** null = ล้างค่า default margin */
+  sparkAutoTradeMarginUsdt?: number | null;
+  sparkAutoTradeLeverage?: number | null;
+  sparkAutoTradeTpPct?: number | null;
+  sparkAutoTradeByVol?: SparkAutoTradeByVol | null;
 };
 
 /**
@@ -137,15 +172,80 @@ export async function saveTradingViewMexcSettings(
     if (s) mexcSecret = s;
   }
 
+  const touchedSparkPatch =
+    input.sparkAutoTradeEnabled !== undefined ||
+    input.sparkAutoTradeDirection !== undefined ||
+    input.sparkAutoTradeMarginUsdt !== undefined ||
+    input.sparkAutoTradeLeverage !== undefined ||
+    input.sparkAutoTradeTpPct !== undefined ||
+    input.sparkAutoTradeByVol !== undefined;
+  const preserveSpark = Boolean(input.preserveSparkAutoTrade) && !touchedSparkPatch;
+
+  const mergedSparkDirection = preserveSpark
+    ? prev?.sparkAutoTradeDirection ?? "both"
+    : input.sparkAutoTradeDirection !== undefined
+      ? input.sparkAutoTradeDirection
+      : prev?.sparkAutoTradeDirection ?? "both";
+
+  let mergedVol: SparkAutoTradeByVol | undefined;
+  if (preserveSpark) mergedVol = prev?.sparkAutoTradeByVol;
+  else if (input.sparkAutoTradeByVol !== undefined) {
+    mergedVol = input.sparkAutoTradeByVol === null ? undefined : input.sparkAutoTradeByVol;
+  } else {
+    mergedVol = prev?.sparkAutoTradeByVol;
+  }
+
   const row: TradingViewMexcUserSettings = {
     mexcApiKey,
     mexcSecret,
     webhookToken: token,
     updatedAt: new Date().toISOString(),
+
+    sparkAutoTradeEnabled: preserveSpark
+      ? prev?.sparkAutoTradeEnabled ?? false
+      : input.sparkAutoTradeEnabled !== undefined
+        ? input.sparkAutoTradeEnabled
+        : prev?.sparkAutoTradeEnabled ?? false,
+
+    sparkAutoTradeDirection: mergedSparkDirection,
+
+    sparkAutoTradeMarginUsdt: preserveSpark
+      ? prev?.sparkAutoTradeMarginUsdt
+      : input.sparkAutoTradeMarginUsdt === null
+        ? undefined
+        : input.sparkAutoTradeMarginUsdt !== undefined
+          ? input.sparkAutoTradeMarginUsdt
+          : prev?.sparkAutoTradeMarginUsdt,
+
+    sparkAutoTradeLeverage: preserveSpark
+      ? prev?.sparkAutoTradeLeverage
+      : input.sparkAutoTradeLeverage === null
+        ? undefined
+        : input.sparkAutoTradeLeverage !== undefined
+          ? input.sparkAutoTradeLeverage
+          : prev?.sparkAutoTradeLeverage,
+
+    sparkAutoTradeTpPct: preserveSpark
+      ? prev?.sparkAutoTradeTpPct
+      : input.sparkAutoTradeTpPct === null
+        ? undefined
+        : input.sparkAutoTradeTpPct !== undefined
+          ? input.sparkAutoTradeTpPct
+          : prev?.sparkAutoTradeTpPct,
+
+    sparkAutoTradeByVol: mergedVol,
   };
   m[userId] = row;
   await saveMap(m);
   return row;
+}
+
+/** เฉพาะ server-side cron — map ครบมี secret */
+export async function loadTradingViewMexcSettingsFullMap(): Promise<
+  Record<string, TradingViewMexcUserSettings>
+> {
+  const m = await loadMap();
+  return { ...m };
 }
 
 /**

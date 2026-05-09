@@ -4,6 +4,7 @@ import { formatPrice } from "./marketsFormat";
 import { sendAlertNotification } from "./alertNotify";
 import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
+import { acquireSpotFutBasisAlertsLock, releaseSpotFutBasisAlertsLock } from "./remoteJsonStore";
 import {
   loadSpotFutBasisAlertState,
   saveSpotFutBasisAlertState,
@@ -104,6 +105,13 @@ function removeSymbol(state: SpotFutBasisAlertState, sym: string): SpotFutBasisA
 export async function runSpotFutBasisAlertTick(
   client: Client,
 ): Promise<{ notifiedPushes: number; symbolsAlerted: number }> {
+  const lockOk = await acquireSpotFutBasisAlertsLock();
+  if (!lockOk) {
+    // Cron overlap — skip this tick to avoid double-send / state race
+    return { notifiedPushes: 0, symbolsAlerted: 0 };
+  }
+
+  try {
   const subscribers = await loadSystemChangeSubscribers();
   if (subscribers.length === 0 && !telegramSparkSystemGroupConfigured()) {
     return { notifiedPushes: 0, symbolsAlerted: 0 };
@@ -188,4 +196,7 @@ export async function runSpotFutBasisAlertTick(
 
   await saveSpotFutBasisAlertState(state);
   return { notifiedPushes, symbolsAlerted };
+  } finally {
+    await releaseSpotFutBasisAlertsLock();
+  }
 }

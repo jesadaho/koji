@@ -3,7 +3,7 @@ import Link from "next/link";
 import MarketsTableWithSearch from "@/components/MarketsTableWithSearch";
 import {
   clampGreenDailyMinDays,
-  getUsdtPerpsGreenDailyCloses,
+  getUsdtPerpsRedDailyCloses,
   KLINE_CANDIDATE_CAP,
   MIN_AMOUNT24_USDT,
 } from "@/src/mexcMarkets";
@@ -25,7 +25,7 @@ function parseMarketsDebugFlag(sp: { debug?: string } | undefined): boolean {
   return env === "1" || env === "true";
 }
 
-function parseWinnersMinDays(sp: { days?: string } | undefined): number {
+function parseMinDays(sp: { days?: string } | undefined): number {
   const raw = sp?.days?.trim();
   if (!raw) return 3;
   return clampGreenDailyMinDays(Number(raw));
@@ -44,17 +44,17 @@ function marketsLosersHref(debug: boolean): string {
   return debug ? "/markets/losers?debug=1" : "/markets/losers";
 }
 
-function marketsRedHref(debug: boolean): string {
-  return debug ? "/markets/red?debug=1" : "/markets/red";
+function marketsWinnersHref(debug: boolean): string {
+  return debug ? "/markets/winners?debug=1" : "/markets/winners";
 }
 
-function marketsWinnersHref(debug: boolean, minDays: number, exact: boolean): string {
+function marketsRedHref(debug: boolean, minDays: number, exact: boolean): string {
   const p = new URLSearchParams();
   if (debug) p.set("debug", "1");
   if (minDays !== 3) p.set("days", String(minDays));
   if (exact) p.set("exact", "1");
   const q = p.toString();
-  return q ? `/markets/winners?${q}` : "/markets/winners";
+  return q ? `/markets/red?${q}` : "/markets/red";
 }
 
 export async function generateMetadata({
@@ -62,29 +62,29 @@ export async function generateMetadata({
 }: {
   searchParams: { debug?: string; days?: string; exact?: string };
 }): Promise<Metadata> {
-  const minDays = parseWinnersMinDays(searchParams);
+  const minDays = parseMinDays(searchParams);
   const exact = parseWinnersExactFlag(searchParams);
   return {
-    title: `Markets — Day1 เขียวติด${exact ? "เท่ากับ" : "อย่างน้อย"} ${minDays} วัน`,
-    description: `USDT perpetual บน MEXC — แท่งรายวันปิดแล้ว${exact ? "เท่ากับ" : "อย่างน้อย"} ${minDays} วันล่าสุดเขียวทุกแท่ง (close > open) — แสดงสตรีคเขียวติดจริง — ${VOL_FILTER_LABEL} — ${SCAN_CAP_LABEL}`,
+    title: `Markets — Day1 แดงติด${exact ? "เท่ากับ" : "อย่างน้อย"} ${minDays} วัน`,
+    description: `USDT perpetual บน MEXC — แท่งรายวันปิดแล้ว${exact ? "เท่ากับ" : "อย่างน้อย"} ${minDays} วันล่าสุดแดงทุกแท่ง (close < open) — แสดงสตรีคแดงติดจริง — ${VOL_FILTER_LABEL} — ${SCAN_CAP_LABEL}`,
   };
 }
 
-export default async function MarketsWinnersPage({
+export default async function MarketsRedPage({
   searchParams,
 }: {
   searchParams: { debug?: string; days?: string; exact?: string };
 }) {
   const showDebugColumns = parseMarketsDebugFlag(searchParams);
-  const minDays = parseWinnersMinDays(searchParams);
+  const minDays = parseMinDays(searchParams);
   const exact = parseWinnersExactFlag(searchParams);
-  let rows: Awaited<ReturnType<typeof getUsdtPerpsGreenDailyCloses>> = [];
+  let rows: Awaited<ReturnType<typeof getUsdtPerpsRedDailyCloses>> = [];
   let errorMessage: string | null = null;
 
   try {
-    rows = await getUsdtPerpsGreenDailyCloses({ minDays });
+    rows = await getUsdtPerpsRedDailyCloses({ minDays });
     if (exact) {
-      rows = rows.filter((r) => r.greenDayStreak === minDays);
+      rows = rows.filter((r) => r.redDayStreak === minDays);
     }
   } catch {
     errorMessage = "โหลดข้อมูลจาก MEXC ไม่ได้ ลองใหม่ภายหลัง";
@@ -94,15 +94,15 @@ export default async function MarketsWinnersPage({
 
   return (
     <main className="marketsPage">
-      <h1>Day1 เขียวติด ({exact ? "เฉพาะ" : "อย่างน้อย"} {minDays} วัน)</h1>
+      <h1>Day1 แดงติด ({exact ? "เฉพาะ" : "อย่างน้อย"} {minDays} วัน)</h1>
       <nav className="marketsSortNav" aria-label="เพจ Markets">
         <Link href={marketsMainHref("momentum", showDebugColumns)}>Momentum</Link>
         <Link href={marketsMainHref("funding", showDebugColumns)}>|Funding| สูงสุด</Link>
         <Link href={marketsMainHref("basis", showDebugColumns)}>Spot–Perp basis</Link>
         <Link href={marketsLosersHref(showDebugColumns)}>Top loser (24h) by vol</Link>
-        <Link href={marketsRedHref(showDebugColumns)}>Day1 แดงติด</Link>
-        <Link href={marketsWinnersHref(showDebugColumns, minDays, exact)} aria-current="page">
-          Day1 เขียวติด
+        <Link href={marketsWinnersHref(showDebugColumns)}>Day1 เขียวติด</Link>
+        <Link href={marketsRedHref(showDebugColumns, minDays, exact)} aria-current="page">
+          Day1 แดงติด
         </Link>
       </nav>
       <p className="sub" role="navigation" aria-label="เลือกเกณฑ์ขั้นต่ำ">
@@ -111,7 +111,7 @@ export default async function MarketsWinnersPage({
           <span key={d}>
             {i > 0 ? " · " : null}
             <Link
-              href={marketsWinnersHref(showDebugColumns, d, exact)}
+              href={marketsRedHref(showDebugColumns, d, exact)}
               aria-current={d === minDays ? "page" : undefined}
             >
               {d} วัน
@@ -121,17 +121,17 @@ export default async function MarketsWinnersPage({
       </p>
       <p className="sub" role="navigation" aria-label="ตัวกรองจำนวนวัน">
         <span className="marketsGreenDaysLabel">แสดงผล: </span>
-        <Link href={marketsWinnersHref(showDebugColumns, minDays, false)} aria-current={!exact ? "page" : undefined}>
+        <Link href={marketsRedHref(showDebugColumns, minDays, false)} aria-current={!exact ? "page" : undefined}>
           อย่างน้อย {minDays} วัน
         </Link>
         {" · "}
-        <Link href={marketsWinnersHref(showDebugColumns, minDays, true)} aria-current={exact ? "page" : undefined}>
+        <Link href={marketsRedHref(showDebugColumns, minDays, true)} aria-current={exact ? "page" : undefined}>
           เฉพาะ {minDays} วัน
         </Link>
       </p>
       <p className="sub">
-        สัญญาที่ <strong>แท่งรายวัน (Day1) ปิดแล้ว{exact ? "เท่ากับ" : "อย่างน้อย"} {minDays} วันล่าสุด</strong>เป็นแท่งเขียวครบทุกวัน (<strong>{`close > open`}</strong>{" "}
-        ต่อแท่ง) — คอลัมน์ <strong>เขียวติด</strong> คือจำนวนวันที่เขียวติดจริงย้อนจากล่าสุด — เรียงตาม{" "}
+        สัญญาที่ <strong>แท่งรายวัน (Day1) ปิดแล้ว{exact ? "เท่ากับ" : "อย่างน้อย"} {minDays} วันล่าสุด</strong>เป็นแท่งแดงครบทุกวัน (
+        <strong>{`close < open`}</strong> ต่อแท่ง) — คอลัมน์ <strong>แดงติด</strong> คือจำนวนวันที่แดงติดจริงย้อนจากล่าสุด — เรียงตาม{" "}
         <strong>Vol 24h (amount24)</strong> มากสุดก่อน — {VOL_FILTER_LABEL}
       </p>
       <p className="sub marketsMetricLegend">
@@ -148,7 +148,7 @@ export default async function MarketsWinnersPage({
       ) : empty ? (
         <div className="card">
           <p className="sub" style={{ marginBottom: 0 }}>
-            ไม่มีสัญญาในชุดที่สแกนที่ตรงเงื่อนไขอย่างน้อย {minDays} วันเขียวติด (หรือไม่มีข้อมูล Day1)
+            ไม่มีสัญญาในชุดที่สแกนที่ตรงเงื่อนไขอย่างน้อย {minDays} วันแดงติด (หรือไม่มีข้อมูล Day1)
           </p>
         </div>
       ) : (
@@ -157,7 +157,7 @@ export default async function MarketsWinnersPage({
             rows={rows}
             showDebugColumns={showDebugColumns}
             marketsSort="momentum"
-            showDayStreakColumn="green"
+            showDayStreakColumn="red"
           />
           <p className="sub marketsFootnote">
             {VOL_FILTER_LABEL} · kline Day1 จาก MEXC contract/kline · %24h จาก ticker — {SCAN_CAP_LABEL}
@@ -183,3 +183,4 @@ export default async function MarketsWinnersPage({
     </main>
   );
 }
+

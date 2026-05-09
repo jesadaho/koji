@@ -449,6 +449,10 @@ export async function createOpenMarketOrder(
     marginUsdt: number;
     leverage: number;
     openType?: 1 | 2;
+    /** TP จากราคา mark ประมาณการเข้า — MEXC place-order field */
+    takeProfitPrice?: number;
+    /** 1 latest (default); 2 fair; 3 index */
+    profitTrend?: number;
   }
 ): Promise<MexcOk<OrderCreateData>> {
   const symbol = p.contractSymbol.trim();
@@ -493,6 +497,13 @@ export async function createOpenMarketOrder(
     leverage: lev,
     positionMode,
   };
+
+  const tp = p.takeProfitPrice;
+  if (typeof tp === "number" && Number.isFinite(tp) && tp > 0) {
+    body.takeProfitPrice = tp;
+    const trend = Number(p.profitTrend);
+    if (Number.isFinite(trend) && trend >= 1 && trend <= 3) body.profitTrend = trend;
+  }
 
   return mexcPrivatePost<OrderCreateData>(creds, "/api/v1/private/order/create", body);
 }

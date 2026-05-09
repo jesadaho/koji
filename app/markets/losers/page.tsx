@@ -35,6 +35,10 @@ function marketsWinnersHref(debug: boolean): string {
   return debug ? "/markets/winners?debug=1" : "/markets/winners";
 }
 
+function marketsRedHref(debug: boolean): string {
+  return debug ? "/markets/red?debug=1" : "/markets/red";
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Markets — Top loser by vol (24h -1% … -15%)",
@@ -70,6 +74,7 @@ export default async function MarketsLosersPage({
           Top loser (24h) by vol
         </Link>
         <Link href={marketsWinnersHref(showDebugColumns)}>Day1 เขียวติด</Link>
+        <Link href={marketsRedHref(showDebugColumns)}>Day1 แดงติด</Link>
       </nav>
       <p className="sub">
         สัญญาที่ราคา 24h <strong>ติดลบ {PCT_RANGE_HUMAN}</strong> เรียงตาม <strong>Vol 24h (amount24)</strong> มากสุดก่อน

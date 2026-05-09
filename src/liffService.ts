@@ -46,7 +46,16 @@ import {
 } from "./volumeSignalAlertTick";
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
-import { ensureTradingViewMexcUserRow, saveTradingViewMexcSettings } from "./tradingViewCloseSettingsStore";
+import {
+  ensureTradingViewMexcUserRow,
+  saveTradingViewMexcSettings,
+  type SaveTradingViewMexcInput,
+  type SparkAutoTradeByVol,
+  type SparkAutoTradeVolBandPreset,
+  type TradingViewMexcUserSettings,
+} from "./tradingViewCloseSettingsStore";
+import { sparkAutoTradeParamsForVolBand } from "./sparkAutoTradeResolve";
+import type { SparkVolBand } from "./sparkTierContext";
 import { newTvWebhookNonce } from "./tradingViewWebhookNonceStore";
 
 export function getLiffConfig() {
@@ -739,9 +748,138 @@ export function formatTradingViewMexcOpenWebhookJson(
   return `${JSON.stringify(tradingViewMexcExampleOpenPayload(userId, token, side, marginUsdt, leverage), null, 2)}\n`;
 }
 
-/**
- * ตั้งค่า MEXC + token สำหรับ Webhook ปิด position
- */
+/** ค่าใน GET เทียบได้กับ body.sparkAutoTrade ตอนบันทึก */
+/** คีย์สอดคล้อง body.sparkAutoTrade ตอน POST */
+export function tradingViewSparkAutoTradePayloadFromRow(row: TradingViewMexcUserSettings): Record<string, unknown> {
+  return {
+    enabled: row.sparkAutoTradeEnabled ?? false,
+    direction: row.sparkAutoTradeDirection ?? "both",
+    marginUsdt: row.sparkAutoTradeMarginUsdt ?? null,
+    leverage: row.sparkAutoTradeLeverage ?? null,
+    tpPct: row.sparkAutoTradeTpPct ?? null,
+    byVol: row.sparkAutoTradeByVol ?? null,
+  };
+}
+
+/** ประกอบ row แล้วรันตัว resolver เดียวกับ cron */
+function mergeTradingViewRowForSparkValidation(
+  prev: TradingViewMexcUserSettings,
+  patch: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret">
+): TradingViewMexcUserSettings {
+  return {
+    ...prev,
+    sparkAutoTradeEnabled: patch.sparkAutoTradeEnabled ?? prev.sparkAutoTradeEnabled ?? false,
+    sparkAutoTradeDirection: patch.sparkAutoTradeDirection ?? prev.sparkAutoTradeDirection ?? "both",
+    sparkAutoTradeMarginUsdt:
+      patch.sparkAutoTradeMarginUsdt === null
+        ? undefined
+        : patch.sparkAutoTradeMarginUsdt !== undefined
+          ? patch.sparkAutoTradeMarginUsdt
+          : prev.sparkAutoTradeMarginUsdt,
+    sparkAutoTradeLeverage:
+      patch.sparkAutoTradeLeverage === null
+        ? undefined
+        : patch.sparkAutoTradeLeverage !== undefined
+          ? patch.sparkAutoTradeLeverage
+          : prev.sparkAutoTradeLeverage,
+    sparkAutoTradeTpPct:
+      patch.sparkAutoTradeTpPct === null
+        ? undefined
+        : patch.sparkAutoTradeTpPct !== undefined
+          ? patch.sparkAutoTradeTpPct
+          : prev.sparkAutoTradeTpPct,
+    sparkAutoTradeByVol:
+      patch.sparkAutoTradeByVol === null
+        ? undefined
+        : patch.sparkAutoTradeByVol !== undefined
+          ? patch.sparkAutoTradeByVol
+          : prev.sparkAutoTradeByVol,
+  };
+}
+
+/** body.sparkAutoTrade จาก client — null ฟิลด์ใน byVol tier = ว่างใน tier */
+function parseSparkAutoTradeNested(
+  raw: unknown
+): { ok: false; error: string } | { ok: true; patch: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret"> } {
+  if (raw === undefined || raw === null) return { ok: false, error: "missing_spark_bundle" };
+  if (typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: "spark_must_object" };
+
+  const o = raw as Record<string, unknown>;
+  const dirRaw = typeof o.direction === "string" ? o.direction.trim().toLowerCase() : "both";
+
+  let direction: "both" | "long_only" | "short_only" | null = null;
+  if (dirRaw === "both" || dirRaw === "") direction = "both";
+  else if (dirRaw === "long_only" || dirRaw === "long-only") direction = "long_only";
+  else if (dirRaw === "short_only" || dirRaw === "short-only") direction = "short_only";
+  else return { ok: false, error: "spark_direction_invalid" };
+
+  let enabled = false;
+  if (typeof o.enabled === "boolean") enabled = o.enabled;
+  else if (o.enabled === "1" || o.enabled === 1 || o.enabled === "true") enabled = true;
+
+  const numOrEmpty = (
+    key: string
+  ): { v: number | null | undefined; err?: string } => {
+    if (!(key in o)) return { v: undefined };
+    const x = o[key];
+    if (x === null || x === "" || x === undefined) return { v: null };
+    const n = typeof x === "number" ? x : Number(String(x).replace(/,/g, "").trim());
+    if (!Number.isFinite(n)) return { err: `${key}_not_number` };
+    return { v: n };
+  };
+
+  const mMargin = numOrEmpty("marginUsdt");
+  const mLev = numOrEmpty("leverage");
+  const mTp = numOrEmpty("tpPct");
+  if (mMargin.err || mLev.err || mTp.err) return { ok: false, error: "spark_numeric_invalid" };
+
+  let byVol: SparkAutoTradeByVol | null | undefined;
+  const bvRaw = o.byVol;
+  if (bvRaw === null || bvRaw === "") byVol = null;
+  else if (bvRaw !== undefined && (typeof bvRaw !== "object" || Array.isArray(bvRaw))) {
+    return { ok: false, error: "byVol_invalid" };
+  } else if (bvRaw !== undefined && typeof bvRaw === "object" && !Array.isArray(bvRaw)) {
+    const allowed = new Set(["high", "mid", "low", "unknown"]);
+    const out: SparkAutoTradeByVol = {};
+    for (const [tier, preset] of Object.entries(bvRaw as Record<string, unknown>)) {
+      const tk = tier.trim().toLowerCase();
+      if (!allowed.has(tk)) continue;
+      if (preset !== null && (typeof preset !== "object" || Array.isArray(preset))) continue;
+      if (preset === null) continue;
+      const pr = preset as Record<string, unknown>;
+      let enT: boolean | undefined;
+      if (typeof pr.enabledBand === "boolean") enT = pr.enabledBand;
+      else if (pr.enabledBand === "0" || pr.enabledBand === 0 || pr.enabledBand === "false") enT = false;
+      else if (pr.enabledBand === "1" || pr.enabledBand === 1 || pr.enabledBand === "true") enT = true;
+      const nM = typeof pr.marginUsdt === "number" ? pr.marginUsdt : Number(String(pr.marginUsdt ?? "").replace(/,/g, ""));
+      const nL = typeof pr.leverage === "number" ? pr.leverage : Number(String(pr.leverage ?? ""));
+      const nP = typeof pr.tpPct === "number" ? pr.tpPct : Number(String(pr.tpPct ?? ""));
+      const entry: SparkAutoTradeVolBandPreset = {};
+      if (enT !== undefined) entry.enabledBand = enT;
+      if (Number.isFinite(nM) && (nM as number) >= 0) entry.marginUsdt = nM as number;
+      if (Number.isFinite(nL) && (nL as number) >= 1) entry.leverage = Math.floor(nL as number);
+      if (Number.isFinite(nP) && (nP as number) >= 0) entry.tpPct = nP as number;
+      const hasAny = Object.keys(entry).length > 0;
+      if (hasAny) out[tk as keyof SparkAutoTradeByVol] = entry;
+    }
+    byVol = Object.keys(out).length > 0 ? out : null;
+  } else byVol = undefined;
+
+  const patchPart: Omit<
+    SaveTradingViewMexcInput,
+    "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
+  > = {
+    sparkAutoTradeEnabled: enabled,
+    sparkAutoTradeDirection: direction ?? undefined,
+    sparkAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
+    sparkAutoTradeLeverage: mLev.v as number | null | undefined,
+    sparkAutoTradeTpPct: mTp.v as number | null | undefined,
+    sparkAutoTradeByVol: byVol ?? undefined,
+  };
+
+  return { ok: true, patch: patchPart };
+}
+
 export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
   status: number;
   json: Record<string, unknown>;
@@ -768,6 +906,9 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
       exampleOpenJson: mexcCredsComplete
         ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
         : null,
+      sparkAutoTradeNote:
+        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว",
+      sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
     },
   };
 }
@@ -789,11 +930,43 @@ export async function liffSetTradingViewMexcSettings(
     return { status: 400, json: { error: "MEXC API key ห้ามมีช่องว่าง" } };
   }
 
+  const sparkBundle = b.sparkAutoTrade;
+  const hasSparkNested = sparkBundle !== undefined && sparkBundle !== null;
+
+  let sparkPatchMerged: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret"> | undefined;
+
+  if (hasSparkNested) {
+    const parsed = parseSparkAutoTradeNested(sparkBundle);
+    if (!parsed.ok) {
+      return { status: 400, json: { error: parsed.error } };
+    }
+    sparkPatchMerged = parsed.patch;
+
+    const prevRow = await ensureTradingViewMexcUserRow(userId);
+    const synth = mergeTradingViewRowForSparkValidation(prevRow, sparkPatchMerged);
+
+    const bandsAll: SparkVolBand[] = ["high", "mid", "low", "unknown"];
+    const anyResolvable = synth.sparkAutoTradeEnabled
+      ? bandsAll.some((b) => sparkAutoTradeParamsForVolBand(synth, b).ok)
+      : true;
+    if (synth.sparkAutoTradeEnabled && !anyResolvable) {
+      return {
+        status: 400,
+        json: {
+          error: "spark_auto_trade_need_effective_margin",
+          hint: "ตั้ง default margin/leverage — หรือกำหนดครบใน Vol tier high/mid/low/unknown",
+        },
+      };
+    }
+  }
+
   const row = await saveTradingViewMexcSettings(userId, {
     mexcApiKey: key,
     mexcSecret: sec,
     rotateWebhookToken: rotate,
     clearMexcCreds: clearMexc,
+    preserveSparkAutoTrade: !hasSparkNested,
+    ...(sparkPatchMerged ?? {}),
   });
 
   const { origin, path } = publicAppBaseForTvWebhook();
@@ -817,6 +990,9 @@ export async function liffSetTradingViewMexcSettings(
       exampleOpenJson: mexcCredsComplete
         ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
         : null,
+      sparkAutoTradeNote:
+        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว",
+      sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
     },
   };
 }

@@ -161,6 +161,8 @@ export type TopMarketRow = {
   nextFundingSettleMs: number | null;
   /** แท่ง Day1 ปิดแล้ว เขียวติดกันกี่วัน (ย้อนจากล่าสุด) — เติมในหน้า winners / alert เท่านั้น */
   greenDayStreak?: number;
+  /** แท่ง Day1 ปิดแล้ว แดงติดกันกี่วัน (ย้อนจากล่าสุด) — เติมในหน้า red streak เท่านั้น */
+  redDayStreak?: number;
 };
 
 function maxFromRiskTiers(detail: MexcDetailRow): number | null {
@@ -636,6 +638,47 @@ function countTrailingGreenClosedBars(k: KlineArrays): number {
     if (typeof oi !== "number" || typeof ci !== "number" || Number.isNaN(oi) || Number.isNaN(ci)) break;
     if (oi <= 0 || ci <= 0) break;
     if (ci <= oi) break;
+    streak++;
+  }
+  return streak;
+}
+
+/** แท่งรายวันที่ปิดแล้ว n แท่งล่าสุดแดงครบ (close < open) — ข้อมูลเก่า→ใหม่; ตัดแท่งสุดท้ายที่อาจยังไม่ปิด */
+function lastNClosedDailyBarsAllRed(k: KlineArrays, n: number): boolean {
+  const { open, close } = k;
+  const len = open.length;
+  if (n < 2 || len < 4 || close.length !== len) return false;
+  const closedEnd = len - 1;
+  const o = open.slice(0, closedEnd);
+  const c = close.slice(0, closedEnd);
+  const m = o.length;
+  if (m < n) return false;
+  for (let i = m - n; i < m; i++) {
+    const oi = o[i];
+    const ci = c[i];
+    if (typeof oi !== "number" || typeof ci !== "number" || Number.isNaN(oi) || Number.isNaN(ci)) return false;
+    if (oi <= 0 || ci <= 0) return false;
+    if (ci >= oi) return false;
+  }
+  return true;
+}
+
+/** นับแท่ง Day1 ที่ปิดแล้ว แดงติดกันย้อนจากล่าสุด */
+function countTrailingRedClosedBars(k: KlineArrays): number {
+  const { open, close } = k;
+  const n = open.length;
+  if (n < 4 || close.length !== n) return 0;
+  const closedEnd = n - 1;
+  const o = open.slice(0, closedEnd);
+  const c = close.slice(0, closedEnd);
+  const m = o.length;
+  let streak = 0;
+  for (let i = m - 1; i >= 0; i--) {
+    const oi = o[i];
+    const ci = c[i];
+    if (typeof oi !== "number" || typeof ci !== "number" || Number.isNaN(oi) || Number.isNaN(ci)) break;
+    if (oi <= 0 || ci <= 0) break;
+    if (ci >= oi) break;
     streak++;
   }
   return streak;
@@ -1124,6 +1167,52 @@ export async function getUsdtPerpsGreenDailyCloses(options: { minDays: number })
     const streak = countTrailingGreenClosedBars(k);
     const base = toTopMarketRow(t, detailBySymbol, EMPTY_MOM);
     return { ...base, greenDayStreak: streak };
+  });
+
+  const matched: TopMarketRow[] = [];
+  for (const r of rowsWithMeta) {
+    if (r) matched.push(r);
+  }
+  matched.sort((a, b) => (b.amount24Usdt ?? 0) - (a.amount24Usdt ?? 0));
+
+  return enrichFundingMeta(matched);
+}
+
+/**
+ * USDT perpetual ที่ผ่าน Vol หลัก (MIN_AMOUNT24_USDT) — สแกนเฉพาะอันดับต้น ๆ ตาม amount24 จำนวน KLINE_CANDIDATE_CAP
+ * แท่ง Day1 ที่ปิดแล้วอย่างน้อย minDays วันล่าสุดแดงทุกแท่ง (close < open) — แต่ละแถวมี redDayStreak = แดงติดจริง
+ */
+export async function getUsdtPerpsRedDailyCloses(options: { minDays: number }): Promise<TopMarketRow[]> {
+  const minDays = clampGreenDailyMinDays(options.minDays);
+  const [tickers, details] = await Promise.all([fetchContractTickers(), fetchContractDetails()]);
+
+  const detailBySymbol = new Map<string, MexcDetailRow>();
+  for (const d of details) {
+    if (d.symbol) detailBySymbol.set(d.symbol, d);
+  }
+
+  const usdtPerp = tickers.filter((t) => {
+    const sym = t.symbol?.trim();
+    if (!sym || !sym.endsWith("_USDT")) return false;
+    const amt = t.amount24;
+    if (typeof amt !== "number" || Number.isNaN(amt) || amt <= MIN_AMOUNT24_USDT) return false;
+    const price = t.lastPrice;
+    if (typeof price !== "number" || Number.isNaN(price) || price <= 0) return false;
+    const d = detailBySymbol.get(sym);
+    if (d && typeof d.state === "number" && d.state !== 0) return false;
+    return true;
+  });
+
+  const ranked = [...usdtPerp].sort((a, b) => (b.amount24 ?? 0) - (a.amount24 ?? 0));
+  const candidates = ranked.slice(0, KLINE_CANDIDATE_CAP);
+
+  const rowsWithMeta = await mapPoolConcurrent(candidates, THREE_GREEN_KLINE_CONCURRENCY, async (t) => {
+    const sym = t.symbol!.trim();
+    const k = await fetchContractKlineDay1OpenClose(sym);
+    if (!k || !lastNClosedDailyBarsAllRed(k, minDays)) return null;
+    const streak = countTrailingRedClosedBars(k);
+    const base = toTopMarketRow(t, detailBySymbol, EMPTY_MOM);
+    return { ...base, redDayStreak: streak };
   });
 
   const matched: TopMarketRow[] = [];

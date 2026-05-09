@@ -14,6 +14,13 @@ import {
   type PriceSpike15mAlertState,
 } from "./priceSpike15mAlertStateStore";
 import { appendSparkFireLog, enqueueSparkFollowUp } from "./sparkFollowUpStore";
+import {
+  isSparkAutotradeCronEnabled,
+  loadSparkAutoTradeTickBatch,
+  runSparkAutoTradeAfterSparkNotify,
+  type SparkAutoTradeTickBatchRef,
+} from "./sparkAutoTradeExecutor";
+import { saveSparkAutoTradeState } from "./sparkAutoTradeStateStore";
 
 /** ให้สอดคล้องกับ follow-up scheduler (anchor: barOpen + SPARK_BAR_SEC วินาที — ไม่ใช่ TF chart) */
 const SPARK_SIGNAL_BAR_SEC = 300;
@@ -287,6 +294,8 @@ export async function runPriceSpike15mAlertTick(
   let notifiedPushes = 0;
   let symbolsHit = 0;
   const nowSec = Math.floor(Date.now() / 1000);
+  /** Spark auto-open: preload map+state ครั้งแรกที่ฟ้าจริง — save ปิดท้าย tick */
+  let sparkAutoTradeBatch: SparkAutoTradeTickBatchRef | null = null;
 
   for (const sym of symbols) {
     const m = bySym.get(sym);
@@ -371,6 +380,29 @@ export async function runPriceSpike15mAlertTick(
       } catch (e) {
         console.error("[priceSpike15mAlertTick] enqueueSparkFollowUp", sym, e);
       }
+      if (isSparkAutotradeCronEnabled()) {
+        try {
+          if (!sparkAutoTradeBatch) sparkAutoTradeBatch = await loadSparkAutoTradeTickBatch();
+          await runSparkAutoTradeAfterSparkNotify(
+            {
+              contractSymbol: sym,
+              returnPct,
+              amount24Usdt: Number.isFinite(amount24) && amount24 >= 0 ? amount24 : 0,
+            },
+            sparkAutoTradeBatch,
+          );
+        } catch (e) {
+          console.error("[priceSpike15mAlertTick] spark auto-open", sym, e);
+        }
+      }
+    }
+  }
+
+  if (sparkAutoTradeBatch) {
+    try {
+      await saveSparkAutoTradeState(sparkAutoTradeBatch.state);
+    } catch (e) {
+      console.error("[priceSpike15mAlertTick] save spark autotrade state", e);
     }
   }
 

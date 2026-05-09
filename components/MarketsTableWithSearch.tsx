@@ -17,8 +17,8 @@ type Props = {
   rows: TopMarketRow[];
   showDebugColumns: boolean;
   marketsSort: MarketsSortMode;
-  /** หน้า winners — แสดงจำนวนวันเขียวติด (Day1) */
-  showGreenStreakColumn?: boolean;
+  /** หน้า streak (Day1) — แสดงจำนวนวันเขียว/แดงติด */
+  showDayStreakColumn?: "green" | "red";
 };
 
 function symbolMatches(symbol: string, q: string): boolean {
@@ -31,7 +31,7 @@ export default function MarketsTableWithSearch({
   rows,
   showDebugColumns,
   marketsSort,
-  showGreenStreakColumn = false,
+  showDayStreakColumn,
 }: Props) {
   const [query, setQuery] = useState("");
   const filtered = useMemo(
@@ -78,9 +78,12 @@ export default function MarketsTableWithSearch({
             <thead>
               <tr>
                 <th>สัญญา</th>
-                {showGreenStreakColumn ? (
-                  <th className="num" title="แท่ง Day1 ที่ปิดแล้ว เขียวติดกันกี่วัน (ย้อนจากล่าสุด)">
-                    เขียวติด
+                {showDayStreakColumn ? (
+                  <th
+                    className="num"
+                    title={`แท่ง Day1 ที่ปิดแล้ว ${showDayStreakColumn === "green" ? "เขียว" : "แดง"}ติดกันกี่วัน (ย้อนจากล่าสุด)`}
+                  >
+                    {showDayStreakColumn === "green" ? "เขียวติด" : "แดงติด"}
                   </th>
                 ) : null}
                 {showDebugColumns ? (
@@ -134,10 +137,16 @@ export default function MarketsTableWithSearch({
                     <td data-label="สัญญา" className="marketsCellSymbol">
                       <code>{r.symbol}</code>
                     </td>
-                    {showGreenStreakColumn ? (
-                      <td className="num" data-label="เขียวติด">
-                        {typeof r.greenDayStreak === "number" && r.greenDayStreak > 0 ? (
-                          <>{r.greenDayStreak} วัน</>
+                    {showDayStreakColumn ? (
+                      <td className="num" data-label={showDayStreakColumn === "green" ? "เขียวติด" : "แดงติด"}>
+                        {showDayStreakColumn === "green" ? (
+                          typeof r.greenDayStreak === "number" && r.greenDayStreak > 0 ? (
+                            <>{r.greenDayStreak} วัน</>
+                          ) : (
+                            "—"
+                          )
+                        ) : typeof r.redDayStreak === "number" && r.redDayStreak > 0 ? (
+                          <>{r.redDayStreak} วัน</>
                         ) : (
                           "—"
                         )}
