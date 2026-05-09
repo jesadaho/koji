@@ -1,4 +1,4 @@
-import type { TradingViewMexcUserSettings } from "./tradingViewCloseSettingsStore";
+import { orderSideEffective, type TradingViewMexcUserSettings } from "./tradingViewCloseSettingsStore";
 import type { SparkVolBand } from "./sparkTierContext";
 
 /** จาก resolve — ว่าจะควรเล่นหรือไม่ + พารามิเตอร์ */
@@ -54,6 +54,18 @@ export function sparkAutoTradeDirectionAllowed(
   if (d === "long_only") return returnPct > 0;
   if (d === "short_only") return returnPct < 0;
   return false;
+}
+
+/**
+ * เลือกฝั่งที่จะเปิดหลังผ่านตัวกรอง Spike (`direction`) — 「long / short» ไม่ผูกกับว่า Spike ขึ้นหรือลงโดยตรง (ยกเว้นโหมด fade ที่สลับจาก momentum)
+ */
+export function sparkAutoTradeOpenLongFromSpark(returnPct: number, row: TradingViewMexcUserSettings): boolean {
+  const side = orderSideEffective(row);
+  if (side === "long") return true;
+  if (side === "short") return false;
+  const momentumLong = returnPct > 0;
+  if (side === "fade_spark") return !momentumLong;
+  return momentumLong;
 }
 
 /** คำนวณ takeProfitPrice ~ จาก mark ประมาณการเข้า (MEXC takeProfitPrice บนคำสั่งเปิด) */

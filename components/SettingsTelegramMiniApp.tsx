@@ -80,6 +80,8 @@ type Phase = "loading" | "setup" | "ready";
 
 type SparkTierKey = "high" | "mid" | "low" | "unknown";
 
+type SparkOrderSideApi = "follow_spark" | "fade_spark" | "long" | "short";
+
 type SparkTierPayload = {
   enabledBand?: boolean;
   marginUsdt?: number;
@@ -90,6 +92,9 @@ type SparkTierPayload = {
 type SparkAutoTradeApiBundle = {
   enabled?: boolean;
   direction?: string;
+  orderSide?: string;
+  /** legacy — จาก API เก่า */
+  invertSide?: boolean;
   marginUsdt?: number | null;
   leverage?: number | null;
   tpPct?: number | null;
@@ -124,11 +129,12 @@ export default function SettingsTelegramMiniApp() {
 
   const [sparkEnabled, setSparkEnabled] = useState(false);
   const [sparkDirection, setSparkDirection] = useState<"both" | "long_only" | "short_only">("both");
+  const [sparkOrderSide, setSparkOrderSide] = useState<SparkOrderSideApi>("follow_spark");
   const [sparkMarginDefault, setSparkMarginDefault] = useState("");
   const [sparkLevDefault, setSparkLevDefault] = useState("");
   const [sparkTpDefault, setSparkTpDefault] = useState("");
-  type SparkTierForm = { off: boolean; margin: string; lev: string; tp: string };
-  const tierEmpty: SparkTierForm = { off: false, margin: "", lev: "", tp: "" };
+  type SparkTierForm = { off: boolean };
+  const tierEmpty: SparkTierForm = { off: false };
   const [sparkTiers, setSparkTiers] = useState<Record<SparkTierKey, SparkTierForm>>({
     high: { ...tierEmpty },
     mid: { ...tierEmpty },
@@ -147,6 +153,15 @@ export default function SettingsTelegramMiniApp() {
     setSparkDirection(
       dir === "long_only" || dir === "short_only" ? dir : dir === "long-only" ? "long_only" : dir === "short-only" ? "short_only" : "both"
     );
+
+    let os: SparkOrderSideApi = "follow_spark";
+    const sid = typeof st.orderSide === "string" ? st.orderSide.trim().toLowerCase().replace(/-/g, "_") : "";
+    if (sid === "follow_spark" || sid === "followspark" || sid === "follow") os = "follow_spark";
+    else if (sid === "fade_spark" || sid === "fadespark" || sid === "fade") os = "fade_spark";
+    else if (sid === "long") os = "long";
+    else if (sid === "short") os = "short";
+    else if (st.invertSide) os = "fade_spark";
+    setSparkOrderSide(os);
     setSparkMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
     setSparkLevDefault(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
     setSparkTpDefault(st.tpPct != null && Number.isFinite(st.tpPct) ? String(st.tpPct) : "");
@@ -159,16 +174,8 @@ export default function SettingsTelegramMiniApp() {
     };
     for (const k of ["high", "mid", "low", "unknown"] as SparkTierKey[]) {
       const bv = st.byVol?.[k];
-      if (!bv || typeof bv !== "object") {
-        nextTiers[k] = { off: false, margin: "", lev: "", tp: "" };
-      } else {
-        nextTiers[k] = {
-          off: bv.enabledBand === false,
-          margin: bv.marginUsdt != null ? String(bv.marginUsdt) : "",
-          lev: bv.leverage != null ? String(bv.leverage) : "",
-          tp: bv.tpPct != null ? String(bv.tpPct) : "",
-        };
-      }
+      if (!bv || typeof bv !== "object") nextTiers[k] = { off: false };
+      else nextTiers[k] = { off: bv.enabledBand === false };
     }
     setSparkTiers(nextTiers);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
@@ -369,23 +376,14 @@ export default function SettingsTelegramMiniApp() {
     return Number.isFinite(n) ? n : null;
   };
 
-  const buildSparkByVolPayload = (): Record<string, SparkTierPayload> | null => {
+  /** ทั้ง 4 tier — เก็บเฉพาะ on/off เทียบ default ด้านบน (และล้าง margin/lev/tp ต่อ-tier เก่าหลังบันทึก) */
+  const buildSparkByVolPayload = (): Record<string, SparkTierPayload> => {
     const tierKeys: SparkTierKey[] = ["high", "mid", "low", "unknown"];
     const out: Record<string, SparkTierPayload> = {};
     for (const key of tierKeys) {
-      const t = sparkTiers[key];
-      const entry: SparkTierPayload = {};
-      if (t.off) entry.enabledBand = false;
-      const om = parseNumRaw(t.margin);
-      const ol = parseNumRaw(t.lev);
-      const op = parseNumRaw(t.tp);
-      if (om != null && om >= 0) entry.marginUsdt = om;
-      if (ol != null && ol >= 1) entry.leverage = Math.floor(ol);
-      if (op != null && op >= 0) entry.tpPct = op;
-      if (Object.keys(entry).length === 0) continue;
-      out[key] = entry;
+      out[key] = sparkTiers[key].off ? { enabledBand: false } : { enabledBand: true };
     }
-    return Object.keys(out).length > 0 ? out : null;
+    return out;
   };
 
   const onSaveSparkAuto = async () => {
@@ -425,10 +423,11 @@ export default function SettingsTelegramMiniApp() {
       const sparkAutoTrade: Record<string, unknown> = {
         enabled: sparkEnabled,
         direction: sparkDirection,
+        orderSide: sparkOrderSide,
         marginUsdt: sparkMarginDefault.trim() ? marginDefaultParsed : null,
         leverage: sparkLevDefault.trim() ? levDefaultParsed : null,
         tpPct: sparkTpDefault.trim() ? tpDefaultParsed : null,
-        ...(byVolBuilt ? { byVol: byVolBuilt } : {}),
+        byVol: byVolBuilt,
       };
       const body: Record<string, unknown> = {
         rotateWebhookToken: false,
@@ -701,17 +700,31 @@ export default function SettingsTelegramMiniApp() {
           </label>
 
           <label className="sub" style={{ display: "block", marginTop: "0.75rem" }}>
-            ทิศทางที่ยอมรับของคุณ
+            สัญญาณ Spark ที่เข้ากรอง (จาก % เทียบจุดอ้างอิงใน cron)
             <select
-              style={{ display: "block", width: "100%", maxWidth: "20rem", marginTop: "0.35rem" }}
+              style={{ display: "block", width: "100%", maxWidth: "24rem", marginTop: "0.35rem" }}
               value={sparkDirection}
               onChange={(e) =>
                 setSparkDirection(e.target.value as "both" | "long_only" | "short_only")
               }
             >
-              <option value="both">ขึ้นและลง (long + short)</option>
-              <option value="long_only">ขึ้นอย่างเดียว (long)</option>
-              <option value="short_only">ลงอย่างเดียว (short)</option>
+              <option value="both">ทั้ง Spike เป็นบวกและเป็นลบ</option>
+              <option value="long_only">เฉพาะ Spike ขึ้น (เปอร์เซ็นต์เป็น +)</option>
+              <option value="short_only">เฉพาะ Spike ลง (เปอร์เซ็นต์เป็น −)</option>
+            </select>
+          </label>
+
+          <label className="sub" style={{ display: "block", marginTop: "0.75rem" }}>
+            ฝั่งออเดอร์ที่สั่งเปิดเมื่อเข้ากรองข้างบน
+            <select
+              style={{ display: "block", width: "100%", maxWidth: "24rem", marginTop: "0.35rem" }}
+              value={sparkOrderSide}
+              onChange={(e) => setSparkOrderSide(e.target.value as SparkOrderSideApi)}
+            >
+              <option value="follow_spark">ตาม Spike — ขึ้น → LONG · ลง → SHORT</option>
+              <option value="fade_spark">เข้าสวน — ขึ้น → SHORT · ลง → LONG</option>
+              <option value="long">LONG เสมอ (ใช้กับฟิลเตอร์ Spike เป็นบวก/ลบตามที่ต้องการ)</option>
+              <option value="short">SHORT เสมอ</option>
             </select>
           </label>
 
@@ -719,7 +732,7 @@ export default function SettingsTelegramMiniApp() {
             Margin / เลเวเรจ / TP (default)
           </p>
           <p className="sub" style={{ marginTop: 0 }}>
-            ใช้เมื่อช่องใน Vol tier ว่างไว้ • TP % จากราคาโดยประมาณที่ประกบกับฟีดของ MEXC ตอนส่งคำสั่งเปิด • ว่างหมายถึงไม่ตั้ง TP
+            ใช้ทุก tier ที่ยังไม่ได้ระงับในรายการด้านล่าง • TP % ประมาณจาก mark ตอนเปิด • ว่าง = ไม่ตั้ง TP
           </p>
           <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
             <label className="sub" style={{ display: "block" }}>
@@ -761,85 +774,50 @@ export default function SettingsTelegramMiniApp() {
           </div>
 
           <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
-            ปรับตามระดับ Vol (24h เทียบ env SPARK_VOL_TIER_* — เหมือนหมวดใน Spark Matrix)
+            ระดับ Vol (24h เทียบ env SPARK_VOL_TIER_* — เหมือน Spark Matrix)
+          </p>
+          <p className="sub" style={{ marginTop: "0.35rem" }}>
+            แต่ละ tier มีแค่ระงับ/ไม่ระงับ — margin / leverage / TP ใช้ชุด default ด้านบน
           </p>
           {(["high", "mid", "low", "unknown"] as SparkTierKey[]).map((key) => (
             <div
               key={key}
               style={{
-                marginTop: "0.65rem",
-                padding: "0.65rem 0.75rem",
+                marginTop: "0.5rem",
+                padding: "0.5rem 0.65rem",
                 borderRadius: "6px",
                 background: "rgba(0,0,0,0.12)",
               }}
             >
-              <strong className="sub">{sparkTierLabelTh(key)}</strong>
-              <label className="sub" style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginTop: "0.35rem", cursor: "pointer" }}>
+              <label
+                className="sub"
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.5rem",
+                  margin: 0,
+                  cursor: "pointer",
+                  lineHeight: 1.35,
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={sparkTiers[key].off}
                   onChange={(e) =>
                     setSparkTiers((prev) => ({
                       ...prev,
-                      [key]: { ...prev[key], off: e.target.checked },
+                      [key]: { off: e.target.checked },
                     }))
                   }
+                  style={{ marginTop: "0.12rem", flexShrink: 0 }}
                 />
-                ปิด tier นี้จากการ auto-open เลย (เล่นทั้งหมดยกเว้นที่ติ๊ก)
+                <span>
+                  <strong>{sparkTierLabelTh(key)}</strong>
+                  <span style={{ display: "block", opacity: 0.88, fontSize: "0.92em", marginTop: "0.15rem" }}>
+                    ติ๊ก = ไม่ auto-open ใน tier นี้
+                  </span>
+                </span>
               </label>
-              <div style={{ marginTop: "0.35rem", display: "grid", gap: "0.35rem", gridTemplateColumns: "1fr", maxWidth: "28rem" }}>
-                <label className="sub" style={{ margin: 0 }}>
-                  Margin (ถ้าว่าง = ใช้ default)
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    style={{ display: "block", width: "100%", marginTop: "0.2rem" }}
-                    autoComplete="off"
-                    placeholder="ว่างใช้ default"
-                    value={sparkTiers[key].margin}
-                    onChange={(e) =>
-                      setSparkTiers((prev) => ({
-                        ...prev,
-                        [key]: { ...prev[key], margin: e.target.value },
-                      }))
-                    }
-                  />
-                </label>
-                <label className="sub" style={{ margin: 0 }}>
-                  Leverage
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    style={{ display: "block", width: "100%", marginTop: "0.2rem" }}
-                    autoComplete="off"
-                    placeholder="ว่างใช้ default"
-                    value={sparkTiers[key].lev}
-                    onChange={(e) =>
-                      setSparkTiers((prev) => ({
-                        ...prev,
-                        [key]: { ...prev[key], lev: e.target.value },
-                      }))
-                    }
-                  />
-                </label>
-                <label className="sub" style={{ margin: 0 }}>
-                  TP %
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    style={{ display: "block", width: "100%", marginTop: "0.2rem" }}
-                    autoComplete="off"
-                    placeholder="ว่างใช้ default · ว่างใน default และที่นี่ด้วย =ไม่มี TP"
-                    value={sparkTiers[key].tp}
-                    onChange={(e) =>
-                      setSparkTiers((prev) => ({
-                        ...prev,
-                        [key]: { ...prev[key], tp: e.target.value },
-                      }))
-                    }
-                  />
-                </label>
-              </div>
             </div>
           ))}
 

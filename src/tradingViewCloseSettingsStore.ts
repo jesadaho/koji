@@ -18,6 +18,9 @@ export type SparkAutoTradeVolBandPreset = {
 
 export type SparkAutoTradeDirection = "both" | "long_only" | "short_only";
 
+/** โพซิชันที่สั่งเปิดเมื่อผ่านตัวกรอง Spike — 「ตาม Spike」ขึ้น→long / ลง→short */
+export type SparkAutoTradeOrderSide = "follow_spark" | "fade_spark" | "long" | "short";
+
 export type SparkAutoTradeByVol = Partial<Record<SparkAutoTradeVolBandKey, SparkAutoTradeVolBandPreset>>;
 
 export type TradingViewMexcUserSettings = {
@@ -29,6 +32,9 @@ export type TradingViewMexcUserSettings = {
 
   sparkAutoTradeEnabled?: boolean;
   sparkAutoTradeDirection?: SparkAutoTradeDirection;
+  /** @deprecated อ่านเท่านั้น — จาก JSON เดิม; ภาพรวมใช้ sparkAutoTradeOrderSide (+ normalize จาก invert) */
+  sparkAutoTradeInvertSide?: boolean;
+  sparkAutoTradeOrderSide?: SparkAutoTradeOrderSide;
   /** default เมื่อ band ไม่ override */
   sparkAutoTradeMarginUsdt?: number;
   sparkAutoTradeLeverage?: number;
@@ -37,6 +43,16 @@ export type TradingViewMexcUserSettings = {
 
   sparkAutoTradeByVol?: SparkAutoTradeByVol;
 };
+
+/** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
+export function orderSideEffective(
+  row: TradingViewMexcUserSettings | null | undefined
+): SparkAutoTradeOrderSide {
+  const o = row?.sparkAutoTradeOrderSide;
+  if (o === "follow_spark" || o === "fade_spark" || o === "long" || o === "short") return o;
+  if (row?.sparkAutoTradeInvertSide) return "fade_spark";
+  return "follow_spark";
+}
 
 type SettingsMap = Record<string, TradingViewMexcUserSettings>;
 
@@ -141,6 +157,7 @@ export type SaveTradingViewMexcInput = {
 
   sparkAutoTradeEnabled?: boolean;
   sparkAutoTradeDirection?: SparkAutoTradeDirection;
+  sparkAutoTradeOrderSide?: SparkAutoTradeOrderSide;
   /** null = ล้างค่า default margin */
   sparkAutoTradeMarginUsdt?: number | null;
   sparkAutoTradeLeverage?: number | null;
@@ -175,6 +192,7 @@ export async function saveTradingViewMexcSettings(
   const touchedSparkPatch =
     input.sparkAutoTradeEnabled !== undefined ||
     input.sparkAutoTradeDirection !== undefined ||
+    input.sparkAutoTradeOrderSide !== undefined ||
     input.sparkAutoTradeMarginUsdt !== undefined ||
     input.sparkAutoTradeLeverage !== undefined ||
     input.sparkAutoTradeTpPct !== undefined ||
@@ -186,6 +204,12 @@ export async function saveTradingViewMexcSettings(
     : input.sparkAutoTradeDirection !== undefined
       ? input.sparkAutoTradeDirection
       : prev?.sparkAutoTradeDirection ?? "both";
+
+  const mergedOrderSide: SparkAutoTradeOrderSide = preserveSpark
+    ? orderSideEffective(prev)
+    : input.sparkAutoTradeOrderSide !== undefined
+      ? input.sparkAutoTradeOrderSide
+      : orderSideEffective(prev);
 
   let mergedVol: SparkAutoTradeByVol | undefined;
   if (preserveSpark) mergedVol = prev?.sparkAutoTradeByVol;
@@ -208,6 +232,9 @@ export async function saveTradingViewMexcSettings(
         : prev?.sparkAutoTradeEnabled ?? false,
 
     sparkAutoTradeDirection: mergedSparkDirection,
+
+    sparkAutoTradeInvertSide: preserveSpark ? prev?.sparkAutoTradeInvertSide : undefined,
+    sparkAutoTradeOrderSide: mergedOrderSide,
 
     sparkAutoTradeMarginUsdt: preserveSpark
       ? prev?.sparkAutoTradeMarginUsdt

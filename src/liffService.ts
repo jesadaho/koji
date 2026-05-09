@@ -52,9 +52,11 @@ import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
 import {
   ensureTradingViewMexcUserRow,
+  orderSideEffective,
   saveTradingViewMexcSettings,
   type SaveTradingViewMexcInput,
   type SparkAutoTradeByVol,
+  type SparkAutoTradeOrderSide,
   type SparkAutoTradeVolBandPreset,
   type TradingViewMexcUserSettings,
 } from "./tradingViewCloseSettingsStore";
@@ -758,6 +760,7 @@ export function tradingViewSparkAutoTradePayloadFromRow(row: TradingViewMexcUser
   return {
     enabled: row.sparkAutoTradeEnabled ?? false,
     direction: row.sparkAutoTradeDirection ?? "both",
+    orderSide: orderSideEffective(row),
     marginUsdt: row.sparkAutoTradeMarginUsdt ?? null,
     leverage: row.sparkAutoTradeLeverage ?? null,
     tpPct: row.sparkAutoTradeTpPct ?? null,
@@ -774,6 +777,9 @@ function mergeTradingViewRowForSparkValidation(
     ...prev,
     sparkAutoTradeEnabled: patch.sparkAutoTradeEnabled ?? prev.sparkAutoTradeEnabled ?? false,
     sparkAutoTradeDirection: patch.sparkAutoTradeDirection ?? prev.sparkAutoTradeDirection ?? "both",
+    sparkAutoTradeInvertSide: patch.sparkAutoTradeOrderSide !== undefined ? undefined : prev.sparkAutoTradeInvertSide,
+    sparkAutoTradeOrderSide:
+      patch.sparkAutoTradeOrderSide !== undefined ? patch.sparkAutoTradeOrderSide : orderSideEffective(prev),
     sparkAutoTradeMarginUsdt:
       patch.sparkAutoTradeMarginUsdt === null
         ? undefined
@@ -801,6 +807,21 @@ function mergeTradingViewRowForSparkValidation(
   };
 }
 
+/** ค่ารับจาก client เทียบ `SparkAutoTradeOrderSide` — โหม่ย่อ follow/fade allowed */
+function normalizeSparkOrderSideKey(raw: unknown): SparkAutoTradeOrderSide | null {
+  const k =
+    typeof raw === "number" && Number.isFinite(raw)
+      ? String(raw).trim().toLowerCase()
+      : typeof raw === "string"
+        ? raw.trim().toLowerCase().replace(/-/g, "_")
+        : "";
+  if (k === "follow_spark" || k === "followspark" || k === "follow") return "follow_spark";
+  if (k === "fade_spark" || k === "fadespark" || k === "fade") return "fade_spark";
+  if (k === "long") return "long";
+  if (k === "short") return "short";
+  return null;
+}
+
 /** body.sparkAutoTrade จาก client — null ฟิลด์ใน byVol tier = ว่างใน tier */
 function parseSparkAutoTradeNested(
   raw: unknown
@@ -820,6 +841,26 @@ function parseSparkAutoTradeNested(
   let enabled = false;
   if (typeof o.enabled === "boolean") enabled = o.enabled;
   else if (o.enabled === "1" || o.enabled === 1 || o.enabled === "true") enabled = true;
+
+  let invertSidePatch: boolean | undefined;
+  if ("invertSide" in o) {
+    const iv = (o as { invertSide?: unknown }).invertSide;
+    if (typeof iv === "boolean") invertSidePatch = iv;
+    else if (iv === 1 || iv === "1" || iv === "true") invertSidePatch = true;
+    else if (iv === 0 || iv === "0" || iv === "false") invertSidePatch = false;
+    else if (iv === null || iv === "") invertSidePatch = false;
+    else return { ok: false, error: "spark_invert_side_invalid" };
+  }
+
+  let orderSidePatch: SparkAutoTradeOrderSide | undefined;
+  if ("orderSide" in o && o.orderSide !== undefined && o.orderSide !== "") {
+    const normalized = normalizeSparkOrderSideKey(o.orderSide);
+    if (!normalized) return { ok: false, error: "spark_order_side_invalid" };
+    orderSidePatch = normalized;
+  }
+  if (orderSidePatch === undefined && invertSidePatch !== undefined) {
+    orderSidePatch = invertSidePatch ? "fade_spark" : "follow_spark";
+  }
 
   const numOrEmpty = (
     key: string
@@ -875,6 +916,7 @@ function parseSparkAutoTradeNested(
   > = {
     sparkAutoTradeEnabled: enabled,
     sparkAutoTradeDirection: direction ?? undefined,
+    ...(orderSidePatch !== undefined ? { sparkAutoTradeOrderSide: orderSidePatch } : {}),
     sparkAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
     sparkAutoTradeLeverage: mLev.v as number | null | undefined,
     sparkAutoTradeTpPct: mTp.v as number | null | undefined,
@@ -911,7 +953,7 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
         ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
         : null,
       sparkAutoTradeNote:
-        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว",
+        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ)",
       sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
     },
   };
@@ -995,7 +1037,7 @@ export async function liffSetTradingViewMexcSettings(
         ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
         : null,
       sparkAutoTradeNote:
-        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว",
+        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ)",
       sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
     },
   };

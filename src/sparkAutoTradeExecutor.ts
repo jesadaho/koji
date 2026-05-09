@@ -8,10 +8,12 @@ import { classifySparkVolBand } from "./sparkTierContext";
 import {
   sparkAutoTradeParamsForVolBand,
   sparkAutoTradeDirectionAllowed,
+  sparkAutoTradeOpenLongFromSpark,
   computeTakeProfitPriceFromMark,
 } from "./sparkAutoTradeResolve";
 import {
   loadTradingViewMexcSettingsFullMap,
+  orderSideEffective,
   type TradingViewMexcUserSettings,
 } from "./tradingViewCloseSettingsStore";
 import {
@@ -115,7 +117,7 @@ export async function runSparkAutoTradeAfterSparkNotify(
     }
     if (hasActiveUsdtPosition(positions, sym)) continue;
 
-    const long = returnPct > 0;
+    const long = sparkAutoTradeOpenLongFromSpark(returnPct, row as TradingViewMexcUserSettings);
     const { marginUsdt, leverage, tpPct } = resolved.value;
     usersAttempted += 1;
 
@@ -174,9 +176,19 @@ export async function runSparkAutoTradeAfterSparkNotify(
           ? `TP (${resolved.value.tpPct}%) ไม่ได้แนบ — แลกเปิดด้วย market อย่างเดียว`
           : "";
 
+    const ord = orderSideEffective(row as TradingViewMexcUserSettings);
+    const ordHint =
+      ord === "fade_spark"
+        ? " · ฝั่งออเดอร์: เข้าสวนสัญญาณ Spike"
+        : ord === "long"
+          ? " · ฝั่งออเดอร์: long ทุกครั้งเมื่อเข้ากรอง"
+          : ord === "short"
+            ? " · ฝั่งออเดอร์: short ทุกครั้งเมื่อเข้ากรอง"
+            : "";
+
     await notifyLines(userId, [
       "Koji — Spark auto-open (MEXC)",
-      long ? "✅ เปิด LONG จาก Spark" : "✅ เปิด SHORT จาก Spark",
+      (long ? "✅ เปิด LONG" : "✅ เปิด SHORT") + ` จาก Spark${ordHint}`,
       `[${shortContractLabel(sym)}]/USDT (${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%)`,
       `Vol band: ${volBand}`,
       `Margin ~${marginUsdt} USDT · ${resolved.value.leverage}x`,
