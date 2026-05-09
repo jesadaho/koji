@@ -72,7 +72,11 @@ function normalizeTimeStopPending(raw: unknown): SparkTimeStopPending[] {
   }
   const bySym = new Map<string, SparkTimeStopPending>();
   for (const e of out) bySym.set(e.contractSymbol, e);
-  return [...bySym.values()];
+  const deduped: SparkTimeStopPending[] = [];
+  bySym.forEach((v) => {
+    deduped.push(v);
+  });
+  return deduped;
 }
 
 function normalizeState(raw: unknown): SparkAutoTradeState {
