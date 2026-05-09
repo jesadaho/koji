@@ -479,6 +479,10 @@ export default function SettingsLiffApp() {
         <span className="siteNavSep" aria-hidden>
           |
         </span>
+        <a href="#spark-auto-open">Spark auto-open</a>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
         <Link href="/upcoming-events">ปฏิทินเหตุการณ์</Link>
       </p>
 
@@ -661,25 +665,35 @@ export default function SettingsLiffApp() {
         )}
       </div>
 
-      {tvSettings ? (
-        <div className="card" style={{ marginTop: "1.25rem" }}>
-          <h2>Spark auto-open (MEXC)</h2>
-          <p className="sub" style={{ marginTop: 0 }}>
-            เมื่อ <strong>แจ้งเตือน Spark ในกลุ่มส่งสำเร็จ</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน{" "}
-            <strong>long</strong>/<strong>short</strong> (market) ตามทิศ Spark ใน universe เดียวกับ Cron (Top vol ตาม env) — เก็บ MEXC key
-            ที่ส่วนด้านบน · เฉพาะ user Telegram <code>{tvSettings.userId}</code> เท่านั้น · จำกัด{" "}
-            <strong>สั่งเปิดได้สำเร็จอย่างมากครั้งหนึ่งต่อเหรียญต่อวันไทย</strong>.
+      <div id="spark-auto-open" className="card" style={{ marginTop: "1.25rem" }}>
+        <h2>Spark auto-open (MEXC)</h2>
+        {!tvSettings && tvLoadErr ? (
+          <p className="sub" style={{ marginTop: 0, color: "var(--danger, #c44)" }}>
+            โหลดโปรไฟล์ MEXC / TradingView ด้านบนไม่สำเร็จ — ตั้งค่า Spark ด้านล่างยังเห็นและยังบันทึกได้เมื่อเข้ามาผ่าน Mini App
           </p>
-          {tvSettings.sparkAutoTradeNote ? (
-            <p className="sub" style={{ marginTop: "0.5rem", opacity: 0.92 }}>
-              {tvSettings.sparkAutoTradeNote}
-            </p>
-          ) : null}
-          {!tvSettings.mexcCredsComplete ? (
-            <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
-              ใส่ MEXC API ด้านบนและกด <strong>บันทึก API</strong> ก่อน — auto-open ถึงจะเรียก MEXC ได้
-            </p>
-          ) : null}
+        ) : !tvSettings ? (
+          <p className="sub" style={{ marginTop: 0, opacity: 0.9 }}>
+            กำลังโหลดโปรไฟล์…
+          </p>
+        ) : null}
+        <p className="sub" style={{ marginTop: 0 }}>
+          เมื่อ <strong>แจ้งเตือน Spark ในกลุ่มส่งสำเร็จ</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน{" "}
+          <strong>long</strong>/<strong>short</strong> (market) ตามทิศ Spark ใน universe เดียวกับ Cron (Top vol ตาม env) — เก็บ MEXC key ที่ส่วนด้านบน · เฉพาะ{" "}
+          <strong>
+            user Telegram <code>{tvSettings?.userId ?? "โหลดยังไม่สำเร็จ — เข้ามาผ่าน Mini App"}</code>
+          </strong>{" "}
+          เท่านั้น · จำกัด <strong>สั่งเปิดได้สำเร็จอย่างมากครั้งหนึ่งต่อเหรียญต่อวันไทย</strong>.
+        </p>
+        {tvSettings?.sparkAutoTradeNote ? (
+          <p className="sub" style={{ marginTop: "0.5rem", opacity: 0.92 }}>
+            {tvSettings.sparkAutoTradeNote}
+          </p>
+        ) : null}
+        {tvSettings && !tvSettings.mexcCredsComplete ? (
+          <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
+            ใส่ MEXC API ด้านบนและกด <strong>บันทึก API</strong> ก่อน — auto-open ถึงจะเรียก MEXC ได้
+          </p>
+        ) : null}
 
           <label className="sub" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", cursor: "pointer" }}>
             <input type="checkbox" checked={sparkEnabled} onChange={(e) => setSparkEnabled(e.target.checked)} />
@@ -845,8 +859,7 @@ export default function SettingsLiffApp() {
               {sparkSaveErr}
             </p>
           ) : null}
-        </div>
-      ) : null}
+      </div>
 
       <p style={{ marginTop: "1rem" }}>
         <Link href="/">← กลับหน้าแจ้งเตือน</Link>
