@@ -24,8 +24,12 @@ function fmtNumOrUnset(n: unknown): string {
 export function sparkAutoTradeTierExplainTh(row: TradingViewMexcUserSettings, volBand: SparkVolBand): string {
   const label = sparkVolBandLabelTh(volBand);
   const preset = row.sparkAutoTradeByVol?.[volBand];
-  const effMargin = preset?.marginUsdt ?? row.sparkAutoTradeMarginUsdt;
-  const effLev = preset?.leverage ?? row.sparkAutoTradeLeverage;
+  const tierM = preset?.marginUsdt;
+  const effMargin =
+    typeof tierM === "number" && Number.isFinite(tierM) && tierM > 0 ? tierM : row.sparkAutoTradeMarginUsdt;
+  const tierL = preset?.leverage;
+  const effLev =
+    typeof tierL === "number" && Number.isFinite(tierL) && tierL >= 1 ? tierL : row.sparkAutoTradeLeverage;
 
   const res = sparkAutoTradeParamsForVolBand(row, volBand);
   if (res.ok) {
@@ -89,8 +93,16 @@ export function sparkAutoTradeParamsForVolBand(
     return { ok: false, reason: `spark_auto_trade_vol_band_off:${volBand}` };
   }
 
-  const margin = preset?.marginUsdt ?? row.sparkAutoTradeMarginUsdt;
-  const levRaw = preset?.leverage ?? row.sparkAutoTradeLeverage;
+  const tierMargin = preset?.marginUsdt;
+  const margin =
+    typeof tierMargin === "number" && Number.isFinite(tierMargin) && tierMargin > 0
+      ? tierMargin
+      : row.sparkAutoTradeMarginUsdt;
+  const tierLev = preset?.leverage;
+  const levRaw =
+    typeof tierLev === "number" && Number.isFinite(tierLev) && tierLev >= 1
+      ? tierLev
+      : row.sparkAutoTradeLeverage;
   const tpRaw = preset?.tpPct ?? row.sparkAutoTradeTpPct ?? 0;
 
   const marginOk = typeof margin === "number" && Number.isFinite(margin) && margin > 0;

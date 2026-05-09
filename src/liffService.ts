@@ -904,7 +904,8 @@ function parseSparkAutoTradeNested(
       const nP = typeof pr.tpPct === "number" ? pr.tpPct : Number(String(pr.tpPct ?? ""));
       const entry: SparkAutoTradeVolBandPreset = {};
       if (enT !== undefined) entry.enabledBand = enT;
-      if (Number.isFinite(nM) && (nM as number) >= 0) entry.marginUsdt = nM as number;
+      /* อย่าเก็บ 0 — ไม่งั้น ?? ใน sparkAutoTradeParamsForVolBand ไม่ fallback ไป default แถว */
+      if (Number.isFinite(nM) && (nM as number) > 0) entry.marginUsdt = nM as number;
       if (Number.isFinite(nL) && (nL as number) >= 1) entry.leverage = Math.floor(nL as number);
       if (Number.isFinite(nP) && (nP as number) >= 0) entry.tpPct = nP as number;
       const hasAny = Object.keys(entry).length > 0;
