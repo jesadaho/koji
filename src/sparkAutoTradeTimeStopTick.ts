@@ -13,6 +13,10 @@ function shortContractLabel(contractSymbol: string): string {
   return s.replace(/_/g, "") || contractSymbol;
 }
 
+function notifyTimeStopLines(userId: string, lines: string[]): Promise<void> {
+  return notifyTradingViewWebhookTelegram(userId, lines.filter(Boolean).join("\n"));
+}
+
 type DueItem = { userId: string; sym: string };
 
 function collectDue(state: SparkAutoTradeState, now: number): DueItem[] {
@@ -53,7 +57,7 @@ export async function runSparkAutoTradeTimeStopSweep(): Promise<{ due: number; c
 
     if (!creds) {
       state = withoutSparkTimeStopForSymbol(state, userId, sym);
-      await notifyTradingViewWebhookTelegram(userId, [
+      await notifyTimeStopLines(userId, [
         "Koji — Spark time-stop (MEXC)",
         `⏱ ถึงเวลาปิด [${shortContractLabel(sym)}]/USDT แล้วแต่ไม่มี MEXC API ใน Settings — ล้างคิว time-stop แล้ว (ถ้ายังมีโพซิชันต้องปิดมือ / ตั้ง key แล้วใช้ time-stop ครั้งถัดไป)`,
       ]);
@@ -65,7 +69,7 @@ export async function runSparkAutoTradeTimeStopSweep(): Promise<{ due: number; c
       r = await closeAllOpenForSymbol(creds, sym);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
-      await notifyTradingViewWebhookTelegram(userId, [
+      await notifyTimeStopLines(userId, [
         "Koji — Spark time-stop (MEXC)",
         `❌ ปิด [${shortContractLabel(sym)}]/USDT ไม่สำเร็จ (เครือข่าย/API) — จะลองรอบถัดไป`,
         detail.slice(0, 400),
@@ -77,7 +81,7 @@ export async function runSparkAutoTradeTimeStopSweep(): Promise<{ due: number; c
       closedOk += 1;
       state = withoutSparkTimeStopForSymbol(state, userId, sym);
       const hadPos = (r.closed?.length ?? 0) > 0;
-      await notifyTradingViewWebhookTelegram(userId, [
+      await notifyTimeStopLines(userId, [
         "Koji — Spark time-stop (MEXC)",
         hadPos
           ? `✅ ปิดโพซิชัน [${shortContractLabel(sym)}]/USDT ตามเวลา (หลัง Spark auto-open)`
@@ -91,7 +95,7 @@ export async function runSparkAutoTradeTimeStopSweep(): Promise<{ due: number; c
           .join("; ") ||
         r.message ||
         "";
-      await notifyTradingViewWebhookTelegram(userId, [
+      await notifyTimeStopLines(userId, [
         "Koji — Spark time-stop (MEXC)",
         `❌ ปิด [${shortContractLabel(sym)}]/USDT ไม่ครบ — จะลองรอบถัดไป`,
         errs ? errs.slice(0, 400) : "",
