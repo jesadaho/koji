@@ -112,6 +112,8 @@ type SparkAutoTradeApiBundle = {
   marginUsdt?: number | null;
   leverage?: number | null;
   tpPct?: number | null;
+  /** ปิดโพซิชันหลัง Spark เปิดครบ N ชม. (cron ~5 นาที) • null = ปิดฟีเจอร์ */
+  timeStopHours?: number | null;
   byVol?: Partial<Record<SparkTierKey, SparkTierPayload | null>> | null;
 };
 
@@ -147,6 +149,8 @@ export default function SettingsTelegramMiniApp() {
   const [sparkMarginDefault, setSparkMarginDefault] = useState("");
   const [sparkLevDefault, setSparkLevDefault] = useState("");
   const [sparkTpDefault, setSparkTpDefault] = useState("");
+  /** checkbox = ชม.; เก็บเซิร์ฟเป็น sparkAutoTradeTimeStopHours === 3 */
+  const [sparkTimeStop3h, setSparkTimeStop3h] = useState(false);
   type SparkTierForm = { off: boolean };
   const tierEmpty: SparkTierForm = { off: false };
   const [sparkTiers, setSparkTiers] = useState<Record<SparkTierKey, SparkTierForm>>({
@@ -186,6 +190,8 @@ export default function SettingsTelegramMiniApp() {
     setSparkMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
     setSparkLevDefault(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
     setSparkTpDefault(st.tpPct != null && Number.isFinite(st.tpPct) ? String(st.tpPct) : "");
+    const tsh = st.timeStopHours;
+    setSparkTimeStop3h(typeof tsh === "number" && Number.isFinite(tsh) && Math.floor(tsh) === 3);
 
     const nextTiers: Record<SparkTierKey, SparkTierForm> = {
       high: { ...tierEmpty },
@@ -449,6 +455,7 @@ export default function SettingsTelegramMiniApp() {
         marginUsdt: sparkMarginDefault.trim() ? marginDefaultParsed : null,
         leverage: sparkLevDefault.trim() ? levDefaultParsed : null,
         tpPct: sparkTpDefault.trim() ? tpDefaultParsed : null,
+        timeStopHours: sparkTimeStop3h ? 3 : null,
         byVol: byVolBuilt,
       };
       const body: Record<string, unknown> = {
@@ -804,6 +811,24 @@ export default function SettingsTelegramMiniApp() {
               />
             </label>
           </div>
+
+          <label
+            className="sub tmaCheckboxField"
+            style={{ marginTop: "0.85rem", display: "flex", alignItems: "flex-start", gap: "0.5rem" }}
+          >
+            <input
+              type="checkbox"
+              checked={sparkTimeStop3h}
+              onChange={(e) => setSparkTimeStop3h(e.target.checked)}
+            />
+            <span className="tmaCheckboxField__text">
+              <strong>ปิด position อัตโนมัติเมื่อครบ ~3 ชั่วโมง</strong>
+              <span style={{ display: "block", opacity: 0.88, fontSize: "0.92em", marginTop: "0.2rem" }}>
+                ใช้กับที่เปิดจาก Spark auto-open เท่านั้น • เซิร์ฟสั่งปิด market (ตามรอบ cron ~5 นาที ไม่ได้เที่ยงวินาที)
+                • ถ้า TP จาก MEXC ชนก่อนครบเวลา โพซิชันอาจถูกปิดจาก TP อยู่ดี
+              </span>
+            </span>
+          </label>
 
           <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
             ระดับ Vol (24h เทียบ env SPARK_VOL_TIER_* — เหมือน Spark Matrix)

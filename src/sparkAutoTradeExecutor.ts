@@ -18,9 +18,9 @@ import {
 } from "./tradingViewCloseSettingsStore";
 import {
   loadSparkAutoTradeState,
-  saveSparkAutoTradeState,
   hasOpenedContractToday,
   withRecordedSuccessfulOpen,
+  withSparkTimeStopScheduled,
   bkkSparkAutoTradeDayKeyNow,
 } from "./sparkAutoTradeStateStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
@@ -48,6 +48,41 @@ export function isSparkAutotradeCronEnabled(): boolean {
 function shortContractLabel(contractSymbol: string): string {
   const s = contractSymbol.replace(/_USDT$/i, "").trim();
   return s.replace(/_/g, "") || contractSymbol;
+}
+
+/** แสดงราคา USDT ในแชท — อ่านง่าย ไม่ทิ้ง .00 ยาวเกิน */
+function formatSparkPriceUsdt(p: number): string {
+  if (!Number.isFinite(p) || p <= 0) return "—";
+  if (p >= 1000) return p.toFixed(2);
+  if (p >= 1) return p.toFixed(4);
+  return p.toFixed(6);
+}
+
+function sparkOpenTpNotifyLines(p: {
+  tpPct: number;
+  mark: number | null;
+  takeProfitPrice: number | undefined;
+  tpOmittedFallback: boolean;
+}): string[] {
+  const { tpPct, mark, takeProfitPrice, tpOmittedFallback } = p;
+  if (!(tpPct > 0)) {
+    return ["เป้า TP: ไม่ตั้ง (TP% = 0 หรือว่างใน Settings)"];
+  }
+  const markStr = mark != null ? formatSparkPriceUsdt(mark) : null;
+  if (takeProfitPrice != null) {
+    const tgt = formatSparkPriceUsdt(takeProfitPrice);
+    if (!tpOmittedFallback) {
+      return [
+        `เป้าราคา take-profit: ${tgt} USDT (+${tpPct}% จาก mark ประมาณ ${markStr ?? "—"} USDT) — แนบกับคำสั่งเปิดบน MEXC แล้ว`,
+      ];
+    }
+    return [
+      `เป้าราคา take-profit ที่คำนวณ: ${tgt} USDT (+${tpPct}% จาก mark ประมาณ ${markStr ?? "—"} USDT) — ไม่ได้แนบกับออเดอร์ (เปิด market อย่างเดียว) · แนะนำตั้ง TP มือบน MEXC ใกล้ราคานี้`,
+    ];
+  }
+  return [
+    `ตั้ง TP ${tpPct}% ใน Settings แต่คำนวณราคาเป้าไม่ได้ (ดึง mark ไม่สำเร็จ) — ควรตั้ง TP มือเอง`,
+  ];
 }
 
 async function notifyLines(userId: string, lines: string[]): Promise<void> {
@@ -145,6 +180,7 @@ export async function runSparkAutoTradeAfterSparkNotify(
         long,
         marginUsdt,
         leverage,
+        openType: 1,
         takeProfitPrice,
       });
 
@@ -155,6 +191,7 @@ export async function runSparkAutoTradeAfterSparkNotify(
           long,
           marginUsdt,
           leverage,
+          openType: 1,
         });
         tpOmittedFallback = true;
       }
@@ -179,14 +216,23 @@ export async function runSparkAutoTradeAfterSparkNotify(
           : undefined;
 
       state = withRecordedSuccessfulOpen(state, userId, sym, dayKey);
+      const tsH = (row as TradingViewMexcUserSettings).sparkAutoTradeTimeStopHours;
+      let timeStopLine = "";
+      if (typeof tsH === "number" && Number.isFinite(tsH) && tsH >= 1 && tsH <= 168) {
+        state = withSparkTimeStopScheduled(state, userId, sym, Date.now() + Math.floor(tsH) * 3600 * 1000);
+        timeStopLine =
+          tsH === 3
+            ? `Time-stop: ระบบจะพยายามปิดมาร์เก็ต ~ 3 ชม. หลังเปิดนี้ (ตามรอบ cron ~5–15 นาที)`
+            : `Time-stop: ระบบจะพยายามปิดมาร์เก็ต ~ ${Math.floor(tsH)} ชม. หลังเปิดนี้ (ตามรอบ cron)`;
+      }
       usersSucceeded += 1;
 
-      const tpLine =
-        takeProfitPrice != null && !tpOmittedFallback
-          ? `Take-profit ~ ${takeProfitPrice} (+${resolved.value.tpPct}%)`
-          : tpPct > 0 && tpOmittedFallback
-            ? `TP (${resolved.value.tpPct}%) ไม่ได้แนบ — แลกเปิดด้วย market อย่างเดียว`
-            : "";
+      const tpNotifyLines = sparkOpenTpNotifyLines({
+        tpPct: resolved.value.tpPct,
+        mark,
+        takeProfitPrice,
+        tpOmittedFallback,
+      });
 
       const ord = orderSideEffective(row as TradingViewMexcUserSettings);
       const ordHint =
@@ -204,7 +250,8 @@ export async function runSparkAutoTradeAfterSparkNotify(
         `[${shortContractLabel(sym)}]/USDT (${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%)`,
         `Vol band: ${volBand}`,
         `Margin ~${marginUsdt} USDT · ${resolved.value.leverage}x`,
-        ...(tpLine ? [tpLine] : []),
+        ...tpNotifyLines,
+        ...(timeStopLine ? [timeStopLine] : []),
         `Order: ${orderId ?? "-"}`,
         "ครั้งถัดไปในวันนี้: จะไม่เปิดจาก Spark เหมือนกันในเหรียญนี้ (ตั้งค่า 1 order/เหรียญ/วัน)",
       ]);

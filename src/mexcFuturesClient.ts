@@ -440,6 +440,7 @@ export function computeOpenVolFromNotionalUsdt(
 
 /**
  * เปิด market: side 1 long, 3 short — notionalUsdt = marginUsdt * leverage (ประมาณมูลค่า position)
+ * openType default = 1 isolated (ถ้าต้องการ cross margin ให้ส่ง openType เป็น 2 ชัดเจน)
  */
 export async function createOpenMarketOrder(
   creds: MexcCredentials,
@@ -448,6 +449,7 @@ export async function createOpenMarketOrder(
     long: boolean;
     marginUsdt: number;
     leverage: number;
+    /** MEXC: 1 = isolated (default), 2 = cross */
     openType?: 1 | 2;
     /** TP จากราคา mark ประมาณการเข้า — MEXC place-order field */
     takeProfitPrice?: number;
@@ -484,7 +486,7 @@ export async function createOpenMarketOrder(
   const vol = volResult.vol;
 
   const positionMode = await getFuturesUserPositionMode(creds);
-  const openType: 1 | 2 = p.openType === 1 ? 1 : 2;
+  const openType: 1 | 2 = p.openType === 2 ? 2 : 1;
   const side = p.long ? 1 : 3;
 
   const body: Record<string, unknown> = {

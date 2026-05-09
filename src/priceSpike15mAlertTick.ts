@@ -21,6 +21,7 @@ import {
   type SparkAutoTradeTickBatchRef,
 } from "./sparkAutoTradeExecutor";
 import { saveSparkAutoTradeState } from "./sparkAutoTradeStateStore";
+import { runSparkAutoTradeTimeStopSweep } from "./sparkAutoTradeTimeStopTick";
 
 /** ให้สอดคล้องกับ follow-up scheduler (anchor: barOpen + SPARK_BAR_SEC วินาที — ไม่ใช่ TF chart) */
 const SPARK_SIGNAL_BAR_SEC = 300;
@@ -244,6 +245,13 @@ function buildSparkMessage(
 export async function runPriceSpike15mAlertTick(
   client: Client
 ): Promise<{ notifiedPushes: number; symbolsHit: number }> {
+  /** time-stop ต้องรันแม้ปิด ticker Spark — ไม่งั้นคิวปิดจาก Spark จะไม่ถูกสแกน */
+  try {
+    await runSparkAutoTradeTimeStopSweep();
+  } catch (e) {
+    console.error("[priceSpike15mAlertTick] spark time-stop sweep (early)", e);
+  }
+
   if (!isPriceSpike15mSparkCronEnabled()) {
     return { notifiedPushes: 0, symbolsHit: 0 };
   }

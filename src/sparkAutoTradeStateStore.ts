@@ -22,10 +22,17 @@ export function bkkSparkAutoTradeDayKeyNow(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 }
 
+/** รอปิด market ตามเวลาหลัง Spark เปิดสำเร็จ — เก็บข้ามวันไทย (เทียบป้ายกำกับจาก dailyKey) */
+export type SparkTimeStopPending = {
+  contractSymbol: string;
+  closeAtMs: number;
+};
+
 export type SparkAutoTradePerUserState = {
   dailyKeyBkk: string;
   /** สัญญาที่เรียก MEXC เปิดสำเร็จแล้วในวันไทยนี้ — อย่างมากหนึ่งครั้งต่อ symbol */
   openedContractSymbolsToday: string[];
+  sparkTimeStopPending?: SparkTimeStopPending[];
 };
 
 export type SparkAutoTradeState = Record<string, SparkAutoTradePerUserState>;
@@ -49,13 +56,36 @@ async function ensureJsonFile(): Promise<void> {
   }
 }
 
+function normalizeTimeStopPending(raw: unknown): SparkTimeStopPending[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SparkTimeStopPending[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object" || Array.isArray(x)) continue;
+    const sym =
+      typeof (x as { contractSymbol?: unknown }).contractSymbol === "string"
+        ? (x as { contractSymbol: string }).contractSymbol.trim().toUpperCase()
+        : "";
+    const cm = (x as { closeAtMs?: unknown }).closeAtMs;
+    const closeAtMs = typeof cm === "number" && Number.isFinite(cm) ? cm : NaN;
+    if (!sym || !Number.isFinite(closeAtMs)) continue;
+    out.push({ contractSymbol: sym, closeAtMs });
+  }
+  const bySym = new Map<string, SparkTimeStopPending>();
+  for (const e of out) bySym.set(e.contractSymbol, e);
+  return [...bySym.values()];
+}
+
 function normalizeState(raw: unknown): SparkAutoTradeState {
   if (!raw || typeof raw !== "object") return {};
   const out: SparkAutoTradeState = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!k?.trim()) continue;
     if (!v || typeof v !== "object" || Array.isArray(v)) continue;
-    const o = v as { dailyKeyBkk?: unknown; openedContractSymbolsToday?: unknown };
+    const o = v as {
+      dailyKeyBkk?: unknown;
+      openedContractSymbolsToday?: unknown;
+      sparkTimeStopPending?: unknown;
+    };
     const dk = typeof o.dailyKeyBkk === "string" && o.dailyKeyBkk.trim() ? o.dailyKeyBkk.trim() : "";
     let syms: string[] = [];
     if (Array.isArray(o.openedContractSymbolsToday)) {
@@ -64,18 +94,35 @@ function normalizeState(raw: unknown): SparkAutoTradeState {
         .map((x) => x.trim().toUpperCase());
     }
     if (!dk) continue;
-    out[k.trim()] = { dailyKeyBkk: dk, openedContractSymbolsToday: dedupeStringsInOrder(syms) };
+    const pending = normalizeTimeStopPending(o.sparkTimeStopPending);
+    const entry: SparkAutoTradePerUserState = {
+      dailyKeyBkk: dk,
+      openedContractSymbolsToday: dedupeStringsInOrder(syms),
+    };
+    if (pending.length) entry.sparkTimeStopPending = pending;
+    out[k.trim()] = entry;
   }
   return out;
 }
 
-/** ให้เป็น state ใน-vocab ของวันไทย — ถ้าวันเก่าให้เก็บว่าง */
+/** ให้เป็น state ใน-vocab ของวันไทย — ถ้าวันเก่าให้เก็บว่าง opened วันนี้แต่เก็บ time-stop ค้าง */
 function userStateFresh(u: SparkAutoTradePerUserState | undefined, dayKey: string): SparkAutoTradePerUserState {
-  if (!u || u.dailyKeyBkk !== dayKey) return { dailyKeyBkk: dayKey, openedContractSymbolsToday: [] };
-  return {
-    ...u,
+  if (!u || u.dailyKeyBkk !== dayKey) {
+    const pend = normalizeTimeStopPending(u?.sparkTimeStopPending);
+    const base: SparkAutoTradePerUserState = {
+      dailyKeyBkk: dayKey,
+      openedContractSymbolsToday: [],
+    };
+    if (pend.length) base.sparkTimeStopPending = pend;
+    return base;
+  }
+  const pendIn = normalizeTimeStopPending(u.sparkTimeStopPending);
+  const next: SparkAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
     openedContractSymbolsToday: dedupeStringsInOrder(u.openedContractSymbolsToday.map((s) => s.toUpperCase())),
   };
+  if (pendIn.length) next.sparkTimeStopPending = pendIn;
+  return next;
 }
 
 export async function loadSparkAutoTradeState(): Promise<SparkAutoTradeState> {
@@ -134,12 +181,54 @@ export function withRecordedSuccessfulOpen(
   const prev = state[uid];
   const fresh = userStateFresh(prev, dayKey);
   if (fresh.openedContractSymbolsToday.includes(sym)) return state;
+  const nextUser: SparkAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    openedContractSymbolsToday: [...fresh.openedContractSymbolsToday, sym],
+  };
+  const pend = normalizeTimeStopPending(fresh.sparkTimeStopPending);
+  if (pend.length) nextUser.sparkTimeStopPending = pend;
+  return {
+    ...state,
+    [uid]: nextUser,
+  };
+}
+
+/** ใส่เวลาปิด market ภายหลัง Spark auto-open — ถ้ามี symbol เดียวกันจะใช้ closeAtMs ครั้งใหม่ */
+export function withSparkTimeStopScheduled(
+  state: SparkAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  closeAtMs: number,
+): SparkAutoTradeState {
+  const uid = userId.trim();
+  const sym = contractSymbol.trim().toUpperCase();
+  const prevUser = state[uid];
+  if (!prevUser) return state;
+  const list = normalizeTimeStopPending(prevUser.sparkTimeStopPending).filter((p) => p.contractSymbol !== sym);
+  list.push({ contractSymbol: sym, closeAtMs });
   return {
     ...state,
     [uid]: {
-      dailyKeyBkk: dayKey,
-      openedContractSymbolsToday: [...fresh.openedContractSymbolsToday, sym],
+      ...prevUser,
+      sparkTimeStopPending: list,
     },
   };
+}
+
+/** เอารายการ time-stop ออกหลังปิดครบแล้ว / โพซิชันไม่มีแล้ว */
+export function withoutSparkTimeStopForSymbol(
+  state: SparkAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+): SparkAutoTradeState {
+  const uid = userId.trim();
+  const sym = contractSymbol.trim().toUpperCase();
+  const prevUser = state[uid];
+  if (!prevUser) return state;
+  const list = normalizeTimeStopPending(prevUser.sparkTimeStopPending).filter((p) => p.contractSymbol !== sym);
+  const nextUser: SparkAutoTradePerUserState = { ...prevUser };
+  if (list.length) nextUser.sparkTimeStopPending = list;
+  else delete nextUser.sparkTimeStopPending;
+  return { ...state, [uid]: nextUser };
 }
 

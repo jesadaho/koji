@@ -78,6 +78,7 @@ function parseWebhookNonce(body: Record<string, unknown>): string | undefined {
  * TradingView Alert → POST JSON (URL เดิม)
  * CLOSE: cmd CLOSE_POSITION
  * OPEN: cmd OPEN_POSITION + side (LONG|SHORT|1|3) + marginUsdt + leverage (+ optional notionalUsdt+leverage)
+ * (+ optional openType: 1 isolated default, 2 cross)
  */
 export async function POST(req: NextRequest) {
   const contentType = req.headers.get("content-type") ?? "";

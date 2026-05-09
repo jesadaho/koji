@@ -767,6 +767,7 @@ export function tradingViewSparkAutoTradePayloadFromRow(row: TradingViewMexcUser
     marginUsdt: row.sparkAutoTradeMarginUsdt ?? null,
     leverage: row.sparkAutoTradeLeverage ?? null,
     tpPct: row.sparkAutoTradeTpPct ?? null,
+    timeStopHours: row.sparkAutoTradeTimeStopHours ?? null,
     byVol: row.sparkAutoTradeByVol ?? null,
   };
 }
@@ -801,6 +802,12 @@ function mergeTradingViewRowForSparkValidation(
         : patch.sparkAutoTradeTpPct !== undefined
           ? patch.sparkAutoTradeTpPct
           : prev.sparkAutoTradeTpPct,
+    sparkAutoTradeTimeStopHours:
+      patch.sparkAutoTradeTimeStopHours === null
+        ? undefined
+        : patch.sparkAutoTradeTimeStopHours !== undefined
+          ? patch.sparkAutoTradeTimeStopHours
+          : prev.sparkAutoTradeTimeStopHours,
     sparkAutoTradeByVol:
       patch.sparkAutoTradeByVol === null
         ? undefined
@@ -914,6 +921,20 @@ function parseSparkAutoTradeNested(
     byVol = Object.keys(out).length > 0 ? out : null;
   } else byVol = undefined;
 
+  let sparkAutoTradeTimeStopHours: number | null | undefined;
+  if ("timeStopHours" in o) {
+    const x = o.timeStopHours;
+    if (x === null || x === false || x === "" || x === 0 || x === "0") {
+      sparkAutoTradeTimeStopHours = null;
+    } else {
+      const n = typeof x === "number" ? x : Number(String(x).replace(/,/g, "").trim());
+      if (!Number.isFinite(n)) return { ok: false, error: "spark_time_stop_hours_invalid" };
+      const h = Math.floor(n);
+      if (h < 1 || h > 168) return { ok: false, error: "spark_time_stop_hours_invalid" };
+      sparkAutoTradeTimeStopHours = h;
+    }
+  }
+
   const patchPart: Omit<
     SaveTradingViewMexcInput,
     "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
@@ -924,6 +945,7 @@ function parseSparkAutoTradeNested(
     sparkAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
     sparkAutoTradeLeverage: mLev.v as number | null | undefined,
     sparkAutoTradeTpPct: mTp.v as number | null | undefined,
+    ...(sparkAutoTradeTimeStopHours !== undefined ? { sparkAutoTradeTimeStopHours } : {}),
     sparkAutoTradeByVol: byVol ?? undefined,
   };
 
@@ -957,7 +979,7 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
         ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
         : null,
       sparkAutoTradeNote:
-        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ)",
+        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ) — ถ้าเปิด time-stop ใน Settings ระบบจะคิวปิด market หลังครบชั่วโมงที่ตั้ง (สแกนตามรอบ cron ticker Spark ~5 นาที)",
       sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
     },
   };
@@ -1045,7 +1067,7 @@ export async function liffSetTradingViewMexcSettings(
         ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
         : null,
       sparkAutoTradeNote:
-        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ)",
+        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ) — ถ้าเปิด time-stop ใน Settings ระบบจะคิวปิด market หลังครบชั่วโมงที่ตั้ง (สแกนตามรอบ cron ticker Spark ~5 นาที)",
       sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
     },
   };

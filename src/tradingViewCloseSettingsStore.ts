@@ -41,6 +41,9 @@ export type TradingViewMexcUserSettings = {
   /** เป้ากำไร % จากราคาประมาณการเข้า — 0 หรือไม่มี = ไม่ตั้ง TP บนคำสั่ง */
   sparkAutoTradeTpPct?: number;
 
+  /** หลังเปิดจาก Spark สำเร็จ → ปิด position ครบประมาณ N ชม. (cron ~5 นาที) • ว่าง = ปิดฟีเจอร์ */
+  sparkAutoTradeTimeStopHours?: number;
+
   sparkAutoTradeByVol?: SparkAutoTradeByVol;
 };
 
@@ -196,6 +199,7 @@ export async function saveTradingViewMexcSettings(
     input.sparkAutoTradeMarginUsdt !== undefined ||
     input.sparkAutoTradeLeverage !== undefined ||
     input.sparkAutoTradeTpPct !== undefined ||
+    input.sparkAutoTradeTimeStopHours !== undefined ||
     input.sparkAutoTradeByVol !== undefined;
   const preserveSpark = Boolean(input.preserveSparkAutoTrade) && !touchedSparkPatch;
 
@@ -259,6 +263,14 @@ export async function saveTradingViewMexcSettings(
         : input.sparkAutoTradeTpPct !== undefined
           ? input.sparkAutoTradeTpPct
           : prev?.sparkAutoTradeTpPct,
+
+    sparkAutoTradeTimeStopHours: preserveSpark
+      ? prev?.sparkAutoTradeTimeStopHours
+      : input.sparkAutoTradeTimeStopHours === null
+        ? undefined
+        : input.sparkAutoTradeTimeStopHours !== undefined
+          ? input.sparkAutoTradeTimeStopHours
+          : prev?.sparkAutoTradeTimeStopHours,
 
     sparkAutoTradeByVol: mergedVol,
   };
