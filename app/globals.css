@@ -102,6 +102,25 @@ input[type="radio"] {
   margin-top: 0.1rem;
 }
 
+/* Checkbox + ข้อความยาวใน Mini App — grid โค้่งกว่า flex บน Telegram WebView */
+.tmaCheckboxField {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 0.35rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.tmaCheckboxField__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .inputSuffixWrap {
   position: relative;
   width: 100%;

@@ -694,21 +694,9 @@ export default function SettingsTelegramMiniApp() {
           </p>
         ) : null}
 
-          <label
-            className="sub"
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "0.5rem",
-              marginTop: "1rem",
-              marginBottom: 0,
-              cursor: "pointer",
-              lineHeight: 1.4,
-              maxWidth: "100%",
-            }}
-          >
+          <label className="sub tmaCheckboxField" style={{ marginTop: "1rem" }}>
             <input type="checkbox" checked={sparkEnabled} onChange={(e) => setSparkEnabled(e.target.checked)} />
-            <span style={{ flex: "1 1 0%", minWidth: 0, wordBreak: "break-word" }}>
+            <span className="tmaCheckboxField__text">
               <strong style={{ fontWeight: 600 }}>เปิดใช้ Spark auto-open</strong>
               <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
                 (ต้องตั้ง <code>SPARK_AUTOTRADE_ENABLED=1</code> ฝั่งเซิร์ฟเวอร์ด้วย)
@@ -806,17 +794,7 @@ export default function SettingsTelegramMiniApp() {
                 background: "rgba(0,0,0,0.12)",
               }}
             >
-              <label
-                className="sub"
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "0.5rem",
-                  margin: 0,
-                  cursor: "pointer",
-                  lineHeight: 1.35,
-                }}
-              >
+              <label className="sub tmaCheckboxField" style={{ marginBottom: 0 }}>
                 <input
                   type="checkbox"
                   checked={sparkTiers[key].off}
@@ -826,9 +804,8 @@ export default function SettingsTelegramMiniApp() {
                       [key]: { off: e.target.checked },
                     }))
                   }
-                  style={{ marginTop: "0.12rem", flexShrink: 0 }}
                 />
-                <span>
+                <span className="tmaCheckboxField__text">
                   <strong>{sparkTierLabelTh(key)}</strong>
                   <span style={{ display: "block", opacity: 0.88, fontSize: "0.92em", marginTop: "0.15rem" }}>
                     ติ๊ก = ไม่ auto-open ใน tier นี้
