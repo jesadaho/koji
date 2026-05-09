@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 
-const LiffApp = dynamic(() => import("@/components/LiffApp"), { ssr: false });
+const TelegramMiniApp = dynamic(() => import("@/components/TelegramMiniApp"), { ssr: false });
 
 export default function Page() {
-  return <LiffApp />;
+  return <TelegramMiniApp />;
 }

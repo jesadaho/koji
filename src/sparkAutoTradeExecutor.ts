@@ -180,7 +180,7 @@ export async function runSparkAutoTradeAfterSparkNotify(
       `[${shortContractLabel(sym)}]/USDT (${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%)`,
       `Vol band: ${volBand}`,
       `Margin ~${marginUsdt} USDT · ${resolved.value.leverage}x`,
-      tpLine || null,
+      ...(tpLine ? [tpLine] : []),
       `Order: ${orderId ?? "-"}`,
       "ครั้งถัดไปในวันนี้: จะไม่เปิดจาก Spark เหมือนกันในเหรียญนี้ (ตั้งค่า 1 order/เหรียญ/วัน)",
     ]);

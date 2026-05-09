@@ -165,7 +165,7 @@ type VolumeSignalAlertRow = {
   };
 };
 
-export default function LiffApp() {
+export default function TelegramMiniApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [welcome, setWelcome] = useState("MEXC Futures — จัดการแจ้งเตือน");
@@ -480,7 +480,7 @@ export default function LiffApp() {
                 <strong>เปิดหน้านี้จาก Telegram Mini App</strong>
               </p>
               <p className="sub">
-                ตั้ง Web App URL ใน BotFather แล้วเปิดจากแอป Telegram — ไม่รองรับโหมด LIFF แล้ว
+                ตั้ง Web App URL ใน BotFather แล้วเปิดจากแอป Telegram (Mini App) เท่านั้น
               </p>
             </>
           );
@@ -727,9 +727,9 @@ export default function LiffApp() {
   if (phase === "loading") {
     return (
       <div className="card">
-        <div className="liffLoading" role="status" aria-live="polite" aria-busy="true">
-          <div className="liffLoadingSpinner" aria-hidden />
-          <p className="liffLoadingLabel">กำลังโหลด…</p>
+        <div className="tmaLoading" role="status" aria-live="polite" aria-busy="true">
+          <div className="tmaLoadingSpinner" aria-hidden />
+          <p className="tmaLoadingLabel">กำลังโหลด…</p>
         </div>
       </div>
     );
@@ -743,7 +743,7 @@ export default function LiffApp() {
     <>
       <h1>Koji</h1>
       <p className="sub">{welcome}</p>
-      <p className="sub liffQuickNav">
+      <p className="sub tmaQuickNav">
         <Link href="/markets">Markets</Link>
         <span className="siteNavSep" aria-hidden>
           |
@@ -757,48 +757,48 @@ export default function LiffApp() {
 
       <div className="card">
         <div
-          className="liffTabList"
+          className="tmaTabList"
           role="tablist"
           aria-label="ประเภทการแจ้งเตือน"
         >
           <button
             type="button"
-            className="liffTab"
-            id="liff-tab-price"
+            className="tmaTab"
+            id="tma-tab-price"
             role="tab"
             aria-selected={homeAlertTab === "price"}
-            aria-controls="liff-panel-price"
+            aria-controls="tma-panel-price"
             tabIndex={homeAlertTab === "price" ? 0 : -1}
             onClick={() => setHomeAlertTab("price")}
           >
             <span>แจ้งเตือนเป้าราคา</span>
-            <span className="liffTabEn">Price Alert</span>
+            <span className="tmaTabEn">Price Alert</span>
           </button>
           <button
             type="button"
-            className="liffTab"
-            id="liff-tab-change"
+            className="tmaTab"
+            id="tma-tab-change"
             role="tab"
             aria-selected={homeAlertTab === "change"}
-            aria-controls="liff-panel-change"
+            aria-controls="tma-panel-change"
             tabIndex={homeAlertTab === "change" ? 0 : -1}
             onClick={() => setHomeAlertTab("change")}
           >
             <span>แจ้งเตือนความเคลื่อนไหว</span>
-            <span className="liffTabEn">Change Alert</span>
+            <span className="tmaTabEn">Change Alert</span>
           </button>
           <button
             type="button"
-            className="liffTab"
-            id="liff-tab-indicators"
+            className="tmaTab"
+            id="tma-tab-indicators"
             role="tab"
             aria-selected={homeAlertTab === "indicators"}
-            aria-controls="liff-panel-indicators"
+            aria-controls="tma-panel-indicators"
             tabIndex={homeAlertTab === "indicators" ? 0 : -1}
             onClick={() => setHomeAlertTab("indicators")}
           >
             <span>Indicator Settings</span>
-            <span className="liffTabEn">Vol · RSI · EMA</span>
+            <span className="tmaTabEn">Vol · RSI · EMA</span>
           </button>
         </div>
 
@@ -810,10 +810,10 @@ export default function LiffApp() {
 
         {homeAlertTab === "price" ? (
           <div
-            className="liffTabPanel"
-            id="liff-panel-price"
+            className="tmaTabPanel"
+            id="tma-panel-price"
             role="tabpanel"
-            aria-labelledby="liff-tab-price"
+            aria-labelledby="tma-tab-price"
           >
             <h2>เพิ่มการแจ้งเตือน</h2>
             <div className="row">
@@ -889,10 +889,10 @@ export default function LiffApp() {
           </div>
         ) : homeAlertTab === "change" ? (
           <div
-            className="liffTabPanel"
-            id="liff-panel-change"
+            className="tmaTabPanel"
+            id="tma-panel-change"
             role="tabpanel"
-            aria-labelledby="liff-tab-change"
+            aria-labelledby="tma-tab-change"
           >
             <h2>แจ้งเตือนการเคลื่อนไหวราคา</h2>
             <p className="sub" style={{ marginTop: 0 }}>
@@ -1001,10 +1001,10 @@ export default function LiffApp() {
           </div>
         ) : homeAlertTab === "indicators" ? (
           <div
-            className="liffTabPanel"
-            id="liff-panel-indicators"
+            className="tmaTabPanel"
+            id="tma-panel-indicators"
             role="tabpanel"
-            aria-labelledby="liff-tab-indicators"
+            aria-labelledby="tma-tab-indicators"
           >
             <h2 className="indSettingsTitle">Koji — Indicator Settings</h2>
             <div className="indSettingsInfo">

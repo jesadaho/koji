@@ -1,3 +1,7 @@
+/**
+ * Helpers ให้คำสั่ง HTTP จากเว็บแอปในแชท: `/api/tma` (หลัก) และ optionally `/api/liff` เมื่อยังผูก LINE OA + LIFF.
+ * พร็อกซีธุรกิจอยู่ที่ฟังก์ชัน `liff*` แม้ว่าใน production ของคุณจะเหลือ Telegram Mini App อย่างเดียว.
+ */
 import { config } from "./config";
 import { verifyLiffIdToken } from "./liffAuth";
 import { addAlert, listAlertsForUser, removeAlertById } from "./alertsStore";
@@ -674,7 +678,7 @@ export async function liffDeleteIndicatorAlert(
   return { status: 204 };
 }
 
-/** สถิติ Spark (global) — ไม่มี userId แต่ต้องผ่าน LIFF auth */
+/** สถิติ Spark (global) — ไม่มี userId แต่ต้องผ่าน auth ของหนึ่งใน `/api/liff` หรือ `/api/tma` */
 export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
   const state = await loadSparkFollowUpState();
   return buildSparkStatsApiPayload(state);

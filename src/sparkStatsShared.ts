@@ -1,5 +1,5 @@
 /**
- * Types + constants สำหรับ Spark stats / LIFF — ไม่ import store (Node/fs)
+ * Types + constants สำหรับ Spark stats (Mini App / LINE เดิม) — ไม่ import store (Node/fs)
  * ใช้จาก client components ได้
  */
 import type { SparkMcapBand, SparkVolBand } from "./sparkTierContext";
@@ -64,7 +64,7 @@ export type SparkSymbolMatrixRow = {
  */
 export type SparkMatrixEmptyHint = null | "fire_log_only" | "history_without_momentum";
 
-/** ค่าที่ส่งออกทาง API LIFF (ไม่รวม aggregates ภายในสำหรับข้อความ LINE) */
+/** ค่าที่ส่งออกทาง REST หลัง auth (ไม่รวม aggregates ภายในสำหรับข้อความ LINE) */
 export type SparkStatsApiPayload = {
   /**
    * false = โฮสต์บน Vercel แต่ยังไม่มี REDIS_URL / Vercel KV — ไม่บันทึก state Spark

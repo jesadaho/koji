@@ -238,24 +238,24 @@ code {
   user-select: none;
 }
 
-.liffQuickNav {
+.tmaQuickNav {
   margin-top: -0.2rem;
   margin-bottom: 0.5rem;
 }
 
-.liffQuickNav a {
+.tmaQuickNav a {
   color: var(--accent);
   text-decoration: none;
   font-weight: 600;
   font-size: 0.9rem;
 }
 
-.liffQuickNav a:hover,
-.liffQuickNav a:focus-visible {
+.tmaQuickNav a:hover,
+.tmaQuickNav a:focus-visible {
   text-decoration: underline;
 }
 
-.liffTabList {
+.tmaTabList {
   display: flex;
   gap: 0.35rem;
   margin: 0 0 1rem;
@@ -265,7 +265,7 @@ code {
   border: 1px solid var(--border);
 }
 
-.liffTab {
+.tmaTab {
   flex: 1;
   min-width: 0;
   margin-top: 0;
@@ -286,38 +286,38 @@ code {
   cursor: pointer;
 }
 
-.liffTab:hover {
+.tmaTab:hover {
   color: var(--text);
 }
 
-.liffTab:focus-visible {
+.tmaTab:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.liffTab[aria-selected="true"] {
+.tmaTab[aria-selected="true"] {
   background: rgba(6, 199, 85, 0.14);
   color: var(--text);
 }
 
-.liffTabEn {
+.tmaTabEn {
   font-size: 0.6rem;
   font-weight: 500;
   opacity: 0.85;
 }
 
-.liffTabPanel h2:first-child {
+.tmaTabPanel h2:first-child {
   margin-top: 0;
 }
 
-/* LIFF — loading state */
-@keyframes liffLoadingSpin {
+/* Telegram Mini App (shared UI chrome) — loading state */
+@keyframes tmaLoadingSpin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.liffLoading {
+.tmaLoading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -327,28 +327,28 @@ code {
   padding: 1.5rem 1rem;
 }
 
-.liffLoadingSpinner {
+.tmaLoadingSpinner {
   width: 2.5rem;
   height: 2.5rem;
   border: 3px solid color-mix(in srgb, var(--accent) 20%, var(--border));
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: liffLoadingSpin 0.72s linear infinite;
+  animation: tmaLoadingSpin 0.72s linear infinite;
 }
 
-.liffLoadingLabel {
+.tmaLoadingLabel {
   font-size: 0.92rem;
   color: var(--muted);
   margin: 0;
 }
 
-.liffLoadingRow {
+.tmaLoadingRow {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
 }
 
-.liffLoadingSpinner--sm {
+.tmaLoadingSpinner--sm {
   width: 1.1rem;
   height: 1.1rem;
   border-width: 2px;
@@ -356,13 +356,13 @@ code {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .liffLoadingSpinner {
+  .tmaLoadingSpinner {
     animation: none;
     border-top-color: color-mix(in srgb, var(--accent) 55%, var(--border));
   }
 }
 
-/* LIFF — Spark stats win-rate matrix */
+/* Spark stats win-rate matrix (Mini App page) */
 .sparkStatsPage {
   max-width: 42rem;
   margin: 0 auto;

@@ -2,14 +2,14 @@ import type { FlexBubble } from "@line/bot-sdk";
 import { SYSTEM_CHANGE_CMD_OFF_TH, SYSTEM_CHANGE_CMD_ON_TH } from "./systemChangeLineCommands";
 
 export const KOJI_MENU_ALT_TEXT =
-  "Koji — เปิดแอป, Market, สถิติ Spark Matrix, Top 50 Funding, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อไม่มี LIFF), ช่วยเหลือ";
+  "Koji — เปิดแอป, Market, สถิติ Spark Matrix, Top 50 Funding, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อยังไม่ตั้งเปิดจากเว็บแอปบน LINE), ช่วยเหลือ";
 
 /** เมื่อยังไม่ติดตามระบบ — ไม่มีปุ่ม Top Funding */
 export const KOJI_MENU_ALT_TEXT_NO_TOP_FUNDING =
-  "Koji — เปิดแอป, Market, สถิติ Spark Matrix, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อไม่มี LIFF), ช่วยเหลือ";
+  "Koji — เปิดแอป, Market, สถิติ Spark Matrix, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อยังไม่ตั้งเปิดจากเว็บแอปบน LINE), ช่วยเหลือ";
 
 export type KojiWelcomeFlexOptions = {
-  /** ถ้า true แสดงปุ่ม Top 50 Funding (เฉพาะเมื่อมี LIFF) — ผูกกับผู้ที่ติดตาม System conditions */
+  /** ถ้า true แสดงปุ่ม Top 50 Funding (เมื่อผูก LIFF-ID บน OA) — ผูกกับผู้ที่ติดตาม System conditions */
   subscribedSystemChange?: boolean;
 };
 

@@ -100,7 +100,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • ติดตามระบบ — System conditions: funding / max order size (Top 50 |funding|)
   funding: แจ้งเมื่อรอบชำระ (ชม.) เปลี่ยน หรือ |Δfunding| ≥ 0.1% pt — ไม่แจ้งเมื่อมีแค่เวลาตัดถัดไปเปลี่ยน (ปรับ env CONTRACT_FUNDING_MIN_DELTA_DISPLAY ได้)
   order: แจ้งเมื่อ max order size เปลี่ยน
-  (หรือเปิด/ปิดจาก LIFF หน้า Settings เมื่อตั้ง LIFF แล้ว)
+  (หรือเปิด/ปิดจากเว็บแอปในแชท หน้า Settings เมื่อติดตั้งแอปเว็บแล้ว)
 • เลิกติดตามระบบ — ปิดการแจ้งเตือนดังกล่าว
 • สถานะติดตามระบบ — เช็คว่าเปิดรับหรือยัง
   (EN: follow system / unfollow system, system conditions on / off, system status, #subscribeSystem / #unsubscribeSystem / #systemStatus)
@@ -112,7 +112,7 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
   (EN: cron status, #cronStatus — Spark ticker: สถานะ spark, spark cron, #sparkCron)
 
 • สถิติ spark — สรุปผลติดตาม Spark หลัง T+10m … T+4h (momentum vs fade) ในแชท
-  เปิด LIFF หน้า «สถิติ Spark» เพื่อดู Win-rate matrix แยก Vol / มาร์ก. (พร็อกซี)
+  เปิดเว็บแอปในแชทที่หน้า «สถิติ Spark» เพื่อดู Win-rate matrix แยก Vol / มาร์ก. (พร็อกซี)
   (EN: spark stats, #sparkStats)
 
 • ล้างสถิติ spark — ล้างข้อมูล matrix (pending / history / fire log) เพื่อเก็บใหม่ — ต้องตั้ง env KOJI_ADMIN_IDS=LINE_user_id ของคุณ
@@ -130,9 +130,9 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 • ทดสอบแจ้งเตือน — ส่งไป Telegram / Discord / LINE ตาม env (LINE ต้อง LINE_ALERT_PUSH_ENABLED=1) แล้วตอบยืนยันในแชท
   (EN: test push, #testpush)
 
-• เหรียญที่ติดตามใน LIFF — แจ้งเมื่อ EMA6 กับ EMA12 ตัดกันบน 15 นาที (รอบเดียวกับ price-sync ~15 นาที; ปิดได้ EMA612_15M_WATCH_ALERTS_ENABLED=0)
+• เหรียญที่ติดตามในเว็บแอป — แจ้งเมื่อ EMA6 กับ EMA12 ตัดกันบน 15 นาที (รอบเดียวกับ price-sync ~15 นาที; ปิดได้ EMA612_15M_WATCH_ALERTS_ENABLED=0)
 
-จัดการผ่านเว็บ LIFF บน Next.js (เช่น Vercel) — ตั้ง LIFF Endpoint ให้ตรง URL โฮสต์หน้าเว็บ`;
+จัดการผ่านเว็บแอปในแชทตามที่ติดตั้ง (LINE OA + LIFF และ/หรือ Telegram Bot + Mini App) บน Next.js (เช่น Vercel) — ให้ Endpoint ของ LIFF และ Web App URL ตรง URL โฮสต์หน้าเว็บ`;
 
 function parsePriceCmd(t: string): string | null {
   const m = t.match(/^(?:ราคา|price)\s+(.+)$/i);
@@ -542,7 +542,7 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
             "ล้าง: คิว follow-up · history (win-rate) · recentSparks (fire log)",
             "ไม่แตะ: price spike state อื่น",
             "",
-            "เปิด LIFF «สถิติ Spark» จะเห็นข้อมูลว่างจนมี Spark ใหม่",
+            "เปิดเว็บแอปที่หน้า «สถิติ Spark» จะเห็นข้อมูลว่างจนมี Spark ใหม่",
           ].join("\n"),
         },
       ]);

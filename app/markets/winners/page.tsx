@@ -165,7 +165,7 @@ export default async function MarketsWinnersPage({
         </div>
       )}
 
-      <p className="sub liffQuickNav" style={{ marginTop: "1rem" }}>
+      <p className="sub tmaQuickNav" style={{ marginTop: "1rem" }}>
         <Link href={marketsMainHref("momentum", showDebugColumns)}>← Markets หลัก (Momentum / Funding / Basis)</Link>
         <span className="siteNavSep" aria-hidden>
           |

@@ -584,7 +584,7 @@ export async function POST(req: NextRequest) {
           "ล้าง: คิว follow-up · history (win-rate) · recentSparks (fire log)",
           "ไม่แตะ: price spike state อื่น",
           "",
-          "เปิด LIFF «สถิติ Spark» จะเห็นข้อมูลว่างจนมี Spark ใหม่",
+          "เปิด Mini App Telegram หน้า «สถิติ Spark» จะเห็นข้อมูลว่างจนมี Spark ใหม่",
         ].join("\n"),
         threadOpts,
       );

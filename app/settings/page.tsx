@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 
-const SettingsLiffApp = dynamic(() => import("@/components/SettingsLiffApp"), { ssr: false });
+const SettingsTelegramMiniApp = dynamic(
+  () => import("@/components/SettingsTelegramMiniApp"),
+  { ssr: false }
+);
 
 export const metadata: Metadata = {
   title: "Settings — Koji",
@@ -9,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function SettingsPage() {
-  return <SettingsLiffApp />;
+  return <SettingsTelegramMiniApp />;
 }

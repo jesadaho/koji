@@ -159,7 +159,7 @@ function SparkStatsMatrixSection({
     <section className="sparkStatsMatrixSection" aria-labelledby={headingId}>
       <h2 id={headingId} className="sparkStatsMatrixSectionTitle">
         {title}
-        <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem", fontSize: "0.88em" }}>
+        <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem", fontSize: "0.88em" }}>
           {titleEn}
         </span>
       </h2>
@@ -200,7 +200,7 @@ function SymbolCountBlock({
     <div className="sparkSymbolCountSection">
       <h3>
         {title}
-        <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", fontSize: "0.85em", marginTop: "0.1rem" }}>
+        <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", fontSize: "0.85em", marginTop: "0.1rem" }}>
           {titleEn}
         </span>
       </h3>
@@ -249,7 +249,7 @@ function SymbolMatrixTable({
     <div style={{ marginTop: "1rem" }}>
       <Title style={{ marginBottom: "0.35rem", fontSize: titleTag === "h3" ? "0.95rem" : undefined }}>
         {title}
-        <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
+        <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
           {titleEn}
         </span>
       </Title>
@@ -310,7 +310,7 @@ function WinRateMatrixTable({
     <div style={{ marginTop: "1rem" }}>
       <Title style={{ marginBottom: "0.35rem", fontSize: titleTag === "h3" ? "0.95rem" : undefined }}>
         {title}
-        <span className="liffTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
+        <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
           {titleEn}
         </span>
       </Title>
@@ -349,7 +349,7 @@ function WinRateMatrixTable({
   );
 }
 
-export default function SparkStatsLiff() {
+export default function SparkStatsTelegramMiniApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [payload, setPayload] = useState<SparkStatsApiPayload | null>(null);
@@ -492,9 +492,9 @@ export default function SparkStatsLiff() {
   if (phase === "loading") {
     return (
       <div className="card">
-        <div className="liffLoading" role="status" aria-live="polite" aria-busy="true">
-          <div className="liffLoadingSpinner" aria-hidden />
-          <p className="liffLoadingLabel">กำลังโหลด…</p>
+        <div className="tmaLoading" role="status" aria-live="polite" aria-busy="true">
+          <div className="tmaLoadingSpinner" aria-hidden />
+          <p className="tmaLoadingLabel">กำลังโหลด…</p>
         </div>
       </div>
     );
@@ -519,11 +519,11 @@ export default function SparkStatsLiff() {
       <h1>สถิติ Spark</h1>
       <p className="sub">
         Spark follow-up · Win-rate matrix
-        <span className="liffTabEn" style={{ display: "block", marginTop: "0.15rem" }}>
+        <span className="tmaTabEn" style={{ display: "block", marginTop: "0.15rem" }}>
           Momentum vs fade (global)
         </span>
       </p>
-      <p className="sub liffQuickNav">
+      <p className="sub tmaQuickNav">
         <Link href="/">เปิดแอป</Link>
         <span className="siteNavSep" aria-hidden>
           |
@@ -559,7 +559,7 @@ export default function SparkStatsLiff() {
             }}
           >
             <strong>ยังไม่มีที่เก็บถาวรสำหรับสถิติ Spark</strong>
-            <span className="liffTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
+            <span className="tmaTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
               Vercel needs REDIS_URL or Vercel KV
             </span>
             <p style={{ margin: "0.5rem 0 0" }}>
@@ -583,7 +583,7 @@ export default function SparkStatsLiff() {
             }}
           >
             <strong>Matrix ยังเป็น — เพราะยังไม่มี follow-up จบครบ</strong>
-            <span className="liffTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
+            <span className="tmaTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
               Spark log counts fires; win-rate needs resolved T+10m…T+4h rows (~4h after signal).
             </span>
             <p style={{ margin: "0.5rem 0 0" }}>
@@ -609,7 +609,7 @@ export default function SparkStatsLiff() {
             }}
           >
             <strong>มี follow-up จบแล้ว แต่ทุกช่วง momentum เป็น null</strong>
-            <span className="liffTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
+            <span className="tmaTabEn" style={{ display: "block", marginTop: "0.2rem", fontWeight: "normal" }}>
               Price fetch may have failed at checkpoints, or rows predate momentum fields.
             </span>
             <p style={{ margin: "0.5rem 0 0" }}>

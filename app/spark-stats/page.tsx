@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import dynamic from "next/dynamic";
 
-const SparkStatsLiff = dynamic(() => import("@/components/SparkStatsLiff"), { ssr: false });
+const SparkStatsTelegramMiniApp = dynamic(
+  () => import("@/components/SparkStatsTelegramMiniApp"),
+  { ssr: false }
+);
 
 export const metadata: Metadata = {
   title: "สถิติ Spark — Koji",
@@ -9,5 +12,5 @@ export const metadata: Metadata = {
 };
 
 export default function SparkStatsPage() {
-  return <SparkStatsLiff />;
+  return <SparkStatsTelegramMiniApp />;
 }

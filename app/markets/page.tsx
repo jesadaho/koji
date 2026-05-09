@@ -192,7 +192,7 @@ export default async function MarketsPage({
         </div>
       )}
 
-      <p className="sub liffQuickNav" style={{ marginTop: "1rem" }}>
+      <p className="sub tmaQuickNav" style={{ marginTop: "1rem" }}>
         <Link href="/">← หน้าแจ้งเตือน</Link>
         <span className="siteNavSep" aria-hidden>
           |

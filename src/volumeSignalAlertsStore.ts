@@ -8,7 +8,7 @@ const filePath = join(process.cwd(), "data", "volume_signal_alerts.json");
 
 export type VolumeSignalTimeframe = "1h" | "4h";
 
-/** บันทึกเมื่อแจ้งเตือนล่าสุด (เฟส 3 — แสดงใน LIFF) */
+/** บันทึกเมื่อแจ้งเตือนล่าสุด (เฟส 3 — แสดงในเว็บแอป) */
 export type VolumeSignalLastEvent = {
   at: string;
   volRatio: number;
@@ -93,7 +93,7 @@ export async function listVolumeSignalAlertsForUser(userId: string): Promise<Vol
 }
 
 /**
- * ลบทุกแถว volume signal ของ user ใน timeframe นี้ แล้วแทนที่ด้วยชุดใหม่ (สำหรับ sync จาก LIFF)
+ * ลบทุกแถว volume signal ของ user ใน timeframe นี้ แล้วแทนที่ด้วยชุดใหม่ (สำหรับ sync จาก Mini App/API)
  */
 export async function replaceUserVolumeSignalAlertsForTimeframe(
   userId: string,

@@ -218,7 +218,7 @@ export async function runVolumeSignalAlertTick(client: Client): Promise<{ notifi
   return { notified };
 }
 
-/** สำหรับ LIFF meta (เกณฑ์จาก env / default) */
+/** สำหรับโหลดเกณฑ์ meta จาก env (ให้ฟอร์ม Mini App เทียบ) */
 export function getVolumeSignalMinVolRatioDisplay(): number {
   return minVolRatio();
 }
@@ -231,7 +231,7 @@ export function getVolumeSignalMinAbsReturnPctDisplay(): number {
   return minAbsReturnPctEnv();
 }
 
-/** ค่าเริ่มของ 1h หลัง fallback (เข้ากันกับ LIFF เดิมที่ใช้ฟิลด์เดียว) */
+/** ค่าเริ่มของ 1h หลัง fallback (เข้ากันข้ามฟอร์มเว็บแอป) */
 export function getVolumeSignalMinAbsMomentumDisplay(): number {
   return minAbsMomentumForTimeframe("1h");
 }

@@ -111,7 +111,7 @@ type TradingViewMexcResponse = {
   sparkAutoTrade?: SparkAutoTradeApiBundle;
 };
 
-export default function SettingsLiffApp() {
+export default function SettingsTelegramMiniApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [titleLine, setTitleLine] = useState("ตั้งค่า");
@@ -303,9 +303,9 @@ export default function SettingsLiffApp() {
   if (phase === "loading") {
     return (
       <div className="card">
-        <div className="liffLoading" role="status" aria-live="polite" aria-busy="true">
-          <div className="liffLoadingSpinner" aria-hidden />
-          <p className="liffLoadingLabel">กำลังโหลด…</p>
+        <div className="tmaLoading" role="status" aria-live="polite" aria-busy="true">
+          <div className="tmaLoadingSpinner" aria-hidden />
+          <p className="tmaLoadingLabel">กำลังโหลด…</p>
         </div>
       </div>
     );
@@ -466,7 +466,7 @@ export default function SettingsLiffApp() {
     <main className="settingsPage">
       <h1>Settings</h1>
       <p className="sub">{titleLine}</p>
-      <p className="sub liffQuickNav">
+      <p className="sub tmaQuickNav">
         <Link href="/">หน้าแจ้งเตือน</Link>
         <span className="siteNavSep" aria-hidden>
           |

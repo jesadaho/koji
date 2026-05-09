@@ -266,7 +266,7 @@ export type SparkStatsPayload = SparkStatsApiPayload & {
 };
 
 /**
- * สรุปสถิติ Spark + follow-up เป็น JSON (ใช้ LIFF / LINE ร่วมกัน)
+ * สรุปสถิติ Spark + follow-up เป็น JSON (ส่งให้ Telegram Mini App / LINE เดิม ใช้ payload เดียวกันได้)
  */
 /** บน Vercel ต้องมี Redis/KV ถึงจะ persist ได้ — โลคัลใช้ไฟล์ใน data/ */
 function sparkStatsPersistenceEnabledForHost(): boolean {
@@ -403,7 +403,7 @@ export function buildSparkStatsPayload(state: SparkFollowUpState): SparkStatsPay
   };
 }
 
-/** สำหรับ API LIFF — ไม่ส่ง lineFormatAggs */
+/** โหลดจาก endpoint ซึ่งเรียกหลัง auth (Mini App/LINE เดิม) — ไม่ส่ง lineFormatAggs */
 export function buildSparkStatsApiPayload(state: SparkFollowUpState): SparkStatsApiPayload {
   const p = buildSparkStatsPayload(state);
   const { lineFormatAggs: _omitLineFormat, ...rest } = p;

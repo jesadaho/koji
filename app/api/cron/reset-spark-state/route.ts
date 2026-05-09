@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * ล้างข้อมูล Spark matrix (state เดียวกับสถิติ LIFF) — เรียกด้วยตนเอง ไม่ใส่ใน vercel.json crons
+ * ล้างข้อมูล Spark matrix (state เดียวกับสถิติที่โชว์ใน Mini App) — เรียกด้วยตนเอง ไม่ใส่ใน vercel.json crons
  *
  * GET /api/cron/reset-spark-state — Authorization: Bearer $CRON_SECRET
  *
