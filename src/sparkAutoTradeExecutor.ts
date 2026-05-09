@@ -112,7 +112,15 @@ export async function runSparkAutoTradeAfterSparkNotify(
     try {
       positions = await getOpenPositions(creds, sym);
     } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
       console.error("[sparkAutoTrade] open_positions fail", sym, userId, e);
+      await notifyLines(userId, [
+        "Koji — Spark auto-open (MEXC)",
+        "❌ เช็คโพซิชันจาก MEXC ไม่สำเร็จ — จึงไม่สั่งเปิด (ป้องกันซ้ำ)",
+        `[${shortContractLabel(sym)}]/USDT (${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%)`,
+        `Vol band: ${volBand}`,
+        `รายละเอียด: ${detail.slice(0, 320)}`,
+      ]);
       continue;
     }
     if (hasActiveUsdtPosition(positions, sym)) continue;
@@ -121,81 +129,96 @@ export async function runSparkAutoTradeAfterSparkNotify(
     const { marginUsdt, leverage, tpPct } = resolved.value;
     usersAttempted += 1;
 
-    const markPub = await getContractLastPricePublic(sym);
-    const mark = typeof markPub === "number" && markPub > 0 ? markPub : null;
-    let takeProfitPrice: number | undefined;
-    if (mark != null) {
-      const tp = computeTakeProfitPriceFromMark(mark, long, tpPct);
-      if (tp != null) takeProfitPrice = tp;
-    }
+    const sideHint = long ? "LONG" : "SHORT";
 
-    let om = await createOpenMarketOrder(creds, {
-      contractSymbol: sym,
-      long,
-      marginUsdt,
-      leverage,
-      takeProfitPrice,
-    });
+    try {
+      const markPub = await getContractLastPricePublic(sym);
+      const mark = typeof markPub === "number" && markPub > 0 ? markPub : null;
+      let takeProfitPrice: number | undefined;
+      if (mark != null) {
+        const tp = computeTakeProfitPriceFromMark(mark, long, tpPct);
+        if (tp != null) takeProfitPrice = tp;
+      }
 
-    let tpOmittedFallback = false;
-    if (!om.success && takeProfitPrice != null) {
-      om = await createOpenMarketOrder(creds, {
+      let om = await createOpenMarketOrder(creds, {
         contractSymbol: sym,
         long,
         marginUsdt,
         leverage,
+        takeProfitPrice,
       });
-      tpOmittedFallback = true;
-    }
 
-    if (!om.success) {
-      const msg = om.message ?? `code ${om.code}`;
-      await notifyLines(userId, [
-        "Koji — Spark auto-open (MEXC)",
-        "❌ สั่งเปิดไม่สำเร็จ",
-        `[${shortContractLabel(sym)}]/USDT (${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%)`,
-        `Vol band: ${volBand}`,
-        `MEXC: ${msg}`,
-      ]);
-      continue;
-    }
+      let tpOmittedFallback = false;
+      if (!om.success && takeProfitPrice != null) {
+        om = await createOpenMarketOrder(creds, {
+          contractSymbol: sym,
+          long,
+          marginUsdt,
+          leverage,
+        });
+        tpOmittedFallback = true;
+      }
 
-    const d = om.data;
-    const orderId =
-      d && typeof d === "object" && d !== null && "orderId" in d
-        ? String((d as { orderId: unknown }).orderId)
-        : undefined;
+      if (!om.success) {
+        const msg = om.message ?? `code ${om.code}`;
+        await notifyLines(userId, [
+          "Koji — Spark auto-open (MEXC)",
+          `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น ${sideHint})`,
+          `[${shortContractLabel(sym)}]/USDT (${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%)`,
+          `Vol band: ${volBand}`,
+          `Margin ~${marginUsdt} USDT · ${leverage}x`,
+          `MEXC: ${msg}`,
+        ]);
+        continue;
+      }
 
-    state = withRecordedSuccessfulOpen(state, userId, sym, dayKey);
-    usersSucceeded += 1;
+      const d = om.data;
+      const orderId =
+        d && typeof d === "object" && d !== null && "orderId" in d
+          ? String((d as { orderId: unknown }).orderId)
+          : undefined;
 
-    const tpLine =
-      takeProfitPrice != null && !tpOmittedFallback
-        ? `Take-profit ~ ${takeProfitPrice} (+${resolved.value.tpPct}%)`
-        : tpPct > 0 && tpOmittedFallback
-          ? `TP (${resolved.value.tpPct}%) ไม่ได้แนบ — แลกเปิดด้วย market อย่างเดียว`
-          : "";
+      state = withRecordedSuccessfulOpen(state, userId, sym, dayKey);
+      usersSucceeded += 1;
 
-    const ord = orderSideEffective(row as TradingViewMexcUserSettings);
-    const ordHint =
-      ord === "fade_spark"
-        ? " · ฝั่งออเดอร์: เข้าสวนสัญญาณ Spike"
-        : ord === "long"
-          ? " · ฝั่งออเดอร์: long ทุกครั้งเมื่อเข้ากรอง"
-          : ord === "short"
-            ? " · ฝั่งออเดอร์: short ทุกครั้งเมื่อเข้ากรอง"
+      const tpLine =
+        takeProfitPrice != null && !tpOmittedFallback
+          ? `Take-profit ~ ${takeProfitPrice} (+${resolved.value.tpPct}%)`
+          : tpPct > 0 && tpOmittedFallback
+            ? `TP (${resolved.value.tpPct}%) ไม่ได้แนบ — แลกเปิดด้วย market อย่างเดียว`
             : "";
 
-    await notifyLines(userId, [
-      "Koji — Spark auto-open (MEXC)",
-      (long ? "✅ เปิด LONG" : "✅ เปิด SHORT") + ` จาก Spark${ordHint}`,
-      `[${shortContractLabel(sym)}]/USDT (${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%)`,
-      `Vol band: ${volBand}`,
-      `Margin ~${marginUsdt} USDT · ${resolved.value.leverage}x`,
-      ...(tpLine ? [tpLine] : []),
-      `Order: ${orderId ?? "-"}`,
-      "ครั้งถัดไปในวันนี้: จะไม่เปิดจาก Spark เหมือนกันในเหรียญนี้ (ตั้งค่า 1 order/เหรียญ/วัน)",
-    ]);
+      const ord = orderSideEffective(row as TradingViewMexcUserSettings);
+      const ordHint =
+        ord === "fade_spark"
+          ? " · ฝั่งออเดอร์: เข้าสวนสัญญาณ Spike"
+          : ord === "long"
+            ? " · ฝั่งออเดอร์: long ทุกครั้งเมื่อเข้ากรอง"
+            : ord === "short"
+              ? " · ฝั่งออเดอร์: short ทุกครั้งเมื่อเข้ากรอง"
+              : "";
+
+      await notifyLines(userId, [
+        "Koji — Spark auto-open (MEXC)",
+        (long ? "✅ เปิด LONG" : "✅ เปิด SHORT") + ` จาก Spark${ordHint}`,
+        `[${shortContractLabel(sym)}]/USDT (${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%)`,
+        `Vol band: ${volBand}`,
+        `Margin ~${marginUsdt} USDT · ${resolved.value.leverage}x`,
+        ...(tpLine ? [tpLine] : []),
+        `Order: ${orderId ?? "-"}`,
+        "ครั้งถัดไปในวันนี้: จะไม่เปิดจาก Spark เหมือนกันในเหรียญนี้ (ตั้งค่า 1 order/เหรียญ/วัน)",
+      ]);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      await notifyLines(userId, [
+        "Koji — Spark auto-open (MEXC)",
+        `❌ สั่งเปิดล้มเหลวจากข้อผิดพลาดระหว่างเรียก MEXC / เครือข่าย (ตั้งใจเป็น ${sideHint})`,
+        `[${shortContractLabel(sym)}]/USDT (${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(1)}%)`,
+        `Vol band: ${volBand}`,
+        `Margin ~${marginUsdt} USDT · ${leverage}x`,
+        `รายละเอียด: ${detail.slice(0, 400)}`,
+      ]);
+    }
   }
 
   ensuredBatch.state = state;

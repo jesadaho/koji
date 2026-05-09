@@ -694,9 +694,26 @@ export default function SettingsTelegramMiniApp() {
           </p>
         ) : null}
 
-          <label className="sub" style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "1rem", cursor: "pointer" }}>
+          <label
+            className="sub"
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.5rem",
+              marginTop: "1rem",
+              marginBottom: 0,
+              cursor: "pointer",
+              lineHeight: 1.4,
+              maxWidth: "100%",
+            }}
+          >
             <input type="checkbox" checked={sparkEnabled} onChange={(e) => setSparkEnabled(e.target.checked)} />
-            เปิดใช้ Spark auto-open (ต้องตั้ง <code>SPARK_AUTOTRADE_ENABLED=1</code> ฝั่งเซิร์ฟเวอร์ด้วย)
+            <span style={{ flex: "1 1 0%", minWidth: 0, wordBreak: "break-word" }}>
+              <strong style={{ fontWeight: 600 }}>เปิดใช้ Spark auto-open</strong>
+              <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+                (ต้องตั้ง <code>SPARK_AUTOTRADE_ENABLED=1</code> ฝั่งเซิร์ฟเวอร์ด้วย)
+              </span>
+            </span>
           </label>
 
           <label className="sub" style={{ display: "block", marginTop: "0.75rem" }}>
