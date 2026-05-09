@@ -165,6 +165,7 @@ export type SaveTradingViewMexcInput = {
   sparkAutoTradeMarginUsdt?: number | null;
   sparkAutoTradeLeverage?: number | null;
   sparkAutoTradeTpPct?: number | null;
+  sparkAutoTradeTimeStopHours?: number | null;
   sparkAutoTradeByVol?: SparkAutoTradeByVol | null;
 };
 
