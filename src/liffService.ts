@@ -60,7 +60,10 @@ import {
   type SparkAutoTradeVolBandPreset,
   type TradingViewMexcUserSettings,
 } from "./tradingViewCloseSettingsStore";
-import { sparkAutoTradeParamsForVolBand } from "./sparkAutoTradeResolve";
+import {
+  sparkAutoTradeExplainSaveBlocked,
+  sparkAutoTradeParamsForVolBand,
+} from "./sparkAutoTradeResolve";
 import type { SparkVolBand } from "./sparkTierContext";
 import { newTvWebhookNonce } from "./tradingViewWebhookNonceStore";
 
@@ -996,11 +999,15 @@ export async function liffSetTradingViewMexcSettings(
       ? bandsAll.some((b) => sparkAutoTradeParamsForVolBand(synth, b).ok)
       : true;
     if (synth.sparkAutoTradeEnabled && !anyResolvable) {
+      const ex = sparkAutoTradeExplainSaveBlocked(synth);
       return {
         status: 400,
         json: {
           error: "spark_auto_trade_need_effective_margin",
-          hint: "ตั้ง default margin/leverage — หรือกำหนดครบใน Vol tier high/mid/low/unknown",
+          hint: ex.summaryTh,
+          summaryTh: ex.summaryTh,
+          mergedDefaultsTh: ex.mergedDefaultsTh,
+          detailsTh: ex.detailsTh,
         },
       };
     }

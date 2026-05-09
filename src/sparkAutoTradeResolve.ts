@@ -8,6 +8,74 @@ export type SparkAutoTradeResolved = {
   tpPct: number;
 };
 
+function sparkVolBandLabelTh(b: SparkVolBand): string {
+  if (b === "high") return "Vol สูง";
+  if (b === "mid") return "Vol กลาง";
+  if (b === "low") return "Vol ต่ำ";
+  return "Vol ไม่ระบุ";
+}
+
+function fmtNumOrUnset(n: unknown): string {
+  if (typeof n === "number" && Number.isFinite(n)) return String(n);
+  return "ไม่ได้ตั้ง (ว่าง)";
+}
+
+/** บรรทัดอธิบายว่า tier จะเล่นหรือไม่ และใช้ margin/lev เท่าไรหลัง merge (สำหรับ error Thai ตอนบันทึก Settings) */
+export function sparkAutoTradeTierExplainTh(row: TradingViewMexcUserSettings, volBand: SparkVolBand): string {
+  const label = sparkVolBandLabelTh(volBand);
+  const preset = row.sparkAutoTradeByVol?.[volBand];
+  const effMargin = preset?.marginUsdt ?? row.sparkAutoTradeMarginUsdt;
+  const effLev = preset?.leverage ?? row.sparkAutoTradeLeverage;
+
+  const res = sparkAutoTradeParamsForVolBand(row, volBand);
+  if (res.ok) {
+    return `${label}: พร้อม auto-open — margin ${res.value.marginUsdt} USDT · lev ${res.value.leverage}`;
+  }
+
+  switch (res.reason) {
+    case "spark_auto_trade_disabled":
+      return `${label}: ปิดใช้ Spark auto-open`;
+    default:
+      break;
+  }
+  if (res.reason.startsWith("spark_auto_trade_vol_band_off:")) {
+    return `${label}: ระงับ tier นี้ (ติ๊ก “ไม่ auto-open”) — จะไม่นับ tier นี้`;
+  }
+  if (res.reason === "spark_auto_trade_bad_margin") {
+    return `${label}: ยังไม่มี Margin ที่ใช้ได้ — ค่าที่คำนวณหลังรวมคำสั่งบันทึก = ${fmtNumOrUnset(effMargin)} USDT (ต้องเป็นตัวเลข > 0) · ใช้ margin ของ tier ถ้ามีระบุ ไม่งั้นใช้ default ช่อง “Margin (USDT)”`;
+  }
+  if (res.reason === "spark_auto_trade_bad_leverage") {
+    return `${label}: Leverage ไม่ผ่าน — ค่าหลังรวม = ${fmtNumOrUnset(effLev)} (ต้องเป็นตัวเลข ≥ 1) · ใช้ lev ของ tier ถ้ามีระบุ ไม่งั้นใช้ default ช่อง “Leverage”`;
+  }
+  return `${label}: ไม่พร้อม (${res.reason})`;
+}
+
+/** สรุป margin/lev/TP ที่แถวนี้มีหลัง merge — ไม่ใช่ยอดในกระเป๋า */
+export function sparkAutoTradeMergedDefaultsExplainTh(row: TradingViewMexcUserSettings): string {
+  const t = row.sparkAutoTradeTpPct;
+  const tpStr =
+    t === undefined ? "ไม่ตั้ง TP" : typeof t === "number" && Number.isFinite(t) ? String(t) : "ไม่ตั้ง TP";
+  return `ค่า default ที่เซิร์ฟใช้ร่วมกับ tier (หลังรวมกับของเดิม): Margin USDT = ${fmtNumOrUnset(row.sparkAutoTradeMarginUsdt)} · Leverage = ${fmtNumOrUnset(row.sparkAutoTradeLeverage)} · TP % = ${tpStr}`;
+}
+
+export type SparkSaveValidationExplain = {
+  summaryTh: string;
+  mergedDefaultsTh: string;
+  detailsTh: string[];
+};
+
+/** เรียกเมื่อเปิด Spark แต่ไม่มี tier ไหน resolve — ให้ผู้ใช้รู้ว่า “ว่างตรงไหน” */
+export function sparkAutoTradeExplainSaveBlocked(row: TradingViewMexcUserSettings): SparkSaveValidationExplain {
+  const bandsAll: SparkVolBand[] = ["high", "mid", "low", "unknown"];
+  const summaryTh =
+    "ยังไม่มีระดับ Vol ชั้นใดที่พร้อม auto-open เลย เซิร์ฟจึงไม่ยอมบันทึก • อย่างน้อยชั้นหนึ่งต้องไม่ถูกระงับ และต้องมี Margin default > 0 กับ Leverage default ≥ 1 (หมายเหตุ: เป็นการตั้งค่าใน Settings ไม่ใช่เช็กยอดกระเป๋า)";
+  return {
+    summaryTh,
+    mergedDefaultsTh: sparkAutoTradeMergedDefaultsExplainTh(row),
+    detailsTh: bandsAll.map((b) => sparkAutoTradeTierExplainTh(row, b)),
+  };
+}
+
 export function sparkAutoTradeParamsForVolBand(
   row: TradingViewMexcUserSettings,
   volBand: SparkVolBand

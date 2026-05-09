@@ -22,9 +22,23 @@ async function readApiResponse(res: Response): Promise<{ text: string; parsed: u
 }
 
 function messageFromParsed(parsed: unknown, fallback: string): string {
-  if (parsed && typeof parsed === "object" && parsed !== null && "error" in parsed) {
-    return String((parsed as { error: unknown }).error);
+  if (!parsed || typeof parsed !== "object" || parsed === null) return fallback;
+  const o = parsed as Record<string, unknown>;
+  const parts: string[] = [];
+  if ("error" in o && o.error != null) parts.push(String(o.error));
+  if (typeof o.hint === "string" && o.hint.trim()) parts.push(o.hint.trim());
+  if (typeof o.summaryTh === "string" && o.summaryTh.trim() && o.summaryTh !== o.hint) {
+    parts.push(o.summaryTh.trim());
   }
+  if (typeof o.mergedDefaultsTh === "string" && o.mergedDefaultsTh.trim()) {
+    parts.push(o.mergedDefaultsTh.trim());
+  }
+  if (Array.isArray(o.detailsTh)) {
+    for (const line of o.detailsTh) {
+      if (typeof line === "string" && line.trim()) parts.push(line.trim());
+    }
+  }
+  if (parts.length) return parts.join("\n\n");
   return fallback;
 }
 
