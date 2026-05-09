@@ -824,7 +824,7 @@ function parseSparkAutoTradeNested(
     const x = o[key];
     if (x === null || x === "" || x === undefined) return { v: null };
     const n = typeof x === "number" ? x : Number(String(x).replace(/,/g, "").trim());
-    if (!Number.isFinite(n)) return { err: `${key}_not_number` };
+    if (!Number.isFinite(n)) return { v: undefined, err: `${key}_not_number` };
     return { v: n };
   };
 
