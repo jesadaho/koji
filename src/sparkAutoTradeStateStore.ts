@@ -5,6 +5,19 @@ import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 const KV_KEY = "koji:spark_autotrade_state";
 const filePath = join(process.cwd(), "data", "spark_autotrade_state.json");
 
+/** ลบซ้ำตามลำดับเข้าก่อน — ไม่พึ่งการวน iterable ของ Set (รองรับ target เก่าที่ไม่เปิด downlevelIteration) */
+function dedupeStringsInOrder(upperSymbols: string[]): string[] {
+  const seen = Object.create(null) as Record<string, true>;
+  const out: string[] = [];
+  for (let i = 0; i < upperSymbols.length; i += 1) {
+    const u = upperSymbols[i]!.trim();
+    if (!u || seen[u]) continue;
+    seen[u] = true;
+    out.push(u);
+  }
+  return out;
+}
+
 export function bkkSparkAutoTradeDayKeyNow(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 }
@@ -51,7 +64,7 @@ function normalizeState(raw: unknown): SparkAutoTradeState {
         .map((x) => x.trim().toUpperCase());
     }
     if (!dk) continue;
-    out[k.trim()] = { dailyKeyBkk: dk, openedContractSymbolsToday: Array.from(new Set(syms)) };
+    out[k.trim()] = { dailyKeyBkk: dk, openedContractSymbolsToday: dedupeStringsInOrder(syms) };
   }
   return out;
 }
@@ -59,7 +72,10 @@ function normalizeState(raw: unknown): SparkAutoTradeState {
 /** ให้เป็น state ใน-vocab ของวันไทย — ถ้าวันเก่าให้เก็บว่าง */
 function userStateFresh(u: SparkAutoTradePerUserState | undefined, dayKey: string): SparkAutoTradePerUserState {
   if (!u || u.dailyKeyBkk !== dayKey) return { dailyKeyBkk: dayKey, openedContractSymbolsToday: [] };
-  return { ...u, openedContractSymbolsToday: [...new Set(u.openedContractSymbolsToday.map((s) => s.toUpperCase()))] };
+  return {
+    ...u,
+    openedContractSymbolsToday: dedupeStringsInOrder(u.openedContractSymbolsToday.map((s) => s.toUpperCase())),
+  };
 }
 
 export async function loadSparkAutoTradeState(): Promise<SparkAutoTradeState> {
