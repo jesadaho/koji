@@ -156,7 +156,14 @@ export default function SettingsTelegramMiniApp() {
     unknown: { ...tierEmpty },
   });
   const [sparkSaveErr, setSparkSaveErr] = useState("");
+  const [sparkSaveOk, setSparkSaveOk] = useState("");
   const [sparkSaving, setSparkSaving] = useState(false);
+
+  useEffect(() => {
+    if (!sparkSaveOk.trim()) return;
+    const t = window.setTimeout(() => setSparkSaveOk(""), 6000);
+    return () => window.clearTimeout(t);
+  }, [sparkSaveOk]);
 
   /** sync จาก GET — อย่ากระทำเมื่อ user แก้อยู่: ให้ hydrate จาก tvSettings เท่านั้น */
   useEffect(() => {
@@ -402,6 +409,7 @@ export default function SettingsTelegramMiniApp() {
 
   const onSaveSparkAuto = async () => {
     setSparkSaveErr("");
+    setSparkSaveOk("");
     const initData = getTelegramInitData();
     if (!initData) {
       setSparkSaveErr("ไม่พบ initData");
@@ -464,6 +472,11 @@ export default function SettingsTelegramMiniApp() {
       setTvSettings(parsed as TradingViewMexcResponse);
       setMexcKeyInput("");
       setMexcSecretInput("");
+      setSparkSaveOk(
+        sparkEnabled
+          ? "บันทึกแล้ว · เปิดใช้ Spark auto-open (รันจริงยังต้องใช้ SPARK_AUTOTRADE_ENABLED=1 ฝั่งเซิร์ฟ)"
+          : "บันทึกแล้ว · ปิด Spark auto-open"
+      );
     } catch (e) {
       setSparkSaveErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -843,6 +856,11 @@ export default function SettingsTelegramMiniApp() {
           {sparkSaveErr ? (
             <p className="sub" style={{ color: "var(--danger, #c44)", marginTop: "0.5rem" }}>
               {sparkSaveErr}
+            </p>
+          ) : null}
+          {sparkSaveOk && !sparkSaveErr ? (
+            <p className="sub" style={{ color: "#2a9d6a", marginTop: "0.5rem" }} role="status">
+              {sparkSaveOk}
             </p>
           ) : null}
       </div>
