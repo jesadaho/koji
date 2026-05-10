@@ -74,3 +74,35 @@ export function emaLine(closes: number[], period: number): number[] {
   }
   return result;
 }
+
+/**
+ * Stochastic RSI (แบบ TradingView): จาก RSI Wilder แล้วสเกลในหน้าต่าง stochPeriod เป็น 0–100
+ * ค่า NaN ช่วง warmup จนกว่า RSI + หน้าต่าง stoch จะพร้อม
+ */
+export function stochRsiLine(closes: number[], rsiPeriod: number, stochPeriod: number): number[] {
+  const n = closes.length;
+  const out: number[] = new Array(n).fill(Number.NaN);
+  if (stochPeriod < 1 || rsiPeriod < 2) return out;
+  const rsi = rsiWilder(closes, rsiPeriod);
+  for (let i = 0; i < n; i++) {
+    const rNow = rsi[i];
+    if (!Number.isFinite(rNow)) continue;
+    const loIdx = Math.max(0, i - stochPeriod + 1);
+    let lowest = Infinity;
+    let highest = -Infinity;
+    let windowOk = true;
+    for (let j = loIdx; j <= i; j++) {
+      const rv = rsi[j];
+      if (!Number.isFinite(rv)) {
+        windowOk = false;
+        break;
+      }
+      lowest = Math.min(lowest, rv);
+      highest = Math.max(highest, rv);
+    }
+    if (!windowOk) continue;
+    if (highest === lowest) out[i] = 50;
+    else out[i] = ((rNow - lowest) / (highest - lowest)) * 100;
+  }
+  return out;
+}

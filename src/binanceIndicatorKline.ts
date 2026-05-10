@@ -45,6 +45,8 @@ export type BinanceKlinePack = {
   /** high / low ต่อแท่ง — ใช้ fractal / divergence (ตรง index กับ close) */
   high: number[];
   low: number[];
+  /** volume ฐานต่อแท่ง (index 5 จาก Binance klines) */
+  volume: number[];
   /** Unix sec — open time ของแท่ง (ตรง index กับ close) */
   timeSec: number[];
 };
@@ -52,9 +54,10 @@ export type BinanceKlinePack = {
 const KLINE_LIMIT = 150;
 
 /** TF สำหรับ public feed — ตรงกับ Binance interval string */
-export type BinanceIndicatorTf = "1h" | "4h";
+export type BinanceIndicatorTf = "15m" | "1h" | "4h";
 
 const INTERVAL: Record<BinanceIndicatorTf, string> = {
+  "15m": "15m",
   "1h": "1h",
   "4h": "4h",
 };
@@ -64,6 +67,7 @@ function parseKlineRows(rows: unknown): BinanceKlinePack | null {
   const close: number[] = [];
   const high: number[] = [];
   const low: number[] = [];
+  const volume: number[] = [];
   const timeSec: number[] = [];
   for (const row of rows) {
     if (!Array.isArray(row) || row.length < 6) continue;
@@ -71,15 +75,17 @@ function parseKlineRows(rows: unknown): BinanceKlinePack | null {
     const hi = Number(row[2]);
     const lo = Number(row[3]);
     const c = Number(row[4]);
+    const vol = Number(row[5]);
     if (!Number.isFinite(openMs) || !Number.isFinite(c)) continue;
     if (!Number.isFinite(hi) || !Number.isFinite(lo)) continue;
     timeSec.push(Math.floor(openMs / 1000));
     high.push(hi);
     low.push(lo);
     close.push(c);
+    volume.push(Number.isFinite(vol) && vol >= 0 ? vol : 0);
   }
   if (close.length < 10) return null;
-  return { close, high, low, timeSec };
+  return { close, high, low, volume, timeSec };
 }
 
 /**
