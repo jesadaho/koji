@@ -154,6 +154,28 @@ function snowballOversoldFloor(): number {
   return 10;
 }
 
+/** EMA ที่ใช้อ้างอิงแนวต้าน playbook ขา Short (Sell the Rally) — TF เดียวกับสัญญาณ Snowball */
+function snowballResistanceEmaPeriod(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_RESISTANCE_EMA);
+  if (Number.isFinite(v) && v >= 2 && v <= 200) return Math.floor(v);
+  return 20;
+}
+
+/**
+ * โหมดโปร: SHORT ต้องปิดใต้ Low ของแท่งที่มี Vol สูงสุดในช่วงด้านใน (proxy จุด Vol หา / Session VP แบบง่าย)
+ * ปิดในค่าเริ่ม — ถ้าตั้ง =1 จะคมขึ้นแต่อาจได้สัญญาณน้อยลง
+ */
+function snowballShortRequireSvpHdBreak(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_SHORT_REQUIRE_SVP_HD", false);
+}
+
+/** ความยาวช่วงย้อนหลังที่ใช้หาแท่ง HVN ก่อนแท่งสัญญาณ */
+function snowballSvpHdInnerLookbackBars(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SVP_HD_INNER_LOOKBACK);
+  if (Number.isFinite(v) && v >= 5 && v <= 120) return Math.floor(v);
+  return 24;
+}
+
 let topAltsCache: { symbols: string[]; at: number } | null = null;
 
 async function getUniverseSymbols(): Promise<string[]> {
@@ -403,6 +425,24 @@ function minLowPriorWindow(low: number[], i: number, lookback: number): number {
   return m;
 }
 
+/** แท่งที่ Vol สูงสุดในช่วง [i − lookback, i − 1] — proxy ก้อนจากมุม Volume Profile */
+function highVolumeNodeBarLow(vol: number[], low: number[], i: number, lookback: number): number | null {
+  const start = Math.max(0, i - lookback);
+  const end = i - 1;
+  if (end < start) return null;
+  let bestJ = start;
+  let bestV = -Infinity;
+  for (let j = start; j <= end; j++) {
+    const v = vol[j]!;
+    if (v > bestV && Number.isFinite(v)) {
+      bestV = v;
+      bestJ = j;
+    }
+  }
+  const L = low[bestJ];
+  return Number.isFinite(L!) ? L! : null;
+}
+
 function snowballStochSeries(
   close: number[],
   rsiP: number,
@@ -429,12 +469,19 @@ function buildSnowballTripleCheckMessage(
     rsiP: number;
     stochLen: number;
     stochLimit: number;
+    emaResistancePeriod: number;
+    emaResistance: number;
+    svpHdInnerLb: number;
+    svpHdLow: number;
+    svpHdRequiredOk: boolean;
   }
 ): string {
   const pair = pairSlashNoDollar(symbol);
   const bkk = formatClosedCandleBkk(barTimeSec);
   const px = formatUsdPrice(args.close);
   const refPx = formatUsdPrice(args.refSwing);
+  const emaPx = formatUsdPrice(args.emaResistance);
+  const hvnPx = formatUsdPrice(args.svpHdLow);
   const volRatio =
     args.volSma > 0 && Number.isFinite(args.volSma)
       ? (args.volume / args.volSma).toFixed(2)
@@ -442,32 +489,56 @@ function buildSnowballTripleCheckMessage(
 
   if (side === "bull") {
     return [
-      `🏹 Snowball Triple-Check · HH (15m)`,
+      `🟢 [LONG Candidate] — Snowball Triple-Check (15m HH)`,
       `${pair} — Binance USDT-M`,
+      "",
+      `💼 Playbook:`,
+      `"ทรงมาดี มีแรงส่งสะสม รอเข้าเมื่อย่อ (Buy the Dip) ที่แนวรับ ~ ${refPx} USDT"`,
       "",
       `⏰ Closed candle: ${bkk}`,
       "",
-      `✅ เงื่อนไข 1 (HH): ปิด ${px} USDT เหนือ High สูงสุดใน ${args.lookback} แท่งก่อนหน้า (ระดับอ้างอิง ~ ${refPx})`,
-      `✅ เงื่อนไข 2 (Volume): Vol แท่งนี้ > SMA(${args.volPeriod}) — อัตราส่วน ~ ${volRatio}x (ไม่ใช่แท่งไส้หลอก)`,
-      `✅ เงื่อนไข 3 (Stoch RSI ${args.rsiP}/${args.stochLen}): ${args.stochK.toFixed(1)} < ${args.stochLimit.toFixed(0)} — ยังไม่ Overbought เกินไป`,
+      `✅ เช็คลิสต์:`,
+      `• เงื่อนไข 1 (HH): ปิด ${px} USDT เหนือ High สูงสุดใน ${args.lookback} แท่งก่อนหน้า (แนวรับอ้างอิง ~ ${refPx})`,
+      `• เงื่อนไข 2 (Volume): Vol แท่งนี้ > SMA(${args.volPeriod}) — อัตราส่วน ~ ${volRatio}x (ไม่ใช่แท่งไส้หลอก)`,
+      `• เงื่อนไข 3 (Stoch RSI ${args.rsiP}/${args.stochLen}): ${args.stochK.toFixed(1)} < ${args.stochLimit.toFixed(0)} — ยังไม่ Overbought เกินไป`,
       "",
-      `📊 Stoch RSI (${SNOWBALL_TF}) · ใช้ตัดเหรียญหัวหมอที่ทำ HH แต่ OB ติดลิฟต์แล้ว`,
+      `📊 Stoch RSI (${SNOWBALL_TF}) · กันสัญญาณ HH ที่ OB ติดลิฟต์แล้ว`,
       "",
       "⚠️ Not financial advice",
     ].join("\n");
   }
 
+  const svpBrokenBelowHvn =
+    Number.isFinite(args.close) &&
+    Number.isFinite(args.svpHdLow) &&
+    args.close < args.svpHdLow - 1e-12;
+
+  const svpLine = args.svpHdRequiredOk
+    ? `📍 โปร · SVP/HVN (proxy): ปิดใต้ Low แท่ง Vol หาใน ${args.svpHdInnerLb} แท่งล่าสุด (~ ${hvnPx} USDT) — ผ่านเกณฑ์กรอง “หลุดก้อน”`
+    : `📍 โปร · SVP/HVN (proxy): จุด Vol หาใน ${args.svpHdInnerLb} แท่งล่าสุด — Low ~ ${hvnPx} USDT (ตั้ง INDICATOR_PUBLIC_SNOWBALL_SHORT_REQUIRE_SVP_HD=1 เพื่อให้มีสัญญาณเมื่อหลุดก้อนนี้จริง ๆ)`;
+
+  const playbookShortLead =
+    svpBrokenBelowHvn || args.svpHdRequiredOk
+      ? "เสียทรงชัดเจน — โปร: หลุดโครงสร้าง + ก้อน Vol หาแบบ SVP/HVN (proxy)"
+      : "เสียทรงชัดเจน — LL + Vol เข้า (ก้อน Vol หา/SVP proxy ดูบรรทัดด้านล่าง)";
+
   return [
-    `🏹 Snowball Triple-Check · LL (15m)`,
+    `🔴 [SHORT Candidate] — Snowball Triple-Check (15m LL)`,
     `${pair} — Binance USDT-M`,
+    "",
+    `💼 Playbook:`,
+    `"${playbookShortLead} · รอเด้งเพื่อเปิด Short (Sell the Rally) ที่แนวต้าน EMA(${args.emaResistancePeriod}) ~ ${emaPx} USDT"`,
+    "",
+    svpLine,
     "",
     `⏰ Closed candle: ${bkk}`,
     "",
-    `✅ เงื่อนไข 1 (LL): ปิด ${px} USDT ต่ำกว่า Low ต่ำสุดใน ${args.lookback} แท่งก่อนหน้า (ระดับอ้างอิง ~ ${refPx})`,
-    `✅ เงื่อนไข 2 (Volume): Vol แท่งนี้ > SMA(${args.volPeriod}) — อัตราส่วน ~ ${volRatio}x`,
-    `✅ เงื่อนไข 3 (Stoch RSI ${args.rsiP}/${args.stochLen}): ${args.stochK.toFixed(1)} > ${args.stochLimit.toFixed(0)} — ยังไม่ Oversold เกินไป`,
+    `✅ เช็คลิสต์:`,
+    `• เงื่อนไข 1 (LL): ปิด ${px} USDT ต่ำกว่า Low ต่ำสุดใน ${args.lookback} แท่งก่อนหน้า (แนวอ้างอิง ~ ${refPx})`,
+    `• เงื่อนไข 2 (Volume): Vol แท่งนี้ > SMA(${args.volPeriod}) — อัตราส่วน ~ ${volRatio}x`,
+    `• เงื่อนไข 3 (Stoch RSI ${args.rsiP}/${args.stochLen}): ${args.stochK.toFixed(1)} > ${args.stochLimit.toFixed(0)} — ยังไม่ Oversold เกินไป`,
     "",
-    `📊 Stoch RSI (${SNOWBALL_TF}) · ใช้ตัดเหรียญหัวหมอที่ทำ LL แต่ OS ติดใต้ดินแล้ว`,
+    `📊 Stoch RSI (${SNOWBALL_TF}) · กันสัญญาณ LL ที่ OS ติดใต้ดินแล้ว`,
     "",
     "⚠️ Not financial advice",
   ].join("\n");
@@ -924,10 +995,13 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const kSm = snowballStochKSmooth();
       const obMax = snowballOverboughtCeiling();
       const osMin = snowballOversoldFloor();
+      const emaResP = snowballResistanceEmaPeriod();
+      const svpInnerLb = snowballSvpHdInnerLookbackBars();
+      const shortNeedSvpHd = snowballShortRequireSvpHdBreak();
 
       const n15 = c15.length;
       const i15 = n15 - 2;
-      const minBars = Math.max(rsiP + stLen + kSm + 8, volP + 2, swingLb + 3);
+      const minBars = Math.max(rsiP + stLen + kSm + 8, volP + 2, swingLb + 3, emaResP + 2, svpInnerLb + 2);
       if (n15 < minBars || i15 < 1) continue;
 
       const barTimeSec15 = t15[i15];
@@ -954,6 +1028,10 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const priorMaxHigh = maxHighPriorWindow(h15, i15, swingLb);
       const priorMinLow = minLowPriorWindow(l15, i15, swingLb);
 
+      const emaResArr = emaLine(c15, emaResP);
+      const emaResistance = emaResArr[i15];
+      const svpHdLowGuess = highVolumeNodeBarLow(v15, l15, i15, svpInnerLb);
+
       const baseArgs = {
         close: clNow,
         volume: viNow,
@@ -978,6 +1056,12 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             ...baseArgs,
             refSwing: priorMaxHigh,
             stochLimit: obMax,
+            emaResistancePeriod: emaResP,
+            emaResistance: Number.isFinite(emaResistance) ? emaResistance : priorMaxHigh,
+            svpHdInnerLb: svpInnerLb,
+            svpHdLow:
+              typeof svpHdLowGuess === "number" && Number.isFinite(svpHdLowGuess) ? svpHdLowGuess : priorMaxHigh,
+            svpHdRequiredOk: false,
           });
           try {
             const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
@@ -991,12 +1075,23 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         }
       }
 
+      let svpHdOkBear = false;
+      if (
+        typeof svpHdLowGuess === "number" &&
+        Number.isFinite(svpHdLowGuess) &&
+        clNow < svpHdLowGuess
+      ) {
+        svpHdOkBear = true;
+      }
+
       if (
         Number.isFinite(priorMinLow) &&
         clNow < priorMinLow &&
         viNow > 0 &&
         viNow > vsNow &&
-        stNow > osMin
+        stNow > osMin &&
+        (!shortNeedSvpHd || svpHdOkBear) &&
+        Number.isFinite(emaResistance)
       ) {
         const key = `${symbol}|SNOWBALL|15m|BEAR`;
         if (state.lastFiredBarSec[key] !== barTimeSec15 && !inCooldown(state, key, now)) {
@@ -1004,6 +1099,12 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             ...baseArgs,
             refSwing: priorMinLow,
             stochLimit: osMin,
+            emaResistancePeriod: emaResP,
+            emaResistance,
+            svpHdInnerLb: svpInnerLb,
+            svpHdLow:
+              typeof svpHdLowGuess === "number" && Number.isFinite(svpHdLowGuess) ? svpHdLowGuess : priorMinLow,
+            svpHdRequiredOk: shortNeedSvpHd && svpHdOkBear,
           });
           try {
             const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
