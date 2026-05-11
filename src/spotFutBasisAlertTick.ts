@@ -8,6 +8,7 @@ import { acquireSpotFutBasisAlertsLock, releaseSpotFutBasisAlertsLock } from "./
 import {
   loadSpotFutBasisAlertState,
   saveSpotFutBasisAlertState,
+  type SpotFutBasisAlertEntryTier,
   type SpotFutBasisAlertState,
   type SpotFutBasisTier,
 } from "./spotFutBasisAlertStateStore";
@@ -88,21 +89,15 @@ function buildSpotFutBasisMessage(
 }
 
 function shouldNotifyBasis(
-  prev: { lastNotifiedBasisPct: number; lastTier: SpotFutBasisTier } | undefined,
+  prev: { lastNotifiedBasisPct: number; lastTier: SpotFutBasisAlertEntryTier } | undefined,
   basisPct: number,
   tier: SpotFutBasisTier,
 ): boolean {
   if (!prev) return true;
+  if (prev.lastTier === "normal") return true;
   if (Math.abs(basisPct - prev.lastNotifiedBasisPct) >= renotifyDeltaPct()) return true;
   if (prev.lastTier === "warning" && tier === "extreme") return true;
   return false;
-}
-
-function removeSymbol(state: SpotFutBasisAlertState, sym: string): SpotFutBasisAlertState {
-  if (!(sym in state)) return state;
-  const next = { ...state };
-  delete next[sym];
-  return next;
 }
 
 /**
@@ -138,7 +133,17 @@ export async function runSpotFutBasisAlertTick(
     const tier = basisTierFromAbs(abs);
 
     if (tier === "normal") {
-      state = removeSymbol(state, sym);
+      const prevRow = state[sym];
+      const sameBkkDay = prevRow?.dailyKeyBkk === dayKey;
+      state = {
+        ...state,
+        [sym]: {
+          lastNotifiedBasisPct: row.basisPct,
+          lastTier: "normal",
+          dailyKeyBkk: dayKey,
+          dailyNotifiedCount: sameBkkDay ? prevRow?.dailyNotifiedCount ?? 0 : 0,
+        },
+      };
       continue;
     }
 

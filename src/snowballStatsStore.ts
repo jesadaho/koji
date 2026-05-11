@@ -41,6 +41,8 @@ export type SnowballStatsRow = {
   entryPrice: number;
   intrabar: boolean;
   triggerKind: string;
+  /** Double Barrier / ชั้นคุณภาพ (แถวเก่าไม่มีฟิลด์นี้) */
+  qualityTier?: "a_plus" | "b_plus";
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
@@ -131,6 +133,7 @@ export type AppendSnowballStatsInput = {
   triggerKind: string;
   vol: number;
   volSma: number;
+  qualityTier?: "a_plus" | "b_plus";
 };
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
@@ -147,6 +150,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     entryPrice: input.entryPrice,
     intrabar: input.intrabar,
     triggerKind: input.triggerKind,
+    qualityTier: input.qualityTier,
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,
     pct4h: null,

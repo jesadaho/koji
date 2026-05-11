@@ -265,6 +265,62 @@ function snowballIntrabarRelaxVolume(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR_RELAX_VOLUME", false);
 }
 
+/** Double Barrier: Barrier1 = swing lookback เดิม · Barrier2 = โซน “ภูเขา” ใกล้ราคา → B+ / A+ */
+function snowballDoubleBarrierEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_DOUBLE_BARRIER_ENABLED", true);
+}
+
+function snowballDoubleBarrierLookbackBars(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_DOUBLE_BARRIER_LOOKBACK);
+  if (Number.isFinite(v) && v >= 50 && v <= 400) return Math.floor(v);
+  return 200;
+}
+
+function snowballDoubleBarrierWatchBandPct(): { min: number; max: number } {
+  let minV = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_DOUBLE_BARRIER_WATCH_MIN_PCT);
+  let maxV = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_DOUBLE_BARRIER_WATCH_MAX_PCT);
+  if (!Number.isFinite(minV) || minV < 0.005 || minV > 0.5) minV = 0.05;
+  if (!Number.isFinite(maxV) || maxV < 0.01 || maxV > 0.5) maxV = 0.1;
+  if (maxV <= minV) maxV = minV + 0.001;
+  return { min: minV, max: maxV };
+}
+
+type SnowballQualityTier = "a_plus" | "b_plus";
+
+function classifyLongDoubleBarrierTier(
+  high: number[],
+  iEval: number,
+  ref: number
+): { tier: SnowballQualityTier; nearestOverhead: number | null; distPct: number | null } {
+  const lb = snowballDoubleBarrierLookbackBars();
+  const { min, max } = snowballDoubleBarrierWatchBandPct();
+  const nearest = nearestOverheadHigh(high, iEval, lb, ref);
+  if (nearest == null) {
+    return { tier: "a_plus", nearestOverhead: null, distPct: null };
+  }
+  const d = (nearest - ref) / ref;
+  const pct = d * 100;
+  if (d >= min && d <= max) return { tier: "b_plus", nearestOverhead: nearest, distPct: pct };
+  return { tier: "a_plus", nearestOverhead: nearest, distPct: pct };
+}
+
+function classifyShortDoubleBarrierTier(
+  low: number[],
+  iEval: number,
+  ref: number
+): { tier: SnowballQualityTier; nearestUnderfoot: number | null; distPct: number | null } {
+  const lb = snowballDoubleBarrierLookbackBars();
+  const { min, max } = snowballDoubleBarrierWatchBandPct();
+  const nearest = nearestUnderfootLow(low, iEval, lb, ref);
+  if (nearest == null) {
+    return { tier: "a_plus", nearestUnderfoot: null, distPct: null };
+  }
+  const d = (ref - nearest) / ref;
+  const pct = d * 100;
+  if (d >= min && d <= max) return { tier: "b_plus", nearestUnderfoot: nearest, distPct: pct };
+  return { tier: "a_plus", nearestUnderfoot: nearest, distPct: pct };
+}
+
 let topAltsCache: { symbols: string[]; at: number; topN: number } | null = null;
 
 async function getUniverseSymbols(topN: number): Promise<string[]> {
@@ -519,6 +575,32 @@ function minLowPriorWindow(low: number[], i: number, lookback: number, excludeRe
   return m;
 }
 
+/** High ต่ำสุดที่ยังอยู่เหนือ ref — แนวต้านใกล้สุด “ภูเขาซ้าย” สำหรับ Long */
+function nearestOverheadHigh(high: number[], iEval: number, lookback: number, ref: number): number | null {
+  if (!Number.isFinite(ref) || ref <= 0 || iEval < 1) return null;
+  const start = Math.max(0, iEval - lookback);
+  let best: number | null = null;
+  for (let j = start; j < iEval; j++) {
+    const h = high[j]!;
+    if (!Number.isFinite(h) || h <= ref) continue;
+    if (best === null || h < best) best = h;
+  }
+  return best;
+}
+
+/** Low สูงสุดที่ยังอยู่ใต้ ref — แนวรับใกล้สุดสมมาตรฝั่ง Short */
+function nearestUnderfootLow(low: number[], iEval: number, lookback: number, ref: number): number | null {
+  if (!Number.isFinite(ref) || ref <= 0 || iEval < 1) return null;
+  const start = Math.max(0, iEval - lookback);
+  let best: number | null = null;
+  for (let j = start; j < iEval; j++) {
+    const x = low[j]!;
+    if (!Number.isFinite(x) || x >= ref) continue;
+    if (best === null || x > best) best = x;
+  }
+  return best;
+}
+
 /** แท่งที่ Vol สูงสุดในช่วง [i − lookback, i − 1] — High/Low ของแท่งเดียวกัน (proxy ก้อน HVN / SVP peak) */
 function highVolumeNodeBarRange(
   vol: number[],
@@ -757,6 +839,13 @@ function buildSnowballTripleCheckMessage(
     ema2SlopeOk?: boolean;
     /** เมื่อสัญญาณ Master = 4h — แผน Entry / SL / TP (จุดเข้า 15m) */
     master4hTradePlan?: SnowballMaster4hLongTradePlan | null;
+    /** Double Barrier: หัวข้อ A+ / B+ และบรรทัดอธิบาย Barrier 2 */
+    doubleBarrierEnabled?: boolean;
+    snowballQualityTier?: SnowballQualityTier;
+    doubleBarrierChecklistLine?: string;
+    /** Short: ชั้นคุณภาพสมมาตร (แนวรับใต้เท้าในโซน %) */
+    shortQualityTier?: SnowballQualityTier;
+    shortDoubleBarrierChecklistLine?: string;
   }
 ): string {
   const pair = pairSlashNoDollar(symbol);
@@ -832,6 +921,10 @@ function buildSnowballTripleCheckMessage(
       .filter((x) => x.length > 0)
       .join("\n");
     const checklistBodyWithTrend = [checklistBody, ema2Line].filter((x) => x.length > 0).join("\n");
+    const barrier2 =
+      args.doubleBarrierEnabled && args.doubleBarrierChecklistLine
+        ? args.doubleBarrierChecklistLine
+        : "";
 
     const plan = args.master4hTradePlan;
     let planBlock = "";
@@ -876,8 +969,15 @@ function buildSnowballTripleCheckMessage(
       planBlock = lines.join("\n");
     }
 
+    const dbLong = Boolean(args.doubleBarrierEnabled && args.snowballQualityTier);
+    const longHeadline = !dbLong
+      ? `🟢 [LONG Candidate] — Snowball Triple-Check (${args.snowballTfDisplay})${sniperSuffix}`
+      : args.snowballQualityTier === "b_plus"
+        ? `🟡 [WATCHLIST - B+] — Snowball Triple-Check (${args.snowballTfDisplay})${sniperSuffix}`
+        : `🟢 [SUPER SNOWBALL - A+] — Snowball Triple-Check (${args.snowballTfDisplay})${sniperSuffix}`;
+
     const out: string[] = [
-      `🟢 [LONG Candidate] — Snowball Triple-Check (${args.snowballTfDisplay})${sniperSuffix}`,
+      longHeadline,
       `${pair} — Binance USDT-M`,
       "",
       `💼 Playbook:`,
@@ -886,7 +986,7 @@ function buildSnowballTripleCheckMessage(
       timeLine,
       "",
       `✅ เช็คลิสต์:`,
-      checklistBodyWithTrend,
+      [checklistBodyWithTrend, barrier2].filter((x) => x.length > 0).join("\n"),
     ];
     if (planBlock) {
       out.push("", planBlock);
@@ -923,8 +1023,19 @@ function buildSnowballTripleCheckMessage(
     : `• Volume: Vol แท่งนี้ > SMA(${args.volPeriod}) — อัตราส่วน ~ ${volRatio}x`;
   const refPx = formatUsdPrice(args.refSwing);
 
+  const dbShort = Boolean(args.doubleBarrierEnabled && args.shortQualityTier);
+  const shortHeadline = !dbShort
+    ? `🔴 [SHORT Candidate] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`
+    : args.shortQualityTier === "b_plus"
+      ? `🟡 [WATCHLIST - B+] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`
+      : `🔴 [SUPER SNOWBALL - A+] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`;
+  const bearBarrier2 =
+    args.doubleBarrierEnabled && args.shortDoubleBarrierChecklistLine
+      ? args.shortDoubleBarrierChecklistLine
+      : "";
+
   return [
-    `🔴 [SHORT Candidate] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`,
+    shortHeadline,
     `${pair} — Binance USDT-M`,
     "",
     `💼 Playbook:`,
@@ -940,6 +1051,7 @@ function buildSnowballTripleCheckMessage(
         ? ` — ไม่นับแท่งล่าสุด ${args.swingExcludeRecent} แท่งก่อนแท่งนี้ (กันพื้น impulse เดียวกัน)`
         : ""
     } (ระดับอ้างอิง swing ~ ${refPx}) · ราคา ~ ${px}`,
+    ...(bearBarrier2 ? [bearBarrier2] : []),
     bearVolLine,
     `• Stoch RSI (${args.rsiP}/${args.stochLen}) แท่งปิดล่าสุด: ${args.stochK.toFixed(1)} > ${args.stochLimit!.toFixed(0)} — ยังไม่ OS เกินไป`,
     "",
@@ -1194,6 +1306,7 @@ function buildRsiDivergenceMessage(
 /**
  * Feed สาธารณะ RSI + EMA จาก Binance USDT-M (1h) + RSI divergence (1h / 4h)
  * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — universe alt ตาม INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS ดีฟอลต์ 100; RSI/EMA/Div ยังใช้ INDICATOR_PUBLIC_TOP_ALTS)
+ *   Double Barrier: Barrier1 = swing lookback เดิม · Barrier2 = แนว High/Low ย้อน 200 แท่งในโซน Watchlist % → 🟡 B+ / 🟢/🔴 A+
  */
 export async function runPublicIndicatorFeedInternal(_client: Client, now: number): Promise<number> {
   void _client;
@@ -1433,6 +1546,8 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const longSlopeMinUpBars = snowballLongTrendEmaSlopeMinUpBars();
       const longEma2On = snowballLongTrendEma2Enabled();
       const longEma2P = snowballLongTrendEma2Period();
+      const dbOn = snowballDoubleBarrierEnabled();
+      const barrier2Lb = dbOn ? snowballDoubleBarrierLookbackBars() : 0;
 
       const minBars = Math.max(
         rsiP + stLen + kSm + 8,
@@ -1444,6 +1559,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         longSlopeEmaOn ? longSlopeEmaP + 2 : 0,
         longEma2On ? longEma2P + 2 : 0,
         longSlopeEmaOn && longSlopeMinUpBars >= 2 ? longSlopeEmaP + (longSlopeMinUpBars + 1) : 0,
+        dbOn ? barrier2Lb + 2 : 0,
         4
       );
       if (n15 < minBars || iClosed < 1 || iForming < 1) continue;
@@ -1586,6 +1702,26 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           }
         }
 
+        let longTier: SnowballQualityTier = "a_plus";
+        let longDoubleBarrierLine = "";
+        if (dbOn) {
+          const cls = classifyLongDoubleBarrierTier(h15, iEval, clE!);
+          longTier = cls.tier;
+          const { min, max } = snowballDoubleBarrierWatchBandPct();
+          const band = `${(min * 100).toFixed(1)}–${(max * 100).toFixed(1)}%`;
+          if (cls.nearestOverhead == null) {
+            longDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): ไม่พบ High เหนือราคาในระยะ — โครงเหนือว่าง (A+) · โซน Watchlist กำหนด +${band} เหนือราคา`;
+          } else {
+            const nearS = formatUsdPrice(cls.nearestOverhead);
+            const distS = cls.distPct != null ? cls.distPct.toFixed(2) : "—";
+            if (cls.tier === "b_plus") {
+              longDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวต้านใกล้ ~ ${nearS} USDT (+${distS}%) อยู่ในโซน Watchlist +${band} — 🟡 B+`;
+            } else {
+              longDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวต้านใกล้ ~ ${nearS} USDT (+${distS}%) อยู่นอกโซน Watchlist +${band} — 🟢 A+`;
+            }
+          }
+        }
+
         const msg = buildSnowballTripleCheckMessage(symbol, "bull", barOpenSec, {
           close: clE!,
           refSwing: refPlaybook,
@@ -1618,6 +1754,9 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           ema2SlopePeriod: longEma2On ? longEma2P : undefined,
           ema2SlopeOk: longEma2On ? Boolean(ema2SlopeOk) : undefined,
           master4hTradePlan: snowTf === "4h" ? master4hTradePlan : null,
+          doubleBarrierEnabled: dbOn,
+          snowballQualityTier: dbOn ? longTier : undefined,
+          doubleBarrierChecklistLine: dbOn ? longDoubleBarrierLine : undefined,
         });
         try {
           const ok = await sendPublicSnowballFeedToSparkGroup(msg);
@@ -1637,6 +1776,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
                 triggerKind: trig,
                 vol: vE!,
                 volSma: vsE!,
+                qualityTier: dbOn ? longTier : undefined,
               });
             } catch (statsErr) {
               console.error("[indicatorPublicFeed] snowball stats LONG", symbol, statsErr);
@@ -1689,6 +1829,26 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const key = `${symbol}|SNOWBALL|${snowTf}|BEAR`;
         if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) return;
 
+        let shortTier: SnowballQualityTier = "a_plus";
+        let shortDoubleBarrierLine = "";
+        if (dbOn) {
+          const cls = classifyShortDoubleBarrierTier(l15, iEval, clE!);
+          shortTier = cls.tier;
+          const { min, max } = snowballDoubleBarrierWatchBandPct();
+          const band = `${(min * 100).toFixed(1)}–${(max * 100).toFixed(1)}%`;
+          if (cls.nearestUnderfoot == null) {
+            shortDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): ไม่พบ Low ใต้ราคาในระยะ — โครงใต้ว่าง (A+) · โซน Watchlist −${band} ใต้ราคา`;
+          } else {
+            const nearS = formatUsdPrice(cls.nearestUnderfoot);
+            const distS = cls.distPct != null ? cls.distPct.toFixed(2) : "—";
+            if (cls.tier === "b_plus") {
+              shortDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวรับใกล้ ~ ${nearS} USDT (−${distS}%) อยู่ในโซน Watchlist −${band} — 🟡 B+`;
+            } else {
+              shortDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวรับใกล้ ~ ${nearS} USDT (−${distS}%) อยู่นอกโซน Watchlist −${band} — A+`;
+            }
+          }
+        }
+
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", barOpenSec, {
           close: clE!,
           refSwing: priorMinLow,
@@ -1710,6 +1870,9 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           svpHdRequiredOk: shortNeedSvpHd && svpHdOkBear,
           intrabar,
           volCheckRelaxed: relaxVol,
+          doubleBarrierEnabled: dbOn,
+          shortQualityTier: dbOn ? shortTier : undefined,
+          shortDoubleBarrierChecklistLine: dbOn ? shortDoubleBarrierLine : undefined,
         });
         try {
           const ok = await sendPublicSnowballFeedToSparkGroup(msg);
@@ -1729,6 +1892,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
                 triggerKind: "swing_ll",
                 vol: vE!,
                 volSma: vsE!,
+                qualityTier: dbOn ? shortTier : undefined,
               });
             } catch (statsErr) {
               console.error("[indicatorPublicFeed] snowball stats BEAR", symbol, statsErr);

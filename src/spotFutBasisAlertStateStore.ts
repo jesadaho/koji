@@ -28,9 +28,12 @@ async function ensureJsonFile(): Promise<void> {
 
 export type SpotFutBasisTier = "warning" | "extreme";
 
+/** เก็บใน state รวม "normal" เมื่อ gap หด — ไม่ลบ entry เพื่อไม่ให้ dailyNotifiedCount รีเซ็ตในวันเดียวกัน */
+export type SpotFutBasisAlertEntryTier = SpotFutBasisTier | "normal";
+
 export type SpotFutBasisAlertEntry = {
   lastNotifiedBasisPct: number;
-  lastTier: SpotFutBasisTier;
+  lastTier: SpotFutBasisAlertEntryTier;
   /** วันที่ (เวลาไทย) ที่นับโควต้าการแจ้งล่าสุด เช่น 2026-04-29 */
   dailyKeyBkk?: string;
   /** จำนวนครั้งที่แจ้งใน dailyKeyBkk นั้น */
@@ -51,7 +54,10 @@ function normalizeState(raw: unknown): SpotFutBasisAlertState {
       dailyNotifiedCount?: unknown;
     };
     const p = Number(o?.lastNotifiedBasisPct);
-    const t = o?.lastTier === "extreme" || o?.lastTier === "warning" ? o.lastTier : null;
+    const t =
+      o?.lastTier === "extreme" || o?.lastTier === "warning" || o?.lastTier === "normal"
+        ? o.lastTier
+        : null;
     if (!Number.isFinite(p) || !t) continue;
     const dailyKeyBkk = typeof o.dailyKeyBkk === "string" && o.dailyKeyBkk.trim() ? o.dailyKeyBkk.trim() : undefined;
     const cntRaw = Number(o.dailyNotifiedCount);
