@@ -26,6 +26,7 @@ import {
   liffSyncIndicatorAlerts,
   liffDeleteIndicatorAlert,
   liffGetSparkStats,
+  liffGetSnowballStats,
 } from "@/src/liffService";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,15 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const auth = await authenticateLiffRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const data = await liffGetSparkStats();
+      return NextResponse.json(data, {
+        status: 200,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    if (segs.length === 1 && a === "snowball-stats") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const data = await liffGetSnowballStats();
       return NextResponse.json(data, {
         status: 200,
         headers: { "Cache-Control": "no-store" },

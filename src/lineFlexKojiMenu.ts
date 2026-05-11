@@ -48,6 +48,16 @@ export function buildKojiWelcomeFlexContents(liffId?: string, options?: KojiWelc
         uri: `https://liff.line.me/${liffId}/spark-stats`,
       },
     });
+    footerContents.push({
+      type: "button" as const,
+      style: "secondary" as const,
+      height: "sm" as const,
+      action: {
+        type: "uri" as const,
+        label: "สถิติ Snowball",
+        uri: `https://liff.line.me/${liffId}/snowball-stats`,
+      },
+    });
     if (showTopFunding) {
       footerContents.push({
         type: "button" as const,

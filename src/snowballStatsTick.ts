@@ -1,0 +1,192 @@
+import {
+  fetchBinanceUsdmKlinesRange,
+  isBinanceIndicatorFapiEnabled,
+  resetBinanceIndicatorFapi451LogDedupe,
+} from "./binanceIndicatorKline";
+import {
+  isSnowballStatsEnabled,
+  loadSnowballStatsState,
+  saveSnowballStatsState,
+  type SnowballStatsRow,
+} from "./snowballStatsStore";
+
+const BAR_15M_SEC = 900;
+
+function anchorCloseSec(row: SnowballStatsRow): number {
+  return row.signalBarOpenSec + BAR_15M_SEC;
+}
+
+function pctVsEntry(side: "long" | "short", entry: number, price: number): number {
+  if (side === "long") return ((price - entry) / entry) * 100;
+  return ((entry - price) / entry) * 100;
+}
+
+function rrRewardSource(): "close_24h" | "mfe" {
+  const v = process.env.SNOWBALL_STATS_RR_REWARD_SOURCE?.trim().toLowerCase();
+  return v === "mfe" ? "mfe" : "close_24h";
+}
+
+function outcomeWinMinPct(): number {
+  const v = Number(process.env.SNOWBALL_STATS_OUTCOME_WIN_MIN_PCT);
+  if (Number.isFinite(v) && v > -100 && v < 100) return v;
+  return 0.3;
+}
+
+function outcomeLossMaxPct(): number {
+  const v = Number(process.env.SNOWBALL_STATS_OUTCOME_LOSS_MAX_PCT);
+  if (Number.isFinite(v) && v > -100 && v < 100) return v;
+  return -0.3;
+}
+
+function formatRr(rewardPct: number, riskPct: number): string {
+  if (!Number.isFinite(riskPct) || riskPct <= 1e-9) return "N/A";
+  if (!Number.isFinite(rewardPct) || rewardPct <= 0) return "N/A";
+  const r = rewardPct / riskPct;
+  if (!Number.isFinite(r) || r <= 0) return "N/A";
+  return `1:${r.toFixed(2)}`;
+}
+
+/** ปิดแท่งล่าสุดที่ปิดไม่เกิน horizonEndSec และไม่เกิน now */
+function pickHorizonClose(
+  timeSec: number[],
+  close: number[],
+  iFirst: number,
+  iLast: number,
+  nowSec: number,
+  horizonEndSec: number,
+  entry: number,
+  side: "long" | "short"
+): { price: number; pct: number } | null {
+  const limitSec = Math.min(horizonEndSec, nowSec);
+  let best = -1;
+  for (let i = iFirst; i <= iLast; i++) {
+    const barClose = timeSec[i]! + BAR_15M_SEC;
+    if (barClose <= limitSec) best = i;
+  }
+  if (best < 0) return null;
+  const price = close[best]!;
+  return { price, pct: pctVsEntry(side, entry, price) };
+}
+
+export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<number> {
+  resetBinanceIndicatorFapi451LogDedupe();
+  if (!isSnowballStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return 0;
+
+  const state = await loadSnowballStatsState();
+  let dirty = 0;
+
+  for (const row of state.rows) {
+    if (row.outcome !== "pending") continue;
+
+    const entry = row.entryPrice;
+    if (!Number.isFinite(entry) || entry <= 0) continue;
+
+    const ac = anchorCloseSec(row);
+    const nowSec = Math.floor(nowMs / 1000);
+    if (nowSec < ac) continue;
+
+    const windowEndSec = Math.min(nowSec, ac + 24 * 3600);
+
+    const pack = await fetchBinanceUsdmKlinesRange(row.symbol, "15m", {
+      startTimeMs: (ac - BAR_15M_SEC) * 1000,
+      endTimeMs: nowMs,
+      limit: 500,
+    });
+    if (!pack || pack.timeSec.length === 0) continue;
+
+    const { timeSec, high, low, close } = pack;
+    const iFirst = timeSec.findIndex((t) => t + BAR_15M_SEC >= ac);
+    if (iFirst < 0) continue;
+
+    let iLast = iFirst;
+    for (let i = iFirst; i < timeSec.length; i++) {
+      if (timeSec[i]! + BAR_15M_SEC <= windowEndSec) iLast = i;
+    }
+    while (iLast >= iFirst && timeSec[iLast]! + BAR_15M_SEC > windowEndSec) {
+      iLast--;
+    }
+    if (iLast < iFirst) continue;
+
+    let maxRoi = -Infinity;
+    let mfeIdx = iFirst;
+    if (row.side === "long") {
+      for (let i = iFirst; i <= iLast; i++) {
+        const roi = ((high[i]! - entry) / entry) * 100;
+        if (roi > maxRoi) {
+          maxRoi = roi;
+          mfeIdx = i;
+        }
+      }
+    } else {
+      for (let i = iFirst; i <= iLast; i++) {
+        const roi = ((entry - low[i]!) / entry) * 100;
+        if (roi > maxRoi) {
+          maxRoi = roi;
+          mfeIdx = i;
+        }
+      }
+    }
+
+    if (!Number.isFinite(maxRoi)) continue;
+
+    let minLow = Infinity;
+    let maxHigh = -Infinity;
+    for (let i = iFirst; i <= mfeIdx; i++) {
+      minLow = Math.min(minLow, low[i]!);
+      maxHigh = Math.max(maxHigh, high[i]!);
+    }
+    let maxDd = 0;
+    if (row.side === "long") {
+      maxDd = ((entry - minLow) / entry) * 100;
+    } else {
+      maxDd = ((maxHigh - entry) / entry) * 100;
+    }
+    if (!Number.isFinite(maxDd) || maxDd < 0) maxDd = 0;
+
+    const durationHours = (timeSec[mfeIdx]! + BAR_15M_SEC - ac) / 3600;
+
+    const h4 = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + 4 * 3600, entry, row.side);
+    const h12 = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + 12 * 3600, entry, row.side);
+    let h24 = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + 24 * 3600, entry, row.side);
+
+    if (h24 == null && nowSec >= ac + 24 * 3600 && iLast >= iFirst) {
+      const p = close[iLast]!;
+      h24 = { price: p, pct: pctVsEntry(row.side, entry, p) };
+    }
+
+    row.maxRoiPct = maxRoi;
+    row.durationToMfeHours = durationHours;
+    row.maxDrawdownPct = maxDd;
+    if (h4) {
+      row.price4h = h4.price;
+      row.pct4h = h4.pct;
+    }
+    if (h12) {
+      row.price12h = h12.price;
+      row.pct12h = h12.pct;
+    }
+    if (h24) {
+      row.price24h = h24.price;
+      row.pct24h = h24.pct;
+    }
+
+    const finalized = nowSec >= ac + 24 * 3600 && row.pct24h != null && row.price24h != null;
+    if (finalized) {
+      const winMin = outcomeWinMinPct();
+      const lossMax = outcomeLossMaxPct();
+      const pct24 = row.pct24h ?? 0;
+      if (pct24 >= winMin) row.outcome = "win_trend";
+      else if (pct24 <= lossMax) row.outcome = "loss";
+      else row.outcome = "flat";
+
+      const reward =
+        rrRewardSource() === "mfe" ? (row.maxRoiPct ?? 0) : (row.pct24h ?? 0);
+      row.resultRr = formatRr(reward, row.maxDrawdownPct ?? 0);
+    }
+
+    dirty += 1;
+  }
+
+  if (dirty > 0) await saveSnowballStatsState(state);
+  return dirty;
+}

@@ -201,6 +201,10 @@ export default async function MarketsPage({
         <span className="siteNavSep" aria-hidden>
           |
         </span>
+        <Link href="/snowball-stats">สถิติ Snowball</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
         <Link href="/settings">Settings</Link>
       </p>
     </main>

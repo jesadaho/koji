@@ -4,6 +4,7 @@ import { fetchContractKlineForTf, type IndicatorChartTf } from "./indicatorKline
 import { sendAlertNotification } from "./alertNotify";
 import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import { isIndicatorPublicFeedEnabled, runPublicIndicatorFeedInternal } from "./publicIndicatorFeed";
+import { runSnowballStatsFollowUpTick } from "./snowballStatsTick";
 import { emaLine, rsiWilder } from "./indicatorMath";
 import {
   loadActiveEmaCrossAlerts,
@@ -283,11 +284,13 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const rsiN = await runRsiInternal(client, now);
   const emaN = await runEmaCrossInternal(client, now);
   const publicN = isIndicatorPublicFeedEnabled() ? await runPublicIndicatorFeedInternal(client, now) : 0;
+  const snowballStatsN = await runSnowballStatsFollowUpTick(now);
   const watch612 = await runEma612ContractWatchAlertTick(client);
   const total = rsiN + emaN + publicN + watch612;
 
   const parts: string[] = [`RSI/EMA (MEXC) ${rsiN + emaN}`];
   if (publicN > 0) parts.push(`public Binance ${publicN}`);
+  if (snowballStatsN > 0) parts.push(`snowball stats ${snowballStatsN}`);
   if (watch612 > 0) parts.push(`EMA6/12·15m ติดตาม ${watch612}`);
   const detail = total > 0 ? `แจ้ง ${total} ครั้ง (${parts.join(" · ")})` : undefined;
 

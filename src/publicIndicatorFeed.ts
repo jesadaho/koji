@@ -13,6 +13,7 @@ import {
   updatePublicFeedFiredKey,
   type IndicatorPublicFeedState,
 } from "./indicatorPublicFeedStore";
+import { appendSnowballStatsRow } from "./snowballStatsStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 
 const TF: BinanceIndicatorTf = "1h";
@@ -109,11 +110,11 @@ function topAltsCount(): number {
   return 15;
 }
 
-/** Swing HH/LL — ย้อนหลังหา High/Low ก่อนแท่งประเมิน · ดีฟอลต์ 24 แท่ง 15m (~6 ชม.) ลดเคสยอดอ้างอิงเก่าไกล */
+/** Swing HH/LL — ย้อนหลังหา High/Low ก่อนแท่งปิด · ดีฟอลต์ 48 แท่ง 15m (~12 ชม.) */
 function snowballSwingLookbackBars(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_LOOKBACK);
   if (Number.isFinite(v) && v >= 5 && v <= 120) return Math.floor(v);
-  return 24;
+  return 48;
 }
 
 function snowballVolSmaPeriod(): number {
@@ -188,16 +189,16 @@ function snowballLongVahLookbackBars(): number {
 }
 
 /**
- * ประเมินด้วยแท่งกำลังก่อน (ดึง kline สด — แท่งสุดท้ายยังไม่ปิด) — ไวกว่ารอปิดแท่ง 15m ทั้งแท่ง
- * เปิดเป็นค่าเริ่มหลังจาก feedback ความหน่วง (ปิดใน env เป็น 0 ถ้าระวังสแปม)
+ * ประเมินด้วยแท่งกำลังก่อน (kline สด — แท่งสุดท้ายยังไม่ปิด) — ค่าเริ่มปิด; รอปิดแท่ง 15m เป็นหลัก
+ * เปิดด้วย INDICATOR_PUBLIC_SNOWBALL_INTRABAR=1 เมื่อต้องการแจ้งก่อนจบแท่ง
  */
 function snowballIntrabarEnabled(): boolean {
-  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR", true);
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR", false);
 }
 
-/** ในโหมด intrabar: ไม่บังคับ Vol > SMA(เพราะวอลุ่มยังสะสมไม่ครบ — จับ breakout เร็วกว่า confirm ท้ายแท่ง) */
+/** ในโหมด intrabar: ไม่บังคับ Vol > SMA — ค่าเริ่มปิด */
 function snowballIntrabarRelaxVolume(): boolean {
-  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR_RELAX_VOLUME", true);
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR_RELAX_VOLUME", false);
 }
 
 let topAltsCache: { symbols: string[]; at: number } | null = null;
@@ -1195,6 +1196,22 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           if (ok) {
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now);
             notified += 1;
+            try {
+              await appendSnowballStatsRow({
+                symbol,
+                side: "long",
+                alertedAtIso: iso,
+                alertedAtMs: now,
+                signalBarOpenSec: barOpenSec,
+                entryPrice: clE!,
+                intrabar,
+                triggerKind: trig,
+                vol: vE!,
+                volSma: vsE!,
+              });
+            } catch (statsErr) {
+              console.error("[indicatorPublicFeed] snowball stats LONG", symbol, statsErr);
+            }
           }
         } catch (e) {
           console.error("[indicatorPublicFeed] Snowball LONG", symbol, intrabar ? "intrabar" : "close", e);
@@ -1268,6 +1285,22 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           if (ok) {
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now);
             notified += 1;
+            try {
+              await appendSnowballStatsRow({
+                symbol,
+                side: "short",
+                alertedAtIso: iso,
+                alertedAtMs: now,
+                signalBarOpenSec: barOpenSec,
+                entryPrice: clE!,
+                intrabar,
+                triggerKind: "swing_ll",
+                vol: vE!,
+                volSma: vsE!,
+              });
+            } catch (statsErr) {
+              console.error("[indicatorPublicFeed] snowball stats BEAR", symbol, statsErr);
+            }
           }
         } catch (e) {
           console.error("[indicatorPublicFeed] Snowball BEAR", symbol, intrabar ? "intrabar" : "close", e);

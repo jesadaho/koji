@@ -62,7 +62,7 @@ const INTERVAL: Record<BinanceIndicatorTf, string> = {
   "4h": "4h",
 };
 
-function parseKlineRows(rows: unknown): BinanceKlinePack | null {
+function parseKlineRows(rows: unknown, minBars = 10): BinanceKlinePack | null {
   if (!Array.isArray(rows) || rows.length === 0) return null;
   const close: number[] = [];
   const high: number[] = [];
@@ -84,7 +84,7 @@ function parseKlineRows(rows: unknown): BinanceKlinePack | null {
     close.push(c);
     volume.push(Number.isFinite(vol) && vol >= 0 ? vol : 0);
   }
-  if (close.length < 10) return null;
+  if (close.length < minBars) return null;
   return { close, high, low, volume, timeSec };
 }
 
@@ -113,6 +113,55 @@ export async function fetchBinanceUsdmKlines(
       logBinance451Once("klines", sym);
     } else {
       console.error("[binanceIndicatorKline] klines", sym, axiosBrief(e));
+    }
+    return null;
+  }
+}
+
+const KLINE_MAX_LIMIT = 1500;
+
+export type BinanceKlineRangeOpts = {
+  startTimeMs: number;
+  endTimeMs: number;
+  /** 1–1500 ค่าเริ่ม 500 */
+  limit?: number;
+};
+
+/**
+ * Kline ในช่วงเวลา (Binance FAPI startTime/endTime ms) — ใช้สถิติ Snowball follow-up
+ */
+export async function fetchBinanceUsdmKlinesRange(
+  symbol: string,
+  tf: BinanceIndicatorTf,
+  opts: BinanceKlineRangeOpts
+): Promise<BinanceKlinePack | null> {
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return null;
+  if (!isBinanceIndicatorFapiEnabled()) return null;
+  const lim = Math.min(
+    KLINE_MAX_LIMIT,
+    Math.max(10, Math.floor(opts.limit ?? 500))
+  );
+  const st = Math.floor(opts.startTimeMs);
+  const et = Math.floor(opts.endTimeMs);
+  if (!Number.isFinite(st) || !Number.isFinite(et) || et <= st) return null;
+  try {
+    const { data } = await axios.get<unknown[]>(`${FAPI}/fapi/v1/klines`, {
+      timeout: 25_000,
+      params: {
+        symbol: sym,
+        interval: INTERVAL[tf],
+        startTime: st,
+        endTime: et,
+        limit: lim,
+      },
+    });
+    return parseKlineRows(data, 1);
+  } catch (e) {
+    if (isBinance451Geo(e)) {
+      logBinance451Once("klines range", sym);
+    } else {
+      console.error("[binanceIndicatorKline] klines range", sym, axiosBrief(e));
     }
     return null;
   }

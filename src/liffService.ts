@@ -50,6 +50,7 @@ import {
 } from "./volumeSignalAlertTick";
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
+import { loadSnowballStatsState, type SnowballStatsApiPayload } from "./snowballStatsStore";
 import {
   ensureTradingViewMexcUserRow,
   orderSideEffective,
@@ -687,6 +688,13 @@ export async function liffDeleteIndicatorAlert(
 export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
   const state = await loadSparkFollowUpState();
   return buildSparkStatsApiPayload(state);
+}
+
+/** สถิติ Snowball (global) — ต้องผ่าน auth เหมือน spark-stats */
+export async function liffGetSnowballStats(): Promise<SnowballStatsApiPayload> {
+  const st = await loadSnowballStatsState();
+  const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
+  return { rows };
 }
 
 function publicAppBaseForTvWebhook(): { origin: string; path: string } {
