@@ -60,7 +60,11 @@ function shortBase(symbol: string): string {
   return s.replace(/_/g, "") || symbol;
 }
 
-function buildSpotFutBasisMessage(row: SpotFutBasisRow, tier: SpotFutBasisTier): string {
+function buildSpotFutBasisMessage(
+  row: SpotFutBasisRow,
+  tier: SpotFutBasisTier,
+  opts: { alertNthToday: number; dayKeyBkk: string },
+): string {
   const base = shortBase(row.symbol);
   const fp = formatPrice(row.futPrice);
   const sp = formatPrice(row.spotPrice);
@@ -69,6 +73,7 @@ function buildSpotFutBasisMessage(row: SpotFutBasisRow, tier: SpotFutBasisTier):
   const tag = tier === "extreme" ? "(Extreme!)" : "(Warning)";
 
   const head = "⚡ Koji: Price Gap Detected!";
+  const debugCountLine = `📎 แจ้งเตือนคู่นี้วันนี้ (เวลาไทย ${opts.dayKeyBkk}): ครั้งที่ ${opts.alertNthToday}`;
 
   return [
     head,
@@ -77,6 +82,8 @@ function buildSpotFutBasisMessage(row: SpotFutBasisRow, tier: SpotFutBasisTier):
     `🔹 Futures Price: $${fp}`,
     `🔸 Spot Price: $${sp}`,
     `⚠️ Price Diff: ${pctStr} ${tag}`,
+    "",
+    debugCountLine,
   ].join("\n");
 }
 
@@ -157,7 +164,8 @@ export async function runSpotFutBasisAlertTick(
       continue;
     }
 
-    const body = buildSpotFutBasisMessage(row, tier);
+    const alertNthToday = cntToday + 1;
+    const body = buildSpotFutBasisMessage(row, tier, { alertNthToday, dayKeyBkk: dayKey });
     let anyOk = false;
     if (telegramSparkSystemGroupConfigured()) {
       try {
@@ -181,7 +189,7 @@ export async function runSpotFutBasisAlertTick(
 
     if (anyOk) {
       symbolsAlerted += 1;
-      const nextCnt = cap > 0 ? cntToday + 1 : cntToday;
+      const nextCnt = cntToday + 1;
       state = {
         ...state,
         [sym]: {
