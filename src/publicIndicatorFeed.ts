@@ -118,6 +118,16 @@ function topAltsCount(): number {
   return 15;
 }
 
+/**
+ * จำนวน alt จาก Binance 24h quoteVolume ที่สแกน Snowball (แยกจาก INDICATOR_PUBLIC_TOP_ALTS ที่ใช้ RSI/EMA/Div)
+ * เมื่อเปิด Snowball จะดึง universe = max(TOP_ALTS, ค่านี้) แต่ RSI/EMA/Divergence ยังรันที่ BTC+ETH+TOP_ALTS เท่านั้น
+ */
+function snowballUniverseTopAltsCount(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS);
+  if (Number.isFinite(v) && v >= 0 && v <= 150) return Math.floor(v);
+  return 100;
+}
+
 /** Swing HH/LL — ย้อนหลังหา High/Low ก่อนแท่งปิด · ดีฟอลต์ 48 แท่ง (ระยะเวลาแล้วแต่ TF Snowball) */
 function snowballSwingLookbackBars(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_LOOKBACK);
@@ -255,17 +265,16 @@ function snowballIntrabarRelaxVolume(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR_RELAX_VOLUME", false);
 }
 
-let topAltsCache: { symbols: string[]; at: number } | null = null;
+let topAltsCache: { symbols: string[]; at: number; topN: number } | null = null;
 
-async function getUniverseSymbols(): Promise<string[]> {
-  const topN = topAltsCount();
+async function getUniverseSymbols(topN: number): Promise<string[]> {
   const ttl = symbolListTtlMs();
   const now = Date.now();
-  if (topAltsCache && now - topAltsCache.at < ttl) {
+  if (topAltsCache && topAltsCache.topN === topN && now - topAltsCache.at < ttl) {
     return ["BTCUSDT", "ETHUSDT", ...topAltsCache.symbols];
   }
   const top = topN > 0 ? await fetchTopUsdmUsdtSymbolsByQuoteVolume(topN) : [];
-  topAltsCache = { symbols: top, at: now };
+  topAltsCache = { symbols: top, at: now, topN };
   return ["BTCUSDT", "ETHUSDT", ...top];
 }
 
@@ -1184,7 +1193,7 @@ function buildRsiDivergenceMessage(
 
 /**
  * Feed สาธารณะ RSI + EMA จาก Binance USDT-M (1h) + RSI divergence (1h / 4h)
- * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — HH/LL + volume + Stoch RSI) → Telegram กลุ่ม Spark/System
+ * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — universe alt ตาม INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS ดีฟอลต์ 100; RSI/EMA/Div ยังใช้ INDICATOR_PUBLIC_TOP_ALTS)
  */
 export async function runPublicIndicatorFeedInternal(_client: Client, now: number): Promise<number> {
   void _client;
@@ -1204,8 +1213,13 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
   const snowballOn = isPublicSnowballTripleCheckEnabled();
   if (!rsiOn && !emaOn && !divOn && !snowballOn) return 0;
 
-  const symbols = await getUniverseSymbols();
+  const baseTopAlts = topAltsCount();
+  const snowballTopAlts = snowballUniverseTopAltsCount();
+  const fetchUniverseTopN = snowballOn ? Math.max(baseTopAlts, snowballTopAlts) : baseTopAlts;
+  const symbols = await getUniverseSymbols(fetchUniverseTopN);
   if (symbols.length === 0) return 0;
+  /** RSI / EMA / Div: เฉพาะ BTC + ETH + alt ตาม INDICATOR_PUBLIC_TOP_ALTS ตัวแรกของลิสต์ volume */
+  const maxIdxCoreFeed = baseTopAlts <= 0 ? 2 : Math.min(symbols.length, 2 + baseTopAlts);
 
   const rsiP = rsiParams();
   const emaP = emaParams();
@@ -1223,8 +1237,17 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
     const part1h = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, TF)));
     packs1h.push(...part1h);
     if (divOn) {
-      const part4h = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, "4h")));
+      const part4h = await Promise.all(
+        chunk.map((s, j) => {
+          const globalIdx = i + j;
+          return globalIdx < maxIdxCoreFeed
+            ? fetchBinanceUsdmKlines(s, "4h")
+            : Promise.resolve(null);
+        })
+      );
       packs4h.push(...part4h);
+    } else {
+      packs4h.push(...chunk.map(() => null));
     }
     if (snowballOn) {
       const partSb = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, snowTf)));
@@ -1253,7 +1276,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
     const iso = new Date().toISOString();
 
-    if (rsiOn && !isNeutralRsi50Threshold(rsiP.threshold)) {
+    if (rsiOn && idx < maxIdxCoreFeed && !isNeutralRsi50Threshold(rsiP.threshold)) {
       const period = rsiP.period;
       if (n >= period + 3) {
         const rsi = rsiWilder(close, period);
@@ -1289,7 +1312,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       }
     }
 
-    if (emaOn && emaP.fast < emaP.slow) {
+    if (emaOn && idx < maxIdxCoreFeed && emaP.fast < emaP.slow) {
       const { fast, slow } = emaP;
       const minIdx = Math.max(fast, slow) - 1;
       const emaF = emaLine(close, fast);
@@ -1340,7 +1363,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       }
     }
 
-    if (divOn) {
+    if (divOn && idx < maxIdxCoreFeed) {
       const wing = divergencePivotWing();
       const minGap = divergenceMinPivotGapBars();
       const strongD = divergenceStrongRsiDelta();
