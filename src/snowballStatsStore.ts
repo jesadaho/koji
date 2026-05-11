@@ -34,8 +34,10 @@ export type SnowballStatsRow = {
   alertedAtIso: string;
   /** ms wall clock ตอนบันทึก (cron) */
   alertedAtMs: number;
-  /** open time แท่ง 15m ที่สัญญาณอิง (sec) */
+  /** open time แท่งสัญญาณที่อิง (sec) */
   signalBarOpenSec: number;
+  /** TF ของแท่งสัญญาณ (ถ้าไม่มีในข้อมูลเก่า = 15m) */
+  signalBarTf?: "15m" | "1h" | "4h";
   entryPrice: number;
   intrabar: boolean;
   triggerKind: string;
@@ -123,6 +125,7 @@ export type AppendSnowballStatsInput = {
   alertedAtIso: string;
   alertedAtMs: number;
   signalBarOpenSec: number;
+  signalBarTf?: "15m" | "1h" | "4h";
   entryPrice: number;
   intrabar: boolean;
   triggerKind: string;
@@ -140,6 +143,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     alertedAtIso: input.alertedAtIso,
     alertedAtMs: input.alertedAtMs,
     signalBarOpenSec: input.signalBarOpenSec,
+    signalBarTf: input.signalBarTf ?? "15m",
     entryPrice: input.entryPrice,
     intrabar: input.intrabar,
     triggerKind: input.triggerKind,

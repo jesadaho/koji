@@ -24,7 +24,7 @@ async function ensureFile(): Promise<void> {
   }
 }
 
-/** key = เช่น "BTCUSDT|RSI" | "SOLUSDT|EMA_GOLDEN" | "ETHUSDT|RSI_DIV|1h|BEARISH" | "BTCUSDT|SNOWBALL|15m|BULL" → bar open time sec (RSI divergence 2-wave = แท่งยืนยัน/ปิดล่าสุด) */
+/** key = เช่น "BTCUSDT|RSI" | "SOLUSDT|EMA_GOLDEN" | "ETHUSDT|RSI_DIV|1h|BEARISH" | "BTCUSDT|SNOWBALL|4h|BULL" → bar open time sec (RSI divergence 2-wave = แท่งยืนยัน/ปิดล่าสุด) */
 export type IndicatorPublicFeedState = {
   lastFiredBarSec: Record<string, number>;
   /** cooldown ต่อ key (wall clock ms) */

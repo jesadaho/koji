@@ -10,10 +10,18 @@ import {
   type SnowballStatsRow,
 } from "./snowballStatsStore";
 
-const BAR_15M_SEC = 900;
+/** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
+const KLINE_GRAN_SEC = 900;
+
+function signalBarDurationSec(row: SnowballStatsRow): number {
+  const tf = row.signalBarTf ?? "15m";
+  if (tf === "4h") return 4 * 3600;
+  if (tf === "1h") return 3600;
+  return 900;
+}
 
 function anchorCloseSec(row: SnowballStatsRow): number {
-  return row.signalBarOpenSec + BAR_15M_SEC;
+  return row.signalBarOpenSec + signalBarDurationSec(row);
 }
 
 function pctVsEntry(side: "long" | "short", entry: number, price: number): number {
@@ -60,7 +68,7 @@ function pickHorizonClose(
   const limitSec = Math.min(horizonEndSec, nowSec);
   let best = -1;
   for (let i = iFirst; i <= iLast; i++) {
-    const barClose = timeSec[i]! + BAR_15M_SEC;
+    const barClose = timeSec[i]! + KLINE_GRAN_SEC;
     if (barClose <= limitSec) best = i;
   }
   if (best < 0) return null;
@@ -88,21 +96,21 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
     const windowEndSec = Math.min(nowSec, ac + 24 * 3600);
 
     const pack = await fetchBinanceUsdmKlinesRange(row.symbol, "15m", {
-      startTimeMs: (ac - BAR_15M_SEC) * 1000,
+      startTimeMs: row.signalBarOpenSec * 1000,
       endTimeMs: nowMs,
       limit: 500,
     });
     if (!pack || pack.timeSec.length === 0) continue;
 
     const { timeSec, high, low, close } = pack;
-    const iFirst = timeSec.findIndex((t) => t + BAR_15M_SEC >= ac);
+    const iFirst = timeSec.findIndex((t) => t + KLINE_GRAN_SEC >= ac);
     if (iFirst < 0) continue;
 
     let iLast = iFirst;
     for (let i = iFirst; i < timeSec.length; i++) {
-      if (timeSec[i]! + BAR_15M_SEC <= windowEndSec) iLast = i;
+      if (timeSec[i]! + KLINE_GRAN_SEC <= windowEndSec) iLast = i;
     }
-    while (iLast >= iFirst && timeSec[iLast]! + BAR_15M_SEC > windowEndSec) {
+    while (iLast >= iFirst && timeSec[iLast]! + KLINE_GRAN_SEC > windowEndSec) {
       iLast--;
     }
     if (iLast < iFirst) continue;
@@ -143,7 +151,7 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
     }
     if (!Number.isFinite(maxDd) || maxDd < 0) maxDd = 0;
 
-    const durationHours = (timeSec[mfeIdx]! + BAR_15M_SEC - ac) / 3600;
+    const durationHours = (timeSec[mfeIdx]! + KLINE_GRAN_SEC - ac) / 3600;
 
     const h4 = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + 4 * 3600, entry, row.side);
     const h12 = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + 12 * 3600, entry, row.side);

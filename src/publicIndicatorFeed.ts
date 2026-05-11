@@ -19,7 +19,15 @@ import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 const TF: BinanceIndicatorTf = "1h";
 
 const DIVERGENCE_TFS: BinanceIndicatorTf[] = ["1h", "4h"];
-const SNOWBALL_TF: BinanceIndicatorTf = "15m";
+
+/** Snowball ใช้ TF นี้จาก Binance USDM (15m / 1h / 4h) — ค่าเริ่ม 4h */
+function snowballBinanceTf(): BinanceIndicatorTf {
+  const raw = process.env.INDICATOR_PUBLIC_SNOWBALL_TF?.trim().toLowerCase();
+  if (raw === "4h" || raw === "4hr") return "4h";
+  if (raw === "1h") return "1h";
+  if (raw === "15m") return "15m";
+  return "4h";
+}
 
 function envFlagOn(key: string, defaultOn: boolean): boolean {
   const raw = process.env[key]?.trim().toLowerCase();
@@ -110,17 +118,33 @@ function topAltsCount(): number {
   return 15;
 }
 
-/** Swing HH/LL — ย้อนหลังหา High/Low ก่อนแท่งปิด · ดีฟอลต์ 48 แท่ง 15m (~12 ชม.) */
+/** Swing HH/LL — ย้อนหลังหา High/Low ก่อนแท่งปิด · ดีฟอลต์ 48 แท่ง (ระยะเวลาแล้วแต่ TF Snowball) */
 function snowballSwingLookbackBars(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_LOOKBACK);
   if (Number.isFinite(v) && v >= 5 && v <= 120) return Math.floor(v);
   return 48;
 }
 
+/**
+ * ไม่นับ high/low ของแท่งล่าสุด N แท่งก่อนแท่งสัญญาณ (กันยอด impulse เดียวกันไปเป็นเพดาน HH / พื้น LL)
+ */
+function snowballSwingExcludeRecentBars(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_EXCLUDE_RECENT_BARS);
+  if (Number.isFinite(v) && v >= 0 && v <= 10) return Math.floor(v);
+  return 2;
+}
+
 function snowballVolSmaPeriod(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_VOL_SMA);
   if (Number.isFinite(v) && v >= 3 && v <= 100) return Math.floor(v);
   return 20;
+}
+
+/** Snowball: ต้องเป็น “แรงกระแทก” — Vol ต้องมากกว่า SMA * multiplier (default 2.5x) */
+function snowballVolMultiplier(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_VOL_MULT);
+  if (Number.isFinite(v) && v >= 1 && v <= 10) return v;
+  return 2.5;
 }
 
 function snowballStochRsiPeriod(): number {
@@ -139,13 +163,6 @@ function snowballStochKSmooth(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_STOCH_K_SMOOTH);
   if (Number.isFinite(v) && v >= 1 && v <= 14) return Math.floor(v);
   return 1;
-}
-
-/** HH: Stoch RSI ต้องต่ำกว่านี้ (ค่าเริ่ม ~77 — เหลือ “ห้อง” upside ไม่เข้า OB ปลายๆ) */
-function snowballOverboughtCeiling(): number {
-  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_STOCH_OVERBOUGHT_MAX);
-  if (Number.isFinite(v) && v > 50 && v <= 100) return v;
-  return 77;
 }
 
 /** LL: Stoch RSI ต้องสูงกว่านี้ (ค่าเริ่ม 10 — ยังไม่ OS เกินไป) */
@@ -207,8 +224,26 @@ function snowballLongTrendEmaPeriod(): number {
   return 20;
 }
 
+/** Long: ต้องเชิดหัวต่อเนื่อง N แท่ง (default 2 = eNow>ePrev และ ePrev>ePrev2) */
+function snowballLongTrendEmaSlopeMinUpBars(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_EMA_SLOPE_MIN_UP_BARS);
+  if (Number.isFinite(v) && v >= 1 && v <= 5) return Math.floor(v);
+  return 2;
+}
+
+/** Long: เพิ่ม Trend alignment โดยให้ EMA2 เชิดหัวด้วย (default เปิด + period 50) */
+function snowballLongTrendEma2Enabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_LONG_EMA2_SLOPE_ENABLED", true);
+}
+
+function snowballLongTrendEma2Period(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_EMA2_SLOPE_PERIOD);
+  if (Number.isFinite(v) && v >= 2 && v <= 200) return Math.floor(v);
+  return 50;
+}
+
 /**
- * ประเมินด้วยแท่งกำลังก่อน (kline สด — แท่งสุดท้ายยังไม่ปิด) — ค่าเริ่มปิด; รอปิดแท่ง 15m เป็นหลัก
+ * ประเมินด้วยแท่งกำลังก่อน (kline สด — แท่งสุดท้ายยังไม่ปิด) — ค่าเริ่มปิด; รอปิดแท่งตาม TF Snowball เป็นหลัก
  * เปิดด้วย INDICATOR_PUBLIC_SNOWBALL_INTRABAR=1 เมื่อต้องการแจ้งก่อนจบแท่ง
  */
 function snowballIntrabarEnabled(): boolean {
@@ -455,17 +490,23 @@ function buildPublicEmaMessage(
   ].join("\n");
 }
 
-function maxHighPriorWindow(high: number[], i: number, lookback: number): number {
+/** High สูงสุดใน [i−lookback, i−1−excludeRecent] — excludeRecent กันยอด impulse 1–2 แท่งล่าสุด */
+function maxHighPriorWindow(high: number[], i: number, lookback: number, excludeRecentTrailing: number): number {
+  const end = i - 1 - excludeRecentTrailing;
   const start = Math.max(0, i - lookback);
+  if (end < start) return -Infinity;
   let m = -Infinity;
-  for (let j = start; j < i; j++) m = Math.max(m, high[j]!);
+  for (let j = start; j <= end; j++) m = Math.max(m, high[j]!);
   return m;
 }
 
-function minLowPriorWindow(low: number[], i: number, lookback: number): number {
+/** Low ต่ำสุดในช่วงเดียวกับ maxHighPriorWindow — สมมาตรฝั่ง Short */
+function minLowPriorWindow(low: number[], i: number, lookback: number, excludeRecentTrailing: number): number {
+  const end = i - 1 - excludeRecentTrailing;
   const start = Math.max(0, i - lookback);
+  if (end < start) return Infinity;
   let m = Infinity;
-  for (let j = start; j < i; j++) m = Math.min(m, low[j]!);
+  for (let j = start; j <= end; j++) m = Math.min(m, low[j]!);
   return m;
 }
 
@@ -515,10 +556,149 @@ function snowballStochSeries(
   return smaLine(raw, kSmooth);
 }
 
-function snowballVolumeOk(relax: boolean, vol: number, volSma: number): boolean {
+function snowballVolumeOk(relax: boolean, vol: number, volSma: number, mult: number): boolean {
   if (!Number.isFinite(vol) || vol <= 0) return false;
   if (relax) return true;
-  return Number.isFinite(volSma) && vol > volSma;
+  return Number.isFinite(volSma) && vol > volSma * mult;
+}
+
+/** แผนเทรดเมื่อ Master = 4h (จุดเข้า 15m + SL/TP proxy) */
+type SnowballMaster4hLongTradePlan = {
+  entryMarket: number;
+  ema20_15m: number | null;
+  entryPullbackLow: number | null;
+  entryPullbackHigh: number | null;
+  swingLow4h: number | null;
+  ema50_4h: number | null;
+  stopLoss: number | null;
+  takeProfits: number[];
+};
+
+/** ครึ่งความกว้างโซนรอบ EMA20 @15m เป็นสัดส่วนของราคา (เช่น 0.003 = ±0.3%) */
+function snowball4hPlanEma20PullbackBandPct(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_4H_PLAN_EMA20_PULLBACK_BAND_PCT);
+  if (Number.isFinite(v) && v > 0 && v <= 0.02) return v;
+  return 0.003;
+}
+
+function snowball4hPlanSlBufferPct(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_4H_PLAN_SL_BUFFER_PCT);
+  if (Number.isFinite(v) && v > 0 && v <= 0.05) return v;
+  return 0.002;
+}
+
+function snowball4hPlanTpLookbackBars(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_4H_PLAN_TP_LOOKBACK);
+  if (Number.isFinite(v) && v >= 20 && v <= 200) return Math.floor(v);
+  return 96;
+}
+
+function snowball4hPlanMaxTp(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_4H_PLAN_MAX_TP);
+  if (Number.isFinite(v) && v >= 1 && v <= 6) return Math.floor(v);
+  return 3;
+}
+
+/** แนวต้าน proxy: high ของแท่งที่ Vol สูงในกลุ่มที่ high > ราคาอ้างอิง — เรียงจากต่ำไปสูงเป็น TP1… */
+function nextSvpResistanceHighsProxy(
+  vol: number[],
+  high: number[],
+  iEval: number,
+  lookback: number,
+  refClose: number,
+  maxLevels: number
+): number[] {
+  const start = Math.max(0, iEval - lookback);
+  const cands: { h: number; v: number }[] = [];
+  for (let j = start; j < iEval; j++) {
+    const h = high[j]!;
+    const vi = vol[j]!;
+    if (!Number.isFinite(h) || !Number.isFinite(vi)) continue;
+    if (h <= refClose + 1e-12) continue;
+    cands.push({ h, v: vi });
+  }
+  cands.sort((a, b) => b.v - a.v);
+  const out: number[] = [];
+  for (const { h } of cands) {
+    let dup = false;
+    for (const o of out) {
+      const denom = Math.max(Math.abs(o), Math.abs(h), 1e-12);
+      if (Math.abs(o - h) / denom < 0.005) {
+        dup = true;
+        break;
+      }
+    }
+    if (dup) continue;
+    out.push(h);
+    if (out.length >= maxLevels) break;
+  }
+  out.sort((a, b) => a - b);
+  return out;
+}
+
+async function buildSnowballMaster4hLongTradePlan(
+  symbol: string,
+  c4: number[],
+  h4: number[],
+  l4: number[],
+  v4: number[],
+  iEval: number,
+  swingLb: number,
+  swingEx: number,
+  entryMarket: number
+): Promise<SnowballMaster4hLongTradePlan> {
+  const ema50_4hArr = emaLine(c4, 50);
+  const em50 = ema50_4hArr[iEval];
+  const swingLow4h = minLowPriorWindow(l4, iEval, swingLb, swingEx);
+
+  let slBase: number | null = null;
+  const swOk = Number.isFinite(swingLow4h);
+  const e50Ok = typeof em50 === "number" && Number.isFinite(em50);
+  if (swOk && e50Ok) slBase = Math.min(swingLow4h, em50!);
+  else if (swOk) slBase = swingLow4h;
+  else if (e50Ok) slBase = em50!;
+
+  const buf = snowball4hPlanSlBufferPct();
+  const stopLoss =
+    slBase != null && Number.isFinite(slBase) && slBase > 0 ? slBase * (1 - buf) : null;
+
+  const tpLook = snowball4hPlanTpLookbackBars();
+  const maxTp = snowball4hPlanMaxTp();
+  let takeProfits = nextSvpResistanceHighsProxy(v4, h4, iEval, tpLook, entryMarket, maxTp);
+  if (takeProfits.length === 0) {
+    const priorH = maxHighPriorWindow(h4, iEval, swingLb, swingEx);
+    if (Number.isFinite(priorH) && priorH > entryMarket) takeProfits = [priorH];
+  }
+
+  let ema20_15m: number | null = null;
+  let entryPullbackLow: number | null = null;
+  let entryPullbackHigh: number | null = null;
+  try {
+    const pack15 = await fetchBinanceUsdmKlines(symbol, "15m");
+    if (pack15 && pack15.close.length >= 22) {
+      const ic = pack15.close.length - 2;
+      const e20 = emaLine(pack15.close, 20)[ic];
+      if (typeof e20 === "number" && Number.isFinite(e20) && e20 > 0) {
+        ema20_15m = e20;
+        const bp = snowball4hPlanEma20PullbackBandPct();
+        entryPullbackLow = e20 * (1 - bp);
+        entryPullbackHigh = e20 * (1 + bp);
+      }
+    }
+  } catch {
+    /* 15m optional */
+  }
+
+  return {
+    entryMarket,
+    ema20_15m,
+    entryPullbackLow,
+    entryPullbackHigh,
+    swingLow4h: swOk ? swingLow4h : null,
+    ema50_4h: e50Ok ? em50! : null,
+    stopLoss,
+    takeProfits,
+  };
 }
 
 type SnowballLongTriggerKind = "swing_hh" | "vah_break" | "both";
@@ -534,10 +714,15 @@ function buildSnowballTripleCheckMessage(
     volSma: number;
     stochK: number;
     lookback: number;
+    /** ไม่นับ N แท่งล่าสุดก่อนแท่งสัญญาณเมื่อหา swing HH/LL */
+    swingExcludeRecent?: number;
     volPeriod: number;
     rsiP: number;
     stochLen: number;
-    stochLimit: number;
+    /** Short: เกณฑ์ OS ขั้นต่ำ — Long ไม่ใช้กรองจากฟิลด์นี้แล้ว */
+    stochLimit?: number;
+    /** แสดงในหัวข้อข้อความ (เช่น 4h / 15m) */
+    snowballTfDisplay: string;
     emaResistancePeriod: number;
     emaResistance: number;
     svpHdInnerLb: number;
@@ -559,6 +744,10 @@ function buildSnowballTripleCheckMessage(
     emaSlopeNow?: number;
     emaSlopePrev?: number;
     emaSlopeOk?: boolean;
+    ema2SlopePeriod?: number;
+    ema2SlopeOk?: boolean;
+    /** เมื่อสัญญาณ Master = 4h — แผน Entry / SL / TP (จุดเข้า 15m) */
+    master4hTradePlan?: SnowballMaster4hLongTradePlan | null;
   }
 ): string {
   const pair = pairSlashNoDollar(symbol);
@@ -578,12 +767,17 @@ function buildSnowballTripleCheckMessage(
     const trig: SnowballLongTriggerKind = args.longTriggerKind ?? "swing_hh";
     const sniperSuffix = args.intrabar ? " · ⚡ Sniper (แท่งกำลังก่อน)" : "";
     const timeLine = args.intrabar
-      ? `⏰ เปิดแท่ง ~ ${bkk} · intrabar · ข้อมูลอาจเปลี่ยนจนกว่าจะปิดแท่ง 15m`
+      ? `⏰ เปิดแท่ง ~ ${bkk} · intrabar · ข้อมูลอาจเปลี่ยนจนกว่าจะปิดแท่ง ${args.snowballTfDisplay}`
       : `⏰ Closed candle: ${bkk}`;
 
     let hhBullet = "";
     if (trig === "swing_hh" || trig === "both") {
-      hhBullet += `• เงื่อนไข Swing HH: ${args.intrabar ? "ระดับ High แท่งนี้" : "ปิด "}เหนือ High ใน ${args.lookback} แท่งก่อนหน้า (ระดับอ้างอิง swing ~ ${playbookRefPx})`;
+      const ex = args.swingExcludeRecent ?? 0;
+      const exNote =
+        ex > 0
+          ? ` — ไม่นับแท่งล่าสุด ${ex} แท่งก่อนแท่งนี้ (กันยอด impulse เดียวกันเป็นเพดาน)`
+          : "";
+      hhBullet += `• เงื่อนไข Swing HH: ${args.intrabar ? "ระดับ High แท่งนี้" : "ปิด "}เหนือ High ใน ${args.lookback} แท่งก่อนหน้า${exNote} (ระดับอ้างอิง swing ~ ${playbookRefPx})`;
     }
     if (trig === "vah_break" || trig === "both") {
       const vahPx = vahLvl != null && Number.isFinite(vahLvl) ? formatUsdPrice(vahLvl) : "—";
@@ -614,12 +808,67 @@ function buildSnowballTripleCheckMessage(
         ? `• EMA(${emaSlopeP}) slope: ${args.emaSlopeNow.toFixed(4)} > ${args.emaSlopePrev.toFixed(4)} — เชิดหัวขึ้น (โมเมนตัมไม่ใช่แค่แท่งดีดหลอก)`
         : "";
 
-    const checklistBody = [hhBullet, volLine, svpLongLine, emaSlopeLine, `• Stoch RSI (${args.rsiP}/${args.stochLen}) บนแท่งปิดล่าสุด: ${args.stochK.toFixed(1)} < ${args.stochLimit.toFixed(0)} — ยังไม่ OB เกินไป (เหลือห้องวิ่ง)`]
+    const ema2Line =
+      args.ema2SlopeOk === true && typeof args.ema2SlopePeriod === "number"
+        ? `• Trend alignment: EMA(${emaSlopeP}) + EMA(${args.ema2SlopePeriod}) เชิดหัวคู่ — เทรนด์หนุน`
+        : "";
+
+    const checklistBody = [
+      hhBullet,
+      volLine,
+      svpLongLine,
+      emaSlopeLine,
+      `• Stoch RSI (${args.rsiP}/${args.stochLen}) บนแท่งปิดล่าสุด: ${args.stochK.toFixed(1)} — แสดงประกอบ (ไม่ใช้กรอง Long)`,
+    ]
       .filter((x) => x.length > 0)
       .join("\n");
+    const checklistBodyWithTrend = [checklistBody, ema2Line].filter((x) => x.length > 0).join("\n");
 
-    return [
-      `🟢 [LONG Candidate] — Snowball Triple-Check (15m)${sniperSuffix}`,
+    const plan = args.master4hTradePlan;
+    let planBlock = "";
+    if (plan) {
+      const lines: string[] = [
+        "🎯 แผนเทรด (Master 4h · จุดเข้าอ้างอิง 15m)",
+        `• Entry 1 (Market): ~ ${formatUsdPrice(plan.entryMarket)} USDT`,
+      ];
+      if (
+        plan.ema20_15m != null &&
+        plan.entryPullbackLow != null &&
+        plan.entryPullbackHigh != null
+      ) {
+        lines.push(
+          `• Entry 2 (Pullback): โซนรอบ EMA20 @15m ~ ${formatUsdPrice(plan.entryPullbackLow)} – ${formatUsdPrice(plan.entryPullbackHigh)} USDT (กลาง ~ ${formatUsdPrice(plan.ema20_15m)})`
+        );
+      } else {
+        lines.push("• Entry 2 (Pullback): ไม่มีข้อมูล 15m เพียงพอ — ดู EMA20 @15m บนกราฟ");
+      }
+      const swS = plan.swingLow4h != null ? formatUsdPrice(plan.swingLow4h) : "—";
+      const e50S = plan.ema50_4h != null ? formatUsdPrice(plan.ema50_4h) : "—";
+      if (plan.stopLoss != null) {
+        lines.push(
+          `• Stop Loss: ใต้ min(Swing low 4h ~ ${swS} / EMA50 4h ~ ${e50S}) — แนะนำใต้ ~ ${formatUsdPrice(plan.stopLoss)} USDT (+ buffer ตาม INDICATOR_PUBLIC_SNOWBALL_4H_PLAN_SL_BUFFER_PCT)`
+        );
+      } else {
+        lines.push(
+          `• Stop Loss: อ้างอิง Swing low 4h ~ ${swS} และ EMA50 4h ~ ${e50S} — วางใต้โครงสร้างบนกราฟ`
+        );
+      }
+      if (plan.takeProfits.length > 0) {
+        const tpStr = plan.takeProfits
+          .map((p, idx) => `TP${idx + 1} ~ ${formatUsdPrice(p)}`)
+          .join(" · ");
+        lines.push(`• Take profit (แนวต้าน SVP/HVN proxy เหนือราคา): ${tpStr} USDT`);
+      } else {
+        lines.push(
+          "• Take profit: ไม่พบแท่ง Vol หาเหนือราคาใน lookback — ใช้ยอดถัดไปบนกราฟ / โครงสร้าง"
+        );
+      }
+      lines.push("📎 SVP = proxy จาก Vol บนแท่ง 4h ไม่ใช่ Session VP จริง");
+      planBlock = lines.join("\n");
+    }
+
+    const out: string[] = [
+      `🟢 [LONG Candidate] — Snowball Triple-Check (${args.snowballTfDisplay})${sniperSuffix}`,
       `${pair} — Binance USDT-M`,
       "",
       `💼 Playbook:`,
@@ -628,12 +877,18 @@ function buildSnowballTripleCheckMessage(
       timeLine,
       "",
       `✅ เช็คลิสต์:`,
-      checklistBody,
+      checklistBodyWithTrend,
+    ];
+    if (planBlock) {
+      out.push("", planBlock);
+    }
+    out.push(
       "",
-      `📊 ราคาในข้อความ ~ ${px} USDT — Stoch ใช้ค่าจากแท่งปิดล่าสุดเพื่อลดสัญญาณหลอกระหว่างแท่ง`,
+      `📊 ราคาในข้อความ ~ ${px} USDT — Stoch จากแท่งปิดล่าสุด (แสดงประกอบ ไม่ใช้กรอง Long)`,
       "",
-      "⚠️ Not financial advice",
-    ].join("\n");
+      "⚠️ Not financial advice"
+    );
+    return out.join("\n");
   }
 
   const svpBrokenBelowHvn =
@@ -652,7 +907,7 @@ function buildSnowballTripleCheckMessage(
 
   const bearSniperSuffix = args.intrabar ? " · ⚡ Sniper (แท่งกำลังก่อน)" : "";
   const bearTimeLine = args.intrabar
-    ? `⏰ เปิดแท่ง ~ ${bkk} · intrabar · ข้อมูลอาจเปลี่ยนจนกว่าจะปิดแท่ง 15m`
+    ? `⏰ เปิดแท่ง ~ ${bkk} · intrabar · ข้อมูลอาจเปลี่ยนจนกว่าจะปิดแท่ง ${args.snowballTfDisplay}`
     : `⏰ Closed candle: ${bkk}`;
   const bearVolLine = args.volCheckRelaxed
     ? `• Volume: โหมด Sniper — ไม่บังคับ Vol > SMA · อัตราส่วนสะสม ~ ${volRatio}x`
@@ -660,7 +915,7 @@ function buildSnowballTripleCheckMessage(
   const refPx = formatUsdPrice(args.refSwing);
 
   return [
-    `🔴 [SHORT Candidate] — Snowball Triple-Check (15m LL)${bearSniperSuffix}`,
+    `🔴 [SHORT Candidate] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`,
     `${pair} — Binance USDT-M`,
     "",
     `💼 Playbook:`,
@@ -671,11 +926,15 @@ function buildSnowballTripleCheckMessage(
     bearTimeLine,
     "",
     `✅ เช็คลิสต์:`,
-    `• เงื่อนไข 1 (LL): ${args.intrabar ? "Low intrabar " : "ปิด "}หลุด Low ใน ${args.lookback} แท่งก่อนหน้า (ระดับอ้างอิง swing ~ ${refPx}) · ราคา ~ ${px}`,
+    `• เงื่อนไข 1 (LL): ${args.intrabar ? "Low intrabar " : "ปิด "}หลุด Low ใน ${args.lookback} แท่งก่อนหน้า${
+      (args.swingExcludeRecent ?? 0) > 0
+        ? ` — ไม่นับแท่งล่าสุด ${args.swingExcludeRecent} แท่งก่อนแท่งนี้ (กันพื้น impulse เดียวกัน)`
+        : ""
+    } (ระดับอ้างอิง swing ~ ${refPx}) · ราคา ~ ${px}`,
     bearVolLine,
-    `• Stoch RSI (${args.rsiP}/${args.stochLen}) แท่งปิดล่าสุด: ${args.stochK.toFixed(1)} > ${args.stochLimit.toFixed(0)} — ยังไม่ OS เกินไป`,
+    `• Stoch RSI (${args.rsiP}/${args.stochLen}) แท่งปิดล่าสุด: ${args.stochK.toFixed(1)} > ${args.stochLimit!.toFixed(0)} — ยังไม่ OS เกินไป`,
     "",
-    `📊 Stoch RSI (${SNOWBALL_TF}) · กันสัญญาณ LL ที่ OS ติดใต้ดินแล้ว`,
+    `📊 Stoch RSI (${args.snowballTfDisplay}) · กันสัญญาณ LL ที่ OS ติดใต้ดินแล้ว`,
     "",
     "⚠️ Not financial advice",
   ].join("\n");
@@ -925,7 +1184,7 @@ function buildRsiDivergenceMessage(
 
 /**
  * Feed สาธารณะ RSI + EMA จาก Binance USDT-M (1h) + RSI divergence (1h / 4h)
- * + Snowball Triple-Check (15m HH/LL + volume + Stoch RSI) → Telegram กลุ่ม Spark/System
+ * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — HH/LL + volume + Stoch RSI) → Telegram กลุ่ม Spark/System
  */
 export async function runPublicIndicatorFeedInternal(_client: Client, now: number): Promise<number> {
   void _client;
@@ -957,7 +1216,8 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
   const concurrency = 8;
   const packs1h: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   const packs4h: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
-  const packs15m: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
+  const snowTf = snowballBinanceTf();
+  const snowballPacks: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   for (let i = 0; i < symbols.length; i += concurrency) {
     const chunk = symbols.slice(i, i + concurrency);
     const part1h = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, TF)));
@@ -967,10 +1227,10 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       packs4h.push(...part4h);
     }
     if (snowballOn) {
-      const part15 = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, SNOWBALL_TF)));
-      packs15m.push(...part15);
+      const partSb = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, snowTf)));
+      snowballPacks.push(...partSb);
     } else {
-      packs15m.push(...chunk.map(() => null));
+      snowballPacks.push(...chunk.map(() => null));
     }
   }
 
@@ -1122,15 +1382,16 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
     }
 
     if (snowballOn) {
-      const pack15 = packs15m[idx];
-      if (!pack15) continue;
-      const { close: c15, high: h15, low: l15, volume: v15, timeSec: t15 } = pack15;
+      const packSb = snowballPacks[idx];
+      if (!packSb) continue;
+      const { close: c15, high: h15, low: l15, volume: v15, timeSec: t15 } = packSb;
       const swingLb = snowballSwingLookbackBars();
+      const swingEx = snowballSwingExcludeRecentBars();
       const volP = snowballVolSmaPeriod();
+      const volMult = snowballVolMultiplier();
       const rsiP = snowballStochRsiPeriod();
       const stLen = snowballStochLength();
       const kSm = snowballStochKSmooth();
-      const obMax = snowballOverboughtCeiling();
       const osMin = snowballOversoldFloor();
       const emaResP = snowballResistanceEmaPeriod();
       const svpInnerLb = snowballSvpHdInnerLookbackBars();
@@ -1146,15 +1407,20 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const longRequireInnerHvnClear = snowballLongRequireAboveInnerHvn();
       const longSlopeEmaOn = snowballLongTrendEmaSlopeEnabled();
       const longSlopeEmaP = snowballLongTrendEmaPeriod();
+      const longSlopeMinUpBars = snowballLongTrendEmaSlopeMinUpBars();
+      const longEma2On = snowballLongTrendEma2Enabled();
+      const longEma2P = snowballLongTrendEma2Period();
 
       const minBars = Math.max(
         rsiP + stLen + kSm + 8,
         volP + 2,
-        swingLb + 3,
+        swingLb + swingEx + 3,
         emaResP + 2,
         svpInnerLb + 2,
         vahLb + 3,
         longSlopeEmaOn ? longSlopeEmaP + 2 : 0,
+        longEma2On ? longEma2P + 2 : 0,
+        longSlopeEmaOn && longSlopeMinUpBars >= 2 ? longSlopeEmaP + (longSlopeMinUpBars + 1) : 0,
         4
       );
       if (n15 < minBars || iClosed < 1 || iForming < 1) continue;
@@ -1168,10 +1434,12 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const emaResArr = emaLine(c15, emaResP);
       const emaLongSlopeArr =
         longSlopeEmaOn && longSlopeEmaP !== emaResP ? emaLine(c15, longSlopeEmaP) : emaResArr;
+      const emaLongSlope2Arr = longEma2On ? emaLine(c15, longEma2P) : null;
 
       const sendSnowballLong = async (iEval: number, intrabar: boolean): Promise<void> => {
         if (iEval < 1) return;
         const iPrev = iEval - 1;
+        const iPrev2 = iEval - 2;
         const relaxVol = intrabar && relaxIntrabarVol;
         const vsE = volSmaArr[iEval];
         const vE = v15[iEval];
@@ -1180,7 +1448,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const hiPrev = h15[iPrev];
         const clPrev = c15[iPrev];
         if (
-          !snowballVolumeOk(relaxVol, vE!, vsE!) ||
+          !snowballVolumeOk(relaxVol, vE!, vsE!, volMult) ||
           !Number.isFinite(clE!) ||
           !Number.isFinite(hiE!) ||
           !Number.isFinite(hiPrev!) ||
@@ -1189,7 +1457,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           return;
         }
 
-        const priorMaxHigh = maxHighPriorWindow(h15, iEval, swingLb);
+        const priorMaxHigh = maxHighPriorWindow(h15, iEval, swingLb, swingEx);
         const vahH = longVahOn ? highVolumeNodeBarHigh(v15, h15, l15, iEval, vahLb) : null;
 
         const swingBreak = intrabar ? hiE! > priorMaxHigh : clE! > priorMaxHigh;
@@ -1203,7 +1471,6 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const vahOk = Boolean(vahCross);
 
         if (!classicSwing && !vahOk) return;
-        if (stochLastClosed >= obMax) return;
 
         const innerHvn = highVolumeNodeBarRange(v15, h15, l15, iEval, svpInnerLb);
         if (longRequireInnerHvnClear) {
@@ -1215,6 +1482,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         if (longSlopeEmaOn) {
           const eNow = emaLongSlopeArr[iEval];
           const ePrev = emaLongSlopeArr[iPrev];
+          const ePrev2 = iPrev2 >= 0 ? emaLongSlopeArr[iPrev2] : NaN;
           if (
             typeof eNow !== "number" ||
             typeof ePrev !== "number" ||
@@ -1223,6 +1491,27 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             eNow <= ePrev
           ) {
             return;
+          }
+          if (longSlopeMinUpBars >= 2) {
+            if (typeof ePrev2 !== "number" || !Number.isFinite(ePrev2) || ePrev <= ePrev2) return;
+          }
+        }
+
+        if (longEma2On) {
+          const a = emaLongSlope2Arr?.[iEval];
+          const b = emaLongSlope2Arr?.[iPrev];
+          const c = iPrev2 >= 0 ? emaLongSlope2Arr?.[iPrev2] : undefined;
+          if (
+            typeof a !== "number" ||
+            typeof b !== "number" ||
+            !Number.isFinite(a) ||
+            !Number.isFinite(b) ||
+            a <= b
+          ) {
+            return;
+          }
+          if (longSlopeMinUpBars >= 2) {
+            if (typeof c !== "number" || !Number.isFinite(c) || b <= c) return;
           }
         }
 
@@ -1234,7 +1523,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const barOpenSec = t15[iEval];
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
 
-        const key = `${symbol}|SNOWBALL|15m|BULL`;
+        const key = `${symbol}|SNOWBALL|${snowTf}|BULL`;
         if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) return;
 
         const sLp = highVolumeNodeBarLow(v15, h15, l15, iEval, svpInnerLb);
@@ -1247,6 +1536,32 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           longSlopeEmaOn && typeof emaLongSlopeArr[iEval] === "number" ? emaLongSlopeArr[iEval]! : undefined;
         const emaSlopePrev =
           longSlopeEmaOn && typeof emaLongSlopeArr[iPrev] === "number" ? emaLongSlopeArr[iPrev]! : undefined;
+        const ema2SlopeOk =
+          longEma2On &&
+          typeof emaLongSlope2Arr?.[iEval] === "number" &&
+          typeof emaLongSlope2Arr?.[iPrev] === "number" &&
+          Number.isFinite(emaLongSlope2Arr?.[iEval] as number) &&
+          Number.isFinite(emaLongSlope2Arr?.[iPrev] as number) &&
+          (emaLongSlope2Arr![iEval]! > emaLongSlope2Arr![iPrev]!);
+
+        let master4hTradePlan: SnowballMaster4hLongTradePlan | null = null;
+        if (snowTf === "4h") {
+          try {
+            master4hTradePlan = await buildSnowballMaster4hLongTradePlan(
+              symbol,
+              c15,
+              h15,
+              l15,
+              v15,
+              iEval,
+              swingLb,
+              swingEx,
+              clE!
+            );
+          } catch (e) {
+            console.error("[indicatorPublicFeed] snowball 4h trade plan", symbol, e);
+          }
+        }
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bull", barOpenSec, {
           close: clE!,
@@ -1255,10 +1570,11 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           volSma: vsE!,
           stochK: stochLastClosed,
           lookback: swingLb,
+          swingExcludeRecent: swingEx,
+          snowballTfDisplay: snowTf,
           volPeriod: volP,
           rsiP,
           stochLen: stLen,
-          stochLimit: obMax,
           emaResistancePeriod: emaResP,
           emaResistance: Number.isFinite(emaR) ? emaR! : refPlaybook,
           svpHdInnerLb: svpInnerLb,
@@ -1276,6 +1592,9 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           emaSlopeNow,
           emaSlopePrev,
           emaSlopeOk: longSlopeEmaOn ? true : undefined,
+          ema2SlopePeriod: longEma2On ? longEma2P : undefined,
+          ema2SlopeOk: longEma2On ? Boolean(ema2SlopeOk) : undefined,
+          master4hTradePlan: snowTf === "4h" ? master4hTradePlan : null,
         });
         try {
           const ok = await sendPublicSnowballFeedToSparkGroup(msg);
@@ -1289,6 +1608,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
                 alertedAtIso: iso,
                 alertedAtMs: now,
                 signalBarOpenSec: barOpenSec,
+                signalBarTf: snowTf,
                 entryPrice: clE!,
                 intrabar,
                 triggerKind: trig,
@@ -1313,7 +1633,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const loE = l15[iEval];
         const loPrev = l15[iEval - 1];
         if (
-          !snowballVolumeOk(relaxVol, vE!, vsE!) ||
+          !snowballVolumeOk(relaxVol, vE!, vsE!, volMult) ||
           !Number.isFinite(clE!) ||
           !Number.isFinite(loE!) ||
           !Number.isFinite(loPrev!)
@@ -1321,7 +1641,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           return;
         }
 
-        const priorMinLow = minLowPriorWindow(l15, iEval, swingLb);
+        const priorMinLow = minLowPriorWindow(l15, iEval, swingLb, swingEx);
         const swingBreak = intrabar ? loE! < priorMinLow : clE! < priorMinLow;
         const classicBear = Number.isFinite(priorMinLow) && swingBreak;
         if (!classicBear) return;
@@ -1343,7 +1663,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const barOpenSec = t15[iEval];
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
 
-        const key = `${symbol}|SNOWBALL|15m|BEAR`;
+        const key = `${symbol}|SNOWBALL|${snowTf}|BEAR`;
         if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) return;
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", barOpenSec, {
@@ -1353,6 +1673,8 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           volSma: vsE!,
           stochK: stochLastClosed,
           lookback: swingLb,
+          swingExcludeRecent: swingEx,
+          snowballTfDisplay: snowTf,
           volPeriod: volP,
           rsiP,
           stochLen: stLen,
@@ -1378,6 +1700,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
                 alertedAtIso: iso,
                 alertedAtMs: now,
                 signalBarOpenSec: barOpenSec,
+                signalBarTf: snowTf,
                 entryPrice: clE!,
                 intrabar,
                 triggerKind: "swing_ll",
