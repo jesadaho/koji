@@ -533,6 +533,8 @@ export default function SettingsTelegramMiniApp() {
           {"; "}
           เทคนิค: <code>TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID</code>
           {"; "}
+          Snowball: <code>TELEGRAM_PUBLIC_SNOWBALL_MESSAGE_THREAD_ID</code> (ไม่ตั้ง → ใช้ topic เทคนิค)
+          {"; "}
           Events weekly: <code>TELEGRAM_PUBLIC_EVENTS_WEEKLY_MESSAGE_THREAD_ID</code>
           {"; "}
           Pre-event: <code>TELEGRAM_PUBLIC_EVENTS_PRE_MESSAGE_THREAD_ID</code>

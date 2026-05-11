@@ -6,7 +6,7 @@ import {
   resetBinanceIndicatorFapi451LogDedupe,
   type BinanceIndicatorTf,
 } from "./binanceIndicatorKline";
-import { sendPublicIndicatorFeedToSparkGroup } from "./alertNotify";
+import { sendPublicIndicatorFeedToSparkGroup, sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
 import { emaLine, rsiWilder, smaLine, stochRsiLine } from "./indicatorMath";
 import {
   loadIndicatorPublicFeedState,
@@ -109,11 +109,11 @@ function topAltsCount(): number {
   return 15;
 }
 
-/** ย้อนหลังกี่แท่ง 15m ใช้หา "High ล่าสุด" / "Low ล่าสุด" ก่อนแท่งปิด (HH / LL) */
+/** Swing HH/LL — ย้อนหลังหา High/Low ก่อนแท่งประเมิน · ดีฟอลต์ 24 แท่ง 15m (~6 ชม.) ลดเคสยอดอ้างอิงเก่าไกล */
 function snowballSwingLookbackBars(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_LOOKBACK);
   if (Number.isFinite(v) && v >= 5 && v <= 120) return Math.floor(v);
-  return 48;
+  return 24;
 }
 
 function snowballVolSmaPeriod(): number {
@@ -174,6 +174,30 @@ function snowballSvpHdInnerLookbackBars(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SVP_HD_INNER_LOOKBACK);
   if (Number.isFinite(v) && v >= 5 && v <= 120) return Math.floor(v);
   return 24;
+}
+
+/** ทะลุ Value Area High แบบ proxy = High ของแท่งที่ Vol สูงสุดในช่วงสั้น (ไวกว่ารอเบรคยอด HH ยาว) */
+function snowballLongVahBreakEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_LONG_VAH_BREAK", true);
+}
+
+function snowballLongVahLookbackBars(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_VAH_LOOKBACK);
+  if (Number.isFinite(v) && v >= 5 && v <= 120) return Math.floor(v);
+  return 20;
+}
+
+/**
+ * ประเมินด้วยแท่งกำลังก่อน (ดึง kline สด — แท่งสุดท้ายยังไม่ปิด) — ไวกว่ารอปิดแท่ง 15m ทั้งแท่ง
+ * เปิดเป็นค่าเริ่มหลังจาก feedback ความหน่วง (ปิดใน env เป็น 0 ถ้าระวังสแปม)
+ */
+function snowballIntrabarEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR", true);
+}
+
+/** ในโหมด intrabar: ไม่บังคับ Vol > SMA(เพราะวอลุ่มยังสะสมไม่ครบ — จับ breakout เร็วกว่า confirm ท้ายแท่ง) */
+function snowballIntrabarRelaxVolume(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR_RELAX_VOLUME", true);
 }
 
 let topAltsCache: { symbols: string[]; at: number } | null = null;
@@ -443,6 +467,24 @@ function highVolumeNodeBarLow(vol: number[], low: number[], i: number, lookback:
   return Number.isFinite(L!) ? L! : null;
 }
 
+/** High ของแท่งที่ Vol สูงสุดในช่วงก่อน index i — proxy ขอบบนก้อน Vol หา (VAH แบบง่าย) */
+function highVolumeNodeBarHigh(vol: number[], high: number[], i: number, lookback: number): number | null {
+  const start = Math.max(0, i - lookback);
+  const end = i - 1;
+  if (end < start) return null;
+  let bestJ = start;
+  let bestV = -Infinity;
+  for (let j = start; j <= end; j++) {
+    const v = vol[j]!;
+    if (v > bestV && Number.isFinite(v)) {
+      bestV = v;
+      bestJ = j;
+    }
+  }
+  const H = high[bestJ];
+  return Number.isFinite(H!) ? H! : null;
+}
+
 function snowballStochSeries(
   close: number[],
   rsiP: number,
@@ -453,6 +495,14 @@ function snowballStochSeries(
   if (kSmooth <= 1) return raw;
   return smaLine(raw, kSmooth);
 }
+
+function snowballVolumeOk(relax: boolean, vol: number, volSma: number): boolean {
+  if (!Number.isFinite(vol) || vol <= 0) return false;
+  if (relax) return true;
+  return Number.isFinite(volSma) && vol > volSma;
+}
+
+type SnowballLongTriggerKind = "swing_hh" | "vah_break" | "both";
 
 function buildSnowballTripleCheckMessage(
   symbol: string,
@@ -474,35 +524,65 @@ function buildSnowballTripleCheckMessage(
     svpHdInnerLb: number;
     svpHdLow: number;
     svpHdRequiredOk: boolean;
+    /** แท่งสัญญาณยังไม่ปิด — ประเมินจาก kline ล่าสุดจาก Binance */
+    intrabar?: boolean;
+    longTriggerKind?: SnowballLongTriggerKind;
+    vahHighLevel?: number | null;
+    longVahLookback?: number;
+    /** เมื่อผ่อนเกณฑ์ปริมาณใน intrabar */
+    volCheckRelaxed?: boolean;
   }
 ): string {
   const pair = pairSlashNoDollar(symbol);
   const bkk = formatClosedCandleBkk(barTimeSec);
   const px = formatUsdPrice(args.close);
-  const refPx = formatUsdPrice(args.refSwing);
+  const playbookRefPx = formatUsdPrice(args.refSwing);
   const emaPx = formatUsdPrice(args.emaResistance);
   const hvnPx = formatUsdPrice(args.svpHdLow);
   const volRatio =
     args.volSma > 0 && Number.isFinite(args.volSma)
       ? (args.volume / args.volSma).toFixed(2)
       : "—";
+  const vahLb = args.longVahLookback ?? 20;
+  const vahLvl = args.vahHighLevel;
 
   if (side === "bull") {
+    const trig: SnowballLongTriggerKind = args.longTriggerKind ?? "swing_hh";
+    const sniperSuffix = args.intrabar ? " · ⚡ Sniper (แท่งกำลังก่อน)" : "";
+    const timeLine = args.intrabar
+      ? `⏰ เปิดแท่ง ~ ${bkk} · intrabar · ข้อมูลอาจเปลี่ยนจนกว่าจะปิดแท่ง 15m`
+      : `⏰ Closed candle: ${bkk}`;
+
+    let hhBullet = "";
+    if (trig === "swing_hh" || trig === "both") {
+      hhBullet += `• เงื่อนไข Swing HH: ${args.intrabar ? "ระดับ High แท่งนี้" : "ปิด "}เหนือ High ใน ${args.lookback} แท่งก่อนหน้า (ระดับอ้างอิง swing ~ ${playbookRefPx})`;
+    }
+    if (trig === "vah_break" || trig === "both") {
+      const vahPx = vahLvl != null && Number.isFinite(vahLvl) ? formatUsdPrice(vahLvl) : "—";
+      hhBullet +=
+        (hhBullet ? "\n" : "") +
+        `• เงื่อนไข VAH proxy: ทะลุ High แท่ง Vol หาใน ${vahLb} แท่งล่าสุด (~ ${vahPx} USDT) — ไวกว่ารอเบรคยอดเก่าไกล ๆ`;
+    }
+
+    const volLine = args.volCheckRelaxed
+      ? `• Volume: โหมด Sniper — ไม่บังคับ Vol > SMA(ยังก่อนแท่ง) · อัตราส่วนสะสม ~ ${volRatio}x`
+      : `• Volume: Vol แท่งนี้ > SMA(${args.volPeriod}) — อัตราส่วน ~ ${volRatio}x (กันท้ายไส้หลอก)`;
+
     return [
-      `🟢 [LONG Candidate] — Snowball Triple-Check (15m HH)`,
+      `🟢 [LONG Candidate] — Snowball Triple-Check (15m)${sniperSuffix}`,
       `${pair} — Binance USDT-M`,
       "",
       `💼 Playbook:`,
-      `"ทรงมาดี มีแรงส่งสะสม รอเข้าเมื่อย่อ (Buy the Dip) ที่แนวรับ ~ ${refPx} USDT"`,
+      `"ทรงมาดี มีแรงส่งสะสม รอเข้าเมื่อย่อ (Buy the Dip) ที่แนวรับ ~ ${playbookRefPx} USDT"`,
       "",
-      `⏰ Closed candle: ${bkk}`,
+      timeLine,
       "",
       `✅ เช็คลิสต์:`,
-      `• เงื่อนไข 1 (HH): ปิด ${px} USDT เหนือ High สูงสุดใน ${args.lookback} แท่งก่อนหน้า (แนวรับอ้างอิง ~ ${refPx})`,
-      `• เงื่อนไข 2 (Volume): Vol แท่งนี้ > SMA(${args.volPeriod}) — อัตราส่วน ~ ${volRatio}x (ไม่ใช่แท่งไส้หลอก)`,
-      `• เงื่อนไข 3 (Stoch RSI ${args.rsiP}/${args.stochLen}): ${args.stochK.toFixed(1)} < ${args.stochLimit.toFixed(0)} — ยังไม่ Overbought เกินไป`,
+      hhBullet,
+      volLine,
+      `• Stoch RSI (${args.rsiP}/${args.stochLen}) บนแท่งปิดล่าสุด: ${args.stochK.toFixed(1)} < ${args.stochLimit.toFixed(0)} — ยังไม่ OB เกินไป`,
       "",
-      `📊 Stoch RSI (${SNOWBALL_TF}) · กันสัญญาณ HH ที่ OB ติดลิฟต์แล้ว`,
+      `📊 ราคาในข้อความ ~ ${px} USDT — Stoch ใช้ค่าจากแท่งปิดล่าสุดเพื่อลดสัญญาณหลอกระหว่างแท่ง`,
       "",
       "⚠️ Not financial advice",
     ].join("\n");
@@ -522,8 +602,17 @@ function buildSnowballTripleCheckMessage(
       ? "เสียทรงชัดเจน — โปร: หลุดโครงสร้าง + ก้อน Vol หาแบบ SVP/HVN (proxy)"
       : "เสียทรงชัดเจน — LL + Vol เข้า (ก้อน Vol หา/SVP proxy ดูบรรทัดด้านล่าง)";
 
+  const bearSniperSuffix = args.intrabar ? " · ⚡ Sniper (แท่งกำลังก่อน)" : "";
+  const bearTimeLine = args.intrabar
+    ? `⏰ เปิดแท่ง ~ ${bkk} · intrabar · ข้อมูลอาจเปลี่ยนจนกว่าจะปิดแท่ง 15m`
+    : `⏰ Closed candle: ${bkk}`;
+  const bearVolLine = args.volCheckRelaxed
+    ? `• Volume: โหมด Sniper — ไม่บังคับ Vol > SMA · อัตราส่วนสะสม ~ ${volRatio}x`
+    : `• Volume: Vol แท่งนี้ > SMA(${args.volPeriod}) — อัตราส่วน ~ ${volRatio}x`;
+  const refPx = formatUsdPrice(args.refSwing);
+
   return [
-    `🔴 [SHORT Candidate] — Snowball Triple-Check (15m LL)`,
+    `🔴 [SHORT Candidate] — Snowball Triple-Check (15m LL)${bearSniperSuffix}`,
     `${pair} — Binance USDT-M`,
     "",
     `💼 Playbook:`,
@@ -531,12 +620,12 @@ function buildSnowballTripleCheckMessage(
     "",
     svpLine,
     "",
-    `⏰ Closed candle: ${bkk}`,
+    bearTimeLine,
     "",
     `✅ เช็คลิสต์:`,
-    `• เงื่อนไข 1 (LL): ปิด ${px} USDT ต่ำกว่า Low ต่ำสุดใน ${args.lookback} แท่งก่อนหน้า (แนวอ้างอิง ~ ${refPx})`,
-    `• เงื่อนไข 2 (Volume): Vol แท่งนี้ > SMA(${args.volPeriod}) — อัตราส่วน ~ ${volRatio}x`,
-    `• เงื่อนไข 3 (Stoch RSI ${args.rsiP}/${args.stochLen}): ${args.stochK.toFixed(1)} > ${args.stochLimit.toFixed(0)} — ยังไม่ Oversold เกินไป`,
+    `• เงื่อนไข 1 (LL): ${args.intrabar ? "Low intrabar " : "ปิด "}หลุด Low ใน ${args.lookback} แท่งก่อนหน้า (ระดับอ้างอิง swing ~ ${refPx}) · ราคา ~ ${px}`,
+    bearVolLine,
+    `• Stoch RSI (${args.rsiP}/${args.stochLen}) แท่งปิดล่าสุด: ${args.stochK.toFixed(1)} > ${args.stochLimit.toFixed(0)} — ยังไม่ OS เกินไป`,
     "",
     `📊 Stoch RSI (${SNOWBALL_TF}) · กันสัญญาณ LL ที่ OS ติดใต้ดินแล้ว`,
     "",
@@ -1000,123 +1089,197 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const shortNeedSvpHd = snowballShortRequireSvpHdBreak();
 
       const n15 = c15.length;
-      const i15 = n15 - 2;
-      const minBars = Math.max(rsiP + stLen + kSm + 8, volP + 2, swingLb + 3, emaResP + 2, svpInnerLb + 2);
-      if (n15 < minBars || i15 < 1) continue;
+      const iClosed = n15 - 2;
+      const iForming = n15 - 1;
+      const vahLb = snowballLongVahLookbackBars();
+      const longVahOn = snowballLongVahBreakEnabled();
+      const intrabarOn = snowballIntrabarEnabled();
+      const relaxIntrabarVol = snowballIntrabarRelaxVolume();
 
-      const barTimeSec15 = t15[i15];
-      if (typeof barTimeSec15 !== "number" || !Number.isFinite(barTimeSec15)) continue;
+      const minBars = Math.max(
+        rsiP + stLen + kSm + 8,
+        volP + 2,
+        swingLb + 3,
+        emaResP + 2,
+        svpInnerLb + 2,
+        vahLb + 3,
+        4
+      );
+      if (n15 < minBars || iClosed < 1 || iForming < 1) continue;
 
       const volSmaArr = smaLine(v15, volP);
       const stochArr = snowballStochSeries(c15, rsiP, stLen, kSm);
+      const stochLastClosed = stochArr[iClosed];
 
-      const vsNow = volSmaArr[i15];
-      const stNow = stochArr[i15];
-      const clNow = c15[i15];
-      const viNow = v15[i15];
-
-      if (
-        !Number.isFinite(vsNow) ||
-        !Number.isFinite(stNow) ||
-        !Number.isFinite(clNow) ||
-        typeof viNow !== "number" ||
-        !Number.isFinite(viNow)
-      ) {
-        continue;
-      }
-
-      const priorMaxHigh = maxHighPriorWindow(h15, i15, swingLb);
-      const priorMinLow = minLowPriorWindow(l15, i15, swingLb);
+      if (!Number.isFinite(stochLastClosed)) continue;
 
       const emaResArr = emaLine(c15, emaResP);
-      const emaResistance = emaResArr[i15];
-      const svpHdLowGuess = highVolumeNodeBarLow(v15, l15, i15, svpInnerLb);
 
-      const baseArgs = {
-        close: clNow,
-        volume: viNow,
-        volSma: vsNow,
-        stochK: stNow,
-        lookback: swingLb,
-        volPeriod: volP,
-        rsiP,
-        stochLen: stLen,
+      const sendSnowballLong = async (iEval: number, intrabar: boolean): Promise<void> => {
+        if (iEval < 1) return;
+        const iPrev = iEval - 1;
+        const relaxVol = intrabar && relaxIntrabarVol;
+        const vsE = volSmaArr[iEval];
+        const vE = v15[iEval];
+        const clE = c15[iEval];
+        const hiE = h15[iEval];
+        const hiPrev = h15[iPrev];
+        const clPrev = c15[iPrev];
+        if (
+          !snowballVolumeOk(relaxVol, vE!, vsE!) ||
+          !Number.isFinite(clE!) ||
+          !Number.isFinite(hiE!) ||
+          !Number.isFinite(hiPrev!) ||
+          !Number.isFinite(clPrev!)
+        ) {
+          return;
+        }
+
+        const priorMaxHigh = maxHighPriorWindow(h15, iEval, swingLb);
+        const vahH = longVahOn ? highVolumeNodeBarHigh(v15, h15, iEval, vahLb) : null;
+
+        const swingBreak = intrabar ? hiE! > priorMaxHigh : clE! > priorMaxHigh;
+        const classicSwing = Number.isFinite(priorMaxHigh) && swingBreak;
+
+        const vahCross =
+          longVahOn &&
+          vahH != null &&
+          Number.isFinite(vahH) &&
+          (intrabar ? hiE! > vahH && hiPrev! <= vahH : clE! > vahH && clPrev! <= vahH);
+        const vahOk = Boolean(vahCross);
+
+        if (!classicSwing && !vahOk) return;
+        if (stochLastClosed >= obMax) return;
+
+        const trig: SnowballLongTriggerKind =
+          classicSwing && vahOk ? "both" : classicSwing ? "swing_hh" : "vah_break";
+
+        const refPlaybook = trig === "vah_break" ? vahH! : priorMaxHigh;
+
+        const barOpenSec = t15[iEval];
+        if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
+
+        const key = `${symbol}|SNOWBALL|15m|BULL`;
+        if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) return;
+
+        const sLp = highVolumeNodeBarLow(v15, l15, iEval, svpInnerLb);
+        const emaR =
+          typeof emaResArr[iEval] === "number" && Number.isFinite(emaResArr[iEval])
+            ? emaResArr[iEval]
+            : emaResArr[iClosed];
+
+        const msg = buildSnowballTripleCheckMessage(symbol, "bull", barOpenSec, {
+          close: clE!,
+          refSwing: refPlaybook,
+          volume: vE!,
+          volSma: vsE!,
+          stochK: stochLastClosed,
+          lookback: swingLb,
+          volPeriod: volP,
+          rsiP,
+          stochLen: stLen,
+          stochLimit: obMax,
+          emaResistancePeriod: emaResP,
+          emaResistance: Number.isFinite(emaR) ? emaR! : refPlaybook,
+          svpHdInnerLb: svpInnerLb,
+          svpHdLow: typeof sLp === "number" && Number.isFinite(sLp) ? sLp : refPlaybook,
+          svpHdRequiredOk: false,
+          intrabar,
+          longTriggerKind: trig,
+          vahHighLevel: vahH,
+          longVahLookback: vahLb,
+          volCheckRelaxed: relaxVol,
+        });
+        try {
+          const ok = await sendPublicSnowballFeedToSparkGroup(msg);
+          if (ok) {
+            await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now);
+            notified += 1;
+          }
+        } catch (e) {
+          console.error("[indicatorPublicFeed] Snowball LONG", symbol, intrabar ? "intrabar" : "close", e);
+        }
       };
 
-      if (
-        Number.isFinite(priorMaxHigh) &&
-        clNow > priorMaxHigh &&
-        viNow > 0 &&
-        viNow > vsNow &&
-        stNow < obMax
-      ) {
-        const key = `${symbol}|SNOWBALL|15m|BULL`;
-        if (state.lastFiredBarSec[key] !== barTimeSec15 && !inCooldown(state, key, now)) {
-          const msg = buildSnowballTripleCheckMessage(symbol, "bull", barTimeSec15, {
-            ...baseArgs,
-            refSwing: priorMaxHigh,
-            stochLimit: obMax,
-            emaResistancePeriod: emaResP,
-            emaResistance: Number.isFinite(emaResistance) ? emaResistance : priorMaxHigh,
-            svpHdInnerLb: svpInnerLb,
-            svpHdLow:
-              typeof svpHdLowGuess === "number" && Number.isFinite(svpHdLowGuess) ? svpHdLowGuess : priorMaxHigh,
-            svpHdRequiredOk: false,
-          });
-          try {
-            const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
-            if (ok) {
-              await updatePublicFeedFiredKey(state, key, barTimeSec15, iso, now);
-              notified += 1;
-            }
-          } catch (e) {
-            console.error("[indicatorPublicFeed] Snowball HH Telegram", symbol, e);
-          }
+      const sendSnowballBear = async (iEval: number, intrabar: boolean): Promise<void> => {
+        if (iEval < 1) return;
+        const relaxVol = intrabar && relaxIntrabarVol;
+        const vsE = volSmaArr[iEval];
+        const vE = v15[iEval];
+        const clE = c15[iEval];
+        const loE = l15[iEval];
+        const loPrev = l15[iEval - 1];
+        if (
+          !snowballVolumeOk(relaxVol, vE!, vsE!) ||
+          !Number.isFinite(clE!) ||
+          !Number.isFinite(loE!) ||
+          !Number.isFinite(loPrev!)
+        ) {
+          return;
         }
-      }
 
-      let svpHdOkBear = false;
-      if (
-        typeof svpHdLowGuess === "number" &&
-        Number.isFinite(svpHdLowGuess) &&
-        clNow < svpHdLowGuess
-      ) {
-        svpHdOkBear = true;
-      }
+        const priorMinLow = minLowPriorWindow(l15, iEval, swingLb);
+        const swingBreak = intrabar ? loE! < priorMinLow : clE! < priorMinLow;
+        const classicBear = Number.isFinite(priorMinLow) && swingBreak;
+        if (!classicBear) return;
+        if (stochLastClosed <= osMin) return;
 
-      if (
-        Number.isFinite(priorMinLow) &&
-        clNow < priorMinLow &&
-        viNow > 0 &&
-        viNow > vsNow &&
-        stNow > osMin &&
-        (!shortNeedSvpHd || svpHdOkBear) &&
-        Number.isFinite(emaResistance)
-      ) {
+        const svpHdLowGuess = highVolumeNodeBarLow(v15, l15, iEval, svpInnerLb);
+        const svpHdOkBear =
+          typeof svpHdLowGuess === "number" &&
+          Number.isFinite(svpHdLowGuess) &&
+          clE! < svpHdLowGuess;
+        if (shortNeedSvpHd && !svpHdOkBear) return;
+
+        const emaResistance =
+          typeof emaResArr[iEval] === "number" && Number.isFinite(emaResArr[iEval])
+            ? emaResArr[iEval]
+            : emaResArr[iClosed];
+        if (!Number.isFinite(emaResistance)) return;
+
+        const barOpenSec = t15[iEval];
+        if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
+
         const key = `${symbol}|SNOWBALL|15m|BEAR`;
-        if (state.lastFiredBarSec[key] !== barTimeSec15 && !inCooldown(state, key, now)) {
-          const msg = buildSnowballTripleCheckMessage(symbol, "bear", barTimeSec15, {
-            ...baseArgs,
-            refSwing: priorMinLow,
-            stochLimit: osMin,
-            emaResistancePeriod: emaResP,
-            emaResistance,
-            svpHdInnerLb: svpInnerLb,
-            svpHdLow:
-              typeof svpHdLowGuess === "number" && Number.isFinite(svpHdLowGuess) ? svpHdLowGuess : priorMinLow,
-            svpHdRequiredOk: shortNeedSvpHd && svpHdOkBear,
-          });
-          try {
-            const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
-            if (ok) {
-              await updatePublicFeedFiredKey(state, key, barTimeSec15, iso, now);
-              notified += 1;
-            }
-          } catch (e) {
-            console.error("[indicatorPublicFeed] Snowball LL Telegram", symbol, e);
+        if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) return;
+
+        const msg = buildSnowballTripleCheckMessage(symbol, "bear", barOpenSec, {
+          close: clE!,
+          refSwing: priorMinLow,
+          volume: vE!,
+          volSma: vsE!,
+          stochK: stochLastClosed,
+          lookback: swingLb,
+          volPeriod: volP,
+          rsiP,
+          stochLen: stLen,
+          stochLimit: osMin,
+          emaResistancePeriod: emaResP,
+          emaResistance: emaResistance!,
+          svpHdInnerLb: svpInnerLb,
+          svpHdLow:
+            typeof svpHdLowGuess === "number" && Number.isFinite(svpHdLowGuess) ? svpHdLowGuess : priorMinLow,
+          svpHdRequiredOk: shortNeedSvpHd && svpHdOkBear,
+          intrabar,
+          volCheckRelaxed: relaxVol,
+        });
+        try {
+          const ok = await sendPublicSnowballFeedToSparkGroup(msg);
+          if (ok) {
+            await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now);
+            notified += 1;
           }
+        } catch (e) {
+          console.error("[indicatorPublicFeed] Snowball BEAR", symbol, intrabar ? "intrabar" : "close", e);
         }
+      };
+
+      if (intrabarOn) {
+        await sendSnowballLong(iForming, true);
+        await sendSnowballBear(iForming, true);
       }
+      await sendSnowballLong(iClosed, false);
+      await sendSnowballBear(iClosed, false);
     }
   }
 

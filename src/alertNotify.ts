@@ -105,6 +105,20 @@ export async function sendPublicIndicatorFeedToSparkGroup(text: string): Promise
 }
 
 /**
+ * Snowball Triple-Check → Forum topic แยก (`TELEGRAM_PUBLIC_SNOWBALL_MESSAGE_THREAD_ID`) ถ้าไม่ตั้งจะ fallback ไป topic เทคนิคเดียวกับ RSI/EMA
+ */
+export async function sendPublicSnowballFeedToSparkGroup(text: string): Promise<boolean> {
+  if (!telegramSparkSystemGroupConfigured()) {
+    console.warn(
+      "[sendPublicSnowballFeedToSparkGroup] ไม่มี TELEGRAM_BOT_TOKEN + TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID) — ไม่ส่ง Snowball feed"
+    );
+    return false;
+  }
+  await sendTelegramPublicBroadcastMessage(text, "snowball");
+  return true;
+}
+
+/**
  * Spark / System Change / สัญญาณสาธารณะที่ใช้กลุ่มเดียวกัน: Telegram → TELEGRAM_PUBLIC_CHAT_ID (+ topic ตาม kind)
  * ไม่บังคับมี LINE user id — ถ้าไม่ตั้งกลุ่ม จะ fallback เป็น sendAlertNotification ต่อ uid (ต้องมี uids)
  * LINE mirror ต่อ uid: เฉพาะเมื่อมี uids + ALERT_ALSO_LINE_PUSH + LINE_ALERT_PUSH_ENABLED

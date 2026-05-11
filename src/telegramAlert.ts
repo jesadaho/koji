@@ -39,6 +39,7 @@ export type PublicBroadcastKind =
   | "condition"
   | "market_pulse"
   | "technical"
+  | "snowball"
   | "events_weekly"
   | "events_pre"
   | "events_result"
@@ -64,6 +65,7 @@ const KIND_TO_THREAD_ENV: Record<PublicBroadcastKind, string> = {
   condition: "TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID",
   market_pulse: "TELEGRAM_PUBLIC_MARKET_PULSE_MESSAGE_THREAD_ID",
   technical: "TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID",
+  snowball: "TELEGRAM_PUBLIC_SNOWBALL_MESSAGE_THREAD_ID",
   events_weekly: "TELEGRAM_PUBLIC_EVENTS_WEEKLY_MESSAGE_THREAD_ID",
   events_pre: "TELEGRAM_PUBLIC_EVENTS_PRE_MESSAGE_THREAD_ID",
   events_result: "TELEGRAM_PUBLIC_EVENTS_RESULT_MESSAGE_THREAD_ID",
@@ -73,6 +75,12 @@ const KIND_TO_THREAD_ENV: Record<PublicBroadcastKind, string> = {
 export function resolvePublicBroadcastMessageThreadIdForKind(kind: PublicBroadcastKind): number | undefined {
   const specific = parsePositiveIntegerMessageThreadId(process.env[KIND_TO_THREAD_ENV[kind]]);
   if (specific != null) return specific;
+  if (kind === "snowball") {
+    return (
+      parsePositiveIntegerMessageThreadId(process.env.TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID) ??
+      resolvePublicBroadcastMessageThreadId()
+    );
+  }
   if (kind === "events_result") {
     return (
       parsePositiveIntegerMessageThreadId(process.env.TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID) ??
