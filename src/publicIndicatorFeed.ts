@@ -1478,6 +1478,14 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
   const packsDiv4hExtra: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   const snowTf = snowballBinanceTf();
   const snowballPacks: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
+  const snowFetchBars = snowballOn
+    ? Math.max(
+        250,
+        (snowballDoubleBarrierEnabled() ? snowballDoubleBarrierLookbackBars() : 0) + 50,
+        snowballSwingLookbackBars() + snowballSwingExcludeRecentBars() + 50,
+        snowballLongTrendEma2Enabled() ? snowballLongTrendEma2Period() + 50 : 0,
+      )
+    : 0;
   for (let i = 0; i < symbols.length; i += concurrency) {
     const chunk = symbols.slice(i, i + concurrency);
     const partCore = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, rsiEmaTf)));
@@ -1509,7 +1517,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       packsDiv4hExtra.push(...chunk.map(() => null));
     }
     if (snowballOn) {
-      const partSb = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, snowTf)));
+      const partSb = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, snowTf, snowFetchBars)));
       snowballPacks.push(...partSb);
     } else {
       snowballPacks.push(...chunk.map(() => null));
@@ -2574,7 +2582,15 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     return baseResult;
   }
 
-  const pack = await fetchBinanceUsdmKlines(symbol, snowTf);
+  const dbOnChecklist = snowballDoubleBarrierEnabled();
+  const barrier2LbChecklist = dbOnChecklist ? snowballDoubleBarrierLookbackBars() : 0;
+  const fetchBars = Math.max(
+    250,
+    barrier2LbChecklist + 50,
+    swingLb + swingEx + 50,
+    longEma2On ? longEma2P + 50 : 0,
+  );
+  const pack = await fetchBinanceUsdmKlines(symbol, snowTf, fetchBars);
   if (!pack) {
     errors.push(`fetchBinanceUsdmKlines(${symbol}, ${snowTf}) คืน null`);
     return baseResult;

@@ -90,21 +90,24 @@ function parseKlineRows(rows: unknown, minBars = 10): BinanceKlinePack | null {
 
 /**
  * Kline USDT-M จาก Binance Futures (เช่น BTCUSDT, interval 1h)
+ * @param limit จำนวนแท่งย้อนหลัง (ดีฟอลต์ 150; Snowball Double Barrier ต้องการ ≥ 200)
  */
 export async function fetchBinanceUsdmKlines(
   symbol: string,
-  tf: BinanceIndicatorTf
+  tf: BinanceIndicatorTf,
+  limit?: number,
 ): Promise<BinanceKlinePack | null> {
   const sym = symbol.trim().toUpperCase();
   if (!sym) return null;
   if (!isBinanceIndicatorFapiEnabled()) return null;
+  const lim = Math.min(KLINE_MAX_LIMIT, Math.max(10, Math.floor(limit ?? KLINE_LIMIT)));
   try {
     const { data } = await axios.get<unknown[]>(`${FAPI}/fapi/v1/klines`, {
       timeout: 20_000,
       params: {
         symbol: sym,
         interval: INTERVAL[tf],
-        limit: KLINE_LIMIT,
+        limit: lim,
       },
     });
     return parseKlineRows(data);
