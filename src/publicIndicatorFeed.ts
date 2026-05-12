@@ -20,7 +20,7 @@ import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
  * RSI cross + EMA golden/death (public Telegram) — ค่าเริ่ม 4h ให้สอดคล้อง divergence
  * ตั้ง INDICATOR_PUBLIC_RSI_EMA_TF=1h หรือ 15m ได้
  */
-function publicRsiEmaCrossTf(): BinanceIndicatorTf {
+export function publicRsiEmaCrossTf(): BinanceIndicatorTf {
   const raw = process.env.INDICATOR_PUBLIC_RSI_EMA_TF?.trim().toLowerCase();
   if (raw === "1h") return "1h";
   if (raw === "15m") return "15m";
@@ -32,7 +32,7 @@ function publicRsiEmaCrossTf(): BinanceIndicatorTf {
  * Timeframe สำหรับ RSI divergence (public Telegram) — ค่าเริ่มเฉพาะ 4h (โครงสร้างชัดกว่า 1h)
  * ตั้ง INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS=1h,4h เพื่อคืนทั้งคู่
  */
-function publicRsiDivergenceTfs(): BinanceIndicatorTf[] {
+export function publicRsiDivergenceTfs(): BinanceIndicatorTf[] {
   const raw = process.env.INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS?.trim().toLowerCase();
   if (!raw) return ["4h"];
   const out: BinanceIndicatorTf[] = [];
@@ -45,7 +45,7 @@ function publicRsiDivergenceTfs(): BinanceIndicatorTf[] {
 }
 
 /** Snowball ใช้ TF นี้จาก Binance USDM (15m / 1h / 4h) — ค่าเริ่ม 4h */
-function snowballBinanceTf(): BinanceIndicatorTf {
+export function snowballBinanceTf(): BinanceIndicatorTf {
   const raw = process.env.INDICATOR_PUBLIC_SNOWBALL_TF?.trim().toLowerCase();
   if (raw === "4h" || raw === "4hr") return "4h";
   if (raw === "1h") return "1h";
@@ -67,8 +67,25 @@ function isPublicRsiDivergenceEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_RSI_DIVERGENCE_ENABLED", true);
 }
 
-function isPublicSnowballTripleCheckEnabled(): boolean {
+export function isPublicSnowballTripleCheckEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_ENABLED", true);
+}
+
+/** สำหรับ debug / เอกสาร — ค่าเดียวกับรอบ runPublicIndicatorFeedInternal */
+export function getIndicatorPublicScanParams(): {
+  coreTopAlts: number;
+  snowballTopAlts: number;
+  snowTf: BinanceIndicatorTf;
+  symbolListTtlMs: number;
+  publicCooldownMs: number;
+} {
+  return {
+    coreTopAlts: topAltsCount(),
+    snowballTopAlts: snowballUniverseTopAltsCount(),
+    snowTf: snowballBinanceTf(),
+    symbolListTtlMs: symbolListTtlMs(),
+    publicCooldownMs: publicCooldownMs(),
+  };
 }
 
 function divergencePivotWing(): number {

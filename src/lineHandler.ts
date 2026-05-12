@@ -14,7 +14,8 @@ import {
   KOJI_MENU_ALT_TEXT,
   KOJI_MENU_ALT_TEXT_NO_TOP_FUNDING,
 } from "./lineFlexKojiMenu";
-import { isCronStatusQuery } from "./cronLineCommands";
+import { isAdminLineUserId } from "./adminIds";
+import { formatPublicIndicatorFeedDebugMessage, parsePublicFeedDebugCommand } from "./publicIndicatorFeedDebug";
 import { isMarketPulseStatusQuery } from "./marketPulseLineCommands";
 import {
   isSparkMatrixResetAllowed,
@@ -110,6 +111,8 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
 
 • สถานะ cron — บันทึกรอบล่าสุด: pct-trailing ~5 นาที (เตือน% + Spark ticker + follow-up) · price-sync ~15 นาที (เป้าราคา + เตือน% รายวัน + volume/RSI + EMA6/12·15m + spot–perp basis) · ชั่วโมง (สัญญา / funding)
   (EN: cron status, #cronStatus — Spark ticker: สถานะ spark, spark cron, #sparkCron)
+• debug public feed [เหรียญ] — สรุป env / universe / รอบ price-sync ล่าสุด (เฉพาะ admin — KOJI_ADMIN_IDS) เช่น debug public feed USELESS
+  (EN: #publicfeeddebug, check public feed SOL)
 
 • สถิติ spark — สรุปผลติดตาม Spark หลัง T+10m … T+4h (momentum vs fade) ในแชท
   เปิดเว็บแอปในแชทที่หน้า «สถิติ Spark» เพื่อดู Win-rate matrix แยก Vol / มาร์ก. (พร็อกซี)
@@ -324,6 +327,27 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       console.error("[lineHandler] cron status", e);
       await client.replyMessage(msgEvent.replyToken, [
         { type: "text", text: "อ่านสถานะ cron ไม่สำเร็จ — บน Vercel ต้องมี REDIS_URL หรือ Vercel KV" },
+      ]);
+    }
+    return;
+  }
+
+  const feedDbg = parsePublicFeedDebugCommand(text);
+  if (feedDbg) {
+    if (!isAdminLineUserId(uid)) {
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: "คำสั่ง debug public feed — เฉพาะ admin (ตั้ง KOJI_ADMIN_IDS=LINE user id ของคุณ)" },
+      ]);
+      return;
+    }
+    try {
+      const body = await formatPublicIndicatorFeedDebugMessage({ symbol: feedDbg.symbol });
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: body }]);
+    } catch (e) {
+      console.error("[lineHandler] public feed debug", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: `debug public feed ล้มเหลว — ${detail.slice(0, 500)}` },
       ]);
     }
     return;
