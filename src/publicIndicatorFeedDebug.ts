@@ -259,15 +259,18 @@ function renderExpectedAlertLines(
   }
 
   /* แท่งปิดแล้ว — ยิงรอบ cron แรกที่รันหลังเวลาปิดแท่ง */
-  out.push(`  ⏰ Bar closed at: ${fmtMsBkk(barCloseMs)} (${fmtRelativeFromNow(barCloseMs, nowMs)})`);
+  const sameSlot = cronAfterCloseMs === barCloseMs;
+  out.push(`  ⏰ เวลาปิดแท่ง: ${fmtMsBkk(barCloseMs)} (${fmtRelativeFromNow(barCloseMs, nowMs)})`);
   if (nowMs >= cronAfterCloseMs) {
     out.push(
-      `  📣 Expected alert: ${fmtMsBkk(cronAfterCloseMs)} — ครบเวลายิงไปแล้ว (${fmtRelativeFromNow(cronAfterCloseMs, nowMs)})`,
+      sameSlot
+        ? `  📣 Expected alert (cron 15m UTC): ${fmtMsBkk(cronAfterCloseMs)} — ตรง slot หลังปิดแท่ง · ครบเวลาแล้ว (${fmtRelativeFromNow(cronAfterCloseMs, nowMs)})`
+        : `  📣 Expected alert (cron 15m UTC): ${fmtMsBkk(cronAfterCloseMs)} — ครบเวลายิงไปแล้ว (${fmtRelativeFromNow(cronAfterCloseMs, nowMs)})`,
     );
-    out.push("  ⚠️ ถ้ายังไม่ได้รับ ตรวจ Vercel logs ของ /api/cron/price-sync หรือ KV state อาจหาย");
+    out.push("  ⚠️ ถ้ายังไม่ได้รับ: deploy แพตช์ early-skip แล้วหรือยัง · Vercel logs /api/cron/price-sync · `debug public feed USELESS` ดู rank ใน Snowball universe");
   } else {
     out.push(
-      `  📣 Expected alert: ${fmtMsBkk(cronAfterCloseMs)} (${fmtRelativeFromNow(cronAfterCloseMs, nowMs)})`,
+      `  📣 Expected alert (cron 15m UTC): ${fmtMsBkk(cronAfterCloseMs)} (${fmtRelativeFromNow(cronAfterCloseMs, nowMs)})`,
     );
   }
   return out;
@@ -281,7 +284,12 @@ function renderSnowballSideBlock(
 ): string[] {
   if (!ev) return [`${title}: — (ข้ามเพราะ index ไม่พร้อม)`];
   const lines: string[] = [];
-  const stamp = `${ev.barOpenIsoBkk} · close=${ev.closePrice}`;
+  const barCloseMs = (ev.barOpenSec + tfSeconds(snowTf)) * 1000;
+  const openBkk = fmtMsBkk(ev.barOpenSec * 1000);
+  const closeBkk = fmtMsBkk(barCloseMs);
+  const stamp = ev.intrabar
+    ? `แท่งกำลังก่อ · เปิด ${openBkk} → ปิด ~${closeBkk} · close=${ev.closePrice}`
+    : `แท่งปิดแล้ว · เปิด ${openBkk} → ปิด ${closeBkk} · close=${ev.closePrice}`;
   lines.push(`${title} · ${ev.allPassed ? "PASS ✅" : "BLOCK ❌"} · ${stamp}`);
   let firstFailMarked = false;
   for (const s of ev.steps) {
@@ -342,7 +350,8 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
 
   lines.push("หมายเหตุ: checklist จำลองจาก kline ล่าสุดที่ขอ + state cooldown ปัจจุบัน");
   lines.push("รอบจริงสแกนทุก ~15 นาที ที่ /api/cron/price-sync (แท่งปิดตาม TF Snowball)");
-  lines.push("Expected alert คำนวณจาก Vercel cron schedule (*/15 * * * * UTC)");
+  lines.push("Expected alert คำนวณจาก Vercel cron schedule (ทุก 15 นาที UTC)");
+  lines.push("Swing HH / VAH: เงื่อนไขเป็น OR — VAH (ยังไม่) แปลว่ายังไม่ cross แท่งนั้น แต่ถ้า swing ทะลุ HH แล้วก็ยัง PASS ได้");
 
   let out = lines.join("\n");
   if (out.length > MAX_OUT) out = `${out.slice(0, MAX_OUT - 20)}\n…(truncated)`;

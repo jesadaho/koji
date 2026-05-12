@@ -30,16 +30,24 @@ export type IndicatorPublicFeedState = {
   /** cooldown ต่อ key (wall clock ms) */
   lastNotifyMs?: Record<string, number>;
   lastTriggeredAt?: string;
+  /** Snowball TF=4h: bar open time (unix sec) ที่ส่งสรุปสแกนลง Telegram แล้ว — กันยิงซ้ำทุก cron */
+  lastSnowballScanSummaryBarOpenSec?: number;
 };
 
 export async function loadIndicatorPublicFeedState(): Promise<IndicatorPublicFeedState> {
   if (useCloudStorage()) {
     const data = await cloudGet<IndicatorPublicFeedState>(KV_KEY);
     if (data && typeof data.lastFiredBarSec === "object" && data.lastFiredBarSec !== null) {
+      const sum =
+        typeof data.lastSnowballScanSummaryBarOpenSec === "number" &&
+        Number.isFinite(data.lastSnowballScanSummaryBarOpenSec)
+          ? data.lastSnowballScanSummaryBarOpenSec
+          : undefined;
       return {
         lastFiredBarSec: { ...data.lastFiredBarSec },
         lastNotifyMs: data.lastNotifyMs ? { ...data.lastNotifyMs } : {},
         lastTriggeredAt: data.lastTriggeredAt,
+        lastSnowballScanSummaryBarOpenSec: sum,
       };
     }
     return { lastFiredBarSec: {}, lastNotifyMs: {} };
@@ -50,10 +58,16 @@ export async function loadIndicatorPublicFeedState(): Promise<IndicatorPublicFee
   try {
     const parsed = JSON.parse(raw) as IndicatorPublicFeedState;
     if (parsed && typeof parsed.lastFiredBarSec === "object" && parsed.lastFiredBarSec !== null) {
+      const sum =
+        typeof parsed.lastSnowballScanSummaryBarOpenSec === "number" &&
+        Number.isFinite(parsed.lastSnowballScanSummaryBarOpenSec)
+          ? parsed.lastSnowballScanSummaryBarOpenSec
+          : undefined;
       return {
         lastFiredBarSec: { ...parsed.lastFiredBarSec },
         lastNotifyMs: parsed.lastNotifyMs ? { ...parsed.lastNotifyMs } : {},
         lastTriggeredAt: parsed.lastTriggeredAt,
+        lastSnowballScanSummaryBarOpenSec: sum,
       };
     }
   } catch {

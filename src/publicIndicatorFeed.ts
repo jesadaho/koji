@@ -10,6 +10,7 @@ import { sendPublicIndicatorFeedToSparkGroup, sendPublicSnowballFeedToSparkGroup
 import { emaLine, rsiWilder, smaLine, stochRsiLine } from "./indicatorMath";
 import {
   loadIndicatorPublicFeedState,
+  saveIndicatorPublicFeedState,
   updatePublicFeedFiredKey,
   type IndicatorPublicFeedState,
 } from "./indicatorPublicFeedStore";
@@ -1346,6 +1347,90 @@ function buildRsiDivergenceMessage(
   ].join("\n");
 }
 
+function isSnowball4hScanSummaryToChatEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_4H_SCAN_SUMMARY_TO_CHAT", true);
+}
+
+type Snowball4hScanSummaryStats = {
+  closedBarOpenSec: number | null;
+  withPack: number;
+  noPack: number;
+  skippedBars: number;
+  skippedStoch: number;
+  longTechPass: number;
+  longDeduped: number;
+  longSent: number;
+  bearTechPass: number;
+  bearDeduped: number;
+  bearSent: number;
+  errors: string[];
+};
+
+function pushSnowScanErr(stats: Snowball4hScanSummaryStats, line: string): void {
+  const s = line.length > 140 ? `${line.slice(0, 137)}...` : line;
+  if (stats.errors.length >= 24) return;
+  stats.errors.push(s);
+}
+
+function tfBarDurationSecForSummary(tf: BinanceIndicatorTf): number {
+  if (tf === "15m") return 15 * 60;
+  if (tf === "1h") return 3600;
+  return 4 * 3600;
+}
+
+function fmtBkkFromUnixSecForSummary(sec: number): string {
+  const d = new Date(sec * 1000);
+  const date = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const time = d.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${date} ${time} BKK`;
+}
+
+function formatSnowball4hScanSummaryMessage(opts: {
+  iso: string;
+  universeLen: number;
+  snowballTopAlts: number;
+  stats: Snowball4hScanSummaryStats;
+  barOpenSec: number;
+}): string[] {
+  const { iso, universeLen, snowballTopAlts, stats, barOpenSec } = opts;
+  const dur = tfBarDurationSecForSummary("4h");
+  const barCloseSec = barOpenSec + dur;
+  const lines: string[] = [];
+  lines.push("🧪 Snowball 4h — สรุปหลังสแกนแท่งปิด");
+  lines.push(`UTC: ${iso}`);
+  lines.push(`แท่ง: เปิด ${fmtBkkFromUnixSecForSummary(barOpenSec)} → ปิด ${fmtBkkFromUnixSecForSummary(barCloseSec)}`);
+  lines.push("");
+  lines.push("— สแกน —");
+  lines.push(`Universe: ${universeLen} สัญญา (fetch top ~${snowballTopAlts} alts + BTC/ETH)`);
+  lines.push(`มี kline Snowball: ${stats.withPack}`);
+  lines.push(`ไม่มี kline (null): ${stats.noPack}`);
+  lines.push(`ข้าม (แท่งไม่พอ minBars): ${stats.skippedBars}`);
+  lines.push(`ข้าม (Stoch แท่งปิดไม่ finite): ${stats.skippedStoch}`);
+  lines.push("");
+  lines.push("— Long (แท่งปิด) —");
+  lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.longTechPass}`);
+  lines.push(`ติด dedupe หรือ cooldown: ${stats.longDeduped}`);
+  lines.push(`ส่ง Telegram สำเร็จ: ${stats.longSent}`);
+  lines.push("");
+  lines.push("— Bear (แท่งปิด) —");
+  lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.bearTechPass}`);
+  lines.push(`ติด dedupe หรือ cooldown: ${stats.bearDeduped}`);
+  lines.push(`ส่ง Telegram สำเร็จ: ${stats.bearSent}`);
+  if (stats.errors.length > 0) {
+    lines.push("");
+    lines.push("— errors —");
+    for (const e of stats.errors) lines.push(`  • ${e}`);
+  }
+  lines.push("");
+  lines.push("ปิดข้อความนี้: INDICATOR_PUBLIC_SNOWBALL_4H_SCAN_SUMMARY_TO_CHAT=0");
+  return lines;
+}
+
 /**
  * Feed สาธารณะ RSI cross + EMA cross + RSI divergence จาก Binance USDT-M (ค่าเริ่ม TF เดียวกันที่ 4h — RSI/EMA: INDICATOR_PUBLIC_RSI_EMA_TF, Div: INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS)
  * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — universe alt ตาม INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS ดีฟอลต์ 100; RSI/EMA/Div ยังใช้ INDICATOR_PUBLIC_TOP_ALTS)
@@ -1433,6 +1518,24 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
   let state = await loadIndicatorPublicFeedState();
   let notified = 0;
+
+  const snowScanStats: Snowball4hScanSummaryStats | null =
+    snowballOn && snowTf === "4h" && isSnowball4hScanSummaryToChatEnabled()
+      ? {
+          closedBarOpenSec: null,
+          withPack: 0,
+          noPack: 0,
+          skippedBars: 0,
+          skippedStoch: 0,
+          longTechPass: 0,
+          longDeduped: 0,
+          longSent: 0,
+          bearTechPass: 0,
+          bearDeduped: 0,
+          bearSent: 0,
+          errors: [],
+        }
+      : null;
 
   for (let idx = 0; idx < symbols.length; idx++) {
     const symbol = symbols[idx]!;
@@ -1589,7 +1692,11 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
     if (snowballOn) {
       const packSb = snowballPacks[idx];
-      if (!packSb) continue;
+      if (!packSb) {
+        if (snowScanStats) snowScanStats.noPack++;
+        continue;
+      }
+      if (snowScanStats) snowScanStats.withPack++;
       const { close: c15, high: h15, low: l15, volume: v15, timeSec: t15 } = packSb;
       const swingLb = snowballSwingLookbackBars();
       const swingEx = snowballSwingExcludeRecentBars();
@@ -1606,6 +1713,9 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const n15 = c15.length;
       const iClosed = n15 - 2;
       const iForming = n15 - 1;
+      if (snowScanStats != null && typeof t15[iClosed] === "number" && Number.isFinite(t15[iClosed])) {
+        if (snowScanStats.closedBarOpenSec == null) snowScanStats.closedBarOpenSec = t15[iClosed]!;
+      }
       const vahLb = snowballLongVahLookbackBars();
       const longVahOn = snowballLongVahBreakEnabled();
       const intrabarOn = snowballIntrabarEnabled();
@@ -1632,13 +1742,19 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         dbOn ? barrier2Lb + 2 : 0,
         4
       );
-      if (n15 < minBars || iClosed < 1 || iForming < 1) continue;
+      if (n15 < minBars || iClosed < 1 || iForming < 1) {
+        if (snowScanStats) snowScanStats.skippedBars++;
+        continue;
+      }
 
       const volSmaArr = smaLine(v15, volP);
       const stochArr = snowballStochSeries(c15, rsiP, stLen, kSm);
       const stochLastClosed = stochArr[iClosed];
 
-      if (!Number.isFinite(stochLastClosed)) continue;
+      if (!Number.isFinite(stochLastClosed)) {
+        if (snowScanStats) snowScanStats.skippedStoch++;
+        continue;
+      }
 
       const emaResArr = emaLine(c15, emaResP);
       const emaLongSlopeArr =
@@ -1732,8 +1848,13 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const barOpenSec = t15[iEval];
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
 
+        if (snowScanStats && !intrabar) snowScanStats.longTechPass++;
+
         const key = `${symbol}|SNOWBALL|${snowTf}|BULL`;
-        if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) return;
+        if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) {
+          if (snowScanStats && !intrabar) snowScanStats.longDeduped++;
+          return;
+        }
 
         const sLp = highVolumeNodeBarLow(v15, h15, l15, iEval, svpInnerLb);
         const emaR =
@@ -1769,6 +1890,12 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             );
           } catch (e) {
             console.error("[indicatorPublicFeed] snowball 4h trade plan", symbol, e);
+            if (snowScanStats && !intrabar) {
+              pushSnowScanErr(
+                snowScanStats,
+                `LONG plan ${symbol}: ${e instanceof Error ? e.message : String(e)}`,
+              );
+            }
           }
         }
 
@@ -1833,6 +1960,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           if (ok) {
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now);
             notified += 1;
+            if (snowScanStats && !intrabar) snowScanStats.longSent++;
             try {
               await appendSnowballStatsRow({
                 symbol,
@@ -1850,10 +1978,19 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
               });
             } catch (statsErr) {
               console.error("[indicatorPublicFeed] snowball stats LONG", symbol, statsErr);
+              if (snowScanStats && !intrabar) {
+                pushSnowScanErr(
+                  snowScanStats,
+                  `LONG stats ${symbol}: ${statsErr instanceof Error ? statsErr.message : String(statsErr)}`,
+                );
+              }
             }
           }
         } catch (e) {
           console.error("[indicatorPublicFeed] Snowball LONG", symbol, intrabar ? "intrabar" : "close", e);
+          if (snowScanStats && !intrabar) {
+            pushSnowScanErr(snowScanStats, `LONG TG ${symbol}: ${e instanceof Error ? e.message : String(e)}`);
+          }
         }
       };
 
@@ -1896,8 +2033,13 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const barOpenSec = t15[iEval];
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
 
+        if (snowScanStats && !intrabar) snowScanStats.bearTechPass++;
+
         const key = `${symbol}|SNOWBALL|${snowTf}|BEAR`;
-        if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) return;
+        if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) {
+          if (snowScanStats && !intrabar) snowScanStats.bearDeduped++;
+          return;
+        }
 
         let shortTier: SnowballQualityTier = "a_plus";
         let shortDoubleBarrierLine = "";
@@ -1949,6 +2091,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           if (ok) {
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now);
             notified += 1;
+            if (snowScanStats && !intrabar) snowScanStats.bearSent++;
             try {
               await appendSnowballStatsRow({
                 symbol,
@@ -1966,10 +2109,19 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
               });
             } catch (statsErr) {
               console.error("[indicatorPublicFeed] snowball stats BEAR", symbol, statsErr);
+              if (snowScanStats && !intrabar) {
+                pushSnowScanErr(
+                  snowScanStats,
+                  `BEAR stats ${symbol}: ${statsErr instanceof Error ? statsErr.message : String(statsErr)}`,
+                );
+              }
             }
           }
         } catch (e) {
           console.error("[indicatorPublicFeed] Snowball BEAR", symbol, intrabar ? "intrabar" : "close", e);
+          if (snowScanStats && !intrabar) {
+            pushSnowScanErr(snowScanStats, `BEAR TG ${symbol}: ${e instanceof Error ? e.message : String(e)}`);
+          }
         }
       };
 
@@ -1979,6 +2131,39 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       }
       await sendSnowballLong(iClosed, false);
       await sendSnowballBear(iClosed, false);
+    }
+  }
+
+  if (snowScanStats != null && snowScanStats.closedBarOpenSec != null) {
+    const barOpen = snowScanStats.closedBarOpenSec;
+    const barDurSec = tfBarDurationSecForSummary("4h");
+    const barCloseMs = (barOpen + barDurSec) * 1000;
+    const ageMs = now - barCloseMs;
+    const tooOld = ageMs > 4 * 3600 * 1000;
+    const already = state.lastSnowballScanSummaryBarOpenSec === barOpen;
+    if (!already) {
+      if (tooOld) {
+        state.lastSnowballScanSummaryBarOpenSec = barOpen;
+        await saveIndicatorPublicFeedState(state);
+      } else {
+        const summaryIso = new Date(now).toISOString();
+        const body = formatSnowball4hScanSummaryMessage({
+          iso: summaryIso,
+          universeLen: symbols.length,
+          snowballTopAlts,
+          stats: snowScanStats,
+          barOpenSec: barOpen,
+        }).join("\n");
+        try {
+          const ok = await sendPublicSnowballFeedToSparkGroup(body);
+          if (ok) {
+            state.lastSnowballScanSummaryBarOpenSec = barOpen;
+            await saveIndicatorPublicFeedState(state);
+          }
+        } catch (e) {
+          console.error("[indicatorPublicFeed] snowball 4h scan summary to chat", e);
+        }
+      }
     }
   }
 
