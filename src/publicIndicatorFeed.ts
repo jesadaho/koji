@@ -1437,150 +1437,152 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
   for (let idx = 0; idx < symbols.length; idx++) {
     const symbol = symbols[idx]!;
     const pack = packsCore[idx];
-    if (!pack) continue;
-
-    const { close, timeSec } = pack;
-    const n = close.length;
-    const i = n - 2;
-    const iPrev = i - 1;
-    if (iPrev < 0) continue;
-
-    const barTimeSec = timeSec[i];
-    if (typeof barTimeSec !== "number" || !Number.isFinite(barTimeSec)) continue;
+    const packSbEarly = snowballPacks[idx];
+    /* Snowball ใช้ snowballPacks — อย่า continue เพราะ packsCore ล้มเหลว (timeout ฯลฯ) ไม่งั้นข้าม Snowball ทั้งเหรียญ */
+    if (!pack && !(snowballOn && packSbEarly)) continue;
 
     const iso = new Date().toISOString();
 
-    if (rsiOn && idx < maxIdxCoreFeed && !isNeutralRsi50Threshold(rsiP.threshold)) {
-      const period = rsiP.period;
-      if (n >= period + 3) {
-        const rsi = rsiWilder(close, period);
-        const rNow = rsi[i]!;
-        const rPrev = rsi[iPrev]!;
-        if (Number.isFinite(rNow) && Number.isFinite(rPrev)) {
-          const key = `${symbol}|RSI|${rsiEmaTf}`;
-          if (
-            rsiCrossMatch(rPrev, rNow, rsiP.threshold, rsiP.direction) &&
-            state.lastFiredBarSec[key] !== barTimeSec &&
-            !inCooldown(state, key, now)
-          ) {
-            const msg = buildPublicRsiMessage(
-              symbol,
-              rsiEmaTf,
-              period,
-              rsiP.threshold,
-              rsiP.direction,
-              rPrev,
-              rNow,
-              barTimeSec
-            );
-            try {
-              const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
-              if (ok) {
-                await updatePublicFeedFiredKey(state, key, barTimeSec, iso, now);
-                notified += 1;
+    if (pack) {
+      const { close, timeSec } = pack;
+      const n = close.length;
+      const i = n - 2;
+      const iPrev = i - 1;
+      if (iPrev >= 0) {
+        const barTimeSec = timeSec[i];
+        if (typeof barTimeSec === "number" && Number.isFinite(barTimeSec)) {
+          if (rsiOn && idx < maxIdxCoreFeed && !isNeutralRsi50Threshold(rsiP.threshold)) {
+            const period = rsiP.period;
+            if (n >= period + 3) {
+              const rsi = rsiWilder(close, period);
+              const rNow = rsi[i]!;
+              const rPrev = rsi[iPrev]!;
+              if (Number.isFinite(rNow) && Number.isFinite(rPrev)) {
+                const key = `${symbol}|RSI|${rsiEmaTf}`;
+                if (
+                  rsiCrossMatch(rPrev, rNow, rsiP.threshold, rsiP.direction) &&
+                  state.lastFiredBarSec[key] !== barTimeSec &&
+                  !inCooldown(state, key, now)
+                ) {
+                  const msg = buildPublicRsiMessage(
+                    symbol,
+                    rsiEmaTf,
+                    period,
+                    rsiP.threshold,
+                    rsiP.direction,
+                    rPrev,
+                    rNow,
+                    barTimeSec
+                  );
+                  try {
+                    const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
+                    if (ok) {
+                      await updatePublicFeedFiredKey(state, key, barTimeSec, iso, now);
+                      notified += 1;
+                    }
+                  } catch (e) {
+                    console.error("[indicatorPublicFeed] RSI Telegram", symbol, e);
+                  }
+                }
               }
-            } catch (e) {
-              console.error("[indicatorPublicFeed] RSI Telegram", symbol, e);
             }
           }
-        }
-      }
-    }
 
-    if (emaOn && idx < maxIdxCoreFeed && emaP.fast < emaP.slow) {
-      const { fast, slow } = emaP;
-      const minIdx = Math.max(fast, slow) - 1;
-      const emaF = emaLine(close, fast);
-      const emaS = emaLine(close, slow);
-      if (i < minIdx || iPrev < minIdx) continue;
+          if (emaOn && idx < maxIdxCoreFeed && emaP.fast < emaP.slow) {
+            const { fast, slow } = emaP;
+            const minIdx = Math.max(fast, slow) - 1;
+            const emaF = emaLine(close, fast);
+            const emaS = emaLine(close, slow);
+            if (i >= minIdx && iPrev >= minIdx) {
+              const efNow = emaF[i]!;
+              const esNow = emaS[i]!;
+              const efPrev = emaF[iPrev]!;
+              const esPrev = emaS[iPrev]!;
+              if (
+                Number.isFinite(efNow) &&
+                Number.isFinite(esNow) &&
+                Number.isFinite(efPrev) &&
+                Number.isFinite(esPrev)
+              ) {
+                const fastAboveNow = efNow > esNow;
+                const fastAbovePrev = efPrev > esPrev;
 
-      const efNow = emaF[i]!;
-      const esNow = emaS[i]!;
-      const efPrev = emaF[iPrev]!;
-      const esPrev = emaS[iPrev]!;
-      if (
-        !Number.isFinite(efNow) ||
-        !Number.isFinite(esNow) ||
-        !Number.isFinite(efPrev) ||
-        !Number.isFinite(esPrev)
-      ) {
-        continue;
-      }
+                for (const kind of ["golden", "death"] as const) {
+                  if (!emaCrossMatch(fastAbovePrev, fastAboveNow, kind)) continue;
+                  const key = `${symbol}|EMA_${kind.toUpperCase()}|${rsiEmaTf}`;
+                  if (state.lastFiredBarSec[key] === barTimeSec || inCooldown(state, key, now)) continue;
 
-      const fastAboveNow = efNow > esNow;
-      const fastAbovePrev = efPrev > esPrev;
-
-      for (const kind of ["golden", "death"] as const) {
-        if (!emaCrossMatch(fastAbovePrev, fastAboveNow, kind)) continue;
-        const key = `${symbol}|EMA_${kind.toUpperCase()}|${rsiEmaTf}`;
-        if (state.lastFiredBarSec[key] === barTimeSec || inCooldown(state, key, now)) continue;
-
-        const msg = buildPublicEmaMessage(
-          symbol,
-          rsiEmaTf,
-          kind,
-          fast,
-          slow,
-          efPrev,
-          esPrev,
-          efNow,
-          esNow,
-          barTimeSec
-        );
-        try {
-          const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
-          if (ok) {
-            await updatePublicFeedFiredKey(state, key, barTimeSec, iso, now);
-            notified += 1;
+                  const msg = buildPublicEmaMessage(
+                    symbol,
+                    rsiEmaTf,
+                    kind,
+                    fast,
+                    slow,
+                    efPrev,
+                    esPrev,
+                    efNow,
+                    esNow,
+                    barTimeSec
+                  );
+                  try {
+                    const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
+                    if (ok) {
+                      await updatePublicFeedFiredKey(state, key, barTimeSec, iso, now);
+                      notified += 1;
+                    }
+                  } catch (e) {
+                    console.error("[indicatorPublicFeed] EMA Telegram", symbol, kind, e);
+                  }
+                }
+              }
+            }
           }
-        } catch (e) {
-          console.error("[indicatorPublicFeed] EMA Telegram", symbol, kind, e);
-        }
-      }
-    }
 
-    if (divOn && idx < maxIdxCoreFeed) {
-      const wing = divergencePivotWing();
-      const minGap = divergenceMinPivotGapBars();
-      const strongD = divergenceStrongRsiDelta();
-      const period = rsiP.period;
-      const rsiMaP = divergenceRsiMaPeriod();
-      const lb = divergenceLookbackBars();
-      const minBars = period + lb + rsiMaP + wing + 12;
+          if (divOn && idx < maxIdxCoreFeed) {
+            const wing = divergencePivotWing();
+            const minGap = divergenceMinPivotGapBars();
+            const strongD = divergenceStrongRsiDelta();
+            const period = rsiP.period;
+            const rsiMaP = divergenceRsiMaPeriod();
+            const lb = divergenceLookbackBars();
+            const minBars = period + lb + rsiMaP + wing + 12;
 
-      for (const divTf of divergenceTfs) {
-        const divPack =
-          divTf === rsiEmaTf
-            ? pack
-            : divTf === "1h"
-              ? packsDiv1hExtra[idx]
-              : packsDiv4hExtra[idx];
-        if (!divPack) continue;
-        const { close: dc, high: dh, low: dl, timeSec: dts } = divPack;
-        const nn = dc.length;
-        if (nn < minBars) continue;
-        const lastClosed = nn - 2;
-        if (lastClosed < period) continue;
+            for (const divTf of divergenceTfs) {
+              const divPack =
+                divTf === rsiEmaTf
+                  ? pack
+                  : divTf === "1h"
+                    ? packsDiv1hExtra[idx]
+                    : packsDiv4hExtra[idx];
+              if (!divPack) continue;
+              const { close: dc, high: dh, low: dl, timeSec: dts } = divPack;
+              const nn = dc.length;
+              if (nn < minBars) continue;
+              const lastClosed = nn - 2;
+              if (lastClosed < period) continue;
 
-        const rsiArr = rsiWilder(dc, period);
-        const hit = detectRsiDivergence(dh, dl, dc, rsiArr, lastClosed, period, wing, minGap);
-        if (!hit) continue;
+              const rsiArr = rsiWilder(dc, period);
+              const hit = detectRsiDivergence(dh, dl, dc, rsiArr, lastClosed, period, wing, minGap);
+              if (!hit) continue;
 
-        const divKey = `${symbol}|RSI_DIV|${divTf}|${hit.kind.toUpperCase()}`;
-        const confirmBarSec = dts[lastClosed];
-        if (typeof confirmBarSec !== "number" || !Number.isFinite(confirmBarSec)) continue;
-        if (state.lastFiredBarSec[divKey] === confirmBarSec) continue;
-        if (inCooldown(state, divKey, now)) continue;
+              const divKey = `${symbol}|RSI_DIV|${divTf}|${hit.kind.toUpperCase()}`;
+              const confirmBarSec = dts[lastClosed];
+              if (typeof confirmBarSec !== "number" || !Number.isFinite(confirmBarSec)) continue;
+              if (state.lastFiredBarSec[divKey] === confirmBarSec) continue;
+              if (inCooldown(state, divKey, now)) continue;
 
-        const msg = buildRsiDivergenceMessage(symbol, divTf, hit, strongD);
-        try {
-          const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
-          if (ok) {
-            await updatePublicFeedFiredKey(state, divKey, confirmBarSec, iso, now);
-            notified += 1;
+              const msg = buildRsiDivergenceMessage(symbol, divTf, hit, strongD);
+              try {
+                const ok = await sendPublicIndicatorFeedToSparkGroup(msg);
+                if (ok) {
+                  await updatePublicFeedFiredKey(state, divKey, confirmBarSec, iso, now);
+                  notified += 1;
+                }
+              } catch (e) {
+                console.error("[indicatorPublicFeed] RSI divergence Telegram", symbol, divTf, hit.kind, e);
+              }
+            }
           }
-        } catch (e) {
-          console.error("[indicatorPublicFeed] RSI divergence Telegram", symbol, divTf, hit.kind, e);
         }
       }
     }
