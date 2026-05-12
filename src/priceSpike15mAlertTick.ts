@@ -22,6 +22,7 @@ import {
 } from "./sparkAutoTradeExecutor";
 import { saveSparkAutoTradeState } from "./sparkAutoTradeStateStore";
 import { runSparkAutoTradeTimeStopSweep } from "./sparkAutoTradeTimeStopTick";
+import { passesSparkKlineConfirm, sparkKlineConfirmEnabled } from "./sparkKlineConfirm";
 
 /** ให้สอดคล้องกับ follow-up scheduler (anchor: barOpen + SPARK_BAR_SEC วินาที — ไม่ใช่ TF chart) */
 const SPARK_SIGNAL_BAR_SEC = 300;
@@ -332,6 +333,20 @@ export async function runPriceSpike15mAlertTick(
       state[sym] = { ...st, checkpointPrice: p, checkpointSec: nowSec };
       continue;
     }
+
+    if (sparkKlineConfirmEnabled()) {
+      try {
+        const klineOk = await passesSparkKlineConfirm(sym, returnPct);
+        if (!klineOk) {
+          // ไม่รีเซ็ต checkpoint — รอบถัดไปลองยืนยัน kline ใหม่
+          continue;
+        }
+      } catch (e) {
+        console.error("[priceSpike15mAlertTick] spark kline confirm", sym, e);
+        continue;
+      }
+    }
+
     const body = buildSparkMessage(
       sym,
       returnPct,

@@ -573,6 +573,70 @@ function isMexcKlineThrottleResponse(data: KlineApiResponse | undefined): boolea
   return m.includes("too frequent") || m.includes("rate limit") || m.includes("try again later");
 }
 
+/** OHLCV จาก MEXC contract kline (เก่า→ใหม่) — Spark kline confirm ฯลฯ */
+export type ContractKlineArrays = {
+  open: number[];
+  close: number[];
+  vol: number[];
+  high?: number[];
+  low?: number[];
+};
+
+/** ช่วงเวลาที่รองรับสำหรับยืนยัน Spark (ขยายได้ทีหลัง) */
+export type MexcContractKlineInterval = "Min15" | "Min60" | "Hour4";
+
+/**
+ * ดึง kline สัญญา perp ตาม interval + limit (สูงสุด 100) — retry เมื่อ MEXC rate limit
+ */
+export async function fetchContractKlineOHLCV(
+  contractSymbol: string,
+  interval: MexcContractKlineInterval,
+  limit: number
+): Promise<ContractKlineArrays | null> {
+  const sym = contractSymbol.trim();
+  if (!sym) return null;
+  const lim = Number.isFinite(limit) ? Math.min(100, Math.max(8, Math.floor(limit))) : 48;
+  const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(sym)}`;
+  const maxAttempts = 4;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const { data } = await axios.get<KlineApiResponse>(url, {
+        timeout: 14_000,
+        params: { interval, limit: lim },
+      });
+      if (data?.success && data.data) {
+        const parsed = parseKlineArrays(data.data);
+        if (
+          !parsed?.open.length ||
+          parsed.open.length !== parsed.close.length ||
+          parsed.open.length !== parsed.vol.length
+        ) {
+          return null;
+        }
+        return {
+          open: parsed.open,
+          close: parsed.close,
+          vol: parsed.vol,
+          high: parsed.high,
+          low: parsed.low,
+        };
+      }
+      if (isMexcKlineThrottleResponse(data) && attempt < maxAttempts - 1) {
+        await sleepMs(300 * Math.pow(2, attempt));
+        continue;
+      }
+      return null;
+    } catch {
+      if (attempt < maxAttempts - 1) {
+        await sleepMs(300 * Math.pow(2, attempt));
+        continue;
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
 async function fetchContractKlineDay1OpenClose(symbol: string): Promise<KlineArrays | null> {
   const sym = symbol.trim();
   const url = `https://api.mexc.com/api/v1/contract/kline/${encodeURIComponent(sym)}`;
