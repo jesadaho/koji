@@ -6,11 +6,14 @@ import {
 import { loadPriceSyncCronRecord } from "./cronStatusStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import {
+  evaluateSnowballChecklist,
   getIndicatorPublicScanParams,
   isIndicatorPublicFeedEnabled,
   isPublicSnowballTripleCheckEnabled,
   publicRsiDivergenceTfs,
   publicRsiEmaCrossTf,
+  type SnowballChecklistResult,
+  type SnowballSideEval,
 } from "./publicIndicatorFeed";
 
 const MAX_OUT = 3800;
@@ -164,6 +167,97 @@ export async function formatPublicIndicatorFeedDebugMessage(opts: { symbol?: str
 
   lines.push("");
   lines.push("รอบจริง: GET /api/cron/price-sync (~15m) — HTTP 200 ไม่ได้แปลว่ามีการแจ้งเตือน");
+  lines.push("ดู Snowball checklist รายเหรียญ: debug snowball USELESS");
+
+  let out = lines.join("\n");
+  if (out.length > MAX_OUT) out = `${out.slice(0, MAX_OUT - 20)}\n…(truncated)`;
+  return out;
+}
+
+/**
+ * Admin debug — `debug snowball SYMBOL`
+ * เดิน checklist เดียวกับ Snowball live tick บนแท่งปิดล่าสุด (+ intrabar ถ้าเปิด)
+ */
+export function parseSnowballDebugCommand(text: string): { symbol: string } | null {
+  const t = text.trim().replace(/\s+/g, " ");
+  const patterns = [
+    /^debug\s+snowball\s+(\S+)\s*$/i,
+    /^snowball\s+debug\s+(\S+)\s*$/i,
+    /^#snowballdebug\s+(\S+)\s*$/i,
+    /^เช็ค\s+snowball\s+(\S+)\s*$/i,
+  ];
+  for (const re of patterns) {
+    const m = t.match(re);
+    if (m && m[1]?.trim()) return { symbol: m[1].trim() };
+  }
+  return null;
+}
+
+function checkMark(ok: boolean): string {
+  return ok ? "✅" : "❌";
+}
+
+function renderSnowballSideBlock(title: string, ev: SnowballSideEval | null): string[] {
+  if (!ev) return [`${title}: — (ข้ามเพราะ index ไม่พร้อม)`];
+  const lines: string[] = [];
+  const stamp = `${ev.barOpenIsoBkk} · close=${ev.closePrice}`;
+  lines.push(`${title} · ${ev.allPassed ? "PASS ✅" : "BLOCK ❌"} · ${stamp}`);
+  let firstFailMarked = false;
+  for (const s of ev.steps) {
+    const mark = checkMark(s.ok);
+    const tag = !s.ok && !firstFailMarked ? " ← BLOCK" : "";
+    if (!s.ok) firstFailMarked = true;
+    lines.push(`  ${mark} ${s.label}: ${s.detail}${tag}`);
+  }
+  return lines;
+}
+
+export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Promise<string> {
+  const lines: string[] = [];
+  let res: SnowballChecklistResult | null = null;
+  try {
+    res = await evaluateSnowballChecklist(rawSymbol);
+  } catch (e) {
+    return `debug snowball ล้มเหลว — ${(e instanceof Error ? e.message : String(e)).slice(0, 500)}`;
+  }
+
+  lines.push(`🟦 Snowball checklist — ${res.symbol || "(no symbol)"}`);
+  lines.push(`UTC: ${new Date().toISOString()}`);
+  lines.push(`Snowball enabled: ${res.enabled ? "on" : "off"} · TF=${res.snowTf} · bars=${res.bars ?? "—"}`);
+  lines.push("");
+
+  if (res.errors.length > 0) {
+    lines.push("— errors —");
+    for (const e of res.errors) lines.push(`  ❌ ${e}`);
+    lines.push("");
+  }
+
+  lines.push("— params —");
+  for (const s of res.paramsSummary) lines.push(`  • ${s}`);
+  lines.push("");
+
+  if (res.long.closed || res.long.intrabar) {
+    lines.push("— LONG (BULL) —");
+    lines.push(...renderSnowballSideBlock("Closed bar", res.long.closed));
+    if (res.long.intrabar) {
+      lines.push("");
+      lines.push(...renderSnowballSideBlock("Intrabar (forming)", res.long.intrabar));
+    }
+    lines.push("");
+  }
+
+  if (res.bear.closed || res.bear.intrabar) {
+    lines.push("— BEAR (SHORT) —");
+    lines.push(...renderSnowballSideBlock("Closed bar", res.bear.closed));
+    if (res.bear.intrabar) {
+      lines.push("");
+      lines.push(...renderSnowballSideBlock("Intrabar (forming)", res.bear.intrabar));
+    }
+    lines.push("");
+  }
+
+  lines.push("หมายเหตุ: checklist จำลองจาก kline ล่าสุดที่ขอ + state cooldown ปัจจุบัน");
+  lines.push("รอบจริงสแกนทุก ~15 นาที ที่ /api/cron/price-sync (แท่งปิดตาม TF Snowball)");
 
   let out = lines.join("\n");
   if (out.length > MAX_OUT) out = `${out.slice(0, MAX_OUT - 20)}\n…(truncated)`;

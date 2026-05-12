@@ -1982,3 +1982,497 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
   return notified;
 }
+
+/** เครื่องมือ debug — เดิน checklist เดียวกับ Snowball live tick บนแท่งปิดล่าสุด (+ intrabar ถ้าเปิด) */
+export type SnowballCheckStep = { id: string; label: string; ok: boolean; detail: string };
+
+export type SnowballSideEval = {
+  side: "long" | "bear";
+  iEval: number;
+  intrabar: boolean;
+  barOpenSec: number;
+  barOpenIsoBkk: string;
+  closePrice: number;
+  steps: SnowballCheckStep[];
+  allPassed: boolean;
+};
+
+export type SnowballChecklistResult = {
+  symbol: string;
+  enabled: boolean;
+  envOk: boolean;
+  snowTf: BinanceIndicatorTf;
+  bars: number | null;
+  paramsSummary: string[];
+  long: { closed: SnowballSideEval | null; intrabar: SnowballSideEval | null };
+  bear: { closed: SnowballSideEval | null; intrabar: SnowballSideEval | null };
+  errors: string[];
+};
+
+function fmtNum(n: number, digits = 6): string {
+  if (!Number.isFinite(n)) return "NaN";
+  if (n === 0) return "0";
+  const abs = Math.abs(n);
+  if (abs >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  if (abs >= 1) return n.toFixed(Math.min(digits, 4));
+  return n.toFixed(digits);
+}
+
+function fmtBarBkkFromOpenSec(openSec: number): string {
+  const d = new Date(openSec * 1000);
+  const date = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const time = d.toLocaleTimeString("en-GB", { timeZone: "Asia/Bangkok", hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${date} ${time} BKK`;
+}
+
+function normalizeBinanceSym(raw: string): string {
+  const s = raw.trim().toUpperCase().replace(/^@/, "");
+  if (!s) return "";
+  return s.endsWith("USDT") ? s : `${s}USDT`;
+}
+
+function evaluateSnowballLongAt(
+  iEval: number,
+  intrabar: boolean,
+  data: { close: number[]; high: number[]; low: number[]; volume: number[]; timeSec: number[] },
+  ctx: {
+    volSmaArr: number[];
+    emaResArr: number[];
+    emaLongSlopeArr: number[];
+    emaLongSlope2Arr: number[] | null;
+    volMult: number;
+    swingLb: number;
+    swingEx: number;
+    vahLb: number;
+    longVahOn: boolean;
+    longRequireInnerHvnClear: boolean;
+    svpInnerLb: number;
+    longSlopeEmaOn: boolean;
+    longSlopeMinUpBars: number;
+    longSlopeEmaP: number;
+    longEma2On: boolean;
+    longEma2P: number;
+    relaxIntrabarVol: boolean;
+    state: IndicatorPublicFeedState;
+    nowMs: number;
+    symbol: string;
+    snowTf: BinanceIndicatorTf;
+  },
+): SnowballSideEval | null {
+  if (iEval < 1) return null;
+  const iPrev = iEval - 1;
+  const iPrev2 = iEval - 2;
+  const relaxVol = intrabar && ctx.relaxIntrabarVol;
+  const steps: SnowballCheckStep[] = [];
+
+  const push = (s: SnowballCheckStep) => {
+    steps.push(s);
+  };
+
+  const { close, high, low, volume, timeSec } = data;
+  const vE = volume[iEval];
+  const vsE = ctx.volSmaArr[iEval];
+  const clE = close[iEval];
+  const hiE = high[iEval];
+  const hiPrev = high[iPrev];
+  const clPrev = close[iPrev];
+
+  const volOk = snowballVolumeOk(relaxVol, vE!, vsE!, ctx.volMult);
+  push({
+    id: "volume",
+    label: "Volume × SMA",
+    ok: volOk,
+    detail: relaxVol
+      ? `intrabar relax — ผ่าน (vol=${fmtNum(vE!, 0)})`
+      : `vol=${fmtNum(vE!, 0)} ${volOk ? ">" : "≤"} SMA*${ctx.volMult} = ${fmtNum((vsE ?? 0) * ctx.volMult, 0)}`,
+  });
+
+  const priceFinite =
+    Number.isFinite(clE!) && Number.isFinite(hiE!) && Number.isFinite(hiPrev!) && Number.isFinite(clPrev!);
+  push({
+    id: "priceFinite",
+    label: "ราคาแท่งครบ",
+    ok: priceFinite,
+    detail: priceFinite ? "ok" : "ค่าราคาบางตัวไม่ finite",
+  });
+
+  const priorMaxHigh = maxHighPriorWindow(high, iEval, ctx.swingLb, ctx.swingEx);
+  const vahH = ctx.longVahOn ? highVolumeNodeBarHigh(volume, high, low, iEval, ctx.vahLb) : null;
+  const swingBreak = intrabar ? hiE! > priorMaxHigh : clE! > priorMaxHigh;
+  const classicSwing = Number.isFinite(priorMaxHigh) && swingBreak;
+  const vahCross =
+    ctx.longVahOn &&
+    vahH != null &&
+    Number.isFinite(vahH) &&
+    (intrabar ? hiE! > vahH && hiPrev! <= vahH : clE! > vahH && clPrev! <= vahH);
+  const vahOk = Boolean(vahCross);
+  const swingOrVahOk = classicSwing || vahOk;
+  push({
+    id: "swingOrVah",
+    label: `Swing HH${ctx.swingLb}/Ex${ctx.swingEx} หรือ VAH${ctx.vahLb}`,
+    ok: swingOrVahOk,
+    detail: [
+      `swingHH max=${fmtNum(priorMaxHigh)} (close=${fmtNum(clE!)} ${classicSwing ? ">" : "≤"})`,
+      ctx.longVahOn
+        ? `vah=${vahH != null ? fmtNum(vahH) : "—"} (${vahOk ? "เบรค" : "ยังไม่"})`
+        : "vah: ปิด",
+    ].join(" · "),
+  });
+
+  let innerHvnOk = true;
+  let innerHvnDetail = "skip (config off)";
+  if (ctx.longRequireInnerHvnClear) {
+    const innerHvn = highVolumeNodeBarRange(volume, high, low, iEval, ctx.svpInnerLb);
+    if (!innerHvn || !Number.isFinite(innerHvn.high)) {
+      innerHvnOk = false;
+      innerHvnDetail = "ไม่พบ HVN proxy";
+    } else {
+      const cleared = intrabar ? hiE! > innerHvn.high : clE! > innerHvn.high;
+      innerHvnOk = cleared;
+      innerHvnDetail = `hvnHigh=${fmtNum(innerHvn.high)} (close=${fmtNum(clE!)} ${cleared ? ">" : "≤"})`;
+    }
+  }
+  push({ id: "innerHvnClear", label: `Inner HVN${ctx.svpInnerLb}`, ok: innerHvnOk, detail: innerHvnDetail });
+
+  let emaSlopeOk = true;
+  let emaSlopeDetail = "skip (config off)";
+  if (ctx.longSlopeEmaOn) {
+    const eNow = ctx.emaLongSlopeArr[iEval];
+    const ePrev = ctx.emaLongSlopeArr[iPrev];
+    const ePrev2 = iPrev2 >= 0 ? ctx.emaLongSlopeArr[iPrev2] : NaN;
+    const cond1 = Number.isFinite(eNow) && Number.isFinite(ePrev) && eNow! > ePrev!;
+    let cond2 = true;
+    if (ctx.longSlopeMinUpBars >= 2) {
+      cond2 = Number.isFinite(ePrev2) && ePrev! > (ePrev2 as number);
+    }
+    emaSlopeOk = cond1 && cond2;
+    emaSlopeDetail = `EMA${ctx.longSlopeEmaP}: now=${fmtNum(eNow ?? NaN)} prev=${fmtNum(ePrev ?? NaN)}${ctx.longSlopeMinUpBars >= 2 ? ` prev2=${fmtNum((ePrev2 as number) ?? NaN)}` : ""} (${cond1 && cond2 ? "ขึ้น" : "ยัง"})`;
+  }
+  push({ id: "emaSlope", label: `EMA slope (${ctx.longSlopeEmaP})`, ok: emaSlopeOk, detail: emaSlopeDetail });
+
+  let ema2SlopeOk = true;
+  let ema2SlopeDetail = "skip (config off)";
+  if (ctx.longEma2On) {
+    const arr = ctx.emaLongSlope2Arr;
+    const a = arr ? arr[iEval] : undefined;
+    const b = arr ? arr[iPrev] : undefined;
+    const c = arr && iPrev2 >= 0 ? arr[iPrev2] : undefined;
+    const cond1 = Number.isFinite(a) && Number.isFinite(b) && a! > b!;
+    let cond2 = true;
+    if (ctx.longSlopeMinUpBars >= 2) {
+      cond2 = Number.isFinite(c) && b! > (c as number);
+    }
+    ema2SlopeOk = cond1 && cond2;
+    ema2SlopeDetail = `EMA${ctx.longEma2P}: now=${fmtNum(a ?? NaN)} prev=${fmtNum(b ?? NaN)}${ctx.longSlopeMinUpBars >= 2 ? ` prev2=${fmtNum((c as number) ?? NaN)}` : ""} (${cond1 && cond2 ? "ขึ้น" : "ยัง"})`;
+  }
+  push({ id: "ema2Slope", label: `EMA2 slope (${ctx.longEma2P})`, ok: ema2SlopeOk, detail: ema2SlopeDetail });
+
+  const barOpenSec = timeSec[iEval] ?? -1;
+  const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BULL`;
+  const lastFired = ctx.state.lastFiredBarSec[key];
+  const dedupeOk = lastFired !== barOpenSec;
+  push({
+    id: "dedupe",
+    label: "dedupe (bar เดียวกันยังไม่ยิง)",
+    ok: dedupeOk,
+    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · barOpenSec=${barOpenSec}`,
+  });
+
+  const lastNotify = ctx.state.lastNotifyMs?.[key];
+  const cd = publicCooldownMs();
+  const cooldownLeft = lastNotify != null && Number.isFinite(lastNotify) ? Math.max(0, lastNotify + cd - ctx.nowMs) : 0;
+  const cooldownOk = cooldownLeft <= 0;
+  push({
+    id: "cooldown",
+    label: `cooldown (${Math.round(cd / 60000)} นาที)`,
+    ok: cooldownOk,
+    detail: cooldownOk
+      ? lastNotify != null
+        ? `พ้นแล้ว (lastNotify ${new Date(lastNotify).toISOString()})`
+        : "ยังไม่เคยยิง"
+      : `เหลืออีก ${Math.round(cooldownLeft / 1000)} วินาที (lastNotify ${new Date(lastNotify!).toISOString()})`,
+  });
+
+  const allPassed = steps.every((s) => s.ok);
+  return {
+    side: "long",
+    iEval,
+    intrabar,
+    barOpenSec,
+    barOpenIsoBkk: barOpenSec > 0 ? fmtBarBkkFromOpenSec(barOpenSec) : "—",
+    closePrice: clE ?? NaN,
+    steps,
+    allPassed,
+  };
+}
+
+function evaluateSnowballBearAt(
+  iEval: number,
+  intrabar: boolean,
+  data: { close: number[]; high: number[]; low: number[]; volume: number[]; timeSec: number[] },
+  ctx: {
+    volSmaArr: number[];
+    emaResArr: number[];
+    stochLastClosed: number;
+    volMult: number;
+    swingLb: number;
+    swingEx: number;
+    osMin: number;
+    shortNeedSvpHd: boolean;
+    svpInnerLb: number;
+    relaxIntrabarVol: boolean;
+    state: IndicatorPublicFeedState;
+    nowMs: number;
+    symbol: string;
+    snowTf: BinanceIndicatorTf;
+  },
+): SnowballSideEval | null {
+  if (iEval < 1) return null;
+  const relaxVol = intrabar && ctx.relaxIntrabarVol;
+  const steps: SnowballCheckStep[] = [];
+  const push = (s: SnowballCheckStep) => steps.push(s);
+
+  const { close, high, low, volume, timeSec } = data;
+  const vE = volume[iEval];
+  const vsE = ctx.volSmaArr[iEval];
+  const clE = close[iEval];
+  const loE = low[iEval];
+  const loPrev = low[iEval - 1];
+
+  const volOk = snowballVolumeOk(relaxVol, vE!, vsE!, ctx.volMult);
+  push({
+    id: "volume",
+    label: "Volume × SMA",
+    ok: volOk,
+    detail: relaxVol
+      ? `intrabar relax — ผ่าน (vol=${fmtNum(vE!, 0)})`
+      : `vol=${fmtNum(vE!, 0)} ${volOk ? ">" : "≤"} SMA*${ctx.volMult} = ${fmtNum((vsE ?? 0) * ctx.volMult, 0)}`,
+  });
+
+  const priceFinite = Number.isFinite(clE!) && Number.isFinite(loE!) && Number.isFinite(loPrev!);
+  push({ id: "priceFinite", label: "ราคาแท่งครบ", ok: priceFinite, detail: priceFinite ? "ok" : "ค่าราคาไม่ finite" });
+
+  const priorMinLow = minLowPriorWindow(low, iEval, ctx.swingLb, ctx.swingEx);
+  const swingBreak = intrabar ? loE! < priorMinLow : clE! < priorMinLow;
+  const classicBear = Number.isFinite(priorMinLow) && swingBreak;
+  push({
+    id: "swingLL",
+    label: `Swing LL${ctx.swingLb}/Ex${ctx.swingEx}`,
+    ok: classicBear,
+    detail: `priorMinLow=${fmtNum(priorMinLow)} (close=${fmtNum(clE!)} ${classicBear ? "<" : "≥"})`,
+  });
+
+  const stochOk = ctx.stochLastClosed > ctx.osMin;
+  push({
+    id: "stochFloor",
+    label: `Stoch > ${ctx.osMin}`,
+    ok: stochOk,
+    detail: `stoch=${fmtNum(ctx.stochLastClosed, 2)} ${stochOk ? ">" : "≤"} ${ctx.osMin}`,
+  });
+
+  let svpOk = true;
+  let svpDetail = "skip (SHORT_REQUIRE_SVP_HD=off)";
+  if (ctx.shortNeedSvpHd) {
+    const svpLow = highVolumeNodeBarLow(volume, high, low, iEval, ctx.svpInnerLb);
+    const ok = typeof svpLow === "number" && Number.isFinite(svpLow) && clE! < svpLow;
+    svpOk = ok;
+    svpDetail = `svpLow=${svpLow != null ? fmtNum(svpLow) : "—"} (close=${fmtNum(clE!)} ${ok ? "<" : "≥"})`;
+  }
+  push({ id: "svpHd", label: "SVP HD break", ok: svpOk, detail: svpDetail });
+
+  const emaR = ctx.emaResArr[iEval];
+  const emaOk = Number.isFinite(emaR);
+  push({ id: "emaResistance", label: "EMA resistance finite", ok: emaOk, detail: emaOk ? `ema=${fmtNum(emaR!)}` : "ema = NaN" });
+
+  const barOpenSec = timeSec[iEval] ?? -1;
+  const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BEAR`;
+  const lastFired = ctx.state.lastFiredBarSec[key];
+  const dedupeOk = lastFired !== barOpenSec;
+  push({
+    id: "dedupe",
+    label: "dedupe (bar เดียวกันยังไม่ยิง)",
+    ok: dedupeOk,
+    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · barOpenSec=${barOpenSec}`,
+  });
+
+  const lastNotify = ctx.state.lastNotifyMs?.[key];
+  const cd = publicCooldownMs();
+  const cooldownLeft = lastNotify != null && Number.isFinite(lastNotify) ? Math.max(0, lastNotify + cd - ctx.nowMs) : 0;
+  const cooldownOk = cooldownLeft <= 0;
+  push({
+    id: "cooldown",
+    label: `cooldown (${Math.round(cd / 60000)} นาที)`,
+    ok: cooldownOk,
+    detail: cooldownOk
+      ? lastNotify != null
+        ? `พ้นแล้ว (lastNotify ${new Date(lastNotify).toISOString()})`
+        : "ยังไม่เคยยิง"
+      : `เหลืออีก ${Math.round(cooldownLeft / 1000)} วินาที (lastNotify ${new Date(lastNotify!).toISOString()})`,
+  });
+
+  return {
+    side: "bear",
+    iEval,
+    intrabar,
+    barOpenSec,
+    barOpenIsoBkk: barOpenSec > 0 ? fmtBarBkkFromOpenSec(barOpenSec) : "—",
+    closePrice: clE ?? NaN,
+    steps,
+    allPassed: steps.every((s) => s.ok),
+  };
+}
+
+export async function evaluateSnowballChecklist(rawSymbol: string): Promise<SnowballChecklistResult> {
+  const symbol = normalizeBinanceSym(rawSymbol);
+  const errors: string[] = [];
+  const enabled = isPublicSnowballTripleCheckEnabled();
+  const envOk = isBinanceIndicatorFapiEnabled();
+  const snowTf = snowballBinanceTf();
+
+  const swingLb = snowballSwingLookbackBars();
+  const swingEx = snowballSwingExcludeRecentBars();
+  const volP = snowballVolSmaPeriod();
+  const volMult = snowballVolMultiplier();
+  const rsiP = snowballStochRsiPeriod();
+  const stLen = snowballStochLength();
+  const kSm = snowballStochKSmooth();
+  const osMin = snowballOversoldFloor();
+  const emaResP = snowballResistanceEmaPeriod();
+  const svpInnerLb = snowballSvpHdInnerLookbackBars();
+  const shortNeedSvpHd = snowballShortRequireSvpHdBreak();
+  const vahLb = snowballLongVahLookbackBars();
+  const longVahOn = snowballLongVahBreakEnabled();
+  const intrabarOn = snowballIntrabarEnabled();
+  const relaxIntrabarVol = snowballIntrabarRelaxVolume();
+  const longRequireInnerHvnClear = snowballLongRequireAboveInnerHvn();
+  const longSlopeEmaOn = snowballLongTrendEmaSlopeEnabled();
+  const longSlopeEmaP = snowballLongTrendEmaPeriod();
+  const longSlopeMinUpBars = snowballLongTrendEmaSlopeMinUpBars();
+  const longEma2On = snowballLongTrendEma2Enabled();
+  const longEma2P = snowballLongTrendEma2Period();
+
+  const paramsSummary = [
+    `Snowball TF: ${snowTf} (INDICATOR_PUBLIC_SNOWBALL_TF)`,
+    `Swing: lookback ${swingLb} · excludeRecent ${swingEx}`,
+    `Volume: SMA ${volP} · mult ${volMult}x`,
+    `VAH break: ${longVahOn ? `on (lookback ${vahLb})` : "off"}`,
+    `Inner HVN gate: ${longRequireInnerHvnClear ? `on (lookback ${svpInnerLb})` : "off"}`,
+    `EMA slope: ${longSlopeEmaOn ? `EMA${longSlopeEmaP} (minUp ${longSlopeMinUpBars})` : "off"}`,
+    `EMA2 slope: ${longEma2On ? `EMA${longEma2P}` : "off"}`,
+    `Stoch RSI: rsiP ${rsiP} · stochLen ${stLen} · kSmooth ${kSm} · bearFloor ${osMin}`,
+    `Short SVP HD gate: ${shortNeedSvpHd ? "on" : "off"}`,
+    `Intrabar: ${intrabarOn ? `on${relaxIntrabarVol ? " (relax vol)" : ""}` : "off"}`,
+    `EMA resistance period: ${emaResP}`,
+    `Public cooldown: ${Math.round(publicCooldownMs() / 60000)} นาที`,
+  ];
+
+  const baseResult: SnowballChecklistResult = {
+    symbol,
+    enabled,
+    envOk,
+    snowTf,
+    bars: null,
+    paramsSummary,
+    long: { closed: null, intrabar: null },
+    bear: { closed: null, intrabar: null },
+    errors,
+  };
+
+  if (!symbol) {
+    errors.push("symbol ว่าง");
+    return baseResult;
+  }
+  if (!envOk) {
+    errors.push("BINANCE_INDICATOR_FAPI_ENABLED=0 — ไม่ดึง kline จาก Binance");
+    return baseResult;
+  }
+
+  const pack = await fetchBinanceUsdmKlines(symbol, snowTf);
+  if (!pack) {
+    errors.push(`fetchBinanceUsdmKlines(${symbol}, ${snowTf}) คืน null`);
+    return baseResult;
+  }
+
+  const { close, high, low, volume, timeSec } = pack;
+  const n = close.length;
+  baseResult.bars = n;
+  const iClosed = n - 2;
+  const iForming = n - 1;
+
+  const minBars = Math.max(
+    rsiP + stLen + kSm + 8,
+    volP + 2,
+    swingLb + swingEx + 3,
+    emaResP + 2,
+    svpInnerLb + 2,
+    vahLb + 3,
+    longSlopeEmaOn ? longSlopeEmaP + 2 : 0,
+    longEma2On ? longEma2P + 2 : 0,
+    longSlopeEmaOn && longSlopeMinUpBars >= 2 ? longSlopeEmaP + (longSlopeMinUpBars + 1) : 0,
+    4,
+  );
+  if (n < minBars || iClosed < 1) {
+    errors.push(`klines น้อยเกินไป — ต้อง ≥ ${minBars} (มี ${n})`);
+    return baseResult;
+  }
+
+  const volSmaArr = smaLine(volume, volP);
+  const stochArr = snowballStochSeries(close, rsiP, stLen, kSm);
+  const emaResArr = emaLine(close, emaResP);
+  const emaLongSlopeArr = longSlopeEmaOn && longSlopeEmaP !== emaResP ? emaLine(close, longSlopeEmaP) : emaResArr;
+  const emaLongSlope2Arr = longEma2On ? emaLine(close, longEma2P) : null;
+
+  const state = await loadIndicatorPublicFeedState();
+  const nowMs = Date.now();
+  const data = { close, high, low, volume, timeSec };
+
+  const longCtxBase = {
+    volSmaArr,
+    emaResArr,
+    emaLongSlopeArr,
+    emaLongSlope2Arr,
+    volMult,
+    swingLb,
+    swingEx,
+    vahLb,
+    longVahOn,
+    longRequireInnerHvnClear,
+    svpInnerLb,
+    longSlopeEmaOn,
+    longSlopeMinUpBars,
+    longSlopeEmaP,
+    longEma2On,
+    longEma2P,
+    relaxIntrabarVol,
+    state,
+    nowMs,
+    symbol,
+    snowTf,
+  };
+
+  const bearCtxBase = {
+    volSmaArr,
+    emaResArr,
+    stochLastClosed: stochArr[iClosed] ?? NaN,
+    volMult,
+    swingLb,
+    swingEx,
+    osMin,
+    shortNeedSvpHd,
+    svpInnerLb,
+    relaxIntrabarVol,
+    state,
+    nowMs,
+    symbol,
+    snowTf,
+  };
+
+  baseResult.long.closed = evaluateSnowballLongAt(iClosed, false, data, longCtxBase);
+  baseResult.bear.closed = evaluateSnowballBearAt(iClosed, false, data, bearCtxBase);
+  if (intrabarOn) {
+    baseResult.long.intrabar = evaluateSnowballLongAt(iForming, true, data, longCtxBase);
+    baseResult.bear.intrabar = evaluateSnowballBearAt(iForming, true, data, bearCtxBase);
+  }
+
+  return baseResult;
+}

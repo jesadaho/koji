@@ -33,7 +33,12 @@ import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
 import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
 import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
 import { isAdminTelegramUserId } from "@/src/adminIds";
-import { formatPublicIndicatorFeedDebugMessage, parsePublicFeedDebugCommand } from "@/src/publicIndicatorFeedDebug";
+import {
+  formatPublicIndicatorFeedDebugMessage,
+  formatSnowballChecklistDebugMessage,
+  parsePublicFeedDebugCommand,
+  parseSnowballDebugCommand,
+} from "@/src/publicIndicatorFeedDebug";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -165,7 +170,7 @@ function parseRunCronCmd(t: string): { scope: CronRunScope; verbose: boolean } |
 
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
- * /start → ปุ่ม Mini App · /chatid → แสดง chat_id / topic (ใส่ env) · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · portfolio / portfolio status (สรุปพอร์ตฟิวเจอร์) · เช็คลิสต์ position (short/long …) · สถิติ Spark / ล้างสถิติ spark (admin — KOJI_ADMIN_IDS) · debug public feed [SYMBOL] (admin)
+ * /start → ปุ่ม Mini App · /chatid → แสดง chat_id / topic (ใส่ env) · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · portfolio / portfolio status (สรุปพอร์ตฟิวเจอร์) · เช็คลิสต์ position (short/long …) · สถิติ Spark / ล้างสถิติ spark (admin — KOJI_ADMIN_IDS) · debug public feed [SYMBOL] · debug snowball SYMBOL (admin)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
@@ -239,6 +244,39 @@ export async function POST(req: NextRequest) {
   const fromUserId = update.message?.from?.id;
 
   const trimmedText = text.trim();
+
+  const snowDbg = parseSnowballDebugCommand(normalized) || parseSnowballDebugCommand(trimmedText);
+  if (snowDbg) {
+    if (!isTelegramCronRunAllowed(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          "คำสั่ง debug snowball ต้องเป็น admin — ตั้ง KOJI_ADMIN_IDS=<telegram user id>",
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] snowball debug deny", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const body = await formatSnowballChecklistDebugMessage(snowDbg.symbol);
+      await sendTelegramMessageToChat(String(chatId), body, threadOpts);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      console.error("[telegram/webhook] snowball debug", e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `debug snowball ล้มเหลว — ${detail.slice(0, 800)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] snowball debug error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   const feedDbg = parsePublicFeedDebugCommand(normalized) || parsePublicFeedDebugCommand(trimmedText);
   if (feedDbg) {
