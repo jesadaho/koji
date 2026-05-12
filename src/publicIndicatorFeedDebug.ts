@@ -221,7 +221,7 @@ function fmtMsBkk(ms: number): string {
   return `${date} ${time} BKK`;
 }
 
-/** Vercel cron `*/15 * * * *` — รอบถัดไปคือ quarter-hour ของ UTC ที่ >= ms */
+/** Vercel cron "* /15 * * * *" — รอบถัดไปคือ quarter-hour ของ UTC ที่ >= ms */
 function nextCronTickMs(ms: number): number {
   const FIFTEEN = 15 * 60 * 1000;
   return Math.ceil(ms / FIFTEEN) * FIFTEEN;
