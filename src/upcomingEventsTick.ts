@@ -1,4 +1,9 @@
-import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured } from "./telegramAlert";
+import { openAiMacroEventLiveBrief } from "./openAiSummary";
+import {
+  sendTelegramPublicBroadcastMessage,
+  TELEGRAM_SEND_MESSAGE_MAX,
+  telegramSparkSystemGroupConfigured,
+} from "./telegramAlert";
 import {
   buildUpcomingEventsSnapshot,
   fetchUnifiedEventsRange,
@@ -29,6 +34,34 @@ function preAlertEnabled(): boolean {
 
 function resultAlertEnabled(): boolean {
   return envFlagOn("UPCOMING_EVENTS_RESULT_ALERT_ENABLED", true);
+}
+
+function liveAiEnabled(): boolean {
+  return envFlagOn("UPCOMING_EVENTS_LIVE_AI_ENABLED", false);
+}
+
+function liveAiWindowMinutes(): number {
+  const n = Number(process.env.UPCOMING_EVENTS_LIVE_AI_WINDOW_MINUTES?.trim());
+  return Number.isFinite(n) && n >= 1 && n <= 120 ? Math.floor(n) : 15;
+}
+
+function eventImportanceRank(imp?: "high" | "medium" | "low"): number {
+  if (imp === "high") return 3;
+  if (imp === "medium") return 2;
+  if (imp === "low") return 1;
+  return 0;
+}
+
+/** ค่าเริ่มต้น: high เท่านั้น — ตั้ง UPCOMING_EVENTS_LIVE_AI_MIN_IMPORTANCE=medium|all */
+function liveAiMinImportanceRank(): number {
+  const raw = process.env.UPCOMING_EVENTS_LIVE_AI_MIN_IMPORTANCE?.trim().toLowerCase();
+  if (raw === "all" || raw === "any" || raw === "low") return 0;
+  if (raw === "medium") return 2;
+  return 3;
+}
+
+function passesLiveAiImportanceFilter(e: UnifiedEvent): boolean {
+  return eventImportanceRank(e.importance) >= liveAiMinImportanceRank();
 }
 
 function daysForward(): number {
@@ -128,18 +161,43 @@ function buildResultMessage(e: UnifiedEvent): string {
   ].join("\n");
 }
 
-/** Cron 5 นาที: อัปเดต snapshot + pre-alert + ผลจริง (US session แยกเรียกใน route) */
+function buildLiveAiTelegramBody(cur: UnifiedEvent, aiText: string): string {
+  const act =
+    cur.actual != null && String(cur.actual).trim() !== ""
+      ? String(cur.actual).trim()
+      : "— (ยังไม่มีในแหล่งข้อมูล)";
+  const header = [
+    "🤖 Koji — Event live (AI)",
+    "",
+    `${cur.title}${cur.country ? ` (${cur.country})` : ""}`,
+    `เวลา: ${fmtUtcYmdHm(cur.startsAtUtc)} UTC | ${fmtBkkYmdHm(cur.startsAtUtc)} (BKK)`,
+    `Forecast: ${cur.forecast ?? "—"} | Previous: ${cur.previous ?? "—"} | Actual: ${act}`,
+    "",
+    "———",
+    "",
+  ].join("\n");
+  const footer = "\n\nไม่ใช่คำแนะนำลงทุน";
+  const maxBody = TELEGRAM_SEND_MESSAGE_MAX - header.length - footer.length - 40;
+  let body = aiText.trim();
+  if (maxBody > 200 && body.length > maxBody) {
+    body = `${body.slice(0, Math.max(0, maxBody - 20)).trimEnd()}\n\n…(ตัดข้อความ)`;
+  }
+  return header + body + footer;
+}
+
+/** Cron 5 นาที: อัปเดต snapshot + pre-alert + live AI (T+0 window) + ผลจริง (US session แยกเรียกใน route) */
 export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   ok: boolean;
   preSent: number;
   resultSent: number;
+  liveAiSent: number;
   skipped: string;
 }> {
   if (!upcomingAlertsEnabled()) {
-    return { ok: true, preSent: 0, resultSent: 0, skipped: "UPCOMING_EVENTS_ALERTS_ENABLED=0" };
+    return { ok: true, preSent: 0, resultSent: 0, liveAiSent: 0, skipped: "UPCOMING_EVENTS_ALERTS_ENABLED=0" };
   }
   if (!telegramSparkSystemGroupConfigured()) {
-    return { ok: true, preSent: 0, resultSent: 0, skipped: "no_telegram_public_chat" };
+    return { ok: true, preSent: 0, resultSent: 0, liveAiSent: 0, skipped: "no_telegram_public_chat" };
   }
 
   const hasAnySource =
@@ -147,7 +205,7 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
     Boolean(process.env.TOKEN_UNLOCKS_API_URL?.trim()) ||
     Boolean(process.env.CRYPTO_MARKET_EVENTS_API_URL?.trim());
   if (!hasAnySource) {
-    return { ok: true, preSent: 0, resultSent: 0, skipped: "no_data_sources" };
+    return { ok: true, preSent: 0, resultSent: 0, liveAiSent: 0, skipped: "no_data_sources" };
   }
 
   const snap = await buildUpcomingEventsSnapshot(daysForward());
@@ -156,6 +214,7 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   let state = await loadUpcomingEventsState();
   let preSent = 0;
   let resultSent = 0;
+  let liveAiSent = 0;
   const now = new Date(nowMs);
 
   const relevantMacro = snap.events.filter((e) => e.category === "macro");
@@ -185,12 +244,53 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
     }
   }
 
-  if (resultAlertEnabled()) {
+  let byId: Map<string, UnifiedEvent> | null = null;
+  if (resultAlertEnabled() || liveAiEnabled()) {
     const from = addDaysUtc(now, -2);
     const to = addDaysUtc(now, 1);
     const fresh = await fetchUnifiedEventsRange(from, to);
-    const byId = new Map(fresh.map((x) => [x.id, x]));
+    byId = new Map(fresh.map((x) => [x.id, x]));
+  }
 
+  if (liveAiEnabled() && byId) {
+    const openAiKey = process.env.OPENAI_API_KEY?.trim();
+    if (!openAiKey) {
+      console.warn("[upcomingEventsTick] UPCOMING_EVENTS_LIVE_AI_ENABLED but OPENAI_API_KEY missing");
+    } else {
+      const winMs = liveAiWindowMinutes() * 60_000;
+      for (const e of allMacro) {
+        if (!passesLiveAiImportanceFilter(e)) continue;
+        const msSince = nowMs - e.startsAtUtc;
+        if (msSince < 0 || msSince > winMs) continue;
+        if (state.liveAiFired[e.id]) continue;
+        const cur = byId.get(e.id) ?? e;
+        const ai = await openAiMacroEventLiveBrief({
+          title: cur.title,
+          country: cur.country,
+          currency: cur.currency,
+          importance: cur.importance,
+          forecast: cur.forecast,
+          previous: cur.previous,
+          actual: cur.actual,
+          startsAtUtc: cur.startsAtUtc,
+        });
+        if (!ai.ok) {
+          console.error("[upcomingEventsTick] live-ai", e.id, ai.error);
+          continue;
+        }
+        try {
+          await sendTelegramPublicBroadcastMessage(buildLiveAiTelegramBody(cur, ai.text), "events_live_ai");
+          state.liveAiFired[e.id] = nowMs;
+          liveAiSent += 1;
+          await saveUpcomingEventsState(state);
+        } catch (err) {
+          console.error("[upcomingEventsTick] live-ai send", e.id, err);
+        }
+      }
+    }
+  }
+
+  if (resultAlertEnabled() && byId) {
     for (const e of allMacro) {
       const cur = byId.get(e.id);
       if (!cur?.actual) continue;
@@ -210,7 +310,7 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   pruneOldStateKeys(state, nowMs);
   await saveUpcomingEventsState(state);
 
-  return { ok: true, preSent, resultSent, skipped: "" };
+  return { ok: true, preSent, resultSent, liveAiSent, skipped: "" };
 }
 
 function pruneOldStateKeys(state: UpcomingEventsState, nowMs: number): void {
@@ -222,6 +322,10 @@ function pruneOldStateKeys(state: UpcomingEventsState, nowMs: number): void {
   for (const k of Object.keys(state.resultNotified)) {
     const t = state.resultNotified[k];
     if (typeof t === "number" && nowMs - t > maxAge) delete state.resultNotified[k];
+  }
+  for (const k of Object.keys(state.liveAiFired)) {
+    const t = state.liveAiFired[k];
+    if (typeof t === "number" && nowMs - t > maxAge) delete state.liveAiFired[k];
   }
 }
 

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Pre-event + live result + อัปเดต snapshot — ทุก ~5 นาที (vercel.json)
+ * Pre-event + live AI (T+0 window) + live result + อัปเดต snapshot — ทุก ~5 นาที (vercel.json)
  * GET + Authorization: Bearer CRON_SECRET
  */
 export async function GET(req: NextRequest) {

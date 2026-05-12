@@ -26,9 +26,10 @@ import { runSparkAutoTradeTimeStopSweep } from "./sparkAutoTradeTimeStopTick";
 /** ให้สอดคล้องกับ follow-up scheduler (anchor: barOpen + SPARK_BAR_SEC วินาที — ไม่ใช่ TF chart) */
 const SPARK_SIGNAL_BAR_SEC = 300;
 
+/** หลังส่ง Spark สำเร็จ — ไม่ส่งซ้ำสำหรับสัญญาเดียวกันภายในช่วงนี้ (default 24 ชม.) */
 function sparkAlertCooldownSec(): number {
   const n = Number(process.env.SPARK_ALERT_COOLDOWN_SEC?.trim());
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 15 * 60;
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 24 * 60 * 60;
 }
 
 /** เปิดรอบ Spark (ticker last) ใน cron pct-trailing — ปิด: PRICE_SPIKE_15M_ENABLED=0 */

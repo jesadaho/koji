@@ -31,6 +31,8 @@ export type UpcomingEventsState = {
   preAlertFired: Record<string, number>;
   /** แจ้งผลจริงแล้วต่อ eventId */
   resultNotified: Record<string, number>;
+  /** ส่งสรุป AI ช่วงถึงเวลาแล้วต่อ eventId */
+  liveAiFired: Record<string, number>;
   /** ปฏิทิน BKK (YYYY-MM-DD) ที่ส่ง US session open แล้ว */
   lastUsOpenAlertBkkYmd?: string | null;
   /** ปฏิทิน BKK ที่ส่ง US close window แล้ว */
@@ -46,6 +48,7 @@ export async function loadUpcomingEventsState(): Promise<UpcomingEventsState> {
         preAlertFired: data.preAlertFired && typeof data.preAlertFired === "object" ? { ...data.preAlertFired } : {},
         resultNotified:
           data.resultNotified && typeof data.resultNotified === "object" ? { ...data.resultNotified } : {},
+        liveAiFired: data.liveAiFired && typeof data.liveAiFired === "object" ? { ...data.liveAiFired } : {},
         lastUsOpenAlertBkkYmd: data.lastUsOpenAlertBkkYmd ?? null,
         lastUsCloseAlertBkkYmd: data.lastUsCloseAlertBkkYmd ?? null,
       };
@@ -54,6 +57,7 @@ export async function loadUpcomingEventsState(): Promise<UpcomingEventsState> {
       lastWeeklyDigestUtcMonday: null,
       preAlertFired: {},
       resultNotified: {},
+      liveAiFired: {},
       lastUsOpenAlertBkkYmd: null,
       lastUsCloseAlertBkkYmd: null,
     };
@@ -63,6 +67,7 @@ export async function loadUpcomingEventsState(): Promise<UpcomingEventsState> {
       lastWeeklyDigestUtcMonday: null,
       preAlertFired: {},
       resultNotified: {},
+      liveAiFired: {},
       lastUsOpenAlertBkkYmd: null,
       lastUsCloseAlertBkkYmd: null,
     };
@@ -75,6 +80,7 @@ export async function loadUpcomingEventsState(): Promise<UpcomingEventsState> {
         lastWeeklyDigestUtcMonday: parsed.lastWeeklyDigestUtcMonday ?? null,
         preAlertFired: parsed.preAlertFired ?? {},
         resultNotified: parsed.resultNotified ?? {},
+        liveAiFired: parsed.liveAiFired ?? {},
         lastUsOpenAlertBkkYmd: parsed.lastUsOpenAlertBkkYmd ?? null,
         lastUsCloseAlertBkkYmd: parsed.lastUsCloseAlertBkkYmd ?? null,
       };
@@ -86,6 +92,7 @@ export async function loadUpcomingEventsState(): Promise<UpcomingEventsState> {
     lastWeeklyDigestUtcMonday: null,
     preAlertFired: {},
     resultNotified: {},
+    liveAiFired: {},
     lastUsOpenAlertBkkYmd: null,
     lastUsCloseAlertBkkYmd: null,
   };

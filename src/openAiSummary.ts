@@ -240,3 +240,122 @@ export async function openAiSummarizePortfolioFromTextResult(input: {
   }
 }
 
+export type MacroEventLiveBriefInput = {
+  title: string;
+  country?: string;
+  currency?: string;
+  importance?: "high" | "medium" | "low";
+  forecast?: string;
+  previous?: string;
+  actual?: string;
+  /** Unix ms UTC */
+  startsAtUtc: number;
+};
+
+/**
+ * สรุปภาษาไทยสำหรับ macro event ช่วงถึงเวลา — ใช้เฉพาะข้อมูลใน input ห้ามแต่งตัวเลข
+ */
+export async function openAiMacroEventLiveBrief(input: MacroEventLiveBriefInput): Promise<OpenAiSummaryResult> {
+  const key = openAiApiKey();
+  if (!key) return { ok: false, error: "missing OPENAI_API_KEY" };
+
+  const utc = new Date(input.startsAtUtc).toISOString().replace("T", " ").slice(0, 16);
+  const hasActual = input.actual != null && String(input.actual).trim() !== "";
+
+  const facts = [
+    `ชื่อเหตุการณ์: ${input.title}`,
+    input.country ? `ประเทศ/เขต: ${input.country}` : null,
+    input.currency ? `สกุลเงิน: ${input.currency}` : null,
+    input.importance ? `ความสำคัญ (จากแหล่งข้อมูล): ${input.importance}` : null,
+    `เวลาประกาศ (UTC): ${utc}`,
+    `คาดการณ์ (Forecast): ${input.forecast ?? "(ไม่มีในข้อมูล)"}`,
+    `ครั้งก่อน (Previous): ${input.previous ?? "(ไม่มีในข้อมูล)"}`,
+    hasActual
+      ? `ผลจริง (Actual) ในข้อมูล: ${String(input.actual).trim()}`
+      : "ผลจริง (Actual): ยังไม่มีในข้อมูลที่ให้ — ห้ามสร้างตัวเลขหรือค่าประกาศ",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const prompt = [
+    "คุณคือ Koji AI — ผู้ช่วยอธิบายข่าวเศรษฐกิจ/นโยบายการเงินแบบรู้บริบททั่วไป แต่ต้องยึดข้อเท็จจริงจากบล็อก \"ข้อมูลที่ให้\" เท่านั้น",
+    "",
+    "ข้อกำหนด:",
+    "- ภาษาไทยล้วน อ่านง่าย ห้ามหยาบคาย",
+    "- ห้ามสร้างตัวเลข Actual/Forecast/Previous ใหม่ ถ้าไม่มีใน \"ข้อมูลที่ให้\" ให้บอกชัดว่ายังไม่มี — ห้ามเดาเลขประกาศ",
+    "- ห้ามสั่งซื้อ/ขาย/เปิด/ปิด/เพิ่ม/ลด position หรือคู่เงิน (ห้ามคำว่า ควรซื้อ/ควรขาย/ควรปิด/ควรเปิด/ควรเพิ่ม/ควรลด)",
+    "- เน้นความหมายของตัวชี้วัด/เหตุการณ์โดยรวม สิ่งที่ตลาดมักจับตา และความเสี่ยงด้านความผันผวน/สภาพคล่อง/ข่าวรอบข้าง — เป็นการศึกษาทั่วไป ไม่ใช่คำแนะนำลงทุน",
+    "- ห้าม markdown code fence / ห้ามคัดลอกทั้งบล็อกข้อมูลมาตอบ",
+    "",
+    "รูปแบบผลลัพธ์ (ต้องมีหัวข้อตามนี้ตามลำดับ และมีบรรทัดว่างระหว่างหัวกับเนื้อหา):",
+    "📌 นี่คืออะไร:",
+    "<2-4 ประโยค>",
+    "",
+    "👀 ตลาดมักโฟกัสอะไร:",
+    "<2-4 ประโยค>",
+    "",
+    "⚠️ นักลงทุนควรระวังอะไร (เชิงความเสี่ยง ไม่ใช่คำสั่งเทรด):",
+    "<2-5 ประโยค>",
+    "",
+    "ข้อมูลที่ให้:",
+    facts,
+  ].join("\n");
+
+  const controller = new AbortController();
+  const timeoutMs = openAiTimeoutMs();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+  const model = openAiModel();
+  const url = "https://api.openai.com/v1/chat/completions";
+  const requestBody = {
+    model,
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.35,
+    max_tokens: 650,
+  };
+
+  const curl = [
+    "curl -sS https://api.openai.com/v1/chat/completions \\",
+    "  -H \"Authorization: Bearer $OPENAI_API_KEY\" \\",
+    "  -H \"Content-Type: application/json\" \\",
+    `  -d '${JSON.stringify({ ...requestBody, messages: [{ role: "user", content: "<omitted: macro event>" }] })}'`,
+  ].join("\n");
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+
+    const rawText = await res.text();
+    if (!res.ok) {
+      let errMsg = `openai HTTP ${res.status} (model ${model})`;
+      try {
+        const parsed = JSON.parse(rawText) as OpenAiChatResponse;
+        const m = parsed?.error?.message;
+        if (m) errMsg = `${errMsg}: ${m}`;
+      } catch {
+        /* ignore */
+      }
+      return { ok: false, status: res.status, error: errMsg, debug: { curl, raw: rawText.slice(0, 3500) } };
+    }
+
+    const data = JSON.parse(rawText) as OpenAiChatResponse;
+    const content = data?.choices?.[0]?.message?.content ?? "";
+    const cleaned = cleanText(content);
+    if (!cleaned) {
+      return { ok: false, error: `empty openai response (model ${model})`, debug: { curl, raw: rawText.slice(0, 3500) } };
+    }
+    return { ok: true, text: cleaned };
+  } catch (e) {
+    const msg =
+      e instanceof Error ? (e.name === "AbortError" ? `timeout (${timeoutMs}ms)` : e.message) : String(e);
+    return { ok: false, error: `openai request failed: ${msg} (model ${model})`, debug: { curl } };
+  } finally {
+    clearTimeout(t);
+  }
+}

@@ -148,6 +148,7 @@ export async function sendSparkSystemAlert(
       kind === "events_weekly" ||
       kind === "events_pre" ||
       kind === "events_result" ||
+      kind === "events_live_ai" ||
       kind === "events_session";
     if (
       !skipLineMirror &&
