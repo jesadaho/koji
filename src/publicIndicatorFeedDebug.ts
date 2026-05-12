@@ -5,6 +5,7 @@ import {
 } from "./binanceIndicatorKline";
 import { loadPriceSyncCronRecord } from "./cronStatusStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
+import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import {
   evaluateSnowballChecklist,
   getIndicatorPublicScanParams,
@@ -197,7 +198,87 @@ function checkMark(ok: boolean): string {
   return ok ? "✅" : "❌";
 }
 
-function renderSnowballSideBlock(title: string, ev: SnowballSideEval | null): string[] {
+function tfSeconds(tf: BinanceIndicatorTf): number {
+  switch (tf) {
+    case "15m":
+      return 15 * 60;
+    case "1h":
+      return 60 * 60;
+    case "4h":
+      return 4 * 60 * 60;
+  }
+}
+
+function fmtMsBkk(ms: number): string {
+  const d = new Date(ms);
+  const date = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const time = d.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${date} ${time} BKK`;
+}
+
+/** Vercel cron `*/15 * * * *` — รอบถัดไปคือ quarter-hour ของ UTC ที่ >= ms */
+function nextCronTickMs(ms: number): number {
+  const FIFTEEN = 15 * 60 * 1000;
+  return Math.ceil(ms / FIFTEEN) * FIFTEEN;
+}
+
+function fmtRelativeFromNow(targetMs: number, nowMs: number): string {
+  const diff = targetMs - nowMs;
+  const abs = Math.abs(diff);
+  const mins = Math.round(abs / 60000);
+  if (mins < 1) return diff >= 0 ? "ภายใน 1 นาที" : "เมื่อ <1 นาทีที่แล้ว";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const span = h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return diff >= 0 ? `ใน ~${span}` : `เมื่อ ~${span} ที่แล้ว`;
+}
+
+function renderExpectedAlertLines(
+  ev: SnowballSideEval,
+  snowTf: BinanceIndicatorTf,
+  nowMs: number,
+): string[] {
+  if (!ev.allPassed) return [];
+  const out: string[] = [];
+  const barCloseMs = (ev.barOpenSec + tfSeconds(snowTf)) * 1000;
+  const nextCronMs = nextCronTickMs(nowMs); /* รอบ cron ถัดไปจากตอนนี้ */
+  const cronAfterCloseMs = nextCronTickMs(barCloseMs);
+
+  if (ev.intrabar) {
+    /* แท่งกำลังก่อ + intrabar=on → ยิงได้ตั้งแต่ cron รอบถัดไป จนถึงก่อนแท่งปิด */
+    out.push(`  ⏰ Bar will close: ${fmtMsBkk(barCloseMs)} (${fmtRelativeFromNow(barCloseMs, nowMs)})`);
+    out.push(
+      `  📣 Expected alert: cron รอบถัดไป ~${fmtMsBkk(nextCronMs)} (${fmtRelativeFromNow(nextCronMs, nowMs)}) — deadline ก่อนแท่งปิด`,
+    );
+    return out;
+  }
+
+  /* แท่งปิดแล้ว — ยิงรอบ cron แรกที่รันหลังเวลาปิดแท่ง */
+  out.push(`  ⏰ Bar closed at: ${fmtMsBkk(barCloseMs)} (${fmtRelativeFromNow(barCloseMs, nowMs)})`);
+  if (nowMs >= cronAfterCloseMs) {
+    out.push(
+      `  📣 Expected alert: ${fmtMsBkk(cronAfterCloseMs)} — ครบเวลายิงไปแล้ว (${fmtRelativeFromNow(cronAfterCloseMs, nowMs)})`,
+    );
+    out.push("  ⚠️ ถ้ายังไม่ได้รับ ตรวจ Vercel logs ของ /api/cron/price-sync หรือ KV state อาจหาย");
+  } else {
+    out.push(
+      `  📣 Expected alert: ${fmtMsBkk(cronAfterCloseMs)} (${fmtRelativeFromNow(cronAfterCloseMs, nowMs)})`,
+    );
+  }
+  return out;
+}
+
+function renderSnowballSideBlock(
+  title: string,
+  ev: SnowballSideEval | null,
+  snowTf: BinanceIndicatorTf,
+  nowMs: number,
+): string[] {
   if (!ev) return [`${title}: — (ข้ามเพราะ index ไม่พร้อม)`];
   const lines: string[] = [];
   const stamp = `${ev.barOpenIsoBkk} · close=${ev.closePrice}`;
@@ -209,6 +290,7 @@ function renderSnowballSideBlock(title: string, ev: SnowballSideEval | null): st
     if (!s.ok) firstFailMarked = true;
     lines.push(`  ${mark} ${s.label}: ${s.detail}${tag}`);
   }
+  lines.push(...renderExpectedAlertLines(ev, snowTf, nowMs));
   return lines;
 }
 
@@ -236,28 +318,31 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
   for (const s of res.paramsSummary) lines.push(`  • ${s}`);
   lines.push("");
 
+  const nowMs = Date.now();
+
   if (res.long.closed || res.long.intrabar) {
     lines.push("— LONG (BULL) —");
-    lines.push(...renderSnowballSideBlock("Closed bar", res.long.closed));
+    lines.push(...renderSnowballSideBlock("Closed bar", res.long.closed, res.snowTf, nowMs));
     if (res.long.intrabar) {
       lines.push("");
-      lines.push(...renderSnowballSideBlock("Intrabar (forming)", res.long.intrabar));
+      lines.push(...renderSnowballSideBlock("Intrabar (forming)", res.long.intrabar, res.snowTf, nowMs));
     }
     lines.push("");
   }
 
   if (res.bear.closed || res.bear.intrabar) {
     lines.push("— BEAR (SHORT) —");
-    lines.push(...renderSnowballSideBlock("Closed bar", res.bear.closed));
+    lines.push(...renderSnowballSideBlock("Closed bar", res.bear.closed, res.snowTf, nowMs));
     if (res.bear.intrabar) {
       lines.push("");
-      lines.push(...renderSnowballSideBlock("Intrabar (forming)", res.bear.intrabar));
+      lines.push(...renderSnowballSideBlock("Intrabar (forming)", res.bear.intrabar, res.snowTf, nowMs));
     }
     lines.push("");
   }
 
   lines.push("หมายเหตุ: checklist จำลองจาก kline ล่าสุดที่ขอ + state cooldown ปัจจุบัน");
   lines.push("รอบจริงสแกนทุก ~15 นาที ที่ /api/cron/price-sync (แท่งปิดตาม TF Snowball)");
+  lines.push("Expected alert คำนวณจาก Vercel cron schedule (*/15 * * * * UTC)");
 
   let out = lines.join("\n");
   if (out.length > MAX_OUT) out = `${out.slice(0, MAX_OUT - 20)}\n…(truncated)`;
