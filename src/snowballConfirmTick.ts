@@ -114,7 +114,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
     groups.set(key, arr);
   }
 
-  for (const [groupKey, items] of groups.entries()) {
+  for (const [groupKey, items] of Array.from(groups.entries())) {
     const first = items[0]!;
     const symbol = first.symbol;
     const snowTf = first.snowTf;
