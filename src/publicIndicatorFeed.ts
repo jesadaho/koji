@@ -16,9 +16,33 @@ import {
 import { appendSnowballStatsRow } from "./snowballStatsStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 
-const TF: BinanceIndicatorTf = "1h";
+/**
+ * RSI cross + EMA golden/death (public Telegram) — ค่าเริ่ม 4h ให้สอดคล้อง divergence
+ * ตั้ง INDICATOR_PUBLIC_RSI_EMA_TF=1h หรือ 15m ได้
+ */
+function publicRsiEmaCrossTf(): BinanceIndicatorTf {
+  const raw = process.env.INDICATOR_PUBLIC_RSI_EMA_TF?.trim().toLowerCase();
+  if (raw === "1h") return "1h";
+  if (raw === "15m") return "15m";
+  if (raw === "4h" || raw === "4hr") return "4h";
+  return "4h";
+}
 
-const DIVERGENCE_TFS: BinanceIndicatorTf[] = ["1h", "4h"];
+/**
+ * Timeframe สำหรับ RSI divergence (public Telegram) — ค่าเริ่มเฉพาะ 4h (โครงสร้างชัดกว่า 1h)
+ * ตั้ง INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS=1h,4h เพื่อคืนทั้งคู่
+ */
+function publicRsiDivergenceTfs(): BinanceIndicatorTf[] {
+  const raw = process.env.INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS?.trim().toLowerCase();
+  if (!raw) return ["4h"];
+  const out: BinanceIndicatorTf[] = [];
+  for (const part of raw.split(/[\s,;+]+/)) {
+    const t = part.replace(/hr$/i, "h").trim();
+    if (t === "1h" && !out.includes("1h")) out.push("1h");
+    if (t === "4h" && !out.includes("4h")) out.push("4h");
+  }
+  return out.length > 0 ? out : ["4h"];
+}
 
 /** Snowball ใช้ TF นี้จาก Binance USDM (15m / 1h / 4h) — ค่าเริ่ม 4h */
 function snowballBinanceTf(): BinanceIndicatorTf {
@@ -436,6 +460,7 @@ function rsiStatusArrowLine(rNow: number, rPrev: number): string {
 
 function buildPublicRsiMessage(
   symbol: string,
+  crossTf: BinanceIndicatorTf,
   period: number,
   threshold: number,
   direction: "above" | "below" | "both",
@@ -458,7 +483,7 @@ function buildPublicRsiMessage(
       `⏰ Time: ${timeBkk}`,
       "",
       "📊 Technical Insight:",
-      `Indicator: RSI (${period}) - 1h Timeframe`,
+      `Indicator: RSI (${period}) - ${crossTf} Timeframe`,
       `Action: 📉 CROSS BELOW ${threshold} (เสียทรงขาขึ้น)`,
       statusLine,
       "",
@@ -475,7 +500,7 @@ function buildPublicRsiMessage(
       `⏰ Time: ${timeBkk}`,
       "",
       "📊 Technical Insight:",
-      `Indicator: RSI (${period}) - 1h Timeframe`,
+      `Indicator: RSI (${period}) - ${crossTf} Timeframe`,
       `Action: 📈 CROSS ABOVE ${threshold} (กู้โมเมนตัมขาขึ้น)`,
       statusLine,
       "",
@@ -490,13 +515,14 @@ function buildPublicRsiMessage(
     "",
     `⏰ Time: ${timeBkk}`,
     "",
-    `Indicator: RSI (${period}) - 1h · prev ${rPrev.toFixed(2)} → now ${rNow.toFixed(2)}`,
+    `Indicator: RSI (${period}) - ${crossTf} · prev ${rPrev.toFixed(2)} → now ${rNow.toFixed(2)}`,
     "สัญญาณไม่ตรงแบบข้ามเกณฑ์มาตรฐาน — ตรวจ INDICATOR_PUBLIC_RSI_DIRECTION",
   ].join("\n");
 }
 
 function buildPublicEmaMessage(
   symbol: string,
+  crossTf: BinanceIndicatorTf,
   kind: "golden" | "death",
   fast: number,
   slow: number,
@@ -522,7 +548,7 @@ function buildPublicEmaMessage(
       `"เทรนด์ขาลงเริ่มชัด - ราคาเริ่มกดตัว"`,
       "",
       "Market: Binance USDT-M (Perpetual)",
-      `🔹 Timeframe: 1h (EMA ${fast} / ${slow})`,
+      `🔹 Timeframe: ${crossTf} (EMA ${fast} / ${slow})`,
       `🔹 Closed Candle: ${bkk}`,
       "",
       "Technical detail:",
@@ -541,7 +567,7 @@ function buildPublicEmaMessage(
     `"เทรนด์ขาขึ้นเริ่มชัด - ราคาเริ่มเร่งตัว"`,
     "",
     "Market: Binance USDT-M (Perpetual)",
-    `🔹 Timeframe: 1h (EMA ${fast} / ${slow})`,
+    `🔹 Timeframe: ${crossTf} (EMA ${fast} / ${slow})`,
     `🔹 Closed Candle: ${bkk}`,
     "",
     "Technical detail:",
@@ -1304,7 +1330,7 @@ function buildRsiDivergenceMessage(
 }
 
 /**
- * Feed สาธารณะ RSI + EMA จาก Binance USDT-M (1h) + RSI divergence (1h / 4h)
+ * Feed สาธารณะ RSI cross + EMA cross + RSI divergence จาก Binance USDT-M (ค่าเริ่ม TF เดียวกันที่ 4h — RSI/EMA: INDICATOR_PUBLIC_RSI_EMA_TF, Div: INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS)
  * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — universe alt ตาม INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS ดีฟอลต์ 100; RSI/EMA/Div ยังใช้ INDICATOR_PUBLIC_TOP_ALTS)
  *   Double Barrier: Barrier1 = swing lookback เดิม · Barrier2 = แนว High/Low ย้อน 200 แท่งในโซน Watchlist % → 🟡 B+ / 🟢/🔴 A+
  */
@@ -1323,6 +1349,10 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
   const rsiOn = envFlagOn("INDICATOR_PUBLIC_RSI_ENABLED", true);
   const emaOn = envFlagOn("INDICATOR_PUBLIC_EMA_ENABLED", true);
   const divOn = isPublicRsiDivergenceEnabled();
+  const divergenceTfs = divOn ? publicRsiDivergenceTfs() : [];
+  const rsiEmaTf = publicRsiEmaCrossTf();
+  const needDiv1hExtra = divOn && divergenceTfs.includes("1h") && rsiEmaTf !== "1h";
+  const needDiv4hExtra = divOn && divergenceTfs.includes("4h") && rsiEmaTf !== "4h";
   const snowballOn = isPublicSnowballTripleCheckEnabled();
   if (!rsiOn && !emaOn && !divOn && !snowballOn) return 0;
 
@@ -1341,16 +1371,30 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
   }
 
   const concurrency = 8;
-  const packs1h: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
-  const packs4h: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
+  const packsCore: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
+  const packsDiv1hExtra: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
+  const packsDiv4hExtra: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   const snowTf = snowballBinanceTf();
   const snowballPacks: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   for (let i = 0; i < symbols.length; i += concurrency) {
     const chunk = symbols.slice(i, i + concurrency);
-    const part1h = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, TF)));
-    packs1h.push(...part1h);
-    if (divOn) {
-      const part4h = await Promise.all(
+    const partCore = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, rsiEmaTf)));
+    packsCore.push(...partCore);
+    if (needDiv1hExtra) {
+      const p1 = await Promise.all(
+        chunk.map((s, j) => {
+          const globalIdx = i + j;
+          return globalIdx < maxIdxCoreFeed
+            ? fetchBinanceUsdmKlines(s, "1h")
+            : Promise.resolve(null);
+        })
+      );
+      packsDiv1hExtra.push(...p1);
+    } else {
+      packsDiv1hExtra.push(...chunk.map(() => null));
+    }
+    if (needDiv4hExtra) {
+      const p4 = await Promise.all(
         chunk.map((s, j) => {
           const globalIdx = i + j;
           return globalIdx < maxIdxCoreFeed
@@ -1358,9 +1402,9 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             : Promise.resolve(null);
         })
       );
-      packs4h.push(...part4h);
+      packsDiv4hExtra.push(...p4);
     } else {
-      packs4h.push(...chunk.map(() => null));
+      packsDiv4hExtra.push(...chunk.map(() => null));
     }
     if (snowballOn) {
       const partSb = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, snowTf)));
@@ -1375,7 +1419,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
   for (let idx = 0; idx < symbols.length; idx++) {
     const symbol = symbols[idx]!;
-    const pack = packs1h[idx];
+    const pack = packsCore[idx];
     if (!pack) continue;
 
     const { close, timeSec } = pack;
@@ -1396,7 +1440,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const rNow = rsi[i]!;
         const rPrev = rsi[iPrev]!;
         if (Number.isFinite(rNow) && Number.isFinite(rPrev)) {
-          const key = `${symbol}|RSI`;
+          const key = `${symbol}|RSI|${rsiEmaTf}`;
           if (
             rsiCrossMatch(rPrev, rNow, rsiP.threshold, rsiP.direction) &&
             state.lastFiredBarSec[key] !== barTimeSec &&
@@ -1404,6 +1448,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           ) {
             const msg = buildPublicRsiMessage(
               symbol,
+              rsiEmaTf,
               period,
               rsiP.threshold,
               rsiP.direction,
@@ -1450,11 +1495,12 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
       for (const kind of ["golden", "death"] as const) {
         if (!emaCrossMatch(fastAbovePrev, fastAboveNow, kind)) continue;
-        const key = `${symbol}|EMA_${kind.toUpperCase()}`;
+        const key = `${symbol}|EMA_${kind.toUpperCase()}|${rsiEmaTf}`;
         if (state.lastFiredBarSec[key] === barTimeSec || inCooldown(state, key, now)) continue;
 
         const msg = buildPublicEmaMessage(
           symbol,
+          rsiEmaTf,
           kind,
           fast,
           slow,
@@ -1485,8 +1531,13 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const lb = divergenceLookbackBars();
       const minBars = period + lb + rsiMaP + wing + 12;
 
-      for (const divTf of DIVERGENCE_TFS) {
-        const divPack = divTf === "1h" ? pack : packs4h[idx];
+      for (const divTf of divergenceTfs) {
+        const divPack =
+          divTf === rsiEmaTf
+            ? pack
+            : divTf === "1h"
+              ? packsDiv1hExtra[idx]
+              : packsDiv4hExtra[idx];
         if (!divPack) continue;
         const { close: dc, high: dh, low: dl, timeSec: dts } = divPack;
         const nn = dc.length;
