@@ -400,6 +400,11 @@ code {
   padding: 1rem 1rem 2rem;
 }
 
+/* รุ่นกว้าง — ใช้กับหน้าที่มีคอลัมน์เยอะ เช่น Snowball stats (13 คอลัมน์) */
+.sparkStatsPage--wide {
+  max-width: min(100%, 96rem);
+}
+
 /* แยกบล็อก: รวมทั้งหมด vs Spark ขึ้น vs Spark ลง (matrix + แยกเหรียญในกลุ่มเดียวกัน) */
 .sparkStatsMatrixSection {
   margin-top: 1.35rem;

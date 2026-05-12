@@ -29,10 +29,22 @@ export type IndicatorPublicFeedState = {
   lastFiredBarSec: Record<string, number>;
   /** cooldown ต่อ key (wall clock ms) */
   lastNotifyMs?: Record<string, number>;
+  /** Snowball wave gate: ราคาแท่งสัญญาณครั้งล่าสุดต่อ key — ใช้กันยิงซ้ำในคลื่นเดิม */
+  lastAlertPrice?: Record<string, number>;
   lastTriggeredAt?: string;
   /** Snowball TF=4h: bar open time (unix sec) ที่ส่งสรุปสแกนลง Telegram แล้ว — กันยิงซ้ำทุก cron */
   lastSnowballScanSummaryBarOpenSec?: number;
 };
+
+function copyPriceMap(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object") return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) out[k] = n;
+  }
+  return out;
+}
 
 export async function loadIndicatorPublicFeedState(): Promise<IndicatorPublicFeedState> {
   if (useCloudStorage()) {
@@ -46,13 +58,14 @@ export async function loadIndicatorPublicFeedState(): Promise<IndicatorPublicFee
       return {
         lastFiredBarSec: { ...data.lastFiredBarSec },
         lastNotifyMs: data.lastNotifyMs ? { ...data.lastNotifyMs } : {},
+        lastAlertPrice: copyPriceMap(data.lastAlertPrice),
         lastTriggeredAt: data.lastTriggeredAt,
         lastSnowballScanSummaryBarOpenSec: sum,
       };
     }
-    return { lastFiredBarSec: {}, lastNotifyMs: {} };
+    return { lastFiredBarSec: {}, lastNotifyMs: {}, lastAlertPrice: {} };
   }
-  if (isVercel()) return { lastFiredBarSec: {}, lastNotifyMs: {} };
+  if (isVercel()) return { lastFiredBarSec: {}, lastNotifyMs: {}, lastAlertPrice: {} };
   await ensureFile();
   const raw = await readFile(filePath, "utf-8");
   try {
@@ -66,6 +79,7 @@ export async function loadIndicatorPublicFeedState(): Promise<IndicatorPublicFee
       return {
         lastFiredBarSec: { ...parsed.lastFiredBarSec },
         lastNotifyMs: parsed.lastNotifyMs ? { ...parsed.lastNotifyMs } : {},
+        lastAlertPrice: copyPriceMap(parsed.lastAlertPrice),
         lastTriggeredAt: parsed.lastTriggeredAt,
         lastSnowballScanSummaryBarOpenSec: sum,
       };
@@ -73,7 +87,7 @@ export async function loadIndicatorPublicFeedState(): Promise<IndicatorPublicFee
   } catch {
     /* empty */
   }
-  return { lastFiredBarSec: {}, lastNotifyMs: {} };
+  return { lastFiredBarSec: {}, lastNotifyMs: {}, lastAlertPrice: {} };
 }
 
 export async function saveIndicatorPublicFeedState(state: IndicatorPublicFeedState): Promise<void> {
@@ -91,11 +105,16 @@ export async function updatePublicFeedFiredKey(
   key: string,
   barTimeSec: number,
   triggeredAtIso: string,
-  notifyWallMs: number
+  notifyWallMs: number,
+  alertPrice?: number,
 ): Promise<void> {
   state.lastFiredBarSec[key] = barTimeSec;
   if (!state.lastNotifyMs) state.lastNotifyMs = {};
   state.lastNotifyMs[key] = notifyWallMs;
+  if (typeof alertPrice === "number" && Number.isFinite(alertPrice) && alertPrice > 0) {
+    if (!state.lastAlertPrice) state.lastAlertPrice = {};
+    state.lastAlertPrice[key] = alertPrice;
+  }
   state.lastTriggeredAt = triggeredAtIso;
   await saveIndicatorPublicFeedState(state);
 }

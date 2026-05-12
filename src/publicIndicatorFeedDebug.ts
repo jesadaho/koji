@@ -13,8 +13,12 @@ import {
   isPublicSnowballTripleCheckEnabled,
   publicRsiDivergenceTfs,
   publicRsiEmaCrossTf,
+  snowballConfirmBarEnabled,
+  snowballWaveGateEnabled,
   type SnowballChecklistResult,
+  type SnowballConfirmRiskGateStatus,
   type SnowballSideEval,
+  type SnowballWaveGateStatus,
 } from "./publicIndicatorFeed";
 
 const MAX_OUT = 3800;
@@ -276,6 +280,78 @@ function renderExpectedAlertLines(
   return out;
 }
 
+function formatPriceShort(p: number | null): string {
+  if (p == null || !Number.isFinite(p)) return "—";
+  const abs = Math.abs(p);
+  if (abs >= 1000) return p.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  if (abs >= 1) return p.toFixed(4);
+  return p.toFixed(6);
+}
+
+function renderConfirmRiskBlock(label: string, status: SnowballConfirmRiskGateStatus | null): string[] {
+  if (!status) return [`${label}: — (ไม่มีข้อมูล)`];
+  const lines: string[] = [];
+  const head = status.flagged ? "🟡 มีความเสี่ยง — Pending Confirm" : "🟢 สะอาด — ไม่ต้องรอแท่ง 2";
+  lines.push(`${label}: ${head}`);
+
+  const wh = status.detail.wickHistory;
+  const whPct = (wh.ratio * 100).toFixed(0);
+  lines.push(
+    `  ${wh.flagged ? "🟡" : "✅"} Wick history (${wh.lookback}b · shadow>body×${wh.bodyRatio}): wicky=${wh.wickyCount}/${wh.total} (${whPct}%)`,
+  );
+
+  const sz = status.detail.supplyZone;
+  const refStr = formatPriceShort(sz.refLevel);
+  const distStr = sz.distPct != null ? `${Math.abs(sz.distPct).toFixed(2)}%` : "—";
+  lines.push(
+    `  ${sz.flagged ? "🟡" : "✅"} Supply/Demand zone (${sz.lookback}b · ≤${(sz.zonePct * 100).toFixed(1)}%): ref=${refStr} · ห่าง ${distStr}`,
+  );
+
+  const sw = status.detail.signalWick;
+  lines.push(
+    `  ${sw.flagged ? "🟡" : "✅"} Signal bar wick (shadow>body×${sw.signalRatio}): shadow=${sw.shadow.toFixed(6)} · body=${sw.body.toFixed(6)}`,
+  );
+
+  if (status.flagged && status.trigger.refLevel != null) {
+    const cmp = status.trigger.side === "long" ? ">" : "<";
+    const refName = status.trigger.side === "long" ? "High" : "Low";
+    const volPct = Math.round(status.trigger.volMinRatio * 100);
+    lines.push(
+      `  ⏳ ถ้ายิงจริงจะติด Pending Confirm: bar2 close ${cmp} ${refName}=${formatPriceShort(status.trigger.refLevel)} + Vol ≥ ${volPct}% ของแท่งนี้`,
+    );
+  }
+  return lines;
+}
+
+function renderWaveGateBlock(label: string, status: SnowballWaveGateStatus | null): string[] {
+  if (!status) return [`${label}: — (ไม่มีข้อมูล)`];
+  const lines: string[] = [];
+  if (!status.active) {
+    lines.push(`${label}: ⚪ ปิดอยู่ — INDICATOR_PUBLIC_SNOWBALL_WAVE_GATE_ENABLED=0`);
+    return lines;
+  }
+  if (status.lastAlertPrice == null || status.lastAlertBarOpenSec == null) {
+    lines.push(`${label}: 🟢 ยังไม่เคยยิง — ไม่ใช้ gate (ผ่านอัตโนมัติ)`);
+    return lines;
+  }
+  const head = status.blocked ? "🔴 BLOCKED (อยู่ในคลื่นเดิม)" : "🟢 PASS (ถือเป็นรอบใหม่)";
+  lines.push(`${label}: ${head}`);
+  lines.push(
+    `  • Last alert: price=${formatPriceShort(status.lastAlertPrice)} · bar=${status.lastAlertBarOpenSec}`,
+  );
+  lines.push(`  • Current close: ${formatPriceShort(status.currentClose)}`);
+  lines.push(
+    `  • Reset เกณฑ์: RSI ${status.rsiResetThreshold} · EMA${status.emaResetPeriod} touch · new ${(status.newHighPct * 100).toFixed(0)}% breakout`,
+  );
+  if (status.resetReason) {
+    lines.push(`  • ผ่านเพราะ: ${status.resetReason}`);
+  }
+  if (status.reason) {
+    lines.push(`  • ${status.blocked ? "Block เพราะ" : "หมายเหตุ"}: ${status.reason}`);
+  }
+  return lines;
+}
+
 function renderSnowballSideBlock(
   title: string,
   ev: SnowballSideEval | null,
@@ -345,6 +421,28 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
       lines.push("");
       lines.push(...renderSnowballSideBlock("Intrabar (forming)", res.bear.intrabar, res.snowTf, nowMs));
     }
+    lines.push("");
+  }
+
+  if (res.confirmRisk) {
+    lines.push("— confirm-bar risk gates (label only) —");
+    lines.push(...renderConfirmRiskBlock("LONG", res.confirmRisk.long));
+    lines.push(...renderConfirmRiskBlock("BEAR", res.confirmRisk.bear));
+    lines.push("");
+  } else if (!snowballConfirmBarEnabled()) {
+    lines.push("— confirm-bar risk gates —");
+    lines.push("  (ปิดอยู่ — INDICATOR_PUBLIC_SNOWBALL_CONFIRM_BAR_ENABLED=0)");
+    lines.push("");
+  }
+
+  if (res.waveGate) {
+    lines.push("— wave gate (กันยิงซ้ำในคลื่นเดิม) —");
+    lines.push(...renderWaveGateBlock("LONG", res.waveGate.long));
+    lines.push(...renderWaveGateBlock("BEAR", res.waveGate.bear));
+    lines.push("");
+  } else if (!snowballWaveGateEnabled()) {
+    lines.push("— wave gate —");
+    lines.push("  (ปิดอยู่ — INDICATOR_PUBLIC_SNOWBALL_WAVE_GATE_ENABLED=0)");
     lines.push("");
   }
 

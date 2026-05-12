@@ -133,9 +133,13 @@ function fmtPct(p: number | null | undefined): string {
   return `${s}${p.toFixed(2)}%`;
 }
 
-function fmtPctCell(price: number | null, pct: number | null): string {
+function fmtPctCell(price: number | null, pct: number | null): ReactNode {
   if (price == null || !Number.isFinite(price)) return "—";
-  return `${fmtPrice(price)} (${fmtPct(pct)})`;
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      {fmtPrice(price)} ({fmtPct(pct)})
+    </span>
+  );
 }
 
 function outcomeLabel(o: SnowballStatsRow["outcome"]): string {
@@ -265,7 +269,7 @@ export default function SnowballStatsTelegramMiniApp() {
 
   if (phase === "loading") {
     return (
-      <div className="sparkStatsPage">
+      <div className="sparkStatsPage sparkStatsPage--wide">
         <div className="tmaLoadingRow">
           <span className="tmaLoadingSpinner" aria-hidden />
           <span className="tmaLoadingLabel">กำลังโหลด…</span>
@@ -276,7 +280,7 @@ export default function SnowballStatsTelegramMiniApp() {
 
   if (phase === "setup") {
     return (
-      <div className="sparkStatsPage">
+      <div className="sparkStatsPage sparkStatsPage--wide">
         <h1 className="sparkStatsMatrixSectionTitle">
           สถิติ Snowball
           <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
@@ -295,7 +299,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const rows = payload?.rows ?? [];
 
   return (
-    <div className="sparkStatsPage">
+    <div className="sparkStatsPage sparkStatsPage--wide">
       <h1 className="sparkStatsMatrixSectionTitle">
         สถิติ Snowball
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
@@ -341,7 +345,9 @@ export default function SnowballStatsTelegramMiniApp() {
                   <tr key={r.id}>
                     <td>{coinLabel(r.symbol)}</td>
                     <td>{r.side === "long" ? "Long" : "Short"}</td>
-                    <td>{formatBkk(r.alertedAtIso)}</td>
+                    <td>
+                      <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
+                    </td>
                     <td>{fmtPrice(r.entryPrice)}</td>
                     <td>{fmtPctCell(r.price4h, r.pct4h)}</td>
                     <td>{fmtPctCell(r.price12h, r.pct12h)}</td>

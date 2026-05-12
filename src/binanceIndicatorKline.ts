@@ -42,6 +42,8 @@ function logBinance451Once(ctx: string, sym: string): void {
 
 export type BinanceKlinePack = {
   close: number[];
+  /** ราคาเปิดต่อแท่ง — ใช้คำนวณ body / wick (ตรง index กับ close) */
+  open: number[];
   /** high / low ต่อแท่ง — ใช้ fractal / divergence (ตรง index กับ close) */
   high: number[];
   low: number[];
@@ -65,6 +67,7 @@ const INTERVAL: Record<BinanceIndicatorTf, string> = {
 function parseKlineRows(rows: unknown, minBars = 10): BinanceKlinePack | null {
   if (!Array.isArray(rows) || rows.length === 0) return null;
   const close: number[] = [];
+  const open: number[] = [];
   const high: number[] = [];
   const low: number[] = [];
   const volume: number[] = [];
@@ -72,6 +75,7 @@ function parseKlineRows(rows: unknown, minBars = 10): BinanceKlinePack | null {
   for (const row of rows) {
     if (!Array.isArray(row) || row.length < 6) continue;
     const openMs = Number(row[0]);
+    const op = Number(row[1]);
     const hi = Number(row[2]);
     const lo = Number(row[3]);
     const c = Number(row[4]);
@@ -79,13 +83,14 @@ function parseKlineRows(rows: unknown, minBars = 10): BinanceKlinePack | null {
     if (!Number.isFinite(openMs) || !Number.isFinite(c)) continue;
     if (!Number.isFinite(hi) || !Number.isFinite(lo)) continue;
     timeSec.push(Math.floor(openMs / 1000));
+    open.push(Number.isFinite(op) ? op : c);
     high.push(hi);
     low.push(lo);
     close.push(c);
     volume.push(Number.isFinite(vol) && vol >= 0 ? vol : 0);
   }
   if (close.length < minBars) return null;
-  return { close, high, low, volume, timeSec };
+  return { close, open, high, low, volume, timeSec };
 }
 
 /**

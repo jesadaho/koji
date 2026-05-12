@@ -15,6 +15,7 @@ import {
   type IndicatorPublicFeedState,
 } from "./indicatorPublicFeedStore";
 import { appendSnowballStatsRow } from "./snowballStatsStore";
+import { addSnowballPendingConfirm } from "./snowballConfirmStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 
 /**
@@ -325,6 +326,428 @@ function snowballDoubleBarrierWatchBandPct(): { min: number; max: number } {
   if (!Number.isFinite(maxV) || maxV < 0.01 || maxV > 0.5) maxV = 0.1;
   if (maxV <= minV) maxV = minV + 0.001;
   return { min: minV, max: maxV };
+}
+
+/** Snowball Confirming Bar — ติด label ความเสี่ยงในแท่ง 1 แล้วส่ง Confirmed follow-up เมื่อแท่ง 2 ปิดผ่านเกณฑ์ */
+export function snowballConfirmBarEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_CONFIRM_BAR_ENABLED", true);
+}
+
+export function snowballWickHistoryLookback(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_WICK_HISTORY_LOOKBACK);
+  if (Number.isFinite(v) && v >= 10 && v <= 300) return Math.floor(v);
+  return 50;
+}
+
+export function snowballWickHistoryRatio(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_WICK_HISTORY_RATIO);
+  if (Number.isFinite(v) && v >= 0.05 && v <= 1) return v;
+  return 0.3;
+}
+
+export function snowballWickBodyRatio(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_WICK_BODY_RATIO);
+  if (Number.isFinite(v) && v >= 0.1 && v <= 10) return v;
+  return 1;
+}
+
+export function snowballSignalWickRatio(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SIGNAL_WICK_RATIO);
+  if (Number.isFinite(v) && v >= 0.1 && v <= 10) return v;
+  return 1;
+}
+
+export function snowballSupplyZoneLookback(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SUPPLY_ZONE_LOOKBACK);
+  if (Number.isFinite(v) && v >= 20 && v <= 500) return Math.floor(v);
+  return 200;
+}
+
+export function snowballSupplyZonePct(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SUPPLY_ZONE_PCT);
+  if (Number.isFinite(v) && v >= 0.005 && v <= 0.5) return v;
+  return 0.03;
+}
+
+export function snowballConfirmVolMinRatio(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_CONFIRM_VOL_MIN_RATIO);
+  if (Number.isFinite(v) && v >= 0 && v <= 5) return v;
+  return 0.6;
+}
+
+export function snowballConfirmMaxAgeHours(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_CONFIRM_MAX_AGE_HOURS);
+  if (Number.isFinite(v) && v >= 1 && v <= 72) return v;
+  return 12;
+}
+
+/** Snowball Wave Gate — กันยิงซ้ำในคลื่นเดิม (ราคายังสูงกว่า/ต่ำกว่าครั้งก่อนและยังไม่มี reset) */
+export function snowballWaveGateEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_WAVE_GATE_ENABLED", true);
+}
+
+export function snowballWaveRsiResetThreshold(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_WAVE_RSI_RESET_THRESHOLD);
+  if (Number.isFinite(v) && v >= 30 && v <= 70) return v;
+  return 50;
+}
+
+export function snowballWaveRsiPeriod(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_WAVE_RSI_PERIOD);
+  if (Number.isFinite(v) && v >= 5 && v <= 50) return Math.floor(v);
+  return 14;
+}
+
+export function snowballWaveEmaResetPeriod(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_WAVE_EMA_RESET_PERIOD);
+  if (Number.isFinite(v) && v >= 5 && v <= 200) return Math.floor(v);
+  return 50;
+}
+
+export function snowballWaveNewHighPct(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_WAVE_NEW_HIGH_PCT);
+  if (Number.isFinite(v) && v >= 0.05 && v <= 1) return v;
+  return 0.2;
+}
+
+export type SnowballConfirmRiskFlagId = "wick_history" | "supply_zone" | "signal_wick";
+
+export type SnowballConfirmRiskFlag = {
+  id: SnowballConfirmRiskFlagId;
+  label: string;
+  detail: string;
+};
+
+/** ใช้ภายในส่งเข้า buildSnowballTripleCheckMessage + state */
+type SnowballConfirmTriggerSnapshot = {
+  refLevel: number;
+  volMinRatio: number;
+};
+
+/** สถานะการตรวจคลื่น (wave gate) — ตรวจก่อนยิงให้แน่ใจว่าเป็นรอบใหม่ ไม่ใช่เสียงรบกวนของคลื่นเดิม */
+export type SnowballWaveGateStatus = {
+  active: boolean;
+  blocked: boolean;
+  /** เหตุผลถ้า blocked */
+  reason?: string;
+  /** เหตุผลที่ถือว่าเป็นรอบใหม่ ถ้า passed */
+  resetReason?: string;
+  /** ราคา alert ครั้งก่อน */
+  lastAlertPrice: number | null;
+  /** bar ที่ alert ครั้งก่อน */
+  lastAlertBarOpenSec: number | null;
+  /** ราคาปิดแท่งปัจจุบัน */
+  currentClose: number;
+  /** ค่าเปอร์เซ็นต์เกณฑ์ new-high/low */
+  newHighPct: number;
+  /** ค่าระดับ RSI สำหรับ reset */
+  rsiResetThreshold: number;
+  emaResetPeriod: number;
+};
+
+/**
+ * Snowball wave gate — กันยิงซ้ำในคลื่นเดิม
+ * - LONG: ห้ามยิงซ้ำถ้าราคายังสูงกว่า lastAlertPrice และระหว่างนั้นยังไม่เกิด reset (RSI <= 50, แตะ EMA50, หรือ new high +20%)
+ * - BEAR: ห้ามยิงซ้ำถ้าราคายังต่ำกว่า lastAlertPrice และระหว่างนั้นยังไม่เกิด reset (RSI >= 50, แตะ EMA50, หรือ new low -20%)
+ */
+export function evaluateSnowballWaveGate(
+  side: "long" | "bear",
+  close: number[],
+  high: number[],
+  low: number[],
+  timeSec: number[],
+  iEval: number,
+  lastAlertBarOpenSec: number | undefined,
+  lastAlertPrice: number | undefined,
+  emaSeries: number[],
+  rsiSeries: number[],
+): SnowballWaveGateStatus {
+  const rsiResetThreshold = snowballWaveRsiResetThreshold();
+  const emaResetPeriod = snowballWaveEmaResetPeriod();
+  const newHighPct = snowballWaveNewHighPct();
+  const clNow = close[iEval];
+  const currentClose = typeof clNow === "number" && Number.isFinite(clNow) ? clNow : NaN;
+
+  const baseStatus: SnowballWaveGateStatus = {
+    active: snowballWaveGateEnabled(),
+    blocked: false,
+    lastAlertPrice: typeof lastAlertPrice === "number" && Number.isFinite(lastAlertPrice) ? lastAlertPrice : null,
+    lastAlertBarOpenSec:
+      typeof lastAlertBarOpenSec === "number" && Number.isFinite(lastAlertBarOpenSec) ? lastAlertBarOpenSec : null,
+    currentClose,
+    newHighPct,
+    rsiResetThreshold,
+    emaResetPeriod,
+  };
+
+  if (!baseStatus.active) return baseStatus;
+  if (baseStatus.lastAlertPrice == null || baseStatus.lastAlertBarOpenSec == null) {
+    baseStatus.reason = "ยังไม่เคยยิง — ไม่ใช้ gate";
+    return baseStatus;
+  }
+  if (!Number.isFinite(currentClose)) {
+    baseStatus.reason = "ปิดราคาแท่งล่าสุดไม่ valid — ไม่ block";
+    return baseStatus;
+  }
+
+  /* ราคาฝั่งตรงข้ามคลื่นเดิม → ปล่อยผ่าน (ปริยายคือเข้าคลื่นใหม่) */
+  if (side === "long") {
+    if (currentClose <= baseStatus.lastAlertPrice) {
+      baseStatus.resetReason = `ราคาปิดแท่งล่าสุด ${currentClose.toFixed(6)} ≤ ราคาครั้งก่อน ${baseStatus.lastAlertPrice.toFixed(6)} → ถือเป็นรอบใหม่`;
+      return baseStatus;
+    }
+  } else {
+    if (currentClose >= baseStatus.lastAlertPrice) {
+      baseStatus.resetReason = `ราคาปิดแท่งล่าสุด ${currentClose.toFixed(6)} ≥ ราคาครั้งก่อน ${baseStatus.lastAlertPrice.toFixed(6)} → ถือเป็นรอบใหม่`;
+      return baseStatus;
+    }
+  }
+
+  /* เช็คเงื่อนไข “รอบใหม่” */
+  const lastIdx = timeSec.indexOf(baseStatus.lastAlertBarOpenSec);
+  const fromIdx = lastIdx >= 0 ? lastIdx + 1 : 0;
+  const toIdx = Math.max(fromIdx, iEval - 1);
+
+  /* เงื่อนไข ก. แตะ EMA50 ในช่วงระหว่าง */
+  let touchedEma = false;
+  let touchedEmaAt = -1;
+  for (let i = fromIdx; i <= toIdx; i++) {
+    const e = emaSeries[i];
+    const lo = low[i];
+    const hi = high[i];
+    if (typeof e !== "number" || !Number.isFinite(e)) continue;
+    if (side === "long") {
+      if (typeof lo === "number" && Number.isFinite(lo) && lo <= e) {
+        touchedEma = true;
+        touchedEmaAt = i;
+        break;
+      }
+    } else {
+      if (typeof hi === "number" && Number.isFinite(hi) && hi >= e) {
+        touchedEma = true;
+        touchedEmaAt = i;
+        break;
+      }
+    }
+  }
+
+  /* เงื่อนไข ข. RSI หลุดเกณฑ์ระหว่าง */
+  let rsiCrossed = false;
+  let rsiCrossedAt = -1;
+  let rsiCrossedValue = NaN;
+  for (let i = fromIdx; i <= toIdx; i++) {
+    const r = rsiSeries[i];
+    if (typeof r !== "number" || !Number.isFinite(r)) continue;
+    if (side === "long" ? r <= rsiResetThreshold : r >= rsiResetThreshold) {
+      rsiCrossed = true;
+      rsiCrossedAt = i;
+      rsiCrossedValue = r;
+      break;
+    }
+  }
+
+  /* เงื่อนไข ค. new high / new low เกินเปอร์เซ็นต์ */
+  const breakoutLevelLong = baseStatus.lastAlertPrice * (1 + newHighPct);
+  const breakoutLevelBear = baseStatus.lastAlertPrice * (1 - newHighPct);
+  const bigBreakout =
+    side === "long" ? currentClose >= breakoutLevelLong : currentClose <= breakoutLevelBear;
+
+  if (rsiCrossed) {
+    const tStr = rsiCrossedAt >= 0 ? ` ที่ idx ${rsiCrossedAt}` : "";
+    baseStatus.resetReason = `RSI ${side === "long" ? "≤" : "≥"} ${rsiResetThreshold} (= ${rsiCrossedValue.toFixed(1)})${tStr} → ถือเป็นรอบใหม่`;
+    return baseStatus;
+  }
+  if (touchedEma) {
+    const tStr = touchedEmaAt >= 0 ? ` ที่ idx ${touchedEmaAt}` : "";
+    baseStatus.resetReason = `${side === "long" ? "Low" : "High"} แตะ EMA${emaResetPeriod}${tStr} → ถือเป็นรอบใหม่`;
+    return baseStatus;
+  }
+  if (bigBreakout) {
+    const lvl = side === "long" ? breakoutLevelLong : breakoutLevelBear;
+    baseStatus.resetReason = `Close ${currentClose.toFixed(6)} ${side === "long" ? "≥" : "≤"} ${lvl.toFixed(6)} (${(newHighPct * 100).toFixed(0)}% จาก ${baseStatus.lastAlertPrice.toFixed(6)}) → คลื่นใหญ่ถัดไป`;
+    return baseStatus;
+  }
+
+  baseStatus.blocked = true;
+  baseStatus.reason =
+    side === "long"
+      ? `Close ${currentClose.toFixed(6)} > last ${baseStatus.lastAlertPrice.toFixed(6)} · ระหว่างนี้ RSI ไม่หลุด ${rsiResetThreshold} / ไม่แตะ EMA${emaResetPeriod} / ยังไม่ทะลุ +${(newHighPct * 100).toFixed(0)}%`
+      : `Close ${currentClose.toFixed(6)} < last ${baseStatus.lastAlertPrice.toFixed(6)} · ระหว่างนี้ RSI ไม่ขึ้นเกิน ${rsiResetThreshold} / ไม่แตะ EMA${emaResetPeriod} / ยังไม่หลุด -${(newHighPct * 100).toFixed(0)}%`;
+  return baseStatus;
+}
+
+/** evaluate ความถี่ของแท่งที่ไส้ยาวกว่าตัวในช่วง history ก่อนแท่งสัญญาณ */
+export function evaluateWickHistory(
+  side: "long" | "bear",
+  high: number[],
+  low: number[],
+  open: number[],
+  close: number[],
+  iEval: number,
+  lookback: number,
+  bodyRatio: number,
+): { flagged: boolean; wickyCount: number; total: number; ratio: number } {
+  const end = iEval - 1; /* ไม่นับแท่งสัญญาณเอง */
+  const start = Math.max(0, end - lookback + 1);
+  let wicky = 0;
+  let total = 0;
+  for (let i = start; i <= end; i++) {
+    const o = open[i];
+    const c = close[i];
+    const h = high[i];
+    const l = low[i];
+    if (
+      typeof o !== "number" ||
+      typeof c !== "number" ||
+      typeof h !== "number" ||
+      typeof l !== "number" ||
+      !Number.isFinite(o) ||
+      !Number.isFinite(c) ||
+      !Number.isFinite(h) ||
+      !Number.isFinite(l)
+    ) {
+      continue;
+    }
+    total += 1;
+    const body = Math.abs(c - o);
+    const upperShadow = h - Math.max(o, c);
+    const lowerShadow = Math.min(o, c) - l;
+    const shadow = side === "long" ? upperShadow : lowerShadow;
+    if (body > 0 && shadow > body * bodyRatio) {
+      wicky += 1;
+    } else if (body <= 0 && shadow > 0) {
+      /* แท่ง doji + มีไส้ → นับเป็น wicky เพราะไม่มีตัวให้เปรียบ */
+      wicky += 1;
+    }
+  }
+  const ratio = total > 0 ? wicky / total : 0;
+  return { flagged: total > 0 && ratio >= snowballWickHistoryRatio(), wickyCount: wicky, total, ratio };
+}
+
+/** ดูว่าใกล้ peak (long) / floor (bear) ในช่วง lookback หรือไม่ */
+export function evaluateSupplyZone(
+  side: "long" | "bear",
+  high: number[],
+  low: number[],
+  iEval: number,
+  lookback: number,
+  zonePct: number,
+  closePrice: number,
+): { flagged: boolean; refLevel: number | null; distPct: number | null } {
+  if (!Number.isFinite(closePrice) || closePrice <= 0) {
+    return { flagged: false, refLevel: null, distPct: null };
+  }
+  const end = iEval - 1;
+  const start = Math.max(0, end - lookback + 1);
+  if (end < start) return { flagged: false, refLevel: null, distPct: null };
+  let refLevel: number | null = null;
+  for (let i = start; i <= end; i++) {
+    const v = side === "long" ? high[i] : low[i];
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    if (refLevel == null) refLevel = v;
+    else if (side === "long" ? v > refLevel : v < refLevel) refLevel = v;
+  }
+  if (refLevel == null) return { flagged: false, refLevel: null, distPct: null };
+  if (side === "long") {
+    const distPct = ((refLevel - closePrice) / closePrice) * 100;
+    const flagged = closePrice >= refLevel * (1 - zonePct) && closePrice <= refLevel;
+    return { flagged, refLevel, distPct };
+  }
+  const distPct = ((closePrice - refLevel) / closePrice) * 100;
+  const flagged = closePrice <= refLevel * (1 + zonePct) && closePrice >= refLevel;
+  return { flagged, refLevel, distPct };
+}
+
+/** ไส้บน/ล่างยาวบนแท่งสัญญาณเอง */
+export function evaluateSignalWick(
+  side: "long" | "bear",
+  open: number,
+  closePrice: number,
+  high: number,
+  low: number,
+  signalRatio: number,
+): { flagged: boolean; body: number; shadow: number } {
+  if (
+    !Number.isFinite(open) ||
+    !Number.isFinite(closePrice) ||
+    !Number.isFinite(high) ||
+    !Number.isFinite(low)
+  ) {
+    return { flagged: false, body: 0, shadow: 0 };
+  }
+  const body = Math.abs(closePrice - open);
+  const upperShadow = high - Math.max(open, closePrice);
+  const lowerShadow = Math.min(open, closePrice) - low;
+  const shadow = side === "long" ? upperShadow : lowerShadow;
+  if (body > 0) {
+    return { flagged: shadow > body * signalRatio, body, shadow };
+  }
+  return { flagged: shadow > 0, body, shadow };
+}
+
+/** รวม 3 gates → ลิสต์ flag พร้อมรายละเอียดให้แสดงในข้อความ */
+export function evaluateSnowballConfirmRisk(
+  side: "long" | "bear",
+  open: number[],
+  high: number[],
+  low: number[],
+  close: number[],
+  iEval: number,
+): SnowballConfirmRiskFlag[] {
+  const flags: SnowballConfirmRiskFlag[] = [];
+  if (!snowballConfirmBarEnabled()) return flags;
+
+  const lookback = snowballWickHistoryLookback();
+  const bodyRatio = snowballWickBodyRatio();
+  const hist = evaluateWickHistory(side, high, low, open, close, iEval, lookback, bodyRatio);
+  if (hist.flagged) {
+    const pct = (hist.ratio * 100).toFixed(0);
+    const sideLabel = side === "long" ? "ไส้บน" : "ไส้ล่าง";
+    flags.push({
+      id: "wick_history",
+      label: `Wick-heavy history (${pct}%)`,
+      detail: `ย้อน ${hist.total} แท่ง พบ ${sideLabel} > body × ${bodyRatio} จำนวน ${hist.wickyCount} แท่ง (${pct}%)`,
+    });
+  }
+
+  const supplyLb = snowballSupplyZoneLookback();
+  const supplyPct = snowballSupplyZonePct();
+  const closeV = close[iEval];
+  if (typeof closeV === "number" && Number.isFinite(closeV)) {
+    const zone = evaluateSupplyZone(side, high, low, iEval, supplyLb, supplyPct, closeV);
+    if (zone.flagged && zone.refLevel != null && zone.distPct != null) {
+      const zoneName = side === "long" ? "Supply zone" : "Demand zone";
+      const refName = side === "long" ? "peak" : "floor";
+      flags.push({
+        id: "supply_zone",
+        label: `${zoneName} proximity`,
+        detail: `${refName} ${supplyLb}b = ${zone.refLevel.toFixed(6)} · ห่างจากราคา ${Math.abs(zone.distPct).toFixed(2)}% (เกณฑ์ ≤ ${(supplyPct * 100).toFixed(1)}%)`,
+      });
+    }
+  }
+
+  const o = open[iEval];
+  const c = close[iEval];
+  const h = high[iEval];
+  const l = low[iEval];
+  if (
+    typeof o === "number" &&
+    typeof c === "number" &&
+    typeof h === "number" &&
+    typeof l === "number"
+  ) {
+    const sw = evaluateSignalWick(side, o, c, h, l, snowballSignalWickRatio());
+    if (sw.flagged) {
+      const sideLabel = side === "long" ? "ไส้บน" : "ไส้ล่าง";
+      flags.push({
+        id: "signal_wick",
+        label: `Signal bar ${sideLabel}ยาว`,
+        detail: `${sideLabel}=${sw.shadow.toFixed(6)} · body=${sw.body.toFixed(6)}`,
+      });
+    }
+  }
+
+  return flags;
 }
 
 type SnowballQualityTier = "a_plus" | "b_plus";
@@ -838,6 +1261,26 @@ async function buildSnowballMaster4hLongTradePlan(
 
 type SnowballLongTriggerKind = "swing_hh" | "vah_break" | "both";
 
+function buildPendingConfirmBlock(
+  flags: SnowballConfirmRiskFlag[] | undefined,
+  trigger: { side: "long" | "bear"; refLevel: number; volMinRatio: number } | undefined,
+): string {
+  if (!flags || flags.length === 0 || !trigger) return "";
+  const lines: string[] = ["🟡 Pending Confirm (รอแท่งที่ 2 ปิด)"];
+  for (const f of flags) {
+    lines.push(`  • ${f.label}: ${f.detail}`);
+  }
+  const refPx = formatUsdPrice(trigger.refLevel);
+  const cmp = trigger.side === "long" ? ">" : "<";
+  const refName = trigger.side === "long" ? "High" : "Low";
+  const volPct = Math.round(trigger.volMinRatio * 100);
+  lines.push(
+    `  • Trigger ยืนยัน: แท่งที่ 2 ปิด ${cmp} ${refName}=${refPx} USDT + Vol ≥ ${volPct}% ของแท่งสัญญาณ`,
+  );
+  lines.push("  • ถ้า confirm ผ่าน — ระบบจะส่งข้อความ ✅ Confirmed ตามมาในรอบถัดไป");
+  return lines.join("\n");
+}
+
 function buildSnowballTripleCheckMessage(
   symbol: string,
   side: "bull" | "bear",
@@ -890,6 +1333,14 @@ function buildSnowballTripleCheckMessage(
     /** Short: ชั้นคุณภาพสมมาตร (แนวรับใต้เท้าในโซน %) */
     shortQualityTier?: SnowballQualityTier;
     shortDoubleBarrierChecklistLine?: string;
+    /** Confirming Bar — flag ความเสี่ยงจาก 3 gates ที่ต้องรอแท่งที่ 2 ยืนยัน */
+    confirmRiskFlags?: SnowballConfirmRiskFlag[];
+    /** เกณฑ์การ confirm ที่จะใช้กับแท่งที่ 2 — ราคาเทียบ + อัตราส่วนปริมาณขั้นต่ำ */
+    confirmTrigger?: {
+      side: "long" | "bear";
+      refLevel: number;
+      volMinRatio: number;
+    };
   }
 ): string {
   const pair = pairSlashNoDollar(symbol);
@@ -1035,6 +1486,10 @@ function buildSnowballTripleCheckMessage(
     if (planBlock) {
       out.push("", planBlock);
     }
+    const pendingBlockLong = buildPendingConfirmBlock(args.confirmRiskFlags, args.confirmTrigger);
+    if (pendingBlockLong) {
+      out.push("", pendingBlockLong);
+    }
     out.push(
       "",
       `📊 ราคาในข้อความ ~ ${px} USDT — Stoch จากแท่งปิดล่าสุด (แสดงประกอบ ไม่ใช้กรอง Long)`,
@@ -1078,7 +1533,9 @@ function buildSnowballTripleCheckMessage(
       ? args.shortDoubleBarrierChecklistLine
       : "";
 
-  return [
+  const pendingBlockBear = buildPendingConfirmBlock(args.confirmRiskFlags, args.confirmTrigger);
+
+  const bearOut: string[] = [
     shortHeadline,
     `${pair} — Binance USDT-M`,
     "",
@@ -1100,9 +1557,12 @@ function buildSnowballTripleCheckMessage(
     `• Stoch RSI (${args.rsiP}/${args.stochLen}) แท่งปิดล่าสุด: ${args.stochK.toFixed(1)} > ${args.stochLimit!.toFixed(0)} — ยังไม่ OS เกินไป`,
     "",
     `📊 Stoch RSI (${args.snowballTfDisplay}) · กันสัญญาณ LL ที่ OS ติดใต้ดินแล้ว`,
-    "",
-    "⚠️ Not financial advice",
-  ].join("\n");
+  ];
+  if (pendingBlockBear) {
+    bearOut.push("", pendingBlockBear);
+  }
+  bearOut.push("", "⚠️ Not financial advice");
+  return bearOut.join("\n");
 }
 
 function formatUsdPrice(p: number): string {
@@ -1359,9 +1819,13 @@ type Snowball4hScanSummaryStats = {
   skippedStoch: number;
   longTechPass: number;
   longDeduped: number;
+  /** กันยิงซ้ำในคลื่นเดิม (Long) */
+  longWaveBlocked: number;
   longSent: number;
   bearTechPass: number;
   bearDeduped: number;
+  /** กันยิงซ้ำในคลื่นเดิม (Bear) */
+  bearWaveBlocked: number;
   bearSent: number;
   errors: string[];
 };
@@ -1415,11 +1879,13 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push("— Long (แท่งปิด) —");
   lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.longTechPass}`);
   lines.push(`ติด dedupe หรือ cooldown: ${stats.longDeduped}`);
+  lines.push(`ติด wave gate (คลื่นเดิม): ${stats.longWaveBlocked}`);
   lines.push(`ส่ง Telegram สำเร็จ: ${stats.longSent}`);
   lines.push("");
   lines.push("— Bear (แท่งปิด) —");
   lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.bearTechPass}`);
   lines.push(`ติด dedupe หรือ cooldown: ${stats.bearDeduped}`);
+  lines.push(`ติด wave gate (คลื่นเดิม): ${stats.bearWaveBlocked}`);
   lines.push(`ส่ง Telegram สำเร็จ: ${stats.bearSent}`);
   if (stats.errors.length > 0) {
     lines.push("");
@@ -1537,9 +2003,11 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           skippedStoch: 0,
           longTechPass: 0,
           longDeduped: 0,
+          longWaveBlocked: 0,
           longSent: 0,
           bearTechPass: 0,
           bearDeduped: 0,
+          bearWaveBlocked: 0,
           bearSent: 0,
           errors: [],
         }
@@ -1705,7 +2173,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         continue;
       }
       if (snowScanStats) snowScanStats.withPack++;
-      const { close: c15, high: h15, low: l15, volume: v15, timeSec: t15 } = packSb;
+      const { close: c15, open: o15, high: h15, low: l15, volume: v15, timeSec: t15 } = packSb;
       const swingLb = snowballSwingLookbackBars();
       const swingEx = snowballSwingExcludeRecentBars();
       const volP = snowballVolSmaPeriod();
@@ -1768,6 +2236,20 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       const emaLongSlopeArr =
         longSlopeEmaOn && longSlopeEmaP !== emaResP ? emaLine(c15, longSlopeEmaP) : emaResArr;
       const emaLongSlope2Arr = longEma2On ? emaLine(c15, longEma2P) : null;
+
+      const waveGateOn = snowballWaveGateEnabled();
+      const waveEmaPeriod = snowballWaveEmaResetPeriod();
+      const waveRsiPeriod = snowballWaveRsiPeriod();
+      const waveEmaArr = waveGateOn
+        ? waveEmaPeriod === emaResP
+          ? emaResArr
+          : waveEmaPeriod === longSlopeEmaP
+            ? emaLongSlopeArr
+            : longEma2On && waveEmaPeriod === longEma2P && emaLongSlope2Arr
+              ? emaLongSlope2Arr
+              : emaLine(c15, waveEmaPeriod)
+        : [];
+      const waveRsiArr = waveGateOn && c15.length >= waveRsiPeriod + 3 ? rsiWilder(c15, waveRsiPeriod) : [];
 
       const sendSnowballLong = async (iEval: number, intrabar: boolean): Promise<void> => {
         if (iEval < 1) return;
@@ -1864,6 +2346,29 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           return;
         }
 
+        let longWaveGate: SnowballWaveGateStatus | null = null;
+        if (waveGateOn && !intrabar) {
+          longWaveGate = evaluateSnowballWaveGate(
+            "long",
+            c15,
+            h15,
+            l15,
+            t15,
+            iEval,
+            state.lastFiredBarSec[key],
+            state.lastAlertPrice?.[key],
+            waveEmaArr,
+            waveRsiArr,
+          );
+          if (longWaveGate.blocked) {
+            if (snowScanStats) snowScanStats.longWaveBlocked++;
+            console.info(
+              `[indicatorPublicFeed] Snowball LONG wave gate blocked ${symbol} — ${longWaveGate.reason ?? ""}`,
+            );
+            return;
+          }
+        }
+
         const sLp = highVolumeNodeBarLow(v15, h15, l15, iEval, svpInnerLb);
         const emaR =
           typeof emaResArr[iEval] === "number" && Number.isFinite(emaResArr[iEval])
@@ -1927,6 +2432,17 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           }
         }
 
+        const longRiskFlags = !intrabar
+          ? evaluateSnowballConfirmRisk("long", o15, h15, l15, c15, iEval)
+          : [];
+        const longSignalHigh = h15[iEval];
+        const longSignalLow = l15[iEval];
+        const longConfirmVolRatio = snowballConfirmVolMinRatio();
+        const longConfirmTrigger: SnowballConfirmTriggerSnapshot | undefined =
+          longRiskFlags.length > 0 && typeof longSignalHigh === "number" && Number.isFinite(longSignalHigh)
+            ? { refLevel: longSignalHigh, volMinRatio: longConfirmVolRatio }
+            : undefined;
+
         const msg = buildSnowballTripleCheckMessage(symbol, "bull", barOpenSec, {
           close: clE!,
           refSwing: refPlaybook,
@@ -1962,13 +2478,38 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           doubleBarrierEnabled: dbOn,
           snowballQualityTier: dbOn ? longTier : undefined,
           doubleBarrierChecklistLine: dbOn ? longDoubleBarrierLine : undefined,
+          confirmRiskFlags: longRiskFlags.length > 0 ? longRiskFlags : undefined,
+          confirmTrigger: longConfirmTrigger
+            ? { side: "long", refLevel: longConfirmTrigger.refLevel, volMinRatio: longConfirmTrigger.volMinRatio }
+            : undefined,
         });
         try {
           const ok = await sendPublicSnowballFeedToSparkGroup(msg);
           if (ok) {
-            await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now);
+            await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now, clE!);
             notified += 1;
             if (snowScanStats && !intrabar) snowScanStats.longSent++;
+            if (!intrabar && longConfirmTrigger && longRiskFlags.length > 0) {
+              try {
+                await addSnowballPendingConfirm({
+                  symbol,
+                  side: "long",
+                  snowTf,
+                  signalBarOpenSec: barOpenSec,
+                  signalHigh: longSignalHigh ?? clE!,
+                  signalLow:
+                    typeof longSignalLow === "number" && Number.isFinite(longSignalLow) ? longSignalLow : clE!,
+                  signalClose: clE!,
+                  signalVolume: vE!,
+                  alertedAtIso: iso,
+                  alertedAtMs: now,
+                  riskFlags: longRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
+                  qualityTier: dbOn ? longTier : undefined,
+                });
+              } catch (pendErr) {
+                console.error("[indicatorPublicFeed] snowball pending confirm LONG", symbol, pendErr);
+              }
+            }
             try {
               await appendSnowballStatsRow({
                 symbol,
@@ -2049,6 +2590,29 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           return;
         }
 
+        let bearWaveGate: SnowballWaveGateStatus | null = null;
+        if (waveGateOn && !intrabar) {
+          bearWaveGate = evaluateSnowballWaveGate(
+            "bear",
+            c15,
+            h15,
+            l15,
+            t15,
+            iEval,
+            state.lastFiredBarSec[key],
+            state.lastAlertPrice?.[key],
+            waveEmaArr,
+            waveRsiArr,
+          );
+          if (bearWaveGate.blocked) {
+            if (snowScanStats) snowScanStats.bearWaveBlocked++;
+            console.info(
+              `[indicatorPublicFeed] Snowball BEAR wave gate blocked ${symbol} — ${bearWaveGate.reason ?? ""}`,
+            );
+            return;
+          }
+        }
+
         let shortTier: SnowballQualityTier = "a_plus";
         let shortDoubleBarrierLine = "";
         if (dbOn) {
@@ -2068,6 +2632,17 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             }
           }
         }
+
+        const bearRiskFlags = !intrabar
+          ? evaluateSnowballConfirmRisk("bear", o15, h15, l15, c15, iEval)
+          : [];
+        const bearSignalHigh = h15[iEval];
+        const bearSignalLow = l15[iEval];
+        const bearConfirmVolRatio = snowballConfirmVolMinRatio();
+        const bearConfirmTrigger: SnowballConfirmTriggerSnapshot | undefined =
+          bearRiskFlags.length > 0 && typeof bearSignalLow === "number" && Number.isFinite(bearSignalLow)
+            ? { refLevel: bearSignalLow, volMinRatio: bearConfirmVolRatio }
+            : undefined;
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", barOpenSec, {
           close: clE!,
@@ -2093,13 +2668,38 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           doubleBarrierEnabled: dbOn,
           shortQualityTier: dbOn ? shortTier : undefined,
           shortDoubleBarrierChecklistLine: dbOn ? shortDoubleBarrierLine : undefined,
+          confirmRiskFlags: bearRiskFlags.length > 0 ? bearRiskFlags : undefined,
+          confirmTrigger: bearConfirmTrigger
+            ? { side: "bear", refLevel: bearConfirmTrigger.refLevel, volMinRatio: bearConfirmTrigger.volMinRatio }
+            : undefined,
         });
         try {
           const ok = await sendPublicSnowballFeedToSparkGroup(msg);
           if (ok) {
-            await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now);
+            await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now, clE!);
             notified += 1;
             if (snowScanStats && !intrabar) snowScanStats.bearSent++;
+            if (!intrabar && bearConfirmTrigger && bearRiskFlags.length > 0) {
+              try {
+                await addSnowballPendingConfirm({
+                  symbol,
+                  side: "bear",
+                  snowTf,
+                  signalBarOpenSec: barOpenSec,
+                  signalHigh:
+                    typeof bearSignalHigh === "number" && Number.isFinite(bearSignalHigh) ? bearSignalHigh : clE!,
+                  signalLow: bearSignalLow ?? clE!,
+                  signalClose: clE!,
+                  signalVolume: vE!,
+                  alertedAtIso: iso,
+                  alertedAtMs: now,
+                  riskFlags: bearRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
+                  qualityTier: dbOn ? shortTier : undefined,
+                });
+              } catch (pendErr) {
+                console.error("[indicatorPublicFeed] snowball pending confirm BEAR", symbol, pendErr);
+              }
+            }
             try {
               await appendSnowballStatsRow({
                 symbol,
@@ -2192,6 +2792,20 @@ export type SnowballSideEval = {
   allPassed: boolean;
 };
 
+export type SnowballConfirmRiskGateStatus = {
+  /** ติด flag เนื่องจากเข้าเงื่อนไขใด ๆ ใน 3 gates หรือไม่ (label only — ไม่บล็อก) */
+  flagged: boolean;
+  flags: SnowballConfirmRiskFlag[];
+  /** รายละเอียดของแต่ละ gate (รวมตอนไม่ติดด้วย) สำหรับ debug */
+  detail: {
+    wickHistory: { flagged: boolean; wickyCount: number; total: number; ratio: number; lookback: number; bodyRatio: number };
+    supplyZone: { flagged: boolean; refLevel: number | null; distPct: number | null; lookback: number; zonePct: number };
+    signalWick: { flagged: boolean; body: number; shadow: number; signalRatio: number };
+  };
+  /** เงื่อนไข confirm ที่จะใช้กับแท่งที่ 2 */
+  trigger: { side: "long" | "bear"; refLevel: number | null; volMinRatio: number };
+};
+
 export type SnowballChecklistResult = {
   symbol: string;
   enabled: boolean;
@@ -2201,8 +2815,56 @@ export type SnowballChecklistResult = {
   paramsSummary: string[];
   long: { closed: SnowballSideEval | null; intrabar: SnowballSideEval | null };
   bear: { closed: SnowballSideEval | null; intrabar: SnowballSideEval | null };
+  /** Confirming Bar — 3 risk gates บนแท่งปิดล่าสุด (long + bear) */
+  confirmRisk: { long: SnowballConfirmRiskGateStatus | null; bear: SnowballConfirmRiskGateStatus | null } | null;
+  /** Wave Gate — กันยิงซ้ำในคลื่นเดิม */
+  waveGate: { long: SnowballWaveGateStatus | null; bear: SnowballWaveGateStatus | null } | null;
   errors: string[];
 };
+
+function buildSnowballConfirmRiskStatus(
+  side: "long" | "bear",
+  open: number[],
+  high: number[],
+  low: number[],
+  close: number[],
+  iEval: number,
+): SnowballConfirmRiskGateStatus {
+  const lookback = snowballWickHistoryLookback();
+  const bodyRatio = snowballWickBodyRatio();
+  const hist = evaluateWickHistory(side, high, low, open, close, iEval, lookback, bodyRatio);
+
+  const supplyLb = snowballSupplyZoneLookback();
+  const zonePct = snowballSupplyZonePct();
+  const clVal = close[iEval];
+  const closeNum = typeof clVal === "number" && Number.isFinite(clVal) ? clVal : NaN;
+  const zone = Number.isFinite(closeNum)
+    ? evaluateSupplyZone(side, high, low, iEval, supplyLb, zonePct, closeNum)
+    : { flagged: false, refLevel: null as number | null, distPct: null as number | null };
+
+  const signalRatio = snowballSignalWickRatio();
+  const o = open[iEval];
+  const h = high[iEval];
+  const l = low[iEval];
+  const sw =
+    typeof o === "number" && typeof clVal === "number" && typeof h === "number" && typeof l === "number"
+      ? evaluateSignalWick(side, o, clVal, h, l, signalRatio)
+      : { flagged: false, body: 0, shadow: 0 };
+
+  const flags = evaluateSnowballConfirmRisk(side, open, high, low, close, iEval);
+  const refLevel = side === "long" ? (typeof h === "number" ? h : null) : typeof l === "number" ? l : null;
+
+  return {
+    flagged: flags.length > 0,
+    flags,
+    detail: {
+      wickHistory: { ...hist, lookback, bodyRatio },
+      supplyZone: { ...zone, lookback: supplyLb, zonePct },
+      signalWick: { ...sw, signalRatio },
+    },
+    trigger: { side, refLevel, volMinRatio: snowballConfirmVolMinRatio() },
+  };
+}
 
 function fmtNum(n: number, digits = 6): string {
   if (!Number.isFinite(n)) return "NaN";
@@ -2570,6 +3232,8 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     paramsSummary,
     long: { closed: null, intrabar: null },
     bear: { closed: null, intrabar: null },
+    confirmRisk: null,
+    waveGate: null,
     errors,
   };
 
@@ -2596,7 +3260,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     return baseResult;
   }
 
-  const { close, high, low, volume, timeSec } = pack;
+  const { close, open: openArr, high, low, volume, timeSec } = pack;
   const n = close.length;
   baseResult.bars = n;
   const iClosed = n - 2;
@@ -2675,6 +3339,55 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
   if (intrabarOn) {
     baseResult.long.intrabar = evaluateSnowballLongAt(iForming, true, data, longCtxBase);
     baseResult.bear.intrabar = evaluateSnowballBearAt(iForming, true, data, bearCtxBase);
+  }
+
+  if (snowballConfirmBarEnabled()) {
+    baseResult.confirmRisk = {
+      long: buildSnowballConfirmRiskStatus("long", openArr, high, low, close, iClosed),
+      bear: buildSnowballConfirmRiskStatus("bear", openArr, high, low, close, iClosed),
+    };
+  }
+
+  if (snowballWaveGateEnabled()) {
+    const waveEmaPeriod = snowballWaveEmaResetPeriod();
+    const waveRsiPeriod = snowballWaveRsiPeriod();
+    const waveEmaArr =
+      waveEmaPeriod === emaResP
+        ? emaResArr
+        : waveEmaPeriod === longSlopeEmaP
+          ? emaLongSlopeArr
+          : longEma2On && waveEmaPeriod === longEma2P && emaLongSlope2Arr
+            ? emaLongSlope2Arr
+            : emaLine(close, waveEmaPeriod);
+    const waveRsiArr = close.length >= waveRsiPeriod + 3 ? rsiWilder(close, waveRsiPeriod) : [];
+    const longKey = `${symbol}|SNOWBALL|${snowTf}|BULL`;
+    const bearKey = `${symbol}|SNOWBALL|${snowTf}|BEAR`;
+    baseResult.waveGate = {
+      long: evaluateSnowballWaveGate(
+        "long",
+        close,
+        high,
+        low,
+        timeSec,
+        iClosed,
+        state.lastFiredBarSec[longKey],
+        state.lastAlertPrice?.[longKey],
+        waveEmaArr,
+        waveRsiArr,
+      ),
+      bear: evaluateSnowballWaveGate(
+        "bear",
+        close,
+        high,
+        low,
+        timeSec,
+        iClosed,
+        state.lastFiredBarSec[bearKey],
+        state.lastAlertPrice?.[bearKey],
+        waveEmaArr,
+        waveRsiArr,
+      ),
+    };
   }
 
   return baseResult;
