@@ -227,7 +227,7 @@ export async function removeSnowballStatsDuplicatesInLastHours(input: {
     arr.push(r);
     byKey.set(key, arr);
   }
-  for (const arr of byKey.values()) {
+  for (const arr of Array.from(byKey.values())) {
     arr.sort((a, b) => (a.alertedAtMs ?? 0) - (b.alertedAtMs ?? 0));
   }
 
