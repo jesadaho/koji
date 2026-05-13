@@ -68,6 +68,11 @@ import {
 } from "./sparkAutoTradeResolve";
 import type { SparkVolBand } from "./sparkTierContext";
 import { newTvWebhookNonce } from "./tradingViewWebhookNonceStore";
+import { isSnowballAutotradeEnabled } from "./snowballAutoTradeExecutor";
+
+/** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
+const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
+  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC (สัญญา BASE_USDT เดียวกันถ้ามีในตลาด) ไม่ใช่การสั่งบน Binance — รันหลังส่ง Super Snowball A+ (closed bar) สำเร็จเท่านั้น — ไม่เปิดซ้ำถ้ามีโพซิชันเปิดอยู่แล้วหรือสั่งเปิดคู่นั้นสำเร็จแล้วในวันเดียวกัน (ปฏิทินไทย) — ต้องมี MEXC API + margin/leverage — ปิดฉุกเฉินทั้งเซิร์ฟ: ตั้ง SNOWBALL_AUTOTRADE_ENABLED=0";
 
 export function getLiffConfig() {
   return {
@@ -1064,6 +1069,8 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
       sparkAutoTradeNote:
         "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ) — ถ้าเปิด time-stop ใน Settings ระบบจะคิวปิด market หลังครบชั่วโมงที่ตั้ง (สแกนตามรอบ cron ticker Spark ~5 นาที)",
       sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
+      snowballAutotradeServerEnabled: isSnowballAutotradeEnabled(),
+      snowballAutoTradeNote: SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH,
       snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),
     },
   };
@@ -1165,6 +1172,8 @@ export async function liffSetTradingViewMexcSettings(
       sparkAutoTradeNote:
         "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ) — ถ้าเปิด time-stop ใน Settings ระบบจะคิวปิด market หลังครบชั่วโมงที่ตั้ง (สแกนตามรอบ cron ticker Spark ~5 นาที)",
       sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
+      snowballAutotradeServerEnabled: isSnowballAutotradeEnabled(),
+      snowballAutoTradeNote: SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH,
       snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),
     },
   };

@@ -339,6 +339,15 @@ export function snowballConfirmBarEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_CONFIRM_BAR_ENABLED", true);
 }
 
+/**
+ * เมื่อแท่งสัญญาณมี Pending Confirm — ไม่ส่งข้อความ Snowball ไปกลุ่ม Telegram จนกว่าแท่ง 2 จะ ✅ Confirmed
+ * (Snowball auto-open Super A+ จะรันหลัง Confirm แทนแท่งแรก)
+ * ส่งแบบเดิมทั้งแท่ง 1 + บล็อก Pending: INDICATOR_PUBLIC_SNOWBALL_SKIP_TG_ON_PENDING_CONFIRM=0
+ */
+export function snowballSkipTelegramWhenPendingConfirm(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_SKIP_TG_ON_PENDING_CONFIRM", true);
+}
+
 /** กรองแท่งไส้ยาว: |open−close| / (high−low) ต้องไม่ต่ำกว่าเกณฑ์ — ใช้เฉพาะแท่งปิด (ไม่ intrabar) */
 export function snowballBodyToRangeFilterEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE_FILTER_ENABLED", true);
@@ -2594,13 +2603,24 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             ? { side: "long", refLevel: longConfirmTrigger.refLevel, volMinRatio: longConfirmTrigger.volMinRatio }
             : undefined,
         });
+        const longPendingConfirm =
+          !intrabar && longRiskFlags.length > 0 && Boolean(longConfirmTrigger);
+        const skipSnowballTgForPending =
+          longPendingConfirm && snowballSkipTelegramWhenPendingConfirm();
         try {
-          const ok = await sendPublicSnowballFeedToSparkGroup(msg);
+          const ok = skipSnowballTgForPending ? true : await sendPublicSnowballFeedToSparkGroup(msg);
+          if (skipSnowballTgForPending) {
+            console.info(
+              `[indicatorPublicFeed] Snowball LONG skip public TG (pending confirm) ${symbol} ${snowTf}`,
+            );
+          }
           if (ok) {
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now, clE!);
-            notified += 1;
-            if (snowScanStats && !intrabar) snowScanStats.longSent++;
-            if (!intrabar) {
+            if (!skipSnowballTgForPending) {
+              notified += 1;
+              if (snowScanStats && !intrabar) snowScanStats.longSent++;
+            }
+            if (!intrabar && !skipSnowballTgForPending) {
               try {
                 // Auto-open เฉพาะ SUPER SNOWBALL (A+) เท่านั้น
                 const isSuperSnowball = Boolean(dbOn && longTier === "a_plus");
@@ -2638,6 +2658,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
                   alertedAtMs: now,
                   riskFlags: longRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
                   qualityTier: dbOn ? longTier : undefined,
+                  ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
                 console.error("[indicatorPublicFeed] snowball pending confirm LONG", symbol, pendErr);
@@ -2828,13 +2849,24 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             ? { side: "bear", refLevel: bearConfirmTrigger.refLevel, volMinRatio: bearConfirmTrigger.volMinRatio }
             : undefined,
         });
+        const bearPendingConfirm =
+          !intrabar && bearRiskFlags.length > 0 && Boolean(bearConfirmTrigger);
+        const skipBearTgForPending =
+          bearPendingConfirm && snowballSkipTelegramWhenPendingConfirm();
         try {
-          const ok = await sendPublicSnowballFeedToSparkGroup(msg);
+          const ok = skipBearTgForPending ? true : await sendPublicSnowballFeedToSparkGroup(msg);
+          if (skipBearTgForPending) {
+            console.info(
+              `[indicatorPublicFeed] Snowball BEAR skip public TG (pending confirm) ${symbol} ${snowTf}`,
+            );
+          }
           if (ok) {
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now, clE!);
-            notified += 1;
-            if (snowScanStats && !intrabar) snowScanStats.bearSent++;
-            if (!intrabar) {
+            if (!skipBearTgForPending) {
+              notified += 1;
+              if (snowScanStats && !intrabar) snowScanStats.bearSent++;
+            }
+            if (!intrabar && !skipBearTgForPending) {
               try {
                 // Auto-open เฉพาะ SUPER SNOWBALL (A+) เท่านั้น
                 const isSuperSnowball = Boolean(dbOn && shortTier === "a_plus");
@@ -2871,6 +2903,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
                   alertedAtMs: now,
                   riskFlags: bearRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
                   qualityTier: dbOn ? shortTier : undefined,
+                  ...(skipBearTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
                 console.error("[indicatorPublicFeed] snowball pending confirm BEAR", symbol, pendErr);

@@ -49,6 +49,10 @@ export type SnowballPendingConfirm = {
   alertedAtMs: number;
   riskFlags: SnowballPendingConfirmFlag[];
   qualityTier?: "a_plus" | "b_plus";
+  /**
+   * true = แท่ง 1 ไม่ส่ง TG / ไม่ autotrade — ให้เรียก Snowball auto-open หลัง ✅ Confirmed (เมื่อเป็น Super A+)
+   */
+  deferSnowballAutotradeToConfirm?: boolean;
 };
 
 export type SnowballPendingConfirmState = {
@@ -96,6 +100,11 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     .filter((f): f is SnowballPendingConfirmFlag => f != null);
   const qualityTier =
     o.qualityTier === "a_plus" || o.qualityTier === "b_plus" ? o.qualityTier : undefined;
+  const deferSnowballAutotradeToConfirm =
+    o.deferSnowballAutotradeToConfirm === true ||
+    o.deferSnowballAutotradeToConfirm === 1 ||
+    o.deferSnowballAutotradeToConfirm === "1" ||
+    o.deferSnowballAutotradeToConfirm === "true";
   return {
     id: typeof o.id === "string" && o.id ? o.id : randomUUID(),
     symbol,
@@ -110,6 +119,7 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     alertedAtMs: Number.isFinite(alertedAtMs) ? alertedAtMs : Date.parse(alertedAtIso),
     riskFlags,
     qualityTier,
+    ...(deferSnowballAutotradeToConfirm ? { deferSnowballAutotradeToConfirm: true as const } : {}),
   };
 }
 

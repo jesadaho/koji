@@ -3,8 +3,10 @@ import {
   isBinanceIndicatorFapiEnabled,
   resetBinanceIndicatorFapi451LogDedupe,
   type BinanceIndicatorTf,
+  type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 import { sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
+import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import {
   isPublicSnowballTripleCheckEnabled,
   snowballConfirmBarEnabled,
@@ -48,6 +50,34 @@ function pairSlashed(symbol: string): string {
   const u = symbol.toUpperCase();
   if (u.endsWith("USDT")) return `${u.slice(0, -4)}/USDT`;
   return u;
+}
+
+function mexcContractSymbolFromBinanceSymbol(sym: string): string {
+  const s = sym.trim().toUpperCase();
+  if (!s) return "";
+  if (s.includes("_")) return s;
+  if (s.endsWith("USDT") && s.length > 4) {
+    const base = s.slice(0, -4);
+    return `${base}_USDT`;
+  }
+  return s;
+}
+
+/** SMA(volume) ย้อนหลังสูงสุด 20 แท่ง จนถึง idx (รวม idx) */
+function volumeSma20AtPackIndex(pack: BinanceKlinePack, idx: number): number {
+  const { volume } = pack;
+  const period = 20;
+  const start = Math.max(0, idx - (period - 1));
+  let sum = 0;
+  let n = 0;
+  for (let i = start; i <= idx; i++) {
+    const v = volume[i];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      sum += v;
+      n++;
+    }
+  }
+  return n > 0 ? sum / n : NaN;
 }
 
 function buildConfirmedMessage(opts: {
@@ -120,7 +150,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
     const snowTf = first.snowTf;
     let pack: Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> = null;
     try {
-      pack = await fetchBinanceUsdmKlines(symbol, snowTf, 10);
+      pack = await fetchBinanceUsdmKlines(symbol, snowTf, 80);
     } catch (e) {
       console.error("[snowballConfirmTick] fetch kline", symbol, snowTf, e);
       continue;
@@ -180,11 +210,35 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
           bar2OpenSec,
           volRatio,
         });
+        let sendOk = false;
         try {
-          const ok = await sendPublicSnowballFeedToSparkGroup(text);
-          if (ok) sent += 1;
+          sendOk = await sendPublicSnowballFeedToSparkGroup(text);
+          if (sendOk) sent += 1;
         } catch (e) {
           console.error("[snowballConfirmTick] send confirm", item.symbol, item.side, e);
+        }
+        if (
+          sendOk &&
+          item.deferSnowballAutotradeToConfirm === true &&
+          item.qualityTier === "a_plus"
+        ) {
+          try {
+            const volSma = volumeSma20AtPackIndex(pack, idx);
+            const volSmaUse = Number.isFinite(volSma) && volSma > 0 ? volSma : vo;
+            await runSnowballAutoTradeAfterSnowballAlert({
+              contractSymbol: mexcContractSymbolFromBinanceSymbol(item.symbol),
+              binanceSymbol: item.symbol,
+              side: item.side === "long" ? "long" : "short",
+              referenceEntryPrice: cl,
+              signalBarOpenSec: bar2OpenSec,
+              signalBarTf: item.snowTf,
+              signalBarLow: item.side === "long" ? lo : null,
+              vol: vo,
+              volSma: volSmaUse,
+            });
+          } catch (e) {
+            console.error("[snowballConfirmTick] snowball auto-open after confirm", item.symbol, item.side, e);
+          }
         }
         removeIds.add(item.id);
       } else {

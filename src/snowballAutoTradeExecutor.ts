@@ -18,9 +18,14 @@ import {
 import { computeSvpHoleYn } from "./snowballStatsStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 
+/**
+ * ค่าเริ่มต้นเปิด — ผู้ใช้เปิด/ปิดหลักใน Mini App (`snowballAutoTradeEnabled`)
+ * ตั้ง `SNOWBALL_AUTOTRADE_ENABLED=0` / `false` / `off` / `no` เพื่อปิดฉุกเฉินทั้งเซิร์ฟ
+ */
 export function isSnowballAutotradeEnabled(): boolean {
   const v = process.env.SNOWBALL_AUTOTRADE_ENABLED?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
+  if (v === "0" || v === "false" || v === "no" || v === "off") return false;
+  return true;
 }
 
 function shortContractLabel(contractSymbol: string): string {

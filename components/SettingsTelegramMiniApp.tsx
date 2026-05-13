@@ -140,6 +140,9 @@ type TradingViewMexcResponse = {
   exampleJson?: Record<string, string>;
   sparkAutoTradeNote?: string;
   sparkAutoTrade?: SparkAutoTradeApiBundle;
+  /** false เมื่อเซิร์ฟตั้ง SNOWBALL_AUTOTRADE_ENABLED=0 (kill switch) */
+  snowballAutotradeServerEnabled?: boolean;
+  snowballAutoTradeNote?: string;
   snowballAutoTrade?: SnowballAutoTradeApiBundle;
 };
 
@@ -1036,6 +1039,17 @@ export default function SettingsTelegramMiniApp() {
           เมื่อ <strong>Snowball ส่งสัญญาณสำเร็จ (closed bar)</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน{" "}
           <strong>LONG</strong>/<strong>SHORT</strong> (market) ตามสัญญาณ Snowball โดยใช้ราคาแนะนำของบอทเป็นจุดอ้างอิงสำหรับการคำนวณ Quick TP/กติกา 24h.
         </p>
+        {tvSettings?.snowballAutotradeServerEnabled === false ? (
+          <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
+            เซิร์ฟเวอร์ปิด Snowball auto-open ฉุกเฉินอยู่ (<code style={{ fontSize: "0.92em" }}>SNOWBALL_AUTOTRADE_ENABLED=0</code> หรือเทียบเท่า) — ลบตัวแปรนี้หรือตั้งเป็น{" "}
+            <code style={{ fontSize: "0.92em" }}>1</code>/<code style={{ fontSize: "0.92em" }}>true</code> แล้วรีสตาร์ทแอป
+          </p>
+        ) : null}
+        {tvSettings?.snowballAutoTradeNote ? (
+          <p className="sub" style={{ marginTop: "0.65rem", opacity: 0.92 }}>
+            {tvSettings.snowballAutoTradeNote}
+          </p>
+        ) : null}
         {tvSettings && !tvSettings.mexcCredsComplete ? (
           <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
             ใส่ MEXC API ด้านบนและกด <strong>บันทึก API</strong> ก่อน — auto-open ถึงจะเรียก MEXC ได้
