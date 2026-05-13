@@ -28,10 +28,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <span className="siteNavSep" aria-hidden>
             |
           </span>
-          <Link href="/spark-stats">Spark matrix</Link>
-          <span className="siteNavSep" aria-hidden>
-            |
-          </span>
           <Link href="/snowball-stats">Snowball</Link>
           <span className="siteNavSep" aria-hidden>
             |

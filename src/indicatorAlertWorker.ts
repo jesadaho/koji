@@ -6,6 +6,8 @@ import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured 
 import { isIndicatorPublicFeedEnabled, runPublicIndicatorFeedInternal } from "./publicIndicatorFeed";
 import { runSnowballConfirmFollowUpTick } from "./snowballConfirmTick";
 import { runSnowballStatsFollowUpTick } from "./snowballStatsTick";
+import { runSnowballAutoTradeQuickTpTick } from "./snowballAutoTradeQuickTpTick";
+import { runSnowballAutoTrade24hGuardTick } from "./snowballAutoTrade24hGuardTick";
 import { emaLine, rsiWilder } from "./indicatorMath";
 import {
   loadActiveEmaCrossAlerts,
@@ -287,6 +289,8 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const publicN = isIndicatorPublicFeedEnabled() ? await runPublicIndicatorFeedInternal(client, now) : 0;
   const snowballConfirmN = await runSnowballConfirmFollowUpTick(now);
   const snowballStatsN = await runSnowballStatsFollowUpTick(now);
+  const snowballQuickTpClosed = await runSnowballAutoTradeQuickTpTick(now);
+  const snowball24hClosed = await runSnowballAutoTrade24hGuardTick(now);
   const watch612 = await runEma612ContractWatchAlertTick(client);
   const total = rsiN + emaN + publicN + snowballConfirmN + watch612;
 
@@ -294,6 +298,8 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   if (publicN > 0) parts.push(`public Binance ${publicN}`);
   if (snowballConfirmN > 0) parts.push(`snowball confirm ${snowballConfirmN}`);
   if (snowballStatsN > 0) parts.push(`snowball stats ${snowballStatsN}`);
+  if (snowballQuickTpClosed > 0) parts.push(`snowball quickTP close ${snowballQuickTpClosed}`);
+  if (snowball24hClosed > 0) parts.push(`snowball 24h close ${snowball24hClosed}`);
   if (watch612 > 0) parts.push(`EMA6/12·15m ติดตาม ${watch612}`);
   const detail = total > 0 ? `แจ้ง ${total} ครั้ง (${parts.join(" · ")})` : undefined;
 

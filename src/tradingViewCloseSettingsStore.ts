@@ -23,6 +23,8 @@ export type SparkAutoTradeOrderSide = "follow_spark" | "fade_spark" | "long" | "
 
 export type SparkAutoTradeByVol = Partial<Record<SparkAutoTradeVolBandKey, SparkAutoTradeVolBandPreset>>;
 
+export type SnowballAutoTradeDirection = "both" | "long_only" | "short_only";
+
 export type TradingViewMexcUserSettings = {
   mexcApiKey: string;
   mexcSecret: string;
@@ -45,6 +47,15 @@ export type TradingViewMexcUserSettings = {
   sparkAutoTradeTimeStopHours?: number;
 
   sparkAutoTradeByVol?: SparkAutoTradeByVol;
+
+  snowballAutoTradeEnabled?: boolean;
+  snowballAutoTradeDirection?: SnowballAutoTradeDirection;
+  snowballAutoTradeMarginUsdt?: number;
+  snowballAutoTradeLeverage?: number;
+  /** ถ้า ROI แตะ threshold ภายใน maxHours → ปิดทันที */
+  snowballAutoTradeQuickTpEnabled?: boolean;
+  snowballAutoTradeQuickTpRoiPct?: number;
+  snowballAutoTradeQuickTpMaxHours?: number;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -167,6 +178,14 @@ export type SaveTradingViewMexcInput = {
   sparkAutoTradeTpPct?: number | null;
   sparkAutoTradeTimeStopHours?: number | null;
   sparkAutoTradeByVol?: SparkAutoTradeByVol | null;
+
+  snowballAutoTradeEnabled?: boolean;
+  snowballAutoTradeDirection?: SnowballAutoTradeDirection;
+  snowballAutoTradeMarginUsdt?: number | null;
+  snowballAutoTradeLeverage?: number | null;
+  snowballAutoTradeQuickTpEnabled?: boolean;
+  snowballAutoTradeQuickTpRoiPct?: number | null;
+  snowballAutoTradeQuickTpMaxHours?: number | null;
 };
 
 /**
@@ -203,6 +222,15 @@ export async function saveTradingViewMexcSettings(
     input.sparkAutoTradeTimeStopHours !== undefined ||
     input.sparkAutoTradeByVol !== undefined;
   const preserveSpark = Boolean(input.preserveSparkAutoTrade) && !touchedSparkPatch;
+
+  const touchedSnowballPatch =
+    input.snowballAutoTradeEnabled !== undefined ||
+    input.snowballAutoTradeDirection !== undefined ||
+    input.snowballAutoTradeMarginUsdt !== undefined ||
+    input.snowballAutoTradeLeverage !== undefined ||
+    input.snowballAutoTradeQuickTpEnabled !== undefined ||
+    input.snowballAutoTradeQuickTpRoiPct !== undefined ||
+    input.snowballAutoTradeQuickTpMaxHours !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -274,7 +302,52 @@ export async function saveTradingViewMexcSettings(
           : prev?.sparkAutoTradeTimeStopHours,
 
     sparkAutoTradeByVol: mergedVol,
+
+    snowballAutoTradeEnabled:
+      input.snowballAutoTradeEnabled !== undefined
+        ? input.snowballAutoTradeEnabled
+        : prev?.snowballAutoTradeEnabled ?? false,
+
+    snowballAutoTradeDirection:
+      input.snowballAutoTradeDirection !== undefined
+        ? input.snowballAutoTradeDirection
+        : prev?.snowballAutoTradeDirection ?? "both",
+
+    snowballAutoTradeMarginUsdt:
+      input.snowballAutoTradeMarginUsdt === null
+        ? undefined
+        : input.snowballAutoTradeMarginUsdt !== undefined
+          ? input.snowballAutoTradeMarginUsdt
+          : prev?.snowballAutoTradeMarginUsdt,
+
+    snowballAutoTradeLeverage:
+      input.snowballAutoTradeLeverage === null
+        ? undefined
+        : input.snowballAutoTradeLeverage !== undefined
+          ? input.snowballAutoTradeLeverage
+          : prev?.snowballAutoTradeLeverage,
+
+    snowballAutoTradeQuickTpEnabled:
+      input.snowballAutoTradeQuickTpEnabled !== undefined
+        ? input.snowballAutoTradeQuickTpEnabled
+        : prev?.snowballAutoTradeQuickTpEnabled ?? false,
+
+    snowballAutoTradeQuickTpRoiPct:
+      input.snowballAutoTradeQuickTpRoiPct === null
+        ? undefined
+        : input.snowballAutoTradeQuickTpRoiPct !== undefined
+          ? input.snowballAutoTradeQuickTpRoiPct
+          : prev?.snowballAutoTradeQuickTpRoiPct,
+
+    snowballAutoTradeQuickTpMaxHours:
+      input.snowballAutoTradeQuickTpMaxHours === null
+        ? undefined
+        : input.snowballAutoTradeQuickTpMaxHours !== undefined
+          ? input.snowballAutoTradeQuickTpMaxHours
+          : prev?.snowballAutoTradeQuickTpMaxHours,
   };
+
+  void touchedSnowballPatch;
   m[userId] = row;
   await saveMap(m);
   return row;

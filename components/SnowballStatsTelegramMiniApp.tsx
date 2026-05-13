@@ -310,8 +310,6 @@ export default function SnowballStatsTelegramMiniApp() {
 
       <p className="tmaQuickNav" style={{ marginTop: "0.75rem" }}>
         <Link href="/">หน้าแรก</Link>
-        {" · "}
-        <Link href="/spark-stats">สถิติ Spark</Link>
       </p>
 
       <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>

@@ -117,6 +117,16 @@ type SparkAutoTradeApiBundle = {
   byVol?: Partial<Record<SparkTierKey, SparkTierPayload | null>> | null;
 };
 
+type SnowballAutoTradeApiBundle = {
+  enabled?: boolean;
+  direction?: string;
+  marginUsdt?: number | null;
+  leverage?: number | null;
+  quickTpEnabled?: boolean;
+  quickTpRoiPct?: number | null;
+  quickTpMaxHours?: number | null;
+};
+
 type TradingViewMexcResponse = {
   exchange?: string;
   userId?: string;
@@ -130,6 +140,7 @@ type TradingViewMexcResponse = {
   exampleJson?: Record<string, string>;
   sparkAutoTradeNote?: string;
   sparkAutoTrade?: SparkAutoTradeApiBundle;
+  snowballAutoTrade?: SnowballAutoTradeApiBundle;
 };
 
 export default function SettingsTelegramMiniApp() {
@@ -163,11 +174,28 @@ export default function SettingsTelegramMiniApp() {
   const [sparkSaveOk, setSparkSaveOk] = useState("");
   const [sparkSaving, setSparkSaving] = useState(false);
 
+  const [snowEnabled, setSnowEnabled] = useState(false);
+  const [snowDirection, setSnowDirection] = useState<"both" | "long_only" | "short_only">("both");
+  const [snowMarginDefault, setSnowMarginDefault] = useState("");
+  const [snowLevDefault, setSnowLevDefault] = useState("");
+  const [snowQuickTpEnabled, setSnowQuickTpEnabled] = useState(false);
+  const [snowQuickTpRoiPct, setSnowQuickTpRoiPct] = useState("");
+  const [snowQuickTpMaxHours, setSnowQuickTpMaxHours] = useState("");
+  const [snowSaveErr, setSnowSaveErr] = useState("");
+  const [snowSaveOk, setSnowSaveOk] = useState("");
+  const [snowSaving, setSnowSaving] = useState(false);
+
   useEffect(() => {
     if (!sparkSaveOk.trim()) return;
     const t = window.setTimeout(() => setSparkSaveOk(""), 6000);
     return () => window.clearTimeout(t);
   }, [sparkSaveOk]);
+
+  useEffect(() => {
+    if (!snowSaveOk.trim()) return;
+    const t = window.setTimeout(() => setSnowSaveOk(""), 6000);
+    return () => window.clearTimeout(t);
+  }, [snowSaveOk]);
 
   /** sync จาก GET — อย่ากระทำเมื่อ user แก้อยู่: ให้ hydrate จาก tvSettings เท่านั้น */
   useEffect(() => {
@@ -207,6 +235,25 @@ export default function SettingsTelegramMiniApp() {
     setSparkTiers(nextTiers);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.sparkAutoTrade]);
+
+  useEffect(() => {
+    const st = tvSettings?.snowballAutoTrade;
+    if (!st) return;
+
+    setSnowEnabled(Boolean(st.enabled));
+    const dir = typeof st.direction === "string" ? st.direction.trim() : "both";
+    setSnowDirection(
+      dir === "long_only" || dir === "short_only" ? dir : dir === "long-only" ? "long_only" : dir === "short-only" ? "short_only" : "both"
+    );
+    setSnowMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
+    setSnowLevDefault(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
+    setSnowQuickTpEnabled(Boolean(st.quickTpEnabled));
+    setSnowQuickTpRoiPct(st.quickTpRoiPct != null && Number.isFinite(st.quickTpRoiPct) ? String(st.quickTpRoiPct) : "");
+    setSnowQuickTpMaxHours(
+      st.quickTpMaxHours != null && Number.isFinite(st.quickTpMaxHours) ? String(st.quickTpMaxHours) : ""
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
+  }, [tvSettings?.webhookToken, tvSettings?.snowballAutoTrade]);
 
   useEffect(() => {
     let cancelled = false;
@@ -491,6 +538,95 @@ export default function SettingsTelegramMiniApp() {
     }
   };
 
+  const onSaveSnowballAuto = async () => {
+    setSnowSaveErr("");
+    setSnowSaveOk("");
+    const initData = getTelegramInitData();
+    if (!initData) {
+      setSnowSaveErr("ไม่พบ initData");
+      return;
+    }
+
+    const marginDefaultParsed = snowMarginDefault.trim() ? parseNumRaw(snowMarginDefault) : null;
+    const levDefaultParsed = snowLevDefault.trim() ? parseNumRaw(snowLevDefault) : null;
+    const quickRoiParsed = snowQuickTpRoiPct.trim() ? parseNumRaw(snowQuickTpRoiPct) : null;
+    const quickHoursParsed = snowQuickTpMaxHours.trim() ? parseNumRaw(snowQuickTpMaxHours) : null;
+
+    if (snowMarginDefault.trim() && marginDefaultParsed == null) {
+      setSnowSaveErr("Margin default ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowLevDefault.trim() && levDefaultParsed == null) {
+      setSnowSaveErr("Leverage default ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowQuickTpRoiPct.trim() && quickRoiParsed == null) {
+      setSnowSaveErr("Quick TP ROI% ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowQuickTpMaxHours.trim() && quickHoursParsed == null) {
+      setSnowSaveErr("Quick TP ชั่วโมง ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowMarginDefault.trim() && marginDefaultParsed != null && marginDefaultParsed <= 0) {
+      setSnowSaveErr("Margin default ต้องเป็นเลขบวก");
+      return;
+    }
+    if (snowLevDefault.trim() && levDefaultParsed != null && levDefaultParsed < 1) {
+      setSnowSaveErr("Leverage default ต้อง ≥ 1");
+      return;
+    }
+    if (snowQuickTpEnabled) {
+      if (quickRoiParsed != null && quickRoiParsed <= 0) {
+        setSnowSaveErr("Quick TP ROI% ต้องเป็นเลขบวก");
+        return;
+      }
+      if (quickHoursParsed != null && quickHoursParsed <= 0) {
+        setSnowSaveErr("Quick TP ชั่วโมง ต้องเป็นเลขบวก");
+        return;
+      }
+    }
+
+    setSnowSaving(true);
+    try {
+      const snowballAutoTrade: Record<string, unknown> = {
+        enabled: snowEnabled,
+        direction: snowDirection,
+        marginUsdt: snowMarginDefault.trim() ? marginDefaultParsed : null,
+        leverage: snowLevDefault.trim() ? levDefaultParsed : null,
+        quickTpEnabled: snowQuickTpEnabled,
+        quickTpRoiPct: snowQuickTpRoiPct.trim() ? quickRoiParsed : null,
+        quickTpMaxHours: snowQuickTpMaxHours.trim() ? quickHoursParsed : null,
+      };
+      const body: Record<string, unknown> = {
+        rotateWebhookToken: false,
+        clearMexcCreds: false,
+        snowballAutoTrade,
+      };
+      if (mexcKeyInput.trim()) body.mexcApiKey = mexcKeyInput.trim();
+      if (mexcSecretInput.trim()) body.mexcSecret = mexcSecretInput.trim();
+      const url = `${apiBase}/api/tma/trading-view-mexc`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `tma ${initData}` },
+        body: JSON.stringify(body),
+      });
+      const { text, parsed } = await readApiResponse(res);
+      if (!res.ok) {
+        setSnowSaveErr(messageFromParsed(parsed, res.statusText) + (text ? ` (${res.status})` : ""));
+        return;
+      }
+      setTvSettings(parsed as TradingViewMexcResponse);
+      setMexcKeyInput("");
+      setMexcSecretInput("");
+      setSnowSaveOk(snowEnabled ? "บันทึกแล้ว · เปิดใช้ Snowball auto-open" : "บันทึกแล้ว · ปิด Snowball auto-open");
+    } catch (e) {
+      setSnowSaveErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSnowSaving(false);
+    }
+  };
+
   const exampleJsonText = tvSettings?.exampleJson
     ? JSON.stringify(tvSettings.exampleJson, null, 2)
     : "";
@@ -508,13 +644,13 @@ export default function SettingsTelegramMiniApp() {
         <span className="siteNavSep" aria-hidden>
           |
         </span>
-        <Link href="/spark-stats">สถิติ Spark · Matrix</Link>
-        {" · "}
         <Link href="/snowball-stats">สถิติ Snowball</Link>
         <span className="siteNavSep" aria-hidden>
           |
         </span>
         <a href="#spark-auto-open">Spark auto-open</a>
+        {" · "}
+        <a href="#snowball-auto-open">Snowball auto-open</a>
         <span className="siteNavSep" aria-hidden>
           |
         </span>
@@ -892,6 +1028,138 @@ export default function SettingsTelegramMiniApp() {
               {sparkSaveOk}
             </p>
           ) : null}
+      </div>
+
+      <div id="snowball-auto-open" className="card" style={{ marginTop: "1.25rem" }}>
+        <h2>Snowball auto-open (MEXC)</h2>
+        <p className="sub" style={{ marginTop: 0 }}>
+          เมื่อ <strong>Snowball ส่งสัญญาณสำเร็จ (closed bar)</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน{" "}
+          <strong>LONG</strong>/<strong>SHORT</strong> (market) ตามสัญญาณ Snowball โดยใช้ราคาแนะนำของบอทเป็นจุดอ้างอิงสำหรับการคำนวณ Quick TP/กติกา 24h.
+        </p>
+        {tvSettings && !tvSettings.mexcCredsComplete ? (
+          <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
+            ใส่ MEXC API ด้านบนและกด <strong>บันทึก API</strong> ก่อน — auto-open ถึงจะเรียก MEXC ได้
+          </p>
+        ) : null}
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "1rem" }}>
+          <input type="checkbox" checked={snowEnabled} onChange={(e) => setSnowEnabled(e.target.checked)} />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>เปิดใช้ Snowball auto-open</strong>
+          </span>
+        </label>
+
+        <label className="sub" style={{ display: "block", marginTop: "0.75rem" }}>
+          สัญญาณ Snowball ที่เข้ากรอง
+          <select
+            style={{ display: "block", width: "100%", maxWidth: "24rem", marginTop: "0.35rem" }}
+            value={snowDirection}
+            onChange={(e) => setSnowDirection(e.target.value as "both" | "long_only" | "short_only")}
+          >
+            <option value="both">ทั้ง LONG และ SHORT</option>
+            <option value="long_only">เฉพาะ LONG</option>
+            <option value="short_only">เฉพาะ SHORT</option>
+          </select>
+        </label>
+
+        <p className="sub" style={{ marginTop: "0.85rem", fontWeight: 600 }}>
+          Margin / เลเวเรจ (default)
+        </p>
+        <p className="sub" style={{ marginTop: 0 }}>
+          ใช้กับทุกสัญญาณที่เข้ากรอง • เปิด market บน MEXC
+        </p>
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            Margin (USDT)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 100"
+              value={snowMarginDefault}
+              onChange={(e) => setSnowMarginDefault(e.target.value)}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            Leverage
+            <input
+              type="text"
+              inputMode="numeric"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 10"
+              value={snowLevDefault}
+              onChange={(e) => setSnowLevDefault(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.85rem" }}>
+          <input
+            type="checkbox"
+            checked={snowQuickTpEnabled}
+            onChange={(e) => setSnowQuickTpEnabled(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong>Quick TP</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              ถ้า ROI แตะเป้าภายในช่วงเวลาที่ตั้ง ระบบจะพยายามปิด market ทันที (ตามรอบ cron)
+            </span>
+          </span>
+        </label>
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            Quick TP ROI% (ดีฟอลต์ 30)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="30"
+              value={snowQuickTpRoiPct}
+              onChange={(e) => setSnowQuickTpRoiPct(e.target.value)}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            Quick TP max ชั่วโมง (ดีฟอลต์ 4)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="4"
+              value={snowQuickTpMaxHours}
+              onChange={(e) => setSnowQuickTpMaxHours(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <p className="sub" style={{ marginTop: "0.85rem" }}>
+          กติกาเสริม: <strong>ครบ 24 ชั่วโมง</strong> แล้วถ้ายังติดลบและไม่เข้าเกณฑ์ “รันเทรน” ระบบจะพยายามปิด market ทันที
+        </p>
+
+        <p style={{ marginTop: "0.95rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+          <button
+            type="button"
+            className="primary"
+            style={{ width: "auto", marginTop: 0 }}
+            disabled={snowSaving || tvSaving}
+            onClick={() => void onSaveSnowballAuto()}
+          >
+            {snowSaving ? "กำลังบันทึก…" : "บันทึก Snowball auto-open"}
+          </button>
+        </p>
+        {snowSaveErr ? (
+          <p className="sub" style={{ color: "var(--danger, #c44)", marginTop: "0.5rem" }}>
+            {snowSaveErr}
+          </p>
+        ) : null}
+        {snowSaveOk && !snowSaveErr ? (
+          <p className="sub" style={{ color: "#2a9d6a", marginTop: "0.5rem" }} role="status">
+            {snowSaveOk}
+          </p>
+        ) : null}
       </div>
 
       <p style={{ marginTop: "1rem" }}>

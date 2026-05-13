@@ -14,6 +14,7 @@ import {
   updatePublicFeedFiredKey,
   type IndicatorPublicFeedState,
 } from "./indicatorPublicFeedStore";
+import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import { appendSnowballStatsRow } from "./snowballStatsStore";
 import { addSnowballPendingConfirm } from "./snowballConfirmStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
@@ -331,6 +332,42 @@ function snowballDoubleBarrierWatchBandPct(): { min: number; max: number } {
 /** Snowball Confirming Bar — ติด label ความเสี่ยงในแท่ง 1 แล้วส่ง Confirmed follow-up เมื่อแท่ง 2 ปิดผ่านเกณฑ์ */
 export function snowballConfirmBarEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_CONFIRM_BAR_ENABLED", true);
+}
+
+/** กรองแท่งไส้ยาว: |open−close| / (high−low) ต้องไม่ต่ำกว่าเกณฑ์ — ใช้เฉพาะแท่งปิด (ไม่ intrabar) */
+export function snowballBodyToRangeFilterEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE_FILTER_ENABLED", true);
+}
+
+function snowballMinBodyToRangeRatio(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_MIN_BODY_TO_RANGE);
+  if (Number.isFinite(v) && v > 0 && v <= 1) return v;
+  return 0.7;
+}
+
+export function snowballSignalCandleBodyRatioOk(
+  open: number,
+  high: number,
+  low: number,
+  close: number
+): boolean {
+  if (!snowballBodyToRangeFilterEnabled()) return true;
+  const range = high - low;
+  if (!Number.isFinite(range) || range <= 0) return false;
+  const body = Math.abs(close - open);
+  if (!Number.isFinite(body)) return false;
+  return body / range >= snowballMinBodyToRangeRatio();
+}
+
+function mexcContractSymbolFromBinanceSymbol(sym: string): string {
+  const s = sym.trim().toUpperCase();
+  if (!s) return "";
+  if (s.includes("_")) return s;
+  if (s.endsWith("USDT") && s.length > 4) {
+    const base = s.slice(0, -4);
+    return `${base}_USDT`;
+  }
+  return s;
 }
 
 export function snowballWickHistoryLookback(): number {
@@ -1818,11 +1855,15 @@ type Snowball4hScanSummaryStats = {
   skippedBars: number;
   skippedStoch: number;
   longTechPass: number;
+  /** เนื้อเทียนเทียบช่วงต่ำกว่าเกณฑ์ (ไส้ยาว) */
+  longBodyRatioBlocked: number;
   longDeduped: number;
   /** กันยิงซ้ำในคลื่นเดิม (Long) */
   longWaveBlocked: number;
   longSent: number;
   bearTechPass: number;
+  /** เนื้อเทียนเทียบช่วงต่ำกว่าเกณฑ์ (ไส้ยาว) */
+  bearBodyRatioBlocked: number;
   bearDeduped: number;
   /** กันยิงซ้ำในคลื่นเดิม (Bear) */
   bearWaveBlocked: number;
@@ -1878,12 +1919,14 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push("");
   lines.push("— Long (แท่งปิด) —");
   lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.longTechPass}`);
+  lines.push(`ติดกรองเนื้อเทียน/ช่วง (ไส้ยาว): ${stats.longBodyRatioBlocked}`);
   lines.push(`ติด dedupe หรือ cooldown: ${stats.longDeduped}`);
   lines.push(`ติด wave gate (คลื่นเดิม): ${stats.longWaveBlocked}`);
   lines.push(`ส่ง Telegram สำเร็จ: ${stats.longSent}`);
   lines.push("");
   lines.push("— Bear (แท่งปิด) —");
   lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.bearTechPass}`);
+  lines.push(`ติดกรองเนื้อเทียน/ช่วง (ไส้ยาว): ${stats.bearBodyRatioBlocked}`);
   lines.push(`ติด dedupe หรือ cooldown: ${stats.bearDeduped}`);
   lines.push(`ติด wave gate (คลื่นเดิม): ${stats.bearWaveBlocked}`);
   lines.push(`ส่ง Telegram สำเร็จ: ${stats.bearSent}`);
@@ -2002,10 +2045,12 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           skippedBars: 0,
           skippedStoch: 0,
           longTechPass: 0,
+          longBodyRatioBlocked: 0,
           longDeduped: 0,
           longWaveBlocked: 0,
           longSent: 0,
           bearTechPass: 0,
+          bearBodyRatioBlocked: 0,
           bearDeduped: 0,
           bearWaveBlocked: 0,
           bearSent: 0,
@@ -2338,6 +2383,23 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const barOpenSec = t15[iEval];
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
 
+        if (!intrabar && snowballBodyToRangeFilterEnabled()) {
+          const oE = o15[iEval];
+          const loE = l15[iEval];
+          if (
+            !Number.isFinite(oE!) ||
+            !Number.isFinite(hiE!) ||
+            !Number.isFinite(loE!) ||
+            !Number.isFinite(clE!)
+          ) {
+            return;
+          }
+          if (!snowballSignalCandleBodyRatioOk(oE!, hiE!, loE!, clE!)) {
+            if (snowScanStats) snowScanStats.longBodyRatioBlocked++;
+            return;
+          }
+        }
+
         if (snowScanStats && !intrabar) snowScanStats.longTechPass++;
 
         const key = `${symbol}|SNOWBALL|${snowTf}|BULL`;
@@ -2489,6 +2551,24 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now, clE!);
             notified += 1;
             if (snowScanStats && !intrabar) snowScanStats.longSent++;
+            if (!intrabar) {
+              try {
+                await runSnowballAutoTradeAfterSnowballAlert({
+                  contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
+                  binanceSymbol: symbol,
+                  side: "long",
+                  referenceEntryPrice: clE!,
+                  signalBarOpenSec: barOpenSec,
+                  signalBarTf: snowTf,
+                  signalBarLow:
+                    typeof longSignalLow === "number" && Number.isFinite(longSignalLow) ? longSignalLow : null,
+                  vol: vE!,
+                  volSma: vsE!,
+                });
+              } catch (e) {
+                console.error("[indicatorPublicFeed] snowball auto-open LONG", symbol, e);
+              }
+            }
             if (!intrabar && longConfirmTrigger && longRiskFlags.length > 0) {
               try {
                 await addSnowballPendingConfirm({
@@ -2581,6 +2661,23 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
         const barOpenSec = t15[iEval];
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
+
+        if (!intrabar && snowballBodyToRangeFilterEnabled()) {
+          const oE = o15[iEval];
+          const hiE = h15[iEval];
+          if (
+            !Number.isFinite(oE!) ||
+            !Number.isFinite(hiE!) ||
+            !Number.isFinite(loE!) ||
+            !Number.isFinite(clE!)
+          ) {
+            return;
+          }
+          if (!snowballSignalCandleBodyRatioOk(oE!, hiE!, loE!, clE!)) {
+            if (snowScanStats) snowScanStats.bearBodyRatioBlocked++;
+            return;
+          }
+        }
 
         if (snowScanStats && !intrabar) snowScanStats.bearTechPass++;
 
@@ -2679,6 +2776,23 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now, clE!);
             notified += 1;
             if (snowScanStats && !intrabar) snowScanStats.bearSent++;
+            if (!intrabar) {
+              try {
+                await runSnowballAutoTradeAfterSnowballAlert({
+                  contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
+                  binanceSymbol: symbol,
+                  side: "short",
+                  referenceEntryPrice: clE!,
+                  signalBarOpenSec: barOpenSec,
+                  signalBarTf: snowTf,
+                  signalBarLow: null,
+                  vol: vE!,
+                  volSma: vsE!,
+                });
+              } catch (e) {
+                console.error("[indicatorPublicFeed] snowball auto-open SHORT", symbol, e);
+              }
+            }
             if (!intrabar && bearConfirmTrigger && bearRiskFlags.length > 0) {
               try {
                 await addSnowballPendingConfirm({

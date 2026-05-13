@@ -55,6 +55,7 @@ import {
   ensureTradingViewMexcUserRow,
   orderSideEffective,
   saveTradingViewMexcSettings,
+  type SnowballAutoTradeDirection,
   type SaveTradingViewMexcInput,
   type SparkAutoTradeByVol,
   type SparkAutoTradeOrderSide,
@@ -780,6 +781,20 @@ export function tradingViewSparkAutoTradePayloadFromRow(row: TradingViewMexcUser
   };
 }
 
+export function tradingViewSnowballAutoTradePayloadFromRow(
+  row: TradingViewMexcUserSettings
+): Record<string, unknown> {
+  return {
+    enabled: row.snowballAutoTradeEnabled ?? false,
+    direction: row.snowballAutoTradeDirection ?? "both",
+    marginUsdt: row.snowballAutoTradeMarginUsdt ?? null,
+    leverage: row.snowballAutoTradeLeverage ?? null,
+    quickTpEnabled: row.snowballAutoTradeQuickTpEnabled ?? false,
+    quickTpRoiPct: row.snowballAutoTradeQuickTpRoiPct ?? null,
+    quickTpMaxHours: row.snowballAutoTradeQuickTpMaxHours ?? null,
+  };
+}
+
 /** ประกอบ row แล้วรันตัว resolver เดียวกับ cron */
 function mergeTradingViewRowForSparkValidation(
   prev: TradingViewMexcUserSettings,
@@ -960,6 +975,66 @@ function parseSparkAutoTradeNested(
   return { ok: true, patch: patchPart };
 }
 
+function normalizeSnowballDirection(raw: unknown): SnowballAutoTradeDirection | null {
+  const k = typeof raw === "string" ? raw.trim().toLowerCase().replace(/-/g, "_") : "";
+  if (k === "" || k === "both") return "both";
+  if (k === "long_only" || k === "longonly") return "long_only";
+  if (k === "short_only" || k === "shortonly") return "short_only";
+  return null;
+}
+
+function parseSnowballAutoTradeNested(
+  raw: unknown
+):
+  | { ok: false; error: string }
+  | { ok: true; patch: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret"> } {
+  if (raw === undefined || raw === null) return { ok: false, error: "missing_snowball_bundle" };
+  if (typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: "snowball_must_object" };
+  const o = raw as Record<string, unknown>;
+
+  let enabled = false;
+  if (typeof o.enabled === "boolean") enabled = o.enabled;
+  else if (o.enabled === "1" || o.enabled === 1 || o.enabled === "true") enabled = true;
+
+  const dir = normalizeSnowballDirection(o.direction);
+  if (!dir) return { ok: false, error: "snowball_direction_invalid" };
+
+  const numOrEmpty = (
+    key: string
+  ): { v: number | null | undefined; err?: string } => {
+    if (!(key in o)) return { v: undefined };
+    const x = o[key];
+    if (x === null || x === "" || x === undefined) return { v: null };
+    const n = typeof x === "number" ? x : Number(String(x).replace(/,/g, "").trim());
+    if (!Number.isFinite(n)) return { v: undefined, err: `${key}_not_number` };
+    return { v: n };
+  };
+
+  const mMargin = numOrEmpty("marginUsdt");
+  const mLev = numOrEmpty("leverage");
+  const mRoi = numOrEmpty("quickTpRoiPct");
+  const mMaxH = numOrEmpty("quickTpMaxHours");
+  if (mMargin.err || mLev.err || mRoi.err || mMaxH.err) return { ok: false, error: "snowball_numeric_invalid" };
+
+  let quickTpEnabled = false;
+  if (typeof o.quickTpEnabled === "boolean") quickTpEnabled = o.quickTpEnabled;
+  else if (o.quickTpEnabled === "1" || o.quickTpEnabled === 1 || o.quickTpEnabled === "true") quickTpEnabled = true;
+
+  const patchPart: Omit<
+    SaveTradingViewMexcInput,
+    "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
+  > = {
+    snowballAutoTradeEnabled: enabled,
+    snowballAutoTradeDirection: dir,
+    snowballAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
+    snowballAutoTradeLeverage: mLev.v as number | null | undefined,
+    snowballAutoTradeQuickTpEnabled: quickTpEnabled,
+    snowballAutoTradeQuickTpRoiPct: mRoi.v as number | null | undefined,
+    snowballAutoTradeQuickTpMaxHours: mMaxH.v as number | null | undefined,
+  };
+  return { ok: true, patch: patchPart };
+}
+
 export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
   status: number;
   json: Record<string, unknown>;
@@ -989,6 +1064,7 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
       sparkAutoTradeNote:
         "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ) — ถ้าเปิด time-stop ใน Settings ระบบจะคิวปิด market หลังครบชั่วโมงที่ตั้ง (สแกนตามรอบ cron ticker Spark ~5 นาที)",
       sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
+      snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),
     },
   };
 }
@@ -1044,6 +1120,17 @@ export async function liffSetTradingViewMexcSettings(
     }
   }
 
+  const snowballBundle = b.snowballAutoTrade;
+  const hasSnowballNested = snowballBundle !== undefined && snowballBundle !== null;
+  let snowballPatchMerged: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret"> | undefined;
+  if (hasSnowballNested) {
+    const parsed = parseSnowballAutoTradeNested(snowballBundle);
+    if (!parsed.ok) {
+      return { status: 400, json: { error: parsed.error } };
+    }
+    snowballPatchMerged = parsed.patch;
+  }
+
   const row = await saveTradingViewMexcSettings(userId, {
     mexcApiKey: key,
     mexcSecret: sec,
@@ -1051,6 +1138,7 @@ export async function liffSetTradingViewMexcSettings(
     clearMexcCreds: clearMexc,
     preserveSparkAutoTrade: !hasSparkNested,
     ...(sparkPatchMerged ?? {}),
+    ...(snowballPatchMerged ?? {}),
   });
 
   const { origin, path } = publicAppBaseForTvWebhook();
@@ -1077,6 +1165,7 @@ export async function liffSetTradingViewMexcSettings(
       sparkAutoTradeNote:
         "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ) — ถ้าเปิด time-stop ใน Settings ระบบจะคิวปิด market หลังครบชั่วโมงที่ตั้ง (สแกนตามรอบ cron ticker Spark ~5 นาที)",
       sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
+      snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),
     },
   };
 }

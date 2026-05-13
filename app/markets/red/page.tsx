@@ -174,10 +174,6 @@ export default async function MarketsRedPage({
         <span className="siteNavSep" aria-hidden>
           |
         </span>
-        <Link href="/spark-stats">สถิติ Spark</Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
         <Link href="/settings">Settings</Link>
       </p>
     </main>

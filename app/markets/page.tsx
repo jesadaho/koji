@@ -197,10 +197,6 @@ export default async function MarketsPage({
         <span className="siteNavSep" aria-hidden>
           |
         </span>
-        <Link href="/spark-stats">สถิติ Spark · Matrix</Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
         <Link href="/snowball-stats">สถิติ Snowball</Link>
         <span className="siteNavSep" aria-hidden>
           |
