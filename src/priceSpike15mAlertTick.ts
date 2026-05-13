@@ -13,7 +13,7 @@ import {
   savePriceSpike15mAlertState,
   type PriceSpike15mAlertState,
 } from "./priceSpike15mAlertStateStore";
-import { appendSparkFireLog, enqueueSparkFollowUp } from "./sparkFollowUpStore";
+import { appendSparkFireLog, enqueueSparkFollowUp, loadSparkFollowUpState } from "./sparkFollowUpStore";
 import {
   isSparkAutotradeCronEnabled,
   loadSparkAutoTradeTickBatch,
@@ -301,6 +301,9 @@ export async function runPriceSpike15mAlertTick(
     );
   }
 
+  const sparkFollowUpState = await loadSparkFollowUpState();
+  const symbolsInSparkFollowUpPending = new Set(sparkFollowUpState.pending.map((p) => p.symbol.trim()).filter(Boolean));
+
   let notifiedPushes = 0;
   let symbolsHit = 0;
   const nowSec = Math.floor(Date.now() / 1000);
@@ -310,6 +313,10 @@ export async function runPriceSpike15mAlertTick(
   for (const sym of symbols) {
     const m = bySym.get(sym);
     if (!m) continue;
+    if (symbolsInSparkFollowUpPending.has(sym)) {
+      // ยังติดตาม follow-up อยู่ — ไม่คำนวณสัญญาณ Spark / ไม่ดึง kline ซ้ำ
+      continue;
+    }
     const p = m.lastPrice;
     const sampled = appendPriceSample(state[sym], p, nowSec, keepSec);
     state[sym] = sampled;
