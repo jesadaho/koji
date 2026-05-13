@@ -232,7 +232,7 @@ export async function removeSnowballStatsDuplicatesInLastHours(input: {
   }
 
   const toDrop = new Set<string>();
-  for (const arr of byKey.values()) {
+  for (const arr of Array.from(byKey.values())) {
     if (arr.length <= 1) continue;
     // keep the first alert; drop subsequent alerts within windowMs of the last kept
     let lastKeptMs = arr[0]!.alertedAtMs ?? 0;
