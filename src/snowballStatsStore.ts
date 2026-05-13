@@ -183,3 +183,76 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
 export async function replaceSnowballStatsRows(rows: SnowballStatsRow[]): Promise<void> {
   await saveSnowballStatsState({ rows });
 }
+
+const EMPTY_SNOWBALL_STATS_STATE: SnowballStatsState = { rows: [] };
+
+/**
+ * ล้าง Snowball stats ทั้งหมด
+ * KV key `koji:snowball_alert_stats` หรือไฟล์ data/snowball_alert_stats.json
+ */
+export async function resetSnowballStatsState(): Promise<void> {
+  await saveSnowballStatsState(EMPTY_SNOWBALL_STATS_STATE);
+}
+
+function normalizeSymbol(s: string): string {
+  return s.trim().toUpperCase();
+}
+
+/**
+ * ลบแถว Snowball stats ที่ซ้ำภายใน window ชั่วโมง (ต่อ symbol+side) โดยคงแถวที่แจ้งก่อน (แถวแรก) ไว้
+ * - ถ้าส่ง `symbol` จะทำเฉพาะเหรียญนั้น
+ * - ถ้าไม่ส่ง จะทำทุกเหรียญ
+ * @returns จำนวนแถวที่ลบออก
+ */
+export async function removeSnowballStatsDuplicatesInLastHours(input: {
+  nowMs: number;
+  windowHours: number;
+  symbol?: string;
+}): Promise<{ removed: number; kept: number; scanned: number }> {
+  const windowMs = Math.max(1, input.windowHours) * 3600 * 1000;
+  const nowMs = input.nowMs;
+  const symbolFilter = input.symbol ? normalizeSymbol(input.symbol) : null;
+
+  const state = await loadSnowballStatsState();
+  const rows = state.rows ?? [];
+  const scanned = rows.length;
+
+  // group -> oldest first
+  const byKey = new Map<string, SnowballStatsRow[]>();
+  for (const r of rows) {
+    const sym = normalizeSymbol(r.symbol);
+    if (symbolFilter && sym !== symbolFilter) continue;
+    const key = `${sym}|${r.side}`;
+    const arr = byKey.get(key) ?? [];
+    arr.push(r);
+    byKey.set(key, arr);
+  }
+  for (const arr of byKey.values()) {
+    arr.sort((a, b) => (a.alertedAtMs ?? 0) - (b.alertedAtMs ?? 0));
+  }
+
+  const toDrop = new Set<string>();
+  for (const arr of byKey.values()) {
+    if (arr.length <= 1) continue;
+    // keep the first alert; drop subsequent alerts within windowMs of the last kept
+    let lastKeptMs = arr[0]!.alertedAtMs ?? 0;
+    for (let i = 1; i < arr.length; i++) {
+      const r = arr[i]!;
+      const t = r.alertedAtMs ?? 0;
+      const dt = t - lastKeptMs;
+      if (dt >= 0 && dt <= windowMs) {
+        toDrop.add(r.id);
+      } else {
+        lastKeptMs = t;
+      }
+    }
+  }
+
+  if (toDrop.size === 0) {
+    return { removed: 0, kept: rows.length, scanned };
+  }
+
+  const next = rows.filter((r) => !toDrop.has(r.id));
+  await saveSnowballStatsState({ rows: next });
+  return { removed: toDrop.size, kept: next.length, scanned };
+}

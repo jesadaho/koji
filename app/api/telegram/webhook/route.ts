@@ -33,6 +33,7 @@ import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
 import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
 import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
 import { isAdminTelegramUserId } from "@/src/adminIds";
+import { removeSnowballStatsDuplicatesInLastHours, resetSnowballStatsState } from "@/src/snowballStatsStore";
 import {
   formatPublicIndicatorFeedDebugMessage,
   formatSnowballChecklistDebugMessage,
@@ -118,6 +119,39 @@ function wantsPortfolioStatusCommand(trimmed: string, normalized: string): boole
     cand === "สรุปพอร์ต" ||
     cand === "สถานะพอร์ต"
   );
+}
+
+/** ล้างสถิติ Snowball — admin only */
+function isSnowballStatsResetCommand(trimmed: string, normalized: string): boolean {
+  const t = trimmed.trim();
+  const n = normalized.trim().toLowerCase();
+  if (/^\/?snowball\s*(?:reset|clear)(?:@\S+)?\s*$/i.test(t)) return true;
+  if (/^\/?reset\s*snowball(?:@\S+)?\s*$/i.test(t)) return true;
+  if (t === "#snowballreset") return true;
+  return (
+    n === "snowball reset" ||
+    n === "reset snowball" ||
+    n === "ล้างสถิติ snowball" ||
+    n === "ล้างสถิติ สโนว์บอล" ||
+    n === "ล้างสถิติsnowball"
+  );
+}
+
+/** ลบแถวซ้ำ Snowball stats ใน 24h (คงแถวล่าสุด) — admin only */
+function parseSnowballStatsDedupeCommand(trimmed: string, normalized: string): { symbol?: string } | null {
+  const t = trimmed.trim();
+  const n = normalized.trim().replace(/\s+/g, " ").toLowerCase();
+
+  // slash forms
+  let m = t.match(/^\/?snowball\s+(?:dedupe|dedup|dupes|duplicates)(?:@\S+)?\s*(\S+)?\s*$/i);
+  if (m) return { symbol: m[1]?.trim() || undefined };
+  m = t.match(/^\/?snowball\s+clear\s+dupes?(?:@\S+)?\s*(\S+)?\s*$/i);
+  if (m) return { symbol: m[1]?.trim() || undefined };
+
+  // text forms
+  m = n.match(/^(?:snowball\s+dedupe|snowball\s+clear\s+dupes|clear\s+snowball\s+dupes)(?:\s+(\S+))?$/i);
+  if (m) return { symbol: m[1]?.trim() || undefined };
+  return null;
 }
 
 function formatBkkFromSec(tsSec: number): string {
@@ -671,6 +705,94 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] spark matrix reset error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (isSnowballStatsResetCommand(text, normalized)) {
+    if (!isAdminTelegramUserId(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          [
+            "ไม่ได้รับอนุญาตให้ล้างสถิติ Snowball",
+            "",
+            "ตั้งค่า env: KOJI_ADMIN_IDS=<Telegram user id ของคุณ>",
+            "(หลายคนคั่นด้วยจุลภาค) แล้ว redeploy",
+          ].join("\n"),
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] snowball stats reset deny reply", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      await resetSnowballStatsState();
+      await sendTelegramMessageToChat(
+        String(chatId),
+        [
+          "✅ ล้างข้อมูล Snowball stats แล้ว",
+          "",
+          "ล้าง: ตารางสถิติ Snowball (follow-up 4h/12h/24h · outcome · RR)",
+          "",
+          "เปิด Mini App Telegram หน้า «สถิติ Snowball» จะเห็นข้อมูลว่างจนมีสัญญาณใหม่",
+        ].join("\n"),
+        threadOpts,
+      );
+    } catch (e) {
+      console.error("[telegram/webhook] snowball stats reset", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(String(chatId), `ล้างไม่สำเร็จ — ${detail.slice(0, 300)}`, threadOpts);
+      } catch (sendErr) {
+        console.error("[telegram/webhook] snowball stats reset error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const snowDedupe = parseSnowballStatsDedupeCommand(text, normalized);
+  if (snowDedupe) {
+    if (!isAdminTelegramUserId(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          [
+            "ไม่ได้รับอนุญาตให้ล้างแถวซ้ำ Snowball stats",
+            "",
+            "ตั้งค่า env: KOJI_ADMIN_IDS=<Telegram user id ของคุณ>",
+            "(หลายคนคั่นด้วยจุลภาค) แล้ว redeploy",
+          ].join("\n"),
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] snowball stats dedupe deny reply", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const sym = snowDedupe.symbol;
+      const r = await removeSnowballStatsDuplicatesInLastHours({ nowMs: Date.now(), windowHours: 24, symbol: sym });
+      await sendTelegramMessageToChat(
+        String(chatId),
+        [
+          "🧹 Snowball stats — clear dupes (24h)",
+          sym ? `เหรียญ: ${sym.toUpperCase()}` : "เหรียญ: ทุกเหรียญ",
+          "",
+          `ลบ: ${r.removed} แถว`,
+          `คงไว้: ${r.kept} แถว`,
+        ].join("\n"),
+        threadOpts,
+      );
+    } catch (e) {
+      console.error("[telegram/webhook] snowball stats dedupe", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(String(chatId), `ทำไม่สำเร็จ — ${detail.slice(0, 300)}`, threadOpts);
+      } catch (sendErr) {
+        console.error("[telegram/webhook] snowball stats dedupe error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });
