@@ -400,9 +400,25 @@ code {
   padding: 1rem 1rem 2rem;
 }
 
-/* รุ่นกว้าง — ใช้กับหน้าที่มีคอลัมน์เยอะ เช่น Snowball stats (13 คอลัมน์) */
+/* รุ่นกว้าง — หน้าตารางคอลัมน์เยอะ (เช่น Snowball 13 คอลัมน์): เต็มความกว้างคอนเทนเนอร์ ไม่จำกัดที่ 96rem */
 .sparkStatsPage--wide {
-  max-width: min(100%, 96rem);
+  max-width: 100%;
+  width: 100%;
+}
+
+.sparkStatsPage--wide .sparkStatsMatrixSection {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.sparkStatsPage--wide .sparkMatrixScroll {
+  width: 100%;
+}
+
+/* อย่างน้อยเท่าความกว้างที่คอลัมน์ต้องการ หรือเต็มคอนเทนเนอร์ — ลดการตัดหัวคอลัมน์ */
+.sparkStatsPage--wide .sparkMatrixTable {
+  min-width: max(100%, max-content);
 }
 
 /* แยกบล็อก: รวมทั้งหมด vs Spark ขึ้น vs Spark ลง (matrix + แยกเหรียญในกลุ่มเดียวกัน) */
