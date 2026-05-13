@@ -144,6 +144,7 @@ function fmtPctCell(price: number | null, pct: number | null): ReactNode {
 
 function outcomeLabel(o: SnowballStatsRow["outcome"]): string {
   if (o === "pending") return "Pending";
+  if (o === "win_quick_tp30") return "Win (Quick TP30%)";
   if (o === "win_trend") return "Win (Trend)";
   if (o === "loss") return "Loss";
   return "Flat";

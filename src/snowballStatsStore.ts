@@ -25,7 +25,7 @@ async function ensureFile(): Promise<void> {
   }
 }
 
-export type SnowballStatsOutcome = "pending" | "win_trend" | "loss" | "flat";
+export type SnowballStatsOutcome = "pending" | "win_trend" | "win_quick_tp30" | "loss" | "flat";
 
 export type SnowballStatsRow = {
   id: string;
@@ -36,6 +36,8 @@ export type SnowballStatsRow = {
   alertedAtMs: number;
   /** open time แท่งสัญญาณที่อิง (sec) */
   signalBarOpenSec: number;
+  /** low ของแท่งสัญญาณ (ใช้เป็นฐาน “Low ของแท่งเบรก”) — เติมจาก follow-up tick ถ้ายังไม่มีตอนยิงสัญญาณ */
+  signalBarLow?: number | null;
   /** TF ของแท่งสัญญาณ (ถ้าไม่มีในข้อมูลเก่า = 15m) */
   signalBarTf?: "15m" | "1h" | "4h";
   entryPrice: number;
@@ -127,6 +129,8 @@ export type AppendSnowballStatsInput = {
   alertedAtIso: string;
   alertedAtMs: number;
   signalBarOpenSec: number;
+  /** low ของแท่งสัญญาณ (ถ้ามี) */
+  signalBarLow?: number | null;
   signalBarTf?: "15m" | "1h" | "4h";
   entryPrice: number;
   intrabar: boolean;
@@ -146,6 +150,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     alertedAtIso: input.alertedAtIso,
     alertedAtMs: input.alertedAtMs,
     signalBarOpenSec: input.signalBarOpenSec,
+    signalBarLow: input.signalBarLow ?? null,
     signalBarTf: input.signalBarTf ?? "15m",
     entryPrice: input.entryPrice,
     intrabar: input.intrabar,

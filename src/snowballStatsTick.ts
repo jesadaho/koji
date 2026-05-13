@@ -46,6 +46,34 @@ function outcomeLossMaxPct(): number {
   return -0.3;
 }
 
+function outcomeQuickTp30MinPct(): number {
+  const v = Number(process.env.SNOWBALL_STATS_OUTCOME_QUICK_TP30_MIN_PCT);
+  if (Number.isFinite(v) && v > 0 && v < 200) return v;
+  return 30;
+}
+
+function outcomeRunTrendMaxDdPct(): number {
+  const v = Number(process.env.SNOWBALL_STATS_OUTCOME_RUN_TREND_MAX_DD_PCT);
+  if (Number.isFinite(v) && v > 0 && v < 100) return v;
+  return 3;
+}
+
+function passesRunTrendGuard(row: SnowballStatsRow): boolean {
+  // ตอนนี้ snowball stats เป็น Binance 15m long/short ได้ แต่กติกา “หลุด Low ของแท่งเบรก” ที่ผู้ใช้ให้มาคือ long-case
+  // ใช้เฉพาะ long ก่อน (ถ้าต้องการ short จะเพิ่ม signalBarHigh ภายหลัง)
+  if (row.side !== "long") return false;
+  const cur = row.price24h;
+  const baseLow = row.signalBarLow;
+  const maxDd = row.maxDrawdownPct;
+  if (cur == null || !Number.isFinite(cur)) return false;
+  if (baseLow == null || !Number.isFinite(baseLow) || baseLow <= 0) return false;
+  if (maxDd == null || !Number.isFinite(maxDd) || maxDd < 0) return false;
+  if (cur <= baseLow) return false;
+  if (maxDd > outcomeRunTrendMaxDdPct()) return false;
+  if (row.svpHoleYn !== "N") return false;
+  return true;
+}
+
 function formatRr(rewardPct: number, riskPct: number): string {
   if (!Number.isFinite(riskPct) || riskPct <= 1e-9) return "N/A";
   if (!Number.isFinite(rewardPct) || rewardPct <= 0) return "N/A";
@@ -103,6 +131,14 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
     if (!pack || pack.timeSec.length === 0) continue;
 
     const { timeSec, high, low, close } = pack;
+    // เติมฐาน low ของแท่งสัญญาณ (ถ้ายังไม่มี) — ใช้แท่งที่ open time ตรงกับ signalBarOpenSec
+    if (row.signalBarLow == null || !Number.isFinite(row.signalBarLow) || row.signalBarLow <= 0) {
+      const iSignal = timeSec.findIndex((t) => t === row.signalBarOpenSec);
+      if (iSignal >= 0) {
+        const lo = low[iSignal];
+        if (typeof lo === "number" && Number.isFinite(lo) && lo > 0) row.signalBarLow = lo;
+      }
+    }
     const iFirst = timeSec.findIndex((t) => t + KLINE_GRAN_SEC >= ac);
     if (iFirst < 0) continue;
 
@@ -182,10 +218,18 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
     if (finalized) {
       const winMin = outcomeWinMinPct();
       const lossMax = outcomeLossMaxPct();
+      const quickTp30 = outcomeQuickTp30MinPct();
       const pct24 = row.pct24h ?? 0;
-      if (pct24 >= winMin) row.outcome = "win_trend";
-      else if (pct24 <= lossMax) row.outcome = "loss";
-      else row.outcome = "flat";
+      if (row.maxRoiPct != null && Number.isFinite(row.maxRoiPct) && row.maxRoiPct >= quickTp30) {
+        row.outcome = "win_quick_tp30";
+      } else if (pct24 >= winMin) {
+        row.outcome = "win_trend";
+      } else if (pct24 <= lossMax) {
+        // กติกา “ยังรันเทรนด์ได้” แม้ 24h ติดลบ: ไม่หลุดฐาน + DD ไม่ลึก + ไม่อยู่ใน SVP hole
+        row.outcome = passesRunTrendGuard(row) ? "win_trend" : "loss";
+      } else {
+        row.outcome = "flat";
+      }
 
       const reward =
         rrRewardSource() === "mfe" ? (row.maxRoiPct ?? 0) : (row.pct24h ?? 0);
