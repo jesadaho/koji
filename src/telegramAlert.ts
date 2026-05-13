@@ -241,6 +241,11 @@ export async function sendTelegramAlertMessage(text: string): Promise<void> {
 export type SendTelegramPublicBroadcastOptions = {
   /** ครอบข้อความด้วย &lt;pre&gt; + parse_mode HTML — monospace ใน Telegram (เฉพาะเมื่อความยาวพอดี) */
   monospaceHtml?: boolean;
+  /**
+   * Forum topic id — บังคับห้องปลายทาง (เช่น ให้ตรง TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID โดยไม่พึ่ง resolve ของ kind อื่น)
+   * เมื่อไม่ส่ง → ใช้ topic ตาม `kind` (เช่น technical → TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID)
+   */
+  messageThreadId?: number;
 };
 
 /**
@@ -258,8 +263,15 @@ export async function sendTelegramPublicBroadcastMessage(
       "ไม่มี chat ปลายทาง: ตั้ง TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID) — หรือ legacy TELEGRAM_MARKET_PULSE_CHAT_ID",
     );
   }
+  const tidOverride = options?.messageThreadId;
   const tid =
-    kind == null ? resolvePublicBroadcastMessageThreadId() : resolvePublicBroadcastMessageThreadIdForKind(kind);
+    typeof tidOverride === "number" &&
+    Number.isInteger(tidOverride) &&
+    tidOverride > 0
+      ? tidOverride
+      : kind == null
+        ? resolvePublicBroadcastMessageThreadId()
+        : resolvePublicBroadcastMessageThreadIdForKind(kind);
 
   let payload = text;
   const chatOpts: SendTelegramMessageOptions = tid != null ? { messageThreadId: tid } : {};
@@ -271,4 +283,14 @@ export async function sendTelegramPublicBroadcastMessage(
     }
   }
   await sendTelegramMessageToChat(chatId, payload, chatOpts);
+}
+
+/**
+ * ส่งไปกลุ่มสาธารณะหัวข้อ **Technical** (`TELEGRAM_PUBLIC_TECHNICAL_MESSAGE_THREAD_ID` หรือ fallback ตาม `resolvePublicBroadcastMessageThreadIdForKind("technical")`)
+ */
+export async function sendTechnicalPublicBroadcastMessage(
+  text: string,
+  options?: SendTelegramPublicBroadcastOptions
+): Promise<void> {
+  return sendTelegramPublicBroadcastMessage(text, "technical", options);
 }

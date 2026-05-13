@@ -194,6 +194,48 @@ const EXCLUDED_TOP_SYMBOLS = new Set([
   "GBPUSDT",
 ]);
 
+type ExchangeInfoSymbolRow = {
+  symbol?: string;
+  status?: string;
+  contractType?: string;
+  quoteAsset?: string;
+};
+
+/**
+ * สัญลักษณ์ USDT-M PERPETUAL ทั้งหมดที่ TRADING จาก exchangeInfo (สแกน universe เต็ม)
+ */
+export async function fetchAllBinanceUsdmLinearSymbols(): Promise<string[]> {
+  if (!isBinanceIndicatorFapiEnabled()) return [];
+  try {
+    const { data } = await axios.get<{ symbols?: ExchangeInfoSymbolRow[] }>(`${FAPI}/fapi/v1/exchangeInfo`, {
+      timeout: 60_000,
+    });
+    const rows = data.symbols;
+    if (!Array.isArray(rows)) return [];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue;
+      if (row.status !== "TRADING" || row.contractType !== "PERPETUAL") continue;
+      if (row.quoteAsset !== "USDT") continue;
+      const s = typeof row.symbol === "string" ? row.symbol.trim().toUpperCase() : "";
+      if (!s || !s.endsWith("USDT")) continue;
+      if (seen.has(s)) continue;
+      seen.add(s);
+      out.push(s);
+    }
+    out.sort();
+    return out;
+  } catch (e) {
+    if (isBinance451Geo(e)) {
+      logBinance451Once("exchangeInfo", "—");
+    } else {
+      console.error("[binanceIndicatorKline] exchangeInfo", axiosBrief(e));
+    }
+    return [];
+  }
+}
+
 /**
  * ดึง Top N สัญญา USDT-M (ยกเว้น BTC/ETH และคู่ stable ที่กำหนด) เรียงจาก quoteVolume สูงสุด
  */
