@@ -82,6 +82,8 @@ const PCT_STEP_ALERTS_LOCK_KEY = "koji:lock:pct_step_alerts";
 const PCT_STEP_ALERTS_LOCK_TTL_SEC = 120;
 const SPOT_FUT_BASIS_ALERTS_LOCK_KEY = "koji:lock:spot_fut_basis_alerts";
 const SPOT_FUT_BASIS_ALERTS_LOCK_TTL_SEC = 120;
+const INDICATOR_PUBLIC_FEED_LOCK_KEY = "koji:lock:indicator_public_feed";
+const INDICATOR_PUBLIC_FEED_LOCK_TTL_SEC = 180;
 
 /** ล็อกก่อน read-modify-write pct step alerts (กัน race ระหว่าง cron 5 นาที vs 15 นาที) — local file ไม่ล็อก */
 export async function acquirePctStepAlertsLock(): Promise<boolean> {
@@ -146,6 +148,39 @@ export async function releaseSpotFutBasisAlertsLock(): Promise<void> {
   }
   if (useKvRest()) {
     await kv.del(SPOT_FUT_BASIS_ALERTS_LOCK_KEY);
+  }
+}
+
+/** ล็อกก่อน run public indicator feed (กัน cron ซ้อนกันทำให้ยิงซ้ำ เพราะ state read-modify-write) */
+export async function acquireIndicatorPublicFeedLock(): Promise<boolean> {
+  if (!useCloudStorage()) return true;
+  if (useRedisUrl()) {
+    const r = await getRedis();
+    const ok = await r.set(INDICATOR_PUBLIC_FEED_LOCK_KEY, "1", {
+      EX: INDICATOR_PUBLIC_FEED_LOCK_TTL_SEC,
+      NX: true,
+    });
+    return ok === "OK";
+  }
+  if (useKvRest()) {
+    const res = await kv.set(INDICATOR_PUBLIC_FEED_LOCK_KEY, "1", {
+      ex: INDICATOR_PUBLIC_FEED_LOCK_TTL_SEC,
+      nx: true,
+    });
+    return res === "OK";
+  }
+  return true;
+}
+
+export async function releaseIndicatorPublicFeedLock(): Promise<void> {
+  if (!useCloudStorage()) return;
+  if (useRedisUrl()) {
+    const r = await getRedis();
+    await r.del(INDICATOR_PUBLIC_FEED_LOCK_KEY);
+    return;
+  }
+  if (useKvRest()) {
+    await kv.del(INDICATOR_PUBLIC_FEED_LOCK_KEY);
   }
 }
 

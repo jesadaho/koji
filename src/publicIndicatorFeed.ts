@@ -14,8 +14,13 @@ import {
   updatePublicFeedFiredKey,
   type IndicatorPublicFeedState,
 } from "./indicatorPublicFeedStore";
+import {
+  acquireIndicatorPublicFeedLock,
+  releaseIndicatorPublicFeedLock,
+  useCloudStorage,
+} from "./remoteJsonStore";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
-import { appendSnowballStatsRow } from "./snowballStatsStore";
+import { appendSnowballStatsRow, loadSnowballStatsState, type SnowballStatsRow } from "./snowballStatsStore";
 import { addSnowballPendingConfirm } from "./snowballConfirmStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 
@@ -1957,6 +1962,22 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
     return 0;
   }
 
+  // กัน cron ซ้อนกัน (โดยเฉพาะบน Vercel ที่อาจมีหลาย instance) — ถ้าไม่มี Redis/KV state จะไม่ persist และทำให้ยิงซ้ำง่ายมาก
+  let locked = false;
+  if (useCloudStorage()) {
+    try {
+      locked = await acquireIndicatorPublicFeedLock();
+    } catch (e) {
+      console.error("[indicatorPublicFeed] acquire lock failed", e);
+      locked = false;
+    }
+    if (!locked) {
+      console.info("[indicatorPublicFeed] skipped (lock busy)");
+      return 0;
+    }
+  }
+
+  try {
   const rsiOn = envFlagOn("INDICATOR_PUBLIC_RSI_ENABLED", true);
   const emaOn = envFlagOn("INDICATOR_PUBLIC_EMA_ENABLED", true);
   const divOn = isPublicRsiDivergenceEnabled();
@@ -2035,6 +2056,29 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
   let state = await loadIndicatorPublicFeedState();
   let notified = 0;
+
+  // กัน Snowball ยิงซ้ำข้าม type (SUPER/WATCHLIST/…) โดยดู “pending” ในสถิติ
+  // ถ้ามี pending อยู่แล้วสำหรับ (symbol, tf, side) ให้ข้ามแจ้งเตือนเพิ่มจนกว่าจะ finalize
+  const snowballPendingKeys = new Set<string>();
+  if (snowballOn) {
+    try {
+      const stats = await loadSnowballStatsState();
+      const rows = (stats?.rows ?? []) as SnowballStatsRow[];
+      for (const r of rows) {
+        if (!r || r.outcome !== "pending") continue;
+        const sym = typeof r.symbol === "string" ? r.symbol.trim().toUpperCase() : "";
+        const tf = r.signalBarTf ?? "15m";
+        const side = r.side;
+        const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
+        // กันค้างยาวผิดปกติ: ถ้าเกิน ~30h ถือว่าไม่เอามาบล็อกแล้ว
+        if (atMs > 0 && now - atMs > 30 * 3600 * 1000) continue;
+        if (!sym) continue;
+        snowballPendingKeys.add(`${sym}|${tf}|${side}`);
+      }
+    } catch (e) {
+      console.error("[indicatorPublicFeed] load snowball stats for pending dedupe failed", e);
+    }
+  }
 
   const snowScanStats: Snowball4hScanSummaryStats | null =
     snowballOn && snowTf === "4h" && isSnowball4hScanSummaryToChatEnabled()
@@ -2383,6 +2427,11 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         const barOpenSec = t15[iEval];
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
 
+        if (!intrabar && snowballPendingKeys.has(`${symbol}|${snowTf}|long`)) {
+          if (snowScanStats) snowScanStats.longDeduped++;
+          return;
+        }
+
         if (!intrabar && snowballBodyToRangeFilterEnabled()) {
           const oE = o15[iEval];
           const loE = l15[iEval];
@@ -2553,18 +2602,22 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             if (snowScanStats && !intrabar) snowScanStats.longSent++;
             if (!intrabar) {
               try {
-                await runSnowballAutoTradeAfterSnowballAlert({
-                  contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
-                  binanceSymbol: symbol,
-                  side: "long",
-                  referenceEntryPrice: clE!,
-                  signalBarOpenSec: barOpenSec,
-                  signalBarTf: snowTf,
-                  signalBarLow:
-                    typeof longSignalLow === "number" && Number.isFinite(longSignalLow) ? longSignalLow : null,
-                  vol: vE!,
-                  volSma: vsE!,
-                });
+                // Auto-open เฉพาะ SUPER SNOWBALL (A+) เท่านั้น
+                const isSuperSnowball = Boolean(dbOn && longTier === "a_plus");
+                if (isSuperSnowball) {
+                  await runSnowballAutoTradeAfterSnowballAlert({
+                    contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
+                    binanceSymbol: symbol,
+                    side: "long",
+                    referenceEntryPrice: clE!,
+                    signalBarOpenSec: barOpenSec,
+                    signalBarTf: snowTf,
+                    signalBarLow:
+                      typeof longSignalLow === "number" && Number.isFinite(longSignalLow) ? longSignalLow : null,
+                    vol: vE!,
+                    volSma: vsE!,
+                  });
+                }
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open LONG", symbol, e);
               }
@@ -2661,6 +2714,11 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
         const barOpenSec = t15[iEval];
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
+
+        if (!intrabar && snowballPendingKeys.has(`${symbol}|${snowTf}|short`)) {
+          if (snowScanStats) snowScanStats.bearDeduped++;
+          return;
+        }
 
         if (!intrabar && snowballBodyToRangeFilterEnabled()) {
           const oE = o15[iEval];
@@ -2778,17 +2836,21 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             if (snowScanStats && !intrabar) snowScanStats.bearSent++;
             if (!intrabar) {
               try {
-                await runSnowballAutoTradeAfterSnowballAlert({
-                  contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
-                  binanceSymbol: symbol,
-                  side: "short",
-                  referenceEntryPrice: clE!,
-                  signalBarOpenSec: barOpenSec,
-                  signalBarTf: snowTf,
-                  signalBarLow: null,
-                  vol: vE!,
-                  volSma: vsE!,
-                });
+                // Auto-open เฉพาะ SUPER SNOWBALL (A+) เท่านั้น
+                const isSuperSnowball = Boolean(dbOn && shortTier === "a_plus");
+                if (isSuperSnowball) {
+                  await runSnowballAutoTradeAfterSnowballAlert({
+                    contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
+                    binanceSymbol: symbol,
+                    side: "short",
+                    referenceEntryPrice: clE!,
+                    signalBarOpenSec: barOpenSec,
+                    signalBarTf: snowTf,
+                    signalBarLow: null,
+                    vol: vE!,
+                    volSma: vsE!,
+                  });
+                }
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open SHORT", symbol, e);
               }
@@ -2889,7 +2951,16 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
     }
   }
 
-  return notified;
+    return notified;
+  } finally {
+    if (locked) {
+      try {
+        await releaseIndicatorPublicFeedLock();
+      } catch (e) {
+        console.error("[indicatorPublicFeed] release lock failed", e);
+      }
+    }
+  }
 }
 
 /** เครื่องมือ debug — เดิน checklist เดียวกับ Snowball live tick บนแท่งปิดล่าสุด (+ intrabar ถ้าเปิด) */
