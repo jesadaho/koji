@@ -15,6 +15,7 @@ import {
   publicRsiEmaCrossTf,
   snowballConfirmBarEnabled,
   snowballSkipTelegramWhenPendingConfirm,
+  snowballTwoBarInlineModeEnabled,
   snowballWaveGateEnabled,
   type SnowballChecklistResult,
   type SnowballConfirmRiskGateStatus,
@@ -361,8 +362,16 @@ function renderPostChecklistTelegramHints(res: SnowballChecklistResult): string[
 
   const lines: string[] = [];
   lines.push("— ผลยิง Telegram สาธารณะ (หลัง checklist — ไม่รวมในแถว PASS ด้านบน) —");
+  if (snowballTwoBarInlineModeEnabled()) {
+    lines.push(
+      "  • Two-bar inline: เปิดอยู่ — สแกนจริงรวม confirm แท่งปิดล่าสุดในรอบเดียว (ไม่คิว pending confirm สำหรับสัญญาณใหม่); wave gate ยังใช้ราคาปิดแท่ง confirm",
+    );
+  }
   lines.push(
-    "  หมายเหตุ: รอบจริงยังมี (1) wave gate (2) confirm-bar risk → อาจไม่ส่งแม้ checklist ผ่านครบ; ถ้ามี pending คนละ type บน (symbol,tf,side) จะถูก dedupe ใน cron",
+    "  หมายเหตุ: รอบจริงยังมี wave gate; ถ้ามี pending คนละ type บน (symbol,tf,side) จะถูก dedupe ใน cron" +
+      (snowballTwoBarInlineModeEnabled()
+        ? ""
+        : " · confirm-bar risk อาจทำให้ไม่ส่งแม้ checklist ผ่านครบ"),
   );
 
   const waveLine = (side: "long" | "bear", wg: SnowballWaveGateStatus | null | undefined): void => {
@@ -479,6 +488,12 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
   lines.push("— params —");
   for (const s of res.paramsSummary) lines.push(`  • ${s}`);
   lines.push("");
+
+  if (res.twoBarInlineNotes && res.twoBarInlineNotes.length > 0) {
+    lines.push("— two-bar inline —");
+    for (const n of res.twoBarInlineNotes) lines.push(`  • ${n}`);
+    lines.push("");
+  }
 
   const nowMs = Date.now();
 
