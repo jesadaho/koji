@@ -124,7 +124,22 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       ]);
       continue;
     }
-    if (hasActiveUsdtPosition(positions, sym)) continue;
+    if (hasActiveUsdtPosition(positions, sym)) {
+      const active = positions.find((p) => p.symbol === sym && p.state === 1 && Number(p.holdVol) > 0);
+      const sideOpen = active?.positionType === 2 ? "SHORT" : "LONG";
+      const hv = active != null ? Number(active.holdVol) : NaN;
+      const volLine =
+        Number.isFinite(hv) && hv > 0 ? `โพซิชันที่เปิดอยู่: ${sideOpen} · holdVol ~${hv}` : "โพซิชันที่เปิดอยู่: มี (รายละเอียดจาก MEXC ไม่ครบ)";
+      await notifyLines(userId, [
+        "Koji — Snowball auto-open (MEXC)",
+        "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชันคู่สัญญานี้อยู่แล้ว",
+        `[${shortContractLabel(sym)}]/USDT`,
+        `สัญญาณ Snowball ล่าสุด: ${input.side.toUpperCase()}`,
+        volLine,
+        "ระบบจึงไม่เปิดซ้ำ (กันซ้อน margin / order ซ้ำ)",
+      ]);
+      continue;
+    }
 
     usersAttempted += 1;
 
