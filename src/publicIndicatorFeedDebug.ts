@@ -14,6 +14,7 @@ import {
   publicRsiDivergenceTfs,
   publicRsiEmaCrossTf,
   snowballConfirmBarEnabled,
+  snowballSkipTelegramWhenPendingConfirm,
   snowballWaveGateEnabled,
   type SnowballChecklistResult,
   type SnowballConfirmRiskGateStatus,
@@ -352,6 +353,83 @@ function renderWaveGateBlock(label: string, status: SnowballWaveGateStatus | nul
   return lines;
 }
 
+/** สรุปว่า cron จะยิง TG หรือไม่ — wave gate + confirm-bar อยู่นอก `steps` ของ PASS ด้านบน */
+function renderPostChecklistTelegramHints(res: SnowballChecklistResult): string[] {
+  const longOk = res.long.closed?.allPassed === true;
+  const bearOk = res.bear.closed?.allPassed === true;
+  if (!longOk && !bearOk) return [];
+
+  const lines: string[] = [];
+  lines.push("— ผลยิง Telegram สาธารณะ (หลัง checklist — ไม่รวมในแถว PASS ด้านบน) —");
+  lines.push(
+    "  หมายเหตุ: รอบจริงยังมี (1) wave gate (2) confirm-bar risk → อาจไม่ส่งแม้ checklist ผ่านครบ; ถ้ามี pending คนละ type บน (symbol,tf,side) จะถูก dedupe ใน cron",
+  );
+
+  const waveLine = (side: "long" | "bear", wg: SnowballWaveGateStatus | null | undefined): void => {
+    if (!snowballWaveGateEnabled()) {
+      lines.push(`  • ${side} wave gate: ปิดใน env`);
+      return;
+    }
+    if (!wg) {
+      lines.push(`  • ${side} wave gate: —`);
+      return;
+    }
+    if (!wg.active) {
+      lines.push(`  • ${side} wave gate: ปิด`);
+      return;
+    }
+    if (wg.lastAlertPrice == null || wg.lastAlertBarOpenSec == null) {
+      lines.push(`  • ${side} wave gate: ยังไม่เคยยิง — ไม่บล็อก`);
+      return;
+    }
+    if (wg.blocked) {
+      lines.push(`  • ${side} wave gate: 🔴 ไม่ยิง — ${wg.reason ?? "blocked"}`);
+    } else {
+      lines.push(`  • ${side} wave gate: 🟢 ผ่าน${wg.resetReason ? ` (${wg.resetReason})` : ""}`);
+    }
+  };
+
+  const confirmTgLine = (side: "long" | "bear"): void => {
+    if (!snowballConfirmBarEnabled()) {
+      lines.push(`  • ${side} confirm-bar: ปิดใน env — ไม่กระทบการส่งแท่ง 1`);
+      return;
+    }
+    const cr = side === "long" ? res.confirmRisk?.long : res.confirmRisk?.bear;
+    if (!cr) {
+      lines.push(`  • ${side} confirm-bar: —`);
+      return;
+    }
+    if (!cr.flagged) {
+      lines.push(`  • ${side} confirm-bar: ไม่ติด risk label — ส่ง Snowball ไปกลุ่มตามปกติ`);
+      return;
+    }
+    const n = cr.flags.length;
+    if (snowballSkipTelegramWhenPendingConfirm()) {
+      lines.push(
+        `  • ${side} confirm-bar: 🟡 มี ${n} risk label + INDICATOR_PUBLIC_SNOWBALL_SKIP_TG_ON_PENDING_CONFIRM เปิด (ค่าเริ่มต้น) → cron ไม่ส่งข้อความ Snowball ไปกลุ่มที่แท่งนี้ (ยังบันทึกสถิติ + คิว confirm แท่ง 2)`,
+      );
+    } else {
+      lines.push(
+        `  • ${side} confirm-bar: 🟡 มี ${n} risk label แต่ส่ง TG แท่ง 1 ได้ — SKIP_TG_ON_PENDING_CONFIRM=0`,
+      );
+    }
+  };
+
+  if (longOk) {
+    lines.push("LONG:");
+    waveLine("long", res.waveGate?.long);
+    confirmTgLine("long");
+  }
+  if (bearOk) {
+    if (longOk) lines.push("");
+    lines.push("BEAR:");
+    waveLine("bear", res.waveGate?.bear);
+    confirmTgLine("bear");
+  }
+  lines.push("");
+  return lines;
+}
+
 function renderSnowballSideBlock(
   title: string,
   ev: SnowballSideEval | null,
@@ -424,6 +502,8 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
     lines.push("");
   }
 
+  lines.push(...renderPostChecklistTelegramHints(res));
+
   if (res.confirmRisk) {
     lines.push("— confirm-bar risk gates (label only) —");
     lines.push(...renderConfirmRiskBlock("LONG", res.confirmRisk.long));
@@ -446,7 +526,10 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
     lines.push("");
   }
 
-  lines.push("หมายเหตุ: checklist จำลองจาก kline ล่าสุดที่ขอ + state cooldown ปัจจุบัน");
+  lines.push(
+    "หมายเหตุ: PASS ด้านบน = เฉพาะ technical checklist (volume / swing / body / dedupe / cooldown); wave gate + confirm-bar สรุปผลยิง TG ในบล็อก «ผลยิง Telegram» และรายละเอียดด้านล่าง",
+  );
+  lines.push("checklist จำลองจาก kline ล่าสุดที่ขอ + state cooldown ปัจจุบัน");
   lines.push("รอบจริงสแกนทุก ~15 นาที ที่ /api/cron/price-sync (แท่งปิดตาม TF Snowball)");
   lines.push("Expected alert คำนวณจาก Vercel cron schedule (ทุก 15 นาที UTC)");
   lines.push("Swing HH / VAH: เงื่อนไขเป็น OR — VAH (ยังไม่) แปลว่ายังไม่ cross แท่งนั้น แต่ถ้า swing ทะลุ HH แล้วก็ยัง PASS ได้");
