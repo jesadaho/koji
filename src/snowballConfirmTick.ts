@@ -19,6 +19,25 @@ import {
   type SnowballPendingConfirm,
 } from "./snowballConfirmStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
+import {
+  saveSnowballConfirmLastRoundStats,
+} from "./snowballConfirmRoundStatsStore";
+
+function labelSide(item: SnowballPendingConfirm): string {
+  return item.side === "long" ? "LONG" : "BEAR";
+}
+
+function snowballConfirmRoundMaxList(): number {
+  const n = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SCAN_SUMMARY_MAX_SYMBOLS?.trim());
+  return Number.isFinite(n) && n >= 5 && n <= 120 ? Math.floor(n) : 45;
+}
+
+function pushRoundSym(arr: string[], entry: string): void {
+  const max = snowballConfirmRoundMaxList();
+  if (arr.length >= max) return;
+  if (arr.includes(entry)) return;
+  arr.push(entry);
+}
 
 function tfDurationSec(tf: BinanceIndicatorTf): number {
   if (tf === "15m") return 15 * 60;
@@ -121,14 +140,31 @@ function buildConfirmedMessage(opts: {
 
 /** เรียกจาก cron — ตรวจรายการ pending แล้วส่ง Confirmed follow-up เมื่อแท่ง 2 ยืนยันผ่าน */
 export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<number> {
-  if (!snowballConfirmBarEnabled()) return 0;
-  if (!isPublicSnowballTripleCheckEnabled()) return 0;
+  const roundStats = {
+    atIso: new Date(nowMs).toISOString(),
+    confirmed: [] as string[],
+    failed: [] as string[],
+    tgFailed: [] as string[],
+  };
+
+  if (!snowballConfirmBarEnabled()) {
+    return 0;
+  }
+  if (!isPublicSnowballTripleCheckEnabled()) {
+    return 0;
+  }
   resetBinanceIndicatorFapi451LogDedupe();
-  if (!isBinanceIndicatorFapiEnabled()) return 0;
-  if (!telegramSparkSystemGroupConfigured()) return 0;
+  if (!isBinanceIndicatorFapiEnabled()) {
+    return 0;
+  }
+  if (!telegramSparkSystemGroupConfigured()) {
+    return 0;
+  }
 
   const state = await loadSnowballPendingConfirms();
-  if (state.items.length === 0) return 0;
+  if (state.items.length === 0) {
+    return 0;
+  }
 
   const maxAgeMs = snowballConfirmMaxAgeHours() * 3600 * 1000;
   const volMinRatio = snowballConfirmVolMinRatio();
@@ -165,6 +201,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
     for (const item of items) {
       const ageMs = nowMs - item.alertedAtMs;
       if (ageMs > maxAgeMs) {
+        pushRoundSym(roundStats.failed, `${item.symbol} ${labelSide(item)} (หมดอายุคิว)`);
         removeIds.add(item.id);
         continue;
       }
@@ -194,6 +231,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
         !Number.isFinite(lo) ||
         !Number.isFinite(vo)
       ) {
+        pushRoundSym(roundStats.failed, `${item.symbol} ${labelSide(item)} (ข้อมูลแท่ง 2 ไม่ครบ)`);
         removeIds.add(item.id);
         continue;
       }
@@ -213,9 +251,15 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
         let sendOk = false;
         try {
           sendOk = await sendPublicSnowballFeedToSparkGroup(text);
-          if (sendOk) sent += 1;
+          if (sendOk) {
+            sent += 1;
+            pushRoundSym(roundStats.confirmed, `${item.symbol} ${labelSide(item)}`);
+          } else {
+            pushRoundSym(roundStats.tgFailed, `${item.symbol} ${labelSide(item)}`);
+          }
         } catch (e) {
           console.error("[snowballConfirmTick] send confirm", item.symbol, item.side, e);
+          pushRoundSym(roundStats.tgFailed, `${item.symbol} ${labelSide(item)}`);
         }
         if (
           sendOk &&
@@ -242,6 +286,13 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
         }
         removeIds.add(item.id);
       } else {
+        const reason =
+          !priceOk && !volOk
+            ? "ราคา+vol"
+            : !priceOk
+              ? "ราคา"
+              : "vol";
+        pushRoundSym(roundStats.failed, `${item.symbol} ${labelSide(item)} (${reason})`);
         /* แท่ง 2 ปิดแล้วแต่ไม่ผ่าน — drop เงียบกัน spam */
         removeIds.add(item.id);
       }
@@ -251,6 +302,12 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
   if (removeIds.size > 0) {
     const next = state.items.filter((it) => !removeIds.has(it.id));
     await saveSnowballPendingConfirms({ items: next });
+  }
+
+  try {
+    await saveSnowballConfirmLastRoundStats(roundStats);
+  } catch (e) {
+    console.error("[snowballConfirmTick] save last round stats", e);
   }
 
   return sent;

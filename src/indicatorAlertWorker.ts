@@ -287,8 +287,8 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const now = Date.now();
   const rsiN = await runRsiInternal(client, now);
   const emaN = await runEmaCrossInternal(client, now);
-  const publicN = isIndicatorPublicFeedEnabled() ? await runPublicIndicatorFeedInternal(client, now) : 0;
   const snowballConfirmN = await runSnowballConfirmFollowUpTick(now);
+  const publicN = isIndicatorPublicFeedEnabled() ? await runPublicIndicatorFeedInternal(client, now) : 0;
   const snowballStatsN = await runSnowballStatsFollowUpTick(now);
   const snowballQuickTpClosed = await runSnowballAutoTradeQuickTpTick(now);
   const snowball24hClosed = await runSnowballAutoTrade24hGuardTick(now);

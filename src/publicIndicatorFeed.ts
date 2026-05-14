@@ -22,6 +22,10 @@ import {
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import { appendSnowballStatsRow, loadSnowballStatsState, type SnowballStatsRow } from "./snowballStatsStore";
 import { addSnowballPendingConfirm } from "./snowballConfirmStore";
+import {
+  loadSnowballConfirmLastRoundStats,
+  type SnowballConfirmLastRoundStats,
+} from "./snowballConfirmRoundStatsStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 
 /**
@@ -1862,6 +1866,39 @@ function isSnowball4hScanSummaryToChatEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_4H_SCAN_SUMMARY_TO_CHAT", true);
 }
 
+function snowballScanSummaryMaxSymbols(): number {
+  const n = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SCAN_SUMMARY_MAX_SYMBOLS?.trim());
+  return Number.isFinite(n) && n >= 5 && n <= 120 ? Math.floor(n) : 45;
+}
+
+function pushSnowScanSymList(list: string[], entry: string): void {
+  const max = snowballScanSummaryMaxSymbols();
+  if (list.length >= max) return;
+  if (list.includes(entry)) return;
+  list.push(entry);
+}
+
+function formatSymbolListLines(indent: string, symbols: string[]): string[] {
+  if (symbols.length === 0) return [];
+  const max = snowballScanSummaryMaxSymbols();
+  const shown = symbols.slice(0, max);
+  const tail = symbols.length > max ? ` … (+${symbols.length - max})` : "";
+  const joined = shown.join(", ");
+  const lines: string[] = [];
+  const chunk = 900;
+  if (joined.length + indent.length <= chunk) {
+    lines.push(`${indent}(${joined}${tail})`);
+    return lines;
+  }
+  lines.push(`${indent}(รายการยาว — แสดงบรรทัดต่อไป)`);
+  let rest = `${shown.join(", ")}${tail}`;
+  while (rest.length > 0) {
+    lines.push(`${indent}${rest.slice(0, chunk)}`);
+    rest = rest.slice(chunk);
+  }
+  return lines;
+}
+
 type Snowball4hScanSummaryStats = {
   closedBarOpenSec: number | null;
   withPack: number;
@@ -1869,19 +1906,34 @@ type Snowball4hScanSummaryStats = {
   skippedBars: number;
   skippedStoch: number;
   longTechPass: number;
+  longTechPassSymbols: string[];
   /** เนื้อเทียนเทียบช่วงต่ำกว่าเกณฑ์ (ไส้ยาว) */
   longBodyRatioBlocked: number;
+  longBodyRatioBlockedSymbols: string[];
   longDeduped: number;
+  longDedupedSymbols: string[];
   /** กันยิงซ้ำในคลื่นเดิม (Long) */
   longWaveBlocked: number;
+  longWaveBlockedSymbols: string[];
   longSent: number;
+  longSentSymbols: string[];
+  /** แท่ง 1 ผ่านแล้วคิวรอ confirm (ไม่ส่ง TG) */
+  longPendingSkipTg: number;
+  longPendingSkipTgSymbols: string[];
   bearTechPass: number;
+  bearTechPassSymbols: string[];
   /** เนื้อเทียนเทียบช่วงต่ำกว่าเกณฑ์ (ไส้ยาว) */
   bearBodyRatioBlocked: number;
+  bearBodyRatioBlockedSymbols: string[];
   bearDeduped: number;
+  bearDedupedSymbols: string[];
   /** กันยิงซ้ำในคลื่นเดิม (Bear) */
   bearWaveBlocked: number;
+  bearWaveBlockedSymbols: string[];
   bearSent: number;
+  bearSentSymbols: string[];
+  bearPendingSkipTg: number;
+  bearPendingSkipTgSymbols: string[];
   errors: string[];
 };
 
@@ -1915,12 +1967,14 @@ function formatSnowball4hScanSummaryMessage(opts: {
   snowballTopAlts: number;
   stats: Snowball4hScanSummaryStats;
   barOpenSec: number;
+  snowTf: BinanceIndicatorTf;
+  confirmLastRound: SnowballConfirmLastRoundStats;
 }): string[] {
-  const { iso, universeLen, snowballTopAlts, stats, barOpenSec } = opts;
-  const dur = tfBarDurationSecForSummary("4h");
+  const { iso, universeLen, snowballTopAlts, stats, barOpenSec, snowTf, confirmLastRound } = opts;
+  const dur = tfBarDurationSecForSummary(snowTf);
   const barCloseSec = barOpenSec + dur;
   const lines: string[] = [];
-  lines.push("🧪 Snowball 4h — สรุปหลังสแกนแท่งปิด");
+  lines.push(`🧪 Snowball ${snowTf} — สรุปหลังสแกนแท่งปิด`);
   lines.push(`UTC: ${iso}`);
   lines.push(`แท่ง: เปิด ${fmtBkkFromUnixSecForSummary(barOpenSec)} → ปิด ${fmtBkkFromUnixSecForSummary(barCloseSec)}`);
   lines.push("");
@@ -1933,17 +1987,46 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push("");
   lines.push("— Long (แท่งปิด) —");
   lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.longTechPass}`);
+  lines.push(...formatSymbolListLines("  ", stats.longTechPassSymbols));
   lines.push(`ติดกรองเนื้อเทียน/ช่วง (ไส้ยาว): ${stats.longBodyRatioBlocked}`);
+  lines.push(...formatSymbolListLines("  ", stats.longBodyRatioBlockedSymbols));
   lines.push(`ติด dedupe หรือ cooldown: ${stats.longDeduped}`);
+  lines.push(...formatSymbolListLines("  ", stats.longDedupedSymbols));
   lines.push(`ติด wave gate (คลื่นเดิม): ${stats.longWaveBlocked}`);
-  lines.push(`ส่ง Telegram สำเร็จ: ${stats.longSent}`);
+  lines.push(...formatSymbolListLines("  ", stats.longWaveBlockedSymbols));
+  lines.push(`ส่ง Telegram สำเร็จ (แท่ง 1): ${stats.longSent}`);
+  lines.push(...formatSymbolListLines("  ", stats.longSentSymbols));
+  lines.push(`แท่ง 1 คิวรอ confirm (ไม่ส่ง TG): ${stats.longPendingSkipTg}`);
+  lines.push(...formatSymbolListLines("  ", stats.longPendingSkipTgSymbols));
   lines.push("");
   lines.push("— Bear (แท่งปิด) —");
   lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.bearTechPass}`);
+  lines.push(...formatSymbolListLines("  ", stats.bearTechPassSymbols));
   lines.push(`ติดกรองเนื้อเทียน/ช่วง (ไส้ยาว): ${stats.bearBodyRatioBlocked}`);
+  lines.push(...formatSymbolListLines("  ", stats.bearBodyRatioBlockedSymbols));
   lines.push(`ติด dedupe หรือ cooldown: ${stats.bearDeduped}`);
+  lines.push(...formatSymbolListLines("  ", stats.bearDedupedSymbols));
   lines.push(`ติด wave gate (คลื่นเดิม): ${stats.bearWaveBlocked}`);
-  lines.push(`ส่ง Telegram สำเร็จ: ${stats.bearSent}`);
+  lines.push(...formatSymbolListLines("  ", stats.bearWaveBlockedSymbols));
+  lines.push(`ส่ง Telegram สำเร็จ (แท่ง 1): ${stats.bearSent}`);
+  lines.push(...formatSymbolListLines("  ", stats.bearSentSymbols));
+  lines.push(`แท่ง 1 คิวรอ confirm (ไม่ส่ง TG): ${stats.bearPendingSkipTg}`);
+  lines.push(...formatSymbolListLines("  ", stats.bearPendingSkipTgSymbols));
+
+  lines.push("");
+  lines.push("— Confirm แท่ง 2 (รอบ cron snowballConfirm ก่อนสแกนนี้) —");
+  lines.push(
+    confirmLastRound.atIso
+      ? `บันทึกรอบ: ${confirmLastRound.atIso}`
+      : "บันทึกรอบ: — (ยังไม่เคยรัน confirm หรือไม่มี state)",
+  );
+  lines.push(`ยืนยันสำเร็จ (ส่ง TG): ${confirmLastRound.confirmed.length}`);
+  lines.push(...formatSymbolListLines("  ", confirmLastRound.confirmed));
+  lines.push(`ยืนยันไม่ผ่าน / หมดอายุ / ข้อมูลแท่ง: ${confirmLastRound.failed.length}`);
+  lines.push(...formatSymbolListLines("  ", confirmLastRound.failed));
+  lines.push(`ผ่านเกณฑ์แต่ส่ง TG ไม่สำเร็จ: ${confirmLastRound.tgFailed.length}`);
+  lines.push(...formatSymbolListLines("  ", confirmLastRound.tgFailed));
+
   if (stats.errors.length > 0) {
     lines.push("");
     lines.push("— errors —");
@@ -2098,15 +2181,29 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           skippedBars: 0,
           skippedStoch: 0,
           longTechPass: 0,
+          longTechPassSymbols: [],
           longBodyRatioBlocked: 0,
+          longBodyRatioBlockedSymbols: [],
           longDeduped: 0,
+          longDedupedSymbols: [],
           longWaveBlocked: 0,
+          longWaveBlockedSymbols: [],
           longSent: 0,
+          longSentSymbols: [],
+          longPendingSkipTg: 0,
+          longPendingSkipTgSymbols: [],
           bearTechPass: 0,
+          bearTechPassSymbols: [],
           bearBodyRatioBlocked: 0,
+          bearBodyRatioBlockedSymbols: [],
           bearDeduped: 0,
+          bearDedupedSymbols: [],
           bearWaveBlocked: 0,
+          bearWaveBlockedSymbols: [],
           bearSent: 0,
+          bearSentSymbols: [],
+          bearPendingSkipTg: 0,
+          bearPendingSkipTgSymbols: [],
           errors: [],
         }
       : null;
@@ -2437,7 +2534,10 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
 
         if (!intrabar && snowballPendingKeys.has(`${symbol}|${snowTf}|long`)) {
-          if (snowScanStats) snowScanStats.longDeduped++;
+          if (snowScanStats) {
+            snowScanStats.longDeduped++;
+            pushSnowScanSymList(snowScanStats.longDedupedSymbols, `${symbol} LONG`);
+          }
           return;
         }
 
@@ -2453,16 +2553,25 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             return;
           }
           if (!snowballSignalCandleBodyRatioOk(oE!, hiE!, loE!, clE!)) {
-            if (snowScanStats) snowScanStats.longBodyRatioBlocked++;
+            if (snowScanStats) {
+              snowScanStats.longBodyRatioBlocked++;
+              pushSnowScanSymList(snowScanStats.longBodyRatioBlockedSymbols, `${symbol} LONG`);
+            }
             return;
           }
         }
 
-        if (snowScanStats && !intrabar) snowScanStats.longTechPass++;
+        if (snowScanStats && !intrabar) {
+          snowScanStats.longTechPass++;
+          pushSnowScanSymList(snowScanStats.longTechPassSymbols, `${symbol} LONG`);
+        }
 
         const key = `${symbol}|SNOWBALL|${snowTf}|BULL`;
         if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) {
-          if (snowScanStats && !intrabar) snowScanStats.longDeduped++;
+          if (snowScanStats && !intrabar) {
+            snowScanStats.longDeduped++;
+            pushSnowScanSymList(snowScanStats.longDedupedSymbols, `${symbol} LONG`);
+          }
           return;
         }
 
@@ -2481,7 +2590,10 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             waveRsiArr,
           );
           if (longWaveGate.blocked) {
-            if (snowScanStats) snowScanStats.longWaveBlocked++;
+            if (snowScanStats) {
+              snowScanStats.longWaveBlocked++;
+              pushSnowScanSymList(snowScanStats.longWaveBlockedSymbols, `${symbol} LONG`);
+            }
             console.info(
               `[indicatorPublicFeed] Snowball LONG wave gate blocked ${symbol} — ${longWaveGate.reason ?? ""}`,
             );
@@ -2613,12 +2725,19 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             console.info(
               `[indicatorPublicFeed] Snowball LONG skip public TG (pending confirm) ${symbol} ${snowTf}`,
             );
+            if (snowScanStats && !intrabar) {
+              snowScanStats.longPendingSkipTg++;
+              pushSnowScanSymList(snowScanStats.longPendingSkipTgSymbols, `${symbol} LONG`);
+            }
           }
           if (ok) {
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now, clE!);
             if (!skipSnowballTgForPending) {
               notified += 1;
-              if (snowScanStats && !intrabar) snowScanStats.longSent++;
+              if (snowScanStats && !intrabar) {
+                snowScanStats.longSent++;
+                pushSnowScanSymList(snowScanStats.longSentSymbols, `${symbol} LONG`);
+              }
             }
             if (!intrabar && !skipSnowballTgForPending) {
               try {
@@ -2737,7 +2856,10 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         if (typeof barOpenSec !== "number" || !Number.isFinite(barOpenSec)) return;
 
         if (!intrabar && snowballPendingKeys.has(`${symbol}|${snowTf}|short`)) {
-          if (snowScanStats) snowScanStats.bearDeduped++;
+          if (snowScanStats) {
+            snowScanStats.bearDeduped++;
+            pushSnowScanSymList(snowScanStats.bearDedupedSymbols, `${symbol} BEAR`);
+          }
           return;
         }
 
@@ -2753,16 +2875,25 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             return;
           }
           if (!snowballSignalCandleBodyRatioOk(oE!, hiE!, loE!, clE!)) {
-            if (snowScanStats) snowScanStats.bearBodyRatioBlocked++;
+            if (snowScanStats) {
+              snowScanStats.bearBodyRatioBlocked++;
+              pushSnowScanSymList(snowScanStats.bearBodyRatioBlockedSymbols, `${symbol} BEAR`);
+            }
             return;
           }
         }
 
-        if (snowScanStats && !intrabar) snowScanStats.bearTechPass++;
+        if (snowScanStats && !intrabar) {
+          snowScanStats.bearTechPass++;
+          pushSnowScanSymList(snowScanStats.bearTechPassSymbols, `${symbol} BEAR`);
+        }
 
         const key = `${symbol}|SNOWBALL|${snowTf}|BEAR`;
         if (state.lastFiredBarSec[key] === barOpenSec || inCooldown(state, key, now)) {
-          if (snowScanStats && !intrabar) snowScanStats.bearDeduped++;
+          if (snowScanStats && !intrabar) {
+            snowScanStats.bearDeduped++;
+            pushSnowScanSymList(snowScanStats.bearDedupedSymbols, `${symbol} BEAR`);
+          }
           return;
         }
 
@@ -2781,7 +2912,10 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             waveRsiArr,
           );
           if (bearWaveGate.blocked) {
-            if (snowScanStats) snowScanStats.bearWaveBlocked++;
+            if (snowScanStats) {
+              snowScanStats.bearWaveBlocked++;
+              pushSnowScanSymList(snowScanStats.bearWaveBlockedSymbols, `${symbol} BEAR`);
+            }
             console.info(
               `[indicatorPublicFeed] Snowball BEAR wave gate blocked ${symbol} — ${bearWaveGate.reason ?? ""}`,
             );
@@ -2859,12 +2993,19 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             console.info(
               `[indicatorPublicFeed] Snowball BEAR skip public TG (pending confirm) ${symbol} ${snowTf}`,
             );
+            if (snowScanStats && !intrabar) {
+              snowScanStats.bearPendingSkipTg++;
+              pushSnowScanSymList(snowScanStats.bearPendingSkipTgSymbols, `${symbol} BEAR`);
+            }
           }
           if (ok) {
             await updatePublicFeedFiredKey(state, key, barOpenSec, iso, now, clE!);
             if (!skipBearTgForPending) {
               notified += 1;
-              if (snowScanStats && !intrabar) snowScanStats.bearSent++;
+              if (snowScanStats && !intrabar) {
+                snowScanStats.bearSent++;
+                pushSnowScanSymList(snowScanStats.bearSentSymbols, `${symbol} BEAR`);
+              }
             }
             if (!intrabar && !skipBearTgForPending) {
               try {
@@ -2953,7 +3094,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
 
   if (snowScanStats != null && snowScanStats.closedBarOpenSec != null) {
     const barOpen = snowScanStats.closedBarOpenSec;
-    const barDurSec = tfBarDurationSecForSummary("4h");
+    const barDurSec = tfBarDurationSecForSummary(snowTf);
     const barCloseMs = (barOpen + barDurSec) * 1000;
     const ageMs = now - barCloseMs;
     const tooOld = ageMs > 4 * 3600 * 1000;
@@ -2964,15 +3105,29 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
         await saveIndicatorPublicFeedState(state);
       } else {
         const summaryIso = new Date(now).toISOString();
+        let confirmLastRound: SnowballConfirmLastRoundStats = {
+          atIso: "",
+          confirmed: [],
+          failed: [],
+          tgFailed: [],
+        };
+        try {
+          confirmLastRound = await loadSnowballConfirmLastRoundStats();
+        } catch (e) {
+          console.error("[indicatorPublicFeed] load snowball confirm last round stats", e);
+        }
         const body = formatSnowball4hScanSummaryMessage({
           iso: summaryIso,
           universeLen: symbols.length,
           snowballTopAlts,
           stats: snowScanStats,
           barOpenSec: barOpen,
+          snowTf,
+          confirmLastRound,
         }).join("\n");
         try {
           const ok = await sendPublicSnowballFeedToSparkGroup(body);
+          console.info("[indicatorPublicFeed] Snowball scan summary (full text follows)\n" + body);
           if (ok) {
             state.lastSnowballScanSummaryBarOpenSec = barOpen;
             await saveIndicatorPublicFeedState(state);
