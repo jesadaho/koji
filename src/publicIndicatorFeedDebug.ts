@@ -19,6 +19,7 @@ import {
   snowballWaveGateEnabled,
   type SnowballChecklistResult,
   type SnowballConfirmRiskGateStatus,
+  type SnowballCheckStep,
   type SnowballSideEval,
   type SnowballWaveGateStatus,
 } from "./publicIndicatorFeed";
@@ -439,6 +440,20 @@ function renderPostChecklistTelegramHints(res: SnowballChecklistResult): string[
   return lines;
 }
 
+function renderGateStepsBlock(title: string, steps: SnowballCheckStep[]): string[] {
+  const lines: string[] = [];
+  const allOk = steps.length > 0 && steps.every((s) => s.ok);
+  lines.push(`${title} · ${allOk ? "PASS ✅" : "มีขั้นไม่ผ่าน ❌"}`);
+  let firstFailMarked = false;
+  for (const s of steps) {
+    const mark = checkMark(s.ok);
+    const tag = !s.ok && !firstFailMarked ? " ← BLOCK" : "";
+    if (!s.ok) firstFailMarked = true;
+    lines.push(`  ${mark} ${s.label}: ${s.detail}${tag}`);
+  }
+  return lines;
+}
+
 function renderSnowballSideBlock(
   title: string,
   ev: SnowballSideEval | null,
@@ -499,7 +514,19 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
 
   if (res.long.closed || res.long.intrabar) {
     lines.push("— LONG (BULL) —");
-    lines.push(...renderSnowballSideBlock("Closed bar", res.long.closed, res.snowTf, nowMs));
+    const twoBarDual = Boolean(res.twoBarConfirmGateRows);
+    if (twoBarDual) {
+      lines.push(
+        "  โหมด two-bar inline: แท่งสัญญาณ = ปิดก่อนล่าสุด (iClosed−1) · แท่ง confirm = ปิดล่าสุด (iClosed) — dedupe/cooldown ในรายการสัญญาณเทียบเวลาเปิดแท่ง confirm",
+      );
+      lines.push(...renderSnowballSideBlock("สัญญาณ (แท่งปิดก่อนล่าสุด)", res.long.closed, res.snowTf, nowMs));
+      if (res.twoBarConfirmGateRows?.long?.length) {
+        lines.push("");
+        lines.push(...renderGateStepsBlock("Confirm inline (แท่งปิดล่าสุด · LONG)", res.twoBarConfirmGateRows.long));
+      }
+    } else {
+      lines.push(...renderSnowballSideBlock("Closed bar", res.long.closed, res.snowTf, nowMs));
+    }
     if (res.long.intrabar) {
       lines.push("");
       lines.push(...renderSnowballSideBlock("Intrabar (forming)", res.long.intrabar, res.snowTf, nowMs));
@@ -509,7 +536,19 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
 
   if (res.bear.closed || res.bear.intrabar) {
     lines.push("— BEAR (SHORT) —");
-    lines.push(...renderSnowballSideBlock("Closed bar", res.bear.closed, res.snowTf, nowMs));
+    const twoBarDualBear = Boolean(res.twoBarConfirmGateRows);
+    if (twoBarDualBear) {
+      lines.push(
+        "  โหมด two-bar inline: แท่งสัญญาณ = ปิดก่อนล่าสุด (iClosed−1) · แท่ง confirm = ปิดล่าสุด (iClosed)",
+      );
+      lines.push(...renderSnowballSideBlock("สัญญาณ (แท่งปิดก่อนล่าสุด)", res.bear.closed, res.snowTf, nowMs));
+      if (res.twoBarConfirmGateRows?.bear?.length) {
+        lines.push("");
+        lines.push(...renderGateStepsBlock("Confirm inline (แท่งปิดล่าสุด · BEAR)", res.twoBarConfirmGateRows.bear));
+      }
+    } else {
+      lines.push(...renderSnowballSideBlock("Closed bar", res.bear.closed, res.snowTf, nowMs));
+    }
     if (res.bear.intrabar) {
       lines.push("");
       lines.push(...renderSnowballSideBlock("Intrabar (forming)", res.bear.intrabar, res.snowTf, nowMs));
@@ -520,7 +559,11 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
   lines.push(...renderPostChecklistTelegramHints(res));
 
   if (res.confirmRisk) {
-    lines.push("— confirm-bar risk gates (label only) —");
+    lines.push(
+      res.twoBarConfirmGateRows
+        ? "— confirm-bar risk (บนแท่งสัญญาณ iClosed−1 — two-bar inline ไม่ใช้ pending; อ้างอิง label เท่านั้น) —"
+        : "— confirm-bar risk gates (label only) —",
+    );
     lines.push(...renderConfirmRiskBlock("LONG", res.confirmRisk.long));
     lines.push(...renderConfirmRiskBlock("BEAR", res.confirmRisk.bear));
     lines.push("");
@@ -541,15 +584,24 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
     lines.push("");
   }
 
+  const twoBarOn = snowballTwoBarInlineModeEnabled();
   lines.push(
-    "หมายเหตุ: PASS ด้านบน = เฉพาะ technical checklist (volume / swing / body / dedupe / cooldown); wave gate + confirm-bar สรุปผลยิง TG ในบล็อก «ผลยิง Telegram» และรายละเอียดด้านล่าง",
+    twoBarOn
+      ? "หมายเหตุ: two-bar inline เปิด — PASS สัญญาณ = แท่งปิดก่อนล่าสุด (ไม่นับ body/range บนแท่งสัญญาณ); ต่อด้วยขั้น Confirm inline; wave gate ใช้ราคาปิดแท่ง confirm; บล็อก confirm-bar risk เป็น label บนแท่งสัญญาณเพื่ออ้างอิง (ไม่คิว pending)"
+      : "หมายเหตุ: PASS ด้านบน = เฉพาะ technical checklist (volume / swing / body / dedupe / cooldown); wave gate + confirm-bar สรุปผลยิง TG ในบล็อก «ผลยิง Telegram» และรายละเอียดด้านล่าง",
   );
   lines.push("checklist จำลองจาก kline ล่าสุดที่ขอ + state cooldown ปัจจุบัน");
   lines.push("รอบจริงสแกนทุก ~15 นาที ที่ /api/cron/price-sync (แท่งปิดตาม TF Snowball)");
   lines.push("Expected alert คำนวณจาก Vercel cron schedule (ทุก 15 นาที UTC)");
   lines.push("Swing HH / VAH: เงื่อนไขเป็น OR — VAH (ยังไม่) แปลว่ายังไม่ cross แท่งนั้น แต่ถ้า swing ทะลุ HH แล้วก็ยัง PASS ได้");
-  lines.push("เนื้อเทียน/ช่วง (body÷range): กรองก่อน dedupe — ตรงกับสแกน longBodyRatioBlocked; คนละชุดกับ wick history / signal wick ใน confirm-bar");
-  lines.push("Follow-through: ถ้าไม่ผ่าน body÷range แต่ close ทะลุ high แท่งก่อน (long) / ต่ำกว่า low แท่งก่อน (short) ให้ผ่าน — INDICATOR_PUBLIC_SNOWBALL_BODY_FOLLOW_THROUGH_ENABLED");
+  if (!twoBarOn) {
+    lines.push(
+      "เนื้อเทียน/ช่วง (body÷range): กรองก่อน dedupe — ตรงกับสแกน longBodyRatioBlocked; คนละชุดกับ wick history / signal wick ใน confirm-bar",
+    );
+    lines.push(
+      "Follow-through: ถ้าไม่ผ่าน body÷range แต่ close ทะลุ high แท่งก่อน (long) / ต่ำกว่า low แท่งก่อน (short) ให้ผ่าน — INDICATOR_PUBLIC_SNOWBALL_BODY_FOLLOW_THROUGH_ENABLED",
+    );
+  }
 
   let out = lines.join("\n");
   if (out.length > MAX_OUT) out = `${out.slice(0, MAX_OUT - 20)}\n…(truncated)`;

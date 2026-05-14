@@ -3582,6 +3582,8 @@ export type SnowballChecklistResult = {
   waveGate: { long: SnowballWaveGateStatus | null; bear: SnowballWaveGateStatus | null } | null;
   /** เมื่อเปิด INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED — สรุปเกณฑ์สองแท่ง + 1h */
   twoBarInlineNotes?: string[];
+  /** two-bar inline + iClosed≥2 — เกณฑ์ confirm แยกจาก checklist สัญญาณ */
+  twoBarConfirmGateRows?: { long: SnowballCheckStep[]; bear: SnowballCheckStep[] } | null;
   errors: string[];
 };
 
@@ -3729,6 +3731,100 @@ function snowballBodyToRangeCheckStep(
   };
 }
 
+/** ขั้น confirm สำหรับ debug two-bar inline (แท่ง iConf ปิดล่าสุด) */
+function buildSnowballTwoBarConfirmGateSteps(
+  close: number[],
+  high: number[],
+  low: number[],
+  volume: number[],
+  timeSec: number[],
+  iSig: number,
+  iConf: number,
+  snowTf: BinanceIndicatorTf,
+  pack1h: BinanceKlinePack | null,
+): { long: SnowballCheckStep[]; bear: SnowballCheckStep[] } {
+  const dur = tfBarDurationSecForSummary(snowTf);
+  const sigOpen = timeSec[iSig]!;
+  const confEnd = timeSec[iConf]! + dur;
+  const sigH = high[iSig]!;
+  const sigL = low[iSig]!;
+  const sigC = close[iSig]!;
+  const confC = close[iConf]!;
+  const sigV = volume[iSig]!;
+  const confV = volume[iConf]!;
+  const range = sigH - sigL;
+  const frac = snowballTwoBarInlinePullbackMaxFrac();
+  const vr = snowballConfirmVolMinRatio();
+
+  const rangeOk = Number.isFinite(range) && range > 0;
+  const pullLongOk =
+    rangeOk && Number.isFinite(confC) && confC >= sigC - frac * range;
+  const pullBearOk =
+    rangeOk && Number.isFinite(confC) && confC <= sigC + frac * range;
+  const volOk = sigV > 0 && Number.isFinite(confV) && confV / sigV >= vr;
+
+  let minL: number | null = null;
+  let maxH: number | null = null;
+  if (pack1h?.timeSec?.length) {
+    minL = snowballMinLow1hBetweenClosedBars(pack1h.timeSec, pack1h.low, sigOpen, confEnd);
+    maxH = snowballMaxHigh1hBetweenClosedBars(pack1h.timeSec, pack1h.high, sigOpen, confEnd);
+  }
+  const h1LongOk = minL != null && minL >= sigL;
+  const h1BearOk = maxH != null && maxH <= sigH;
+
+  const longSteps: SnowballCheckStep[] = [
+    {
+      id: "twoBarPullLong",
+      label: "Confirm pullback (LONG)",
+      ok: pullLongOk,
+      detail: rangeOk
+        ? `confirmClose=${fmtNum(confC)} ≥ signalClose−${(frac * 100).toFixed(0)}%×range (${fmtNum(sigC - frac * range)})`
+        : "ช่วงสัญญาณไม่ถูกต้อง",
+    },
+    {
+      id: "twoBarVolLong",
+      label: "Confirm vol vs signal (LONG)",
+      ok: volOk,
+      detail: `confVol/sigVol=${sigV > 0 ? fmtNum(confV / sigV, 4) : "—"} (ต้อง ≥ ${vr})`,
+    },
+    {
+      id: "twoBar1hLong",
+      label: "1h min-low ≥ signal low (LONG)",
+      ok: Boolean(pack1h?.timeSec?.length) && h1LongOk,
+      detail: pack1h?.timeSec?.length
+        ? `minLow1h=${minL != null ? fmtNum(minL) : "—"} vs signalLow=${fmtNum(sigL)}`
+        : "ไม่มีข้อมูล 1h",
+    },
+  ];
+
+  const bearSteps: SnowballCheckStep[] = [
+    {
+      id: "twoBarPullBear",
+      label: "Confirm pullback (BEAR)",
+      ok: pullBearOk,
+      detail: rangeOk
+        ? `confirmClose=${fmtNum(confC)} ≤ signalClose+${(frac * 100).toFixed(0)}%×range (${fmtNum(sigC + frac * range)})`
+        : "ช่วงสัญญาณไม่ถูกต้อง",
+    },
+    {
+      id: "twoBarVolBear",
+      label: "Confirm vol vs signal (BEAR)",
+      ok: volOk,
+      detail: `confVol/sigVol=${sigV > 0 ? fmtNum(confV / sigV, 4) : "—"} (ต้อง ≥ ${vr})`,
+    },
+    {
+      id: "twoBar1hBear",
+      label: "1h max-high ≤ signal high (BEAR)",
+      ok: Boolean(pack1h?.timeSec?.length) && h1BearOk,
+      detail: pack1h?.timeSec?.length
+        ? `maxHigh1h=${maxH != null ? fmtNum(maxH) : "—"} vs signalHigh=${fmtNum(sigH)}`
+        : "ไม่มีข้อมูล 1h",
+    },
+  ];
+
+  return { long: longSteps, bear: bearSteps };
+}
+
 function fmtBarBkkFromOpenSec(openSec: number): string {
   const d = new Date(openSec * 1000);
   const date = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -3768,6 +3864,8 @@ function evaluateSnowballLongAt(
     nowMs: number;
     symbol: string;
     snowTf: BinanceIndicatorTf;
+    checklistSkipBodyToRange?: boolean;
+    checklistTwoBarDedupeOpenSec?: number;
   },
 ): SnowballSideEval | null {
   if (iEval < 1) return null;
@@ -3878,17 +3976,35 @@ function evaluateSnowballLongAt(
   }
   push({ id: "ema2Slope", label: `EMA2 slope (${ctx.longEma2P})`, ok: ema2SlopeOk, detail: ema2SlopeDetail });
 
-  push(snowballBodyToRangeCheckStep(intrabar, "long", iEval, open, high, low, close));
+  if (ctx.checklistSkipBodyToRange) {
+    push({
+      id: "bodyToRange",
+      label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
+      ok: true,
+      detail:
+        "ข้ามในโหมด two-bar inline — สแกนจริงไม่ใช้ INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE / follow-through บนแท่งสัญญาณ (INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=1)",
+    });
+  } else {
+    push(snowballBodyToRangeCheckStep(intrabar, "long", iEval, open, high, low, close));
+  }
 
   const barOpenSec = timeSec[iEval] ?? -1;
   const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BULL`;
   const lastFired = ctx.state.lastFiredBarSec[key];
-  const dedupeOk = lastFired !== barOpenSec;
+  const dedupeBarOpenSec =
+    typeof ctx.checklistTwoBarDedupeOpenSec === "number" && Number.isFinite(ctx.checklistTwoBarDedupeOpenSec)
+      ? ctx.checklistTwoBarDedupeOpenSec
+      : barOpenSec;
+  const dedupeOk = lastFired !== dedupeBarOpenSec;
   push({
     id: "dedupe",
     label: "dedupe (bar เดียวกันยังไม่ยิง)",
     ok: dedupeOk,
-    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · barOpenSec=${barOpenSec}`,
+    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · barOpenSec=${dedupeBarOpenSec}${
+      ctx.checklistTwoBarDedupeOpenSec != null
+        ? ` (two-bar: เทียบแท่ง confirm; แท่งสัญญาณเปิด=${barOpenSec})`
+        : ""
+    }`,
   });
 
   const lastNotify = ctx.state.lastNotifyMs?.[key];
@@ -3938,6 +4054,8 @@ function evaluateSnowballBearAt(
     nowMs: number;
     symbol: string;
     snowTf: BinanceIndicatorTf;
+    checklistSkipBodyToRange?: boolean;
+    checklistTwoBarDedupeOpenSec?: number;
   },
 ): SnowballSideEval | null {
   if (iEval < 1) return null;
@@ -3997,17 +4115,35 @@ function evaluateSnowballBearAt(
   const emaOk = Number.isFinite(emaR);
   push({ id: "emaResistance", label: "EMA resistance finite", ok: emaOk, detail: emaOk ? `ema=${fmtNum(emaR!)}` : "ema = NaN" });
 
-  push(snowballBodyToRangeCheckStep(intrabar, "bear", iEval, open, high, low, close));
+  if (ctx.checklistSkipBodyToRange) {
+    push({
+      id: "bodyToRange",
+      label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
+      ok: true,
+      detail:
+        "ข้ามในโหมด two-bar inline — สแกนจริงไม่ใช้ INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE / follow-through บนแท่งสัญญาณ (INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=1)",
+    });
+  } else {
+    push(snowballBodyToRangeCheckStep(intrabar, "bear", iEval, open, high, low, close));
+  }
 
   const barOpenSec = timeSec[iEval] ?? -1;
   const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BEAR`;
   const lastFired = ctx.state.lastFiredBarSec[key];
-  const dedupeOk = lastFired !== barOpenSec;
+  const dedupeBarOpenSec =
+    typeof ctx.checklistTwoBarDedupeOpenSec === "number" && Number.isFinite(ctx.checklistTwoBarDedupeOpenSec)
+      ? ctx.checklistTwoBarDedupeOpenSec
+      : barOpenSec;
+  const dedupeOk = lastFired !== dedupeBarOpenSec;
   push({
     id: "dedupe",
     label: "dedupe (bar เดียวกันยังไม่ยิง)",
     ok: dedupeOk,
-    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · barOpenSec=${barOpenSec}`,
+    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · barOpenSec=${dedupeBarOpenSec}${
+      ctx.checklistTwoBarDedupeOpenSec != null
+        ? ` (two-bar: เทียบแท่ง confirm; แท่งสัญญาณเปิด=${barOpenSec})`
+        : ""
+    }`,
   });
 
   const lastNotify = ctx.state.lastNotifyMs?.[key];
@@ -4197,17 +4333,62 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     snowTf,
   };
 
-  baseResult.long.closed = evaluateSnowballLongAt(iClosed, false, data, longCtxBase);
-  baseResult.bear.closed = evaluateSnowballBearAt(iClosed, false, data, bearCtxBase);
+  const twoBarChecklistOn = snowballTwoBarInlineModeEnabled() && iClosed >= 2;
+  let pack1hForTwoBarChecklist: BinanceKlinePack | null = null;
+  if (twoBarChecklistOn) {
+    try {
+      pack1hForTwoBarChecklist = await fetchBinanceUsdmKlines(symbol, "1h", 120);
+    } catch (e) {
+      errors.push(`two-bar checklist 1h: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120));
+    }
+  }
+
+  if (twoBarChecklistOn) {
+    const iSig = iClosed - 1;
+    baseResult.long.closed = evaluateSnowballLongAt(iClosed - 1, false, data, {
+      ...longCtxBase,
+      checklistSkipBodyToRange: true,
+      checklistTwoBarDedupeOpenSec: timeSec[iClosed],
+    });
+    baseResult.bear.closed = evaluateSnowballBearAt(iClosed - 1, false, data, {
+      ...bearCtxBase,
+      checklistSkipBodyToRange: true,
+      checklistTwoBarDedupeOpenSec: timeSec[iClosed],
+    });
+    baseResult.twoBarConfirmGateRows = buildSnowballTwoBarConfirmGateSteps(
+      close,
+      high,
+      low,
+      volume,
+      timeSec,
+      iSig,
+      iClosed,
+      snowTf,
+      pack1hForTwoBarChecklist,
+    );
+  } else {
+    baseResult.long.closed = evaluateSnowballLongAt(iClosed, false, data, longCtxBase);
+    baseResult.bear.closed = evaluateSnowballBearAt(iClosed, false, data, bearCtxBase);
+  }
+  if (twoBarChecklistOn) {
+    baseResult.paramsSummary.push(
+      "Closed checklist (two-bar inline): สัญญาณ = แท่งปิดก่อนล่าสุด (index n−3) — ข้าม body/range; dedupe/cooldown ในรายการสัญญาณใช้เวลาเปิดแท่ง confirm (ปิดล่าสุด)",
+    );
+  } else if (snowballTwoBarInlineModeEnabled() && iClosed < 2) {
+    baseResult.paramsSummary.push(
+      "Two-bar inline เปิดใน env แต่ iClosed < 2 — checklist แท่งปิดยังใช้แท่งเดียว (รอข้อมูลย้อนหลังเพิ่ม)",
+    );
+  }
   if (intrabarOn) {
     baseResult.long.intrabar = evaluateSnowballLongAt(iForming, true, data, longCtxBase);
     baseResult.bear.intrabar = evaluateSnowballBearAt(iForming, true, data, bearCtxBase);
   }
 
   if (snowballConfirmBarEnabled()) {
+    const iRisk = twoBarChecklistOn ? iClosed - 1 : iClosed;
     baseResult.confirmRisk = {
-      long: buildSnowballConfirmRiskStatus("long", openArr, high, low, close, iClosed),
-      bear: buildSnowballConfirmRiskStatus("bear", openArr, high, low, close, iClosed),
+      long: buildSnowballConfirmRiskStatus("long", openArr, high, low, close, iRisk),
+      bear: buildSnowballConfirmRiskStatus("bear", openArr, high, low, close, iRisk),
     };
   }
 
@@ -4265,11 +4446,13 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
       const dur = tfBarDurationSecForSummary(snowTf);
       const sigOpen = timeSec[iClosed - 1]!;
       const confEnd = timeSec[iClosed]! + dur;
-      let pack1h: BinanceKlinePack | null = null;
-      try {
-        pack1h = await fetchBinanceUsdmKlines(symbol, "1h", 120);
-      } catch (e) {
-        errors.push(`two-bar debug 1h: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120));
+      let pack1h: BinanceKlinePack | null = pack1hForTwoBarChecklist;
+      if (!pack1h) {
+        try {
+          pack1h = await fetchBinanceUsdmKlines(symbol, "1h", 120);
+        } catch (e) {
+          errors.push(`two-bar debug 1h: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120));
+        }
       }
       const sigH = high[iClosed - 1]!;
       const sigL = low[iClosed - 1]!;
