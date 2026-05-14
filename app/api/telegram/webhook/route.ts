@@ -446,6 +446,16 @@ export async function POST(req: NextRequest) {
           `notified: ${r.notified}`,
           `detail: ${r.detail}`,
         ];
+        if (r.scanSkippedReason) lines.push("", `scanSkippedReason: ${r.scanSkippedReason}`);
+        if (r.snowballScanSummaryText) {
+          const raw = r.snowballScanSummaryText;
+          const max = 3200;
+          lines.push(
+            "",
+            "— snowball 4h scan summary —",
+            raw.length <= max ? raw : `${raw.slice(0, max)}\n… (ยาว ${raw.length} ตัวอักษร — ตัดในแชท; ดูเต็มใน response cron หรือกลุ่มสาธารณะ)`
+          );
+        }
         await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
       } else {
         const steps = await Promise.allSettled([

@@ -2072,6 +2072,14 @@ function formatSnowball4hScanSummaryMessage(opts: {
   return lines;
 }
 
+/** ผลรัน public indicator feed — `skippedReason` มีเมื่อไม่ได้เข้าลูปสแกนหลัก (env / lock) */
+export type PublicIndicatorFeedRunResult = {
+  notified: number;
+  skippedReason?: string;
+  /** ข้อความ 🧪 Snowball 4h scan summary (เมื่อเก็บสถิติและประกอบข้อความแล้ว) */
+  snowballScanSummaryText?: string;
+};
+
 /**
  * Feed สาธารณะ RSI cross + EMA cross + RSI divergence จาก Binance USDT-M (ค่าเริ่ม TF เดียวกันที่ 4h — RSI/EMA: INDICATOR_PUBLIC_RSI_EMA_TF, Div: INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS)
  * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — universe alt ตาม INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS ดีฟอลต์ 100; RSI/EMA/Div ยังใช้ INDICATOR_PUBLIC_TOP_ALTS)
@@ -2082,16 +2090,23 @@ export async function runPublicIndicatorFeedInternal(
   _client: Client,
   now: number,
   opts?: { snowballOnly?: boolean },
-): Promise<number> {
+): Promise<PublicIndicatorFeedRunResult> {
   void _client;
-  if (!isIndicatorPublicFeedEnabled()) return 0;
+  if (!isIndicatorPublicFeedEnabled()) {
+    return { notified: 0, skippedReason: "public feed ปิด (INDICATOR_PUBLIC_FEED_ENABLED=0)" };
+  }
   resetBinanceIndicatorFapi451LogDedupe();
-  if (!isBinanceIndicatorFapiEnabled()) return 0;
+  if (!isBinanceIndicatorFapiEnabled()) {
+    return { notified: 0, skippedReason: "Binance USDM indicator ปิด (BINANCE_INDICATOR_FAPI_ENABLED=0)" };
+  }
   if (!telegramSparkSystemGroupConfigured()) {
     console.warn(
       "[indicatorPublicFeed] ไม่มี TELEGRAM_BOT_TOKEN + TELEGRAM_PUBLIC_CHAT_ID (หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID) — ข้าม public indicator feed"
     );
-    return 0;
+    return {
+      notified: 0,
+      skippedReason: "ไม่มี Telegram สาธารณะ (TELEGRAM_BOT_TOKEN + TELEGRAM_PUBLIC_CHAT_ID หรือ TELEGRAM_SPARK_SYSTEM_CHAT_ID)",
+    };
   }
 
   // กัน cron ซ้อนกัน (โดยเฉพาะบน Vercel ที่อาจมีหลาย instance) — ถ้าไม่มี Redis/KV state จะไม่ persist และทำให้ยิงซ้ำง่ายมาก
@@ -2105,7 +2120,10 @@ export async function runPublicIndicatorFeedInternal(
     }
     if (!locked) {
       console.info("[indicatorPublicFeed] skipped (lock busy)");
-      return 0;
+      return {
+        notified: 0,
+        skippedReason: "feed lock ถูกจับอยู่ (รอบ price-sync/snowball อื่น — รอ ~1–2 นาทีแล้วลองใหม่)",
+      };
     }
   }
 
@@ -2115,7 +2133,9 @@ export async function runPublicIndicatorFeedInternal(
   const divOn = isPublicRsiDivergenceEnabled();
   const snowballOn = isPublicSnowballTripleCheckEnabled();
   const snowballOnly = Boolean(opts?.snowballOnly);
-  if (snowballOnly && !snowballOn) return 0;
+  if (snowballOnly && !snowballOn) {
+    return { notified: 0, skippedReason: "Snowball ปิดใน env (INDICATOR_PUBLIC_SNOWBALL_ENABLED)" };
+  }
 
   const effectiveRsiOn = snowballOnly ? false : rsiOn;
   const effectiveEmaOn = snowballOnly ? false : emaOn;
@@ -2125,13 +2145,20 @@ export async function runPublicIndicatorFeedInternal(
   const divergenceTfs = effectiveDivOn ? publicRsiDivergenceTfs() : [];
   const needDiv1hExtra = effectiveDivOn && divergenceTfs.includes("1h") && rsiEmaTf !== "1h";
   const needDiv4hExtra = effectiveDivOn && divergenceTfs.includes("4h") && rsiEmaTf !== "4h";
-  if (!effectiveRsiOn && !effectiveEmaOn && !effectiveDivOn && !snowballOn) return 0;
+  if (!effectiveRsiOn && !effectiveEmaOn && !effectiveDivOn && !snowballOn) {
+    return {
+      notified: 0,
+      skippedReason: "สัญญาณ public ปิดหมดใน env (RSI / EMA / Div / Snowball)",
+    };
+  }
 
   const baseTopAlts = topAltsCount();
   const snowballTopAlts = snowballUniverseTopAltsCount();
   const fetchUniverseTopN = snowballOn ? Math.max(baseTopAlts, snowballTopAlts) : baseTopAlts;
   const symbols = await getUniverseSymbols(fetchUniverseTopN);
-  if (symbols.length === 0) return 0;
+  if (symbols.length === 0) {
+    return { notified: 0, skippedReason: "universe สัญญาว่าง (ดึงรายการไม่ได้หรือกรองหมด)" };
+  }
   /** RSI / EMA / Div: เฉพาะ BTC + ETH + alt ตาม INDICATOR_PUBLIC_TOP_ALTS ตัวแรกของลิสต์ volume */
   const maxIdxCoreFeed = baseTopAlts <= 0 ? 2 : Math.min(symbols.length, 2 + baseTopAlts);
 
@@ -2195,6 +2222,7 @@ export async function runPublicIndicatorFeedInternal(
 
   let state = await loadIndicatorPublicFeedState();
   let notified = 0;
+  let snowballScanSummaryText: string | undefined;
 
   // กัน Snowball ยิงซ้ำข้าม type (SUPER/WATCHLIST/…) โดยดู “pending” ในสถิติ
   // ถ้ามี pending อยู่แล้วสำหรับ (symbol, tf, side) ให้ข้ามแจ้งเตือนเพิ่มจนกว่าจะ finalize
@@ -2219,8 +2247,9 @@ export async function runPublicIndicatorFeedInternal(
     }
   }
 
-  const snowScanStats: Snowball4hScanSummaryStats | null =
-    snowballOn && snowTf === "4h" && isSnowball4hScanSummaryToChatEnabled()
+  const collectSnowScanStats =
+    snowballOn && snowTf === "4h" && (isSnowball4hScanSummaryToChatEnabled() || snowballOnly);
+  const snowScanStats: Snowball4hScanSummaryStats | null = collectSnowScanStats
       ? {
           closedBarOpenSec: null,
           withPack: 0,
@@ -3146,47 +3175,50 @@ export async function runPublicIndicatorFeedInternal(
     const ageMs = now - barCloseMs;
     const tooOld = ageMs > 4 * 3600 * 1000;
     const already = state.lastSnowballScanSummaryBarOpenSec === barOpen;
-    if (!already) {
-      if (tooOld) {
+    const manualSnowballResend = Boolean(opts?.snowballOnly);
+
+    if (tooOld) {
+      if (!already) {
         state.lastSnowballScanSummaryBarOpenSec = barOpen;
         await saveIndicatorPublicFeedState(state);
-      } else {
-        const summaryIso = new Date(now).toISOString();
-        let confirmLastRound: SnowballConfirmLastRoundStats = {
-          atIso: "",
-          confirmed: [],
-          failed: [],
-          tgFailed: [],
-        };
-        try {
-          confirmLastRound = await loadSnowballConfirmLastRoundStats();
-        } catch (e) {
-          console.error("[indicatorPublicFeed] load snowball confirm last round stats", e);
+      }
+    } else if (!already || manualSnowballResend) {
+      const summaryIso = new Date(now).toISOString();
+      let confirmLastRound: SnowballConfirmLastRoundStats = {
+        atIso: "",
+        confirmed: [],
+        failed: [],
+        tgFailed: [],
+      };
+      try {
+        confirmLastRound = await loadSnowballConfirmLastRoundStats();
+      } catch (e) {
+        console.error("[indicatorPublicFeed] load snowball confirm last round stats", e);
+      }
+      const body = formatSnowball4hScanSummaryMessage({
+        iso: summaryIso,
+        universeLen: symbols.length,
+        snowballTopAlts,
+        stats: snowScanStats,
+        barOpenSec: barOpen,
+        snowTf,
+        confirmLastRound,
+      }).join("\n");
+      snowballScanSummaryText = body;
+      try {
+        const ok = await sendPublicSnowballFeedToSparkGroup(body);
+        console.info("[indicatorPublicFeed] Snowball scan summary (full text follows)\n" + body);
+        if (ok) {
+          state.lastSnowballScanSummaryBarOpenSec = barOpen;
+          await saveIndicatorPublicFeedState(state);
         }
-        const body = formatSnowball4hScanSummaryMessage({
-          iso: summaryIso,
-          universeLen: symbols.length,
-          snowballTopAlts,
-          stats: snowScanStats,
-          barOpenSec: barOpen,
-          snowTf,
-          confirmLastRound,
-        }).join("\n");
-        try {
-          const ok = await sendPublicSnowballFeedToSparkGroup(body);
-          console.info("[indicatorPublicFeed] Snowball scan summary (full text follows)\n" + body);
-          if (ok) {
-            state.lastSnowballScanSummaryBarOpenSec = barOpen;
-            await saveIndicatorPublicFeedState(state);
-          }
-        } catch (e) {
-          console.error("[indicatorPublicFeed] snowball 4h scan summary to chat", e);
-        }
+      } catch (e) {
+        console.error("[indicatorPublicFeed] snowball 4h scan summary to chat", e);
       }
     }
   }
 
-    return notified;
+    return { notified, snowballScanSummaryText };
   } finally {
     if (locked) {
       try {

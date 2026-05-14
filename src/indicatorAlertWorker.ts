@@ -288,7 +288,13 @@ async function runEmaCrossInternal(client: Client, now: number): Promise<number>
  * รันเฉพาะ public Snowball (Binance) + สรุปสแกน 4h ตาม env — ไม่ส่ง RSI/EMA/Div ของ public feed
  * ใช้ manual: GET /api/cron/snowball-scan หรือ Telegram `run cron snowball`
  */
-export async function runSnowballPublicScanTick(client: Client): Promise<{ notified: number; detail: string }> {
+export async function runSnowballPublicScanTick(client: Client): Promise<{
+  notified: number;
+  detail: string;
+  scanSkippedReason?: string;
+  /** ข้อความ 🧪 Snowball 4h scan summary (เมื่อรันสแกนและประกอบได้) */
+  snowballScanSummaryText?: string;
+}> {
   const now = Date.now();
   if (!isIndicatorPublicFeedEnabled()) {
     return { notified: 0, detail: "INDICATOR_PUBLIC_FEED_ENABLED=0 — ข้าม" };
@@ -297,14 +303,30 @@ export async function runSnowballPublicScanTick(client: Client): Promise<{ notif
     return { notified: 0, detail: "Snowball public ปิด (INDICATOR_PUBLIC_SNOWBALL) — ข้าม" };
   }
   const confirmN = await runSnowballConfirmFollowUpTick(now);
-  const n = await runPublicIndicatorFeedInternal(client, now, { snowballOnly: true });
+  const scanRes = await runPublicIndicatorFeedInternal(client, now, { snowballOnly: true });
+  const n = scanRes.notified;
   const total = confirmN + n;
   const parts: string[] = [];
   if (confirmN > 0) parts.push(`confirm แท่ง 2: ${confirmN}`);
   if (n > 0) parts.push(`สแกน public: ${n}`);
-  const detail =
-    total > 0 ? `Snowball — ${parts.join(" · ")}` : `Snowball scan เสร็จ (confirm ${confirmN}, สแกน ${n})`;
-  return { notified: total, detail };
+  let detail: string;
+  if (total > 0) {
+    detail = `Snowball — ${parts.join(" · ")}`;
+  } else if (scanRes.skippedReason) {
+    detail = `confirm ${confirmN} · สแกนไม่รัน — ${scanRes.skippedReason}`;
+  } else {
+    detail = `สแกนครบ (ไม่มีแจ้งเตือนใหม่) — confirm ${confirmN} · สแกน 0; ถ้าควรมีสัญญาณลอง debug snowball <SYMBOL>`;
+  }
+  if (scanRes.snowballScanSummaryText) {
+    const n = scanRes.snowballScanSummaryText.length;
+    detail = `${detail} · สรุปสแกน 4h: ${n} ตัวอักษร (ดู JSON snowballScanSummaryText / กลุ่มสาธารณะ)`;
+  }
+  return {
+    notified: total,
+    detail,
+    scanSkippedReason: scanRes.skippedReason,
+    snowballScanSummaryText: scanRes.snowballScanSummaryText,
+  };
 }
 
 /**
@@ -315,7 +337,8 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const rsiN = await runRsiInternal(client, now);
   const emaN = await runEmaCrossInternal(client, now);
   const snowballConfirmN = await runSnowballConfirmFollowUpTick(now);
-  const publicN = isIndicatorPublicFeedEnabled() ? await runPublicIndicatorFeedInternal(client, now) : 0;
+  const publicRes = isIndicatorPublicFeedEnabled() ? await runPublicIndicatorFeedInternal(client, now) : { notified: 0 };
+  const publicN = publicRes.notified;
   const snowballStatsN = await runSnowballStatsFollowUpTick(now);
   const snowballQuickTpClosed = await runSnowballAutoTradeQuickTpTick(now);
   const snowball24hClosed = await runSnowballAutoTrade24hGuardTick(now);
@@ -325,13 +348,16 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
 
   const parts: string[] = [`RSI/EMA (MEXC) ${rsiN + emaN}`];
   if (publicN > 0) parts.push(`public Binance ${publicN}`);
+  else if (publicRes.skippedReason) parts.push(`public Binance ข้าม (${publicRes.skippedReason})`);
   if (snowballConfirmN > 0) parts.push(`snowball confirm ${snowballConfirmN}`);
   if (snowballStatsN > 0) parts.push(`snowball stats ${snowballStatsN}`);
   if (snowballQuickTpClosed > 0) parts.push(`snowball quickTP close ${snowballQuickTpClosed}`);
   if (snowball24hClosed > 0) parts.push(`snowball 24h close ${snowball24hClosed}`);
   if (watch612 > 0) parts.push(`EMA6/12·15m ติดตาม ${watch612}`);
   if (downsideN > 0) parts.push(`downside reversal (Binance) ${downsideN}`);
-  const detail = total > 0 ? `แจ้ง ${total} ครั้ง (${parts.join(" · ")})` : undefined;
+  let detail: string | undefined;
+  if (total > 0) detail = `แจ้ง ${total} ครั้ง (${parts.join(" · ")})`;
+  else if (publicRes.skippedReason) detail = `ไม่แจ้ง (0) · ${parts.join(" · ")}`;
 
   return { notified: total, ...(detail ? { detail } : {}) };
 }

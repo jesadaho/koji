@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Manual / extra cron — รันเฉพาะ public Snowball (Binance) ตาม TF env + สรุปสแกน 4h ถ้าเปิด
+ * Manual / extra cron — รันเฉพาะ public Snowball (Binance) ตาม TF env + สรุปสแกน 4h (เข้ากลุ่มเมื่อเปิด env หรือรัน manual นี้; ข้อความเต็มใน JSON `snowballScanSummaryText` เมื่อมี)
  * ไม่รัน RSI/EMA/Div ของ public feed, ไม่รัน price-sync อื่น ๆ
  * GET + Authorization: Bearer CRON_SECRET
  */
@@ -26,6 +26,13 @@ export async function GET(req: NextRequest) {
       ok: true,
       notified: r.notified,
       detail: r.detail,
+      ...(r.scanSkippedReason ? { scanSkippedReason: r.scanSkippedReason } : {}),
+      ...(r.snowballScanSummaryText
+        ? {
+            snowballScanSummaryText: r.snowballScanSummaryText,
+            snowballScanSummaryChars: r.snowballScanSummaryText.length,
+          }
+        : {}),
       at: atIso,
       durationMs: Date.now() - started,
     });
