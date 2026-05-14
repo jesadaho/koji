@@ -2853,6 +2853,8 @@ export async function runPublicIndicatorFeedInternal(
                   alertedAtMs: now,
                   riskFlags: longRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
                   qualityTier: dbOn ? longTier : undefined,
+                  statsTriggerKind: String(trig),
+                  statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
                   ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -2860,20 +2862,22 @@ export async function runPublicIndicatorFeedInternal(
               }
             }
             try {
-              await appendSnowballStatsRow({
-                symbol,
-                side: "long",
-                alertedAtIso: iso,
-                alertedAtMs: now,
-                signalBarOpenSec: barOpenSec,
-                signalBarTf: snowTf,
-                entryPrice: clE!,
-                intrabar,
-                triggerKind: trig,
-                vol: vE!,
-                volSma: vsE!,
-                qualityTier: dbOn ? longTier : undefined,
-              });
+              if (!skipSnowballTgForPending) {
+                await appendSnowballStatsRow({
+                  symbol,
+                  side: "long",
+                  alertedAtIso: iso,
+                  alertedAtMs: now,
+                  signalBarOpenSec: barOpenSec,
+                  signalBarTf: snowTf,
+                  entryPrice: clE!,
+                  intrabar,
+                  triggerKind: trig,
+                  vol: vE!,
+                  volSma: vsE!,
+                  qualityTier: dbOn ? longTier : undefined,
+                });
+              }
             } catch (statsErr) {
               console.error("[indicatorPublicFeed] snowball stats LONG", symbol, statsErr);
               if (snowScanStats && !intrabar) {
@@ -3120,6 +3124,8 @@ export async function runPublicIndicatorFeedInternal(
                   alertedAtMs: now,
                   riskFlags: bearRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
                   qualityTier: dbOn ? shortTier : undefined,
+                  statsTriggerKind: "swing_ll",
+                  statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
                   ...(skipBearTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3127,20 +3133,22 @@ export async function runPublicIndicatorFeedInternal(
               }
             }
             try {
-              await appendSnowballStatsRow({
-                symbol,
-                side: "short",
-                alertedAtIso: iso,
-                alertedAtMs: now,
-                signalBarOpenSec: barOpenSec,
-                signalBarTf: snowTf,
-                entryPrice: clE!,
-                intrabar,
-                triggerKind: "swing_ll",
-                vol: vE!,
-                volSma: vsE!,
-                qualityTier: dbOn ? shortTier : undefined,
-              });
+              if (!skipBearTgForPending) {
+                await appendSnowballStatsRow({
+                  symbol,
+                  side: "short",
+                  alertedAtIso: iso,
+                  alertedAtMs: now,
+                  signalBarOpenSec: barOpenSec,
+                  signalBarTf: snowTf,
+                  entryPrice: clE!,
+                  intrabar,
+                  triggerKind: "swing_ll",
+                  vol: vE!,
+                  volSma: vsE!,
+                  qualityTier: dbOn ? shortTier : undefined,
+                });
+              }
             } catch (statsErr) {
               console.error("[indicatorPublicFeed] snowball stats BEAR", symbol, statsErr);
               if (snowScanStats && !intrabar) {

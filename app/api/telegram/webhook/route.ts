@@ -34,6 +34,7 @@ import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
 import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
 import { isAdminTelegramUserId } from "@/src/adminIds";
 import { removeSnowballStatsDuplicatesInLastHours, resetSnowballStatsState } from "@/src/snowballStatsStore";
+import { clearSnowballSymbolForManualRetry } from "@/src/snowballManualSymbolClear";
 import {
   formatPublicIndicatorFeedDebugMessage,
   formatSnowballChecklistDebugMessage,
@@ -154,6 +155,28 @@ function parseSnowballStatsDedupeCommand(trimmed: string, normalized: string): {
   return null;
 }
 
+/** ลบแถวสถิติ Snowball + ปลดล็อกยิงซ้ำต่อสัญญา — admin only */
+function parseSnowballStatsRemoveSymbolCommand(trimmed: string, normalized: string): string | null {
+  const t = trimmed.trim();
+  const n = normalized.trim().replace(/\s+/g, " ").toLowerCase();
+
+  let m = t.match(/^\/?snowball\s+stats\s+(?:remove|rm|delete|del)(?:@\S+)?\s+(\S+)\s*$/i);
+  if (m?.[1]) return m[1].trim();
+
+  m = t.match(/^\/?(?:remove|rm)\s+snowball\s+stats(?:@\S+)?\s+(\S+)\s*$/i);
+  if (m?.[1]) return m[1].trim();
+
+  if (/^#snowballstats(?:remove|rm|delete)\s+\S+/i.test(t)) {
+    const mm = t.match(/^#snowballstats(?:remove|rm|delete)\s+(\S+)\s*$/i);
+    return mm?.[1]?.trim() ?? null;
+  }
+
+  const th = n.match(/^ลบสถิติ\s+(?:snowball|สโนว์บอล)\s+(\S+)\s*$/);
+  if (th?.[1]) return th[1].trim();
+
+  return null;
+}
+
 function formatBkkFromSec(tsSec: number): string {
   const d = new Date(tsSec * 1000);
   const datePart = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -209,6 +232,7 @@ function parseRunCronCmd(t: string): { scope: CronRunScope; verbose: boolean } |
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
  * /start … · debug public feed / debug snowball (admin) · run cron price-sync | snowball | spark (admin — KOJI_ADMIN_IDS)
+ * · snowball stats remove SYMBOL — ลบแถวสถิติ + ปลดล็อกยิง Snowball ต่อสัญญา (admin)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
@@ -818,6 +842,53 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessageToChat(String(chatId), `ทำไม่สำเร็จ — ${detail.slice(0, 300)}`, threadOpts);
       } catch (sendErr) {
         console.error("[telegram/webhook] snowball stats dedupe error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const snowRmSym = parseSnowballStatsRemoveSymbolCommand(text, normalized);
+  if (snowRmSym) {
+    if (!isAdminTelegramUserId(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          [
+            "ไม่ได้รับอนุญาตให้ลบสถิติ Snowball ต่อสัญญา",
+            "",
+            "ตั้งค่า env: KOJI_ADMIN_IDS=<Telegram user id ของคุณ>",
+            "(หลายคนคั่นด้วยจุลภาค) แล้ว redeploy",
+          ].join("\n"),
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] snowball stats remove deny reply", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const r = await clearSnowballSymbolForManualRetry(snowRmSym);
+      await sendTelegramMessageToChat(
+        String(chatId),
+        [
+          "🧹 Snowball — ลบต่อสัญญา + ปลดล็อกยิงซ้ำ",
+          `สัญญา: ${r.binanceSymbol}`,
+          "",
+          `แถวสถิติ Mini App ที่ลบ: ${r.statsRowsRemoved}`,
+          `คิว pending confirm ที่ลบ: ${r.pendingConfirmRemoved}`,
+          `ล้าง state ยิง Snowball (dedupe/cooldown/wave): ${r.publicFeedSnowballKeysCleared} key`,
+          "",
+          "รอบ price-sync / snowball-scan ถัดไปจะประเมินแท่งล่าสุดใหม่ — ถ้าเงื่อนไขยังครบอาจยิงซ้ำได้",
+        ].join("\n"),
+        threadOpts,
+      );
+    } catch (e) {
+      console.error("[telegram/webhook] snowball stats remove symbol", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(String(chatId), `ทำไม่สำเร็จ — ${detail.slice(0, 400)}`, threadOpts);
+      } catch (sendErr) {
+        console.error("[telegram/webhook] snowball stats remove error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

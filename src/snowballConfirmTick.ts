@@ -20,8 +20,9 @@ import {
 } from "./snowballConfirmStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import {
-  saveSnowballConfirmLastRoundStats,
-} from "./snowballConfirmRoundStatsStore";
+  appendSnowballStatsRow,
+  isSnowballStatsEnabled,
+} from "./snowballStatsStore";
 
 function labelSide(item: SnowballPendingConfirm): string {
   return item.side === "long" ? "LONG" : "BEAR";
@@ -260,6 +261,42 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
         } catch (e) {
           console.error("[snowballConfirmTick] send confirm", item.symbol, item.side, e);
           pushRoundSym(roundStats.tgFailed, `${item.symbol} ${labelSide(item)}`);
+        }
+        if (sendOk && item.deferSnowballAutotradeToConfirm === true && isSnowballStatsEnabled()) {
+          try {
+            const iSig = timeSec.indexOf(item.signalBarOpenSec);
+            let volSmaSig =
+              typeof item.statsVolSma === "number" && Number.isFinite(item.statsVolSma) && item.statsVolSma > 0
+                ? item.statsVolSma
+                : NaN;
+            if (!Number.isFinite(volSmaSig) && iSig >= 0) {
+              volSmaSig = volumeSma20AtPackIndex(pack, iSig);
+            }
+            if (!Number.isFinite(volSmaSig) || volSmaSig <= 0) volSmaSig = item.signalVolume;
+            const trigKind =
+              typeof item.statsTriggerKind === "string" && item.statsTriggerKind.trim()
+                ? item.statsTriggerKind.trim()
+                : item.side === "bear"
+                  ? "swing_ll"
+                  : "both";
+            await appendSnowballStatsRow({
+              symbol: item.symbol,
+              side: item.side === "long" ? "long" : "short",
+              alertedAtIso: item.alertedAtIso,
+              alertedAtMs: item.alertedAtMs,
+              signalBarOpenSec: item.signalBarOpenSec,
+              signalBarTf: item.snowTf,
+              ...(item.side === "long" ? { signalBarLow: item.signalLow } : {}),
+              entryPrice: item.signalClose,
+              intrabar: false,
+              triggerKind: trigKind,
+              vol: item.signalVolume,
+              volSma: volSmaSig,
+              qualityTier: item.qualityTier,
+            });
+          } catch (e) {
+            console.error("[snowballConfirmTick] append snowball stats after confirm", item.symbol, item.side, e);
+          }
         }
         if (
           sendOk &&

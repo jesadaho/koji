@@ -406,7 +406,7 @@ function renderPostChecklistTelegramHints(res: SnowballChecklistResult): string[
     const n = cr.flags.length;
     if (snowballSkipTelegramWhenPendingConfirm()) {
       lines.push(
-        `  • ${side} confirm-bar: 🟡 มี ${n} risk label + INDICATOR_PUBLIC_SNOWBALL_SKIP_TG_ON_PENDING_CONFIRM เปิด (ค่าเริ่มต้น) → cron ไม่ส่งข้อความ Snowball ไปกลุ่มที่แท่งนี้ (ยังบันทึกสถิติ + คิว confirm แท่ง 2)`,
+        `  • ${side} confirm-bar: 🟡 มี ${n} risk label + INDICATOR_PUBLIC_SNOWBALL_SKIP_TG_ON_PENDING_CONFIRM เปิด (ค่าเริ่มต้น) → cron ไม่ส่งข้อความ Snowball ไปกลุ่มที่แท่งนี้ (คิว confirm แท่ง 2); สถิติ Mini App จะ append หลัง ✅ Confirm สำเร็จ — ไม่ใส่ follow-up list ตอนแท่ง 1`,
       );
     } else {
       lines.push(

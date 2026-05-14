@@ -53,6 +53,10 @@ export type SnowballPendingConfirm = {
    * true = แท่ง 1 ไม่ส่ง TG / ไม่ autotrade — ให้เรียก Snowball auto-open หลัง ✅ Confirmed (เมื่อเป็น Super A+)
    */
   deferSnowballAutotradeToConfirm?: boolean;
+  /** เก็บไว้สำหรับ append Snowball stats หลัง confirm (แท่ง 1 ไม่ใส่ลิสต์เมื่อ skip TG) */
+  statsTriggerKind?: string;
+  /** SMA(volume) ที่แท่งสัญญาณ — ใช้คำนวณ SVP hole ใน stats ให้สอดคล้องแท่ง 1 */
+  statsVolSma?: number;
 };
 
 export type SnowballPendingConfirmState = {
@@ -105,6 +109,9 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     o.deferSnowballAutotradeToConfirm === 1 ||
     o.deferSnowballAutotradeToConfirm === "1" ||
     o.deferSnowballAutotradeToConfirm === "true";
+  const statsTriggerKind = typeof o.statsTriggerKind === "string" && o.statsTriggerKind.trim() ? o.statsTriggerKind.trim() : undefined;
+  const statsVolSma = Number(o.statsVolSma);
+  const statsVolSmaOk = Number.isFinite(statsVolSma) && statsVolSma > 0;
   return {
     id: typeof o.id === "string" && o.id ? o.id : randomUUID(),
     symbol,
@@ -120,6 +127,8 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     riskFlags,
     qualityTier,
     ...(deferSnowballAutotradeToConfirm ? { deferSnowballAutotradeToConfirm: true as const } : {}),
+    ...(statsTriggerKind ? { statsTriggerKind } : {}),
+    ...(statsVolSmaOk ? { statsVolSma } : {}),
   };
 }
 
