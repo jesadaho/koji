@@ -62,7 +62,9 @@ export async function clearSnowballSymbolForManualRetry(rawSymbol: string): Prom
       if (k.startsWith(prefix)) keys.add(k);
     }
   }
-  for (const k of keys) {
+  const keysToClear = Array.from(keys);
+  for (let i = 0; i < keysToClear.length; i++) {
+    const k = keysToClear[i]!;
     delete feed.lastFiredBarSec[k];
     if (feed.lastNotifyMs) delete feed.lastNotifyMs[k];
     if (feed.lastAlertPrice) delete feed.lastAlertPrice[k];
