@@ -36,6 +36,25 @@ function resultAlertEnabled(): boolean {
   return envFlagOn("UPCOMING_EVENTS_RESULT_ALERT_ENABLED", true);
 }
 
+/** เลยเวลาเหตุการณ์แล้วแต่ API ยังไม่มี actual — แจ้งครั้งเดียว (อิงเวลา startsAtUtc เดียวกับ pre-alert) */
+function resultPendingAlertEnabled(): boolean {
+  return envFlagOn("UPCOMING_EVENTS_RESULT_PENDING_ALERT_ENABLED", true);
+}
+
+/** ถ้าเปิด: ส่ง pending เฉพาะ event ที่เคยส่ง pre-alert (60/30 นาที) แล้ว */
+function resultPendingRequiresPreAlert(): boolean {
+  return envFlagOn("UPCOMING_EVENTS_RESULT_PENDING_REQUIRES_PRE_ALERT", true);
+}
+
+function resultPendingMinutesAfter(): number {
+  const n = Number(process.env.UPCOMING_EVENTS_RESULT_PENDING_MINUTES_AFTER?.trim());
+  return Number.isFinite(n) && n >= 0 && n <= 120 ? Math.floor(n) : 2;
+}
+
+function hadPreAlert(state: UpcomingEventsState, eventId: string): boolean {
+  return Boolean(state.preAlertFired[`${eventId}|60`] || state.preAlertFired[`${eventId}|30`]);
+}
+
 function liveAiEnabled(): boolean {
   return envFlagOn("UPCOMING_EVENTS_LIVE_AI_ENABLED", false);
 }
@@ -134,6 +153,25 @@ function buildPreMessage(minutes: 60 | 30, e: UnifiedEvent): string {
   ].join("\n");
 }
 
+function buildResultPendingMessage(e: UnifiedEvent): string {
+  const est = e.forecast ?? "—";
+  const prev = e.previous ?? "—";
+  const utc = fmtUtcYmdHm(e.startsAtUtc);
+  const bkk = fmtBkkYmdHm(e.startsAtUtc);
+  return [
+    "📊 Koji — Event window (รอตัวเลข)",
+    "",
+    `${e.title}${e.country ? ` (${e.country})` : ""}`,
+    `เวลาประกาศตามปฏิทิน: ${utc} UTC | ${bkk} (BKK)`,
+    "",
+    `Forecast: ${est} | Previous: ${prev}`,
+    "",
+    "ยังไม่มี Actual จากแหล่งข้อมูล (เช่น Finnhub) — จะแจ้งผลอีกครั้งเมื่อมีตัวเลข",
+    "",
+    "ไม่ใช่คำแนะนำลงทุน",
+  ].join("\n");
+}
+
 function buildResultMessage(e: UnifiedEvent): string {
   const act = e.actual ?? "—";
   const est = e.forecast ?? "—";
@@ -185,19 +223,34 @@ function buildLiveAiTelegramBody(cur: UnifiedEvent, aiText: string): string {
   return header + body + footer;
 }
 
-/** Cron 5 นาที: อัปเดต snapshot + pre-alert + live AI (T+0 window) + ผลจริง (US session แยกเรียกใน route) */
+/** Cron 5 นาที: อัปเดต snapshot + pre-alert + live AI (T+0 window) + ผลจริง / แจ้งรอตัวเลขเมื่อเลยเวลา (US session แยกเรียกใน route) */
 export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   ok: boolean;
   preSent: number;
   resultSent: number;
+  resultPendingSent: number;
   liveAiSent: number;
   skipped: string;
 }> {
   if (!upcomingAlertsEnabled()) {
-    return { ok: true, preSent: 0, resultSent: 0, liveAiSent: 0, skipped: "UPCOMING_EVENTS_ALERTS_ENABLED=0" };
+    return {
+      ok: true,
+      preSent: 0,
+      resultSent: 0,
+      resultPendingSent: 0,
+      liveAiSent: 0,
+      skipped: "UPCOMING_EVENTS_ALERTS_ENABLED=0",
+    };
   }
   if (!telegramSparkSystemGroupConfigured()) {
-    return { ok: true, preSent: 0, resultSent: 0, liveAiSent: 0, skipped: "no_telegram_public_chat" };
+    return {
+      ok: true,
+      preSent: 0,
+      resultSent: 0,
+      resultPendingSent: 0,
+      liveAiSent: 0,
+      skipped: "no_telegram_public_chat",
+    };
   }
 
   const hasAnySource =
@@ -205,7 +258,14 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
     Boolean(process.env.TOKEN_UNLOCKS_API_URL?.trim()) ||
     Boolean(process.env.CRYPTO_MARKET_EVENTS_API_URL?.trim());
   if (!hasAnySource) {
-    return { ok: true, preSent: 0, resultSent: 0, liveAiSent: 0, skipped: "no_data_sources" };
+    return {
+      ok: true,
+      preSent: 0,
+      resultSent: 0,
+      resultPendingSent: 0,
+      liveAiSent: 0,
+      skipped: "no_data_sources",
+    };
   }
 
   const snap = await buildUpcomingEventsSnapshot(daysForward());
@@ -214,6 +274,7 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   let state = await loadUpcomingEventsState();
   let preSent = 0;
   let resultSent = 0;
+  let resultPendingSent = 0;
   let liveAiSent = 0;
   const now = new Date(nowMs);
 
@@ -291,18 +352,38 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   }
 
   if (resultAlertEnabled() && byId) {
+    const graceMs = resultPendingMinutesAfter() * 60_000;
     for (const e of allMacro) {
-      const cur = byId.get(e.id);
-      if (!cur?.actual) continue;
+      const cur = byId.get(e.id) ?? e;
       if (cur.startsAtUtc > nowMs) continue;
       if (state.resultNotified[e.id]) continue;
+
+      const hasActual = cur.actual != null && String(cur.actual).trim() !== "";
+      if (hasActual) {
+        try {
+          await sendTelegramPublicBroadcastMessage(buildResultMessage(cur), "events_result");
+          state.resultNotified[e.id] = nowMs;
+          delete state.resultPendingNotified[e.id];
+          resultSent += 1;
+          await saveUpcomingEventsState(state);
+        } catch (err) {
+          console.error("[upcomingEventsTick] result", e.id, err);
+        }
+        continue;
+      }
+
+      if (!resultPendingAlertEnabled()) continue;
+      if (state.resultPendingNotified[e.id]) continue;
+      if (resultPendingRequiresPreAlert() && !hadPreAlert(state, e.id)) continue;
+      if (nowMs - cur.startsAtUtc < graceMs) continue;
+
       try {
-        await sendTelegramPublicBroadcastMessage(buildResultMessage(cur), "events_result");
-        state.resultNotified[e.id] = nowMs;
-        resultSent += 1;
+        await sendTelegramPublicBroadcastMessage(buildResultPendingMessage(cur), "events_result_pending");
+        state.resultPendingNotified[e.id] = nowMs;
+        resultPendingSent += 1;
         await saveUpcomingEventsState(state);
       } catch (err) {
-        console.error("[upcomingEventsTick] result", e.id, err);
+        console.error("[upcomingEventsTick] result-pending", e.id, err);
       }
     }
   }
@@ -310,7 +391,7 @@ export async function runUpcomingEventsAlertsTick(nowMs: number): Promise<{
   pruneOldStateKeys(state, nowMs);
   await saveUpcomingEventsState(state);
 
-  return { ok: true, preSent, resultSent, liveAiSent, skipped: "" };
+  return { ok: true, preSent, resultSent, resultPendingSent, liveAiSent, skipped: "" };
 }
 
 function pruneOldStateKeys(state: UpcomingEventsState, nowMs: number): void {
@@ -322,6 +403,10 @@ function pruneOldStateKeys(state: UpcomingEventsState, nowMs: number): void {
   for (const k of Object.keys(state.resultNotified)) {
     const t = state.resultNotified[k];
     if (typeof t === "number" && nowMs - t > maxAge) delete state.resultNotified[k];
+  }
+  for (const k of Object.keys(state.resultPendingNotified)) {
+    const t = state.resultPendingNotified[k];
+    if (typeof t === "number" && nowMs - t > maxAge) delete state.resultPendingNotified[k];
   }
   for (const k of Object.keys(state.liveAiFired)) {
     const t = state.liveAiFired[k];

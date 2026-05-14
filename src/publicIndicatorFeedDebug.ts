@@ -450,6 +450,7 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
   lines.push("รอบจริงสแกนทุก ~15 นาที ที่ /api/cron/price-sync (แท่งปิดตาม TF Snowball)");
   lines.push("Expected alert คำนวณจาก Vercel cron schedule (ทุก 15 นาที UTC)");
   lines.push("Swing HH / VAH: เงื่อนไขเป็น OR — VAH (ยังไม่) แปลว่ายังไม่ cross แท่งนั้น แต่ถ้า swing ทะลุ HH แล้วก็ยัง PASS ได้");
+  lines.push("เนื้อเทียน/ช่วง (body÷range): กรองก่อน dedupe — ตรงกับสแกน longBodyRatioBlocked; คนละชุดกับ wick history / signal wick ใน confirm-bar");
 
   let out = lines.join("\n");
   if (out.length > MAX_OUT) out = `${out.slice(0, MAX_OUT - 20)}\n…(truncated)`;

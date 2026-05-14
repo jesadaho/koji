@@ -3248,6 +3248,63 @@ function fmtNum(n: number, digits = 6): string {
   return n.toFixed(digits);
 }
 
+/** ขั้น checklist / debug — ตรงกับ live tick ก่อน dedupe (เฉพาะแท่งปิด) */
+function snowballBodyToRangeCheckStep(
+  intrabar: boolean,
+  o: number | undefined,
+  h: number | undefined,
+  l: number | undefined,
+  c: number | undefined,
+): SnowballCheckStep {
+  if (intrabar) {
+    return {
+      id: "bodyToRange",
+      label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
+      ok: true,
+      detail: "intrabar — ใน live ไม่ใช้กรองนี้ (เฉพาะแท่งปิด)",
+    };
+  }
+  if (!snowballBodyToRangeFilterEnabled()) {
+    return {
+      id: "bodyToRange",
+      label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
+      ok: true,
+      detail: "ปิด (INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE_FILTER_ENABLED=0)",
+    };
+  }
+  const oN = o ?? NaN;
+  const hN = h ?? NaN;
+  const lN = l ?? NaN;
+  const cN = c ?? NaN;
+  if (!Number.isFinite(oN) || !Number.isFinite(hN) || !Number.isFinite(lN) || !Number.isFinite(cN)) {
+    return {
+      id: "bodyToRange",
+      label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
+      ok: false,
+      detail: "OHLC บางค่าไม่ finite",
+    };
+  }
+  const range = hN - lN;
+  const body = Math.abs(cN - oN);
+  const minR = snowballMinBodyToRangeRatio();
+  if (!Number.isFinite(range) || range <= 0) {
+    return {
+      id: "bodyToRange",
+      label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
+      ok: false,
+      detail: "ช่วงราคาไม่ถูกต้อง (high−low ≤ 0)",
+    };
+  }
+  const ratio = body / range;
+  const ok = snowballSignalCandleBodyRatioOk(oN, hN, lN, cN);
+  return {
+    id: "bodyToRange",
+    label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
+    ok,
+    detail: `body/range=${fmtNum(ratio)} ${ok ? "≥" : "<"} เกณฑ์ ${minR} (สแกน: longBodyRatioBlocked / bearBodyRatioBlocked)`,
+  };
+}
+
 function fmtBarBkkFromOpenSec(openSec: number): string {
   const d = new Date(openSec * 1000);
   const date = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -3264,7 +3321,7 @@ function normalizeBinanceSym(raw: string): string {
 function evaluateSnowballLongAt(
   iEval: number,
   intrabar: boolean,
-  data: { close: number[]; high: number[]; low: number[]; volume: number[]; timeSec: number[] },
+  data: { close: number[]; high: number[]; low: number[]; open: number[]; volume: number[]; timeSec: number[] },
   ctx: {
     volSmaArr: number[];
     emaResArr: number[];
@@ -3299,7 +3356,7 @@ function evaluateSnowballLongAt(
     steps.push(s);
   };
 
-  const { close, high, low, volume, timeSec } = data;
+  const { close, high, low, open, volume, timeSec } = data;
   const vE = volume[iEval];
   const vsE = ctx.volSmaArr[iEval];
   const clE = close[iEval];
@@ -3397,6 +3454,8 @@ function evaluateSnowballLongAt(
   }
   push({ id: "ema2Slope", label: `EMA2 slope (${ctx.longEma2P})`, ok: ema2SlopeOk, detail: ema2SlopeDetail });
 
+  push(snowballBodyToRangeCheckStep(intrabar, open[iEval], hiE, low[iEval], clE));
+
   const barOpenSec = timeSec[iEval] ?? -1;
   const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BULL`;
   const lastFired = ctx.state.lastFiredBarSec[key];
@@ -3439,7 +3498,7 @@ function evaluateSnowballLongAt(
 function evaluateSnowballBearAt(
   iEval: number,
   intrabar: boolean,
-  data: { close: number[]; high: number[]; low: number[]; volume: number[]; timeSec: number[] },
+  data: { close: number[]; high: number[]; low: number[]; open: number[]; volume: number[]; timeSec: number[] },
   ctx: {
     volSmaArr: number[];
     emaResArr: number[];
@@ -3462,7 +3521,7 @@ function evaluateSnowballBearAt(
   const steps: SnowballCheckStep[] = [];
   const push = (s: SnowballCheckStep) => steps.push(s);
 
-  const { close, high, low, volume, timeSec } = data;
+  const { close, high, low, open, volume, timeSec } = data;
   const vE = volume[iEval];
   const vsE = ctx.volSmaArr[iEval];
   const clE = close[iEval];
@@ -3513,6 +3572,8 @@ function evaluateSnowballBearAt(
   const emaR = ctx.emaResArr[iEval];
   const emaOk = Number.isFinite(emaR);
   push({ id: "emaResistance", label: "EMA resistance finite", ok: emaOk, detail: emaOk ? `ema=${fmtNum(emaR!)}` : "ema = NaN" });
+
+  push(snowballBodyToRangeCheckStep(intrabar, open[iEval], high[iEval], loE, clE));
 
   const barOpenSec = timeSec[iEval] ?? -1;
   const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BEAR`;
@@ -3592,6 +3653,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     `Stoch RSI: rsiP ${rsiP} · stochLen ${stLen} · kSmooth ${kSm} · bearFloor ${osMin}`,
     `Short SVP HD gate: ${shortNeedSvpHd ? "on" : "off"}`,
     `Intrabar: ${intrabarOn ? `on${relaxIntrabarVol ? " (relax vol)" : ""}` : "off"}`,
+    `Body/range (ไส้ยาว): ${snowballBodyToRangeFilterEnabled() ? `on (min ${snowballMinBodyToRangeRatio()})` : "off"} (INDICATOR_PUBLIC_SNOWBALL_MIN_BODY_TO_RANGE)`,
     `EMA resistance period: ${emaResP}`,
     `Public cooldown: ${Math.round(publicCooldownMs() / 60000)} นาที`,
   ];
@@ -3664,7 +3726,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
 
   const state = await loadIndicatorPublicFeedState();
   const nowMs = Date.now();
-  const data = { close, high, low, volume, timeSec };
+  const data = { close, high, low, open: openArr, volume, timeSec };
 
   const longCtxBase = {
     volSmaArr,

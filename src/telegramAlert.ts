@@ -43,6 +43,7 @@ export type PublicBroadcastKind =
   | "events_weekly"
   | "events_pre"
   | "events_result"
+  | "events_result_pending"
   | "events_live_ai"
   | "events_session";
 
@@ -70,6 +71,7 @@ const KIND_TO_THREAD_ENV: Record<PublicBroadcastKind, string> = {
   events_weekly: "TELEGRAM_PUBLIC_EVENTS_WEEKLY_MESSAGE_THREAD_ID",
   events_pre: "TELEGRAM_PUBLIC_EVENTS_PRE_MESSAGE_THREAD_ID",
   events_result: "TELEGRAM_PUBLIC_EVENTS_RESULT_MESSAGE_THREAD_ID",
+  events_result_pending: "TELEGRAM_PUBLIC_EVENTS_RESULT_MESSAGE_THREAD_ID",
   events_live_ai: "TELEGRAM_PUBLIC_EVENTS_LIVE_AI_MESSAGE_THREAD_ID",
   events_session: "TELEGRAM_PUBLIC_EVENTS_SESSION_MESSAGE_THREAD_ID",
 };
@@ -83,7 +85,7 @@ export function resolvePublicBroadcastMessageThreadIdForKind(kind: PublicBroadca
       resolvePublicBroadcastMessageThreadId()
     );
   }
-  if (kind === "events_result") {
+  if (kind === "events_result" || kind === "events_result_pending") {
     return (
       parsePositiveIntegerMessageThreadId(process.env.TELEGRAM_PUBLIC_CONDITION_MESSAGE_THREAD_ID) ??
       resolvePublicBroadcastMessageThreadId()
