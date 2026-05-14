@@ -19,6 +19,7 @@ import {
   type SnowballPendingConfirm,
 } from "./snowballConfirmStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
+import { saveSnowballConfirmLastRoundStats } from "./snowballConfirmRoundStatsStore";
 import {
   appendSnowballStatsRow,
   isSnowballStatsEnabled,
