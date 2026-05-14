@@ -451,6 +451,7 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
   lines.push("Expected alert คำนวณจาก Vercel cron schedule (ทุก 15 นาที UTC)");
   lines.push("Swing HH / VAH: เงื่อนไขเป็น OR — VAH (ยังไม่) แปลว่ายังไม่ cross แท่งนั้น แต่ถ้า swing ทะลุ HH แล้วก็ยัง PASS ได้");
   lines.push("เนื้อเทียน/ช่วง (body÷range): กรองก่อน dedupe — ตรงกับสแกน longBodyRatioBlocked; คนละชุดกับ wick history / signal wick ใน confirm-bar");
+  lines.push("Follow-through: ถ้าไม่ผ่าน body÷range แต่ close ทะลุ high แท่งก่อน (long) / ต่ำกว่า low แท่งก่อน (short) ให้ผ่าน — INDICATOR_PUBLIC_SNOWBALL_BODY_FOLLOW_THROUGH_ENABLED");
 
   let out = lines.join("\n");
   if (out.length > MAX_OUT) out = `${out.slice(0, MAX_OUT - 20)}\n…(truncated)`;

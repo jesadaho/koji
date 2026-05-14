@@ -377,6 +377,41 @@ export function snowballSignalCandleBodyRatioOk(
   return body / range >= snowballMinBodyToRangeRatio();
 }
 
+/** แท่งถัดไปปิดทะลุ high/low แท่งก่อน → ผ่านกรองไส้ยาวแทน body÷range ของแท่งสัญญาณ */
+export function snowballBodyFollowThroughEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_BODY_FOLLOW_THROUGH_ENABLED", true);
+}
+
+/**
+ * แท่งสัญญาณ (index iEval) ผ่านกรองเนื้อเทียน/ช่วงหรือไม่
+ * — ผ่านทันทีถ้า body÷range ถึงเกณฑ์
+ * — ถ้าไม่ถึง: LONG ใช้ close[iEval] > high[iEval-1], SHORT ใช้ close[iEval] < low[iEval-1] (แท่งปิดเท่านั้น)
+ */
+export function snowballSignalBarBodyRangePassed(
+  side: "long" | "bear",
+  iEval: number,
+  open: number[],
+  high: number[],
+  low: number[],
+  close: number[],
+): boolean {
+  if (!snowballBodyToRangeFilterEnabled()) return true;
+  if (iEval < 0 || iEval >= close.length) return false;
+  const o = open[iEval];
+  const h = high[iEval];
+  const l = low[iEval];
+  const c = close[iEval];
+  if (!Number.isFinite(o) || !Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c)) return false;
+  if (snowballSignalCandleBodyRatioOk(o, h, l, c)) return true;
+  if (!snowballBodyFollowThroughEnabled() || iEval < 1) return false;
+  if (side === "long") {
+    const prevH = high[iEval - 1];
+    return Number.isFinite(prevH) && c > prevH;
+  }
+  const prevL = low[iEval - 1];
+  return Number.isFinite(prevL) && c < prevL;
+}
+
 function mexcContractSymbolFromBinanceSymbol(sym: string): string {
   const s = sym.trim().toUpperCase();
   if (!s) return "";
@@ -2552,7 +2587,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           ) {
             return;
           }
-          if (!snowballSignalCandleBodyRatioOk(oE!, hiE!, loE!, clE!)) {
+          if (!snowballSignalBarBodyRangePassed("long", iEval, o15, h15, l15, c15)) {
             if (snowScanStats) {
               snowScanStats.longBodyRatioBlocked++;
               pushSnowScanSymList(snowScanStats.longBodyRatioBlockedSymbols, `${symbol} LONG`);
@@ -2874,7 +2909,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
           ) {
             return;
           }
-          if (!snowballSignalCandleBodyRatioOk(oE!, hiE!, loE!, clE!)) {
+          if (!snowballSignalBarBodyRangePassed("bear", iEval, o15, h15, l15, c15)) {
             if (snowScanStats) {
               snowScanStats.bearBodyRatioBlocked++;
               pushSnowScanSymList(snowScanStats.bearBodyRatioBlockedSymbols, `${symbol} BEAR`);
@@ -3251,10 +3286,12 @@ function fmtNum(n: number, digits = 6): string {
 /** ขั้น checklist / debug — ตรงกับ live tick ก่อน dedupe (เฉพาะแท่งปิด) */
 function snowballBodyToRangeCheckStep(
   intrabar: boolean,
-  o: number | undefined,
-  h: number | undefined,
-  l: number | undefined,
-  c: number | undefined,
+  side: "long" | "bear",
+  iEval: number,
+  open: number[],
+  high: number[],
+  low: number[],
+  close: number[],
 ): SnowballCheckStep {
   if (intrabar) {
     return {
@@ -3272,10 +3309,10 @@ function snowballBodyToRangeCheckStep(
       detail: "ปิด (INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE_FILTER_ENABLED=0)",
     };
   }
-  const oN = o ?? NaN;
-  const hN = h ?? NaN;
-  const lN = l ?? NaN;
-  const cN = c ?? NaN;
+  const oN = open[iEval];
+  const hN = high[iEval];
+  const lN = low[iEval];
+  const cN = close[iEval];
   if (!Number.isFinite(oN) || !Number.isFinite(hN) || !Number.isFinite(lN) || !Number.isFinite(cN)) {
     return {
       id: "bodyToRange",
@@ -3296,12 +3333,44 @@ function snowballBodyToRangeCheckStep(
     };
   }
   const ratio = body / range;
-  const ok = snowballSignalCandleBodyRatioOk(oN, hN, lN, cN);
+  const primaryOk = snowballSignalCandleBodyRatioOk(oN, hN, lN, cN);
+  if (primaryOk) {
+    return {
+      id: "bodyToRange",
+      label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
+      ok: true,
+      detail: `body/range=${fmtNum(ratio)} ≥ เกณฑ์ ${minR}`,
+    };
+  }
+  const passFollow = snowballSignalBarBodyRangePassed(side, iEval, open, high, low, close);
+  if (passFollow) {
+    const ft =
+      side === "long" && iEval >= 1
+        ? `body/range=${fmtNum(ratio)} < ${minR} แต่ close=${fmtNum(cN)} > prev high=${fmtNum(high[iEval - 1])} (follow-through)`
+        : side === "bear" && iEval >= 1
+          ? `body/range=${fmtNum(ratio)} < ${minR} แต่ close=${fmtNum(cN)} < prev low=${fmtNum(low[iEval - 1])} (follow-through)`
+          : `body/range=${fmtNum(ratio)} < ${minR} (ผ่าน follow-through)`;
+    return {
+      id: "bodyToRange",
+      label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
+      ok: true,
+      detail: ft,
+    };
+  }
+  let extra = "";
+  if (snowballBodyFollowThroughEnabled() && iEval >= 1) {
+    extra =
+      side === "long"
+        ? ` · close ยังไม่ทะลุ prev high (${fmtNum(high[iEval - 1])})`
+        : ` · close ยังไม่ต่ำกว่า prev low (${fmtNum(low[iEval - 1])})`;
+  } else if (!snowballBodyFollowThroughEnabled()) {
+    extra = " · follow-through ปิด (INDICATOR_PUBLIC_SNOWBALL_BODY_FOLLOW_THROUGH_ENABLED=0)";
+  }
   return {
     id: "bodyToRange",
     label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
-    ok,
-    detail: `body/range=${fmtNum(ratio)} ${ok ? "≥" : "<"} เกณฑ์ ${minR} (สแกน: longBodyRatioBlocked / bearBodyRatioBlocked)`,
+    ok: false,
+    detail: `body/range=${fmtNum(ratio)} < เกณฑ์ ${minR}${extra}`,
   };
 }
 
@@ -3454,7 +3523,7 @@ function evaluateSnowballLongAt(
   }
   push({ id: "ema2Slope", label: `EMA2 slope (${ctx.longEma2P})`, ok: ema2SlopeOk, detail: ema2SlopeDetail });
 
-  push(snowballBodyToRangeCheckStep(intrabar, open[iEval], hiE, low[iEval], clE));
+  push(snowballBodyToRangeCheckStep(intrabar, "long", iEval, open, high, low, close));
 
   const barOpenSec = timeSec[iEval] ?? -1;
   const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BULL`;
@@ -3573,7 +3642,7 @@ function evaluateSnowballBearAt(
   const emaOk = Number.isFinite(emaR);
   push({ id: "emaResistance", label: "EMA resistance finite", ok: emaOk, detail: emaOk ? `ema=${fmtNum(emaR!)}` : "ema = NaN" });
 
-  push(snowballBodyToRangeCheckStep(intrabar, open[iEval], high[iEval], loE, clE));
+  push(snowballBodyToRangeCheckStep(intrabar, "bear", iEval, open, high, low, close));
 
   const barOpenSec = timeSec[iEval] ?? -1;
   const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BEAR`;
@@ -3654,6 +3723,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     `Short SVP HD gate: ${shortNeedSvpHd ? "on" : "off"}`,
     `Intrabar: ${intrabarOn ? `on${relaxIntrabarVol ? " (relax vol)" : ""}` : "off"}`,
     `Body/range (ไส้ยาว): ${snowballBodyToRangeFilterEnabled() ? `on (min ${snowballMinBodyToRangeRatio()})` : "off"} (INDICATOR_PUBLIC_SNOWBALL_MIN_BODY_TO_RANGE)`,
+    `Follow-through (แท่งถัดไปทะลุ high/low แท่งก่อน): ${snowballBodyFollowThroughEnabled() ? "on" : "off"} (INDICATOR_PUBLIC_SNOWBALL_BODY_FOLLOW_THROUGH_ENABLED)`,
     `EMA resistance period: ${emaResP}`,
     `Public cooldown: ${Math.round(publicCooldownMs() / 60000)} นาที`,
   ];
