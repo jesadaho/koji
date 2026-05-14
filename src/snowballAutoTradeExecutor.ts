@@ -2,6 +2,7 @@ import {
   createOpenMarketOrder,
   getOpenPositions,
   type MexcCredentials,
+  type OpenPositionRow,
 } from "./mexcFuturesClient";
 import {
   loadTradingViewMexcSettingsFullMap,
@@ -33,6 +34,13 @@ function shortContractLabel(contractSymbol: string): string {
   return s.replace(/_/g, "") || contractSymbol;
 }
 
+function fmtSnowballPriceUsdt(p: number): string {
+  if (!Number.isFinite(p) || p <= 0) return "—";
+  if (p >= 1000) return p.toFixed(2);
+  if (p >= 1) return p.toFixed(4);
+  return p.toFixed(6);
+}
+
 async function notifyLines(userId: string, lines: string[]): Promise<void> {
   await notifyTradingViewWebhookTelegram(userId, lines.filter(Boolean).join("\n"));
 }
@@ -53,6 +61,25 @@ function hasActiveUsdtPosition(
 ): boolean {
   const sym = contractSymbol.trim();
   return positions.some((p) => p.symbol === sym && p.state === 1 && Number(p.holdVol) > 0);
+}
+
+/** ราคาเข้าเฉลี่ยจาก MEXC — ใช้คำนวณ Quick TP ให้ใกล้ UI จริง (ไม่ใช่แค่ close Binance) */
+function readMexcAvgEntryPrice(
+  positions: OpenPositionRow[],
+  contractSymbol: string,
+  side: SnowballAutoTradeSide
+): number | null {
+  const sym = contractSymbol.trim();
+  const wantType = side === "long" ? 1 : 2;
+  const p = positions.find(
+    (x) => x.symbol === sym && x.state === 1 && Number(x.holdVol) > 0 && x.positionType === wantType
+  );
+  if (!p) return null;
+  const o = Number(p.openAvgPrice);
+  if (Number.isFinite(o) && o > 0) return o;
+  const h = Number(p.holdAvgPrice);
+  if (Number.isFinite(h) && h > 0) return h;
+  return null;
 }
 
 export async function runSnowballAutoTradeAfterSnowballAlert(input: {
@@ -164,6 +191,14 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         continue;
       }
 
+      let mexcAvgEntry: number | null = null;
+      try {
+        const posAfter = await getOpenPositions(creds, sym);
+        mexcAvgEntry = readMexcAvgEntryPrice(posAfter, sym, input.side);
+      } catch (e) {
+        console.error("[snowballAutoTrade] getOpenPositions after open", sym, userId, e);
+      }
+
       const quickTpEnabled = Boolean(row.snowballAutoTradeQuickTpEnabled);
       const quickTpRoiPct =
         typeof row.snowballAutoTradeQuickTpRoiPct === "number" && Number.isFinite(row.snowballAutoTradeQuickTpRoiPct)
@@ -183,6 +218,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           side: input.side,
           openedAtMs: Date.now(),
           referenceEntryPrice: input.referenceEntryPrice,
+          mexcAvgEntryPrice: mexcAvgEntry,
           signalBarOpenSec: input.signalBarOpenSec,
           signalBarTf: input.signalBarTf,
           signalBarLow: input.signalBarLow,
@@ -201,7 +237,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         long ? "✅ เปิด LONG จาก Snowball" : "✅ เปิด SHORT จาก Snowball",
         `[${shortContractLabel(sym)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
-        `จุดเข้าอ้างอิง (บอทแนะนำ): ${input.referenceEntryPrice}`,
+        `จุดเข้าอ้างอิง (บอท / Binance): ${fmtSnowballPriceUsdt(input.referenceEntryPrice)} USDT`,
+        mexcAvgEntry != null && Number.isFinite(mexcAvgEntry) && mexcAvgEntry > 0
+          ? `ราคาเข้าเฉลี่ย MEXC: ${fmtSnowballPriceUsdt(mexcAvgEntry)} USDT — Quick TP คิด ROI จากราคานี้`
+          : "ราคาเข้าเฉลี่ย MEXC: ยังดึงไม่ได้ — Quick TP จะใช้จุดอ้างอิงบอท (อาจคลาดกับ UI)",
         quickTpEnabled
           ? `Quick TP: เปิด (ROI ≥ ${quickTpRoiPct}% ภายใน ${quickTpMaxHours} ชม.)`
           : "Quick TP: ปิด",

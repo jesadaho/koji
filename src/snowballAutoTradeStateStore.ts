@@ -29,8 +29,10 @@ export type SnowballAutoTradeActive = {
   binanceSymbol: string;
   side: SnowballAutoTradeSide;
   openedAtMs: number;
-  /** จุดเข้าซื้อที่บอทแนะนำ (อ้างอิงคำนวณ ROI/time rules) */
+  /** จุดเข้าซื้อที่บอทแนะนำ (Binance แท่งสัญญาณ) — กติกา 24h / แสดงผล */
   referenceEntryPrice: number;
+  /** ราคาเข้าเฉลี่ยจาก MEXC หลังเปิด (ถ้ามี) — Quick TP ใช้คำนวณ ROI ให้ใกล้ UI จริง */
+  mexcAvgEntryPrice?: number;
   signalBarOpenSec: number;
   signalBarTf: "15m" | "1h" | "4h";
   signalBarLow: number | null;
@@ -79,6 +81,9 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
     const side = o.side === "long" || o.side === "short" ? (o.side as SnowballAutoTradeSide) : null;
     const openedAtMs = typeof o.openedAtMs === "number" && Number.isFinite(o.openedAtMs) ? o.openedAtMs : NaN;
     const entry = typeof o.referenceEntryPrice === "number" && Number.isFinite(o.referenceEntryPrice) ? o.referenceEntryPrice : NaN;
+    const mexcEntryRaw = (o as { mexcAvgEntryPrice?: unknown }).mexcAvgEntryPrice;
+    const mexcAvgEntryPrice =
+      typeof mexcEntryRaw === "number" && Number.isFinite(mexcEntryRaw) && mexcEntryRaw > 0 ? mexcEntryRaw : undefined;
     const signalBarOpenSec =
       typeof o.signalBarOpenSec === "number" && Number.isFinite(o.signalBarOpenSec) ? o.signalBarOpenSec : NaN;
     const signalBarTf =
@@ -110,7 +115,7 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
     }
     const quickTpRoiPct = Number.isFinite(qRoi) && qRoi > 0 ? qRoi : 30;
     const quickTpMaxHours = Number.isFinite(qH) && qH > 0 ? qH : 4;
-    out.push({
+    const row: SnowballAutoTradeActive = {
       contractSymbol: sym,
       binanceSymbol,
       side,
@@ -124,7 +129,9 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
       quickTpEnabled: qEn,
       quickTpRoiPct,
       quickTpMaxHours,
-    });
+    };
+    if (mexcAvgEntryPrice != null) row.mexcAvgEntryPrice = mexcAvgEntryPrice;
+    out.push(row);
   }
   const bySym = new Map<string, SnowballAutoTradeActive>();
   for (const e of out) bySym.set(`${e.contractSymbol}|${e.side}`, e);
@@ -243,6 +250,8 @@ export function withRecordedSnowballSuccessfulOpen(
     quickTpEnabled: boolean;
     quickTpRoiPct: number;
     quickTpMaxHours: number;
+    /** ถ้ามี — Quick TP คำนวณ ROI จากราคานี้แทน reference (ใกล้ MEXC) */
+    mexcAvgEntryPrice?: number | null;
   },
   dayKey: string
 ): SnowballAutoTradeState {
@@ -255,7 +264,7 @@ export function withRecordedSnowballSuccessfulOpen(
     : [...fresh.openedContractSymbolsToday, sym];
   const activePrev = normalizeActive(fresh.active);
   const activeNext = activePrev.filter((x) => !(x.contractSymbol === sym && x.side === p.side));
-  activeNext.push({
+  const activeRow: SnowballAutoTradeActive = {
     contractSymbol: sym,
     binanceSymbol: p.binanceSymbol.trim().toUpperCase(),
     side: p.side,
@@ -269,7 +278,12 @@ export function withRecordedSnowballSuccessfulOpen(
     quickTpEnabled: Boolean(p.quickTpEnabled),
     quickTpRoiPct: p.quickTpRoiPct > 0 ? p.quickTpRoiPct : 30,
     quickTpMaxHours: p.quickTpMaxHours > 0 ? p.quickTpMaxHours : 4,
-  });
+  };
+  const mexcE = p.mexcAvgEntryPrice;
+  if (typeof mexcE === "number" && Number.isFinite(mexcE) && mexcE > 0) {
+    activeRow.mexcAvgEntryPrice = mexcE;
+  }
+  activeNext.push(activeRow);
   return {
     ...state,
     [uid]: {

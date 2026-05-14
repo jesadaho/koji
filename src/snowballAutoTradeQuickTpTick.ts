@@ -1,4 +1,4 @@
-import { closeAllOpenForSymbol, getContractLastPricePublic, type MexcCredentials } from "./mexcFuturesClient";
+import { closeAllOpenForSymbol, getContractLastPricePublic, getOpenPositions, type MexcCredentials } from "./mexcFuturesClient";
 import { loadTradingViewMexcSettingsFullMap } from "./tradingViewCloseSettingsStore";
 import {
   loadSnowballAutoTradeState,
@@ -18,10 +18,61 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
   await notifyTradingViewWebhookTelegram(userId, lines.filter(Boolean).join("\n"));
 }
 
+function fmtSnowballPriceUsdt(p: number): string {
+  if (!Number.isFinite(p) || p <= 0) return "—";
+  if (p >= 1000) return p.toFixed(2);
+  if (p >= 1) return p.toFixed(4);
+  return p.toFixed(6);
+}
+
 function roiPctFromMark(p: { side: SnowballAutoTradeSide; entry: number; mark: number; leverage: number }): number {
   if (!(p.entry > 0) || !(p.mark > 0) || p.leverage < 1) return NaN;
   const movePct = p.side === "long" ? ((p.mark - p.entry) / p.entry) * 100 : ((p.entry - p.mark) / p.entry) * 100;
   return movePct * p.leverage;
+}
+
+/** ราคาเข้าเฉลี่ยจาก MEXC — ลำดับ: state → API → จุดอ้างอิงบอท */
+async function resolveQuickTpEntry(
+  creds: MexcCredentials,
+  a: SnowballAutoTradeActive
+): Promise<{ entry: number; source: "mexc" | "reference" }> {
+  const m = a.mexcAvgEntryPrice;
+  if (typeof m === "number" && Number.isFinite(m) && m > 0) return { entry: m, source: "mexc" };
+  try {
+    const pos = await getOpenPositions(creds, a.contractSymbol);
+    const sym = a.contractSymbol.trim();
+    const wantType = a.side === "long" ? 1 : 2;
+    const row = pos.find(
+      (x) => x.symbol === sym && x.state === 1 && Number(x.holdVol) > 0 && x.positionType === wantType
+    );
+    if (row) {
+      const o = Number(row.openAvgPrice);
+      if (Number.isFinite(o) && o > 0) return { entry: o, source: "mexc" };
+      const h = Number(row.holdAvgPrice);
+      if (Number.isFinite(h) && h > 0) return { entry: h, source: "mexc" };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { entry: a.referenceEntryPrice, source: "reference" };
+}
+
+function quickTpDetailLines(p: {
+  a: SnowballAutoTradeActive;
+  mark: number;
+  roi: number;
+  entry: number;
+  entrySource: "mexc" | "reference";
+}): string[] {
+  const { a, mark, roi, entry, entrySource } = p;
+  const refLine = `จุดอ้างอิงบอท (Binance): ${fmtSnowballPriceUsdt(a.referenceEntryPrice)} USDT`;
+  const entryLine =
+    entrySource === "mexc"
+      ? `ราคาเข้า (MEXC เฉลี่ย): ${fmtSnowballPriceUsdt(entry)} USDT — ใช้คำนวณ ROI Quick TP`
+      : `ราคาเข้า MEXC: ไม่พบ — ใช้จุดอ้างอิงบอทคำนวณ ROI (อาจต่างจาก MEXC UI)`;
+  const markLine = `ราคา mark ณ ตัดสินใจ: ${fmtSnowballPriceUsdt(mark)} USDT`;
+  const roiLine = `ROI บนมาร์จิ้น (ประมาณ): ${roi.toFixed(1)}% (เป้า Quick TP ${a.quickTpRoiPct}%) · เลเวอเรจ ${a.leverage}x`;
+  return [refLine, entryLine, markLine, roiLine];
 }
 
 export async function runSnowballAutoTradeQuickTpTick(nowMs: number): Promise<number> {
@@ -45,8 +96,11 @@ export async function runSnowballAutoTradeQuickTpTick(nowMs: number): Promise<nu
 
       const mark = await getContractLastPricePublic(a.contractSymbol);
       if (mark == null || !(mark > 0)) continue;
-      const roi = roiPctFromMark({ side: a.side, entry: a.referenceEntryPrice, mark, leverage: a.leverage });
+      const { entry, source: entrySource } = await resolveQuickTpEntry(creds, a);
+      const roi = roiPctFromMark({ side: a.side, entry, mark, leverage: a.leverage });
       if (!Number.isFinite(roi) || roi < a.quickTpRoiPct) continue;
+
+      const detail = quickTpDetailLines({ a, mark, roi, entry, entrySource });
 
       const r = await closeAllOpenForSymbol(creds, a.contractSymbol);
       if (!r.success) {
@@ -54,7 +108,7 @@ export async function runSnowballAutoTradeQuickTpTick(nowMs: number): Promise<nu
           "Koji — Snowball auto-open (MEXC)",
           "❌ Quick TP: ปิดไม่สำเร็จ",
           `[${shortContractLabel(a.contractSymbol)}]/USDT (${a.side.toUpperCase()})`,
-          `ROI ประมาณ: ${roi.toFixed(1)}% (เป้า ${a.quickTpRoiPct}%)`,
+          ...detail,
           r.message ? `MEXC: ${r.message}` : "",
         ]);
         continue;
@@ -66,7 +120,7 @@ export async function runSnowballAutoTradeQuickTpTick(nowMs: number): Promise<nu
         "Koji — Snowball auto-open (MEXC)",
         "✅ Quick TP: ปิดโพซิชันแล้ว",
         `[${shortContractLabel(a.contractSymbol)}]/USDT (${a.side.toUpperCase()})`,
-        `ROI ประมาณ: ${roi.toFixed(1)}% (เป้า ${a.quickTpRoiPct}%)`,
+        ...detail,
       ]);
     }
   }

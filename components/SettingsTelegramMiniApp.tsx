@@ -1118,7 +1118,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong>Quick TP</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              ถ้า ROI แตะเป้าภายในช่วงเวลาที่ตั้ง ระบบจะพยายามปิด market ทันที (ตามรอบ cron)
+              ถ้า ROI แตะเป้าภายในช่วงเวลาที่ตั้ง ระบบจะพยายามปิด market ทันที (ตามรอบ cron) — ROI คำนวณจากราคาเข้าเฉลี่ยบน MEXC เมื่อดึงได้ ไม่ใช่แค่ close Binance
             </span>
           </span>
         </label>
