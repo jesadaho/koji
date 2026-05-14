@@ -474,10 +474,11 @@ export function snowballConfirmMaxAgeHours(): number {
 
 /**
  * โหมดสองแท่งปิดในครั้งเดียว — แท่งสัญญาณ = แท่งปิดก่อนล่าสุด (iClosed-1), confirm = แท่งปิดล่าสุด (iClosed)
- * ไม่ใช้ pending confirm / snowballConfirmTick สำหรับสัญญาณใหม่ (รายการ pending เก่ายังถูกประมวลผลตามเดิม)
+ * ค่าเริ่ม **เปิด** (เมื่อไม่ตั้ง env) — ตั้ง INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=0/false เพื่อโหมดแท่งเดียว + pending confirm เดิม
+ * ไม่ใช้ pending confirm / snowballConfirmTick สำหรับสัญญาณใหม่เมื่อโหมดนี้เปิด (รายการ pending เก่ายังถูกประมวลผลตามเดิม)
  */
 export function snowballTwoBarInlineModeEnabled(): boolean {
-  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED", false);
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED", true);
 }
 
 /** ดึงย้อนของปิด confirm เทียบช่วง (high−low) แท่งสัญญาณ — ค่าเริ่ม 0.3 = 30% */
@@ -3580,7 +3581,7 @@ export type SnowballChecklistResult = {
   confirmRisk: { long: SnowballConfirmRiskGateStatus | null; bear: SnowballConfirmRiskGateStatus | null } | null;
   /** Wave Gate — กันยิงซ้ำในคลื่นเดิม */
   waveGate: { long: SnowballWaveGateStatus | null; bear: SnowballWaveGateStatus | null } | null;
-  /** เมื่อเปิด INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED — สรุปเกณฑ์สองแท่ง + 1h */
+  /** เมื่อโหมด two-bar inline เปิด (ค่าเริ่ม) — สรุปเกณฑ์สองแท่ง + 1h */
   twoBarInlineNotes?: string[];
   /** two-bar inline + iClosed≥2 — เกณฑ์ confirm แยกจาก checklist สัญญาณ */
   twoBarConfirmGateRows?: { long: SnowballCheckStep[]; bear: SnowballCheckStep[] } | null;
@@ -3982,7 +3983,7 @@ function evaluateSnowballLongAt(
       label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
       ok: true,
       detail:
-        "ข้ามในโหมด two-bar inline — สแกนจริงไม่ใช้ INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE / follow-through บนแท่งสัญญาณ (INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=1)",
+        "ข้ามในโหมด two-bar inline — สแกนจริงไม่ใช้ INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE / follow-through บนแท่งสัญญาณ (ค่าเริ่ม two-bar inline เปิด; ปิดด้วย INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=0)",
     });
   } else {
     push(snowballBodyToRangeCheckStep(intrabar, "long", iEval, open, high, low, close));
@@ -4121,7 +4122,7 @@ function evaluateSnowballBearAt(
       label: "เนื้อเทียน/ช่วง (ไส้ยาว)",
       ok: true,
       detail:
-        "ข้ามในโหมด two-bar inline — สแกนจริงไม่ใช้ INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE / follow-through บนแท่งสัญญาณ (INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=1)",
+        "ข้ามในโหมด two-bar inline — สแกนจริงไม่ใช้ INDICATOR_PUBLIC_SNOWBALL_BODY_TO_RANGE / follow-through บนแท่งสัญญาณ (ค่าเริ่ม two-bar inline เปิด; ปิดด้วย INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=0)",
     });
   } else {
     push(snowballBodyToRangeCheckStep(intrabar, "bear", iEval, open, high, low, close));
@@ -4218,8 +4219,8 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     `EMA resistance period: ${emaResP}`,
     `Public cooldown: ${Math.round(publicCooldownMs() / 60000)} นาที`,
     snowballTwoBarInlineModeEnabled()
-      ? "Two-bar inline: on (INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED) — สแกนจริงรวม confirm ในรอบเดียว; ดูบล็อก two-bar inline ด้านล่าง"
-      : "Two-bar inline: off — โหมด pending confirm + snowballConfirmTick ตามเดิมเมื่อมี risk flags",
+      ? "Two-bar inline: on (ค่าเริ่มเมื่อไม่ตั้ง env — หรือตั้ง 1/true) — สแกนจริงรวม confirm ในรอบเดียว; ดูบล็อก two-bar inline ด้านล่าง"
+      : "Two-bar inline: off — โหมดแท่งเดียว + pending confirm (legacy)",
   ];
 
   const baseResult: SnowballChecklistResult = {
@@ -4376,7 +4377,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     );
   } else if (snowballTwoBarInlineModeEnabled() && iClosed < 2) {
     baseResult.paramsSummary.push(
-      "Two-bar inline เปิดใน env แต่ iClosed < 2 — checklist แท่งปิดยังใช้แท่งเดียว (รอข้อมูลย้อนหลังเพิ่ม)",
+      "Two-bar inline เปิดอยู่ (ค่าเริ่ม) แต่ iClosed < 2 — checklist แท่งปิดยังใช้แท่งเดียว (รอข้อมูลย้อนหลังเพิ่ม)",
     );
   }
   if (intrabarOn) {

@@ -517,7 +517,7 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
     const twoBarDual = Boolean(res.twoBarConfirmGateRows);
     if (twoBarDual) {
       lines.push(
-        "  โหมด two-bar inline: แท่งสัญญาณ = ปิดก่อนล่าสุด (iClosed−1) · แท่ง confirm = ปิดล่าสุด (iClosed) — dedupe/cooldown ในรายการสัญญาณเทียบเวลาเปิดแท่ง confirm",
+        "  โหมด two-bar inline: แท่งสัญญาณ ① = ปิดก่อนล่าสุด (iClosed−1 = n−3) · แท่ง confirm ② = ปิดล่าสุด (iClosed = n−2) · แท่ง ③ กำลังก่อ = n−1 (ไม่ใช้ใน checklist ปิด) — dedupe/cooldown ในรายการสัญญาณเทียบเวลาเปิดแท่ง confirm",
       );
       lines.push(...renderSnowballSideBlock("สัญญาณ (แท่งปิดก่อนล่าสุด)", res.long.closed, res.snowTf, nowMs));
       if (res.twoBarConfirmGateRows?.long?.length) {
@@ -525,7 +525,15 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
         lines.push(...renderGateStepsBlock("Confirm inline (แท่งปิดล่าสุด · LONG)", res.twoBarConfirmGateRows.long));
       }
     } else {
-      lines.push(...renderSnowballSideBlock("Closed bar", res.long.closed, res.snowTf, nowMs));
+      lines.push(
+        "  📎 แท่งใน Binance array: สุดท้าย (n−1) = กำลังก่อ · n−2 = ปิดล่าสุด (บรรทัดด้านล่าง) · n−3 = ปิดก่อนล่าสุด",
+      );
+      lines.push(
+        "  📎 เทียบกราฟ ①สัญญาณ ②confirm ③ก่อ: บรรทัดถัดไป = checklist ที่ ② (iClosed) แบบแท่งเดียว — โหมดสองแท่งที่ ①+② ใช้เมื่อ two-bar inline เปิดและมีข้อมูล iClosed≥2; ถ้าต้องการแท่งเดียวแบบ legacy ตั้ง INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=0",
+      );
+      lines.push(
+        ...renderSnowballSideBlock("แท่งปิดล่าสุด (iClosed) — โหมดแท่งเดียว", res.long.closed, res.snowTf, nowMs),
+      );
     }
     if (res.long.intrabar) {
       lines.push("");
@@ -539,7 +547,7 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
     const twoBarDualBear = Boolean(res.twoBarConfirmGateRows);
     if (twoBarDualBear) {
       lines.push(
-        "  โหมด two-bar inline: แท่งสัญญาณ = ปิดก่อนล่าสุด (iClosed−1) · แท่ง confirm = ปิดล่าสุด (iClosed)",
+        "  โหมด two-bar inline: แท่งสัญญาณ ① = iClosed−1 · แท่ง confirm ② = iClosed · ③ = กำลังก่อ (ไม่ใช้ใน checklist ปิด)",
       );
       lines.push(...renderSnowballSideBlock("สัญญาณ (แท่งปิดก่อนล่าสุด)", res.bear.closed, res.snowTf, nowMs));
       if (res.twoBarConfirmGateRows?.bear?.length) {
@@ -547,7 +555,15 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
         lines.push(...renderGateStepsBlock("Confirm inline (แท่งปิดล่าสุด · BEAR)", res.twoBarConfirmGateRows.bear));
       }
     } else {
-      lines.push(...renderSnowballSideBlock("Closed bar", res.bear.closed, res.snowTf, nowMs));
+      lines.push(
+        "  📎 แท่งใน Binance array: สุดท้าย (n−1) = กำลังก่อ · n−2 = ปิดล่าสุด (บรรทัดด้านล่าง) · n−3 = ปิดก่อนล่าสุด",
+      );
+      lines.push(
+        "  📎 เทียบกราฟ ①②③: บรรทัดถัดไป = ② (iClosed) แบบแท่งเดียว — สองแท่ง ①+② เมื่อ two-bar inline เปิดและ iClosed≥2; legacy แท่งเดียวตั้ง INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=0",
+      );
+      lines.push(
+        ...renderSnowballSideBlock("แท่งปิดล่าสุด (iClosed) — โหมดแท่งเดียว", res.bear.closed, res.snowTf, nowMs),
+      );
     }
     if (res.bear.intrabar) {
       lines.push("");
