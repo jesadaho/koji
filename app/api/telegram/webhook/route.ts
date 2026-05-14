@@ -37,8 +37,10 @@ import { removeSnowballStatsDuplicatesInLastHours, resetSnowballStatsState } fro
 import { clearSnowballSymbolForManualRetry } from "@/src/snowballManualSymbolClear";
 import {
   formatPublicIndicatorFeedDebugMessage,
+  formatReversalRiskDebugMessage,
   formatSnowballChecklistDebugMessage,
   parsePublicFeedDebugCommand,
+  parseReversalRiskDebugCommand,
   parseSnowballDebugCommand,
 } from "@/src/publicIndicatorFeedDebug";
 
@@ -231,7 +233,7 @@ function parseRunCronCmd(t: string): { scope: CronRunScope; verbose: boolean } |
 
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
- * /start … · debug public feed / debug snowball (admin) · run cron price-sync | snowball | spark (admin — KOJI_ADMIN_IDS)
+ * /start … · debug public feed / debug snowball / debug reversal risk (admin) · run cron price-sync | snowball | spark (admin — KOJI_ADMIN_IDS)
  * · snowball stats remove SYMBOL — ลบแถวสถิติ + ปลดล็อกยิง Snowball ต่อสัญญา (admin)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
@@ -335,6 +337,39 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] snowball debug error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const revDbg = parseReversalRiskDebugCommand(normalized) || parseReversalRiskDebugCommand(trimmedText);
+  if (revDbg) {
+    if (!isTelegramCronRunAllowed(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          "คำสั่ง debug reversal risk ต้องเป็น admin — ตั้ง KOJI_ADMIN_IDS=<telegram user id>",
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] reversal risk debug deny", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const body = await formatReversalRiskDebugMessage(revDbg.symbol);
+      await sendTelegramMessageToChat(String(chatId), body, threadOpts);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      console.error("[telegram/webhook] reversal risk debug", e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `debug reversal risk ล้มเหลว — ${detail.slice(0, 800)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] reversal risk debug error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

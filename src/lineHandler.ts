@@ -18,8 +18,10 @@ import { isCronStatusQuery } from "./cronLineCommands";
 import { isAdminLineUserId } from "./adminIds";
 import {
   formatPublicIndicatorFeedDebugMessage,
+  formatReversalRiskDebugMessage,
   formatSnowballChecklistDebugMessage,
   parsePublicFeedDebugCommand,
+  parseReversalRiskDebugCommand,
   parseSnowballDebugCommand,
 } from "./publicIndicatorFeedDebug";
 import { isMarketPulseStatusQuery } from "./marketPulseLineCommands";
@@ -119,6 +121,8 @@ const HELP = `Koji — แจ้งเตือนราคา (MEXC Futures USD
   (EN: cron status, #cronStatus — Spark ticker: สถานะ spark, spark cron, #sparkCron)
 • debug public feed [เหรียญ] — สรุป env / universe / รอบ price-sync ล่าสุด (เฉพาะ admin — KOJI_ADMIN_IDS) เช่น debug public feed USELESS
   (EN: #publicfeeddebug, check public feed SOL)
+• debug reversal risk <เหรียญ> — เงื่อนไข Reversal Risk / Bearish Vol / Trend Broken บน Binance USDM (เฉพาะ admin) เช่น debug reversal risk AI
+  (EN: #reversalriskdebug AI, check reversal risk SOL)
 • debug snowball <เหรียญ> — เดิน checklist Snowball ทีละขั้น (Long/Short) บอกว่าติดตรงไหน เช่น debug snowball USELESS
   (EN: #snowballdebug USELESS, check snowball SOL)
 
@@ -356,6 +360,27 @@ export async function handleWebhookEvent(client: Client, event: WebhookEvent): P
       const detail = e instanceof Error ? e.message : String(e);
       await client.replyMessage(msgEvent.replyToken, [
         { type: "text", text: `debug snowball ล้มเหลว — ${detail.slice(0, 500)}` },
+      ]);
+    }
+    return;
+  }
+
+  const revDbg = parseReversalRiskDebugCommand(text);
+  if (revDbg) {
+    if (!isAdminLineUserId(uid)) {
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: "คำสั่ง debug reversal risk — เฉพาะ admin (ตั้ง KOJI_ADMIN_IDS=LINE user id ของคุณ)" },
+      ]);
+      return;
+    }
+    try {
+      const body = await formatReversalRiskDebugMessage(revDbg.symbol);
+      await client.replyMessage(msgEvent.replyToken, [{ type: "text", text: body }]);
+    } catch (e) {
+      console.error("[lineHandler] reversal risk debug", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      await client.replyMessage(msgEvent.replyToken, [
+        { type: "text", text: `debug reversal risk ล้มเหลว — ${detail.slice(0, 500)}` },
       ]);
     }
     return;

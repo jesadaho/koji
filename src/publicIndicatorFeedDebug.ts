@@ -3,6 +3,7 @@ import {
   fetchTopUsdmUsdtSymbolsByQuoteVolume,
   isBinanceIndicatorFapiEnabled,
 } from "./binanceIndicatorKline";
+import { formatDownsideReversalRiskDebugMessage } from "./downsideReversalAlertTick";
 import { loadPriceSyncCronRecord } from "./cronStatusStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
@@ -176,6 +177,7 @@ export async function formatPublicIndicatorFeedDebugMessage(opts: { symbol?: str
   lines.push("");
   lines.push("รอบจริง: GET /api/cron/price-sync (~15m) — HTTP 200 ไม่ได้แปลว่ามีการแจ้งเตือน");
   lines.push("ดู Snowball checklist รายเหรียญ: debug snowball USELESS");
+  lines.push("ดู Reversal Risk (Binance downside tick): debug reversal risk USELESS");
 
   let out = lines.join("\n");
   if (out.length > MAX_OUT) out = `${out.slice(0, MAX_OUT - 20)}\n…(truncated)`;
@@ -199,6 +201,29 @@ export function parseSnowballDebugCommand(text: string): { symbol: string } | nu
     if (m && m[1]?.trim()) return { symbol: m[1].trim() };
   }
   return null;
+}
+
+/**
+ * Admin debug — `debug reversal risk SYMBOL` (เงื่อนไขเดียวกับ downside reversal tick บน Binance USDM)
+ */
+export function parseReversalRiskDebugCommand(text: string): { symbol: string } | null {
+  const t = text.trim().replace(/\s+/g, " ");
+  const patterns = [
+    /^debug\s+reversal\s+risk\s+(\S+)\s*$/i,
+    /^reversal\s+risk\s+debug\s+(\S+)\s*$/i,
+    /^#reversalriskdebug\s+(\S+)\s*$/i,
+    /^เช็ค\s+reversal\s+risk\s+(\S+)\s*$/i,
+    /^เช็ค\s+กลับตัว\s+(\S+)\s*$/i,
+  ];
+  for (const re of patterns) {
+    const m = t.match(re);
+    if (m && m[1]?.trim()) return { symbol: m[1].trim() };
+  }
+  return null;
+}
+
+export function formatReversalRiskDebugMessage(symbol: string): Promise<string> {
+  return formatDownsideReversalRiskDebugMessage(symbol);
 }
 
 function checkMark(ok: boolean): string {
