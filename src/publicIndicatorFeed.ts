@@ -2076,8 +2076,13 @@ function formatSnowball4hScanSummaryMessage(opts: {
  * Feed สาธารณะ RSI cross + EMA cross + RSI divergence จาก Binance USDT-M (ค่าเริ่ม TF เดียวกันที่ 4h — RSI/EMA: INDICATOR_PUBLIC_RSI_EMA_TF, Div: INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS)
  * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — universe alt ตาม INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS ดีฟอลต์ 100; RSI/EMA/Div ยังใช้ INDICATOR_PUBLIC_TOP_ALTS)
  *   Double Barrier: Barrier1 = swing lookback เดิม · Barrier2 = แนว High/Low ย้อน 200 แท่งในโซน Watchlist % → 🟡 B+ / 🟢/🔴 A+
+ * @param opts.snowballOnly ถ้า true — รันเฉพาะ Snowball (ใช้ GET /api/cron/snowball-scan / run cron snowball)
  */
-export async function runPublicIndicatorFeedInternal(_client: Client, now: number): Promise<number> {
+export async function runPublicIndicatorFeedInternal(
+  _client: Client,
+  now: number,
+  opts?: { snowballOnly?: boolean },
+): Promise<number> {
   void _client;
   if (!isIndicatorPublicFeedEnabled()) return 0;
   resetBinanceIndicatorFapi451LogDedupe();
@@ -2108,12 +2113,19 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
   const rsiOn = envFlagOn("INDICATOR_PUBLIC_RSI_ENABLED", true);
   const emaOn = envFlagOn("INDICATOR_PUBLIC_EMA_ENABLED", true);
   const divOn = isPublicRsiDivergenceEnabled();
-  const divergenceTfs = divOn ? publicRsiDivergenceTfs() : [];
-  const rsiEmaTf = publicRsiEmaCrossTf();
-  const needDiv1hExtra = divOn && divergenceTfs.includes("1h") && rsiEmaTf !== "1h";
-  const needDiv4hExtra = divOn && divergenceTfs.includes("4h") && rsiEmaTf !== "4h";
   const snowballOn = isPublicSnowballTripleCheckEnabled();
-  if (!rsiOn && !emaOn && !divOn && !snowballOn) return 0;
+  const snowballOnly = Boolean(opts?.snowballOnly);
+  if (snowballOnly && !snowballOn) return 0;
+
+  const effectiveRsiOn = snowballOnly ? false : rsiOn;
+  const effectiveEmaOn = snowballOnly ? false : emaOn;
+  const effectiveDivOn = snowballOnly ? false : divOn;
+
+  const rsiEmaTf = publicRsiEmaCrossTf();
+  const divergenceTfs = effectiveDivOn ? publicRsiDivergenceTfs() : [];
+  const needDiv1hExtra = effectiveDivOn && divergenceTfs.includes("1h") && rsiEmaTf !== "1h";
+  const needDiv4hExtra = effectiveDivOn && divergenceTfs.includes("4h") && rsiEmaTf !== "4h";
+  if (!effectiveRsiOn && !effectiveEmaOn && !effectiveDivOn && !snowballOn) return 0;
 
   const baseTopAlts = topAltsCount();
   const snowballTopAlts = snowballUniverseTopAltsCount();
@@ -2260,7 +2272,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
       if (iPrev >= 0) {
         const barTimeSec = timeSec[i];
         if (typeof barTimeSec === "number" && Number.isFinite(barTimeSec)) {
-          if (rsiOn && idx < maxIdxCoreFeed && !isNeutralRsi50Threshold(rsiP.threshold)) {
+          if (effectiveRsiOn && idx < maxIdxCoreFeed && !isNeutralRsi50Threshold(rsiP.threshold)) {
             const period = rsiP.period;
             if (n >= period + 3) {
               const rsi = rsiWilder(close, period);
@@ -2297,7 +2309,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             }
           }
 
-          if (emaOn && idx < maxIdxCoreFeed && emaP.fast < emaP.slow) {
+          if (effectiveEmaOn && idx < maxIdxCoreFeed && emaP.fast < emaP.slow) {
             const { fast, slow } = emaP;
             const minIdx = Math.max(fast, slow) - 1;
             const emaF = emaLine(close, fast);
@@ -2347,7 +2359,7 @@ export async function runPublicIndicatorFeedInternal(_client: Client, now: numbe
             }
           }
 
-          if (divOn && idx < maxIdxCoreFeed) {
+          if (effectiveDivOn && idx < maxIdxCoreFeed) {
             const wing = divergencePivotWing();
             const minGap = divergenceMinPivotGapBars();
             const strongD = divergenceStrongRsiDelta();

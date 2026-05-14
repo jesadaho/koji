@@ -29,7 +29,7 @@ import { runSparkFollowUpTick } from "@/src/sparkFollowUpTick";
 import { runPriceAlertTick } from "@/src/priceAlertTick";
 import { runPctStepDailyPriceAlertTick } from "@/src/pctStepPriceAlertTick";
 import { runVolumeSignalAlertTick } from "@/src/volumeSignalAlertTick";
-import { runIndicatorAlertTick } from "@/src/indicatorAlertWorker";
+import { runIndicatorAlertTick, runSnowballPublicScanTick } from "@/src/indicatorAlertWorker";
 import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
 import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
 import { isAdminTelegramUserId } from "@/src/adminIds";
@@ -179,32 +179,36 @@ function isTelegramCronRunAllowed(fromUserId: number | undefined): boolean {
   return isAdminTelegramUserId(fromUserId);
 }
 
-type CronRunScope = "pct-trailing" | "price-sync";
+type CronRunScope = "pct-trailing" | "price-sync" | "snowball-scan";
 
 function parseRunCronCmd(t: string): { scope: CronRunScope; verbose: boolean } | null {
   const s = t.trim().replace(/\s+/g, " ");
   let m = s.match(
-    /^(?:run\s+cron|cron\s+run|runc|runcron)\s+(pct-trailing|pct_trailing|spark|price-sync|price_sync)(?:\s+(v|verbose))?\s*$/i
+    /^(?:run\s+cron|cron\s+run|runc|runcron)\s+(pct-trailing|pct_trailing|spark|price-sync|price_sync|snowball|snowball-scan|snowball_scan)(?:\s+(v|verbose))?\s*$/i
   );
   if (m) {
     const key = m[1]!.toLowerCase();
     const verbose = Boolean(m[2]);
     if (key === "spark" || key === "pct-trailing" || key === "pct_trailing") return { scope: "pct-trailing", verbose };
     if (key === "price-sync" || key === "price_sync") return { scope: "price-sync", verbose };
+    if (key === "snowball" || key === "snowball-scan" || key === "snowball_scan") return { scope: "snowball-scan", verbose };
   }
-  m = s.match(/^(?:รัน\s*cron|สั่งรัน\s*cron|รันcron)\s+(spark|pct-trailing|price-sync)(?:\s+(v|verbose))?\s*$/i);
+  m = s.match(
+    /^(?:รัน\s*cron|สั่งรัน\s*cron|รันcron)\s+(spark|pct-trailing|price-sync|snowball|สโนว์บอล)(?:\s+(v|verbose))?\s*$/i
+  );
   if (m) {
     const key = m[1]!.toLowerCase();
     const verbose = Boolean(m[2]);
     if (key === "spark" || key === "pct-trailing") return { scope: "pct-trailing", verbose };
     if (key === "price-sync") return { scope: "price-sync", verbose };
+    if (key === "snowball" || key === "สโนว์บอล") return { scope: "snowball-scan", verbose };
   }
   return null;
 }
 
 /**
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
- * /start → ปุ่ม Mini App · /chatid → แสดง chat_id / topic (ใส่ env) · ขอ Webhook JSON MEXC / ขอรับ webhook json close / ขอรับ Webhook JSON open / เช็ค MEXC API · portfolio / portfolio status (สรุปพอร์ตฟิวเจอร์) · เช็คลิสต์ position (short/long …) · สถิติ Spark / ล้างสถิติ spark (admin — KOJI_ADMIN_IDS) · debug public feed [SYMBOL] · debug snowball SYMBOL (admin)
+ * /start … · debug public feed / debug snowball (admin) · run cron price-sync | snowball | spark (admin — KOJI_ADMIN_IDS)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
@@ -431,6 +435,17 @@ export async function POST(req: NextRequest) {
             beforeCp != null && afterCp != null ? `stateChanged: ${afterCp > beforeCp ? "yes" : "no"}` : "stateChanged: —"
           );
         }
+        await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
+      } else if (runReq.scope === "snowball-scan") {
+        const r = await runSnowballPublicScanTick(client);
+        const lines = [
+          "🟪 Koji — run cron (snowball-scan)",
+          `UTC: ${atIso}`,
+          `durationMs: ${Date.now() - started}`,
+          "",
+          `notified: ${r.notified}`,
+          `detail: ${r.detail}`,
+        ];
         await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
       } else {
         const steps = await Promise.allSettled([

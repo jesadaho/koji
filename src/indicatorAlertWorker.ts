@@ -3,7 +3,11 @@ import { runEma612ContractWatchAlertTick } from "./ema612ContractWatchAlertTick"
 import { fetchContractKlineForTf, type IndicatorChartTf } from "./indicatorKline";
 import { sendAlertNotification } from "./alertNotify";
 import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured } from "./telegramAlert";
-import { isIndicatorPublicFeedEnabled, runPublicIndicatorFeedInternal } from "./publicIndicatorFeed";
+import {
+  isIndicatorPublicFeedEnabled,
+  isPublicSnowballTripleCheckEnabled,
+  runPublicIndicatorFeedInternal,
+} from "./publicIndicatorFeed";
 import { runSnowballConfirmFollowUpTick } from "./snowballConfirmTick";
 import { runSnowballStatsFollowUpTick } from "./snowballStatsTick";
 import { runSnowballAutoTradeQuickTpTick } from "./snowballAutoTradeQuickTpTick";
@@ -278,6 +282,29 @@ async function runEmaCrossInternal(client: Client, now: number): Promise<number>
   }
 
   return notified;
+}
+
+/**
+ * รันเฉพาะ public Snowball (Binance) + สรุปสแกน 4h ตาม env — ไม่ส่ง RSI/EMA/Div ของ public feed
+ * ใช้ manual: GET /api/cron/snowball-scan หรือ Telegram `run cron snowball`
+ */
+export async function runSnowballPublicScanTick(client: Client): Promise<{ notified: number; detail: string }> {
+  const now = Date.now();
+  if (!isIndicatorPublicFeedEnabled()) {
+    return { notified: 0, detail: "INDICATOR_PUBLIC_FEED_ENABLED=0 — ข้าม" };
+  }
+  if (!isPublicSnowballTripleCheckEnabled()) {
+    return { notified: 0, detail: "Snowball public ปิด (INDICATOR_PUBLIC_SNOWBALL) — ข้าม" };
+  }
+  const confirmN = await runSnowballConfirmFollowUpTick(now);
+  const n = await runPublicIndicatorFeedInternal(client, now, { snowballOnly: true });
+  const total = confirmN + n;
+  const parts: string[] = [];
+  if (confirmN > 0) parts.push(`confirm แท่ง 2: ${confirmN}`);
+  if (n > 0) parts.push(`สแกน public: ${n}`);
+  const detail =
+    total > 0 ? `Snowball — ${parts.join(" · ")}` : `Snowball scan เสร็จ (confirm ${confirmN}, สแกน ${n})`;
+  return { notified: total, detail };
 }
 
 /**
