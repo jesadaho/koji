@@ -57,6 +57,10 @@ export type SnowballPendingConfirm = {
   statsTriggerKind?: string;
   /** SMA(volume) ที่แท่งสัญญาณ — ใช้คำนวณ SVP hole ใน stats ให้สอดคล้องแท่ง 1 */
   statsVolSma?: number;
+  /** ATR(100) ตอนแท่งสัญญาณ — ส่งต่อให้ stats หลัง confirm */
+  statsAtr100?: number | null;
+  /** Max upper wick 100 แท่งก่อนสัญญาณ */
+  statsMaxUpperWick100?: number | null;
 };
 
 export type SnowballPendingConfirmState = {
@@ -131,6 +135,8 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(deferSnowballAutotradeToConfirm ? { deferSnowballAutotradeToConfirm: true as const } : {}),
     ...(statsTriggerKind ? { statsTriggerKind } : {}),
     ...(statsVolSmaOk ? { statsVolSma } : {}),
+    ...(statsAtr100Ok ? { statsAtr100 } : {}),
+    ...(statsMaxUpperWick100Ok ? { statsMaxUpperWick100 } : {}),
   };
 }
 

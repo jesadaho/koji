@@ -104,7 +104,6 @@ export type AppendSnowballStatsInput = {
   alertedAtIso: string;
   alertedAtMs: number;
   signalBarOpenSec: number;
-  /** low ของแท่งสัญญาณ (ถ้ามี) */
   signalBarLow?: number | null;
   signalBarTf?: "15m" | "1h" | "4h";
   entryPrice: number;
@@ -113,10 +112,21 @@ export type AppendSnowballStatsInput = {
   vol: number;
   volSma: number;
   qualityTier?: SnowballStatsQualityTier;
+  /** Wilder ATR(100) ที่แท่งสัญญาณ — baseline ความผันผวน */
+  atr100?: number | null;
+  /** Max upper wick ใน 100 แท่งก่อนแท่งสัญญาณ — เพดานไส้บน */
+  maxUpperWick100?: number | null;
 };
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
   if (!isSnowballStatsEnabled()) return null;
+
+  const atr100 =
+    input.atr100 != null && Number.isFinite(input.atr100) && input.atr100 > 0 ? input.atr100 : null;
+  const maxUpperWick100 =
+    input.maxUpperWick100 != null && Number.isFinite(input.maxUpperWick100) && input.maxUpperWick100 >= 0
+      ? input.maxUpperWick100
+      : null;
 
   const row: SnowballStatsRow = {
     id: randomUUID(),
@@ -131,6 +141,8 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     intrabar: input.intrabar,
     triggerKind: input.triggerKind,
     qualityTier: input.qualityTier,
+    atr100,
+    maxUpperWick100,
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,
     pct4h: null,
@@ -175,9 +187,6 @@ function normalizeSymbol(s: string): string {
 
 /**
  * ลบแถว Snowball stats ที่ซ้ำภายใน window ชั่วโมง (ต่อ symbol+side) โดยคงแถวที่แจ้งก่อน (แถวแรก) ไว้
- * - ถ้าส่ง `symbol` จะทำเฉพาะเหรียญนั้น
- * - ถ้าไม่ส่ง จะทำทุกเหรียญ
- * @returns จำนวนแถวที่ลบออก
  */
 export async function removeSnowballStatsDuplicatesInLastHours(input: {
   nowMs: number;
@@ -192,7 +201,6 @@ export async function removeSnowballStatsDuplicatesInLastHours(input: {
   const rows = state.rows ?? [];
   const scanned = rows.length;
 
-  // group -> oldest first
   const byKey = new Map<string, SnowballStatsRow[]>();
   for (const r of rows) {
     const sym = normalizeSymbol(r.symbol);
@@ -209,7 +217,6 @@ export async function removeSnowballStatsDuplicatesInLastHours(input: {
   const toDrop = new Set<string>();
   for (const arr of Array.from(byKey.values())) {
     if (arr.length <= 1) continue;
-    // keep the first alert; drop subsequent alerts within windowMs of the last kept
     let lastKeptMs = arr[0]!.alertedAtMs ?? 0;
     for (let i = 1; i < arr.length; i++) {
       const r = arr[i]!;

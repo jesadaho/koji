@@ -22,6 +22,7 @@ import {
 } from "./remoteJsonStore";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import { appendSnowballStatsRow, loadSnowballStatsState, type SnowballStatsRow } from "./snowballStatsStore";
+import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { addSnowballPendingConfirm } from "./snowballConfirmStore";
 import {
   loadSnowballConfirmLastRoundStats,
@@ -2323,12 +2324,14 @@ export async function runPublicIndicatorFeedInternal(
   const snowSwingLb = snowballSwingLookbackBars();
   const snowSwingGradeLb = snowballSwingGradeLookbackBars();
   const snowSwingEx = snowballSwingExcludeRecentBars();
+  const snowVolLb = snowballVolatilityLookbackBars();
   const snowFetchBars = snowballOn
     ? Math.max(
         250,
         (snowballDoubleBarrierEnabled() ? snowballDoubleBarrierLookbackBars() : 0) + 50,
         snowSwingLb + snowSwingEx + 50,
         snowSwingGradeLb + snowSwingEx + 50,
+        snowVolLb + 20,
         snowballLongTrendEma2Enabled() ? snowballLongTrendEma2Period() + 50 : 0,
       )
     : 0;
@@ -3093,6 +3096,7 @@ export async function runPublicIndicatorFeedInternal(
                 console.error("[indicatorPublicFeed] snowball auto-open LONG", symbol, e);
               }
             }
+            const longVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
             if (!twoBarInline && !intrabar && longConfirmTrigger && longRiskFlags.length > 0) {
               try {
                 await addSnowballPendingConfirm({
@@ -3111,6 +3115,8 @@ export async function runPublicIndicatorFeedInternal(
                   qualityTier: longBreakoutGrade,
                   statsTriggerKind: String(trig),
                   statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
+                  statsAtr100: longVolSnap.atr100,
+                  statsMaxUpperWick100: longVolSnap.maxUpperWick100,
                   ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3132,6 +3138,8 @@ export async function runPublicIndicatorFeedInternal(
                   vol: vE!,
                   volSma: vsE!,
                   qualityTier: longBreakoutGrade,
+                  atr100: longVolSnap.atr100,
+                  maxUpperWick100: longVolSnap.maxUpperWick100,
                 });
               }
             } catch (statsErr) {
@@ -3463,6 +3471,7 @@ export async function runPublicIndicatorFeedInternal(
                 console.error("[indicatorPublicFeed] snowball auto-open SHORT", symbol, e);
               }
             }
+            const bearVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
             if (!twoBarInline && !intrabar && bearConfirmTrigger && bearRiskFlags.length > 0) {
               try {
                 await addSnowballPendingConfirm({
@@ -3481,6 +3490,8 @@ export async function runPublicIndicatorFeedInternal(
                   qualityTier: dbOn ? shortTier : undefined,
                   statsTriggerKind: "swing_ll",
                   statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
+                  statsAtr100: bearVolSnap.atr100,
+                  statsMaxUpperWick100: bearVolSnap.maxUpperWick100,
                   ...(skipBearTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3502,6 +3513,8 @@ export async function runPublicIndicatorFeedInternal(
                   vol: vE!,
                   volSma: vsE!,
                   qualityTier: dbOn ? shortTier : undefined,
+                  atr100: bearVolSnap.atr100,
+                  maxUpperWick100: bearVolSnap.maxUpperWick100,
                 });
               }
             } catch (statsErr) {

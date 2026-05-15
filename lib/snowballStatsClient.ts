@@ -17,6 +17,10 @@ export type SnowballStatsRow = {
   intrabar: boolean;
   triggerKind: string;
   qualityTier?: SnowballStatsQualityTier;
+  /** Wilder ATR(100) ตอนแจ้ง — baseline ความผันผวน */
+  atr100?: number | null;
+  /** Max upper wick 100 แท่งก่อนสัญญาณ — เพดานไส้บน */
+  maxUpperWick100?: number | null;
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
@@ -45,4 +49,22 @@ export function snowballStatsGradeLabel(
   if (tier === "b_plus") return "B";
   if (tier === "c_plus") return side === "short" ? "—" : "C";
   return "—";
+}
+
+/** แสดงค่า ATR / Max Wick ในตาราง (ราคา + % ของ entry ถ้ามี) */
+export function snowballStatsVolMetricLabel(
+  value: number | null | undefined,
+  entryPrice: number | null | undefined
+): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const abs = Math.abs(value);
+  let px: string;
+  if (abs >= 1000) px = value.toFixed(2);
+  else if (abs >= 1) px = value.toFixed(4);
+  else px = value.toFixed(6);
+  if (entryPrice != null && Number.isFinite(entryPrice) && entryPrice > 0) {
+    const pct = (value / entryPrice) * 100;
+    return `${px} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)`;
+  }
+  return px;
 }

@@ -1,0 +1,92 @@
+/** ATR + Max Upper Wick สำหรับบันทึก Snowball stats (ไม่มี Node / I/O). */
+
+export function snowballVolatilityLookbackBars(): number {
+  const v = Number(process.env.SNOWBALL_STATS_VOLATILITY_LOOKBACK?.trim());
+  if (Number.isFinite(v) && v >= 14 && v <= 400) return Math.floor(v);
+  return 100;
+}
+
+function trueRange(high: number[], low: number[], close: number[], i: number): number | null {
+  const h = high[i];
+  const l = low[i];
+  if (!Number.isFinite(h) || !Number.isFinite(l)) return null;
+  if (i < 1) return h - l;
+  const prevC = close[i - 1];
+  if (!Number.isFinite(prevC)) return h - l;
+  return Math.max(h - l, Math.abs(h - prevC), Math.abs(l - prevC));
+}
+
+/** Wilder ATR(period) ที่แท่ง i (ต้องมีอย่างน้อย period แท่งก่อนหน้า + แท่ง i) */
+export function atrWilderAt(
+  high: number[],
+  low: number[],
+  close: number[],
+  i: number,
+  period: number
+): number | null {
+  if (period < 2 || i < period) return null;
+  let sum = 0;
+  for (let j = 1; j <= period; j++) {
+    const tr = trueRange(high, low, close, j);
+    if (tr == null || !Number.isFinite(tr)) return null;
+    sum += tr;
+  }
+  let atr = sum / period;
+  for (let j = period + 1; j <= i; j++) {
+    const tr = trueRange(high, low, close, j);
+    if (tr == null || !Number.isFinite(tr)) return null;
+    atr = (atr * (period - 1) + tr) / period;
+  }
+  return atr;
+}
+
+function upperWickAt(high: number[], open: number[], close: number[], i: number): number | null {
+  const h = high[i];
+  const o = open[i];
+  const c = close[i];
+  if (!Number.isFinite(h) || !Number.isFinite(o) || !Number.isFinite(c)) return null;
+  return Math.max(0, h - Math.max(o, c));
+}
+
+/**
+ * Max upper wick ใน `lookback` แท่งก่อนแท่งสัญญาณ (ไม่รวม iEval) — เพดานไส้บนในอดีต
+ */
+export function maxUpperWickPrior(
+  high: number[],
+  open: number[],
+  close: number[],
+  iEval: number,
+  lookback: number
+): number | null {
+  const end = iEval - 1;
+  if (end < 0 || lookback < 1) return null;
+  const start = Math.max(0, end - lookback + 1);
+  let max = -Infinity;
+  let n = 0;
+  for (let j = start; j <= end; j++) {
+    const w = upperWickAt(high, open, close, j);
+    if (w == null || !Number.isFinite(w)) continue;
+    n += 1;
+    max = Math.max(max, w);
+  }
+  return n > 0 && Number.isFinite(max) ? max : null;
+}
+
+export type SnowballVolatilitySnapshot = {
+  atr100: number | null;
+  maxUpperWick100: number | null;
+};
+
+export function snowballVolatilitySnapshotAt(
+  high: number[],
+  low: number[],
+  close: number[],
+  open: number[],
+  iEval: number,
+  lookback = snowballVolatilityLookbackBars()
+): SnowballVolatilitySnapshot {
+  return {
+    atr100: atrWilderAt(high, low, close, iEval, lookback),
+    maxUpperWick100: maxUpperWickPrior(high, open, close, iEval, lookback),
+  };
+}
