@@ -57,7 +57,7 @@ function envFlagOn(key: string, defaultTrue: boolean): boolean {
 
 function snowballSwingLookbackBars(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_LOOKBACK?.trim());
-  if (Number.isFinite(v) && v >= 5 && v <= 120) return Math.floor(v);
+  if (Number.isFinite(v) && v >= 5 && v <= 400) return Math.floor(v);
   return 48;
 }
 
@@ -65,6 +65,12 @@ function snowballSwingExcludeRecentBars(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_EXCLUDE_RECENT_BARS?.trim());
   if (Number.isFinite(v) && v >= 0 && v <= 10) return Math.floor(v);
   return 2;
+}
+
+/** จำนวนแท่ง 15m ที่ดึง — ต้องครอบ swingLb+swingEx (+ buffer) ไม่ให้ eval ข้ามทุกสัญญาเมื่อ lookback ใหญ่ */
+function downsideReversal15mFetchLimit(): number {
+  const need = snowballSwingLookbackBars() + snowballSwingExcludeRecentBars() + 15;
+  return Math.min(1500, Math.max(96, need));
 }
 
 function snowballVolSmaPeriod(): number {
@@ -472,7 +478,7 @@ export async function formatDownsideReversalRiskDebugMessage(rawSymbol: string):
   }
 
   const [pack15, pack1h] = await Promise.all([
-    fetchBinanceUsdmKlines(symbol, "15m", 96),
+    fetchBinanceUsdmKlines(symbol, "15m", downsideReversal15mFetchLimit()),
     fetchBinanceUsdmKlines(symbol, "1h", 48),
   ]);
   lines.push("");
@@ -563,7 +569,7 @@ export async function runDownsideReversalAlertTick(): Promise<number> {
   const results = await mapPoolConcurrent(symbols, concurrency, async (symbol) => {
     const st = state[symbol] ?? emptySymState();
     const [pack15, pack1h] = await Promise.all([
-      fetchBinanceUsdmKlines(symbol, "15m", 96),
+      fetchBinanceUsdmKlines(symbol, "15m", downsideReversal15mFetchLimit()),
       fetchBinanceUsdmKlines(symbol, "1h", 48),
     ]);
     if (!pack15 || !pack1h) return { symbol, evals: null as EvalOut | null };

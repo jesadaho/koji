@@ -634,7 +634,9 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
   lines.push("checklist จำลองจาก kline ล่าสุดที่ขอ + state cooldown ปัจจุบัน");
   lines.push("รอบจริงสแกนทุก ~15 นาที ที่ /api/cron/price-sync (แท่งปิดตาม TF Snowball)");
   lines.push("Expected alert คำนวณจาก Vercel cron schedule (ทุก 15 นาที UTC)");
-  lines.push("Swing HH / VAH: เงื่อนไขเป็น OR — VAH (ยังไม่) แปลว่ายังไม่ cross แท่งนั้น แต่ถ้า swing ทะลุ HH แล้วก็ยัง PASS ได้");
+  lines.push(
+    "Swing HH / VAH: เงื่อนไขเป็น OR — ผ่านขั้นนี้ถ้า Swing HH48 หรือ VAH อย่างใดอย่างหนึ่งเป็นจริง · Grade LONG: A+=HH48+HH200+VAH · B=VAH อย่างเดียว · C=HH48 แต่ไม่ผ่าน HH200 (หรือผ่าน HH200 แต่ยังไม่เบรค VAH)",
+  );
   if (!twoBarOn) {
     lines.push(
       "เนื้อเทียน/ช่วง (body÷range): กรองก่อน dedupe — ตรงกับสแกน longBodyRatioBlocked; คนละชุดกับ wick history / signal wick ใน confirm-bar",

@@ -14,7 +14,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ราคาและ % จาก Binance USDT-M 15m · SVP Hole = วอลุ่มแท่งสัญญาณต่ำกว่าเกณฑ์เทียบ SMA (proxy) · RR = reward/risk โดย risk = Max DD ก่อนถึง MFE · reward ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
+  "ราคาและ % จาก Binance USDT-M 15m · Grade = LONG: A+=HH48+HH200+VAH · B=VAH · C=HH48 ไม่ผ่าน HH200 · SVP Hole = วอลุ่มแท่งสัญญาณต่ำกว่าเกณฑ์เทียบ SMA (proxy) · RR = reward/risk โดย risk = Max DD ก่อนถึง MFE · reward ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -148,6 +148,15 @@ function outcomeLabel(o: SnowballStatsRow["outcome"]): string {
   if (o === "win_trend") return "Win (Trend)";
   if (o === "loss") return "Loss";
   return "Flat";
+}
+
+/** LONG Snowball breakout grade from `qualityTier` (SHORT ไม่ใช้คอลัมน์นี้) */
+function longGradeLabel(side: SnowballStatsRow["side"], tier: SnowballStatsRow["qualityTier"]): string {
+  if (side !== "long") return "—";
+  if (tier === "a_plus") return "A+";
+  if (tier === "b_plus") return "B";
+  if (tier === "c_plus") return "C";
+  return "—";
 }
 
 export default function SnowballStatsTelegramMiniApp() {
@@ -319,6 +328,7 @@ export default function SnowballStatsTelegramMiniApp() {
               <tr>
                 <th scope="col">เหรียญ</th>
                 <th scope="col">ทิศ</th>
+                <th scope="col">Grade</th>
                 <th scope="col">เวลา (BKK)</th>
                 <th scope="col">Entry</th>
                 <th scope="col">4h</th>
@@ -344,6 +354,7 @@ export default function SnowballStatsTelegramMiniApp() {
                   <tr key={r.id}>
                     <td>{coinLabel(r.symbol)}</td>
                     <td>{r.side === "long" ? "Long" : "Short"}</td>
+                    <td>{longGradeLabel(r.side, r.qualityTier)}</td>
                     <td>
                       <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
                     </td>

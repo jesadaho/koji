@@ -43,8 +43,8 @@ export type SnowballStatsRow = {
   entryPrice: number;
   intrabar: boolean;
   triggerKind: string;
-  /** Double Barrier / ชั้นคุณภาพ (แถวเก่าไม่มีฟิลด์นี้) */
-  qualityTier?: "a_plus" | "b_plus";
+  /** Grade LONG (HH/VAH) หรือ Double Barrier ฝั่ง short */
+  qualityTier?: "a_plus" | "b_plus" | "c_plus";
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
@@ -137,8 +137,7 @@ export type AppendSnowballStatsInput = {
   triggerKind: string;
   vol: number;
   volSma: number;
-  qualityTier?: "a_plus" | "b_plus";
-};
+  qualityTier?: "a_plus" | "b_plus" | "c_plus";
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
   if (!isSnowballStatsEnabled()) return null;

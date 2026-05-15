@@ -182,11 +182,18 @@ function snowballUniverseTopAltsCount(): number {
   return 100;
 }
 
-/** Swing HH/LL — ย้อนหลังหา High/Low ก่อนแท่งปิด · ดีฟอลต์ 48 แท่ง (ระยะเวลาแล้วแต่ TF Snowball) */
+/** Swing HH/LL — ย้อนหลังหา High/Low ก่อนแท่งปิด · ดีฟอลต์ 48 แท่ง (ทริกเกอร์สัญญาณ) */
 function snowballSwingLookbackBars(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_LOOKBACK);
-  if (Number.isFinite(v) && v >= 5 && v <= 120) return Math.floor(v);
+  if (Number.isFinite(v) && v >= 5 && v <= 400) return Math.floor(v);
   return 48;
+}
+
+/** Swing HH โครงสร้างใหญ่ — ใช้จัด Grade LONG (ดีฟอลต์ 200 แท่ง) */
+function snowballSwingGradeLookbackBars(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_GRADE_LOOKBACK);
+  if (Number.isFinite(v) && v >= 5 && v <= 400) return Math.floor(v);
+  return 200;
 }
 
 /**
@@ -905,13 +912,44 @@ export function evaluateSnowballConfirmRisk(
   return flags;
 }
 
-type SnowballQualityTier = "a_plus" | "b_plus";
+/** Double Barrier เทียบแนวใกล้ราคา — คนละความหมายกับ Grade HH/VAH */
+type SnowballDoubleBarrierTier = "a_plus" | "b_plus";
+
+/**
+ * Grade LONG: ทริกเกอร์ผ่าน HH48 หรือ VAH · A+ = HH48+HH200+VAH · B = VAH อย่างเดียว · C = HH48 แต่ไม่ผ่าน HH200 (หรือผ่าน HH200 แต่ไม่มี VAH)
+ */
+export type SnowballLongBreakoutGrade = "a_plus" | "b_plus" | "c_plus";
+
+function classifyLongBreakoutGrade(
+  swing48: boolean,
+  swing200: boolean,
+  vahOk: boolean,
+): SnowballLongBreakoutGrade {
+  if (!swing48 && vahOk) return "b_plus";
+  if (swing48 && swing200 && vahOk) return "a_plus";
+  return "c_plus";
+}
+
+function snowballLongSwingHighBreak(
+  high: number[],
+  close: number[],
+  iSig: number,
+  lookback: number,
+  excludeRecent: number,
+  intrabar: boolean,
+): boolean {
+  const priorMaxHigh = maxHighPriorWindow(high, iSig, lookback, excludeRecent);
+  if (!Number.isFinite(priorMaxHigh)) return false;
+  const hiE = high[iSig]!;
+  const clE = close[iSig]!;
+  return intrabar ? hiE > priorMaxHigh : clE > priorMaxHigh;
+}
 
 function classifyLongDoubleBarrierTier(
   high: number[],
   iEval: number,
   ref: number
-): { tier: SnowballQualityTier; nearestOverhead: number | null; distPct: number | null } {
+): { tier: SnowballDoubleBarrierTier; nearestOverhead: number | null; distPct: number | null } {
   const lb = snowballDoubleBarrierLookbackBars();
   const { min, max } = snowballDoubleBarrierWatchBandPct();
   const nearest = nearestOverheadHigh(high, iEval, lb, ref);
@@ -928,7 +966,7 @@ function classifyShortDoubleBarrierTier(
   low: number[],
   iEval: number,
   ref: number
-): { tier: SnowballQualityTier; nearestUnderfoot: number | null; distPct: number | null } {
+): { tier: SnowballDoubleBarrierTier; nearestUnderfoot: number | null; distPct: number | null } {
   const lb = snowballDoubleBarrierLookbackBars();
   const { min, max } = snowballDoubleBarrierWatchBandPct();
   const nearest = nearestUnderfootLow(low, iEval, lb, ref);
@@ -1481,12 +1519,15 @@ function buildSnowballTripleCheckMessage(
     ema2SlopeOk?: boolean;
     /** เมื่อสัญญาณ Master = 4h — แผน Entry / SL / TP (จุดเข้า 15m) */
     master4hTradePlan?: SnowballMaster4hLongTradePlan | null;
-    /** Double Barrier: หัวข้อ A+ / B+ และบรรทัดอธิบาย Barrier 2 */
+    /** Grade LONG (HH48/HH200/VAH) — หัวข้อ Telegram */
+    snowballLongBreakoutGrade?: SnowballLongBreakoutGrade;
+    /** ผ่าน Swing HH โครงสร้าง (ดีฟอลต์ 200 แท่ง) — ใช้ข้อความ Grade C */
+    longSwing200Ok?: boolean;
     doubleBarrierEnabled?: boolean;
-    snowballQualityTier?: SnowballQualityTier;
+    /** Double Barrier (แนวใกล้ในโซน %) — บรรทัด checklist */
     doubleBarrierChecklistLine?: string;
-    /** Short: ชั้นคุณภาพสมมาตร (แนวรับใต้เท้าในโซน %) */
-    shortQualityTier?: SnowballQualityTier;
+    /** Short: ชั้นคุณภาพ Double Barrier สมมาตร */
+    shortQualityTier?: SnowballDoubleBarrierTier;
     shortDoubleBarrierChecklistLine?: string;
     /** Confirming Bar — flag ความเสี่ยงจาก 3 gates ที่ต้องรอแท่งที่ 2 ยืนยัน */
     confirmRiskFlags?: SnowballConfirmRiskFlag[];
@@ -1621,12 +1662,24 @@ function buildSnowballTripleCheckMessage(
       planBlock = lines.join("\n");
     }
 
-    const dbLong = Boolean(args.doubleBarrierEnabled && args.snowballQualityTier);
-    const longHeadline = !dbLong
-      ? `🟢 [LONG Candidate] — Snowball Triple-Check (${args.snowballTfDisplay})${sniperSuffix}`
-      : args.snowballQualityTier === "b_plus"
-        ? `🟡 [WATCHLIST - B+] — Snowball Triple-Check (${args.snowballTfDisplay})${sniperSuffix}`
-        : `🟢 [SUPER SNOWBALL - A+] — Snowball Triple-Check (${args.snowballTfDisplay})${sniperSuffix}`;
+    const g = args.snowballLongBreakoutGrade;
+    const gradeLine =
+      g === "a_plus"
+        ? "📎 Grade A+: Swing HH48 + HH200 + VAH — The Real Breakout (ทะลุยอดสั้น+โครงสร้างใหญ่ + เบรคก้อน Vol proxy)"
+        : g === "b_plus"
+          ? "📎 Grade B: Volume Break — เบรค VAH แต่ปิดยังไม่เหนือ Swing HH48 (ระวัง rejection ใต้ไฮสั้น)"
+          : g === "c_plus"
+            ? args.longSwing200Ok === false
+              ? "📎 Grade C: ทะลุย Swing HH48 แต่ยังไม่เหนือ HH200 — เบรกสั้น ยังไม่ยืนยันโครงสร้างใหญ่"
+              : "📎 Grade C: ผ่าน HH48+HH200 แต่ยังไม่เบรค VAH proxy (โวลุ่มก้อนอาจยังไม่สนับสนุน)"
+            : "";
+    const longHeadline = (() => {
+      const sfx = sniperSuffix;
+      if (g === "a_plus") return `🟢 [Grade A+ · Real Breakout] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+      if (g === "b_plus") return `🟡 [Grade B · Volume Break] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+      if (g === "c_plus") return `🟠 [Grade C · Empty Break] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+      return `🟢 [LONG Candidate] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+    })();
 
     const out: string[] = [
       longHeadline,
@@ -1634,6 +1687,7 @@ function buildSnowballTripleCheckMessage(
       "",
       `💼 Playbook:`,
       `"ทรงมาดี มีแรงส่งสะสม รอเข้าเมื่อย่อ (Buy the Dip) ที่แนวรับ ~ ${playbookRefPx} USDT"`,
+      ...(gradeLine ? ["", gradeLine] : []),
       "",
       timeLine,
       "",
@@ -2175,7 +2229,7 @@ export type PublicIndicatorFeedRunResult = {
 /**
  * Feed สาธารณะ RSI cross + EMA cross + RSI divergence จาก Binance USDT-M (ค่าเริ่ม TF เดียวกันที่ 4h — RSI/EMA: INDICATOR_PUBLIC_RSI_EMA_TF, Div: INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS)
  * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — universe alt ตาม INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS ดีฟอลต์ 100; RSI/EMA/Div ยังใช้ INDICATOR_PUBLIC_TOP_ALTS)
- *   Double Barrier: Barrier1 = swing lookback เดิม · Barrier2 = แนว High/Low ย้อน 200 แท่งในโซน Watchlist % → 🟡 B+ / 🟢/🔴 A+
+ *   Double Barrier: Barrier2 = แนว High/Low ใกล้ราคาในโซน Watchlist % (บรรทัด checklist) — คนละชุดกับ Grade LONG A+/B/C (หัวข้อ TG จาก Swing HH + VAH)
  * @param opts.snowballOnly ถ้า true — รันเฉพาะ Snowball (ใช้ GET /api/cron/snowball-scan / run cron snowball)
  */
 export async function runPublicIndicatorFeedInternal(
@@ -2266,11 +2320,15 @@ export async function runPublicIndicatorFeedInternal(
   const packsDiv4hExtra: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   const snowTf = snowballBinanceTf();
   const snowballPacks: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
+  const snowSwingLb = snowballSwingLookbackBars();
+  const snowSwingGradeLb = snowballSwingGradeLookbackBars();
+  const snowSwingEx = snowballSwingExcludeRecentBars();
   const snowFetchBars = snowballOn
     ? Math.max(
         250,
         (snowballDoubleBarrierEnabled() ? snowballDoubleBarrierLookbackBars() : 0) + 50,
-        snowballSwingLookbackBars() + snowballSwingExcludeRecentBars() + 50,
+        snowSwingLb + snowSwingEx + 50,
+        snowSwingGradeLb + snowSwingEx + 50,
         snowballLongTrendEma2Enabled() ? snowballLongTrendEma2Period() + 50 : 0,
       )
     : 0;
@@ -2541,8 +2599,9 @@ export async function runPublicIndicatorFeedInternal(
       }
       if (snowScanStats) snowScanStats.withPack++;
       const { close: c15, open: o15, high: h15, low: l15, volume: v15, timeSec: t15 } = packSb;
-      const swingLb = snowballSwingLookbackBars();
-      const swingEx = snowballSwingExcludeRecentBars();
+      const swingLb = snowSwingLb;
+      const swingGradeLb = snowSwingGradeLb;
+      const swingEx = snowSwingEx;
       const volP = snowballVolSmaPeriod();
       const volMult = snowballVolMultiplier();
       const rsiP = snowballStochRsiPeriod();
@@ -2576,6 +2635,7 @@ export async function runPublicIndicatorFeedInternal(
         rsiP + stLen + kSm + 8,
         volP + 2,
         swingLb + swingEx + 3,
+        swingGradeLb + swingEx + 3,
         emaResP + 2,
         svpInnerLb + 2,
         vahLb + 3,
@@ -2647,10 +2707,10 @@ export async function runPublicIndicatorFeedInternal(
         }
 
         const priorMaxHigh = maxHighPriorWindow(h15, iSig, swingLb, swingEx);
+        const swing48 = snowballLongSwingHighBreak(h15, c15, iSig, swingLb, swingEx, intrabar);
+        const swing200 = snowballLongSwingHighBreak(h15, c15, iSig, swingGradeLb, swingEx, intrabar);
+        const classicSwing = swing48;
         const vahH = longVahOn ? highVolumeNodeBarHigh(v15, h15, l15, iSig, vahLb) : null;
-
-        const swingBreak = intrabar ? hiE! > priorMaxHigh : clE! > priorMaxHigh;
-        const classicSwing = Number.isFinite(priorMaxHigh) && swingBreak;
 
         const vahCross =
           longVahOn &&
@@ -2886,22 +2946,22 @@ export async function runPublicIndicatorFeedInternal(
           }
         }
 
-        let longTier: SnowballQualityTier = "a_plus";
+        const longBreakoutGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
+
         let longDoubleBarrierLine = "";
         if (dbOn) {
           const cls = classifyLongDoubleBarrierTier(h15, iSig, clE!);
-          longTier = cls.tier;
           const { min, max } = snowballDoubleBarrierWatchBandPct();
           const band = `${(min * 100).toFixed(1)}–${(max * 100).toFixed(1)}%`;
           if (cls.nearestOverhead == null) {
-            longDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): ไม่พบ High เหนือราคาในระยะ — โครงเหนือว่าง (A+) · โซน Watchlist กำหนด +${band} เหนือราคา`;
+            longDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): ไม่พบ High เหนือราคาในระยะ — โครงเหนือว่าง · โซน Watchlist กำหนด +${band} เหนือราคา`;
           } else {
             const nearS = formatUsdPrice(cls.nearestOverhead);
             const distS = cls.distPct != null ? cls.distPct.toFixed(2) : "—";
             if (cls.tier === "b_plus") {
-              longDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวต้านใกล้ ~ ${nearS} USDT (+${distS}%) อยู่ในโซน Watchlist +${band} — 🟡 B+`;
+              longDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวต้านใกล้ ~ ${nearS} USDT (+${distS}%) อยู่ในโซน Watchlist +${band} — ระวังแนวบน`;
             } else {
-              longDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวต้านใกล้ ~ ${nearS} USDT (+${distS}%) อยู่นอกโซน Watchlist +${band} — 🟢 A+`;
+              longDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวต้านใกล้ ~ ${nearS} USDT (+${distS}%) อยู่นอกโซน Watchlist +${band} — โครงเหนือว่างขึ้นไป`;
             }
           }
         }
@@ -2969,7 +3029,8 @@ export async function runPublicIndicatorFeedInternal(
           ema2SlopeOk: longEma2On ? Boolean(ema2SlopeOk) : undefined,
           master4hTradePlan: snowTf === "4h" ? master4hTradePlan : null,
           doubleBarrierEnabled: dbOn,
-          snowballQualityTier: dbOn ? longTier : undefined,
+          snowballLongBreakoutGrade: longBreakoutGrade,
+          longSwing200Ok: swing200,
           doubleBarrierChecklistLine: dbOn ? longDoubleBarrierLine : undefined,
           confirmRiskFlags: twoBarInline ? undefined : longRiskFlags.length > 0 ? longRiskFlags : undefined,
           confirmTrigger: twoBarInline
@@ -3012,8 +3073,8 @@ export async function runPublicIndicatorFeedInternal(
             }
             if (!intrabar && !skipSnowballTgForPending) {
               try {
-                // Auto-open เฉพาะ SUPER SNOWBALL (A+) เท่านั้น
-                const isSuperSnowball = Boolean(dbOn && longTier === "a_plus");
+                // Auto-open เฉพาะ Grade A+ (HH48+HH200+VAH) เมื่อเปิด Double Barrier
+                const isSuperSnowball = Boolean(dbOn && longBreakoutGrade === "a_plus");
                 if (isSuperSnowball) {
                   await runSnowballAutoTradeAfterSnowballAlert({
                     contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
@@ -3047,7 +3108,7 @@ export async function runPublicIndicatorFeedInternal(
                   alertedAtIso: iso,
                   alertedAtMs: now,
                   riskFlags: longRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
-                  qualityTier: dbOn ? longTier : undefined,
+                  qualityTier: longBreakoutGrade,
                   statsTriggerKind: String(trig),
                   statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
                   ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
@@ -3070,7 +3131,7 @@ export async function runPublicIndicatorFeedInternal(
                   triggerKind: trig,
                   vol: vE!,
                   volSma: vsE!,
-                  qualityTier: dbOn ? longTier : undefined,
+                  qualityTier: longBreakoutGrade,
                 });
               }
             } catch (statsErr) {
@@ -3268,7 +3329,7 @@ export async function runPublicIndicatorFeedInternal(
           }
         }
 
-        let shortTier: SnowballQualityTier = "a_plus";
+        let shortTier: SnowballDoubleBarrierTier = "a_plus";
         let shortDoubleBarrierLine = "";
         if (dbOn) {
           const cls = classifyShortDoubleBarrierTier(l15, iSig, clE!);
@@ -3276,14 +3337,14 @@ export async function runPublicIndicatorFeedInternal(
           const { min, max } = snowballDoubleBarrierWatchBandPct();
           const band = `${(min * 100).toFixed(1)}–${(max * 100).toFixed(1)}%`;
           if (cls.nearestUnderfoot == null) {
-            shortDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): ไม่พบ Low ใต้ราคาในระยะ — โครงใต้ว่าง (A+) · โซน Watchlist −${band} ใต้ราคา`;
+            shortDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): ไม่พบ Low ใต้ราคาในระยะ — โครงใต้ว่าง · โซน Watchlist −${band} ใต้ราคา`;
           } else {
             const nearS = formatUsdPrice(cls.nearestUnderfoot);
             const distS = cls.distPct != null ? cls.distPct.toFixed(2) : "—";
             if (cls.tier === "b_plus") {
-              shortDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวรับใกล้ ~ ${nearS} USDT (−${distS}%) อยู่ในโซน Watchlist −${band} — 🟡 B+`;
+              shortDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวรับใกล้ ~ ${nearS} USDT (−${distS}%) อยู่ในโซน Watchlist −${band} — ระวังแนวล่าง`;
             } else {
-              shortDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวรับใกล้ ~ ${nearS} USDT (−${distS}%) อยู่นอกโซน Watchlist −${band} — A+`;
+              shortDoubleBarrierLine = `• Barrier 2 (คุณภาพ · ย้อน ${barrier2Lb} แท่ง): แนวรับใกล้ ~ ${nearS} USDT (−${distS}%) อยู่นอกโซน Watchlist −${band} — โครงใต้ว่างลงไป`;
             }
           }
         }
@@ -3850,6 +3911,7 @@ function evaluateSnowballLongAt(
     emaLongSlope2Arr: number[] | null;
     volMult: number;
     swingLb: number;
+    swingGradeLb: number;
     swingEx: number;
     vahLb: number;
     longVahOn: boolean;
@@ -3906,10 +3968,12 @@ function evaluateSnowballLongAt(
     detail: priceFinite ? "ok" : "ค่าราคาบางตัวไม่ finite",
   });
 
-  const priorMaxHigh = maxHighPriorWindow(high, iEval, ctx.swingLb, ctx.swingEx);
+  const priorMaxHigh48 = maxHighPriorWindow(high, iEval, ctx.swingLb, ctx.swingEx);
+  const priorMaxHighGrade = maxHighPriorWindow(high, iEval, ctx.swingGradeLb, ctx.swingEx);
+  const swing48 = snowballLongSwingHighBreak(high, close, iEval, ctx.swingLb, ctx.swingEx, intrabar);
+  const swing200 = snowballLongSwingHighBreak(high, close, iEval, ctx.swingGradeLb, ctx.swingEx, intrabar);
+  const classicSwing = swing48;
   const vahH = ctx.longVahOn ? highVolumeNodeBarHigh(volume, high, low, iEval, ctx.vahLb) : null;
-  const swingBreak = intrabar ? hiE! > priorMaxHigh : clE! > priorMaxHigh;
-  const classicSwing = Number.isFinite(priorMaxHigh) && swingBreak;
   const vahCross =
     ctx.longVahOn &&
     vahH != null &&
@@ -3917,15 +3981,27 @@ function evaluateSnowballLongAt(
     (intrabar ? hiE! > vahH && hiPrev! <= vahH : clE! > vahH && clPrev! <= vahH);
   const vahOk = Boolean(vahCross);
   const swingOrVahOk = classicSwing || vahOk;
+  const breakoutGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
+  const gradeHint = `Grade: ${
+    breakoutGrade === "a_plus"
+      ? "A+ (HH48+HH200+VAH)"
+      : breakoutGrade === "b_plus"
+        ? "B (VAH only)"
+        : swing200
+          ? "C (HH48+HH200 ไม่มี VAH)"
+          : "C (HH48 ไม่ผ่าน HH200)"
+  }`;
   push({
     id: "swingOrVah",
-    label: `Swing HH${ctx.swingLb}/Ex${ctx.swingEx} หรือ VAH${ctx.vahLb}`,
+    label: `Swing HH${ctx.swingLb}/HH${ctx.swingGradeLb}/Ex${ctx.swingEx} หรือ VAH${ctx.vahLb}`,
     ok: swingOrVahOk,
     detail: [
-      `swingHH max=${fmtNum(priorMaxHigh)} (close=${fmtNum(clE!)} ${classicSwing ? ">" : "≤"})`,
+      `HH48 max=${fmtNum(priorMaxHigh48)} (${swing48 ? "ผ่าน" : "ไม่ผ่าน"})`,
+      `HH${ctx.swingGradeLb} max=${fmtNum(priorMaxHighGrade)} (${swing200 ? "ผ่าน" : "ไม่ผ่าน"})`,
       ctx.longVahOn
         ? `vah=${vahH != null ? fmtNum(vahH) : "—"} (${vahOk ? "เบรค" : "ยังไม่"})`
         : "vah: ปิด",
+      gradeHint,
     ].join(" · "),
   });
 
@@ -4182,6 +4258,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
   const snowTf = snowballBinanceTf();
 
   const swingLb = snowballSwingLookbackBars();
+  const swingGradeLb = snowballSwingGradeLookbackBars();
   const swingEx = snowballSwingExcludeRecentBars();
   const volP = snowballVolSmaPeriod();
   const volMult = snowballVolMultiplier();
@@ -4205,7 +4282,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
 
   const paramsSummary = [
     `Snowball TF: ${snowTf} (INDICATOR_PUBLIC_SNOWBALL_TF)`,
-    `Swing: lookback ${swingLb} · excludeRecent ${swingEx}`,
+    `Swing trigger: HH${swingLb} · Grade HH${swingGradeLb} · excludeRecent ${swingEx}`,
     `Volume: SMA ${volP} · mult ${volMult}x`,
     `VAH break: ${longVahOn ? `on (lookback ${vahLb})` : "off"}`,
     `Inner HVN gate: ${longRequireInnerHvnClear ? `on (lookback ${svpInnerLb})` : "off"}`,
@@ -4252,6 +4329,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     250,
     barrier2LbChecklist + 50,
     swingLb + swingEx + 50,
+    swingGradeLb + swingEx + 50,
     longEma2On ? longEma2P + 50 : 0,
   );
   const pack = await fetchBinanceUsdmKlines(symbol, snowTf, fetchBars);
@@ -4270,6 +4348,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     rsiP + stLen + kSm + 8,
     volP + 2,
     swingLb + swingEx + 3,
+    swingGradeLb + swingEx + 3,
     emaResP + 2,
     svpInnerLb + 2,
     vahLb + 3,
@@ -4300,6 +4379,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     emaLongSlope2Arr,
     volMult,
     swingLb,
+    swingGradeLb,
     swingEx,
     vahLb,
     longVahOn,
