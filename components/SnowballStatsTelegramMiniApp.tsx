@@ -11,7 +11,7 @@ import {
   snowballStatsGradeLabel,
   type SnowballStatsApiPayload,
   type SnowballStatsRow,
-} from "@/src/snowballStatsStore";
+} from "@/src/snowballStatsShared";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 

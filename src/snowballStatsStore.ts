@@ -2,6 +2,18 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
+import {
+  type SnowballStatsQualityTier,
+  type SnowballStatsRow,
+} from "./snowballStatsShared";
+
+export type {
+  SnowballStatsApiPayload,
+  SnowballStatsOutcome,
+  SnowballStatsQualityTier,
+  SnowballStatsRow,
+} from "./snowballStatsShared";
+export { snowballStatsGradeLabel } from "./snowballStatsShared";
 
 const KV_KEY = "koji:snowball_alert_stats";
 const filePath = join(process.cwd(), "data", "snowball_alert_stats.json");
@@ -25,46 +37,7 @@ async function ensureFile(): Promise<void> {
   }
 }
 
-export type SnowballStatsOutcome = "pending" | "win_trend" | "win_quick_tp30" | "loss" | "flat";
-
-export type SnowballStatsRow = {
-  id: string;
-  symbol: string;
-  side: "long" | "short";
-  alertedAtIso: string;
-  /** ms wall clock ตอนบันทึก (cron) */
-  alertedAtMs: number;
-  /** open time แท่งสัญญาณที่อิง (sec) */
-  signalBarOpenSec: number;
-  /** low ของแท่งสัญญาณ (ใช้เป็นฐาน “Low ของแท่งเบรก”) — เติมจาก follow-up tick ถ้ายังไม่มีตอนยิงสัญญาณ */
-  signalBarLow?: number | null;
-  /** TF ของแท่งสัญญาณ (ถ้าไม่มีในข้อมูลเก่า = 15m) */
-  signalBarTf?: "15m" | "1h" | "4h";
-  entryPrice: number;
-  intrabar: boolean;
-  triggerKind: string;
-  /** Grade LONG (HH/VAH) หรือ Double Barrier ฝั่ง short */
-  qualityTier?: "a_plus" | "b_plus" | "c_plus";
-  svpHoleYn: "Y" | "N";
-  price4h: number | null;
-  pct4h: number | null;
-  price12h: number | null;
-  pct12h: number | null;
-  price24h: number | null;
-  pct24h: number | null;
-  maxRoiPct: number | null;
-  durationToMfeHours: number | null;
-  maxDrawdownPct: number | null;
-  resultRr: string | null;
-  outcome: SnowballStatsOutcome;
-};
-
 export type SnowballStatsState = {
-  rows: SnowballStatsRow[];
-};
-
-/** ส่งให้ Mini App / API */
-export type SnowballStatsApiPayload = {
   rows: SnowballStatsRow[];
 };
 
@@ -137,20 +110,8 @@ export type AppendSnowballStatsInput = {
   triggerKind: string;
   vol: number;
   volSma: number;
-  qualityTier?: "a_plus" | "b_plus" | "c_plus";
+  qualityTier?: SnowballStatsQualityTier;
 };
-
-/** A+/B/C สำหรับตารางสถิติ (LONG = HH/VAH · SHORT = Double Barrier) */
-export function snowballStatsGradeLabel(
-  side: SnowballStatsRow["side"],
-  tier: SnowballStatsRow["qualityTier"] | undefined
-): string {
-  if (!tier) return "—";
-  if (tier === "a_plus") return "A+";
-  if (tier === "b_plus") return side === "short" ? "B" : "B";
-  if (tier === "c_plus") return side === "short" ? "—" : "C";
-  return "—";
-}
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
   if (!isSnowballStatsEnabled()) return null;
