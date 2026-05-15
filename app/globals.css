@@ -486,6 +486,37 @@ code {
   text-align: center;
 }
 
+/* Snowball stats — คอลัมน์ Grade ติดซ้ายเมื่อเลื่อนตารางบนมือถือ */
+.sparkStatsPage--wide .snowStatsStickyCoin,
+.sparkStatsPage--wide .snowStatsStickyGrade {
+  position: sticky;
+  z-index: 1;
+  background: var(--card);
+}
+.sparkStatsPage--wide .snowStatsStickyCoin {
+  left: 0;
+  min-width: 3.25rem;
+}
+.sparkStatsPage--wide .snowStatsStickyGrade {
+  left: 3.25rem;
+  min-width: 2.75rem;
+  font-weight: 700;
+}
+.sparkStatsPage--wide thead .snowStatsStickyCoin,
+.sparkStatsPage--wide thead .snowStatsStickyGrade {
+  z-index: 2;
+  background: color-mix(in srgb, var(--card) 88%, var(--border));
+}
+.snowGradeCell--a {
+  color: #22c55e;
+}
+.snowGradeCell--b {
+  color: #eab308;
+}
+.snowGradeCell--c {
+  color: #f97316;
+}
+
 .sparkMatrixPct {
   font-weight: 600;
 }

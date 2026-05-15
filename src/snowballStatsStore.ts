@@ -138,6 +138,19 @@ export type AppendSnowballStatsInput = {
   vol: number;
   volSma: number;
   qualityTier?: "a_plus" | "b_plus" | "c_plus";
+};
+
+/** A+/B/C สำหรับตารางสถิติ (LONG = HH/VAH · SHORT = Double Barrier) */
+export function snowballStatsGradeLabel(
+  side: SnowballStatsRow["side"],
+  tier: SnowballStatsRow["qualityTier"] | undefined
+): string {
+  if (!tier) return "—";
+  if (tier === "a_plus") return "A+";
+  if (tier === "b_plus") return side === "short" ? "B" : "B";
+  if (tier === "c_plus") return side === "short" ? "—" : "C";
+  return "—";
+}
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
   if (!isSnowballStatsEnabled()) return null;
