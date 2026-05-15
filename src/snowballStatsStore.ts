@@ -1,19 +1,21 @@
+import "server-only";
+
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import {
+  type SnowballStatsApiPayload,
   type SnowballStatsQualityTier,
   type SnowballStatsRow,
-} from "./snowballStatsShared";
+} from "@/lib/snowballStatsClient";
+import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 
 export type {
   SnowballStatsApiPayload,
   SnowballStatsOutcome,
   SnowballStatsQualityTier,
   SnowballStatsRow,
-} from "./snowballStatsShared";
-export { snowballStatsGradeLabel } from "./snowballStatsShared";
+} from "@/lib/snowballStatsClient";
 
 const KV_KEY = "koji:snowball_alert_stats";
 const filePath = join(process.cwd(), "data", "snowball_alert_stats.json");

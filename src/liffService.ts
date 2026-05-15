@@ -50,7 +50,8 @@ import {
 } from "./volumeSignalAlertTick";
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
-import { loadSnowballStatsState, type SnowballStatsApiPayload } from "./snowballStatsStore";
+import type { SnowballStatsApiPayload } from "@/lib/snowballStatsClient";
+import { loadSnowballStatsState } from "./snowballStatsStore";
 import {
   ensureTradingViewMexcUserRow,
   orderSideEffective,

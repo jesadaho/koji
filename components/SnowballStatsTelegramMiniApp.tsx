@@ -11,7 +11,7 @@ import {
   snowballStatsGradeLabel,
   type SnowballStatsApiPayload,
   type SnowballStatsRow,
-} from "@/src/snowballStatsShared";
+} from "@/lib/snowballStatsClient";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -351,7 +351,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="sub">
+                  <td colSpan={14} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
