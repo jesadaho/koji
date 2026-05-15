@@ -10,6 +10,7 @@ import {
 import {
   snowballStatsGradeLabel,
   snowballStatsVolMetricLabel,
+  snowballStatsVolScoreLabel,
   type SnowballStatsApiPayload,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
@@ -340,6 +341,8 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">Entry</th>
                 <th scope="col">ATR(100)</th>
                 <th scope="col">Max Wick(100)</th>
+                <th scope="col">Range</th>
+                <th scope="col">Wick</th>
                 <th scope="col">4h</th>
                 <th scope="col">12h</th>
                 <th scope="col">24h</th>
@@ -354,7 +357,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="sub">
+                  <td colSpan={18} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -372,6 +375,8 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{fmtPrice(r.entryPrice)}</td>
                     <td>{snowballStatsVolMetricLabel(r.atr100, r.entryPrice)}</td>
                     <td>{snowballStatsVolMetricLabel(r.maxUpperWick100, r.entryPrice)}</td>
+                    <td>{snowballStatsVolScoreLabel(r.rangeScore)}</td>
+                    <td>{snowballStatsVolScoreLabel(r.wickScore)}</td>
                     <td>{fmtPctCell(r.price4h, r.pct4h)}</td>
                     <td>{fmtPctCell(r.price12h, r.pct12h)}</td>
                     <td>{fmtPctCell(r.price24h, r.pct24h)}</td>

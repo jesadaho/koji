@@ -296,6 +296,8 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               qualityTier: item.qualityTier,
               atr100: item.statsAtr100 ?? null,
               maxUpperWick100: item.statsMaxUpperWick100 ?? null,
+              rangeScore: item.statsRangeScore ?? null,
+              wickScore: item.statsWickScore ?? null,
             });
           } catch (e) {
             console.error("[snowballConfirmTick] append snowball stats after confirm", item.symbol, item.side, e);

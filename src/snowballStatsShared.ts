@@ -5,4 +5,8 @@ export type {
   SnowballStatsQualityTier,
   SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
-export { snowballStatsGradeLabel, snowballStatsVolMetricLabel } from "@/lib/snowballStatsClient";
+export {
+  snowballStatsGradeLabel,
+  snowballStatsVolMetricLabel,
+  snowballStatsVolScoreLabel,
+} from "@/lib/snowballStatsClient";

@@ -75,6 +75,10 @@ export function maxUpperWickPrior(
 export type SnowballVolatilitySnapshot = {
   atr100: number | null;
   maxUpperWick100: number | null;
+  /** (High−Low) แท่งสัญญาณ ÷ ATR(100) — ~1 = ปกติ · ≥3 = วิ่งแรงผิดปกติ */
+  rangeScore: number | null;
+  /** UpperWick แท่งสัญญาณ ÷ MaxWick(100) — ~1 = ไส้เทียบเพดานประวัติ */
+  wickScore: number | null;
 };
 
 export function snowballVolatilitySnapshotAt(
@@ -85,8 +89,31 @@ export function snowballVolatilitySnapshotAt(
   iEval: number,
   lookback = snowballVolatilityLookbackBars()
 ): SnowballVolatilitySnapshot {
-  return {
-    atr100: atrWilderAt(high, low, close, iEval, lookback),
-    maxUpperWick100: maxUpperWickPrior(high, open, close, iEval, lookback),
-  };
+  const atr100 = atrWilderAt(high, low, close, iEval, lookback);
+  const maxUpperWick100 = maxUpperWickPrior(high, open, close, iEval, lookback);
+
+  const h = high[iEval];
+  const l = low[iEval];
+  let rangeScore: number | null = null;
+  if (
+    atr100 != null &&
+    atr100 > 0 &&
+    Number.isFinite(h) &&
+    Number.isFinite(l)
+  ) {
+    const barRange = h - l;
+    if (Number.isFinite(barRange) && barRange >= 0) rangeScore = barRange / atr100;
+  }
+
+  const upperWickNow = upperWickAt(high, open, close, iEval);
+  let wickScore: number | null = null;
+  if (upperWickNow != null && Number.isFinite(upperWickNow) && upperWickNow >= 0) {
+    if (maxUpperWick100 != null && maxUpperWick100 > 0) {
+      wickScore = upperWickNow / maxUpperWick100;
+    } else if (maxUpperWick100 === 0 && upperWickNow === 0) {
+      wickScore = 0;
+    }
+  }
+
+  return { atr100, maxUpperWick100, rangeScore, wickScore };
 }

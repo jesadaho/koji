@@ -21,6 +21,10 @@ export type SnowballStatsRow = {
   atr100?: number | null;
   /** Max upper wick 100 แท่งก่อนสัญญาณ — เพดานไส้บน */
   maxUpperWick100?: number | null;
+  /** (H−L) แท่งสัญญาณ / ATR(100) */
+  rangeScore?: number | null;
+  /** UpperWick แท่งสัญญาณ / MaxWick(100) */
+  wickScore?: number | null;
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
@@ -67,4 +71,10 @@ export function snowballStatsVolMetricLabel(
     return `${px} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)`;
   }
   return px;
+}
+
+/** แสดง Range / Wick score (อัตราส่วนไม่มีหน่วย) */
+export function snowballStatsVolScoreLabel(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return value.toFixed(2);
 }

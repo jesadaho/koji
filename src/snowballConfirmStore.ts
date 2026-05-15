@@ -61,6 +61,8 @@ export type SnowballPendingConfirm = {
   statsAtr100?: number | null;
   /** Max upper wick 100 แท่งก่อนสัญญาณ */
   statsMaxUpperWick100?: number | null;
+  statsRangeScore?: number | null;
+  statsWickScore?: number | null;
 };
 
 export type SnowballPendingConfirmState = {
@@ -118,6 +120,14 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsTriggerKind = typeof o.statsTriggerKind === "string" && o.statsTriggerKind.trim() ? o.statsTriggerKind.trim() : undefined;
   const statsVolSma = Number(o.statsVolSma);
   const statsVolSmaOk = Number.isFinite(statsVolSma) && statsVolSma > 0;
+  const statsAtr100 = Number(o.statsAtr100);
+  const statsAtr100Ok = Number.isFinite(statsAtr100) && statsAtr100 > 0;
+  const statsMaxUpperWick100 = Number(o.statsMaxUpperWick100);
+  const statsMaxUpperWick100Ok = Number.isFinite(statsMaxUpperWick100) && statsMaxUpperWick100 >= 0;
+  const statsRangeScore = Number(o.statsRangeScore);
+  const statsRangeScoreOk = Number.isFinite(statsRangeScore) && statsRangeScore >= 0;
+  const statsWickScore = Number(o.statsWickScore);
+  const statsWickScoreOk = Number.isFinite(statsWickScore) && statsWickScore >= 0;
   return {
     id: typeof o.id === "string" && o.id ? o.id : randomUUID(),
     symbol,
@@ -137,6 +147,8 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsVolSmaOk ? { statsVolSma } : {}),
     ...(statsAtr100Ok ? { statsAtr100 } : {}),
     ...(statsMaxUpperWick100Ok ? { statsMaxUpperWick100 } : {}),
+    ...(statsRangeScoreOk ? { statsRangeScore } : {}),
+    ...(statsWickScoreOk ? { statsWickScore } : {}),
   };
 }
 

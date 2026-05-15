@@ -3117,6 +3117,8 @@ export async function runPublicIndicatorFeedInternal(
                   statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
                   statsAtr100: longVolSnap.atr100,
                   statsMaxUpperWick100: longVolSnap.maxUpperWick100,
+                  statsRangeScore: longVolSnap.rangeScore,
+                  statsWickScore: longVolSnap.wickScore,
                   ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3140,6 +3142,8 @@ export async function runPublicIndicatorFeedInternal(
                   qualityTier: longBreakoutGrade,
                   atr100: longVolSnap.atr100,
                   maxUpperWick100: longVolSnap.maxUpperWick100,
+                  rangeScore: longVolSnap.rangeScore,
+                  wickScore: longVolSnap.wickScore,
                 });
               }
             } catch (statsErr) {
@@ -3492,6 +3496,8 @@ export async function runPublicIndicatorFeedInternal(
                   statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
                   statsAtr100: bearVolSnap.atr100,
                   statsMaxUpperWick100: bearVolSnap.maxUpperWick100,
+                  statsRangeScore: bearVolSnap.rangeScore,
+                  statsWickScore: bearVolSnap.wickScore,
                   ...(skipBearTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3515,6 +3521,8 @@ export async function runPublicIndicatorFeedInternal(
                   qualityTier: dbOn ? shortTier : undefined,
                   atr100: bearVolSnap.atr100,
                   maxUpperWick100: bearVolSnap.maxUpperWick100,
+                  rangeScore: bearVolSnap.rangeScore,
+                  wickScore: bearVolSnap.wickScore,
                 });
               }
             } catch (statsErr) {

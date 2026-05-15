@@ -116,6 +116,8 @@ export type AppendSnowballStatsInput = {
   atr100?: number | null;
   /** Max upper wick ใน 100 แท่งก่อนแท่งสัญญาณ — เพดานไส้บน */
   maxUpperWick100?: number | null;
+  rangeScore?: number | null;
+  wickScore?: number | null;
 };
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
@@ -126,6 +128,14 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
   const maxUpperWick100 =
     input.maxUpperWick100 != null && Number.isFinite(input.maxUpperWick100) && input.maxUpperWick100 >= 0
       ? input.maxUpperWick100
+      : null;
+  const rangeScore =
+    input.rangeScore != null && Number.isFinite(input.rangeScore) && input.rangeScore >= 0
+      ? input.rangeScore
+      : null;
+  const wickScore =
+    input.wickScore != null && Number.isFinite(input.wickScore) && input.wickScore >= 0
+      ? input.wickScore
       : null;
 
   const row: SnowballStatsRow = {
@@ -143,6 +153,8 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     qualityTier: input.qualityTier,
     atr100,
     maxUpperWick100,
+    rangeScore,
+    wickScore,
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,
     pct4h: null,
