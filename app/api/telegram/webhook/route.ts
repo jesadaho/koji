@@ -44,8 +44,8 @@ import {
   parseSnowballDebugCommand,
 } from "@/src/publicIndicatorFeedDebug";
 import {
-  formatCandleReversal1dDebugMessage,
-  parseCandleReversal1dDebugCommand,
+  formatCandleReversalDebugMessage,
+  parseCandleReversalDebugCommand,
 } from "@/src/candleReversal1dAlertTick";
 
 export const dynamic = "force-dynamic";
@@ -385,35 +385,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const rev1dDbg =
-    parseCandleReversal1dDebugCommand(normalized) || parseCandleReversal1dDebugCommand(trimmedText);
-  if (rev1dDbg) {
+  const revDbg =
+    parseCandleReversalDebugCommand(normalized) || parseCandleReversalDebugCommand(trimmedText);
+  if (revDbg) {
     if (!isTelegramCronRunAllowed(fromUserId)) {
       try {
         await sendTelegramMessageToChat(
           String(chatId),
-          "คำสั่ง debug reversal 1d ต้องเป็น admin — ตั้ง KOJI_ADMIN_IDS=<telegram user id>",
+          "คำสั่ง debug reversal ต้องเป็น admin — ตั้ง KOJI_ADMIN_IDS=<telegram user id>",
           threadOpts,
         );
       } catch (e) {
-        console.error("[telegram/webhook] reversal 1d debug deny", e);
+        console.error("[telegram/webhook] reversal debug deny", e);
       }
       return NextResponse.json({ ok: true });
     }
     try {
-      const body = await formatCandleReversal1dDebugMessage(rev1dDbg.symbol);
+      const body = await formatCandleReversalDebugMessage(revDbg.symbol, revDbg.tf);
       await sendTelegramMessageToChat(String(chatId), body, threadOpts);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
-      console.error("[telegram/webhook] reversal 1d debug", e);
+      console.error("[telegram/webhook] reversal debug", e);
       try {
         await sendTelegramMessageToChat(
           String(chatId),
-          `debug reversal 1d ล้มเหลว — ${detail.slice(0, 800)}`,
+          `debug reversal ล้มเหลว — ${detail.slice(0, 800)}`,
           threadOpts,
         );
       } catch (sendErr) {
-        console.error("[telegram/webhook] reversal 1d debug error reply", sendErr);
+        console.error("[telegram/webhook] reversal debug error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

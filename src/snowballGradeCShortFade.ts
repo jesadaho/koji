@@ -342,3 +342,11 @@ export async function resolveSnowballLongAutotradeSide(
   }
   return { side: fade.ok ? "short" : null, fade };
 }
+
+/** Re-export 1H reversal patterns (shared with candle reversal alerts). */
+export {
+  DEFAULT_CANDLE_REVERSAL_1H_ENV,
+  evalInvertedDoji1h,
+  evalLongestRedBody1h,
+  type CandleReversal1hDetectEnv,
+} from "./candleReversalDetect";

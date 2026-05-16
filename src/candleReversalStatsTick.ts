@@ -1,3 +1,4 @@
+import type { CandleReversalSignalBarTf } from "@/lib/candleReversalStatsClient";
 import {
   fetchBinanceUsdmKlinesRange,
   isBinanceIndicatorFapiEnabled,
@@ -10,15 +11,20 @@ import {
   type CandleReversalStatsRow,
 } from "./candleReversalStatsStore";
 
-const KLINE_GRAN_SEC = 24 * 3600;
+const DAY_SEC = 24 * 3600;
+const HOUR_SEC = 3600;
 const FOLLOWUP_DAYS = 7;
 
-function signalBarDurationSec(): number {
-  return KLINE_GRAN_SEC;
+function signalBarTf(row: CandleReversalStatsRow): CandleReversalSignalBarTf {
+  return row.signalBarTf === "1h" ? "1h" : "1d";
+}
+
+function signalBarDurationSec(row: CandleReversalStatsRow): number {
+  return signalBarTf(row) === "1h" ? HOUR_SEC : DAY_SEC;
 }
 
 function anchorCloseSec(row: CandleReversalStatsRow): number {
-  return row.signalBarOpenSec + signalBarDurationSec();
+  return row.signalBarOpenSec + signalBarDurationSec(row);
 }
 
 function pctVsEntryShort(entry: number, price: number): number {
@@ -40,6 +46,7 @@ function outcomeLossMaxPct(): number {
 function pickHorizonClose(
   timeSec: number[],
   close: number[],
+  barDurSec: number,
   iFirst: number,
   iLast: number,
   nowSec: number,
@@ -49,12 +56,44 @@ function pickHorizonClose(
   const limitSec = Math.min(horizonEndSec, nowSec);
   let best = -1;
   for (let i = iFirst; i <= iLast; i++) {
-    const barClose = timeSec[i]! + KLINE_GRAN_SEC;
+    const barClose = timeSec[i]! + barDurSec;
     if (barClose <= limitSec) best = i;
   }
   if (best < 0) return null;
   const price = close[best]!;
   return { price, pct: pctVsEntryShort(entry, price) };
+}
+
+function computeMfeFromPack(
+  timeSec: number[],
+  high: number[],
+  low: number[],
+  barDurSec: number,
+  iFirst: number,
+  iLast: number,
+  ac: number,
+  entry: number,
+): { maxRoi: number; mfeIdx: number; maxDd: number; durationHours: number } | null {
+  let maxRoi = -Infinity;
+  let mfeIdx = iFirst;
+  for (let i = iFirst; i <= iLast; i++) {
+    const roi = ((entry - low[i]!) / entry) * 100;
+    if (roi > maxRoi) {
+      maxRoi = roi;
+      mfeIdx = i;
+    }
+  }
+  if (!Number.isFinite(maxRoi)) return null;
+
+  let maxHigh = -Infinity;
+  for (let i = iFirst; i <= mfeIdx; i++) {
+    maxHigh = Math.max(maxHigh, high[i]!);
+  }
+  let maxDd = ((maxHigh - entry) / entry) * 100;
+  if (!Number.isFinite(maxDd) || maxDd < 0) maxDd = 0;
+
+  const durationHours = (timeSec[mfeIdx]! + barDurSec - ac) / 3600;
+  return { maxRoi, mfeIdx, maxDd, durationHours };
 }
 
 export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise<number> {
@@ -63,6 +102,7 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
 
   const state = await loadCandleReversalStatsState();
   let dirty = 0;
+  const nowSec = Math.floor(nowMs / 1000);
 
   for (const row of state.rows) {
     if (row.outcome !== "pending") continue;
@@ -70,61 +110,70 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
     const entry = row.entryPrice;
     if (!Number.isFinite(entry) || entry <= 0) continue;
 
+    const tf = signalBarTf(row);
+    const barDur = signalBarDurationSec(row);
     const ac = anchorCloseSec(row);
-    const nowSec = Math.floor(nowMs / 1000);
     if (nowSec < ac) continue;
 
-    const followSec = FOLLOWUP_DAYS * KLINE_GRAN_SEC;
+    const followSec = FOLLOWUP_DAYS * DAY_SEC;
     const windowEndSec = Math.min(nowSec, ac + followSec);
 
-    const pack = await fetchBinanceUsdmKlinesRange(row.symbol, "1d", {
+    const dayPack = await fetchBinanceUsdmKlinesRange(row.symbol, "1d", {
       startTimeMs: row.signalBarOpenSec * 1000,
       endTimeMs: nowMs,
       limit: 20,
     });
-    if (!pack || pack.timeSec.length === 0) continue;
+    if (!dayPack || dayPack.timeSec.length === 0) continue;
 
-    const { timeSec, high, low, close } = pack;
-    const iFirst = timeSec.findIndex((t) => t + KLINE_GRAN_SEC >= ac);
-    if (iFirst < 0) continue;
+    const { timeSec: dayT, close: dayC } = dayPack;
+    const iDayFirst = dayT.findIndex((t) => t + DAY_SEC >= ac);
+    if (iDayFirst < 0) continue;
 
-    let iLast = iFirst;
-    for (let i = iFirst; i < timeSec.length; i++) {
-      if (timeSec[i]! + KLINE_GRAN_SEC <= windowEndSec) iLast = i;
+    let iDayLast = iDayFirst;
+    for (let i = iDayFirst; i < dayT.length; i++) {
+      if (dayT[i]! + DAY_SEC <= windowEndSec) iDayLast = i;
     }
-    if (iLast < iFirst) continue;
+    if (iDayLast < iDayFirst) continue;
 
-    let maxRoi = -Infinity;
-    let mfeIdx = iFirst;
-    for (let i = iFirst; i <= iLast; i++) {
-      const roi = ((entry - low[i]!) / entry) * 100;
-      if (roi > maxRoi) {
-        maxRoi = roi;
-        mfeIdx = i;
+    let mfe: ReturnType<typeof computeMfeFromPack> = null;
+
+    if (tf === "1h") {
+      const hPack = await fetchBinanceUsdmKlinesRange(row.symbol, "1h", {
+        startTimeMs: row.signalBarOpenSec * 1000,
+        endTimeMs: nowMs,
+        limit: 200,
+      });
+      if (hPack && hPack.timeSec.length > 0) {
+        const { timeSec: hT, high: hH, low: hL } = hPack;
+        const iHFirst = hT.findIndex((t) => t + HOUR_SEC >= ac);
+        if (iHFirst >= 0) {
+          let iHLast = iHFirst;
+          for (let i = iHFirst; i < hT.length; i++) {
+            if (hT[i]! + HOUR_SEC <= windowEndSec) iHLast = i;
+          }
+          if (iHLast >= iHFirst) {
+            mfe = computeMfeFromPack(hT, hH, hL, HOUR_SEC, iHFirst, iHLast, ac, entry);
+          }
+        }
       }
     }
-    if (!Number.isFinite(maxRoi)) continue;
 
-    let maxHigh = -Infinity;
-    for (let i = iFirst; i <= mfeIdx; i++) {
-      maxHigh = Math.max(maxHigh, high[i]!);
+    if (!mfe) {
+      mfe = computeMfeFromPack(dayT, dayPack.high, dayPack.low, DAY_SEC, iDayFirst, iDayLast, ac, entry);
     }
-    let maxDd = ((maxHigh - entry) / entry) * 100;
-    if (!Number.isFinite(maxDd) || maxDd < 0) maxDd = 0;
+    if (!mfe) continue;
 
-    const durationHours = (timeSec[mfeIdx]! + KLINE_GRAN_SEC - ac) / 3600;
-
-    const h1d = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + KLINE_GRAN_SEC, entry);
-    const h3d = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + 3 * KLINE_GRAN_SEC, entry);
-    let h7d = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + followSec, entry);
-    if (h7d == null && nowSec >= ac + followSec && iLast >= iFirst) {
-      const p = close[iLast]!;
+    const h1d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, ac + DAY_SEC, entry);
+    const h3d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, ac + 3 * DAY_SEC, entry);
+    let h7d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, ac + followSec, entry);
+    if (h7d == null && nowSec >= ac + followSec && iDayLast >= iDayFirst) {
+      const p = dayC[iDayLast]!;
       h7d = { price: p, pct: pctVsEntryShort(entry, p) };
     }
 
-    row.maxRoiPct = maxRoi;
-    row.durationToMfeHours = durationHours;
-    row.maxDrawdownPct = maxDd;
+    row.maxRoiPct = mfe.maxRoi;
+    row.durationToMfeHours = mfe.durationHours;
+    row.maxDrawdownPct = mfe.maxDd;
     if (h1d) {
       row.price1d = h1d.price;
       row.pct1d = h1d.pct;

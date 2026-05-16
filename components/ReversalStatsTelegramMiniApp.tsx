@@ -12,13 +12,15 @@ import {
   candleReversalDayOfWeekBkk,
   candleReversalModelLabel,
   candleReversalOutcomeLabel,
+  candleReversalSignalBarTfLabel,
+  candleReversalVolScoreLabel,
   type CandleReversalStatsApiPayload,
 } from "@/lib/candleReversalStatsClient";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const FOOTNOTE =
-  "Binance USDT-M · แท่ง Day ปิด · Short bias · follow-up 1d/3d/7d จากราคาปิดแท่ง Day ถัดไป · ผลสรุปที่ 7d";
+  "Binance USDT-M · TF 1D/1H · Short bias · follow-up 1d/3d/7d จากราคาปิด Day · MFE 1H ใช้แท่ง 1H · ผลสรุปที่ 7d";
 
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
@@ -156,7 +158,7 @@ export default function ReversalStatsTelegramMiniApp() {
   if (phase === "setup") {
     return (
       <div className="sparkStatsPage sparkStatsPage--wide">
-        <h1 className="sparkStatsMatrixSectionTitle">สถิติ Reversal 1D</h1>
+        <h1 className="sparkStatsMatrixSectionTitle">สถิติ Reversal</h1>
         {setupBody}
         <p className="sub" style={{ marginTop: "1rem" }}>
           <Link href="/">กลับหน้าแรก</Link>
@@ -170,9 +172,9 @@ export default function ReversalStatsTelegramMiniApp() {
   return (
     <div className="sparkStatsPage sparkStatsPage--wide">
       <h1 className="sparkStatsMatrixSectionTitle">
-        สถิติ Reversal 1D
+        สถิติ Reversal
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-          โดจิกลับหัว · แท่งแดงทุบ · Binance Day
+          1D + 1H · โดจิกลับหัว · แท่งแดงทุบ
         </span>
       </h1>
 
@@ -184,6 +186,7 @@ export default function ReversalStatsTelegramMiniApp() {
             <thead>
               <tr>
                 <th scope="col">เหรียญ</th>
+                <th scope="col">TF</th>
                 <th scope="col">โมเดล</th>
                 <th scope="col">วัน</th>
                 <th scope="col">เวลา (BKK)</th>
@@ -192,6 +195,8 @@ export default function ReversalStatsTelegramMiniApp() {
                 <th scope="col">SL</th>
                 <th scope="col">ไส้%</th>
                 <th scope="col">เนื้อ%</th>
+                <th scope="col">Range</th>
+                <th scope="col">Wick</th>
                 <th scope="col">1d</th>
                 <th scope="col">3d</th>
                 <th scope="col">7d</th>
@@ -203,14 +208,15 @@ export default function ReversalStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="sub">
-                    ยังไม่มีแถว — รอสัญญาณ Reversal 1D ส่งสำเร็จและ CANDLE_REVERSAL_1D_ALERTS_ENABLED
+                  <td colSpan={18} className="sub">
+                    ยังไม่มีแถว — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1D/1H_ALERTS_ENABLED)
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => (
                   <tr key={r.id}>
                     <td>{coinLabel(r.symbol)}</td>
+                    <td>{candleReversalSignalBarTfLabel(r.signalBarTf ?? "1d")}</td>
                     <td>{candleReversalModelLabel(r.model)}</td>
                     <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
                     <td>
@@ -221,6 +227,8 @@ export default function ReversalStatsTelegramMiniApp() {
                     <td>{fmtPrice(r.slPrice)}</td>
                     <td>{r.wickRatioPct != null ? `${r.wickRatioPct.toFixed(1)}%` : "—"}</td>
                     <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
+                    <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
+                    <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
                     <td>{fmtPctCell(r.price1d, r.pct1d)}</td>
                     <td>{fmtPctCell(r.price3d, r.pct3d)}</td>
                     <td>{fmtPctCell(r.price7d, r.pct7d)}</td>

@@ -58,9 +58,18 @@ type LegacyCandleReversalRow = CandleReversalStatsRow & {
   pct24h?: number | null;
 };
 
-function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRow): CandleReversalStatsRow {
+type LegacyCandleReversalRowV1 = LegacyCandleReversalRow & {
+  signalBarTf?: CandleReversalStatsRow["signalBarTf"];
+  rangeScore?: number | null;
+  wickScore?: number | null;
+};
+
+function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleReversalStatsRow {
   return {
     ...r,
+    signalBarTf: r.signalBarTf === "1h" ? "1h" : "1d",
+    rangeScore: r.rangeScore != null && Number.isFinite(r.rangeScore) ? r.rangeScore : null,
+    wickScore: r.wickScore != null && Number.isFinite(r.wickScore) ? r.wickScore : null,
     price1d: r.price1d ?? r.price4h ?? null,
     pct1d: r.pct1d ?? r.pct4h ?? null,
     price3d: r.price3d ?? r.price12h ?? null,
@@ -104,6 +113,7 @@ export async function saveCandleReversalStatsState(state: CandleReversalStatsSta
 
 export type AppendCandleReversalStatsInput = {
   symbol: string;
+  signalBarTf: CandleReversalStatsRow["signalBarTf"];
   model: CandleReversalStatsRow["model"];
   alertedAtIso: string;
   alertedAtMs: number;
@@ -113,6 +123,8 @@ export type AppendCandleReversalStatsInput = {
   slPrice: number;
   wickRatioPct?: number | null;
   bodyPct?: number | null;
+  rangeScore?: number | null;
+  wickScore?: number | null;
   afterInvertedDoji?: boolean;
 };
 
@@ -121,9 +133,19 @@ export async function appendCandleReversalStatsRow(
 ): Promise<CandleReversalStatsRow | null> {
   if (!isCandleReversalStatsEnabled()) return null;
 
+  const rangeScore =
+    input.rangeScore != null && Number.isFinite(input.rangeScore) && input.rangeScore >= 0
+      ? input.rangeScore
+      : null;
+  const wickScore =
+    input.wickScore != null && Number.isFinite(input.wickScore) && input.wickScore >= 0
+      ? input.wickScore
+      : null;
+
   const row: CandleReversalStatsRow = {
     id: randomUUID(),
     symbol: input.symbol.trim().toUpperCase(),
+    signalBarTf: input.signalBarTf === "1h" ? "1h" : "1d",
     model: input.model,
     alertedAtIso: input.alertedAtIso,
     alertedAtMs: input.alertedAtMs,
@@ -134,6 +156,8 @@ export async function appendCandleReversalStatsRow(
     wickRatioPct:
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,
     bodyPct: input.bodyPct != null && Number.isFinite(input.bodyPct) ? input.bodyPct : null,
+    rangeScore,
+    wickScore,
     afterInvertedDoji: Boolean(input.afterInvertedDoji),
     price1d: null,
     pct1d: null,
