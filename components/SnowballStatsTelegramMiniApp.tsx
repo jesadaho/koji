@@ -24,7 +24,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "Binance USDT-M · Range = (H−L)/ATR(100) · Wick = UpperWick/MaxWick(100) · R% 2แท่ง = (H−L)/Close แท่งก่อน+สัญญาณ · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
+  "ทิศ = ทิศเทรด (ไม่ใช่ทิศแจ้งเตือน) · Grade C Long มักเป็น Short · confirm แดง+vol สูงกว่าแท่งสัญญาณ → Short · Binance USDT-M · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;

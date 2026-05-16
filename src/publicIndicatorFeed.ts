@@ -29,6 +29,7 @@ import {
   type SnowballGradeCShortFadeResult,
 } from "./snowballGradeCShortFade";
 import { appendSnowballStatsRow, loadSnowballStatsState, type SnowballStatsRow } from "./snowballStatsStore";
+import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { addSnowballPendingConfirm } from "./snowballConfirmStore";
@@ -3186,9 +3187,22 @@ export async function runPublicIndicatorFeedInternal(
             }
             try {
               if (!skipSnowballTgForPending) {
+                const longStatsTradeSide = resolveSnowballStatsTradeSide({
+                  alertSide: "long",
+                  qualityTier: longBreakoutGrade,
+                  signalOpen: o15[iSig]!,
+                  signalClose: clE!,
+                  signalHigh: longSignalHigh,
+                  signalLow: longSignalLow,
+                  signalVolume: vE!,
+                  confirmOpen: twoBarInline ? o15[iConf]! : null,
+                  confirmClose: twoBarInline ? c15[iConf]! : null,
+                  confirmVolume: twoBarInline ? v15[iConf]! : null,
+                  gradeCFadeOk: gradeCShortFade?.ok,
+                });
                 await appendSnowballStatsRow({
                   symbol,
-                  side: "long",
+                  side: longStatsTradeSide,
                   alertedAtIso: iso,
                   alertedAtMs: now,
                   signalBarOpenSec,
@@ -3575,9 +3589,21 @@ export async function runPublicIndicatorFeedInternal(
             }
             try {
               if (!skipBearTgForPending) {
+                const bearStatsTradeSide = resolveSnowballStatsTradeSide({
+                  alertSide: "bear",
+                  qualityTier: dbOn ? shortTier : undefined,
+                  signalOpen: o15[iSig]!,
+                  signalClose: clE!,
+                  signalHigh: bearSignalHigh,
+                  signalLow: bearSignalLow,
+                  signalVolume: vE!,
+                  confirmOpen: twoBarInline ? o15[iConf]! : null,
+                  confirmClose: twoBarInline ? c15[iConf]! : null,
+                  confirmVolume: twoBarInline ? v15[iConf]! : null,
+                });
                 await appendSnowballStatsRow({
                   symbol,
-                  side: "short",
+                  side: bearStatsTradeSide,
                   alertedAtIso: iso,
                   alertedAtMs: now,
                   signalBarOpenSec,

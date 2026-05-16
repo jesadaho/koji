@@ -63,7 +63,7 @@ export function snowballStatsGradeLabel(
   if (!tier) return "—";
   if (tier === "a_plus") return "A+";
   if (tier === "b_plus") return "B";
-  if (tier === "c_plus") return side === "short" ? "—" : "C";
+  if (tier === "c_plus") return "C";
   return "—";
 }
 

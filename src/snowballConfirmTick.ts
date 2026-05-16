@@ -29,6 +29,7 @@ import {
   appendSnowballStatsRow,
   isSnowballStatsEnabled,
 } from "./snowballStatsStore";
+import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 
 function labelSide(item: SnowballPendingConfirm): string {
   return item.side === "long" ? "LONG" : "BEAR";
@@ -285,9 +286,33 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                 : item.side === "bear"
                   ? "swing_ll"
                   : "both";
+            const sigOpen = iSig >= 0 && typeof open[iSig] === "number" ? open[iSig]! : item.signalClose;
+            let gradeCFadeOk = false;
+            if (item.side === "long" && item.qualityTier === "c_plus") {
+              const resolved = await resolveSnowballLongAutotradeSide(
+                item.symbol,
+                item.qualityTier,
+                snowballDoubleBarrierEnabled(),
+                item.signalBarOpenSec,
+              );
+              gradeCFadeOk = Boolean(resolved.fade?.ok);
+            }
+            const statsTradeSide = resolveSnowballStatsTradeSide({
+              alertSide: item.side === "long" ? "long" : "bear",
+              qualityTier: item.qualityTier,
+              signalOpen: sigOpen,
+              signalClose: item.signalClose,
+              signalHigh: item.signalHigh,
+              signalLow: item.signalLow,
+              signalVolume: item.signalVolume,
+              confirmOpen: open[idx],
+              confirmClose: cl,
+              confirmVolume: vo,
+              gradeCFadeOk,
+            });
             await appendSnowballStatsRow({
               symbol: item.symbol,
-              side: item.side === "long" ? "long" : "short",
+              side: statsTradeSide,
               alertedAtIso: item.alertedAtIso,
               alertedAtMs: item.alertedAtMs,
               signalBarOpenSec: item.signalBarOpenSec,
