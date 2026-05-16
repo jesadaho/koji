@@ -33,11 +33,15 @@ import {
   buildCandleReversalAlertMessage,
   DEFAULT_CANDLE_REVERSAL_1D_ENV,
   DEFAULT_CANDLE_REVERSAL_1H_ENV,
+  candleReversalBarIndexBarsAgo,
+  candleReversalLatestClosedBarIndex,
+  evalCandleReversalAtBarIndex,
   evalCandleReversalClosedBar,
   evalInvertedDoji1d,
   evalInvertedDoji1h,
   evalLongestRedBody1h,
   evalMarubozu1d,
+  fmtReversalPrice,
   type CandleReversal1dDetectEnv,
   type CandleReversal1hDetectEnv,
   type CandleReversalModel,
@@ -599,7 +603,36 @@ export async function runCandleReversal1dAlertTick(
   return r.notified;
 }
 
-async function formatDebugForTf(sym: string, tf: CandleReversalTf): Promise<string[]> {
+function formatReversalBarTimeBkk(tsSec: number): string {
+  const d = new Date(tsSec * 1000);
+  const datePart = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  const timePart = d.toLocaleTimeString("en-GB", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${datePart} ${timePart} BKK`;
+}
+
+function hadInvertedDojiBeforeBarIndex(
+  pack: NonNullable<Awaited<ReturnType<typeof fetchBinanceUsdmKlines>>>,
+  tf: CandleReversalTf,
+  barIndex: number,
+  env1d: CandleReversal1dDetectEnv,
+  env1h: CandleReversal1hDetectEnv,
+): boolean {
+  const barMs = pack.timeSec[barIndex]! * 1000;
+  const windowMs = marubozuAfterDojiWindowMs(tf);
+  for (let j = barIndex - 1; j >= 0; j--) {
+    if (barMs - pack.timeSec[j]! * 1000 > windowMs) break;
+    if (tf === "1h" && evalInvertedDoji1h(pack, j, env1h)) return true;
+    if (tf === "1d" && evalInvertedDoji1d(pack, j, env1d)) return true;
+  }
+  return false;
+}
+
+async function formatDebugForTf(sym: string, tf: CandleReversalTf, barsAgo = 0): Promise<string[]> {
   const lines: string[] = [];
   const pack = await fetchBinanceUsdmKlines(sym, tf, klineFetchLimit(tf));
   if (!pack) {
@@ -608,35 +641,92 @@ async function formatDebugForTf(sym: string, tf: CandleReversalTf): Promise<stri
   }
   const env1d = detectEnv1d();
   const env1h = detectEnv1h();
-  const st = (await loadCandleReversalAlertState())[sym] ?? emptySymState();
-  const hadDoji =
-    tf === "1h"
-      ? st.lastInvertedDoji1hAlertedAtMs != null &&
-        Date.now() - st.lastInvertedDoji1hAlertedAtMs <= marubozuAfterDojiWindowMs("1h")
-      : st.lastInvertedDoji1dAlertedAtMs != null &&
-        Date.now() - st.lastInvertedDoji1dAlertedAtMs <= marubozuAfterDojiWindowMs("1d");
+  const n = pack.close.length;
+  const latestClosed = candleReversalLatestClosedBarIndex(pack);
+  const i = candleReversalBarIndexBarsAgo(pack, barsAgo);
 
-  const sig = evalCandleReversalClosedBar(tf, pack, env1d, env1h, { hadRecentInvertedDoji: hadDoji });
   lines.push(`— ${tf} —`);
-  if (!sig) {
-    lines.push("ไม่ผ่านเงื่อนไขบนแท่งปิดล่าสุด (i=n-2)");
+  lines.push(`klines: ${n} แท่ง · ปิดล่าสุด index=${latestClosed}`);
+  if (barsAgo > 0) {
+    lines.push(`barsAgo=${barsAgo} → ประเมินที่ index ${i}`);
+  } else {
+    lines.push(`barsAgo=0 → แท่งปิดล่าสุด (index ${i})`);
+  }
+
+  if (i < 0) {
+    lines.push(`❌ ข้อมูลไม่พอ — ลด barsAgo หรือเพิ่ม limit (สูงสุด ~${latestClosed})`);
     return lines;
   }
-  lines.push(`model: ${sig.model}`);
+
+  const o = pack.open[i]!;
+  const h = pack.high[i]!;
+  const l = pack.low[i]!;
+  const c = pack.close[i]!;
+  lines.push(`open ${formatReversalBarTimeBkk(pack.timeSec[i]!)}`);
+  lines.push(
+    `O ${fmtReversalPrice(o)} · H ${fmtReversalPrice(h)} · L ${fmtReversalPrice(l)} · C ${fmtReversalPrice(c)}`,
+  );
+
+  const hadDojiHist = hadInvertedDojiBeforeBarIndex(pack, tf, i, env1d, env1h);
+  let hadDojiLive = false;
+  if (barsAgo === 0) {
+    const st = (await loadCandleReversalAlertState())[sym] ?? emptySymState();
+    hadDojiLive =
+      tf === "1h"
+        ? st.lastInvertedDoji1hAlertedAtMs != null &&
+          Date.now() - st.lastInvertedDoji1hAlertedAtMs <= marubozuAfterDojiWindowMs("1h")
+        : st.lastInvertedDoji1dAlertedAtMs != null &&
+          Date.now() - st.lastInvertedDoji1dAlertedAtMs <= marubozuAfterDojiWindowMs("1d");
+  }
+  const hadDoji = barsAgo === 0 ? hadDojiLive || hadDojiHist : hadDojiHist;
+  lines.push(
+    `hadRecentInvertedDoji: ${hadDoji ? "yes" : "no"}` +
+      (barsAgo === 0 && hadDojiLive !== hadDojiHist
+        ? ` (state=${hadDojiLive ? "yes" : "no"} · klines=${hadDojiHist ? "yes" : "no"})`
+        : ""),
+  );
+
+  const inverted = tf === "1h" ? evalInvertedDoji1h(pack, i, env1h) : evalInvertedDoji1d(pack, i, env1d);
+  const marubozu = tf === "1d" ? evalMarubozu1d(pack, i, env1d, hadDoji) : null;
+  const longest = tf === "1h" ? evalLongestRedBody1h(pack, i, env1h, hadDoji) : null;
+  lines.push(`inverted_doji: ${inverted ? "✓" : "—"}`);
+  if (tf === "1d") lines.push(`marubozu: ${marubozu ? "✓" : "—"}`);
+  if (tf === "1h") lines.push(`longest_red_body: ${longest ? "✓" : "—"}`);
+
+  const sig = evalCandleReversalAtBarIndex(tf, pack, i, env1d, env1h, { hadRecentInvertedDoji: hadDoji });
+  if (!sig) {
+    lines.push("");
+    lines.push("ผลรวม: ไม่ผ่านเงื่อนไขส่งแจ้งเตือน");
+    return lines;
+  }
+  lines.push("");
+  lines.push(`ผลรวม: ${sig.model}`);
   lines.push(`wick ${(sig.wickRatio * 100).toFixed(1)}% · body ${(sig.bodyRatio * 100).toFixed(1)}%`);
-  lines.push(`retest ${sig.retestPrice} · SL ${sig.slPrice}`);
+  lines.push(`retest ${fmtReversalPrice(sig.retestPrice)} · SL ${fmtReversalPrice(sig.slPrice)}`);
   lines.push("");
   lines.push(buildCandleReversalAlertMessage(sym, sig));
   return lines;
 }
 
-export async function formatCandleReversalDebugMessage(rawSymbol: string, tf?: CandleReversalTf): Promise<string> {
+export type CandleReversalDebugOpts = {
+  tf?: CandleReversalTf;
+  /** 0 = แท่งปิดล่าสุด · 25 = ย้อนหลัง 25 แท่งจากปิดล่าสุด */
+  barsAgo?: number;
+};
+
+export async function formatCandleReversalDebugMessage(
+  rawSymbol: string,
+  tf?: CandleReversalTf,
+  opts?: Pick<CandleReversalDebugOpts, "barsAgo">,
+): Promise<string> {
   const symbol = rawSymbol.trim().toUpperCase().replace(/^@/, "");
   const sym = symbol.endsWith("USDT") ? symbol : `${symbol}USDT`;
   const lines: string[] = [];
+  const barsAgo = Math.max(0, Math.floor(opts?.barsAgo ?? 0));
   lines.push("🎯 Candle Reversal — debug (Binance USDM)");
   lines.push(`UTC: ${new Date().toISOString()}`);
   lines.push(`1D: ${isCandleReversal1dAlertsEnabled() ? "on" : "off"} · 1H: ${isCandleReversal1hAlertsEnabled() ? "on" : "off"}`);
+  if (barsAgo > 0) lines.push(`barsAgo: ${barsAgo} (ย้อนจากแท่งปิดล่าสุด)`);
   lines.push("");
 
   if (!sym) {
@@ -645,13 +735,13 @@ export async function formatCandleReversalDebugMessage(rawSymbol: string, tf?: C
   }
 
   if (tf === "1d" || tf === "1h") {
-    lines.push(...(await formatDebugForTf(sym, tf)));
+    lines.push(...(await formatDebugForTf(sym, tf, barsAgo)));
     return lines.join("\n");
   }
 
-  lines.push(...(await formatDebugForTf(sym, "1d")));
+  lines.push(...(await formatDebugForTf(sym, "1d", barsAgo)));
   lines.push("");
-  lines.push(...(await formatDebugForTf(sym, "1h")));
+  lines.push(...(await formatDebugForTf(sym, "1h", barsAgo)));
   return lines.join("\n");
 }
 
@@ -659,18 +749,37 @@ export async function formatCandleReversalDebugMessage(rawSymbol: string, tf?: C
 export const formatCandleReversal1dDebugMessage = (rawSymbol: string) =>
   formatCandleReversalDebugMessage(rawSymbol, "1d");
 
-export function parseCandleReversalDebugCommand(text: string): { symbol: string; tf?: CandleReversalTf } | null {
+export type CandleReversalDebugCommand = {
+  symbol: string;
+  tf?: CandleReversalTf;
+  barsAgo?: number;
+};
+
+function parseCandleReversalBarsAgo(raw: string | undefined): number | undefined {
+  if (!raw?.trim()) return undefined;
+  const m = raw.trim().match(/^@?(\d+)$/);
+  if (!m?.[1]) return undefined;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n < 0 || n > 400) return undefined;
+  return Math.floor(n);
+}
+
+export function parseCandleReversalDebugCommand(text: string): CandleReversalDebugCommand | null {
   const t = text.trim();
-  let m = t.match(/^(?:debug\s+)?(?:candle\s+)?reversal\s+1h(?:@\S+)?\s+(\S+)\s*$/i);
-  if (m?.[1]) return { symbol: m[1].trim(), tf: "1h" };
-  m = t.match(/^(?:debug\s+)?(?:candle\s+)?reversal\s+1d(?:@\S+)?\s+(\S+)\s*$/i);
-  if (m?.[1]) return { symbol: m[1].trim(), tf: "1d" };
-  m = t.match(/^(?:debug\s+)?reversal\s+alert(?:@\S+)?\s+(\S+)\s*$/i);
-  if (m?.[1]) return { symbol: m[1].trim() };
-  m = t.match(/^#reversal1hdebug\s+(\S+)\s*$/i);
-  if (m?.[1]) return { symbol: m[1].trim(), tf: "1h" };
-  m = t.match(/^#reversal1ddebug\s+(\S+)\s*$/i);
-  if (m?.[1]) return { symbol: m[1].trim(), tf: "1d" };
+  let m = t.match(/^(?:debug\s+)?(?:candle\s+)?reversal\s+1h(?:@\S+)?\s+(\S+?)(?:\s+(@?\d+))?\s*$/i);
+  if (m?.[1]) {
+    return { symbol: m[1].trim(), tf: "1h", barsAgo: parseCandleReversalBarsAgo(m[2]) };
+  }
+  m = t.match(/^(?:debug\s+)?(?:candle\s+)?reversal\s+1d(?:@\S+)?\s+(\S+?)(?:\s+(@?\d+))?\s*$/i);
+  if (m?.[1]) {
+    return { symbol: m[1].trim(), tf: "1d", barsAgo: parseCandleReversalBarsAgo(m[2]) };
+  }
+  m = t.match(/^(?:debug\s+)?reversal\s+alert(?:@\S+)?\s+(\S+?)(?:\s+(@?\d+))?\s*$/i);
+  if (m?.[1]) return { symbol: m[1].trim(), barsAgo: parseCandleReversalBarsAgo(m[2]) };
+  m = t.match(/^#reversal1hdebug\s+(\S+?)(?:\s+(@?\d+))?\s*$/i);
+  if (m?.[1]) return { symbol: m[1].trim(), tf: "1h", barsAgo: parseCandleReversalBarsAgo(m[2]) };
+  m = t.match(/^#reversal1ddebug\s+(\S+?)(?:\s+(@?\d+))?\s*$/i);
+  if (m?.[1]) return { symbol: m[1].trim(), tf: "1d", barsAgo: parseCandleReversalBarsAgo(m[2]) };
   return null;
 }
 

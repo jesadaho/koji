@@ -412,7 +412,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
     try {
-      const body = await formatCandleReversalDebugMessage(revDbg.symbol, revDbg.tf);
+      const body = await formatCandleReversalDebugMessage(revDbg.symbol, revDbg.tf, {
+        barsAgo: revDbg.barsAgo,
+      });
       await sendTelegramMessageToChat(String(chatId), body, threadOpts);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);

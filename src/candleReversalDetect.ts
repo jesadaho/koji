@@ -255,15 +255,27 @@ export function evalLongestRedBody1h(
   return buildSignal("1h", "longest_red_body", pack, i, 0, body / range, retestPrice, slPrice, hadRecentInvertedDoji);
 }
 
-export function evalCandleReversalClosedBar(
+/** index แท่งปิดล่าสุด (ไม่รวมแท่งกำลังก่อตัว) */
+export function candleReversalLatestClosedBarIndex(pack: BinanceKlinePack): number {
+  return pack.close.length - 2;
+}
+
+/** index จากจำนวนแท่งย้อนหลังจากแท่งปิดล่าสุด (0 = ปิดล่าสุด) */
+export function candleReversalBarIndexBarsAgo(pack: BinanceKlinePack, barsAgo: number): number {
+  const ago = Math.max(0, Math.floor(barsAgo));
+  return candleReversalLatestClosedBarIndex(pack) - ago;
+}
+
+/** ประเมิน reversal ที่ index แท่งปิดที่กำหนด */
+export function evalCandleReversalAtBarIndex(
   tf: CandleReversalTf,
   pack: BinanceKlinePack,
+  barIndex: number,
   env1d: CandleReversal1dDetectEnv,
   env1h: CandleReversal1hDetectEnv,
   opts?: { hadRecentInvertedDoji?: boolean },
 ): CandleReversalSignal | null {
-  const n = pack.close.length;
-  const i = n - 2;
+  const i = barIndex;
   const hadDoji = Boolean(opts?.hadRecentInvertedDoji);
 
   if (tf === "1h") {
@@ -277,6 +289,18 @@ export function evalCandleReversalClosedBar(
   const marubozu = evalMarubozu1d(pack, i, env1d, hadDoji);
   if (marubozu) return marubozu;
   return evalInvertedDoji1d(pack, i, env1d);
+}
+
+export function evalCandleReversalClosedBar(
+  tf: CandleReversalTf,
+  pack: BinanceKlinePack,
+  env1d: CandleReversal1dDetectEnv,
+  env1h: CandleReversal1hDetectEnv,
+  opts?: { hadRecentInvertedDoji?: boolean },
+): CandleReversalSignal | null {
+  const i = candleReversalLatestClosedBarIndex(pack);
+  if (i < 0) return null;
+  return evalCandleReversalAtBarIndex(tf, pack, i, env1d, env1h, opts);
 }
 
 /** @deprecated */
