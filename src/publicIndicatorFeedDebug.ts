@@ -16,6 +16,7 @@ import {
   publicRsiEmaCrossTf,
   snowballConfirmBarEnabled,
   snowballSkipTelegramWhenPendingConfirm,
+  snowballLongBreakout1hConfirmEnabled,
   snowballTwoBarInlineModeEnabled,
   snowballWaveGateEnabled,
   type SnowballChecklistResult,
@@ -531,6 +532,12 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
   for (const s of res.paramsSummary) lines.push(`  • ${s}`);
   lines.push("");
 
+  if (res.longBreakout1hNotes && res.longBreakout1hNotes.length > 0) {
+    lines.push("— Long Breakout Entry (1H confirm) —");
+    for (const n of res.longBreakout1hNotes) lines.push(`  • ${n}`);
+    lines.push("");
+  }
+
   if (res.twoBarInlineNotes && res.twoBarInlineNotes.length > 0) {
     lines.push("— two-bar inline —");
     for (const n of res.twoBarInlineNotes) lines.push(`  • ${n}`);
@@ -541,7 +548,17 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
 
   if (res.long.closed || res.long.intrabar) {
     lines.push("— LONG (BULL) —");
-    const twoBarDual = Boolean(res.twoBarConfirmGateRows);
+    if (res.longBreakout1hConfirmGateRows?.length) {
+      lines.push(
+        "  โหมด Breakout Entry: สัญญาณ = แท่ง Snowball ปิดล่าสุด · ยืนยัน = แท่ง 1H ปิดล่าสุด (ไม่ใช้ two-bar inline ฝั่ง Long)",
+      );
+      lines.push(...renderSnowballSideBlock("สัญญาณ (แท่ง Snowball ปิดล่าสุด)", res.long.closed, res.snowTf, nowMs));
+      lines.push("");
+      lines.push(
+        ...renderGateStepsBlock("Breakout confirm (แท่ง 1H ปิดล่าสุด)", res.longBreakout1hConfirmGateRows),
+      );
+    }
+    const twoBarDual = Boolean(res.twoBarConfirmGateRows) && !res.longBreakout1hConfirmGateRows?.length;
     if (twoBarDual) {
       lines.push(
         "  โหมด two-bar inline: แท่งสัญญาณ ① = ปิดก่อนล่าสุด (iClosed−1 = n−3) · แท่ง confirm ② = ปิดล่าสุด (iClosed = n−2) · แท่ง ③ กำลังก่อ = n−1 (ไม่ใช้ใน checklist ปิด) — dedupe/cooldown ในรายการสัญญาณเทียบเวลาเปิดแท่ง confirm",
@@ -551,12 +568,12 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
         lines.push("");
         lines.push(...renderGateStepsBlock("Confirm inline (แท่งปิดล่าสุด · LONG)", res.twoBarConfirmGateRows.long));
       }
-    } else {
+    } else if (!res.longBreakout1hConfirmGateRows?.length) {
       lines.push(
         "  📎 แท่งใน Binance array: สุดท้าย (n−1) = กำลังก่อ · n−2 = ปิดล่าสุด (บรรทัดด้านล่าง) · n−3 = ปิดก่อนล่าสุด",
       );
       lines.push(
-        "  📎 เทียบกราฟ ①สัญญาณ ②confirm ③ก่อ: บรรทัดถัดไป = checklist ที่ ② (iClosed) แบบแท่งเดียว — โหมดสองแท่งที่ ①+② ใช้เมื่อ two-bar inline เปิดและมีข้อมูล iClosed≥2; ถ้าต้องการแท่งเดียวแบบ legacy ตั้ง INDICATOR_PUBLIC_SNOWBALL_TWO_BAR_INLINE_ENABLED=0",
+        "  📎 เทียบกราฟ ①สัญญาณ ②confirm ③ก่อ: บรรทัดถัดไป = checklist ที่ ② (iClosed) แบบแท่งเดียว — โหมดสองแท่งที่ ①+② ใช้เมื่อ two-bar inline เปิดและมีข้อมูล iClosed≥2; Breakout 1H เปิดอยู่จะใช้ยืนยัน 1H แทน two-bar ฝั่ง Long",
       );
       lines.push(
         ...renderSnowballSideBlock("แท่งปิดล่าสุด (iClosed) — โหมดแท่งเดียว", res.long.closed, res.snowTf, nowMs),
@@ -627,11 +644,14 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
     lines.push("");
   }
 
+  const breakout1hOn = snowballLongBreakout1hConfirmEnabled();
   const twoBarOn = snowballTwoBarInlineModeEnabled();
   lines.push(
-    twoBarOn
-      ? "หมายเหตุ: two-bar inline เปิด — PASS สัญญาณ = แท่งปิดก่อนล่าสุด (ไม่นับ body/range บนแท่งสัญญาณ); ต่อด้วยขั้น Confirm inline; wave gate ใช้ราคาปิดแท่ง confirm; บล็อก confirm-bar risk เป็น label บนแท่งสัญญาณเพื่ออ้างอิง (ไม่คิว pending)"
-      : "หมายเหตุ: PASS ด้านบน = เฉพาะ technical checklist (volume / swing / body / dedupe / cooldown); wave gate + confirm-bar สรุปผลยิง TG ในบล็อก «ผลยิง Telegram» และรายละเอียดด้านล่าง",
+    breakout1hOn
+      ? "หมายเหตุ: Long Breakout Entry เปิด — ยืนยันด้วยแท่ง 1H ปิดเดียว (close > high ก่อนหน้า ex 3–4 · body/range · vol×SMA); ไม่ใช้ two-bar inline ฝั่ง Long; auto-open ที่ราคาปิด 1H"
+      : twoBarOn
+        ? "หมายเหตุ: two-bar inline เปิด — PASS สัญญาณ = แท่งปิดก่อนล่าสุด (ไม่นับ body/range บนแท่งสัญญาณ); ต่อด้วยขั้น Confirm inline; wave gate ใช้ราคาปิดแท่ง confirm; บล็อก confirm-bar risk เป็น label บนแท่งสัญญาณเพื่ออ้างอิง (ไม่คิว pending)"
+        : "หมายเหตุ: PASS ด้านบน = เฉพาะ technical checklist (volume / swing / body / dedupe / cooldown); wave gate + confirm-bar สรุปผลยิง TG ในบล็อก «ผลยิง Telegram» และรายละเอียดด้านล่าง",
   );
   lines.push("checklist จำลองจาก kline ล่าสุดที่ขอ + state cooldown ปัจจุบัน");
   lines.push("รอบจริงสแกนทุก ~15 นาที ที่ /api/cron/price-sync (แท่งปิดตาม TF Snowball)");
