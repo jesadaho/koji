@@ -181,8 +181,8 @@ export function evalInvertedDoji1d(
   const hh200 = maxHighPriorWindow(h, i, env.hh200Lookback, env.hh200ExcludeRecent);
   const priorTailMax = maxHighPriorWindow(h, i, env.highestTailLookback, 0);
   const athContext =
-    (Number.isFinite(hh200) && c[i]! > hh200) ||
-    (Number.isFinite(priorTailMax) && h[i]! >= priorTailMax);
+    (Number.isFinite(hh200) && h[i]! > hh200 - eps) ||
+    (Number.isFinite(priorTailMax) && h[i]! >= priorTailMax - eps);
   if (!athContext) return null;
 
   const allTimePriorMax = maxHighPriorWindow(h, i, Math.max(env.hh200Lookback, i), 0);
@@ -446,6 +446,101 @@ export function candleReversal1hInvertedDojiCheckLines(
   const highOk = Number.isFinite(windowMax) && h[i]! >= windowMax - eps;
   lines.push(
     `  high สูงสุดในรอบ: ${checkMark(highOk)} (H ${fmtReversalPrice(h[i]!)} vs max ${fmtReversalPrice(windowMax)})`,
+  );
+
+  return lines;
+}
+
+/** รายการเกณฑ์ inverted_doji 1D สำหรับ debug */
+export function candleReversal1dInvertedDojiCheckLines(
+  pack: BinanceKlinePack,
+  barIndex: number,
+  env: CandleReversal1dDetectEnv = DEFAULT_CANDLE_REVERSAL_1D_ENV,
+): string[] {
+  const i = barIndex;
+  const { open: o, high: h, low: l, close: c } = pack;
+  const lines: string[] = [];
+  lines.push(
+    `เกณฑ์ inverted_doji 1D (ไส้≥${(env.wickMinRatio * 100).toFixed(0)}% · เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}% · HH${env.hh200Lookback}/tail${env.highestTailLookback}):`,
+  );
+
+  const range = h[i]! - l[i]!;
+  const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
+  const body = Math.abs(c[i]! - o[i]!);
+  const upperWick = h[i]! - Math.max(o[i]!, c[i]!);
+  const wickRatio = upperWick / range;
+  const bodyRatio = body / range;
+  lines.push(
+    `  ไส้บน≥${(env.wickMinRatio * 100).toFixed(0)}%: ${checkMark(wickRatio >= env.wickMinRatio)} (${(wickRatio * 100).toFixed(1)}%)`,
+  );
+  lines.push(
+    `  เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}%: ${checkMark(bodyRatio <= env.bodyMaxRatio)} (${(bodyRatio * 100).toFixed(1)}%)`,
+  );
+
+  const hh200 = maxHighPriorWindow(h, i, env.hh200Lookback, env.hh200ExcludeRecent);
+  const priorTailMax = maxHighPriorWindow(h, i, env.highestTailLookback, 0);
+  const athContext =
+    (Number.isFinite(hh200) && h[i]! > hh200 - eps) ||
+    (Number.isFinite(priorTailMax) && h[i]! >= priorTailMax - eps);
+  lines.push(
+    `  บริบท ATH/tail: ${checkMark(athContext)} (H>${fmtReversalPrice(hh200)} HH200 หรือ H≥tail ${fmtReversalPrice(priorTailMax)})`,
+  );
+
+  const allTimePriorMax = maxHighPriorWindow(h, i, Math.max(env.hh200Lookback, i), 0);
+  const highestTail =
+    (Number.isFinite(priorTailMax) && h[i]! >= priorTailMax) ||
+    (Number.isFinite(allTimePriorMax) && h[i]! >= allTimePriorMax);
+  lines.push(
+    `  high ปลายไส้สูงสุด: ${checkMark(highestTail)} (H ${fmtReversalPrice(h[i]!)} vs tail ${fmtReversalPrice(priorTailMax)} / prior ${fmtReversalPrice(allTimePriorMax)})`,
+  );
+
+  return lines;
+}
+
+/** รายการเกณฑ์ marubozu 1D สำหรับ debug */
+export function candleReversal1dMarubozuCheckLines(
+  pack: BinanceKlinePack,
+  barIndex: number,
+  env: CandleReversal1dDetectEnv = DEFAULT_CANDLE_REVERSAL_1D_ENV,
+): string[] {
+  const i = barIndex;
+  const { open: o, high: h, low: l, close: c } = pack;
+  const lines: string[] = [];
+  const lb = env.marubozuBodyLookback;
+  lines.push(`เกณฑ์ marubozu 1D (lookback ${lb} แท่ง · กลืนเขียว · ปิดใต้ EMA${env.marubozuEmaPeriod}):`);
+
+  const red = c[i]! < o[i]!;
+  lines.push(`  แท่งแดง C<O: ${checkMark(red)}`);
+
+  const body = o[i]! - c[i]!;
+  const range = h[i]! - l[i]!;
+  const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
+  const winStart = Math.max(0, i - lb + 1);
+  const windowHighMax = maxHighInWindowInclusive(h, winStart, i);
+  const highOk = Number.isFinite(windowHighMax) && h[i]! >= windowHighMax - eps;
+  lines.push(
+    `  high สูงสุดใน ${lb} แท่ง: ${checkMark(highOk)} (H ${fmtReversalPrice(h[i]!)} vs max ${fmtReversalPrice(windowHighMax)})`,
+  );
+
+  const maxRedBody = maxRedBodyInWindow(o, c, winStart, i);
+  const bodyLongestOk = Number.isFinite(maxRedBody) && body >= maxRedBody - eps;
+  lines.push(
+    `  เนื้อแดงยาวสุดในรอบ: ${checkMark(bodyLongestOk)} (เนื้อ ${fmtReversalPrice(body)} vs max ${fmtReversalPrice(maxRedBody)})`,
+  );
+
+  const prevGreen = i >= 1 && c[i - 1]! > o[i - 1]!;
+  const prevBody = i >= 1 ? c[i - 1]! - o[i - 1]! : 0;
+  const engulfDepth = i >= 1 ? o[i - 1]! - c[i]! : 0;
+  const engulfOk =
+    i >= 1 &&
+    (c[i]! <= o[i - 1]! || (prevBody > eps && engulfDepth >= prevBody * env.marubozuEngulfMinRatio));
+  lines.push(`  แท่งก่อนเขียว+กลืน: ${checkMark(prevGreen && engulfOk)}`);
+
+  const ema = emaLine(c, env.marubozuEmaPeriod);
+  const eNow = ema[i];
+  const underEma = Number.isFinite(eNow) && c[i]! < (eNow as number);
+  lines.push(
+    `  ปิดใต้ EMA${env.marubozuEmaPeriod}: ${checkMark(underEma)} (C ${fmtReversalPrice(c[i]!)} · EMA ${fmtReversalPrice(eNow as number)})`,
   );
 
   return lines;

@@ -41,6 +41,8 @@ import {
   evalInvertedDoji1h,
   evalLongestRedBody1h,
   evalMarubozu1d,
+  candleReversal1dInvertedDojiCheckLines,
+  candleReversal1dMarubozuCheckLines,
   candleReversal1hInvertedDojiCheckLines,
   candleReversal1hLongestRedBodyCheckLines,
   fmtReversalPrice,
@@ -708,6 +710,12 @@ async function formatDebugForTf(sym: string, tf: CandleReversalTf, barsAgo = 0):
   lines.push(`  inverted_doji: ${inverted ? "✓" : "—"}`);
   if (tf === "1d") lines.push(`  marubozu: ${marubozu ? "✓" : "—"}`);
   if (tf === "1h") lines.push(`  longest_red_body: ${longest ? "✓" : "—"}`);
+  if (tf === "1d") {
+    lines.push("");
+    lines.push(...candleReversal1dInvertedDojiCheckLines(pack, i, env1d));
+    lines.push("");
+    lines.push(...candleReversal1dMarubozuCheckLines(pack, i, env1d));
+  }
   if (tf === "1h") {
     lines.push("");
     lines.push(...candleReversal1hLongestRedBodyCheckLines(pack, i, env1h));
