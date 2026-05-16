@@ -648,7 +648,7 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
   const twoBarOn = snowballTwoBarInlineModeEnabled();
   lines.push(
     breakout1hOn
-      ? "หมายเหตุ: Long Breakout Entry เปิด — ยืนยันด้วยแท่ง 1H ปิดเดียว (close > high ก่อนหน้า ex 3–4 · body/range · vol×SMA); ไม่ใช้ two-bar inline ฝั่ง Long; auto-open ที่ราคาปิด 1H"
+      ? "หมายเหตุ: Long Breakout Entry เปิด — ยืนยัน 1H (clean close · Dynamic body/God Vol · vol×SMA · อันดับ vol top-2 ใน 48 แท่ง); ไม่ใช้ two-bar inline ฝั่ง Long; auto-open ที่ราคาปิด 1H"
       : twoBarOn
         ? "หมายเหตุ: two-bar inline เปิด — PASS สัญญาณ = แท่งปิดก่อนล่าสุด (ไม่นับ body/range บนแท่งสัญญาณ); ต่อด้วยขั้น Confirm inline; wave gate ใช้ราคาปิดแท่ง confirm; บล็อก confirm-bar risk เป็น label บนแท่งสัญญาณเพื่ออ้างอิง (ไม่คิว pending)"
         : "หมายเหตุ: PASS ด้านบน = เฉพาะ technical checklist (volume / swing / body / dedupe / cooldown); wave gate + confirm-bar สรุปผลยิง TG ในบล็อก «ผลยิง Telegram» และรายละเอียดด้านล่าง",

@@ -28,6 +28,12 @@ import {
   resolveSnowballLongAutotradeSide,
   type SnowballGradeCShortFadeResult,
 } from "./snowballGradeCShortFade";
+import {
+  buildSnowballLongBreakout1hConfirmGateSteps,
+  evaluateSnowballLongBreakout1hConfirm,
+  formatSnowballLongBreakout1hCriteriaSummary,
+  type SnowballLongBreakout1hConfirmEval,
+} from "./snowballLongBreakoutConfirm";
 import { appendSnowballStatsRow, loadSnowballStatsState, type SnowballStatsRow } from "./snowballStatsStore";
 import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
@@ -217,23 +223,18 @@ function snowballSwingExcludeRecentBars(): number {
 
 /**
  * Long Breakout Entry — ยืนยันด้วยแท่ง 1H ปิดเดียว (แทน two-bar inline ฝั่ง Long)
- * เมื่อ high เดิมอยู่ 3–4 แท่งก่อนหน้า: ปิด > prior high · body/range > เกณฑ์ · vol > SMA×mult
+ * Logic ใน snowballLongBreakoutConfirm.ts — Dynamic body + God Vol + อันดับ vol top-N
  */
 export function snowballLongBreakout1hConfirmEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_LONG_BREAKOUT_1H_CONFIRM_ENABLED", true);
 }
 
-export function snowballLongBreakout1hBodyMinRatio(): number {
-  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_BREAKOUT_1H_BODY_MIN_RATIO);
-  if (Number.isFinite(v) && v > 0 && v <= 1) return v;
-  return 0.6;
-}
-
-export function snowballLongBreakout1hVolMult(): number {
-  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_BREAKOUT_1H_VOL_MULT);
-  if (Number.isFinite(v) && v >= 1 && v <= 10) return v;
-  return 1.5;
-}
+export {
+  snowballLongBreakout1hBodyMinRatio,
+  snowballLongBreakout1hVolMult,
+  evaluateSnowballLongBreakout1hConfirm,
+  type SnowballLongBreakout1hConfirmEval,
+} from "./snowballLongBreakoutConfirm";
 
 /** Lookback สำหรับ high24h_before บน 1H — ค่าเริ่มเท่า Swing HH48 */
 function snowballLongBreakout1hSwingLookback(): number {
@@ -248,118 +249,6 @@ function snowballLongBreakout1hExcludeRecent(): number {
   if (Number.isFinite(v) && v >= 3 && v <= 4) return Math.floor(v);
   const ex = snowballSwingExcludeRecentBars();
   return ex >= 3 && ex <= 4 ? ex : 3;
-}
-
-export type SnowballLongBreakout1hConfirmEval = {
-  ok: boolean;
-  i1h: number;
-  barOpenSec: number;
-  close: number;
-  open: number;
-  priorMaxHigh: number;
-  bodyRatio: number;
-  volRatio: number;
-  cleanCloseOk: boolean;
-  bodyOk: boolean;
-  volOk: boolean;
-  detail: string;
-};
-
-function volumeSmaAtIndex(volume: number[], idx: number, period: number): number {
-  const start = Math.max(0, idx - (period - 1));
-  let sum = 0;
-  let n = 0;
-  for (let i = start; i <= idx; i++) {
-    const v = volume[i];
-    if (typeof v === "number" && Number.isFinite(v)) {
-      sum += v;
-      n++;
-    }
-  }
-  return n > 0 ? sum / n : NaN;
-}
-
-/** เกณฑ์ Breakout Entry บนแท่ง 1H ปิดล่าสุด */
-export function evaluateSnowballLongBreakout1hConfirm(
-  pack1h: BinanceKlinePack | null,
-  swingLookback?: number,
-  excludeRecent?: number,
-): SnowballLongBreakout1hConfirmEval | null {
-  if (!pack1h?.timeSec?.length) return null;
-  const lb = swingLookback ?? snowballLongBreakout1hSwingLookback();
-  const ex = excludeRecent ?? snowballLongBreakout1hExcludeRecent();
-  const bodyMin = snowballLongBreakout1hBodyMinRatio();
-  const volMult = snowballLongBreakout1hVolMult();
-  const volPeriod = snowballVolSmaPeriod();
-
-  const { open, high, low, close, volume, timeSec } = pack1h;
-  const n = close.length;
-  const i1h = n - 2;
-  const minBars = lb + ex + 3;
-  if (i1h < minBars) {
-    return {
-      ok: false,
-      i1h,
-      barOpenSec: typeof timeSec[i1h] === "number" ? timeSec[i1h]! : -1,
-      close: NaN,
-      open: NaN,
-      priorMaxHigh: NaN,
-      bodyRatio: NaN,
-      volRatio: NaN,
-      cleanCloseOk: false,
-      bodyOk: false,
-      volOk: false,
-      detail: `แท่ง 1H ไม่พอ (ต้อง ≥ ${minBars} แท่งปิด)`,
-    };
-  }
-
-  const o = open[i1h]!;
-  const h = high[i1h]!;
-  const l = low[i1h]!;
-  const c = close[i1h]!;
-  const v = volume[i1h]!;
-  const barOpenSec = timeSec[i1h]!;
-  if (
-    !Number.isFinite(o) ||
-    !Number.isFinite(h) ||
-    !Number.isFinite(l) ||
-    !Number.isFinite(c) ||
-    !Number.isFinite(v) ||
-    !Number.isFinite(barOpenSec)
-  ) {
-    return null;
-  }
-
-  const priorMaxHigh = maxHighPriorWindow(high, i1h, lb, ex);
-  const cleanCloseOk = Number.isFinite(priorMaxHigh) && c > priorMaxHigh;
-  const range = h - l;
-  const bodyRatio = range > 0 && c > o ? (c - o) / range : 0;
-  const bodyOk = c > o && bodyRatio > bodyMin;
-  const volSma = volumeSmaAtIndex(volume, i1h, volPeriod);
-  const volRatio = Number.isFinite(volSma) && volSma > 0 ? v / volSma : NaN;
-  const volOk = Number.isFinite(volRatio) && volRatio >= volMult;
-
-  const ok = cleanCloseOk && bodyOk && volOk;
-  const detail = [
-    `close ${fmtNum(c)} ${cleanCloseOk ? ">" : "≤"} high${lb}_before (ex ${ex}) ${fmtNum(priorMaxHigh)}`,
-    `body/range ${(bodyRatio * 100).toFixed(1)}% ${bodyOk ? ">" : "≤"} ${(bodyMin * 100).toFixed(0)}% (เขียว)`,
-    `vol ${Number.isFinite(volRatio) ? `${volRatio.toFixed(2)}x` : "—"} SMA(${volPeriod}) ${volOk ? "≥" : "<"} ${volMult}x`,
-  ].join(" · ");
-
-  return {
-    ok,
-    i1h,
-    barOpenSec,
-    close: c,
-    open: o,
-    priorMaxHigh,
-    bodyRatio,
-    volRatio,
-    cleanCloseOk,
-    bodyOk,
-    volOk,
-    detail,
-  };
 }
 
 function snowballVolSmaPeriod(): number {
@@ -4247,47 +4136,6 @@ function buildSnowballTwoBarConfirmGateSteps(
   return { long: longSteps, bear: bearSteps };
 }
 
-/** ขั้น confirm Breakout Entry บนแท่ง 1H ปิดล่าสุด */
-function buildSnowballLongBreakout1hConfirmGateSteps(
-  pack1h: BinanceKlinePack | null,
-  swingLookback: number,
-  excludeRecent: number,
-): SnowballCheckStep[] {
-  const ev = evaluateSnowballLongBreakout1hConfirm(pack1h, swingLookback, excludeRecent);
-  if (!ev) {
-    return [
-      {
-        id: "breakout1hPack",
-        label: "Breakout 1H confirm",
-        ok: false,
-        detail: "ไม่มีข้อมูล 1h",
-      },
-    ];
-  }
-  const bodyMin = snowballLongBreakout1hBodyMinRatio();
-  const volMult = snowballLongBreakout1hVolMult();
-  return [
-    {
-      id: "breakout1hCleanClose",
-      label: "Clean close > high before (1H)",
-      ok: ev.cleanCloseOk,
-      detail: `close=${fmtNum(ev.close)} vs priorMaxHigh=${fmtNum(ev.priorMaxHigh)} (lb=${swingLookback} ex=${excludeRecent})`,
-    },
-    {
-      id: "breakout1hBody",
-      label: `Strong body (close-open)/range > ${(bodyMin * 100).toFixed(0)}%`,
-      ok: ev.bodyOk,
-      detail: `body/range=${(ev.bodyRatio * 100).toFixed(1)}% · แท่งเขียว=${ev.close > ev.open ? "ใช่" : "ไม่"}`,
-    },
-    {
-      id: "breakout1hVol",
-      label: `Volume > SMA×${volMult}`,
-      ok: ev.volOk,
-      detail: `vol/SMA=${Number.isFinite(ev.volRatio) ? `${ev.volRatio.toFixed(2)}x` : "—"}`,
-    },
-  ];
-}
-
 function fmtBarBkkFromOpenSec(openSec: number): string {
   const d = new Date(openSec * 1000);
   const date = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
@@ -4697,7 +4545,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     `EMA resistance period: ${emaResP}`,
     `Public cooldown: ${Math.round(publicCooldownMs() / 60000)} นาที`,
     snowballLongBreakout1hConfirmEnabled()
-      ? `Long Breakout 1H confirm: on (body>${snowballLongBreakout1hBodyMinRatio()} · vol×${snowballLongBreakout1hVolMult()} · ex ${snowballLongBreakout1hExcludeRecent()} แท่ง)`
+      ? `Long Breakout 1H confirm: on (${formatSnowballLongBreakout1hCriteriaSummary(snowballLongBreakout1hExcludeRecent())})`
       : "Long Breakout 1H confirm: off",
     snowballTwoBarInlineModeEnabled()
       ? "Two-bar inline: on (BEAR + legacy LONG ถ้าปิด Breakout 1H) — ดูบล็อกด้านล่าง"
@@ -4849,8 +4697,8 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     );
     baseResult.longBreakout1hNotes = [
       "Long Breakout Entry: สัญญาณบน TF Snowball + ยืนยันด้วยแท่ง 1H ปิดล่าสุด (ไม่ใช้ two-bar inline ฝั่ง Long)",
-      `เกณฑ์ 1H: close > high ก่อนหน้า (ex ${snowballLongBreakout1hExcludeRecent()} แท่ง) · body/range > ${(snowballLongBreakout1hBodyMinRatio() * 100).toFixed(0)}% · vol > SMA×${snowballLongBreakout1hVolMult()}`,
-      b1h ? `ล่าสุด: ${b1h.ok ? "ผ่าน" : "ไม่ผ่าน"} — ${b1h.detail}` : "ยังประเมิน 1H ไม่ได้",
+      `เกณฑ์ 1H: ${formatSnowballLongBreakout1hCriteriaSummary(snowballLongBreakout1hExcludeRecent())}`,
+      b1h ? `ล่าสุด: ${b1h.ok ? "ผ่าน" : "ไม่ผ่าน"}${b1h.bodyPassMode === "god_volume" ? " (God Vol)" : ""} — ${b1h.detail}` : "ยังประเมิน 1H ไม่ได้",
     ];
     if (snowballTwoBarInlineModeEnabled() && iClosed >= 2) {
       const iSig = iClosed - 1;
