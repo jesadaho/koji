@@ -11,7 +11,6 @@ import {
   snowballStatsBarRangePctLabel,
   snowballStatsDayOfWeekBkk,
   snowballStatsGradeLabel,
-  snowballStatsVolMetricLabel,
   snowballStatsVolScoreLabel,
   type SnowballStatsApiPayload,
   type SnowballStatsRow,
@@ -22,7 +21,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "Binance USDT-M · R% ก่อน/สัญญาณ/2แท่ง = (H−L)/Close×100 · Range/Wick score · ATR/MaxWick = Ref · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
+  "Binance USDT-M · Range = (H−L)/ATR(100) · Wick = UpperWick/MaxWick(100) · R% 2แท่ง = (H−L)/Close แท่งก่อน+สัญญาณ · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -342,8 +341,6 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">วัน</th>
                 <th scope="col">เวลา (BKK)</th>
                 <th scope="col">Entry</th>
-                <th scope="col">ATR(100)</th>
-                <th scope="col">Max Wick(100)</th>
                 <th scope="col">Range</th>
                 <th scope="col">Wick</th>
                 <th scope="col">R% ก่อน</th>
@@ -363,7 +360,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={19} className="sub">
+                  <td colSpan={20} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -384,8 +381,6 @@ export default function SnowballStatsTelegramMiniApp() {
                       <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
                     </td>
                     <td>{fmtPrice(r.entryPrice)}</td>
-                    <td>{snowballStatsVolMetricLabel(r.atr100, r.entryPrice)}</td>
-                    <td>{snowballStatsVolMetricLabel(r.maxUpperWick100, r.entryPrice)}</td>
                     <td>{snowballStatsVolScoreLabel(r.rangeScore)}</td>
                     <td>{snowballStatsVolScoreLabel(r.wickScore)}</td>
                     <td>{snowballStatsBarRangePctLabel(r.barRangePctPrev)}</td>
