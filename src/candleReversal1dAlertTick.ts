@@ -96,8 +96,9 @@ function maxAlertsPerRun(): number {
 
 function klineFetchLimit(tf: CandleReversalTf): number {
   if (tf === "1h") {
-    const lb = detectEnv1h().longestRedBodyLookback;
-    return Math.min(500, Math.max(130, lb + 110));
+    const env1h = detectEnv1h();
+    const lb = Math.max(env1h.highestHighLookback, env1h.longestRedBodyLookback, env1h.emaPeriod);
+    return Math.min(500, Math.max(220, lb + 30));
   }
   const need = DEFAULT_CANDLE_REVERSAL_1D_ENV.hh200Lookback + DEFAULT_CANDLE_REVERSAL_1D_ENV.hh200ExcludeRecent + 30;
   return Math.min(500, Math.max(110, need));
@@ -134,7 +135,7 @@ function detectEnv1h(): CandleReversal1hDetectEnv {
   const bodyMax = Number(process.env.CANDLE_REVERSAL_1H_BODY_MAX_RATIO?.trim());
   if (Number.isFinite(bodyMax) && bodyMax > 0.05 && bodyMax < 0.35) env.bodyMaxRatio = bodyMax;
   const hhLb = Number(process.env.CANDLE_REVERSAL_1H_HIGHEST_HIGH_LOOKBACK?.trim());
-  if (Number.isFinite(hhLb) && hhLb >= 8 && hhLb <= 72) env.highestHighLookback = Math.floor(hhLb);
+  if (Number.isFinite(hhLb) && hhLb >= 8 && hhLb <= 500) env.highestHighLookback = Math.floor(hhLb);
   const redLb = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_LOOKBACK?.trim());
   if (Number.isFinite(redLb) && redLb >= 8 && redLb <= 72) env.longestRedBodyLookback = Math.floor(redLb);
   const redRatio = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_MIN_RATIO?.trim());

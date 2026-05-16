@@ -122,7 +122,7 @@ export const DEFAULT_CANDLE_REVERSAL_1D_ENV: CandleReversal1dDetectEnv = {
 };
 
 export const DEFAULT_CANDLE_REVERSAL_1H_ENV: CandleReversal1hDetectEnv = {
-  highestHighLookback: 24,
+  highestHighLookback: 200,
   wickMinRatio: 0.65,
   bodyMaxRatio: 0.2,
   longestRedBodyLookback: 24,
@@ -196,7 +196,7 @@ export function evalInvertedDoji1d(
   return buildSignal("1d", "inverted_doji", pack, i, wickRatio, bodyRatio, retestPrice, slPrice, false);
 }
 
-/** 1H inverted doji ที่ high สูงสุดในรอบ N แท่ง (ดีฟอลต์ 24h) */
+/** 1H inverted doji ที่ high สูงสุดในรอบ N แท่ง (ดีฟอลต์ 200) */
 export function evalInvertedDoji1h(
   pack: BinanceKlinePack,
   i: number,
