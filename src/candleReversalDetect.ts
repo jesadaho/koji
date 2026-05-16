@@ -116,7 +116,7 @@ export const DEFAULT_CANDLE_REVERSAL_1D_ENV: CandleReversal1dDetectEnv = {
   wickMinRatio: 0.65,
   bodyMaxRatio: 0.15,
   marubozuBodyLookback: 48,
-  marubozuEngulfMinRatio: 0.8,
+  marubozuEngulfMinRatio: 0.7,
   marubozuEmaPeriod: 20,
   slBufferPct: 0.001,
 };
@@ -248,13 +248,7 @@ export function evalMarubozu1d(
   const prevGreen = c[i - 1]! > o[i - 1]!;
   if (!prevGreen) return null;
   const prevBody = c[i - 1]! - o[i - 1]!;
-  const engulfDepth = o[i - 1]! - c[i]!;
-  const engulfOk = c[i]! <= o[i - 1]! || (prevBody > eps && engulfDepth >= prevBody * env.marubozuEngulfMinRatio);
-  if (!engulfOk) return null;
-
-  const ema = emaLine(c, env.marubozuEmaPeriod);
-  const eNow = ema[i];
-  if (!Number.isFinite(eNow) || c[i]! >= (eNow as number)) return null;
+  if (!(prevBody > eps && body >= prevBody * env.marubozuEngulfMinRatio)) return null;
 
   const retest50 = c[i]! + body * 0.5;
   const retest382 = c[i]! + body * 0.382;
@@ -507,7 +501,9 @@ export function candleReversal1dMarubozuCheckLines(
   const { open: o, high: h, low: l, close: c } = pack;
   const lines: string[] = [];
   const lb = env.marubozuBodyLookback;
-  lines.push(`เกณฑ์ marubozu 1D (lookback ${lb} แท่ง · กลืนเขียว · ปิดใต้ EMA${env.marubozuEmaPeriod}):`);
+  lines.push(
+    `เกณฑ์ marubozu 1D (lookback ${lb} แท่ง · high+เนื้อแดงสุดในรอบ · กลืนเขียว≥${(env.marubozuEngulfMinRatio * 100).toFixed(0)}% · ไม่เช็ค EMA):`,
+  );
 
   const red = c[i]! < o[i]!;
   lines.push(`  แท่งแดง C<O: ${checkMark(red)}`);
@@ -530,17 +526,13 @@ export function candleReversal1dMarubozuCheckLines(
 
   const prevGreen = i >= 1 && c[i - 1]! > o[i - 1]!;
   const prevBody = i >= 1 ? c[i - 1]! - o[i - 1]! : 0;
-  const engulfDepth = i >= 1 ? o[i - 1]! - c[i]! : 0;
-  const engulfOk =
-    i >= 1 &&
-    (c[i]! <= o[i - 1]! || (prevBody > eps && engulfDepth >= prevBody * env.marubozuEngulfMinRatio));
-  lines.push(`  แท่งก่อนเขียว+กลืน: ${checkMark(prevGreen && engulfOk)}`);
-
-  const ema = emaLine(c, env.marubozuEmaPeriod);
-  const eNow = ema[i];
-  const underEma = Number.isFinite(eNow) && c[i]! < (eNow as number);
+  const engulfOk = i >= 1 && prevBody > eps && body >= prevBody * env.marubozuEngulfMinRatio;
+  const engulfPct = prevBody > eps ? (body / prevBody) * 100 : null;
   lines.push(
-    `  ปิดใต้ EMA${env.marubozuEmaPeriod}: ${checkMark(underEma)} (C ${fmtReversalPrice(c[i]!)} · EMA ${fmtReversalPrice(eNow as number)})`,
+    `  แท่งก่อนเขียว+กลืน: ${checkMark(prevGreen && engulfOk)}` +
+      (engulfPct != null
+        ? ` (เนื้อแดง ${engulfPct.toFixed(0)}% ของเนื้อเขียวก่อน · ต้อง≥${(env.marubozuEngulfMinRatio * 100).toFixed(0)}%)`
+        : ""),
   );
 
   return lines;
@@ -601,7 +593,7 @@ export function buildCandleReversalAlertMessage(symbol: string, sig: CandleRever
     `แท่งปิด: O ${fmtReversalPrice(sig.o)} · H ${fmtReversalPrice(sig.h)} · L ${fmtReversalPrice(sig.l)} · C ${fmtReversalPrice(sig.c)}`,
     sig.model === "longest_red_body"
       ? `เนื้อแดง ${bodyPct}% · โซน EMA20 (ม้วนลง/เพิ่งหลุด)`
-      : `เนื้อแดง ${bodyPct}% · กลืนแท่งเขียวก่อนหน้า · ปิดใต้ EMA20`,
+      : `เนื้อแดง ${bodyPct}% · high/เนื้อยาวสุดในรอบ · กลืนเขียวก่อนหน้า`,
     "",
     ...plan,
     "",

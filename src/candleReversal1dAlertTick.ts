@@ -127,6 +127,8 @@ function detectEnv1d(): CandleReversal1dDetectEnv {
   if (Number.isFinite(tailLb) && tailLb >= 10 && tailLb <= 120) env.highestTailLookback = Math.floor(tailLb);
   const mbLb = Number(process.env.CANDLE_REVERSAL_MARUBOZU_BODY_LOOKBACK?.trim());
   if (Number.isFinite(mbLb) && mbLb >= 8 && mbLb <= 120) env.marubozuBodyLookback = Math.floor(mbLb);
+  const engulf = Number(process.env.CANDLE_REVERSAL_MARUBOZU_ENGULF_MIN_RATIO?.trim());
+  if (Number.isFinite(engulf) && engulf >= 0.5 && engulf <= 1) env.marubozuEngulfMinRatio = engulf;
   return env;
 }
 
