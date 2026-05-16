@@ -30,6 +30,7 @@ import {
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
 } from "@/src/liffService";
+import { tgStoreKeyToTelegramUserIdString } from "@/src/telegramMiniAppAuth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
