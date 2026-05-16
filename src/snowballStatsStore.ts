@@ -118,6 +118,9 @@ export type AppendSnowballStatsInput = {
   maxUpperWick100?: number | null;
   rangeScore?: number | null;
   wickScore?: number | null;
+  barRangePctPrev?: number | null;
+  barRangePctSignal?: number | null;
+  barRangePct2Sum?: number | null;
 };
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
@@ -137,6 +140,11 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     input.wickScore != null && Number.isFinite(input.wickScore) && input.wickScore >= 0
       ? input.wickScore
       : null;
+  const normBarRangePct = (v: number | null | undefined): number | null =>
+    v != null && Number.isFinite(v) && v >= 0 ? v : null;
+  const barRangePctPrev = normBarRangePct(input.barRangePctPrev);
+  const barRangePctSignal = normBarRangePct(input.barRangePctSignal);
+  const barRangePct2Sum = normBarRangePct(input.barRangePct2Sum);
 
   const row: SnowballStatsRow = {
     id: randomUUID(),
@@ -155,6 +163,9 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     maxUpperWick100,
     rangeScore,
     wickScore,
+    barRangePctPrev,
+    barRangePctSignal,
+    barRangePct2Sum,
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,
     pct4h: null,

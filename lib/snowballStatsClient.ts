@@ -25,6 +25,12 @@ export type SnowballStatsRow = {
   rangeScore?: number | null;
   /** UpperWick แท่งสัญญาณ / MaxWick(100) */
   wickScore?: number | null;
+  /** % กว้าง (H−L)/Close แท่งก่อนสัญญาณ */
+  barRangePctPrev?: number | null;
+  /** % กว้างแท่งสัญญาณ */
+  barRangePctSignal?: number | null;
+  /** รวม % 2 แท่งล่าสุด */
+  barRangePct2Sum?: number | null;
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
@@ -77,4 +83,24 @@ export function snowballStatsVolMetricLabel(
 export function snowballStatsVolScoreLabel(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return value.toFixed(2);
+}
+
+/** แสดง % ความกว้างแท่ง (H−L)/Close */
+export function snowballStatsBarRangePctLabel(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(2)}%`;
+}
+
+/** วันในสัปดาห์ (ปฏิทินไทย / Asia/Bangkok) จากเวลาแจ้งสัญญาณ */
+export function snowballStatsDayOfWeekBkk(
+  alertedAtIso: string,
+  alertedAtMs?: number | null
+): string {
+  const ms =
+    alertedAtMs != null && Number.isFinite(alertedAtMs) ? alertedAtMs : Date.parse(alertedAtIso);
+  if (Number.isNaN(ms)) return "—";
+  return new Date(ms).toLocaleDateString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    weekday: "short",
+  });
 }

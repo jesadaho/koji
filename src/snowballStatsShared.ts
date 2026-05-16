@@ -6,6 +6,8 @@ export type {
   SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
 export {
+  snowballStatsBarRangePctLabel,
+  snowballStatsDayOfWeekBkk,
   snowballStatsGradeLabel,
   snowballStatsVolMetricLabel,
   snowballStatsVolScoreLabel,

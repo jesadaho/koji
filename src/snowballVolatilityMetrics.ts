@@ -72,6 +72,17 @@ export function maxUpperWickPrior(
   return n > 0 && Number.isFinite(max) ? max : null;
 }
 
+/** (High−Low) / Close × 100 — % ความกว้างแท่ง (สำหรับ leverage / 2 แท่งล่าสุด) */
+function barRangePct(high: number[], low: number[], close: number[], i: number): number | null {
+  const h = high[i];
+  const l = low[i];
+  const c = close[i];
+  if (!Number.isFinite(h) || !Number.isFinite(l) || !Number.isFinite(c) || c <= 0) return null;
+  const span = h - l;
+  if (!Number.isFinite(span) || span < 0) return null;
+  return (span / c) * 100;
+}
+
 export type SnowballVolatilitySnapshot = {
   atr100: number | null;
   maxUpperWick100: number | null;
@@ -79,6 +90,12 @@ export type SnowballVolatilitySnapshot = {
   rangeScore: number | null;
   /** UpperWick แท่งสัญญาณ ÷ MaxWick(100) — ~1 = ไส้เทียบเพดานประวัติ */
   wickScore: number | null;
+  /** % กว้างแท่งก่อนสัญญาณ (H−L)/Close */
+  barRangePctPrev: number | null;
+  /** % กว้างแท่งสัญญาณ */
+  barRangePctSignal: number | null;
+  /** รวม % 2 แท่งล่าสุด (ก่อน + สัญญาณ) */
+  barRangePct2Sum: number | null;
 };
 
 export function snowballVolatilitySnapshotAt(
@@ -115,5 +132,20 @@ export function snowballVolatilitySnapshotAt(
     }
   }
 
-  return { atr100, maxUpperWick100, rangeScore, wickScore };
+  const barRangePctSignal = barRangePct(high, low, close, iEval);
+  const barRangePctPrev = iEval >= 1 ? barRangePct(high, low, close, iEval - 1) : null;
+  let barRangePct2Sum: number | null = null;
+  if (barRangePctPrev != null && barRangePctSignal != null) {
+    barRangePct2Sum = barRangePctPrev + barRangePctSignal;
+  }
+
+  return {
+    atr100,
+    maxUpperWick100,
+    rangeScore,
+    wickScore,
+    barRangePctPrev,
+    barRangePctSignal,
+    barRangePct2Sum,
+  };
 }

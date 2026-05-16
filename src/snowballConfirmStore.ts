@@ -63,6 +63,9 @@ export type SnowballPendingConfirm = {
   statsMaxUpperWick100?: number | null;
   statsRangeScore?: number | null;
   statsWickScore?: number | null;
+  statsBarRangePctPrev?: number | null;
+  statsBarRangePctSignal?: number | null;
+  statsBarRangePct2Sum?: number | null;
 };
 
 export type SnowballPendingConfirmState = {
@@ -128,6 +131,12 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsRangeScoreOk = Number.isFinite(statsRangeScore) && statsRangeScore >= 0;
   const statsWickScore = Number(o.statsWickScore);
   const statsWickScoreOk = Number.isFinite(statsWickScore) && statsWickScore >= 0;
+  const statsBarRangePctPrev = Number(o.statsBarRangePctPrev);
+  const statsBarRangePctPrevOk = Number.isFinite(statsBarRangePctPrev) && statsBarRangePctPrev >= 0;
+  const statsBarRangePctSignal = Number(o.statsBarRangePctSignal);
+  const statsBarRangePctSignalOk = Number.isFinite(statsBarRangePctSignal) && statsBarRangePctSignal >= 0;
+  const statsBarRangePct2Sum = Number(o.statsBarRangePct2Sum);
+  const statsBarRangePct2SumOk = Number.isFinite(statsBarRangePct2Sum) && statsBarRangePct2Sum >= 0;
   return {
     id: typeof o.id === "string" && o.id ? o.id : randomUUID(),
     symbol,
@@ -149,6 +158,9 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsMaxUpperWick100Ok ? { statsMaxUpperWick100 } : {}),
     ...(statsRangeScoreOk ? { statsRangeScore } : {}),
     ...(statsWickScoreOk ? { statsWickScore } : {}),
+    ...(statsBarRangePctPrevOk ? { statsBarRangePctPrev } : {}),
+    ...(statsBarRangePctSignalOk ? { statsBarRangePctSignal } : {}),
+    ...(statsBarRangePct2SumOk ? { statsBarRangePct2Sum } : {}),
   };
 }
 

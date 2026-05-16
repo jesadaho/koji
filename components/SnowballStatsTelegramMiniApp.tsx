@@ -8,6 +8,8 @@ import {
   prepareTelegramMiniAppShell,
 } from "@/lib/kojiTelegramWebApp";
 import {
+  snowballStatsBarRangePctLabel,
+  snowballStatsDayOfWeekBkk,
   snowballStatsGradeLabel,
   snowballStatsVolMetricLabel,
   snowballStatsVolScoreLabel,
@@ -20,7 +22,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ราคาและ % จาก Binance USDT-M 15m · ATR(100) = Wilder ATR ที่แท่งสัญญาณ · Max Wick(100) = ไส้บนสูงสุดใน 100 แท่งก่อนสัญญาณ (ไม่รวมแท่งสัญญาณ) · Grade LONG: A+=HH48+HH200+VAH · B=VAH · C=HH48 ไม่ผ่าน HH200 · SVP Hole = วอลุ่มแท่งสัญญาณต่ำกว่าเกณฑ์เทียบ SMA · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
+  "Binance USDT-M · R% ก่อน/สัญญาณ/2แท่ง = (H−L)/Close×100 · Range/Wick score · ATR/MaxWick = Ref · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -337,12 +339,16 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col" className="snowStatsStickyGrade">
                   Grade
                 </th>
+                <th scope="col">วัน</th>
                 <th scope="col">เวลา (BKK)</th>
                 <th scope="col">Entry</th>
                 <th scope="col">ATR(100)</th>
                 <th scope="col">Max Wick(100)</th>
                 <th scope="col">Range</th>
                 <th scope="col">Wick</th>
+                <th scope="col">R% ก่อน</th>
+                <th scope="col">R% สัญญาณ</th>
+                <th scope="col">R% 2แท่ง</th>
                 <th scope="col">4h</th>
                 <th scope="col">12h</th>
                 <th scope="col">24h</th>
@@ -357,7 +363,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={18} className="sub">
+                  <td colSpan={19} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -370,6 +376,11 @@ export default function SnowballStatsTelegramMiniApp() {
                       {snowballStatsGradeLabel(r.side, r.qualityTier)}
                     </td>
                     <td>
+                      <span style={{ whiteSpace: "nowrap" }}>
+                        {snowballStatsDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}
+                      </span>
+                    </td>
+                    <td>
                       <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
                     </td>
                     <td>{fmtPrice(r.entryPrice)}</td>
@@ -377,6 +388,9 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{snowballStatsVolMetricLabel(r.maxUpperWick100, r.entryPrice)}</td>
                     <td>{snowballStatsVolScoreLabel(r.rangeScore)}</td>
                     <td>{snowballStatsVolScoreLabel(r.wickScore)}</td>
+                    <td>{snowballStatsBarRangePctLabel(r.barRangePctPrev)}</td>
+                    <td>{snowballStatsBarRangePctLabel(r.barRangePctSignal)}</td>
+                    <td>{snowballStatsBarRangePctLabel(r.barRangePct2Sum)}</td>
                     <td>{fmtPctCell(r.price4h, r.pct4h)}</td>
                     <td>{fmtPctCell(r.price12h, r.pct12h)}</td>
                     <td>{fmtPctCell(r.price24h, r.pct24h)}</td>

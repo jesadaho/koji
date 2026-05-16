@@ -3119,6 +3119,9 @@ export async function runPublicIndicatorFeedInternal(
                   statsMaxUpperWick100: longVolSnap.maxUpperWick100,
                   statsRangeScore: longVolSnap.rangeScore,
                   statsWickScore: longVolSnap.wickScore,
+                  statsBarRangePctPrev: longVolSnap.barRangePctPrev,
+                  statsBarRangePctSignal: longVolSnap.barRangePctSignal,
+                  statsBarRangePct2Sum: longVolSnap.barRangePct2Sum,
                   ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3144,6 +3147,9 @@ export async function runPublicIndicatorFeedInternal(
                   maxUpperWick100: longVolSnap.maxUpperWick100,
                   rangeScore: longVolSnap.rangeScore,
                   wickScore: longVolSnap.wickScore,
+                  barRangePctPrev: longVolSnap.barRangePctPrev,
+                  barRangePctSignal: longVolSnap.barRangePctSignal,
+                  barRangePct2Sum: longVolSnap.barRangePct2Sum,
                 });
               }
             } catch (statsErr) {
@@ -3523,6 +3529,9 @@ export async function runPublicIndicatorFeedInternal(
                   maxUpperWick100: bearVolSnap.maxUpperWick100,
                   rangeScore: bearVolSnap.rangeScore,
                   wickScore: bearVolSnap.wickScore,
+                  barRangePctPrev: bearVolSnap.barRangePctPrev,
+                  barRangePctSignal: bearVolSnap.barRangePctSignal,
+                  barRangePct2Sum: bearVolSnap.barRangePct2Sum,
                 });
               }
             } catch (statsErr) {
