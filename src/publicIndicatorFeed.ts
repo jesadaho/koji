@@ -21,6 +21,12 @@ import {
   useCloudStorage,
 } from "./remoteJsonStore";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
+import {
+  evaluateSnowballGradeCShortFade,
+  formatGradeCShortFadeAutotradeLine,
+  resolveSnowballLongAutotradeSide,
+  type SnowballGradeCShortFadeResult,
+} from "./snowballGradeCShortFade";
 import { appendSnowballStatsRow, loadSnowballStatsState, type SnowballStatsRow } from "./snowballStatsStore";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { addSnowballPendingConfirm } from "./snowballConfirmStore";
@@ -328,7 +334,7 @@ function snowballIntrabarRelaxVolume(): boolean {
 }
 
 /** Double Barrier: Barrier1 = swing lookback เดิม · Barrier2 = โซน “ภูเขา” ใกล้ราคา → B+ / A+ */
-function snowballDoubleBarrierEnabled(): boolean {
+export function snowballDoubleBarrierEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_DOUBLE_BARRIER_ENABLED", true);
 }
 
@@ -1524,6 +1530,8 @@ function buildSnowballTripleCheckMessage(
     snowballLongBreakoutGrade?: SnowballLongBreakoutGrade;
     /** ผ่าน Swing HH โครงสร้าง (ดีฟอลต์ 200 แท่ง) — ใช้ข้อความ Grade C */
     longSwing200Ok?: boolean;
+    /** Grade C — ผล gate rejection 1h ในกรอบ 4h (auto-open Short) */
+    gradeCShortFade?: SnowballGradeCShortFadeResult | null;
     doubleBarrierEnabled?: boolean;
     /** Double Barrier (แนวใกล้ในโซน %) — บรรทัด checklist */
     doubleBarrierChecklistLine?: string;
@@ -1674,6 +1682,12 @@ function buildSnowballTripleCheckMessage(
               ? "📎 Grade C: ทะลุย Swing HH48 แต่ยังไม่เหนือ HH200 — เบรกสั้น ยังไม่ยืนยันโครงสร้างใหญ่"
               : "📎 Grade C: ผ่าน HH48+HH200 แต่ยังไม่เบรค VAH proxy (โวลุ่มก้อนอาจยังไม่สนับสนุน)"
             : "";
+    const longAutotradeBiasLine =
+      g === "c_plus"
+        ? formatGradeCShortFadeAutotradeLine(args.gradeCShortFade)
+        : g === "b_plus"
+          ? "📎 Auto-open: Grade B — ไม่สั่งเปิดอัตโนมัติ (รอ A+ Long หรือสัญญาณ Short แยก)"
+          : "";
     const longHeadline = (() => {
       const sfx = sniperSuffix;
       if (g === "a_plus") return `🟢 [Grade A+ · Real Breakout] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
@@ -1689,6 +1703,7 @@ function buildSnowballTripleCheckMessage(
       `💼 Playbook:`,
       `"ทรงมาดี มีแรงส่งสะสม รอเข้าเมื่อย่อ (Buy the Dip) ที่แนวรับ ~ ${playbookRefPx} USDT"`,
       ...(gradeLine ? ["", gradeLine] : []),
+      ...(longAutotradeBiasLine ? ["", longAutotradeBiasLine] : []),
       "",
       timeLine,
       "",
@@ -2951,6 +2966,12 @@ export async function runPublicIndicatorFeedInternal(
 
         const longBreakoutGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
 
+        let gradeCShortFade: SnowballGradeCShortFadeResult | null = null;
+        if (longBreakoutGrade === "c_plus") {
+          const pack1hGradeC = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
+          gradeCShortFade = evaluateSnowballGradeCShortFade(pack1hGradeC ?? null, signalBarOpenSec);
+        }
+
         let longDoubleBarrierLine = "";
         if (dbOn) {
           const cls = classifyLongDoubleBarrierTier(h15, iSig, clE!);
@@ -3034,6 +3055,7 @@ export async function runPublicIndicatorFeedInternal(
           doubleBarrierEnabled: dbOn,
           snowballLongBreakoutGrade: longBreakoutGrade,
           longSwing200Ok: swing200,
+          gradeCShortFade,
           doubleBarrierChecklistLine: dbOn ? longDoubleBarrierLine : undefined,
           confirmRiskFlags: twoBarInline ? undefined : longRiskFlags.length > 0 ? longRiskFlags : undefined,
           confirmTrigger: twoBarInline
@@ -3076,24 +3098,49 @@ export async function runPublicIndicatorFeedInternal(
             }
             if (!intrabar && !skipSnowballTgForPending) {
               try {
-                // Auto-open เฉพาะ Grade A+ (HH48+HH200+VAH) เมื่อเปิด Double Barrier
-                const isSuperSnowball = Boolean(dbOn && longBreakoutGrade === "a_plus");
-                if (isSuperSnowball) {
+                const { side: longAutoSide, fade: longFade } = await resolveSnowballLongAutotradeSide(
+                  symbol,
+                  longBreakoutGrade,
+                  dbOn,
+                  signalBarOpenSec,
+                  packsDiv1hExtra[idx] ?? pack1hForTwoBar,
+                );
+                if (longAutoSide) {
+                  const refEntry =
+                    longAutoSide === "short" &&
+                    longFade?.referenceEntryPrice != null &&
+                    Number.isFinite(longFade.referenceEntryPrice)
+                      ? longFade.referenceEntryPrice
+                      : twoBarInline
+                        ? c15[iConf]!
+                        : clE!;
                   await runSnowballAutoTradeAfterSnowballAlert({
                     contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
                     binanceSymbol: symbol,
-                    side: "long",
-                    referenceEntryPrice: twoBarInline ? c15[iConf]! : clE!,
+                    side: longAutoSide,
+                    referenceEntryPrice: refEntry,
                     signalBarOpenSec,
                     signalBarTf: snowTf,
                     signalBarLow:
-                      typeof longSignalLow === "number" && Number.isFinite(longSignalLow) ? longSignalLow : null,
+                      longAutoSide === "long" &&
+                      typeof longSignalLow === "number" &&
+                      Number.isFinite(longSignalLow)
+                        ? longSignalLow
+                        : null,
                     vol: vE!,
                     volSma: vsE!,
+                    ...(longFade?.ok && longFade.entryStrategy
+                      ? {
+                          gradeCShortEntry: {
+                            strategy: longFade.entryStrategy,
+                            limitPrice: longFade.limitEntryPrice,
+                          },
+                        }
+                      : {}),
                   });
                 }
               } catch (e) {
-                console.error("[indicatorPublicFeed] snowball auto-open LONG", symbol, e);
+                console.error("[indicatorPublicFeed] snowball auto-open", symbol, e);
               }
             }
             const longVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);

@@ -1,4 +1,5 @@
 import {
+  createOpenLimitOrder,
   createOpenMarketOrder,
   getOpenPositions,
   type MexcCredentials,
@@ -27,6 +28,27 @@ export function isSnowballAutotradeEnabled(): boolean {
   const v = process.env.SNOWBALL_AUTOTRADE_ENABLED?.trim().toLowerCase();
   if (v === "0" || v === "false" || v === "no" || v === "off") return false;
   return true;
+}
+
+/** Grade LONG จากสัญญาณ Snowball (สอดคล้อง publicIndicatorFeed) */
+export type SnowballLongAlertGrade = "a_plus" | "b_plus" | "c_plus";
+
+/** เกรดต่ำกว่า B = C เท่านั้น */
+export function isSnowballLongGradeBelowB(grade: SnowballLongAlertGrade | undefined): boolean {
+  return grade === "c_plus";
+}
+
+/**
+ * ทิศ auto-open จากสัญญาณ LONG + Grade (ต้องเปิด Double Barrier)
+ * A+ → Long · C → Short ผ่าน `evaluateSnowballGradeCShortFade` แยก · B → ไม่ auto-open
+ */
+export function snowballAutotradeSideForLongGrade(
+  grade: SnowballLongAlertGrade | undefined,
+  doubleBarrierOn: boolean,
+): SnowballAutoTradeSide | null {
+  if (!doubleBarrierOn || !grade) return null;
+  if (grade === "a_plus") return "long";
+  return null;
 }
 
 function shortContractLabel(contractSymbol: string): string {
@@ -93,6 +115,11 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   signalBarLow: number | null;
   vol: number;
   volSma: number;
+  /** Grade C Short fade — สายไส้ = limit retest · สาย V-Top = market */
+  gradeCShortEntry?: {
+    strategy: "wick_limit_retest" | "vtop_market";
+    limitPrice?: number | null;
+  };
 }): Promise<{ usersAttempted: number; usersSucceeded: number }> {
   if (!isSnowballAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
 
@@ -171,32 +198,64 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     usersAttempted += 1;
 
     const long = input.side === "long";
+    const gradeCEntry = input.gradeCShortEntry;
+    const useWickLimit =
+      !long &&
+      gradeCEntry?.strategy === "wick_limit_retest" &&
+      typeof gradeCEntry.limitPrice === "number" &&
+      Number.isFinite(gradeCEntry.limitPrice) &&
+      gradeCEntry.limitPrice > 0;
+
     try {
-      const om = await createOpenMarketOrder(creds, {
-        contractSymbol: sym,
-        long,
-        marginUsdt,
-        leverage: Math.floor(leverage),
-        openType: 1,
-      });
+      const om = useWickLimit
+        ? await createOpenLimitOrder(creds, {
+            contractSymbol: sym,
+            long: false,
+            marginUsdt,
+            leverage: Math.floor(leverage),
+            limitPrice: gradeCEntry!.limitPrice!,
+            openType: 1,
+          })
+        : await createOpenMarketOrder(creds, {
+            contractSymbol: sym,
+            long,
+            marginUsdt,
+            leverage: Math.floor(leverage),
+            openType: 1,
+          });
       if (!om.success) {
         const msg = om.message ?? `code ${om.code}`;
         await notifyLines(userId, [
           "Koji — Snowball auto-open (MEXC)",
-          `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น ${long ? "LONG" : "SHORT"})`,
+          `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น ${long ? "LONG" : "SHORT"}${useWickLimit ? " · Limit retest ไส้" : gradeCEntry?.strategy === "vtop_market" ? " · Market V-Top" : ""})`,
           `[${shortContractLabel(sym)}]/USDT`,
           `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
+          useWickLimit ? `Limit ~${fmtSnowballPriceUsdt(gradeCEntry!.limitPrice!)} USDT` : "",
           `MEXC: ${msg}`,
         ]);
         continue;
       }
 
       let mexcAvgEntry: number | null = null;
+      let positionOpen = false;
       try {
         const posAfter = await getOpenPositions(creds, sym);
+        positionOpen = hasActiveUsdtPosition(posAfter, sym);
         mexcAvgEntry = readMexcAvgEntryPrice(posAfter, sym, input.side);
       } catch (e) {
         console.error("[snowballAutoTrade] getOpenPositions after open", sym, userId, e);
+      }
+
+      if (useWickLimit && !positionOpen) {
+        await notifyLines(userId, [
+          "Koji — Snowball auto-open (MEXC)",
+          "⏳ ตั้ง Limit SHORT ดัก retest ไส้บนแล้ว — ยังไม่ fill",
+          `[${shortContractLabel(sym)}]/USDT`,
+          `Limit ~${fmtSnowballPriceUsdt(gradeCEntry!.limitPrice!)} USDT · Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
+          `จุดอ้างอิง (บอท): ${fmtSnowballPriceUsdt(input.referenceEntryPrice)} USDT`,
+          "ยังไม่นับ 1 order/วัน — จะเปิดซ้ำได้เมื่อยังไม่มีโพซิชันและยังไม่เคยเปิดสำเร็จวันนี้",
+        ]);
+        continue;
       }
 
       const quickTpEnabled = Boolean(row.snowballAutoTradeQuickTpEnabled);
@@ -232,11 +291,21 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       );
       usersSucceeded += 1;
 
+      const entryModeLine = useWickLimit
+        ? "โหมดเข้า: Limit retest ไส้บน (50% ไส้บนแท่ง rejection ล่าสุด)"
+        : gradeCEntry?.strategy === "vtop_market"
+          ? "โหมดเข้า: Market V-Top (ทุบกลืนเนื้อเขียว)"
+          : "";
+
       await notifyLines(userId, [
         "Koji — Snowball auto-open (MEXC)",
         long ? "✅ เปิด LONG จาก Snowball" : "✅ เปิด SHORT จาก Snowball",
         `[${shortContractLabel(sym)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
+        ...(entryModeLine ? [entryModeLine] : []),
+        useWickLimit
+          ? `Limit ที่ตั้ง: ${fmtSnowballPriceUsdt(gradeCEntry!.limitPrice!)} USDT`
+          : "",
         `จุดเข้าอ้างอิง (บอท / Binance): ${fmtSnowballPriceUsdt(input.referenceEntryPrice)} USDT`,
         mexcAvgEntry != null && Number.isFinite(mexcAvgEntry) && mexcAvgEntry > 0
           ? `ราคาเข้าเฉลี่ย MEXC: ${fmtSnowballPriceUsdt(mexcAvgEntry)} USDT — Quick TP คิด ROI จากราคานี้`

@@ -6,12 +6,17 @@ import {
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 import { sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
-import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
+import { runSnowballAutoTradeAfterSnowballAlert, type SnowballLongAlertGrade } from "./snowballAutoTradeExecutor";
+import {
+  resolveSnowballLongAutotradeSide,
+  type SnowballGradeCShortFadeResult,
+} from "./snowballGradeCShortFade";
 import {
   isPublicSnowballTripleCheckEnabled,
   snowballConfirmBarEnabled,
   snowballConfirmMaxAgeHours,
   snowballConfirmVolMinRatio,
+  snowballDoubleBarrierEnabled,
 } from "./publicIndicatorFeed";
 import {
   loadSnowballPendingConfirms,
@@ -306,27 +311,54 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
             console.error("[snowballConfirmTick] append snowball stats after confirm", item.symbol, item.side, e);
           }
         }
-        if (
-          sendOk &&
-          item.deferSnowballAutotradeToConfirm === true &&
-          item.qualityTier === "a_plus"
-        ) {
-          try {
-            const volSma = volumeSma20AtPackIndex(pack, idx);
-            const volSmaUse = Number.isFinite(volSma) && volSma > 0 ? volSma : vo;
-            await runSnowballAutoTradeAfterSnowballAlert({
-              contractSymbol: mexcContractSymbolFromBinanceSymbol(item.symbol),
-              binanceSymbol: item.symbol,
-              side: item.side === "long" ? "long" : "short",
-              referenceEntryPrice: cl,
-              signalBarOpenSec: bar2OpenSec,
-              signalBarTf: item.snowTf,
-              signalBarLow: item.side === "long" ? lo : null,
-              vol: vo,
-              volSma: volSmaUse,
-            });
-          } catch (e) {
-            console.error("[snowballConfirmTick] snowball auto-open after confirm", item.symbol, item.side, e);
+        if (sendOk && item.deferSnowballAutotradeToConfirm === true) {
+          const longGrade = item.qualityTier as SnowballLongAlertGrade | undefined;
+          let autoSide: "long" | "short" | null = null;
+          let gradeCFade: SnowballGradeCShortFadeResult | null = null;
+          if (item.side === "long") {
+            const resolved = await resolveSnowballLongAutotradeSide(
+              item.symbol,
+              longGrade,
+              snowballDoubleBarrierEnabled(),
+              item.signalBarOpenSec,
+            );
+            autoSide = resolved.side;
+            gradeCFade = resolved.fade;
+          } else if (item.side === "bear" && item.qualityTier === "a_plus") {
+            autoSide = "short";
+          }
+          if (autoSide) {
+            try {
+              const volSma = volumeSma20AtPackIndex(pack, idx);
+              const volSmaUse = Number.isFinite(volSma) && volSma > 0 ? volSma : vo;
+              const refEntry =
+                autoSide === "short" &&
+                gradeCFade?.referenceEntryPrice != null &&
+                Number.isFinite(gradeCFade.referenceEntryPrice)
+                  ? gradeCFade.referenceEntryPrice
+                  : cl;
+              await runSnowballAutoTradeAfterSnowballAlert({
+                contractSymbol: mexcContractSymbolFromBinanceSymbol(item.symbol),
+                binanceSymbol: item.symbol,
+                side: autoSide,
+                referenceEntryPrice: refEntry,
+                signalBarOpenSec: bar2OpenSec,
+                signalBarTf: item.snowTf,
+                signalBarLow: autoSide === "long" ? lo : null,
+                vol: vo,
+                volSma: volSmaUse,
+                ...(gradeCFade?.ok && gradeCFade.entryStrategy
+                  ? {
+                      gradeCShortEntry: {
+                        strategy: gradeCFade.entryStrategy,
+                        limitPrice: gradeCFade.limitEntryPrice,
+                      },
+                    }
+                  : {}),
+              });
+            } catch (e) {
+              console.error("[snowballConfirmTick] snowball auto-open after confirm", item.symbol, item.side, e);
+            }
           }
         }
         removeIds.add(item.id);

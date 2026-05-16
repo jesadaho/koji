@@ -511,6 +511,74 @@ export async function createOpenMarketOrder(
 }
 
 /**
+ * เปิด limit: side 1 long, 3 short — type 1 limit (รอ fill ที่ราคาที่กำหนด)
+ */
+export async function createOpenLimitOrder(
+  creds: MexcCredentials,
+  p: {
+    contractSymbol: string;
+    long: boolean;
+    marginUsdt: number;
+    leverage: number;
+    limitPrice: number;
+    openType?: 1 | 2;
+    takeProfitPrice?: number;
+    profitTrend?: number;
+  }
+): Promise<MexcOk<OrderCreateData>> {
+  const symbol = p.contractSymbol.trim();
+  const margin = p.marginUsdt;
+  const levIn = Math.floor(p.leverage);
+  const limitPrice = p.limitPrice;
+  if (!(margin > 0) || levIn < 1) {
+    return { success: false, code: -1, message: "margin หรือ leverage ไม่ถูกต้อง" };
+  }
+  if (!(limitPrice > 0) || !Number.isFinite(limitPrice)) {
+    return { success: false, code: -1, message: "limitPrice ไม่ถูกต้อง" };
+  }
+
+  const detail = await fetchContractDetailPublic(symbol);
+  if (!detail) {
+    return { success: false, code: -1, message: "ดึง contract detail ไม่ได้" };
+  }
+
+  const minLev = Number(detail.minLeverage) || 1;
+  const maxLev = Number(detail.maxLeverage) || 500;
+  const lev = Math.min(maxLev, Math.max(minLev, levIn));
+
+  const notionalUsdt = margin * lev;
+  const volResult = computeOpenVolFromNotionalUsdt(notionalUsdt, limitPrice, detail);
+  if ("error" in volResult) {
+    return { success: false, code: -1, message: volResult.error };
+  }
+  const vol = volResult.vol;
+
+  const positionMode = await getFuturesUserPositionMode(creds);
+  const openType: 1 | 2 = p.openType === 2 ? 2 : 1;
+  const side = p.long ? 1 : 3;
+
+  const body: Record<string, unknown> = {
+    symbol,
+    price: limitPrice,
+    vol,
+    side,
+    type: 1,
+    openType,
+    leverage: lev,
+    positionMode,
+  };
+
+  const tp = p.takeProfitPrice;
+  if (typeof tp === "number" && Number.isFinite(tp) && tp > 0) {
+    body.takeProfitPrice = tp;
+    const trend = Number(p.profitTrend);
+    if (Number.isFinite(trend) && trend >= 1 && trend <= 3) body.profitTrend = trend;
+  }
+
+  return mexcPrivatePost<OrderCreateData>(creds, "/api/v1/private/order/create", body);
+}
+
+/**
  * ปิด position: side 2 = close short, 4 = close long; type 5 = market; flashClose ลด slippageตาม platform
  */
 export async function createCloseOrder(
