@@ -18,6 +18,11 @@ export type CandleReversalSignal = {
   retestPrice: number;
   slPrice: number;
   afterInvertedDoji: boolean;
+  /** อันดับ high ในรอบ lookbackBars (1 = สูงสุด) */
+  highRankInLookback?: number;
+  /** อันดับ volume ในรอบ lookbackBars (1 = สูงสุด) */
+  volRankInLookback?: number;
+  lookbackBars?: number;
 };
 
 /** @deprecated use CandleReversalSignal */
@@ -145,6 +150,11 @@ export const DEFAULT_CANDLE_REVERSAL_1H_ENV: CandleReversal1hDetectEnv = {
   slBufferPct: 0.001,
 };
 
+type CandleReversalSignalLookbackMeta = Pick<
+  CandleReversalSignal,
+  "highRankInLookback" | "volRankInLookback" | "lookbackBars"
+>;
+
 function buildSignal(
   tf: CandleReversalTf,
   model: CandleReversalModel,
@@ -155,6 +165,7 @@ function buildSignal(
   retestPrice: number,
   slPrice: number,
   afterInvertedDoji: boolean,
+  lookback?: CandleReversalSignalLookbackMeta,
 ): CandleReversalSignal {
   const { open: o, high: h, low: l, close: c, timeSec: t } = pack;
   return {
@@ -170,6 +181,7 @@ function buildSignal(
     retestPrice,
     slPrice,
     afterInvertedDoji,
+    ...lookback,
   };
 }
 
@@ -230,7 +242,10 @@ export function evalInvertedDoji1h(
 
   const retestPrice = h[i]! - upperWick * 0.5;
   const slPrice = h[i]! * (1 + env.slBufferPct);
-  return buildSignal("1h", "inverted_doji", pack, i, wickRatio, bodyRatio, retestPrice, slPrice, false);
+  return buildSignal("1h", "inverted_doji", pack, i, wickRatio, bodyRatio, retestPrice, slPrice, false, {
+    highRankInLookback: 1,
+    lookbackBars: env.highestHighLookback,
+  });
 }
 
 export function evalMarubozu1d(
@@ -272,7 +287,11 @@ export function evalMarubozu1d(
   const retest382 = c[i]! + body * 0.382;
   const retestPrice = (retest50 + retest382) / 2;
   const slPrice = h[i]! * (1 + env.slBufferPct);
-  return buildSignal("1d", "marubozu", pack, i, 0, body / range, retestPrice, slPrice, hadRecentInvertedDoji);
+  return buildSignal("1d", "marubozu", pack, i, 0, body / range, retestPrice, slPrice, hadRecentInvertedDoji, {
+    highRankInLookback: 1,
+    volRankInLookback: volRank,
+    lookbackBars: env.marubozuBodyLookback,
+  });
 }
 
 /** 1H longest red body — เนื้อแดงยาว · high top-N · โซน EMA (ม้วนลง/เพิ่งหลุด) */
@@ -282,7 +301,7 @@ export function evalLongestRedBody1h(
   env: CandleReversal1hDetectEnv,
   hadRecentInvertedDoji: boolean,
 ): CandleReversalSignal | null {
-  const { open: o, high: h, low: l, close: c } = pack;
+  const { open: o, high: h, low: l, close: c, volume: vol } = pack;
   if (c[i]! >= o[i]!) return null;
 
   const body = o[i]! - c[i]!;
@@ -298,6 +317,10 @@ export function evalLongestRedBody1h(
   const highRank = highRankInWindow(h, start, i, i);
   if (highRank > env.longestRedBodyHighRankMax) return null;
 
+  const barVol = vol[i];
+  const volRank =
+    Number.isFinite(barVol) && barVol! > 0 ? volumeRankInWindow(vol, start, i, i) : undefined;
+
   const ema = emaLine(c, env.emaPeriod);
   const eNow = ema[i];
   if (!Number.isFinite(eNow) || !isLongestRedBody1hEmaZoneOk(c[i]!, eNow as number, env)) return null;
@@ -306,7 +329,11 @@ export function evalLongestRedBody1h(
   const retest382 = c[i]! + body * 0.382;
   const retestPrice = (retest50 + retest382) / 2;
   const slPrice = h[i]! * (1 + env.slBufferPct);
-  return buildSignal("1h", "longest_red_body", pack, i, 0, body / range, retestPrice, slPrice, hadRecentInvertedDoji);
+  return buildSignal("1h", "longest_red_body", pack, i, 0, body / range, retestPrice, slPrice, hadRecentInvertedDoji, {
+    highRankInLookback: highRank,
+    volRankInLookback: volRank,
+    lookbackBars: env.longestRedBodyLookback,
+  });
 }
 
 /** index แท่งปิดล่าสุด (ไม่รวมแท่งกำลังก่อตัว) */
@@ -377,7 +404,7 @@ export function candleReversal1hLongestRedBodyCheckLines(
   env: CandleReversal1hDetectEnv = DEFAULT_CANDLE_REVERSAL_1H_ENV,
 ): string[] {
   const i = barIndex;
-  const { open: o, high: h, low: l, close: c } = pack;
+  const { open: o, high: h, low: l, close: c, volume: vol } = pack;
   const lines: string[] = [];
   lines.push(
     `เกณฑ์ longest_red_body (lookback ${env.longestRedBodyLookback} แท่ง · min ${(env.longestRedBodyMinRatio * 100).toFixed(0)}% เนื้อแดง · high อันดับ≤${env.longestRedBodyHighRankMax} · EMA${env.emaPeriod} ${-env.longestRedBodyEmaDistBelowMaxPct}%..+${env.longestRedBodyEmaDistAboveMaxPct}%):`,
@@ -404,6 +431,13 @@ export function candleReversal1hLongestRedBodyCheckLines(
   const highRankOk = highRank <= env.longestRedBodyHighRankMax;
   lines.push(
     `  high อันดับในรอบ: ${checkMark(highRankOk)} (อันดับ ${highRank} · H ${fmtReversalPrice(h[i]!)} · ต้อง≤${env.longestRedBodyHighRankMax})`,
+  );
+
+  const barVol = vol[i];
+  const volRank =
+    Number.isFinite(barVol) && barVol! > 0 ? volumeRankInWindow(vol, start, i, i) : NaN;
+  lines.push(
+    `  vol อันดับในรอบ: ${Number.isFinite(volRank) ? "✓" : "—"} (อันดับ ${Number.isFinite(volRank) ? volRank : "—"} · vol ${Number.isFinite(barVol) ? barVol!.toFixed(0) : "—"} · รอบ ${env.longestRedBodyLookback} แท่ง)`,
   );
 
   const ema = emaLine(c, env.emaPeriod);
@@ -581,6 +615,41 @@ export function candleReversalModelLabelTh(model: CandleReversalModel): string {
   return "แท่งแดงทุบ";
 }
 
+function candleReversalRankLookbackLabelTh(
+  kind: "high" | "vol",
+  rank: number,
+  lb: number,
+  model: CandleReversalModel,
+): string {
+  if (kind === "high" && model === "inverted_doji") return `high สูงสุดใน ${lb} แท่ง`;
+  const prefix = kind === "high" ? "high" : "vol";
+  if (rank <= 1) return `${prefix} สูงสุดในรอบ ${lb} แท่ง`;
+  return `${prefix} อันดับ ${rank} ในรอบ ${lb} แท่ง`;
+}
+
+/** ข้อความบริบท high ในรอบ lookback สำหรับแจ้งเตือน */
+export function candleReversalHighLookbackLabelTh(sig: CandleReversalSignal): string | null {
+  const rank = sig.highRankInLookback;
+  const lb = sig.lookbackBars;
+  if (rank == null || lb == null) return null;
+  return candleReversalRankLookbackLabelTh("high", rank, lb, sig.model);
+}
+
+/** ข้อความบริบท volume ในรอบ lookback สำหรับแจ้งเตือน */
+export function candleReversalVolLookbackLabelTh(sig: CandleReversalSignal): string | null {
+  const rank = sig.volRankInLookback;
+  const lb = sig.lookbackBars;
+  if (rank == null || lb == null) return null;
+  return candleReversalRankLookbackLabelTh("vol", rank, lb, sig.model);
+}
+
+function candleReversalLookbackContextSuffix(sig: CandleReversalSignal): string {
+  const parts = [candleReversalHighLookbackLabelTh(sig), candleReversalVolLookbackLabelTh(sig)].filter(
+    (s): s is string => Boolean(s),
+  );
+  return parts.length ? ` · ${parts.join(" · ")}` : "";
+}
+
 export function buildCandleReversalAlertMessage(symbol: string, sig: CandleReversalSignal): string {
   const base = symbol.replace(/USDT$/i, "");
   const tfLabel = sig.tf.toUpperCase();
@@ -592,7 +661,7 @@ export function buildCandleReversalAlertMessage(symbol: string, sig: CandleRever
     return [
       `🎯 [Reversal ${tfLabel}] ${base} — ${modelTh}`,
       `แท่งปิด: O ${fmtReversalPrice(sig.o)} · H ${fmtReversalPrice(sig.h)} · L ${fmtReversalPrice(sig.l)} · C ${fmtReversalPrice(sig.c)}`,
-      `ไส้บน ${wickPct}% · เนื้อ ${bodyPct}% ของช่วงแท่ง`,
+      `ไส้บน ${wickPct}% · เนื้อ ${bodyPct}% ของช่วงแท่ง${candleReversalLookbackContextSuffix(sig)}`,
       "",
       "📍 แผน Short (รอรีเทสต์):",
       `• Limit รีเทสต์ ~50% ไส้บน: ${fmtReversalPrice(sig.retestPrice)}`,
@@ -621,8 +690,8 @@ export function buildCandleReversalAlertMessage(symbol: string, sig: CandleRever
     `🔻 [Reversal ${tfLabel}] ${base} — ${modelTh}${ctx}`,
     `แท่งปิด: O ${fmtReversalPrice(sig.o)} · H ${fmtReversalPrice(sig.h)} · L ${fmtReversalPrice(sig.l)} · C ${fmtReversalPrice(sig.c)}`,
     sig.model === "longest_red_body"
-      ? `เนื้อแดง ${bodyPct}% · โซน EMA20 (ม้วนลง/เพิ่งหลุด)`
-      : `เนื้อแดง ${bodyPct}% · high/vol/เนื้อยาวสุดในรอบ · กลืน/monster`,
+      ? `เนื้อแดง ${bodyPct}%${candleReversalLookbackContextSuffix(sig)} · โซน EMA20 (ม้วนลง/เพิ่งหลุด)`
+      : `เนื้อแดง ${bodyPct}%${candleReversalLookbackContextSuffix(sig)} · high/vol/เนื้อยาวสุดในรอบ · กลืน/monster`,
     "",
     ...plan,
     "",
