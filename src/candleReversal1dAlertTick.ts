@@ -9,6 +9,7 @@ import {
 import { sendPublicReversalFeedToSparkGroup } from "./alertNotify";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import {
+  loadCandleReversalAlertState,
   loadCandleReversalAlertStateWithMeta,
   saveCandleReversalAlertStateWithMeta,
   type CandleReversalAlertState,
