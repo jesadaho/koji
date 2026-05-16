@@ -31,6 +31,12 @@ export type SnowballStatsRow = {
   barRangePctSignal?: number | null;
   /** รวม % 2 แท่งล่าสุด */
   barRangePct2Sum?: number | null;
+  /** BTC PSAR 4h trend ตอนแจ้ง (Binance BTCUSDT) */
+  btcPsar4hTrend?: "up" | "down" | null;
+  /** ปิดแท่ง 4h BTC ล่าสุดที่ปิดแล้ว */
+  btcPsar4hClose?: number | null;
+  /** quoteVolume 24h ของคู่สัญญาณ (USDT, Binance futures) */
+  quoteVol24hUsdt?: number | null;
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
@@ -92,6 +98,21 @@ export function snowballStatsBarRangePctLabel(value: number | null | undefined):
 }
 
 /** วันในสัปดาห์ (ปฏิทินไทย / Asia/Bangkok) จากเวลาแจ้งสัญญาณ */
+export function snowballStatsBtcPsar4hLabel(trend: SnowballStatsRow["btcPsar4hTrend"]): string {
+  if (trend === "up") return "BTC↑";
+  if (trend === "down") return "BTC↓";
+  return "—";
+}
+
+/** แสดง quote vol 24h (USDT) แบบย่อ */
+export function snowballStatsQuoteVol24hLabel(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return "—";
+  if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+  if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+  if (value >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
+  return value.toFixed(0);
+}
+
 export function snowballStatsDayOfWeekBkk(
   alertedAtIso: string,
   alertedAtMs?: number | null

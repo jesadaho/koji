@@ -121,6 +121,9 @@ export type AppendSnowballStatsInput = {
   barRangePctPrev?: number | null;
   barRangePctSignal?: number | null;
   barRangePct2Sum?: number | null;
+  btcPsar4hTrend?: "up" | "down" | null;
+  btcPsar4hClose?: number | null;
+  quoteVol24hUsdt?: number | null;
 };
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
@@ -166,6 +169,16 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     barRangePctPrev,
     barRangePctSignal,
     barRangePct2Sum,
+    btcPsar4hTrend:
+      input.btcPsar4hTrend === "up" || input.btcPsar4hTrend === "down" ? input.btcPsar4hTrend : null,
+    btcPsar4hClose:
+      input.btcPsar4hClose != null && Number.isFinite(input.btcPsar4hClose) && input.btcPsar4hClose > 0
+        ? input.btcPsar4hClose
+        : null,
+    quoteVol24hUsdt:
+      input.quoteVol24hUsdt != null && Number.isFinite(input.quoteVol24hUsdt) && input.quoteVol24hUsdt > 0
+        ? input.quoteVol24hUsdt
+        : null,
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,
     pct4h: null,

@@ -306,6 +306,9 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               barRangePctPrev: item.statsBarRangePctPrev ?? null,
               barRangePctSignal: item.statsBarRangePctSignal ?? null,
               barRangePct2Sum: item.statsBarRangePct2Sum ?? null,
+              btcPsar4hTrend: item.statsBtcPsar4hTrend ?? null,
+              btcPsar4hClose: item.statsBtcPsar4hClose ?? null,
+              quoteVol24hUsdt: item.statsQuoteVol24hUsdt ?? null,
             });
           } catch (e) {
             console.error("[snowballConfirmTick] append snowball stats after confirm", item.symbol, item.side, e);

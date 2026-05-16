@@ -28,6 +28,7 @@ import {
   type SnowballGradeCShortFadeResult,
 } from "./snowballGradeCShortFade";
 import { appendSnowballStatsRow, loadSnowballStatsState, type SnowballStatsRow } from "./snowballStatsStore";
+import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { addSnowballPendingConfirm } from "./snowballConfirmStore";
 import {
@@ -2456,6 +2457,8 @@ export async function runPublicIndicatorFeedInternal(
         }
       : null;
 
+  if (snowballOn) resetSnowballBtcPsar4hCache();
+
   for (let idx = 0; idx < symbols.length; idx++) {
     const symbol = symbols[idx]!;
     const pack = packsCore[idx];
@@ -3144,6 +3147,7 @@ export async function runPublicIndicatorFeedInternal(
               }
             }
             const longVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
+            const longMktCtx = !intrabar ? await fetchSnowballAlertMarketContext(symbol) : null;
             if (!twoBarInline && !intrabar && longConfirmTrigger && longRiskFlags.length > 0) {
               try {
                 await addSnowballPendingConfirm({
@@ -3169,6 +3173,9 @@ export async function runPublicIndicatorFeedInternal(
                   statsBarRangePctPrev: longVolSnap.barRangePctPrev,
                   statsBarRangePctSignal: longVolSnap.barRangePctSignal,
                   statsBarRangePct2Sum: longVolSnap.barRangePct2Sum,
+                  statsBtcPsar4hTrend: longMktCtx?.btcPsar4hTrend ?? null,
+                  statsBtcPsar4hClose: longMktCtx?.btcPsar4hClose ?? null,
+                  statsQuoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                   ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3197,6 +3204,9 @@ export async function runPublicIndicatorFeedInternal(
                   barRangePctPrev: longVolSnap.barRangePctPrev,
                   barRangePctSignal: longVolSnap.barRangePctSignal,
                   barRangePct2Sum: longVolSnap.barRangePct2Sum,
+                  btcPsar4hTrend: longMktCtx?.btcPsar4hTrend ?? null,
+                  btcPsar4hClose: longMktCtx?.btcPsar4hClose ?? null,
+                  quoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                 });
               }
             } catch (statsErr) {
@@ -3529,6 +3539,7 @@ export async function runPublicIndicatorFeedInternal(
               }
             }
             const bearVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
+            const bearMktCtx = !intrabar ? await fetchSnowballAlertMarketContext(symbol) : null;
             if (!twoBarInline && !intrabar && bearConfirmTrigger && bearRiskFlags.length > 0) {
               try {
                 await addSnowballPendingConfirm({
@@ -3551,6 +3562,9 @@ export async function runPublicIndicatorFeedInternal(
                   statsMaxUpperWick100: bearVolSnap.maxUpperWick100,
                   statsRangeScore: bearVolSnap.rangeScore,
                   statsWickScore: bearVolSnap.wickScore,
+                  statsBtcPsar4hTrend: bearMktCtx?.btcPsar4hTrend ?? null,
+                  statsBtcPsar4hClose: bearMktCtx?.btcPsar4hClose ?? null,
+                  statsQuoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
                   ...(skipBearTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3579,6 +3593,9 @@ export async function runPublicIndicatorFeedInternal(
                   barRangePctPrev: bearVolSnap.barRangePctPrev,
                   barRangePctSignal: bearVolSnap.barRangePctSignal,
                   barRangePct2Sum: bearVolSnap.barRangePct2Sum,
+                  btcPsar4hTrend: bearMktCtx?.btcPsar4hTrend ?? null,
+                  btcPsar4hClose: bearMktCtx?.btcPsar4hClose ?? null,
+                  quoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
                 });
               }
             } catch (statsErr) {

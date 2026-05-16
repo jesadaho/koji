@@ -10,7 +10,9 @@ import {
 import {
   snowballStatsBarRangePctLabel,
   snowballStatsDayOfWeekBkk,
+  snowballStatsBtcPsar4hLabel,
   snowballStatsGradeLabel,
+  snowballStatsQuoteVol24hLabel,
   snowballStatsVolScoreLabel,
   type SnowballStatsApiPayload,
   type SnowballStatsRow,
@@ -360,7 +362,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={20} className="sub">
+                  <td colSpan={22} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -386,6 +388,8 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{snowballStatsBarRangePctLabel(r.barRangePctPrev)}</td>
                     <td>{snowballStatsBarRangePctLabel(r.barRangePctSignal)}</td>
                     <td>{snowballStatsBarRangePctLabel(r.barRangePct2Sum)}</td>
+                    <td>{snowballStatsBtcPsar4hLabel(r.btcPsar4hTrend)}</td>
+                    <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                     <td>{fmtPctCell(r.price4h, r.pct4h)}</td>
                     <td>{fmtPctCell(r.price12h, r.pct12h)}</td>
                     <td>{fmtPctCell(r.price24h, r.pct24h)}</td>

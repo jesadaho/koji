@@ -1,4 +1,7 @@
 import { computeEmaLast } from "./emaUtils";
+import { computeParabolicSarLast } from "./indicatorMath";
+
+export { computeParabolicSarLast } from "./indicatorMath";
 import {
   fetchAllOpenPositions,
   fetchContractDetailPublic,
@@ -145,80 +148,6 @@ export function describeSwingStructureFromCloses(closes: number[]): string {
   }
   if (parts.length === 0) return "Range / ไม่ชัด (heuristic)";
   return `${parts.join(" · ")} (heuristic)`;
-}
-
-type PsarResult = {
-  sar: number;
-  trend: "up" | "down";
-  flipped: boolean;
-};
-
-/**
- * Parabolic SAR (classic) using high/low arrays (old→new).
- * step=0.02 max=0.2 เป็นค่ามาตรฐานทั่วไป
- */
-export function computeParabolicSarLast(
-  high: number[],
-  low: number[],
-  step = 0.02,
-  maxAf = 0.2
-): PsarResult | null {
-  const n = Math.min(high.length, low.length);
-  if (n < 5) return null;
-  const h = high.slice(-n);
-  const l = low.slice(-n);
-  const valid =
-    h.every((x) => Number.isFinite(x) && x > 0) && l.every((x) => Number.isFinite(x) && x > 0);
-  if (!valid) return null;
-
-  // initial trend from first 2 bars
-  let trend: "up" | "down" = h[1]! >= h[0]! ? "up" : "down";
-  let ep = trend === "up" ? Math.max(h[0]!, h[1]!) : Math.min(l[0]!, l[1]!);
-  let sar = trend === "up" ? Math.min(l[0]!, l[1]!) : Math.max(h[0]!, h[1]!);
-  let af = step;
-
-  let flipped = false;
-  for (let i = 2; i < n; i++) {
-    flipped = false;
-    const prevSar = sar;
-    sar = prevSar + af * (ep - prevSar);
-
-    if (trend === "up") {
-      // SAR cannot be above prior lows (classic clamp)
-      sar = Math.min(sar, l[i - 1]!, l[i - 2]!);
-      // flip
-      if (l[i]! <= sar) {
-        trend = "down";
-        flipped = true;
-        sar = ep; // on flip, SAR becomes prior EP
-        ep = l[i]!;
-        af = step;
-      } else {
-        // update EP + AF
-        if (h[i]! > ep) {
-          ep = h[i]!;
-          af = Math.min(maxAf, af + step);
-        }
-      }
-    } else {
-      // downtrend clamp
-      sar = Math.max(sar, h[i - 1]!, h[i - 2]!);
-      if (h[i]! >= sar) {
-        trend = "up";
-        flipped = true;
-        sar = ep;
-        ep = h[i]!;
-        af = step;
-      } else {
-        if (l[i]! < ep) {
-          ep = l[i]!;
-          af = Math.min(maxAf, af + step);
-        }
-      }
-    }
-  }
-
-  return { sar, trend, flipped };
 }
 
 function describeEma12Proxy(long: boolean, mark: number, ema12: number | null): { line: string; distPct: number | null } {

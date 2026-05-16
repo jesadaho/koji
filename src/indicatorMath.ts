@@ -106,3 +106,67 @@ export function stochRsiLine(closes: number[], rsiPeriod: number, stochPeriod: n
   }
   return out;
 }
+
+export type ParabolicSarResult = {
+  sar: number;
+  trend: "up" | "down";
+  flipped: boolean;
+};
+
+/**
+ * Parabolic SAR (classic) — high/low เรียงเก่า→ใหม่ · step=0.02 max=0.2
+ */
+export function computeParabolicSarLast(
+  high: number[],
+  low: number[],
+  step = 0.02,
+  maxAf = 0.2
+): ParabolicSarResult | null {
+  const n = Math.min(high.length, low.length);
+  if (n < 5) return null;
+  const h = high.slice(-n);
+  const l = low.slice(-n);
+  const valid =
+    h.every((x) => Number.isFinite(x) && x > 0) && l.every((x) => Number.isFinite(x) && x > 0);
+  if (!valid) return null;
+
+  let trend: "up" | "down" = h[1]! >= h[0]! ? "up" : "down";
+  let ep = trend === "up" ? Math.max(h[0]!, h[1]!) : Math.min(l[0]!, l[1]!);
+  let sar = trend === "up" ? Math.min(l[0]!, l[1]!) : Math.max(h[0]!, h[1]!);
+  let af = step;
+
+  let flipped = false;
+  for (let i = 2; i < n; i++) {
+    flipped = false;
+    const prevSar = sar;
+    sar = prevSar + af * (ep - prevSar);
+
+    if (trend === "up") {
+      sar = Math.min(sar, l[i - 1]!, l[i - 2]!);
+      if (l[i]! <= sar) {
+        trend = "down";
+        flipped = true;
+        sar = ep;
+        ep = l[i]!;
+        af = step;
+      } else if (h[i]! > ep) {
+        ep = h[i]!;
+        af = Math.min(maxAf, af + step);
+      }
+    } else {
+      sar = Math.max(sar, h[i - 1]!, h[i - 2]!);
+      if (h[i]! >= sar) {
+        trend = "up";
+        flipped = true;
+        sar = ep;
+        ep = h[i]!;
+        af = step;
+      } else if (l[i]! < ep) {
+        ep = l[i]!;
+        af = Math.min(maxAf, af + step);
+      }
+    }
+  }
+
+  return { sar, trend, flipped };
+}

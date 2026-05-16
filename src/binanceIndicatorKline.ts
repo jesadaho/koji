@@ -239,6 +239,28 @@ export async function fetchAllBinanceUsdmLinearSymbols(): Promise<string[]> {
 /**
  * ดึง Top N สัญญา USDT-M (ยกเว้น BTC/ETH และคู่ stable ที่กำหนด) เรียงจาก quoteVolume สูงสุด
  */
+/** quoteVolume USDT จาก ticker 24hr (Futures USDT-M) */
+export async function fetchBinanceUsdmQuoteVol24h(symbol: string): Promise<number | null> {
+  if (!isBinanceIndicatorFapiEnabled()) return null;
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return null;
+  try {
+    const { data } = await axios.get<Ticker24hRow>(`${FAPI}/fapi/v1/ticker/24hr`, {
+      params: { symbol: sym },
+      timeout: 20_000,
+    });
+    const qv = Number(data?.quoteVolume ?? data?.volume ?? NaN);
+    return Number.isFinite(qv) && qv > 0 ? qv : null;
+  } catch (e) {
+    if (isBinance451Geo(e)) {
+      logBinance451Once("ticker/24hr symbol", sym);
+    } else {
+      console.error("[binanceIndicatorKline] ticker 24hr symbol", sym, axiosBrief(e));
+    }
+    return null;
+  }
+}
+
 export async function fetchTopUsdmUsdtSymbolsByQuoteVolume(topN: number): Promise<string[]> {
   if (topN <= 0) return [];
   if (!isBinanceIndicatorFapiEnabled()) return [];
