@@ -5,6 +5,7 @@ import {
   isBinanceIndicatorFapiEnabled,
   resetBinanceIndicatorFapi451LogDedupe,
   type BinanceIndicatorTf,
+  type SnowballBinanceTf,
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 import { sendPublicIndicatorFeedToSparkGroup, sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
@@ -66,7 +67,7 @@ export function publicRsiDivergenceTfs(): BinanceIndicatorTf[] {
 }
 
 /** Snowball ใช้ TF นี้จาก Binance USDM (15m / 1h / 4h) — ค่าเริ่ม 4h */
-export function snowballBinanceTf(): BinanceIndicatorTf {
+export function snowballBinanceTf(): SnowballBinanceTf {
   const raw = process.env.INDICATOR_PUBLIC_SNOWBALL_TF?.trim().toLowerCase();
   if (raw === "4h" || raw === "4hr") return "4h";
   if (raw === "1h") return "1h";
@@ -2130,6 +2131,7 @@ function pushSnowScanErr(stats: Snowball4hScanSummaryStats, line: string): void 
 function tfBarDurationSecForSummary(tf: BinanceIndicatorTf): number {
   if (tf === "15m") return 15 * 60;
   if (tf === "1h") return 3600;
+  if (tf === "1d") return 24 * 3600;
   return 4 * 3600;
 }
 

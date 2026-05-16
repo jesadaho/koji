@@ -2,11 +2,11 @@ import type { FlexBubble } from "@line/bot-sdk";
 import { SYSTEM_CHANGE_CMD_OFF_TH, SYSTEM_CHANGE_CMD_ON_TH } from "./systemChangeLineCommands";
 
 export const KOJI_MENU_ALT_TEXT =
-  "Koji — เปิดแอป, Market, สถิติ Snowball, Top 50 Funding, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อยังไม่ตั้งเปิดจากเว็บแอปบน LINE), ช่วยเหลือ";
+  "Koji — เปิดแอป, Market, สถิติ Snowball/Reversal, Top 50 Funding, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อยังไม่ตั้งเปิดจากเว็บแอปบน LINE), ช่วยเหลือ";
 
 /** เมื่อยังไม่ติดตามระบบ — ไม่มีปุ่ม Top Funding */
 export const KOJI_MENU_ALT_TEXT_NO_TOP_FUNDING =
-  "Koji — เปิดแอป, Market, สถิติ Snowball, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อยังไม่ตั้งเปิดจากเว็บแอปบน LINE), ช่วยเหลือ";
+  "Koji — เปิดแอป, Market, สถิติ Snowball/Reversal, Settings (ติดตามระบบ), ติดตาม/เลิกติดตามระบบ (เมื่อยังไม่ตั้งเปิดจากเว็บแอปบน LINE), ช่วยเหลือ";
 
 export type KojiWelcomeFlexOptions = {
   /** ถ้า true แสดงปุ่ม Top 50 Funding (เมื่อผูก LIFF-ID บน OA) — ผูกกับผู้ที่ติดตาม System conditions */
@@ -46,6 +46,16 @@ export function buildKojiWelcomeFlexContents(liffId?: string, options?: KojiWelc
         type: "uri" as const,
         label: "สถิติ Snowball",
         uri: `https://liff.line.me/${liffId}/snowball-stats`,
+      },
+    });
+    footerContents.push({
+      type: "button" as const,
+      style: "secondary" as const,
+      height: "sm" as const,
+      action: {
+        type: "uri" as const,
+        label: "สถิติ Reversal",
+        uri: `https://liff.line.me/${liffId}/reversal-stats`,
       },
     });
     if (showTopFunding) {

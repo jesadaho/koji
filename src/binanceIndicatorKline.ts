@@ -58,6 +58,9 @@ const KLINE_LIMIT = 150;
 /** TF สำหรับ public feed — ตรงกับ Binance interval string */
 export type BinanceIndicatorTf = "15m" | "1h" | "4h" | "1d";
 
+/** Snowball / stats / auto-trade — ไม่ใช้ 1d (Reversal 1D ใช้ fetch แยก) */
+export type SnowballBinanceTf = "15m" | "1h" | "4h";
+
 const INTERVAL: Record<BinanceIndicatorTf, string> = {
   "15m": "15m",
   "1h": "1h",

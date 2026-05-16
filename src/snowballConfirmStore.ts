@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
-import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
+import type { SnowballBinanceTf } from "./binanceIndicatorKline";
 
 /** ค่าเดียวกับ SnowballConfirmRiskFlagId ใน publicIndicatorFeed — แยกเพื่อกัน import วน */
 export type SnowballConfirmRiskFlagId = "wick_history" | "supply_zone" | "signal_wick";
@@ -39,7 +39,7 @@ export type SnowballPendingConfirm = {
   id: string;
   symbol: string;
   side: "long" | "bear";
-  snowTf: BinanceIndicatorTf;
+  snowTf: SnowballBinanceTf;
   signalBarOpenSec: number;
   signalHigh: number;
   signalLow: number;

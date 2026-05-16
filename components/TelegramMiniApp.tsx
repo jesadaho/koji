@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import IndicatorCoinPicker from "@/components/IndicatorCoinPicker";
+import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { formatScore } from "@/src/marketsFormat";
 import {
   getTelegramInitData,
@@ -748,16 +749,16 @@ export default function TelegramMiniApp() {
         <span className="siteNavSep" aria-hidden>
           |
         </span>
-        <Link href="/snowball-stats">สถิติ Snowball</Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
-        <Link href="/reversal-stats">สถิติ Reversal</Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
         <Link href="/settings">Settings</Link>
       </p>
+
+      <div className="card" style={{ marginTop: "0.75rem" }}>
+        <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>สถิติสัญญาณ</h2>
+        <p className="sub" style={{ marginTop: "0.25rem", marginBottom: "0.65rem" }}>
+          บันทึกหลังแจ้งเตือน Telegram สำเร็จ · follow-up ตามระยะเวลา
+        </p>
+        <MiniAppStatsNav className="tmaQuickNav" style={{ margin: 0 }} />
+      </div>
 
       <div className="card">
         <div

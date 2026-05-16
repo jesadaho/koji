@@ -651,6 +651,10 @@ export default function SettingsTelegramMiniApp() {
         <span className="siteNavSep" aria-hidden>
           |
         </span>
+        <Link href="/reversal-stats">สถิติ Reversal</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
         <a href="#spark-auto-open">Spark auto-open</a>
         {" · "}
         <a href="#snowball-auto-open">Snowball auto-open</a>

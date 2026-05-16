@@ -201,6 +201,10 @@ export default async function MarketsPage({
         <span className="siteNavSep" aria-hidden>
           |
         </span>
+        <Link href="/reversal-stats">สถิติ Reversal</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
         <Link href="/settings">Settings</Link>
       </p>
     </main>

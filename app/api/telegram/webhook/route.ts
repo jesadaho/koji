@@ -284,7 +284,13 @@ export async function POST(req: NextRequest) {
     };
     if (url) {
       payload.reply_markup = {
-        inline_keyboard: [[{ text: "เปิด Koji", web_app: { url } }]],
+        inline_keyboard: [
+          [{ text: "เปิด Koji", web_app: { url } }],
+          [
+            { text: "สถิติ Snowball", web_app: { url: `${url}snowball-stats` } },
+            { text: "สถิติ Reversal", web_app: { url: `${url}reversal-stats` } },
+          ],
+        ],
       };
     }
 

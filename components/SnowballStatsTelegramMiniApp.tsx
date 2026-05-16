@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import {
   getTelegramInitData,
   loadTelegramWebApp,
@@ -324,9 +325,7 @@ export default function SnowballStatsTelegramMiniApp() {
         </span>
       </h1>
 
-      <p className="tmaQuickNav" style={{ marginTop: "0.75rem" }}>
-        <Link href="/">หน้าแรก</Link>
-      </p>
+      <MiniAppStatsNav showHome style={{ marginTop: "0.75rem" }} />
 
       <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
         <div className="sparkMatrixScroll">
