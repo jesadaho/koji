@@ -352,8 +352,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const revDbg = parseReversalRiskDebugCommand(normalized) || parseReversalRiskDebugCommand(trimmedText);
-  if (revDbg) {
+  const revRiskDbg = parseReversalRiskDebugCommand(normalized) || parseReversalRiskDebugCommand(trimmedText);
+  if (revRiskDbg) {
     if (!isTelegramCronRunAllowed(fromUserId)) {
       try {
         await sendTelegramMessageToChat(
@@ -367,7 +367,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
     try {
-      const body = await formatReversalRiskDebugMessage(revDbg.symbol);
+      const body = await formatReversalRiskDebugMessage(revRiskDbg.symbol);
       await sendTelegramMessageToChat(String(chatId), body, threadOpts);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
