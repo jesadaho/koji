@@ -41,6 +41,8 @@ import {
   evalInvertedDoji1h,
   evalLongestRedBody1h,
   evalMarubozu1d,
+  candleReversal1hInvertedDojiCheckLines,
+  candleReversal1hLongestRedBodyCheckLines,
   fmtReversalPrice,
   type CandleReversal1dDetectEnv,
   type CandleReversal1hDetectEnv,
@@ -137,6 +139,10 @@ function detectEnv1h(): CandleReversal1hDetectEnv {
   if (Number.isFinite(redLb) && redLb >= 8 && redLb <= 72) env.longestRedBodyLookback = Math.floor(redLb);
   const redRatio = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_MIN_RATIO?.trim());
   if (Number.isFinite(redRatio) && redRatio > 0.5 && redRatio < 1) env.longestRedBodyMinRatio = redRatio;
+  const highRankMax = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_HIGH_RANK_MAX?.trim());
+  if (Number.isFinite(highRankMax) && highRankMax >= 1 && highRankMax <= 5) {
+    env.longestRedBodyHighRankMax = Math.floor(highRankMax);
+  }
   return env;
 }
 
@@ -689,9 +695,16 @@ async function formatDebugForTf(sym: string, tf: CandleReversalTf, barsAgo = 0):
   const inverted = tf === "1h" ? evalInvertedDoji1h(pack, i, env1h) : evalInvertedDoji1d(pack, i, env1d);
   const marubozu = tf === "1d" ? evalMarubozu1d(pack, i, env1d, hadDoji) : null;
   const longest = tf === "1h" ? evalLongestRedBody1h(pack, i, env1h, hadDoji) : null;
-  lines.push(`inverted_doji: ${inverted ? "✓" : "—"}`);
-  if (tf === "1d") lines.push(`marubozu: ${marubozu ? "✓" : "—"}`);
-  if (tf === "1h") lines.push(`longest_red_body: ${longest ? "✓" : "—"}`);
+  lines.push(`โมเดล (ผ่านทั้งชุด = ✓):`);
+  lines.push(`  inverted_doji: ${inverted ? "✓" : "—"}`);
+  if (tf === "1d") lines.push(`  marubozu: ${marubozu ? "✓" : "—"}`);
+  if (tf === "1h") lines.push(`  longest_red_body: ${longest ? "✓" : "—"}`);
+  if (tf === "1h") {
+    lines.push("");
+    lines.push(...candleReversal1hLongestRedBodyCheckLines(pack, i, env1h));
+    lines.push("");
+    lines.push(...candleReversal1hInvertedDojiCheckLines(pack, i, env1h));
+  }
 
   const sig = evalCandleReversalAtBarIndex(tf, pack, i, env1d, env1h, { hadRecentInvertedDoji: hadDoji });
   if (!sig) {

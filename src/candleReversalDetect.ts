@@ -51,6 +51,17 @@ function maxRedBodyInWindow(open: number[], close: number[], start: number, end:
   return m;
 }
 
+/** อันดับ high ใน окน [start,end] — 1 = สูงสุด (นับแท่งที่ high สูงกว่าแท่ง i เท่านั้น) */
+function highRankInWindow(high: number[], start: number, end: number, i: number): number {
+  const hi = high[i]!;
+  const eps = Math.max(1e-12, Math.abs(hi) * 1e-10);
+  let strictlyHigher = 0;
+  for (let j = start; j <= end; j++) {
+    if (j !== i && high[j]! > hi + eps) strictlyHigher++;
+  }
+  return strictlyHigher + 1;
+}
+
 export type CandleReversal1dDetectEnv = {
   hh200Lookback: number;
   hh200ExcludeRecent: number;
@@ -69,6 +80,8 @@ export type CandleReversal1hDetectEnv = {
   bodyMaxRatio: number;
   longestRedBodyLookback: number;
   longestRedBodyMinRatio: number;
+  /** high ของแท่งต้องอยู่อันดับ 1..N ในรอบ longestRedBodyLookback (ดีฟอลต์ 2) */
+  longestRedBodyHighRankMax: number;
   emaPeriod: number;
   slBufferPct: number;
 };
@@ -91,6 +104,7 @@ export const DEFAULT_CANDLE_REVERSAL_1H_ENV: CandleReversal1hDetectEnv = {
   bodyMaxRatio: 0.2,
   longestRedBodyLookback: 24,
   longestRedBodyMinRatio: 0.8,
+  longestRedBodyHighRankMax: 2,
   emaPeriod: 20,
   slBufferPct: 0.001,
 };
@@ -224,7 +238,7 @@ export function evalMarubozu1d(
   return buildSignal("1d", "marubozu", pack, i, 0, body / range, retestPrice, slPrice, hadRecentInvertedDoji);
 }
 
-/** 1H longest red body — เนื้อแดง ≥ ratio × max ในรอบ N แท่ง + ปิดใต้ EMA */
+/** 1H longest red body — เนื้อแดง ≥ ratio × max ในรอบ N แท่ง · high อันดับ 1–2 ในรอบเดียวกัน · ปิดใต้ EMA */
 export function evalLongestRedBody1h(
   pack: BinanceKlinePack,
   i: number,
@@ -243,6 +257,9 @@ export function evalLongestRedBody1h(
   const maxRedBody = maxRedBodyInWindow(o, c, start, i);
   if (!Number.isFinite(maxRedBody) || maxRedBody <= eps) return null;
   if (body <= maxRedBody * env.longestRedBodyMinRatio) return null;
+
+  const highRank = highRankInWindow(h, start, i, i);
+  if (highRank > env.longestRedBodyHighRankMax) return null;
 
   const ema = emaLine(c, env.emaPeriod);
   const eNow = ema[i];
@@ -310,6 +327,95 @@ export function evalCandleReversal1dClosedBar(
   opts?: { hadRecentInvertedDoji?: boolean },
 ): CandleReversalSignal | null {
   return evalCandleReversalClosedBar("1d", pack, env, DEFAULT_CANDLE_REVERSAL_1H_ENV, opts);
+}
+
+function checkMark(ok: boolean): string {
+  return ok ? "✓" : "—";
+}
+
+/** รายการเกณฑ์ longest_red_body 1H สำหรับ debug */
+export function candleReversal1hLongestRedBodyCheckLines(
+  pack: BinanceKlinePack,
+  barIndex: number,
+  env: CandleReversal1hDetectEnv = DEFAULT_CANDLE_REVERSAL_1H_ENV,
+): string[] {
+  const i = barIndex;
+  const { open: o, high: h, low: l, close: c } = pack;
+  const lines: string[] = [];
+  lines.push(
+    `เกณฑ์ longest_red_body (lookback ${env.longestRedBodyLookback} แท่ง · min ${(env.longestRedBodyMinRatio * 100).toFixed(0)}% ของเนื้อแดงสูงสุด · high อันดับ≤${env.longestRedBodyHighRankMax} · EMA${env.emaPeriod}):`,
+  );
+
+  const red = c[i]! < o[i]!;
+  lines.push(`  แท่งแดง C<O: ${checkMark(red)} (${fmtReversalPrice(c[i]!)} < ${fmtReversalPrice(o[i]!)})`);
+
+  const body = o[i]! - c[i]!;
+  const range = h[i]! - l[i]!;
+  const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
+  const bodyOk = Number.isFinite(body) && body > eps && Number.isFinite(range) && range > eps;
+  lines.push(`  มีเนื้อ/ช่วงแท่ง: ${checkMark(bodyOk)}`);
+
+  const start = Math.max(0, i - env.longestRedBodyLookback + 1);
+  const maxRedBody = maxRedBodyInWindow(o, c, start, i);
+  const need = maxRedBody * env.longestRedBodyMinRatio;
+  const longestOk = Number.isFinite(maxRedBody) && maxRedBody > eps && body > need;
+  lines.push(
+    `  เนื้อแดงยาวในรอบ: ${checkMark(longestOk)} (เนื้อ ${fmtReversalPrice(body)} > ${(env.longestRedBodyMinRatio * 100).toFixed(0)}%×max ${fmtReversalPrice(maxRedBody)} = ${fmtReversalPrice(need)})`,
+  );
+
+  const highRank = highRankInWindow(h, start, i, i);
+  const highRankOk = highRank <= env.longestRedBodyHighRankMax;
+  lines.push(
+    `  high อันดับในรอบ: ${checkMark(highRankOk)} (อันดับ ${highRank} · H ${fmtReversalPrice(h[i]!)} · ต้อง≤${env.longestRedBodyHighRankMax})`,
+  );
+
+  const ema = emaLine(c, env.emaPeriod);
+  const eNow = ema[i];
+  const underEma = Number.isFinite(eNow) && c[i]! < (eNow as number);
+  lines.push(
+    `  ปิดใต้ EMA${env.emaPeriod}: ${checkMark(underEma)} (C ${fmtReversalPrice(c[i]!)} < EMA ${fmtReversalPrice(eNow as number)})`,
+  );
+
+  return lines;
+}
+
+/** รายการเกณฑ์ inverted_doji 1H สำหรับ debug */
+export function candleReversal1hInvertedDojiCheckLines(
+  pack: BinanceKlinePack,
+  barIndex: number,
+  env: CandleReversal1hDetectEnv = DEFAULT_CANDLE_REVERSAL_1H_ENV,
+): string[] {
+  const i = barIndex;
+  const { open: o, high: h, low: l, close: c } = pack;
+  const lines: string[] = [];
+  lines.push(`เกณฑ์ inverted_doji (high สูงสุดใน ${env.highestHighLookback} แท่ง · ไส้≥${(env.wickMinRatio * 100).toFixed(0)}% · เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}%):`);
+
+  const range = h[i]! - l[i]!;
+  const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
+  const rangeOk = Number.isFinite(range) && range > eps;
+  lines.push(`  ช่วงแท่ง: ${checkMark(rangeOk)}`);
+
+  const body = Math.abs(c[i]! - o[i]!);
+  const upperWick = h[i]! - Math.max(o[i]!, c[i]!);
+  const wickRatio = upperWick / range;
+  const bodyRatio = body / range;
+  const wickOk = wickRatio >= env.wickMinRatio;
+  const bodySmallOk = bodyRatio <= env.bodyMaxRatio;
+  lines.push(
+    `  ไส้บน≥${(env.wickMinRatio * 100).toFixed(0)}%: ${checkMark(wickOk)} (${(wickRatio * 100).toFixed(1)}%)`,
+  );
+  lines.push(
+    `  เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}%: ${checkMark(bodySmallOk)} (${(bodyRatio * 100).toFixed(1)}%)`,
+  );
+
+  const start = Math.max(0, i - env.highestHighLookback + 1);
+  const windowMax = maxHighInWindowInclusive(h, start, i);
+  const highOk = Number.isFinite(windowMax) && h[i]! >= windowMax - eps;
+  lines.push(
+    `  high สูงสุดในรอบ: ${checkMark(highOk)} (H ${fmtReversalPrice(h[i]!)} vs max ${fmtReversalPrice(windowMax)})`,
+  );
+
+  return lines;
 }
 
 export function fmtReversalPrice(n: number): string {
