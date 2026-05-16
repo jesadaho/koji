@@ -43,6 +43,10 @@ import {
   parseReversalRiskDebugCommand,
   parseSnowballDebugCommand,
 } from "@/src/publicIndicatorFeedDebug";
+import {
+  formatCandleReversal1dDebugMessage,
+  parseCandleReversal1dDebugCommand,
+} from "@/src/candleReversal1dAlertTick";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -370,6 +374,40 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] reversal risk debug error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const rev1dDbg =
+    parseCandleReversal1dDebugCommand(normalized) || parseCandleReversal1dDebugCommand(trimmedText);
+  if (rev1dDbg) {
+    if (!isTelegramCronRunAllowed(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          "คำสั่ง debug reversal 1d ต้องเป็น admin — ตั้ง KOJI_ADMIN_IDS=<telegram user id>",
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] reversal 1d debug deny", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const body = await formatCandleReversal1dDebugMessage(rev1dDbg.symbol);
+      await sendTelegramMessageToChat(String(chatId), body, threadOpts);
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      console.error("[telegram/webhook] reversal 1d debug", e);
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          `debug reversal 1d ล้มเหลว — ${detail.slice(0, 800)}`,
+          threadOpts,
+        );
+      } catch (sendErr) {
+        console.error("[telegram/webhook] reversal 1d debug error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

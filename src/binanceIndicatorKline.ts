@@ -56,12 +56,13 @@ export type BinanceKlinePack = {
 const KLINE_LIMIT = 150;
 
 /** TF สำหรับ public feed — ตรงกับ Binance interval string */
-export type BinanceIndicatorTf = "15m" | "1h" | "4h";
+export type BinanceIndicatorTf = "15m" | "1h" | "4h" | "1d";
 
 const INTERVAL: Record<BinanceIndicatorTf, string> = {
   "15m": "15m",
   "1h": "1h",
   "4h": "4h",
+  "1d": "1d",
 };
 
 function parseKlineRows(rows: unknown, minBars = 10): BinanceKlinePack | null {

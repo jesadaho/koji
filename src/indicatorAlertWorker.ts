@@ -13,6 +13,8 @@ import { runSnowballStatsFollowUpTick } from "./snowballStatsTick";
 import { runSnowballAutoTradeQuickTpTick } from "./snowballAutoTradeQuickTpTick";
 import { runSnowballAutoTrade24hGuardTick } from "./snowballAutoTrade24hGuardTick";
 import { runDownsideReversalAlertTick } from "./downsideReversalAlertTick";
+import { runCandleReversal1dAlertTick } from "./candleReversal1dAlertTick";
+import { runCandleReversalStatsFollowUpTick } from "./candleReversalStatsTick";
 import { emaLine, rsiWilder } from "./indicatorMath";
 import {
   loadActiveEmaCrossAlerts,
@@ -344,7 +346,9 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const snowball24hClosed = await runSnowballAutoTrade24hGuardTick(now);
   const watch612 = await runEma612ContractWatchAlertTick(client);
   const downsideN = await runDownsideReversalAlertTick();
-  const total = rsiN + emaN + publicN + snowballConfirmN + watch612 + downsideN;
+  const candleReversalN = await runCandleReversal1dAlertTick(now);
+  const candleReversalStatsN = await runCandleReversalStatsFollowUpTick(now);
+  const total = rsiN + emaN + publicN + snowballConfirmN + watch612 + downsideN + candleReversalN;
 
   const parts: string[] = [`RSI/EMA (MEXC) ${rsiN + emaN}`];
   if (publicN > 0) parts.push(`public Binance ${publicN}`);
@@ -355,6 +359,8 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   if (snowball24hClosed > 0) parts.push(`snowball 24h close ${snowball24hClosed}`);
   if (watch612 > 0) parts.push(`EMA6/12·15m ติดตาม ${watch612}`);
   if (downsideN > 0) parts.push(`downside reversal (Binance) ${downsideN}`);
+  if (candleReversalN > 0) parts.push(`candle reversal 1D ${candleReversalN}`);
+  if (candleReversalStatsN > 0) parts.push(`candle reversal stats ${candleReversalStatsN}`);
   let detail: string | undefined;
   if (total > 0) detail = `แจ้ง ${total} ครั้ง (${parts.join(" · ")})`;
   else if (publicRes.skippedReason) detail = `ไม่แจ้ง (0) · ${parts.join(" · ")}`;

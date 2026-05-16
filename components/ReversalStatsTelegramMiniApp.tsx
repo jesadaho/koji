@@ -1,0 +1,252 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  getTelegramInitData,
+  loadTelegramWebApp,
+  prepareTelegramMiniAppShell,
+} from "@/lib/kojiTelegramWebApp";
+import {
+  candleReversalDayOfWeekBkk,
+  candleReversalModelLabel,
+  candleReversalOutcomeLabel,
+  type CandleReversalStatsApiPayload,
+} from "@/lib/candleReversalStatsClient";
+
+const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+
+const FOOTNOTE =
+  "Binance USDT-M · แท่ง Day ปิด · Short bias · follow-up 1d/3d/7d จากราคาปิดแท่ง Day ถัดไป · ผลสรุปที่ 7d";
+
+function coinLabel(symbol: string): string {
+  const u = symbol.toUpperCase();
+  return u.endsWith("USDT") ? u.slice(0, -4) : u;
+}
+
+function formatBkk(iso: string): string {
+  const d = Date.parse(iso);
+  if (Number.isNaN(d)) return iso;
+  return new Date(d).toLocaleString("th-TH", {
+    timeZone: "Asia/Bangkok",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function fmtPrice(p: number | null | undefined): string {
+  if (p == null || !Number.isFinite(p)) return "—";
+  const abs = Math.abs(p);
+  if (abs >= 1000) return p.toFixed(2);
+  if (abs >= 1) return p.toFixed(4);
+  return p.toFixed(6);
+}
+
+function fmtPct(p: number | null | undefined): string {
+  if (p == null || !Number.isFinite(p)) return "—";
+  const s = p >= 0 ? "+" : "";
+  return `${s}${p.toFixed(2)}%`;
+}
+
+function fmtPctCell(price: number | null, pct: number | null): ReactNode {
+  if (price == null || !Number.isFinite(price)) return "—";
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      {fmtPrice(price)} ({fmtPct(pct)})
+    </span>
+  );
+}
+
+type Phase = "loading" | "setup" | "ready";
+
+export default function ReversalStatsTelegramMiniApp() {
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [setupBody, setSetupBody] = useState<ReactNode>(null);
+  const [payload, setPayload] = useState<CandleReversalStatsApiPayload | null>(null);
+
+  const api = useCallback(async (path: string) => {
+    const initData = getTelegramInitData();
+    const url = `${apiBase}/api/tma${path}`;
+    const res = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        ...(initData ? { Authorization: `tma ${initData}` } : {}),
+      },
+    });
+    const text = await res.text();
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      /* ignore */
+    }
+    if (!res.ok) {
+      const msg =
+        parsed && typeof parsed === "object" && parsed !== null && "error" in parsed
+          ? String((parsed as { error: unknown }).error)
+          : res.statusText;
+      throw new Error(msg);
+    }
+    return parsed as CandleReversalStatsApiPayload;
+  }, []);
+
+  const loadStats = useCallback(async () => {
+    const data = await api("/reversal-stats");
+    setPayload(data);
+  }, [api]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await loadTelegramWebApp();
+        prepareTelegramMiniAppShell();
+      } catch (e) {
+        if (!cancelled) {
+          setSetupBody(
+            <p>โหลด Telegram Web App ไม่ได้: {e instanceof Error ? e.message : String(e)}</p>,
+          );
+          setPhase("setup");
+        }
+        return;
+      }
+
+      try {
+        const configUrl = `${apiBase}/api/tma/config`;
+        const res = await fetch(configUrl);
+        const cfg = (await res.json()) as { botTokenConfigured?: boolean };
+        if (!cfg.botTokenConfigured) {
+          if (!cancelled) {
+            setSetupBody(<p>ยังไม่ตั้ง TELEGRAM_BOT_TOKEN</p>);
+            setPhase("setup");
+          }
+          return;
+        }
+        await loadStats();
+        if (!cancelled) setPhase("ready");
+      } catch (e) {
+        if (!cancelled) {
+          setSetupBody(
+            <p>โหลดสถิติ Reversal ไม่สำเร็จ: {e instanceof Error ? e.message : String(e)}</p>,
+          );
+          setPhase("setup");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadStats]);
+
+  if (phase === "loading") {
+    return (
+      <div className="sparkStatsPage sparkStatsPage--wide">
+        <div className="tmaLoadingRow">
+          <span className="tmaLoadingSpinner" aria-hidden />
+          <span className="tmaLoadingLabel">กำลังโหลด…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "setup") {
+    return (
+      <div className="sparkStatsPage sparkStatsPage--wide">
+        <h1 className="sparkStatsMatrixSectionTitle">สถิติ Reversal 1D</h1>
+        {setupBody}
+        <p className="sub" style={{ marginTop: "1rem" }}>
+          <Link href="/">กลับหน้าแรก</Link>
+        </p>
+      </div>
+    );
+  }
+
+  const rows = payload?.rows ?? [];
+
+  return (
+    <div className="sparkStatsPage sparkStatsPage--wide">
+      <h1 className="sparkStatsMatrixSectionTitle">
+        สถิติ Reversal 1D
+        <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
+          โดจิกลับหัว · แท่งแดงทุบ · Binance Day
+        </span>
+      </h1>
+
+      <p className="tmaQuickNav" style={{ marginTop: "0.75rem" }}>
+        <Link href="/">หน้าแรก</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
+        <Link href="/snowball-stats">Snowball</Link>
+      </p>
+
+      <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
+        <div className="sparkMatrixScroll">
+          <table className="sparkMatrixTable sparkMatrixTable--compact">
+            <thead>
+              <tr>
+                <th scope="col">เหรียญ</th>
+                <th scope="col">โมเดล</th>
+                <th scope="col">วัน</th>
+                <th scope="col">เวลา (BKK)</th>
+                <th scope="col">Entry</th>
+                <th scope="col">Retest</th>
+                <th scope="col">SL</th>
+                <th scope="col">ไส้%</th>
+                <th scope="col">เนื้อ%</th>
+                <th scope="col">1d</th>
+                <th scope="col">3d</th>
+                <th scope="col">7d</th>
+                <th scope="col">Max ROI</th>
+                <th scope="col">Max DD</th>
+                <th scope="col">ผล</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={15} className="sub">
+                    ยังไม่มีแถว — รอสัญญาณ Reversal 1D ส่งสำเร็จและ CANDLE_REVERSAL_1D_ALERTS_ENABLED
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => (
+                  <tr key={r.id}>
+                    <td>{coinLabel(r.symbol)}</td>
+                    <td>{candleReversalModelLabel(r.model)}</td>
+                    <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
+                    <td>
+                      <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
+                    </td>
+                    <td>{fmtPrice(r.entryPrice)}</td>
+                    <td>{fmtPrice(r.retestPrice)}</td>
+                    <td>{fmtPrice(r.slPrice)}</td>
+                    <td>{r.wickRatioPct != null ? `${r.wickRatioPct.toFixed(1)}%` : "—"}</td>
+                    <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
+                    <td>{fmtPctCell(r.price1d, r.pct1d)}</td>
+                    <td>{fmtPctCell(r.price3d, r.pct3d)}</td>
+                    <td>{fmtPctCell(r.price7d, r.pct7d)}</td>
+                    <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
+                    <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
+                    <td>{candleReversalOutcomeLabel(r.outcome)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
+          {FOOTNOTE}
+        </p>
+        <p style={{ marginTop: "0.75rem" }}>
+          <button type="button" className="sparkStatsRefreshBtn" onClick={() => void loadStats()}>
+            รีเฟรช
+          </button>
+        </p>
+      </section>
+    </div>
+  );
+}

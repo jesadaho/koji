@@ -26,6 +26,7 @@ import {
   liffDeleteIndicatorAlert,
   liffGetSparkStats,
   liffGetSnowballStats,
+  liffGetCandleReversalStats,
   liffGetTradingViewMexcSettings,
   liffSetTradingViewMexcSettings,
 } from "@/src/liffService";
@@ -112,6 +113,15 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const data = await liffGetSnowballStats();
+      return NextResponse.json(data, {
+        status: 200,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    if (segs.length === 1 && a === "reversal-stats") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const data = await liffGetCandleReversalStats();
       return NextResponse.json(data, {
         status: 200,
         headers: { "Cache-Control": "no-store" },

@@ -52,6 +52,8 @@ import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
 import type { SnowballStatsApiPayload } from "@/lib/snowballStatsClient";
 import { loadSnowballStatsState } from "./snowballStatsStore";
+import { loadCandleReversalStatsState } from "./candleReversalStatsStore";
+import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
 import {
   ensureTradingViewMexcUserRow,
   orderSideEffective,
@@ -700,6 +702,12 @@ export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
 /** สถิติ Snowball (global) — ต้องผ่าน auth เหมือน spark-stats */
 export async function liffGetSnowballStats(): Promise<SnowballStatsApiPayload> {
   const st = await loadSnowballStatsState();
+  const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
+  return { rows };
+}
+
+export async function liffGetCandleReversalStats(): Promise<CandleReversalStatsApiPayload> {
+  const st = await loadCandleReversalStatsState();
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
   return { rows };
 }

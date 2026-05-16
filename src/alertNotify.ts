@@ -119,6 +119,20 @@ export async function sendPublicSnowballFeedToSparkGroup(text: string): Promise<
 }
 
 /**
+ * 1D Candle Reversal (โดจิกลับหัว / แท่งแดงทุบ) → Forum topic แยก (`TELEGRAM_PUBLIC_REVERSAL_MESSAGE_THREAD_ID`)
+ */
+export async function sendPublicReversalFeedToSparkGroup(text: string): Promise<boolean> {
+  if (!telegramSparkSystemGroupConfigured()) {
+    console.warn(
+      "[sendPublicReversalFeedToSparkGroup] ไม่มี TELEGRAM_BOT_TOKEN + TELEGRAM_PUBLIC_CHAT_ID — ไม่ส่ง Reversal feed"
+    );
+    return false;
+  }
+  await sendTelegramPublicBroadcastMessage(text, "reversal");
+  return true;
+}
+
+/**
  * Spark / System Change / สัญญาณสาธารณะที่ใช้กลุ่มเดียวกัน: Telegram → TELEGRAM_PUBLIC_CHAT_ID (+ topic ตาม kind)
  * ไม่บังคับมี LINE user id — ถ้าไม่ตั้งกลุ่ม จะ fallback เป็น sendAlertNotification ต่อ uid (ต้องมี uids)
  * LINE mirror ต่อ uid: เฉพาะเมื่อมี uids + ALERT_ALSO_LINE_PUSH + LINE_ALERT_PUSH_ENABLED

@@ -676,6 +676,8 @@ export default function SettingsTelegramMiniApp() {
           {"; "}
           Snowball: <code>TELEGRAM_PUBLIC_SNOWBALL_MESSAGE_THREAD_ID</code> (ไม่ตั้ง → ใช้ topic เทคนิค)
           {"; "}
+          Reversal 1D: <code>TELEGRAM_PUBLIC_REVERSAL_MESSAGE_THREAD_ID</code>
+          {"; "}
           Events weekly: <code>TELEGRAM_PUBLIC_EVENTS_WEEKLY_MESSAGE_THREAD_ID</code>
           {"; "}
           Pre-event: <code>TELEGRAM_PUBLIC_EVENTS_PRE_MESSAGE_THREAD_ID</code>
