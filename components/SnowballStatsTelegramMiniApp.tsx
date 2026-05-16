@@ -348,6 +348,8 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">R% ก่อน</th>
                 <th scope="col">R% สัญญาณ</th>
                 <th scope="col">R% 2แท่ง</th>
+                <th scope="col">BTC 4h</th>
+                <th scope="col">Vol 24h</th>
                 <th scope="col">4h</th>
                 <th scope="col">12h</th>
                 <th scope="col">24h</th>
