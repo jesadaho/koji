@@ -204,7 +204,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
       continue;
     }
 
-    const { high, low, close, volume, timeSec } = pack;
+    const { open: barOpen, high, low, close, volume, timeSec } = pack;
 
     for (const item of items) {
       const ageMs = nowMs - item.alertedAtMs;
@@ -286,7 +286,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                 : item.side === "bear"
                   ? "swing_ll"
                   : "both";
-            const sigOpen = iSig >= 0 && typeof open[iSig] === "number" ? open[iSig]! : item.signalClose;
+            const sigOpen = iSig >= 0 && typeof barOpen[iSig] === "number" ? barOpen[iSig]! : item.signalClose;
             let gradeCFadeOk = false;
             if (item.side === "long" && item.qualityTier === "c_plus") {
               const resolved = await resolveSnowballLongAutotradeSide(
@@ -305,7 +305,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               signalHigh: item.signalHigh,
               signalLow: item.signalLow,
               signalVolume: item.signalVolume,
-              confirmOpen: open[idx],
+              confirmOpen: barOpen[idx],
               confirmClose: cl,
               confirmVolume: vo,
               gradeCFadeOk,
