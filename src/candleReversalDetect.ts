@@ -51,15 +51,23 @@ function maxRedBodyInWindow(open: number[], close: number[], start: number, end:
   return m;
 }
 
-/** อันดับ high ใน окน [start,end] — 1 = สูงสุด (นับแท่งที่ high สูงกว่าแท่ง i เท่านั้น) */
-function highRankInWindow(high: number[], start: number, end: number, i: number): number {
-  const hi = high[i]!;
-  const eps = Math.max(1e-12, Math.abs(hi) * 1e-10);
+/** อันดับค่าใน окน [start,end] — 1 = สูงสุด (นับแท่งที่ค่าสูงกว่าแท่ง i เท่านั้น) */
+function valueRankInWindow(values: number[], start: number, end: number, i: number): number {
+  const vi = values[i]!;
+  const eps = Math.max(1e-12, Math.abs(vi) * 1e-10);
   let strictlyHigher = 0;
   for (let j = start; j <= end; j++) {
-    if (j !== i && high[j]! > hi + eps) strictlyHigher++;
+    if (j !== i && values[j]! > vi + eps) strictlyHigher++;
   }
   return strictlyHigher + 1;
+}
+
+function highRankInWindow(high: number[], start: number, end: number, i: number): number {
+  return valueRankInWindow(high, start, end, i);
+}
+
+function volumeRankInWindow(volume: number[], start: number, end: number, i: number): number {
+  return valueRankInWindow(volume, start, end, i);
 }
 
 /** % ระยะปิดจาก EMA — บวก = เหนือเส้น · ลบ = ใต้เส้น */
@@ -89,6 +97,8 @@ export type CandleReversal1dDetectEnv = {
   bodyMaxRatio: number;
   marubozuBodyLookback: number;
   marubozuEngulfMinRatio: number;
+  /** volume แท่งสัญญาณต้องอยู่อันดับ 1..N ในรอบ marubozuBodyLookback */
+  marubozuVolRankMax: number;
   marubozuEmaPeriod: number;
   slBufferPct: number;
 };
@@ -117,6 +127,7 @@ export const DEFAULT_CANDLE_REVERSAL_1D_ENV: CandleReversal1dDetectEnv = {
   bodyMaxRatio: 0.15,
   marubozuBodyLookback: 48,
   marubozuEngulfMinRatio: 0.7,
+  marubozuVolRankMax: 2,
   marubozuEmaPeriod: 20,
   slBufferPct: 0.001,
 };
@@ -228,7 +239,7 @@ export function evalMarubozu1d(
   env: CandleReversal1dDetectEnv,
   hadRecentInvertedDoji: boolean,
 ): CandleReversalSignal | null {
-  const { open: o, high: h, low: l, close: c } = pack;
+  const { open: o, high: h, low: l, close: c, volume: vol } = pack;
   if (c[i]! >= o[i]!) return null;
 
   const body = o[i]! - c[i]!;
@@ -241,14 +252,21 @@ export function evalMarubozu1d(
   const windowHighMax = maxHighInWindowInclusive(h, winStart, i);
   if (!Number.isFinite(windowHighMax) || h[i]! < windowHighMax - eps) return null;
 
+  const barVol = vol[i];
+  if (!Number.isFinite(barVol) || barVol <= 0) return null;
+  const volRank = volumeRankInWindow(vol, winStart, i, i);
+  if (volRank > env.marubozuVolRankMax) return null;
+
   const maxRedBody = maxRedBodyInWindow(o, c, winStart, i);
   if (!Number.isFinite(maxRedBody) || body < maxRedBody - eps) return null;
+  const isAbsoluteMonsterRed = body >= maxRedBody - eps;
 
   if (i < 1) return null;
   const prevGreen = c[i - 1]! > o[i - 1]!;
   if (!prevGreen) return null;
   const prevBody = c[i - 1]! - o[i - 1]!;
-  if (!(prevBody > eps && body >= prevBody * env.marubozuEngulfMinRatio)) return null;
+  const standardEngulf = prevBody > eps && body >= prevBody * env.marubozuEngulfMinRatio;
+  if (!standardEngulf && !isAbsoluteMonsterRed) return null;
 
   const retest50 = c[i]! + body * 0.5;
   const retest382 = c[i]! + body * 0.382;
@@ -498,11 +516,11 @@ export function candleReversal1dMarubozuCheckLines(
   env: CandleReversal1dDetectEnv = DEFAULT_CANDLE_REVERSAL_1D_ENV,
 ): string[] {
   const i = barIndex;
-  const { open: o, high: h, low: l, close: c } = pack;
+  const { open: o, high: h, low: l, close: c, volume: vol } = pack;
   const lines: string[] = [];
   const lb = env.marubozuBodyLookback;
   lines.push(
-    `เกณฑ์ marubozu 1D (lookback ${lb} แท่ง · high+เนื้อแดงสุดในรอบ · กลืนเขียว≥${(env.marubozuEngulfMinRatio * 100).toFixed(0)}% · ไม่เช็ค EMA):`,
+    `เกณฑ์ marubozu 1D (lookback ${lb} แท่ง · high+vol+เนื้อแดงสุดในรอบ · กลืน/monster · ไม่เช็ค EMA):`,
   );
 
   const red = c[i]! < o[i]!;
@@ -518,6 +536,14 @@ export function candleReversal1dMarubozuCheckLines(
     `  high สูงสุดใน ${lb} แท่ง: ${checkMark(highOk)} (H ${fmtReversalPrice(h[i]!)} vs max ${fmtReversalPrice(windowHighMax)})`,
   );
 
+  const barVol = vol[i];
+  const volRank =
+    Number.isFinite(barVol) && barVol! > 0 ? volumeRankInWindow(vol, winStart, i, i) : NaN;
+  const volRankOk = Number.isFinite(volRank) && volRank <= env.marubozuVolRankMax;
+  lines.push(
+    `  volume อันดับในรอบ: ${checkMark(volRankOk)} (อันดับ ${Number.isFinite(volRank) ? volRank : "—"} · vol ${Number.isFinite(barVol) ? barVol!.toFixed(0) : "—"} · ต้อง≤${env.marubozuVolRankMax})`,
+  );
+
   const maxRedBody = maxRedBodyInWindow(o, c, winStart, i);
   const bodyLongestOk = Number.isFinite(maxRedBody) && body >= maxRedBody - eps;
   lines.push(
@@ -526,12 +552,15 @@ export function candleReversal1dMarubozuCheckLines(
 
   const prevGreen = i >= 1 && c[i - 1]! > o[i - 1]!;
   const prevBody = i >= 1 ? c[i - 1]! - o[i - 1]! : 0;
-  const engulfOk = i >= 1 && prevBody > eps && body >= prevBody * env.marubozuEngulfMinRatio;
+  const standardEngulf = i >= 1 && prevBody > eps && body >= prevBody * env.marubozuEngulfMinRatio;
+  const monsterBypass = bodyLongestOk;
+  const engulfOk = prevGreen && (standardEngulf || monsterBypass);
   const engulfPct = prevBody > eps ? (body / prevBody) * 100 : null;
   lines.push(
-    `  แท่งก่อนเขียว+กลืน: ${checkMark(prevGreen && engulfOk)}` +
+    `  แท่งก่อนเขียว+กลืน: ${checkMark(engulfOk)}` +
       (engulfPct != null
-        ? ` (เนื้อแดง ${engulfPct.toFixed(0)}% ของเนื้อเขียวก่อน · ต้อง≥${(env.marubozuEngulfMinRatio * 100).toFixed(0)}%)`
+        ? ` (กลืนมาตรฐาน ${engulfPct.toFixed(0)}%≥${(env.marubozuEngulfMinRatio * 100).toFixed(0)}%` +
+          `${monsterBypass ? " · หรือเนื้อแดงยาวสุดในรอบ=monster bypass" : ""})`
         : ""),
   );
 
@@ -593,7 +622,7 @@ export function buildCandleReversalAlertMessage(symbol: string, sig: CandleRever
     `แท่งปิด: O ${fmtReversalPrice(sig.o)} · H ${fmtReversalPrice(sig.h)} · L ${fmtReversalPrice(sig.l)} · C ${fmtReversalPrice(sig.c)}`,
     sig.model === "longest_red_body"
       ? `เนื้อแดง ${bodyPct}% · โซน EMA20 (ม้วนลง/เพิ่งหลุด)`
-      : `เนื้อแดง ${bodyPct}% · high/เนื้อยาวสุดในรอบ · กลืนเขียวก่อนหน้า`,
+      : `เนื้อแดง ${bodyPct}% · high/vol/เนื้อยาวสุดในรอบ · กลืน/monster`,
     "",
     ...plan,
     "",
