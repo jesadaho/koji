@@ -69,14 +69,18 @@ export default function ReversalStatsTelegramMiniApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [payload, setPayload] = useState<CandleReversalStatsApiPayload | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
-  const api = useCallback(async (path: string) => {
+  const api = useCallback(async (path: string, init?: RequestInit) => {
     const initData = getTelegramInitData();
     const url = `${apiBase}/api/tma${path}`;
     const res = await fetch(url, {
+      ...init,
       headers: {
         Accept: "application/json",
         ...(initData ? { Authorization: `tma ${initData}` } : {}),
+        ...(init?.headers ?? {}),
       },
     });
     const text = await res.text();
@@ -99,7 +103,28 @@ export default function ReversalStatsTelegramMiniApp() {
   const loadStats = useCallback(async () => {
     const data = await api("/reversal-stats");
     setPayload(data);
+    setResetError(null);
   }, [api]);
+
+  const resetStats = useCallback(async () => {
+    if (
+      !window.confirm(
+        "ล้างสถิติ Reversal ทั้งหมด?\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้ — แถวในตารางจะหายจนมีสัญญาณใหม่",
+      )
+    ) {
+      return;
+    }
+    setResetBusy(true);
+    setResetError(null);
+    try {
+      await api("/reversal-stats", { method: "POST" });
+      await loadStats();
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setResetBusy(false);
+    }
+  }, [api, loadStats]);
 
   useEffect(() => {
     let cancelled = false;
@@ -244,11 +269,26 @@ export default function ReversalStatsTelegramMiniApp() {
         <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
           {FOOTNOTE}
         </p>
-        <p style={{ marginTop: "0.75rem" }}>
+        <p className="sparkStatsActionRow" style={{ marginTop: "0.75rem" }}>
           <button type="button" className="sparkStatsRefreshBtn" onClick={() => void loadStats()}>
             รีเฟรช
           </button>
+          {payload?.isAdmin ? (
+            <button
+              type="button"
+              className="sparkStatsRefreshBtn danger"
+              disabled={resetBusy}
+              onClick={() => void resetStats()}
+            >
+              {resetBusy ? "กำลังล้าง…" : "ล้างสถิติ"}
+            </button>
+          ) : null}
         </p>
+        {resetError ? (
+          <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
+            {resetError}
+          </p>
+        ) : null}
       </section>
     </div>
   );

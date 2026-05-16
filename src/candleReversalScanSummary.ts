@@ -160,7 +160,7 @@ export function formatCandleReversalScanSummaryMessage(opts: {
     lines.push(`ครบเกณฑ์ (ก่อน dedupe): ${stats.invertedDojiPass}`);
     lines.push(...formatSymbolListLines("  ", stats.invertedDojiPassSymbols));
     lines.push("");
-    lines.push("— 1D แท่งแดงทุบ (Marubozu) —");
+    lines.push("— 1D แท่งแดงทุบ (Marubozu · high+เนื้อแดงสูงสุดใน N แท่ง) —");
     lines.push(`ครบเกณฑ์ (ก่อน dedupe): ${stats.marubozuPass}`);
     lines.push(...formatSymbolListLines("  ", stats.marubozuPassSymbols));
   } else {

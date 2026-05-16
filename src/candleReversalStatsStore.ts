@@ -180,3 +180,10 @@ export async function appendCandleReversalStatsRow(
   await saveCandleReversalStatsState(state);
   return row;
 }
+
+const EMPTY_CANDLE_REVERSAL_STATS_STATE: CandleReversalStatsState = { rows: [] };
+
+/** ล้างตารางสถิติ Reversal ทั้งหมด */
+export async function resetCandleReversalStatsState(): Promise<void> {
+  await saveCandleReversalStatsState(EMPTY_CANDLE_REVERSAL_STATS_STATE);
+}

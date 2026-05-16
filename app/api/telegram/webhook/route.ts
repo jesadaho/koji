@@ -33,6 +33,7 @@ import { runIndicatorAlertTick, runSnowballPublicScanTick } from "@/src/indicato
 import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
 import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
 import { isAdminTelegramUserId } from "@/src/adminIds";
+import { resetCandleReversalStatsState } from "@/src/candleReversalStatsStore";
 import { removeSnowballStatsDuplicatesInLastHours, resetSnowballStatsState } from "@/src/snowballStatsStore";
 import { clearSnowballSymbolForManualRetry } from "@/src/snowballManualSymbolClear";
 import {
@@ -126,6 +127,16 @@ function wantsPortfolioStatusCommand(trimmed: string, normalized: string): boole
     cand === "สรุปพอร์ต" ||
     cand === "สถานะพอร์ต"
   );
+}
+
+/** ล้างสถิติ Reversal — admin only */
+function isReversalStatsResetCommand(trimmed: string, normalized: string): boolean {
+  const t = trimmed.trim();
+  const n = normalized.trim().toLowerCase();
+  if (/^\/?reversal\s*(?:reset|clear)(?:@\S+)?\s*(?:stats)?\s*$/i.test(t)) return true;
+  if (/^\/?reset\s*reversal(?:@\S+)?\s*$/i.test(t)) return true;
+  if (t === "#reversalreset") return true;
+  return n === "reversal reset" || n === "reset reversal" || n === "ล้างสถิติ reversal";
 }
 
 /** ล้างสถิติ Snowball — admin only */
@@ -833,6 +844,46 @@ export async function POST(req: NextRequest) {
         );
       } catch (sendErr) {
         console.error("[telegram/webhook] spark matrix reset error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (isReversalStatsResetCommand(text, normalized)) {
+    if (!isAdminTelegramUserId(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          [
+            "ไม่ได้รับอนุญาตให้ล้างสถิติ Reversal",
+            "",
+            "ตั้งค่า env: KOJI_ADMIN_IDS=<Telegram user id ของคุณ>",
+          ].join("\n"),
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] reversal stats reset deny", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      await resetCandleReversalStatsState();
+      await sendTelegramMessageToChat(
+        String(chatId),
+        [
+          "✅ ล้างข้อมูล Reversal stats แล้ว",
+          "",
+          "เปิด Mini App หน้า «Reversal» จะเห็นตารางว่างจนมีสัญญาณใหม่",
+        ].join("\n"),
+        threadOpts,
+      );
+    } catch (e) {
+      console.error("[telegram/webhook] reversal stats reset", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(String(chatId), `ล้างไม่สำเร็จ — ${detail.slice(0, 300)}`, threadOpts);
+      } catch (sendErr) {
+        console.error("[telegram/webhook] reversal stats reset error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

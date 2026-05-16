@@ -51,18 +51,6 @@ function maxRedBodyInWindow(open: number[], close: number[], start: number, end:
   return m;
 }
 
-function maxBodyPriorWindow(open: number[], close: number[], i: number, lookback: number): number {
-  const start = Math.max(0, i - lookback);
-  const end = i - 1;
-  if (end < start) return -Infinity;
-  let m = -Infinity;
-  for (let j = start; j <= end; j++) {
-    const body = Math.abs(close[j]! - open[j]!);
-    if (body > m) m = body;
-  }
-  return m;
-}
-
 export type CandleReversal1dDetectEnv = {
   hh200Lookback: number;
   hh200ExcludeRecent: number;
@@ -91,7 +79,7 @@ export const DEFAULT_CANDLE_REVERSAL_1D_ENV: CandleReversal1dDetectEnv = {
   highestTailLookback: 30,
   wickMinRatio: 0.65,
   bodyMaxRatio: 0.15,
-  marubozuBodyLookback: 15,
+  marubozuBodyLookback: 48,
   marubozuEngulfMinRatio: 0.8,
   marubozuEmaPeriod: 20,
   slBufferPct: 0.001,
@@ -209,8 +197,13 @@ export function evalMarubozu1d(
   const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
   if (!Number.isFinite(body) || body <= eps || !Number.isFinite(range) || range <= eps) return null;
 
-  const maxPriorBody = maxBodyPriorWindow(o, c, i, env.marubozuBodyLookback);
-  if (!Number.isFinite(maxPriorBody) || body <= maxPriorBody) return null;
+  const lb = env.marubozuBodyLookback;
+  const winStart = Math.max(0, i - lb + 1);
+  const windowHighMax = maxHighInWindowInclusive(h, winStart, i);
+  if (!Number.isFinite(windowHighMax) || h[i]! < windowHighMax - eps) return null;
+
+  const maxRedBody = maxRedBodyInWindow(o, c, winStart, i);
+  if (!Number.isFinite(maxRedBody) || body < maxRedBody - eps) return null;
 
   if (i < 1) return null;
   const prevGreen = c[i - 1]! > o[i - 1]!;

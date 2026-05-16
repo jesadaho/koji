@@ -578,6 +578,17 @@ code {
   margin-top: 0;
 }
 
+.sparkStatsActionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.sparkStatsRefreshBtn.danger {
+  max-width: none;
+}
+
 /* LIFF — Indicator Settings (strategy-first, mobile-friendly) */
 .indSettingsTitle {
   font-size: 1.05rem;

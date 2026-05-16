@@ -36,6 +36,8 @@ export type CandleReversalStatsRow = {
 
 export type CandleReversalStatsApiPayload = {
   rows: CandleReversalStatsRow[];
+  /** true เมื่อ Telegram user อยู่ใน KOJI_ADMIN_IDS */
+  isAdmin?: boolean;
 };
 
 export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): string {

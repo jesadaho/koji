@@ -52,7 +52,8 @@ import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
 import type { SnowballStatsApiPayload } from "@/lib/snowballStatsClient";
 import { loadSnowballStatsState } from "./snowballStatsStore";
-import { loadCandleReversalStatsState } from "./candleReversalStatsStore";
+import { isAdminTelegramUserId } from "./adminIds";
+import { loadCandleReversalStatsState, resetCandleReversalStatsState } from "./candleReversalStatsStore";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
 import {
   ensureTradingViewMexcUserRow,
@@ -706,10 +707,25 @@ export async function liffGetSnowballStats(): Promise<SnowballStatsApiPayload> {
   return { rows };
 }
 
-export async function liffGetCandleReversalStats(): Promise<CandleReversalStatsApiPayload> {
+export async function liffGetCandleReversalStats(
+  telegramUserId?: number,
+): Promise<CandleReversalStatsApiPayload> {
   const st = await loadCandleReversalStatsState();
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
-  return { rows };
+  return {
+    rows,
+    ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
+  };
+}
+
+export async function liffResetCandleReversalStats(
+  telegramUserId: number,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  await resetCandleReversalStatsState();
+  return { ok: true };
 }
 
 function publicAppBaseForTvWebhook(): { origin: string; path: string } {

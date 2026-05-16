@@ -27,6 +27,7 @@ import {
   liffGetSparkStats,
   liffGetSnowballStats,
   liffGetCandleReversalStats,
+  liffResetCandleReversalStats,
   liffGetTradingViewMexcSettings,
   liffSetTradingViewMexcSettings,
 } from "@/src/liffService";
@@ -121,7 +122,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     if (segs.length === 1 && a === "reversal-stats") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
-      const data = await liffGetCandleReversalStats();
+      const data = await liffGetCandleReversalStats(auth.telegramUserId);
       return NextResponse.json(data, {
         status: 200,
         headers: { "Cache-Control": "no-store" },
@@ -228,6 +229,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       }
       const r = await liffSetTradingViewMexcSettings(auth.userId, body);
       return json(r.json, r.status);
+    }
+    if (segs.length === 1 && a === "reversal-stats") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const r = await liffResetCandleReversalStats(auth.telegramUserId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({ ok: true });
     }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);

@@ -28,6 +28,7 @@ import {
   liffGetSparkStats,
   liffGetSnowballStats,
   liffGetCandleReversalStats,
+  liffResetCandleReversalStats,
 } from "@/src/liffService";
 
 export const dynamic = "force-dynamic";
@@ -120,7 +121,9 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     if (segs.length === 1 && a === "reversal-stats") {
       const auth = await authenticateLiffRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
-      const data = await liffGetCandleReversalStats();
+      const tgRaw = tgStoreKeyToTelegramUserIdString(auth.userId);
+      const tgId = tgRaw != null ? Number(tgRaw) : NaN;
+      const data = await liffGetCandleReversalStats(Number.isFinite(tgId) ? tgId : undefined);
       return NextResponse.json(data, {
         status: 200,
         headers: { "Cache-Control": "no-store" },
@@ -290,6 +293,18 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
         return new NextResponse(null, { status: 204 });
       }
       return json(r.json ?? {}, r.status);
+    }
+    if (segs.length === 1 && a === "reversal-stats") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const tgRaw = tgStoreKeyToTelegramUserIdString(auth.userId);
+      const tgId = tgRaw != null ? Number(tgRaw) : NaN;
+      if (!Number.isFinite(tgId)) {
+        return json({ error: "ล้างสถิติ Reversal รองรับเฉพาะ Telegram Mini App" }, 403);
+      }
+      const r = await liffResetCandleReversalStats(tgId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({ ok: true });
     }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);
