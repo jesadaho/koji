@@ -299,7 +299,7 @@ export async function POST(req: NextRequest) {
           [{ text: "เปิด Koji", web_app: { url } }],
           [
             { text: "สถิติ Snowball", web_app: { url: `${url}snowball-stats` } },
-            { text: "สถิติ Reversal", web_app: { url: `${url}reversal-stats` } },
+            { text: "Reversal", web_app: { url: `${url}reversal-stats` } },
           ],
         ],
       };

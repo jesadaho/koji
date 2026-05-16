@@ -24,7 +24,7 @@ export function MiniAppStatsNav({ showHome = false, className = "sub tmaQuickNav
       <span className="siteNavSep" aria-hidden>
         |
       </span>
-      <Link href="/reversal-stats">สถิติ Reversal</Link>
+      <Link href="/reversal-stats">Reversal</Link>
     </p>
   );
 }

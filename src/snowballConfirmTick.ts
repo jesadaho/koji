@@ -313,6 +313,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
             await appendSnowballStatsRow({
               symbol: item.symbol,
               side: statsTradeSide,
+              alertSide: item.side === "long" ? "long" : "bear",
               alertedAtIso: item.alertedAtIso,
               alertedAtMs: item.alertedAtMs,
               signalBarOpenSec: item.signalBarOpenSec,

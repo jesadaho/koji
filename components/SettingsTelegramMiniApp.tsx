@@ -651,7 +651,7 @@ export default function SettingsTelegramMiniApp() {
         <span className="siteNavSep" aria-hidden>
           |
         </span>
-        <Link href="/reversal-stats">สถิติ Reversal</Link>
+        <Link href="/reversal-stats">Reversal</Link>
         <span className="siteNavSep" aria-hidden>
           |
         </span>

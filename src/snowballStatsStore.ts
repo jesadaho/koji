@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
+  type SnowballStatsAlertSide,
   type SnowballStatsApiPayload,
   type SnowballStatsQualityTier,
   type SnowballStatsRow,
@@ -101,6 +102,7 @@ export async function saveSnowballStatsState(state: SnowballStatsState): Promise
 export type AppendSnowballStatsInput = {
   symbol: string;
   side: "long" | "short";
+  alertSide: SnowballStatsAlertSide;
   alertedAtIso: string;
   alertedAtMs: number;
   signalBarOpenSec: number;
@@ -153,6 +155,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     id: randomUUID(),
     symbol: input.symbol.trim().toUpperCase(),
     side: input.side,
+    alertSide: input.alertSide,
     alertedAtIso: input.alertedAtIso,
     alertedAtMs: input.alertedAtMs,
     signalBarOpenSec: input.signalBarOpenSec,

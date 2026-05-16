@@ -54,7 +54,7 @@ export function buildKojiWelcomeFlexContents(liffId?: string, options?: KojiWelc
       height: "sm" as const,
       action: {
         type: "uri" as const,
-        label: "สถิติ Reversal",
+        label: "Reversal",
         uri: `https://liff.line.me/${liffId}/reversal-stats`,
       },
     });

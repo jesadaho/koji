@@ -4,10 +4,16 @@ export type SnowballStatsOutcome = "pending" | "win_trend" | "win_quick_tp30" | 
 
 export type SnowballStatsQualityTier = "a_plus" | "b_plus" | "c_plus";
 
+/** ทิศสัญญาณ Snowball ตอนแจ้ง (long / bear) */
+export type SnowballStatsAlertSide = "long" | "bear";
+
 export type SnowballStatsRow = {
   id: string;
   symbol: string;
+  /** ทิศเทรดสำหรับสถิติ */
   side: "long" | "short";
+  /** ทิศสัญญาณตอนแจ้ง — แถวเก่าอาจไม่มี */
+  alertSide?: SnowballStatsAlertSide;
   alertedAtIso: string;
   alertedAtMs: number;
   signalBarOpenSec: number;
@@ -54,6 +60,30 @@ export type SnowballStatsRow = {
 export type SnowballStatsApiPayload = {
   rows: SnowballStatsRow[];
 };
+
+function snowballStatsAlertSideLabel(alert: SnowballStatsAlertSide): "Long" | "Short" {
+  return alert === "long" ? "Long" : "Short";
+}
+
+function snowballStatsTradeSideLabel(trade: SnowballStatsRow["side"]): "Long" | "Short" {
+  return trade === "long" ? "Long" : "Short";
+}
+
+/** ทิศในตาราง: เดียวกัน = Long/Short · สวน = Long->Short */
+export function snowballStatsSideLabel(
+  row: Pick<SnowballStatsRow, "side" | "alertSide" | "triggerKind">,
+): string {
+  const trade = snowballStatsTradeSideLabel(row.side);
+  let alert: SnowballStatsAlertSide | null = row.alertSide ?? null;
+  if (!alert) {
+    if (row.side === "long") alert = "long";
+    else if (row.triggerKind === "swing_ll") alert = "bear";
+    else alert = "long";
+  }
+  const signal = snowballStatsAlertSideLabel(alert);
+  if (signal === trade) return trade;
+  return `${signal}->${trade}`;
+}
 
 /** A+/B/C สำหรับตารางสถิติ (LONG = HH48/HH200/VAH · SHORT = Double Barrier) */
 export function snowballStatsGradeLabel(

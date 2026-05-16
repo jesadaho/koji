@@ -3203,6 +3203,7 @@ export async function runPublicIndicatorFeedInternal(
                 await appendSnowballStatsRow({
                   symbol,
                   side: longStatsTradeSide,
+                  alertSide: "long",
                   alertedAtIso: iso,
                   alertedAtMs: now,
                   signalBarOpenSec,
@@ -3604,6 +3605,7 @@ export async function runPublicIndicatorFeedInternal(
                 await appendSnowballStatsRow({
                   symbol,
                   side: bearStatsTradeSide,
+                  alertSide: "bear",
                   alertedAtIso: iso,
                   alertedAtMs: now,
                   signalBarOpenSec,
