@@ -62,6 +62,25 @@ function highRankInWindow(high: number[], start: number, end: number, i: number)
   return strictlyHigher + 1;
 }
 
+/** % ระยะปิดจาก EMA — บวก = เหนือเส้น · ลบ = ใต้เส้น */
+export function longestRedBody1hEmaDistancePct(close: number, ema: number): number | null {
+  if (!Number.isFinite(close) || !Number.isFinite(ema) || ema <= 0) return null;
+  return ((close - ema) / ema) * 100;
+}
+
+export function isLongestRedBody1hEmaZoneOk(
+  close: number,
+  ema: number,
+  env: Pick<
+    CandleReversal1hDetectEnv,
+    "longestRedBodyEmaDistAboveMaxPct" | "longestRedBodyEmaDistBelowMaxPct"
+  >,
+): boolean {
+  const dist = longestRedBody1hEmaDistancePct(close, ema);
+  if (dist == null) return false;
+  return dist >= -env.longestRedBodyEmaDistBelowMaxPct && dist <= env.longestRedBodyEmaDistAboveMaxPct;
+}
+
 export type CandleReversal1dDetectEnv = {
   hh200Lookback: number;
   hh200ExcludeRecent: number;
@@ -80,9 +99,13 @@ export type CandleReversal1hDetectEnv = {
   bodyMaxRatio: number;
   longestRedBodyLookback: number;
   longestRedBodyMinRatio: number;
-  /** high ของแท่งต้องอยู่อันดับ 1..N ในรอบ longestRedBodyLookback (ดีฟอลต์ 2) */
+  /** high ของแท่งต้องอยู่อันดับ 1..N ในรอบ longestRedBodyLookback (ดีฟอลต์ 3) */
   longestRedBodyHighRankMax: number;
   emaPeriod: number;
+  /** ยอมให้ปิดเหนือ EMA ไม่เกิน X% (ม้วนลงมาหาเส้น) */
+  longestRedBodyEmaDistAboveMaxPct: number;
+  /** ยอมให้ปิดใต้ EMA ไม่เกิน X% (เพิ่งเริ่มหลุด) */
+  longestRedBodyEmaDistBelowMaxPct: number;
   slBufferPct: number;
 };
 
@@ -104,8 +127,10 @@ export const DEFAULT_CANDLE_REVERSAL_1H_ENV: CandleReversal1hDetectEnv = {
   bodyMaxRatio: 0.2,
   longestRedBodyLookback: 24,
   longestRedBodyMinRatio: 0.8,
-  longestRedBodyHighRankMax: 2,
+  longestRedBodyHighRankMax: 3,
   emaPeriod: 20,
+  longestRedBodyEmaDistAboveMaxPct: 10,
+  longestRedBodyEmaDistBelowMaxPct: 3,
   slBufferPct: 0.001,
 };
 
@@ -238,7 +263,7 @@ export function evalMarubozu1d(
   return buildSignal("1d", "marubozu", pack, i, 0, body / range, retestPrice, slPrice, hadRecentInvertedDoji);
 }
 
-/** 1H longest red body — เนื้อแดง ≥ ratio × max ในรอบ N แท่ง · high อันดับ 1–2 ในรอบเดียวกัน · ปิดใต้ EMA */
+/** 1H longest red body — เนื้อแดงยาว · high top-N · โซน EMA (ม้วนลง/เพิ่งหลุด) */
 export function evalLongestRedBody1h(
   pack: BinanceKlinePack,
   i: number,
@@ -263,7 +288,7 @@ export function evalLongestRedBody1h(
 
   const ema = emaLine(c, env.emaPeriod);
   const eNow = ema[i];
-  if (!Number.isFinite(eNow) || c[i]! >= (eNow as number)) return null;
+  if (!Number.isFinite(eNow) || !isLongestRedBody1hEmaZoneOk(c[i]!, eNow as number, env)) return null;
 
   const retest50 = c[i]! + body * 0.5;
   const retest382 = c[i]! + body * 0.382;
@@ -343,7 +368,7 @@ export function candleReversal1hLongestRedBodyCheckLines(
   const { open: o, high: h, low: l, close: c } = pack;
   const lines: string[] = [];
   lines.push(
-    `เกณฑ์ longest_red_body (lookback ${env.longestRedBodyLookback} แท่ง · min ${(env.longestRedBodyMinRatio * 100).toFixed(0)}% ของเนื้อแดงสูงสุด · high อันดับ≤${env.longestRedBodyHighRankMax} · EMA${env.emaPeriod}):`,
+    `เกณฑ์ longest_red_body (lookback ${env.longestRedBodyLookback} แท่ง · min ${(env.longestRedBodyMinRatio * 100).toFixed(0)}% เนื้อแดง · high อันดับ≤${env.longestRedBodyHighRankMax} · EMA${env.emaPeriod} ${-env.longestRedBodyEmaDistBelowMaxPct}%..+${env.longestRedBodyEmaDistAboveMaxPct}%):`,
   );
 
   const red = c[i]! < o[i]!;
@@ -371,9 +396,17 @@ export function candleReversal1hLongestRedBodyCheckLines(
 
   const ema = emaLine(c, env.emaPeriod);
   const eNow = ema[i];
-  const underEma = Number.isFinite(eNow) && c[i]! < (eNow as number);
+  const emaDist = Number.isFinite(eNow) ? longestRedBody1hEmaDistancePct(c[i]!, eNow as number) : null;
+  const emaZoneOk =
+    emaDist != null && isLongestRedBody1hEmaZoneOk(c[i]!, eNow as number, env);
+  const emaRel =
+    emaDist != null && emaDist > 0.01
+      ? "เหนือ"
+      : emaDist != null && emaDist < -0.01
+        ? "ใต้"
+        : "แนบ";
   lines.push(
-    `  ปิดใต้ EMA${env.emaPeriod}: ${checkMark(underEma)} (C ${fmtReversalPrice(c[i]!)} < EMA ${fmtReversalPrice(eNow as number)})`,
+    `  โซน EMA${env.emaPeriod}: ${checkMark(emaZoneOk)} (C ${fmtReversalPrice(c[i]!)} · EMA ${fmtReversalPrice(eNow as number)} · ${emaRel} ${emaDist != null ? `${emaDist >= 0 ? "+" : ""}${emaDist.toFixed(2)}%` : "—"} · ยอม ${-env.longestRedBodyEmaDistBelowMaxPct}%..+${env.longestRedBodyEmaDistAboveMaxPct}%)`,
   );
 
   return lines;
@@ -472,7 +505,7 @@ export function buildCandleReversalAlertMessage(symbol: string, sig: CandleRever
     `🔻 [Reversal ${tfLabel}] ${base} — ${modelTh}${ctx}`,
     `แท่งปิด: O ${fmtReversalPrice(sig.o)} · H ${fmtReversalPrice(sig.h)} · L ${fmtReversalPrice(sig.l)} · C ${fmtReversalPrice(sig.c)}`,
     sig.model === "longest_red_body"
-      ? `เนื้อแดง ${bodyPct}% · ปิดใต้ EMA20`
+      ? `เนื้อแดง ${bodyPct}% · โซน EMA20 (ม้วนลง/เพิ่งหลุด)`
       : `เนื้อแดง ${bodyPct}% · กลืนแท่งเขียวก่อนหน้า · ปิดใต้ EMA20`,
     "",
     ...plan,

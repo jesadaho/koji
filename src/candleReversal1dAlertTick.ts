@@ -143,6 +143,14 @@ function detectEnv1h(): CandleReversal1hDetectEnv {
   if (Number.isFinite(highRankMax) && highRankMax >= 1 && highRankMax <= 5) {
     env.longestRedBodyHighRankMax = Math.floor(highRankMax);
   }
+  const emaAbove = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_EMA_ABOVE_MAX_PCT?.trim());
+  if (Number.isFinite(emaAbove) && emaAbove >= 0 && emaAbove <= 30) {
+    env.longestRedBodyEmaDistAboveMaxPct = emaAbove;
+  }
+  const emaBelow = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_EMA_BELOW_MAX_PCT?.trim());
+  if (Number.isFinite(emaBelow) && emaBelow >= 0 && emaBelow <= 15) {
+    env.longestRedBodyEmaDistBelowMaxPct = emaBelow;
+  }
   return env;
 }
 
