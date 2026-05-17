@@ -145,7 +145,7 @@ function detectEnv1h(): CandleReversal1hDetectEnv {
   const hhLb = Number(process.env.CANDLE_REVERSAL_1H_HIGHEST_HIGH_LOOKBACK?.trim());
   if (Number.isFinite(hhLb) && hhLb >= 8 && hhLb <= 500) env.highestHighLookback = Math.floor(hhLb);
   const redLb = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_LOOKBACK?.trim());
-  if (Number.isFinite(redLb) && redLb >= 8 && redLb <= 72) env.longestRedBodyLookback = Math.floor(redLb);
+  if (Number.isFinite(redLb) && redLb >= 8 && redLb <= 500) env.longestRedBodyLookback = Math.floor(redLb);
   const redRatio = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_MIN_RATIO?.trim());
   if (Number.isFinite(redRatio) && redRatio > 0.5 && redRatio < 1) env.longestRedBodyMinRatio = redRatio;
   const highRankMax = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_HIGH_RANK_MAX?.trim());
@@ -240,7 +240,9 @@ function evalSymbolTf(
       diag: { ...emptyDiag, skippedBars: true },
     };
   }
-  if (tf === "1h" && i < env1h.highestHighLookback + 2) {
+  const min1hBars =
+    Math.max(env1h.highestHighLookback, env1h.longestRedBodyLookback, env1h.emaPeriod) + 2;
+  if (tf === "1h" && i < min1hBars) {
     return {
       symbol,
       signal: null,

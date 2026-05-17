@@ -141,7 +141,7 @@ export const DEFAULT_CANDLE_REVERSAL_1H_ENV: CandleReversal1hDetectEnv = {
   highestHighLookback: 200,
   wickMinRatio: 0.65,
   bodyMaxRatio: 0.2,
-  longestRedBodyLookback: 24,
+  longestRedBodyLookback: 200,
   longestRedBodyMinRatio: 0.8,
   longestRedBodyHighRankMax: 3,
   emaPeriod: 20,
@@ -360,7 +360,8 @@ export function evalCandleReversalAtBarIndex(
   const hadDoji = Boolean(opts?.hadRecentInvertedDoji);
 
   if (tf === "1h") {
-    if (i < env1h.highestHighLookback + 2) return null;
+    const min1hBars = Math.max(env1h.highestHighLookback, env1h.longestRedBodyLookback, env1h.emaPeriod) + 2;
+    if (i < min1hBars) return null;
     const longest = evalLongestRedBody1h(pack, i, env1h, hadDoji);
     if (longest) return longest;
     return evalInvertedDoji1h(pack, i, env1h);
