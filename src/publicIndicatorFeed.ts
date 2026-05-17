@@ -1128,6 +1128,12 @@ function inCooldown(state: IndicatorPublicFeedState, key: string, nowMs: number)
   return nowMs - t < publicCooldownMs();
 }
 
+/** Snowball dedupe ต่อเหรียญ+TF+ทิศ (BULL/BEAR) — ยิงแล้วไม่ยิงซ้ำจนกว่าจะล้าง state */
+function snowballSymbolDedupeBlocks(state: IndicatorPublicFeedState, key: string): boolean {
+  const t = state.lastFiredBarSec[key];
+  return t != null && Number.isFinite(t);
+}
+
 function rsiStatusArrowLine(rNow: number, rPrev: number): string {
   if (rNow > rPrev) {
     return `Status: ${rNow.toFixed(2)} ↗️ (ดีดจาก ${rPrev.toFixed(2)})`;
@@ -2468,7 +2474,9 @@ export async function runPublicIndicatorFeedInternal(
         // กันค้างยาวผิดปกติ: ถ้าเกิน ~30h ถือว่าไม่เอามาบล็อกแล้ว
         if (atMs > 0 && now - atMs > 30 * 3600 * 1000) continue;
         if (!sym) continue;
-        snowballPendingKeys.add(`${sym}|${tf}|${side}`);
+        const alertSide = r.alertSide ?? (r.side === "short" || r.triggerKind === "swing_ll" ? "bear" : "long");
+        const pendingSide = alertSide === "bear" ? "short" : "long";
+        snowballPendingKeys.add(`${sym}|${tf}|${pendingSide}`);
       }
     } catch (e) {
       console.error("[indicatorPublicFeed] load snowball stats for pending dedupe failed", e);
@@ -2969,15 +2977,8 @@ export async function runPublicIndicatorFeedInternal(
           pushSnowScanSymList(snowScanStats.longTechPassSymbols, `${symbol} LONG`);
         }
 
-        const barOpenSecForKey = longBreakout1h
-          ? breakout1hEval!.barOpenSec
-          : twoBarInline
-            ? t15[iConf]!
-            : signalBarOpenSec;
-        if (typeof barOpenSecForKey !== "number" || !Number.isFinite(barOpenSecForKey)) return;
-
         const key = `${symbol}|SNOWBALL|${snowTf}|BULL`;
-        if (state.lastFiredBarSec[key] === barOpenSecForKey || inCooldown(state, key, now)) {
+        if (snowballSymbolDedupeBlocks(state, key)) {
           if (snowScanStats && !intrabar) {
             snowScanStats.longDeduped++;
             pushSnowScanSymList(snowScanStats.longDedupedSymbols, `${symbol} LONG`);
@@ -3192,7 +3193,7 @@ export async function runPublicIndicatorFeedInternal(
             await updatePublicFeedFiredKey(
               state,
               key,
-              barOpenSecForKey,
+              signalBarOpenSec,
               iso,
               now,
               entryClosePx,
@@ -3407,9 +3408,6 @@ export async function runPublicIndicatorFeedInternal(
 
         const signalBarOpenSec = t15[iSig];
         if (typeof signalBarOpenSec !== "number" || !Number.isFinite(signalBarOpenSec)) return;
-        const barOpenSecForKey = twoBarInline ? t15[iConf]! : signalBarOpenSec;
-        if (typeof barOpenSecForKey !== "number" || !Number.isFinite(barOpenSecForKey)) return;
-
         if (!intrabar && snowballPendingKeys.has(`${symbol}|${snowTf}|short`)) {
           if (snowScanStats) {
             snowScanStats.bearDeduped++;
@@ -3504,7 +3502,7 @@ export async function runPublicIndicatorFeedInternal(
         }
 
         const key = `${symbol}|SNOWBALL|${snowTf}|BEAR`;
-        if (state.lastFiredBarSec[key] === barOpenSecForKey || inCooldown(state, key, now)) {
+        if (snowballSymbolDedupeBlocks(state, key)) {
           if (snowScanStats && !intrabar) {
             snowScanStats.bearDeduped++;
             pushSnowScanSymList(snowScanStats.bearDedupedSymbols, `${symbol} BEAR`);
@@ -3640,7 +3638,7 @@ export async function runPublicIndicatorFeedInternal(
             await updatePublicFeedFiredKey(
               state,
               key,
-              barOpenSecForKey,
+              signalBarOpenSec,
               iso,
               now,
               twoBarInline ? c15[iConf]! : clE!,
@@ -4317,35 +4315,12 @@ function evaluateSnowballLongAt(
   const barOpenSec = timeSec[iEval] ?? -1;
   const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BULL`;
   const lastFired = ctx.state.lastFiredBarSec[key];
-  const dedupeBarOpenSec =
-    typeof ctx.checklistTwoBarDedupeOpenSec === "number" && Number.isFinite(ctx.checklistTwoBarDedupeOpenSec)
-      ? ctx.checklistTwoBarDedupeOpenSec
-      : barOpenSec;
-  const dedupeOk = lastFired !== dedupeBarOpenSec;
+  const dedupeOk = !snowballSymbolDedupeBlocks(ctx.state, key);
   push({
     id: "dedupe",
-    label: "dedupe (bar เดียวกันยังไม่ยิง)",
+    label: "dedupe (เหรียญนี้ยังไม่ยิง)",
     ok: dedupeOk,
-    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · barOpenSec=${dedupeBarOpenSec}${
-      ctx.checklistTwoBarDedupeOpenSec != null
-        ? ` (two-bar: เทียบแท่ง confirm; แท่งสัญญาณเปิด=${barOpenSec})`
-        : ""
-    }`,
-  });
-
-  const lastNotify = ctx.state.lastNotifyMs?.[key];
-  const cd = publicCooldownMs();
-  const cooldownLeft = lastNotify != null && Number.isFinite(lastNotify) ? Math.max(0, lastNotify + cd - ctx.nowMs) : 0;
-  const cooldownOk = cooldownLeft <= 0;
-  push({
-    id: "cooldown",
-    label: `cooldown (${Math.round(cd / 60000)} นาที)`,
-    ok: cooldownOk,
-    detail: cooldownOk
-      ? lastNotify != null
-        ? `พ้นแล้ว (lastNotify ${new Date(lastNotify).toISOString()})`
-        : "ยังไม่เคยยิง"
-      : `เหลืออีก ${Math.round(cooldownLeft / 1000)} วินาที (lastNotify ${new Date(lastNotify!).toISOString()})`,
+    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · แท่งสัญญาณเปิด=${barOpenSec} (ต่อเหรียญ — ยิงแล้วไม่ยิงซ้ำ)`,
   });
 
   const allPassed = steps.every((s) => s.ok);
@@ -4456,35 +4431,12 @@ function evaluateSnowballBearAt(
   const barOpenSec = timeSec[iEval] ?? -1;
   const key = `${ctx.symbol}|SNOWBALL|${ctx.snowTf}|BEAR`;
   const lastFired = ctx.state.lastFiredBarSec[key];
-  const dedupeBarOpenSec =
-    typeof ctx.checklistTwoBarDedupeOpenSec === "number" && Number.isFinite(ctx.checklistTwoBarDedupeOpenSec)
-      ? ctx.checklistTwoBarDedupeOpenSec
-      : barOpenSec;
-  const dedupeOk = lastFired !== dedupeBarOpenSec;
+  const dedupeOk = !snowballSymbolDedupeBlocks(ctx.state, key);
   push({
     id: "dedupe",
-    label: "dedupe (bar เดียวกันยังไม่ยิง)",
+    label: "dedupe (เหรียญนี้ยังไม่ยิง)",
     ok: dedupeOk,
-    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · barOpenSec=${dedupeBarOpenSec}${
-      ctx.checklistTwoBarDedupeOpenSec != null
-        ? ` (two-bar: เทียบแท่ง confirm; แท่งสัญญาณเปิด=${barOpenSec})`
-        : ""
-    }`,
-  });
-
-  const lastNotify = ctx.state.lastNotifyMs?.[key];
-  const cd = publicCooldownMs();
-  const cooldownLeft = lastNotify != null && Number.isFinite(lastNotify) ? Math.max(0, lastNotify + cd - ctx.nowMs) : 0;
-  const cooldownOk = cooldownLeft <= 0;
-  push({
-    id: "cooldown",
-    label: `cooldown (${Math.round(cd / 60000)} นาที)`,
-    ok: cooldownOk,
-    detail: cooldownOk
-      ? lastNotify != null
-        ? `พ้นแล้ว (lastNotify ${new Date(lastNotify).toISOString()})`
-        : "ยังไม่เคยยิง"
-      : `เหลืออีก ${Math.round(cooldownLeft / 1000)} วินาที (lastNotify ${new Date(lastNotify!).toISOString()})`,
+    detail: `key=${key} · lastFiredBarSec=${lastFired ?? "—"} · แท่งสัญญาณเปิด=${barOpenSec} (ต่อเหรียญ — ยิงแล้วไม่ยิงซ้ำ)`,
   });
 
   return {
