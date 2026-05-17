@@ -35,7 +35,10 @@ import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlert
 import { isAdminTelegramUserId } from "@/src/adminIds";
 import { resetCandleReversalStatsState } from "@/src/candleReversalStatsStore";
 import { removeSnowballStatsDuplicatesInLastHours, resetSnowballStatsState } from "@/src/snowballStatsStore";
-import { clearSnowballSymbolForManualRetry } from "@/src/snowballManualSymbolClear";
+import {
+  clearSnowballSymbolForManualRetry,
+  toBinanceUsdtPerpSymbol,
+} from "@/src/snowballManualSymbolClear";
 import {
   formatPublicIndicatorFeedDebugMessage,
   formatReversalRiskDebugMessage,
@@ -956,17 +959,30 @@ export async function POST(req: NextRequest) {
     try {
       const sym = snowDedupe.symbol;
       const r = await removeSnowballStatsDuplicatesInLastHours({ nowMs: Date.now(), windowHours: 24, symbol: sym });
-      await sendTelegramMessageToChat(
-        String(chatId),
-        [
-          "🧹 Snowball stats — clear dupes (24h)",
-          sym ? `เหรียญ: ${sym.toUpperCase()}` : "เหรียญ: ทุกเหรียญ",
+      const symResolved = sym ? toBinanceUsdtPerpSymbol(sym) : null;
+      const lines = [
+        "🧹 Snowball stats — clear dupes (24h)",
+        symResolved ? `เหรียญ: ${symResolved}` : "เหรียญ: ทุกเหรียญ",
+        "",
+        `ลบ: ${r.removed} แถว`,
+        `คงไว้ในตารางทั้งหมด: ${r.kept} แถว`,
+      ];
+      if (symResolved && r.matched === 0) {
+        lines.push(
           "",
-          `ลบ: ${r.removed} แถว`,
-          `คงไว้: ${r.kept} แถว`,
-        ].join("\n"),
-        threadOpts,
-      );
+          "ไม่พบแถวของสัญญานี้ในสถิติ — ตรวจชื่อคู่ให้ตรง Binance (เช่น AIAUSDT)",
+        );
+      } else if (symResolved) {
+        lines.push(`แถวของสัญญานี้ที่ตรวจ: ${r.matched}`);
+        if (r.removed === 0 && r.matched > 1) {
+          lines.push(
+            "",
+            "ไม่มีแถวซ้ำตามกฎ dedupe (ต้อง symbol+ทิศเทรดเดียวกัน และห่างกันไม่เกิน 24 ชม.)",
+            "Long กับ Long→Short ถือคนละทิศ · เกรด/เวลาต่างก็ไม่ถือซ้ำ",
+          );
+        }
+      }
+      await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
     } catch (e) {
       console.error("[telegram/webhook] snowball stats dedupe", e);
       const detail = e instanceof Error ? e.message : String(e);

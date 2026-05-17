@@ -71,9 +71,31 @@ export async function fetchSnowball1hPackForTrendMomentum(
  * คำนวณ Max Drawback (1H) และ Volume Cascade จาก 3 แท่ง 1H ปิดล่าสุด
  * (เทียบเท่า slice(-4, -1) บน array ที่ไม่รวมแท่งกำลังก่อตัว)
  */
+/** Max % retracement จาก peak high ถึง low ถัดไปในช่วง 3 แท่ง 1H ปิด */
+function maxDrawbackPercentIn1hWindow(
+  high: number[],
+  low: number[],
+  iStart: number,
+  iEnd: number
+): number {
+  let peakHigh = -Infinity;
+  let maxDd = 0;
+  for (let i = iStart; i <= iEnd; i++) {
+    const h = high[i]!;
+    const l = low[i]!;
+    if (!Number.isFinite(h) || !Number.isFinite(l)) continue;
+    if (h > peakHigh) peakHigh = h;
+    if (peakHigh > 0 && l < peakHigh) {
+      const dd = ((peakHigh - l) / peakHigh) * 100;
+      if (dd > maxDd) maxDd = dd;
+    }
+  }
+  return maxDd;
+}
+
 export function calculateTrendMomentumMetrics(pack1h: BinanceKlinePack | null): TrendMomentumMetrics | null {
   if (!pack1h?.close?.length) return null;
-  const { open, close, volume } = pack1h;
+  const { open, close, high, low, volume } = pack1h;
   const n = close.length;
   const iEnd = n - 2;
   const iStart = iEnd - 2;
@@ -113,7 +135,11 @@ export function calculateTrendMomentumMetrics(pack1h: BinanceKlinePack | null): 
     if (v1 <= v0) isVolumeCascading = false;
   }
 
-  /** ถ้าไม่มีคู่เขียว→แดง ใช้ pullback จากจุดสูงสุดของ close ในช่วง 3 แท่ง */
+  /** DD 1H% ในตารางสถิติ — peak high → low ในช่วง 3 แท่ง (ไม่ผูกเฉพาะเขียว→แดง) */
+  const windowDd = maxDrawbackPercentIn1hWindow(high, low, iStart, iEnd);
+  if (windowDd > maxDrawbackPercent) maxDrawbackPercent = windowDd;
+
+  /** เสริม: pullback จาก close สูงสุดในช่วง (กรณี wick แคบ) */
   if (maxDrawbackPercent <= 0) {
     let peakClose = -Infinity;
     for (let i = iStart; i <= iEnd; i++) {

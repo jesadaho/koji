@@ -110,15 +110,14 @@ function pickHorizonClose(
 }
 
 function rowNeedsTrendMomentumBackfill(row: SnowballStatsRow): boolean {
-  if (row.maxDrawback1hPct == null || row.volumeCascadeYn == null) return true;
-  /** แถว pending ที่เคยคำนวณจาก pack 15m ผิด — รีเฟรชทุกรอบ stats จนกว่าจะปิด outcome */
-  if (row.outcome === "pending" && row.maxDrawback1hPct === 0 && row.volumeCascadeYn === "N") {
-    return true;
-  }
+  if (row.volumeCascadeYn == null) return true;
+  if (row.maxDrawback1hPct == null) return true;
+  /** vol_cascade ถูกแล้ว แต่ DD 1H ยังเป็น 0 จากข้อมูล/สูตรเก่า — รีเฟรชเฉพาะ DD */
+  if (row.outcome === "pending" && row.maxDrawback1hPct === 0) return true;
   return false;
 }
 
-/** เติม/อัปเดต DD 1H% / Vol↗ จากแท่ง 1H จริง */
+/** เติม/อัปเดต DD 1H% และ vol_cascade จากแท่ง 1H จริง */
 async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Promise<number> {
   const need = rows.filter(rowNeedsTrendMomentumBackfill);
   if (need.length === 0) return 0;

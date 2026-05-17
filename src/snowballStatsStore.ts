@@ -10,6 +10,7 @@ import {
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
+import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 
 export type {
   SnowballStatsApiPayload,
@@ -239,19 +240,21 @@ export async function removeSnowballStatsDuplicatesInLastHours(input: {
   nowMs: number;
   windowHours: number;
   symbol?: string;
-}): Promise<{ removed: number; kept: number; scanned: number }> {
+}): Promise<{ removed: number; kept: number; scanned: number; matched: number }> {
   const windowMs = Math.max(1, input.windowHours) * 3600 * 1000;
   const nowMs = input.nowMs;
-  const symbolFilter = input.symbol ? normalizeSymbol(input.symbol) : null;
+  const symbolFilter = input.symbol ? toBinanceUsdtPerpSymbol(input.symbol) : null;
 
   const state = await loadSnowballStatsState();
   const rows = state.rows ?? [];
   const scanned = rows.length;
+  let matched = 0;
 
   const byKey = new Map<string, SnowballStatsRow[]>();
   for (const r of rows) {
     const sym = normalizeSymbol(r.symbol);
     if (symbolFilter && sym !== symbolFilter) continue;
+    matched += 1;
     const key = `${sym}|${r.side}`;
     const arr = byKey.get(key) ?? [];
     arr.push(r);
@@ -278,10 +281,10 @@ export async function removeSnowballStatsDuplicatesInLastHours(input: {
   }
 
   if (toDrop.size === 0) {
-    return { removed: 0, kept: rows.length, scanned };
+    return { removed: 0, kept: rows.length, scanned, matched };
   }
 
   const next = rows.filter((r) => !toDrop.has(r.id));
   await saveSnowballStatsState({ rows: next });
-  return { removed: toDrop.size, kept: next.length, scanned };
+  return { removed: toDrop.size, kept: next.length, scanned, matched };
 }
