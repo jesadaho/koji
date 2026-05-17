@@ -201,6 +201,9 @@ export function evalInvertedDoji1d(
   env: CandleReversal1dDetectEnv,
 ): CandleReversalSignal | null {
   const { open: o, high: h, low: l, close: c } = pack;
+  /** Reversal ต้องเป็นแท่งแดงปิดจริง — ห้ามยิงจากเขียวที่มีแค่ไส้บนยาว */
+  if (c[i]! >= o[i]!) return null;
+
   const range = h[i]! - l[i]!;
   const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
   if (!Number.isFinite(range) || range <= eps) return null;
@@ -236,6 +239,9 @@ export function evalInvertedDoji1h(
   env: CandleReversal1hDetectEnv,
 ): CandleReversalSignal | null {
   const { open: o, high: h, low: l, close: c } = pack;
+  /** Reversal ต้องเป็นแท่งแดงปิดจริง — ห้ามยิงจากเขียวที่มีแค่ไส้บนยาว */
+  if (c[i]! >= o[i]!) return null;
+
   const range = h[i]! - l[i]!;
   const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
   if (!Number.isFinite(range) || range <= eps) return null;
@@ -480,7 +486,12 @@ export function candleReversal1hInvertedDojiCheckLines(
   const i = barIndex;
   const { open: o, high: h, low: l, close: c } = pack;
   const lines: string[] = [];
-  lines.push(`เกณฑ์ inverted_doji (high สูงสุดใน ${env.highestHighLookback} แท่ง · ไส้≥${(env.wickMinRatio * 100).toFixed(0)}% · เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}%):`);
+  lines.push(
+    `เกณฑ์ inverted_doji (แท่งแดง C<O · high สูงสุดใน ${env.highestHighLookback} แท่ง · ไส้≥${(env.wickMinRatio * 100).toFixed(0)}% · เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}%):`,
+  );
+
+  const red = c[i]! < o[i]!;
+  lines.push(`  แท่งแดง C<O: ${checkMark(red)} (${fmtReversalPrice(c[i]!)} < ${fmtReversalPrice(o[i]!)})`);
 
   const range = h[i]! - l[i]!;
   const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
@@ -520,8 +531,11 @@ export function candleReversal1dInvertedDojiCheckLines(
   const { open: o, high: h, low: l, close: c } = pack;
   const lines: string[] = [];
   lines.push(
-    `เกณฑ์ inverted_doji 1D (ไส้≥${(env.wickMinRatio * 100).toFixed(0)}% · เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}% · HH${env.hh200Lookback}/tail${env.highestTailLookback}):`,
+    `เกณฑ์ inverted_doji 1D (แท่งแดง C<O · ไส้≥${(env.wickMinRatio * 100).toFixed(0)}% · เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}% · HH${env.hh200Lookback}/tail${env.highestTailLookback}):`,
   );
+
+  const red = c[i]! < o[i]!;
+  lines.push(`  แท่งแดง C<O: ${checkMark(red)} (${fmtReversalPrice(c[i]!)} < ${fmtReversalPrice(o[i]!)})`);
 
   const range = h[i]! - l[i]!;
   const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
@@ -674,7 +688,7 @@ export function buildCandleReversalAlertMessage(symbol: string, sig: CandleRever
     return [
       `🎯 [Reversal ${tfLabel}] ${base} — ${modelTh}`,
       `แท่งปิด: O ${fmtReversalPrice(sig.o)} · H ${fmtReversalPrice(sig.h)} · L ${fmtReversalPrice(sig.l)} · C ${fmtReversalPrice(sig.c)}`,
-      `ไส้บน ${wickPct}% · เนื้อ ${bodyPct}% ของช่วงแท่ง${candleReversalLookbackContextSuffix(sig)}`,
+      `แท่งแดง · ไส้บน ${wickPct}% · เนื้อ ${bodyPct}% ของช่วงแท่ง${candleReversalLookbackContextSuffix(sig)}`,
       "",
       "📍 แผน Short (รอรีเทสต์):",
       `• Limit รีเทสต์ ~50% ไส้บน: ${fmtReversalPrice(sig.retestPrice)}`,
