@@ -155,6 +155,16 @@ type CandleReversalSignalLookbackMeta = Pick<
   "highRankInLookback" | "volRankInLookback" | "lookbackBars"
 >;
 
+/** ไส้บนต่อช่วงแท่ง (0–1) — ใช้แสดงไส้% ใน stats ทุกโมเดล */
+export function candleUpperWickRatio(pack: BinanceKlinePack, i: number): number {
+  const { open: o, high: h, low: l, close: c } = pack;
+  const range = h[i]! - l[i]!;
+  const eps = Math.max(1e-12, Math.abs(h[i]!) * 1e-10);
+  if (!Number.isFinite(range) || range <= eps) return 0;
+  const upperWick = Math.max(0, h[i]! - Math.max(o[i]!, c[i]!));
+  return upperWick / range;
+}
+
 function buildSignal(
   tf: CandleReversalTf,
   model: CandleReversalModel,
@@ -287,7 +297,8 @@ export function evalMarubozu1d(
   const retest382 = c[i]! + body * 0.382;
   const retestPrice = (retest50 + retest382) / 2;
   const slPrice = h[i]! * (1 + env.slBufferPct);
-  return buildSignal("1d", "marubozu", pack, i, 0, body / range, retestPrice, slPrice, hadRecentInvertedDoji, {
+  const wickRatio = candleUpperWickRatio(pack, i);
+  return buildSignal("1d", "marubozu", pack, i, wickRatio, body / range, retestPrice, slPrice, hadRecentInvertedDoji, {
     highRankInLookback: 1,
     volRankInLookback: volRank,
     lookbackBars: env.marubozuBodyLookback,
@@ -329,7 +340,8 @@ export function evalLongestRedBody1h(
   const retest382 = c[i]! + body * 0.382;
   const retestPrice = (retest50 + retest382) / 2;
   const slPrice = h[i]! * (1 + env.slBufferPct);
-  return buildSignal("1h", "longest_red_body", pack, i, 0, body / range, retestPrice, slPrice, hadRecentInvertedDoji, {
+  const wickRatio = candleUpperWickRatio(pack, i);
+  return buildSignal("1h", "longest_red_body", pack, i, wickRatio, body / range, retestPrice, slPrice, hadRecentInvertedDoji, {
     highRankInLookback: highRank,
     volRankInLookback: volRank,
     lookbackBars: env.longestRedBodyLookback,

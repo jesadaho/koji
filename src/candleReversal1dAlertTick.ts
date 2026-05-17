@@ -453,7 +453,7 @@ async function notifyResults(
           entryPrice: sig.c,
           retestPrice: sig.retestPrice,
           slPrice: sig.slPrice,
-          wickRatioPct: sig.model === "inverted_doji" ? sig.wickRatio * 100 : null,
+          wickRatioPct: Number.isFinite(sig.wickRatio) ? sig.wickRatio * 100 : null,
           bodyPct: sig.bodyRatio * 100,
           highRankInLookback: sig.highRankInLookback ?? null,
           volRankInLookback: sig.volRankInLookback ?? null,
