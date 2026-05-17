@@ -975,11 +975,9 @@ export async function POST(req: NextRequest) {
       } else if (symResolved) {
         lines.push(`แถวของสัญญานี้ที่ตรวจ: ${r.matched}`);
         if (r.removed === 0 && r.matched > 1) {
-          lines.push(
-            "",
-            "ไม่มีแถวซ้ำตามกฎ dedupe (ต้อง symbol+ทิศเทรดเดียวกัน และห่างกันไม่เกิน 24 ชม.)",
-            "Long กับ Long→Short ถือคนละทิศ · เกรด/เวลาต่างก็ไม่ถือซ้ำ",
-          );
+          lines.push("", "ใน 24 ชม. มีหลายแถวแต่ไม่มีแถวซ้ำให้ลบ (ผิดปกติ — แจ้ง dev)");
+        } else if (r.removed > 0) {
+          lines.push("", "คงแค่สัญญาณแรกต่อเหรียญใน 24 ชม. (แจ้งเร็วสุด · ไม่แยก long/short)");
         }
       }
       await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);

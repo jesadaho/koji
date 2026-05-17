@@ -234,7 +234,7 @@ function normalizeSymbol(s: string): string {
 }
 
 /**
- * ลบแถว Snowball stats ที่ซ้ำภายใน window ชั่วโมง (ต่อ symbol+side) โดยคงแถวที่แจ้งก่อน (แถวแรก) ไว้
+ * ลบแถว Snowball stats ซ้ำภายใน window ชั่วโมง — ต่อเหรียญคงแค่สัญญาณแรก (แจ้งเร็วสุด ไม่แยก long/short)
  */
 export async function removeSnowballStatsDuplicatesInLastHours(input: {
   nowMs: number;
@@ -243,6 +243,7 @@ export async function removeSnowballStatsDuplicatesInLastHours(input: {
 }): Promise<{ removed: number; kept: number; scanned: number; matched: number }> {
   const windowMs = Math.max(1, input.windowHours) * 3600 * 1000;
   const nowMs = input.nowMs;
+  const cutoffMs = nowMs - windowMs;
   const symbolFilter = input.symbol ? toBinanceUsdtPerpSymbol(input.symbol) : null;
 
   const state = await loadSnowballStatsState();
@@ -250,33 +251,24 @@ export async function removeSnowballStatsDuplicatesInLastHours(input: {
   const scanned = rows.length;
   let matched = 0;
 
-  const byKey = new Map<string, SnowballStatsRow[]>();
+  const bySymbol = new Map<string, SnowballStatsRow[]>();
   for (const r of rows) {
     const sym = normalizeSymbol(r.symbol);
     if (symbolFilter && sym !== symbolFilter) continue;
+    const t = r.alertedAtMs ?? 0;
+    if (t < cutoffMs) continue;
     matched += 1;
-    const key = `${sym}|${r.side}`;
-    const arr = byKey.get(key) ?? [];
+    const arr = bySymbol.get(sym) ?? [];
     arr.push(r);
-    byKey.set(key, arr);
-  }
-  for (const arr of Array.from(byKey.values())) {
-    arr.sort((a, b) => (a.alertedAtMs ?? 0) - (b.alertedAtMs ?? 0));
+    bySymbol.set(sym, arr);
   }
 
   const toDrop = new Set<string>();
-  for (const arr of Array.from(byKey.values())) {
+  for (const arr of Array.from(bySymbol.values())) {
     if (arr.length <= 1) continue;
-    let lastKeptMs = arr[0]!.alertedAtMs ?? 0;
+    arr.sort((a, b) => (a.alertedAtMs ?? 0) - (b.alertedAtMs ?? 0));
     for (let i = 1; i < arr.length; i++) {
-      const r = arr[i]!;
-      const t = r.alertedAtMs ?? 0;
-      const dt = t - lastKeptMs;
-      if (dt >= 0 && dt <= windowMs) {
-        toDrop.add(r.id);
-      } else {
-        lastKeptMs = t;
-      }
+      toDrop.add(arr[i]!.id);
     }
   }
 
