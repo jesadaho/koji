@@ -47,6 +47,8 @@ export type PctTrailingCronRecord = {
   durationMs: number;
   steps: {
     trailingPct: CronStepResult;
+    /** แจ้งเตือน trailing % ของ open positions ใน portfolio (Settings) */
+    portfolioTrailingPct?: CronStepResult;
     sparkTicker: CronStepResult;
     sparkFollowUp: CronStepResult;
   };
@@ -223,6 +225,9 @@ export function formatCronStatusForLine(bundle: {
     parts.push("— รอบล่าสุด: pct-trailing (~5 นาที; เตือน% + Spark ticker + follow-up) —");
     parts.push(`เวลา: ${pctTrailing.at} · รวม ${pctTrailing.durationMs}ms`);
     parts.push(fmt(pctTrailing.steps.trailingPct, "เตือน% trailing"));
+    if (pctTrailing.steps.portfolioTrailingPct) {
+      parts.push(fmt(pctTrailing.steps.portfolioTrailingPct, "Portfolio trailing"));
+    }
     parts.push(fmt(pctTrailing.steps.sparkTicker, "Spark (ราคา last / ticker)"));
     parts.push(fmt(pctTrailing.steps.sparkFollowUp, "Spark follow-up"));
     parts.push("");

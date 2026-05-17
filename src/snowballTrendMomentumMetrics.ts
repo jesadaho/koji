@@ -1,4 +1,6 @@
-import type { BinanceKlinePack } from "./binanceIndicatorKline";
+import { fetchBinanceUsdmKlines, type BinanceKlinePack } from "./binanceIndicatorKline";
+
+const SNOWBALL_TREND_1H_BARS = 120;
 
 /** โมเมนตัมเทรนด์ระยะสั้นจาก 3 แท่ง 1H ปิดล่าสุด */
 export type TrendMomentumMetrics = {
@@ -53,6 +55,18 @@ export function isHighQualityAccumulation(metrics: TrendMomentumMetrics | null |
   return isSustainedBuyingPressure(metrics);
 }
 
+/** ดึงแท่ง 1H สำหรับ DD 1H% / Vol↗ — ต้องใช้ TF 1H เท่านั้น (ห้ามส่ง pack 15m) */
+export async function fetchSnowball1hPackForTrendMomentum(
+  symbol: string
+): Promise<BinanceKlinePack | null> {
+  try {
+    return await fetchBinanceUsdmKlines(symbol.trim().toUpperCase(), "1h", SNOWBALL_TREND_1H_BARS);
+  } catch (e) {
+    console.error("[snowballTrendMomentum] fetch 1h", symbol, e);
+    return null;
+  }
+}
+
 /**
  * คำนวณ Max Drawback (1H) และ Volume Cascade จาก 3 แท่ง 1H ปิดล่าสุด
  * (เทียบเท่า slice(-4, -1) บน array ที่ไม่รวมแท่งกำลังก่อตัว)
@@ -97,6 +111,23 @@ export function calculateTrendMomentumMetrics(pack1h: BinanceKlinePack | null): 
     }
 
     if (v1 <= v0) isVolumeCascading = false;
+  }
+
+  /** ถ้าไม่มีคู่เขียว→แดง ใช้ pullback จากจุดสูงสุดของ close ในช่วง 3 แท่ง */
+  if (maxDrawbackPercent <= 0) {
+    let peakClose = -Infinity;
+    for (let i = iStart; i <= iEnd; i++) {
+      const c = close[i]!;
+      if (Number.isFinite(c) && c > peakClose) peakClose = c;
+    }
+    if (peakClose > 0) {
+      for (let i = iStart; i <= iEnd; i++) {
+        const c = close[i]!;
+        if (!Number.isFinite(c) || c >= peakClose) continue;
+        const dd = ((peakClose - c) / peakClose) * 100;
+        if (dd > maxDrawbackPercent) maxDrawbackPercent = dd;
+      }
+    }
   }
 
   const threshold = envMaxDrawbackPct();

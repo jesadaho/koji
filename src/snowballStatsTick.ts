@@ -9,6 +9,11 @@ import {
   saveSnowballStatsState,
   type SnowballStatsRow,
 } from "./snowballStatsStore";
+import {
+  calculateTrendMomentumMetrics,
+  fetchSnowball1hPackForTrendMomentum,
+  trendMomentumStatsFields,
+} from "./snowballTrendMomentumMetrics";
 
 /** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
 const KLINE_GRAN_SEC = 900;
@@ -104,12 +109,58 @@ function pickHorizonClose(
   return { price, pct: pctVsEntry(side, entry, price) };
 }
 
+function rowNeedsTrendMomentumBackfill(row: SnowballStatsRow): boolean {
+  if (row.maxDrawback1hPct == null || row.volumeCascadeYn == null) return true;
+  /** แถว pending ที่เคยคำนวณจาก pack 15m ผิด — รีเฟรชทุกรอบ stats จนกว่าจะปิด outcome */
+  if (row.outcome === "pending" && row.maxDrawback1hPct === 0 && row.volumeCascadeYn === "N") {
+    return true;
+  }
+  return false;
+}
+
+/** เติม/อัปเดต DD 1H% / Vol↗ จากแท่ง 1H จริง */
+async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Promise<number> {
+  const need = rows.filter(rowNeedsTrendMomentumBackfill);
+  if (need.length === 0) return 0;
+
+  const bySymbol = new Map<string, SnowballStatsRow[]>();
+  for (const row of need) {
+    const sym = row.symbol.trim().toUpperCase();
+    const arr = bySymbol.get(sym) ?? [];
+    arr.push(row);
+    bySymbol.set(sym, arr);
+  }
+
+  let updated = 0;
+  for (const [symbol, symRows] of bySymbol) {
+    const pack1h = await fetchSnowball1hPackForTrendMomentum(symbol);
+    const metrics = calculateTrendMomentumMetrics(pack1h);
+    const fields = trendMomentumStatsFields(metrics);
+    if (fields.maxDrawback1hPct == null && fields.volumeCascadeYn == null) continue;
+    for (const row of symRows) {
+      let touched = false;
+      if (fields.maxDrawback1hPct != null && row.maxDrawback1hPct !== fields.maxDrawback1hPct) {
+        row.maxDrawback1hPct = fields.maxDrawback1hPct;
+        touched = true;
+      }
+      if (fields.volumeCascadeYn != null && row.volumeCascadeYn !== fields.volumeCascadeYn) {
+        row.volumeCascadeYn = fields.volumeCascadeYn;
+        touched = true;
+      }
+      if (touched) updated += 1;
+    }
+  }
+  return updated;
+}
+
 export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<number> {
   resetBinanceIndicatorFapi451LogDedupe();
   if (!isSnowballStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return 0;
 
   const state = await loadSnowballStatsState();
   let dirty = 0;
+
+  dirty += await backfillSnowballTrendMomentumFields(state.rows);
 
   for (const row of state.rows) {
     if (row.outcome !== "pending") continue;

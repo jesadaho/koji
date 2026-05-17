@@ -55,6 +55,8 @@ import { loadSnowballStatsState } from "./snowballStatsStore";
 import { isAdminTelegramUserId } from "./adminIds";
 import { loadCandleReversalStatsState, resetCandleReversalStatsState } from "./candleReversalStatsStore";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
+import { isPctStepPresetValue, PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
+import { clearPortfolioTrailingStateForUser } from "./portfolioTrailingAlertStateStore";
 import {
   ensureTradingViewMexcUserRow,
   orderSideEffective,
@@ -825,6 +827,58 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
   };
 }
 
+export function tradingViewPortfolioTrailingPayloadFromRow(
+  row: TradingViewMexcUserSettings
+): Record<string, unknown> {
+  return {
+    enabled: row.portfolioTrailingAlertEnabled ?? false,
+    stepPct: row.portfolioTrailingStepPct ?? null,
+  };
+}
+
+function parsePortfolioTrailingAlertNested(
+  raw: unknown
+):
+  | { ok: false; error: string }
+  | { ok: true; patch: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret"> } {
+  if (raw === undefined || raw === null) return { ok: false, error: "missing_portfolio_trailing_bundle" };
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, error: "portfolio_trailing_must_object" };
+  }
+  const o = raw as Record<string, unknown>;
+
+  let enabled = false;
+  if (typeof o.enabled === "boolean") enabled = o.enabled;
+  else if (o.enabled === "1" || o.enabled === 1 || o.enabled === "true") enabled = true;
+
+  if (!enabled) {
+    return {
+      ok: true,
+      patch: {
+        portfolioTrailingAlertEnabled: false,
+        portfolioTrailingStepPct: null,
+      },
+    };
+  }
+
+  const stepRaw = o.stepPct ?? o.step;
+  const stepPct = typeof stepRaw === "number" ? stepRaw : Number(stepRaw);
+  if (!Number.isFinite(stepPct) || !isPctStepPresetValue(stepPct)) {
+    return {
+      ok: false,
+      error: `stepPct ต้องเป็นหนึ่งใน ${PCT_STEP_PRESET_VALUES.join(", ")}`,
+    };
+  }
+
+  return {
+    ok: true,
+    patch: {
+      portfolioTrailingAlertEnabled: true,
+      portfolioTrailingStepPct: stepPct,
+    },
+  };
+}
+
 /** ประกอบ row แล้วรันตัว resolver เดียวกับ cron */
 function mergeTradingViewRowForSparkValidation(
   prev: TradingViewMexcUserSettings,
@@ -1097,6 +1151,7 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
       snowballAutotradeServerEnabled: isSnowballAutotradeEnabled(),
       snowballAutoTradeNote: SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH,
       snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),
+      portfolioTrailingAlert: tradingViewPortfolioTrailingPayloadFromRow(row),
     },
   };
 }
@@ -1163,6 +1218,28 @@ export async function liffSetTradingViewMexcSettings(
     snowballPatchMerged = parsed.patch;
   }
 
+  const portfolioBundle = b.portfolioTrailingAlert;
+  const hasPortfolioNested = portfolioBundle !== undefined && portfolioBundle !== null;
+  let portfolioPatchMerged: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret"> | undefined;
+  if (hasPortfolioNested) {
+    const parsed = parsePortfolioTrailingAlertNested(portfolioBundle);
+    if (!parsed.ok) {
+      return { status: 400, json: { error: parsed.error } };
+    }
+    portfolioPatchMerged = parsed.patch;
+
+    const prevRow = await ensureTradingViewMexcUserRow(userId);
+    const nextEnabled = parsed.patch.portfolioTrailingAlertEnabled ?? false;
+    const nextStep = parsed.patch.portfolioTrailingStepPct;
+    const prevEnabled = prevRow.portfolioTrailingAlertEnabled ?? false;
+    const prevStep = prevRow.portfolioTrailingStepPct;
+    const settingsChanged =
+      nextEnabled !== prevEnabled || (nextEnabled && nextStep !== prevStep);
+    if (settingsChanged) {
+      await clearPortfolioTrailingStateForUser(userId);
+    }
+  }
+
   const row = await saveTradingViewMexcSettings(userId, {
     mexcApiKey: key,
     mexcSecret: sec,
@@ -1171,6 +1248,7 @@ export async function liffSetTradingViewMexcSettings(
     preserveSparkAutoTrade: !hasSparkNested,
     ...(sparkPatchMerged ?? {}),
     ...(snowballPatchMerged ?? {}),
+    ...(portfolioPatchMerged ?? {}),
   });
 
   const { origin, path } = publicAppBaseForTvWebhook();
@@ -1200,6 +1278,7 @@ export async function liffSetTradingViewMexcSettings(
       snowballAutotradeServerEnabled: isSnowballAutotradeEnabled(),
       snowballAutoTradeNote: SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH,
       snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),
+      portfolioTrailingAlert: tradingViewPortfolioTrailingPayloadFromRow(row),
     },
   };
 }

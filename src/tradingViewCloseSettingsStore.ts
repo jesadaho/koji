@@ -56,6 +56,10 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeQuickTpEnabled?: boolean;
   snowballAutoTradeQuickTpRoiPct?: number;
   snowballAutoTradeQuickTpMaxHours?: number;
+
+  /** แจ้งเตือน trailing % ของเหรียญใน open positions (cron ~5 นาที) */
+  portfolioTrailingAlertEnabled?: boolean;
+  portfolioTrailingStepPct?: number;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -186,6 +190,9 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeQuickTpEnabled?: boolean;
   snowballAutoTradeQuickTpRoiPct?: number | null;
   snowballAutoTradeQuickTpMaxHours?: number | null;
+
+  portfolioTrailingAlertEnabled?: boolean;
+  portfolioTrailingStepPct?: number | null;
 };
 
 /**
@@ -231,6 +238,10 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeQuickTpEnabled !== undefined ||
     input.snowballAutoTradeQuickTpRoiPct !== undefined ||
     input.snowballAutoTradeQuickTpMaxHours !== undefined;
+
+  const touchedPortfolioTrailingPatch =
+    input.portfolioTrailingAlertEnabled !== undefined ||
+    input.portfolioTrailingStepPct !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -345,9 +356,22 @@ export async function saveTradingViewMexcSettings(
         : input.snowballAutoTradeQuickTpMaxHours !== undefined
           ? input.snowballAutoTradeQuickTpMaxHours
           : prev?.snowballAutoTradeQuickTpMaxHours,
+
+    portfolioTrailingAlertEnabled:
+      input.portfolioTrailingAlertEnabled !== undefined
+        ? input.portfolioTrailingAlertEnabled
+        : prev?.portfolioTrailingAlertEnabled ?? false,
+
+    portfolioTrailingStepPct:
+      input.portfolioTrailingStepPct === null
+        ? undefined
+        : input.portfolioTrailingStepPct !== undefined
+          ? input.portfolioTrailingStepPct
+          : prev?.portfolioTrailingStepPct,
   };
 
   void touchedSnowballPatch;
+  void touchedPortfolioTrailingPatch;
   m[userId] = row;
   await saveMap(m);
   return row;

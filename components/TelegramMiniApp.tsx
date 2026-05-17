@@ -148,7 +148,7 @@ type IndicatorAlertRow =
       lastTriggeredAt?: string;
     };
 
-const PCT_STEP_PRESET_VALUES = [1, 2, 3, 5, 10] as const;
+import { PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 
 type VolumeSignalAlertRow = {
   id: string;

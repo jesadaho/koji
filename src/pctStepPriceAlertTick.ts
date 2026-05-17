@@ -12,6 +12,10 @@ import {
   type PctStepAlert,
   type PctStepMode,
 } from "./pctStepAlertsStore";
+import {
+  buildTrailingAlertMessage,
+  evaluateTrailingPriceStep,
+} from "./pctTrailingAlertUtils";
 
 const EPS = 1e-10;
 
@@ -82,29 +86,7 @@ function buildDailyMessage(row: PctStepAlert, anchor: number, p: number): string
 }
 
 function buildTrailingMessage(row: PctStepAlert, prevAnchor: number, p: number): string {
-  const label = symLabel(row);
-  const deltaPct = ((p - prevAnchor) / prevAnchor) * 100;
-  const pctStr =
-    deltaPct >= 0
-      ? `+${Math.abs(deltaPct).toFixed(1)}%`
-      : `-${Math.abs(deltaPct).toFixed(1)}%`;
-
-  const head =
-    deltaPct >= 0
-      ? `🚀 Price Alert: [${label}] (${pctStr})`
-      : `🔴 Price Alert: [${label}] (${pctStr})`;
-
-  const body =
-    deltaPct >= 0 ? `ขยับขึ้นจากเตือนครั้งก่อนแล้ว!` : `ขยับลงจากเตือนครั้งก่อนแล้ว!`;
-
-  return [
-    head,
-    "",
-    body,
-    "",
-    `🔹 ราคาปัจจุบัน: ${fmtUsd(p)}`,
-    `🔹 นับจากเตือนครั้งก่อน: ${fmtUsd(prevAnchor)}`,
-  ].join("\n");
+  return buildTrailingAlertMessage(symLabel(row), prevAnchor, p);
 }
 
 function coinIdsForScope(rows: PctStepAlert[], scope: PctStepScope): string[] {
@@ -152,23 +134,26 @@ async function runPctStepPriceAlertTickInner(
         continue;
       }
 
-      const anchor = row.trailingAnchorPrice ?? p;
-      const diffPct = (Math.abs(p - anchor) / anchor) * 100;
-      if (diffPct + EPS >= row.stepPct) {
+      const step = evaluateTrailingPriceStep(p, row.trailingAnchorPrice, row.stepPct);
+      if (step.fired) {
         try {
-          await sendAlertNotification(client, row.userId, buildTrailingMessage(row, anchor, p));
+          await sendAlertNotification(
+            client,
+            row.userId,
+            buildTrailingMessage(row, step.prevAnchor, step.price)
+          );
           notified += 1;
         } catch (e) {
           console.error("[pctStepPriceAlertTick] push trailing", row.id, e);
         }
         nextRows.push({
           ...row,
-          trailingAnchorPrice: p,
+          trailingAnchorPrice: step.nextAnchor,
         });
       } else {
         nextRows.push({
           ...row,
-          trailingAnchorPrice: row.trailingAnchorPrice ?? p,
+          trailingAnchorPrice: step.nextAnchor,
         });
       }
       continue;

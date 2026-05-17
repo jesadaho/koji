@@ -4,6 +4,7 @@ import type { PctTrailingCronRecord } from "@/src/cronStatusStore";
 import { savePctTrailingCronRecord } from "@/src/cronStatusStore";
 import { requireCronAuth } from "@/src/cronAuth";
 import { createLineClientForCron } from "@/src/lineHandler";
+import { runPortfolioTrailingPriceAlertTick } from "@/src/portfolioTrailingPriceAlertTick";
 import { runPctStepTrailingPriceAlertTick } from "@/src/pctStepPriceAlertTick";
 import {
   isPriceSpike15mSparkCronEnabled,
@@ -33,11 +34,13 @@ export async function GET(req: NextRequest) {
 
   const steps: PctTrailingCronRecord["steps"] = {
     trailingPct: { ok: false },
+    portfolioTrailingPct: { ok: false },
     sparkTicker: { ok: false },
     sparkFollowUp: { ok: false },
   };
 
   let r = { notified: 0 };
+  let portfolioR = { notified: 0, usersScanned: 0 };
   let spark = { symbolsHit: 0, notifiedPushes: 0 };
   let follow = { checkpoints: 0, resolvedEvents: 0, notifiedPushes: 0 };
 
@@ -58,6 +61,23 @@ export async function GET(req: NextRequest) {
       error: errMsg(e),
     };
     console.error("[cron pct-trailing] trailing", e);
+  }
+
+  const tPortfolio = Date.now();
+  try {
+    portfolioR = await runPortfolioTrailingPriceAlertTick(client);
+    steps.portfolioTrailingPct = {
+      ok: true,
+      ms: Date.now() - tPortfolio,
+      detail: `แจ้งไปแล้ว ${portfolioR.notified} ครั้ง · สแกน ${portfolioR.usersScanned} user`,
+    };
+  } catch (e) {
+    steps.portfolioTrailingPct = {
+      ok: false,
+      ms: Date.now() - tPortfolio,
+      error: errMsg(e),
+    };
+    console.error("[cron pct-trailing] portfolio trailing", e);
   }
 
   /** Spark / follow-up ไม่พึ่งผล trailing — อย่าข้ามเมื่อล็อกเตือน% ล้มเหลว (เคยทำให้ไม่มี Spark ทั้งรอบ) */
@@ -112,7 +132,10 @@ export async function GET(req: NextRequest) {
   }
 
   const allOk =
-    steps.trailingPct.ok && steps.sparkTicker.ok && steps.sparkFollowUp.ok;
+    steps.trailingPct.ok &&
+    (steps.portfolioTrailingPct?.ok ?? true) &&
+    steps.sparkTicker.ok &&
+    steps.sparkFollowUp.ok;
 
   if (!allOk) {
     await notifyCronFailure({
@@ -136,6 +159,10 @@ export async function GET(req: NextRequest) {
     ok: true,
     scope: "trailing",
     notified: r.notified,
+    portfolioTrailing: {
+      notified: portfolioR.notified,
+      usersScanned: portfolioR.usersScanned,
+    },
     spark: { symbolsHit: spark.symbolsHit, notifiedPushes: spark.notifiedPushes },
     sparkFollowUp: {
       checkpoints: follow.checkpoints,

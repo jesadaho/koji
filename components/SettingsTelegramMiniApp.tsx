@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import { PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import {
   getTelegramInitData,
   getTelegramMiniAppDisplayName,
@@ -144,6 +145,10 @@ type TradingViewMexcResponse = {
   snowballAutotradeServerEnabled?: boolean;
   snowballAutoTradeNote?: string;
   snowballAutoTrade?: SnowballAutoTradeApiBundle;
+  portfolioTrailingAlert?: {
+    enabled?: boolean;
+    stepPct?: number | null;
+  };
 };
 
 export default function SettingsTelegramMiniApp() {
@@ -188,6 +193,12 @@ export default function SettingsTelegramMiniApp() {
   const [snowSaveOk, setSnowSaveOk] = useState("");
   const [snowSaving, setSnowSaving] = useState(false);
 
+  const [portfolioTrailingEnabled, setPortfolioTrailingEnabled] = useState(false);
+  const [portfolioTrailingStepPct, setPortfolioTrailingStepPct] = useState<string>("3");
+  const [portfolioTrailingSaveErr, setPortfolioTrailingSaveErr] = useState("");
+  const [portfolioTrailingSaveOk, setPortfolioTrailingSaveOk] = useState("");
+  const [portfolioTrailingSaving, setPortfolioTrailingSaving] = useState(false);
+
   useEffect(() => {
     if (!sparkSaveOk.trim()) return;
     const t = window.setTimeout(() => setSparkSaveOk(""), 6000);
@@ -199,6 +210,12 @@ export default function SettingsTelegramMiniApp() {
     const t = window.setTimeout(() => setSnowSaveOk(""), 6000);
     return () => window.clearTimeout(t);
   }, [snowSaveOk]);
+
+  useEffect(() => {
+    if (!portfolioTrailingSaveOk.trim()) return;
+    const t = window.setTimeout(() => setPortfolioTrailingSaveOk(""), 6000);
+    return () => window.clearTimeout(t);
+  }, [portfolioTrailingSaveOk]);
 
   /** sync จาก GET — อย่ากระทำเมื่อ user แก้อยู่: ให้ hydrate จาก tvSettings เท่านั้น */
   useEffect(() => {
@@ -257,6 +274,19 @@ export default function SettingsTelegramMiniApp() {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.snowballAutoTrade]);
+
+  useEffect(() => {
+    const st = tvSettings?.portfolioTrailingAlert;
+    if (!st) return;
+    setPortfolioTrailingEnabled(Boolean(st.enabled));
+    const sp = st.stepPct;
+    if (sp != null && Number.isFinite(sp) && (PCT_STEP_PRESET_VALUES as readonly number[]).includes(sp)) {
+      setPortfolioTrailingStepPct(String(sp));
+    } else if (!st.enabled) {
+      setPortfolioTrailingStepPct("3");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
+  }, [tvSettings?.webhookToken, tvSettings?.portfolioTrailingAlert]);
 
   useEffect(() => {
     let cancelled = false;
@@ -463,6 +493,63 @@ export default function SettingsTelegramMiniApp() {
     return out;
   };
 
+  const onSavePortfolioTrailing = async () => {
+    setPortfolioTrailingSaveErr("");
+    setPortfolioTrailingSaveOk("");
+    const initData = getTelegramInitData();
+    if (!initData) {
+      setPortfolioTrailingSaveErr("ไม่พบ initData");
+      return;
+    }
+    const stepParsed = Number(portfolioTrailingStepPct);
+    if (
+      portfolioTrailingEnabled &&
+      (!(PCT_STEP_PRESET_VALUES as readonly number[]).includes(stepParsed) || !Number.isFinite(stepParsed))
+    ) {
+      setPortfolioTrailingSaveErr("เลือกเปอร์เซ็นต์จากรายการ");
+      return;
+    }
+
+    setPortfolioTrailingSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        rotateWebhookToken: false,
+        clearMexcCreds: false,
+        portfolioTrailingAlert: {
+          enabled: portfolioTrailingEnabled,
+          stepPct: portfolioTrailingEnabled ? stepParsed : null,
+        },
+      };
+      const url = `${apiBase}/api/tma/trading-view-mexc`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: `tma ${initData}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const { text, parsed } = await readApiResponse(res);
+      if (!res.ok) {
+        setPortfolioTrailingSaveErr(
+          messageFromParsed(parsed, res.statusText) + (text ? ` (${res.status})` : "")
+        );
+        return;
+      }
+      setTvSettings(parsed as TradingViewMexcResponse);
+      setPortfolioTrailingSaveOk(
+        portfolioTrailingEnabled
+          ? `บันทึกแล้ว · แจ้งเตือน portfolio trailing ทุก ${stepParsed}%`
+          : "บันทึกแล้ว · ปิดแจ้งเตือน portfolio trailing"
+      );
+    } catch (e) {
+      setPortfolioTrailingSaveErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPortfolioTrailingSaving(false);
+    }
+  };
+
   const onSaveSparkAuto = async () => {
     setSparkSaveErr("");
     setSparkSaveOk("");
@@ -655,6 +742,8 @@ export default function SettingsTelegramMiniApp() {
         <span className="siteNavSep" aria-hidden>
           |
         </span>
+        <a href="#portfolio-trailing-alert">Portfolio trailing</a>
+        {" · "}
         <a href="#spark-auto-open">Spark auto-open</a>
         {" · "}
         <a href="#snowball-auto-open">Snowball auto-open</a>
@@ -845,6 +934,67 @@ export default function SettingsTelegramMiniApp() {
             กำลังโหลด…
           </p>
         )}
+      </div>
+
+      <div id="portfolio-trailing-alert" className="card" style={{ marginTop: "1.25rem" }}>
+        <h2>แจ้งเตือนราคา Portfolio (Trailing)</h2>
+        <p className="sub" style={{ marginTop: 0 }}>
+          แจ้งเตือนอัตโนมัติเมื่อราคาเหรียญที่<strong>ถืออยู่ในโพซิชันเปิด</strong>บน MEXC เคลื่อนจากจุดเตือนครั้งล่าสุดครบทุก X% (แบบ trailing) — ตรวจประมาณทุก 5 นาที
+        </p>
+        {tvSettings && !tvSettings.mexcCredsComplete && portfolioTrailingEnabled ? (
+          <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
+            ต้องตั้ง MEXC API ด้านบนและกด <strong>บันทึก API</strong> ก่อน — ระบบถึงจะอ่านพอร์ตได้
+          </p>
+        ) : null}
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "1rem" }}>
+          <input
+            type="checkbox"
+            checked={portfolioTrailingEnabled}
+            onChange={(e) => setPortfolioTrailingEnabled(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>เปิดแจ้งเตือนอัตโนมัติ (Portfolio trailing)</strong>
+          </span>
+        </label>
+
+        <label className="sub" style={{ display: "block", marginTop: "0.75rem" }}>
+          แจ้งทุก (เปอร์เซ็นต์)
+          <select
+            style={{ display: "block", width: "100%", maxWidth: "24rem", marginTop: "0.35rem" }}
+            value={portfolioTrailingStepPct}
+            disabled={!portfolioTrailingEnabled}
+            onChange={(e) => setPortfolioTrailingStepPct(e.target.value)}
+          >
+            {PCT_STEP_PRESET_VALUES.map((n) => (
+              <option key={n} value={String(n)}>
+                {n}%
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <p style={{ marginTop: "0.75rem" }}>
+          <button
+            type="button"
+            className="primary"
+            style={{ width: "auto", marginTop: 0 }}
+            disabled={portfolioTrailingSaving}
+            onClick={() => void onSavePortfolioTrailing()}
+          >
+            {portfolioTrailingSaving ? "กำลังบันทึก…" : "บันทึกการแจ้งเตือน Portfolio"}
+          </button>
+        </p>
+        {portfolioTrailingSaveErr ? (
+          <p className="sub" style={{ color: "var(--danger, #c44)" }}>
+            {portfolioTrailingSaveErr}
+          </p>
+        ) : null}
+        {portfolioTrailingSaveOk ? (
+          <p className="sub" style={{ color: "var(--ok, #2a4)" }}>
+            {portfolioTrailingSaveOk}
+          </p>
+        ) : null}
       </div>
 
       <div id="spark-auto-open" className="card" style={{ marginTop: "1.25rem" }}>

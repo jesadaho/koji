@@ -34,7 +34,12 @@ import {
   formatSnowballLongBreakout1hCriteriaSummary,
   type SnowballLongBreakout1hConfirmEval,
 } from "./snowballLongBreakoutConfirm";
-import { appendSnowballStatsRow, loadSnowballStatsState, type SnowballStatsRow } from "./snowballStatsStore";
+import {
+  appendSnowballStatsRow,
+  isSnowballStatsEnabled,
+  loadSnowballStatsState,
+  type SnowballStatsRow,
+} from "./snowballStatsStore";
 import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
@@ -3725,6 +3730,8 @@ export async function runPublicIndicatorFeedInternal(
             }
             const bearVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
             const bearMktCtx = !intrabar ? await fetchSnowballAlertMarketContext(symbol) : null;
+            const pack1hTrendBear = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
+            const trendMomentumBear = calculateTrendMomentumMetrics(pack1hTrendBear);
             if (!twoBarInline && !intrabar && bearConfirmTrigger && bearRiskFlags.length > 0) {
               try {
                 await addSnowballPendingConfirm({
@@ -3794,6 +3801,7 @@ export async function runPublicIndicatorFeedInternal(
                   btcPsar4hTrend: bearMktCtx?.btcPsar4hTrend ?? null,
                   btcPsar4hClose: bearMktCtx?.btcPsar4hClose ?? null,
                   quoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
+                  ...trendMomentumStatsFields(trendMomentumBear),
                 });
               }
             } catch (statsErr) {
@@ -3821,7 +3829,8 @@ export async function runPublicIndicatorFeedInternal(
       let pack1hTwoBar: BinanceKlinePack | null = null;
       const needPack1h =
         snowballLongBreakout1hConfirmEnabled() ||
-        (snowballTwoBarInlineModeEnabled() && iClosed >= 2);
+        (snowballTwoBarInlineModeEnabled() && iClosed >= 2) ||
+        isSnowballStatsEnabled();
       if (needPack1h) {
         try {
           pack1hTwoBar = await fetchBinanceUsdmKlines(symbol, "1h", 120);
