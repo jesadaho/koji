@@ -13,9 +13,11 @@ import {
   snowballStatsDayOfWeekBkk,
   snowballStatsBtcPsar4hLabel,
   snowballStatsGradeLabel,
+  snowballStatsMaxDrawback1hLabel,
   snowballStatsSideLabel,
   snowballStatsQuoteVol24hLabel,
   snowballStatsVolScoreLabel,
+  snowballStatsVolumeCascadeLabel,
   type SnowballStatsApiPayload,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
@@ -350,6 +352,12 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">R% 2แท่ง</th>
                 <th scope="col">BTC 4h</th>
                 <th scope="col">Vol 24h</th>
+                <th scope="col" title="Max drawback % จาก 3 แท่ง 1H ปิด">
+                  DD 1H%
+                </th>
+                <th scope="col" title="Volume เรียงตัวขึ้น 3 แท่ง 1H">
+                  Vol↗
+                </th>
                 <th scope="col">4h</th>
                 <th scope="col">12h</th>
                 <th scope="col">24h</th>
@@ -364,7 +372,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={22} className="sub">
+                  <td colSpan={24} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -392,6 +400,8 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{snowballStatsBarRangePctLabel(r.barRangePct2Sum)}</td>
                     <td>{snowballStatsBtcPsar4hLabel(r.btcPsar4hTrend)}</td>
                     <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
+                    <td>{snowballStatsMaxDrawback1hLabel(r.maxDrawback1hPct)}</td>
+                    <td>{snowballStatsVolumeCascadeLabel(r.volumeCascadeYn)}</td>
                     <td>{fmtPctCell(r.price4h, r.pct4h)}</td>
                     <td>{fmtPctCell(r.price12h, r.pct12h)}</td>
                     <td>{fmtPctCell(r.price24h, r.pct24h)}</td>

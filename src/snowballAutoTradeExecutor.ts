@@ -120,6 +120,8 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     strategy: "wick_limit_retest" | "vtop_market";
     limitPrice?: number | null;
   };
+  /** สัดส่วน margin (เช่น 0.5 สำหรับ Grade B sustained flow) */
+  marginScale?: number;
 }): Promise<{ usersAttempted: number; usersSucceeded: number }> {
   if (!isSnowballAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
 
@@ -159,7 +161,12 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         : null;
     if (!creds) continue;
 
-    const marginUsdt = row.snowballAutoTradeMarginUsdt ?? NaN;
+    const marginBase = row.snowballAutoTradeMarginUsdt ?? NaN;
+    const marginScale =
+      typeof input.marginScale === "number" && Number.isFinite(input.marginScale) && input.marginScale > 0
+        ? Math.min(1, input.marginScale)
+        : 1;
+    const marginUsdt = marginBase * marginScale;
     const leverage = row.snowballAutoTradeLeverage ?? NaN;
     if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) continue;
     if (!(typeof leverage === "number" && Number.isFinite(leverage) && leverage >= 1)) continue;

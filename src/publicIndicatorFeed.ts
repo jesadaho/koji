@@ -38,6 +38,15 @@ import { appendSnowballStatsRow, loadSnowballStatsState, type SnowballStatsRow }
 import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
+import {
+  calculateTrendMomentumMetrics,
+  formatTrendMomentumMetricsLine,
+  isSustainedBuyingPressure,
+  snowballGradeBRequiresSustainedMomentum,
+  snowballGradeBSustainedMarginScale,
+  type TrendMomentumMetrics,
+  trendMomentumStatsFields,
+} from "./snowballTrendMomentumMetrics";
 import { addSnowballPendingConfirm } from "./snowballConfirmStore";
 import {
   loadSnowballConfirmLastRoundStats,
@@ -1596,6 +1605,8 @@ function buildSnowballTripleCheckMessage(
     /** Breakout Entry — ยืนยันด้วยแท่ง 1H ปิดเดียว */
     breakout1hConfirmUsed?: boolean;
     breakout1hConfirmFootnote?: string;
+    trendMomentum?: TrendMomentumMetrics | null;
+    sustainedBuyingPressure?: boolean;
   }
 ): string {
   const pair = pairSlashNoDollar(symbol);
@@ -1734,7 +1745,9 @@ function buildSnowballTripleCheckMessage(
       g === "c_plus"
         ? formatGradeCShortFadeAutotradeLine(args.gradeCShortFade)
         : g === "b_plus"
-          ? "📎 Auto-open: Grade B — ไม่สั่งเปิดอัตโนมัติ (รอ A+ Long หรือสัญญาณ Short แยก)"
+          ? args.sustainedBuyingPressure
+            ? `📎 Auto-open: Grade B + sustained flow — Long ครึ่งไม้ (~${(snowballGradeBSustainedMarginScale() * 100).toFixed(0)}% margin) เมื่อเปิด Double Barrier`
+            : "📎 Auto-open: Grade B — ไม่สั่งเปิดอัตโนมัติ (ต้อง sustained momentum 1H หรือรอ A+)"
           : "";
     const longHeadline = (() => {
       const sfx = sniperSuffix;
@@ -1755,6 +1768,8 @@ function buildSnowballTripleCheckMessage(
       `"ทรงมาดี มีแรงส่งสะสม รอเข้าเมื่อย่อ (Buy the Dip) ที่แนวรับ ~ ${playbookRefPx} USDT"`,
       ...(gradeLine ? ["", gradeLine] : []),
       ...(longAutotradeBiasLine ? ["", longAutotradeBiasLine] : []),
+      "",
+      formatTrendMomentumMetricsLine(args.trendMomentum ?? null),
       "",
       timeLine,
       "",
@@ -2148,6 +2163,9 @@ type Snowball4hScanSummaryStats = {
   /** Breakout Entry 1H confirm ไม่ผ่าน */
   longBreakout1hBlocked: number;
   longBreakout1hBlockedSymbols: string[];
+  /** Grade B ไม่ผ่าน sustained momentum (1H drawback / vol cascade) */
+  longGradeBMomentumBlocked: number;
+  longGradeBMomentumBlockedSymbols: string[];
   longDeduped: number;
   longDedupedSymbols: string[];
   /** กันยิงซ้ำในคลื่นเดิม (Long) */
@@ -2240,8 +2258,12 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push("— Long (แท่งปิด) —");
   lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.longTechPass}`);
   lines.push(...formatSymbolListLines("  ", stats.longTechPassSymbols));
-  lines.push(`ติดกรองเนื้อเทียน/ช่วง (ไส้ยาว): ${stats.longBodyRatioBlocked}`);
+    lines.push(`ติดกรองเนื้อเทียน/ช่วง (ไส้ยาว): ${stats.longBodyRatioBlocked}`);
   lines.push(...formatSymbolListLines("  ", stats.longBodyRatioBlockedSymbols));
+  if (snowballGradeBRequiresSustainedMomentum()) {
+    lines.push(`Grade B ไม่ผ่าน trend momentum (1H): ${stats.longGradeBMomentumBlocked}`);
+    lines.push(...formatSymbolListLines("  ", stats.longGradeBMomentumBlockedSymbols));
+  }
   if (snowballLongBreakout1hConfirmEnabled()) {
     lines.push(`Breakout 1H confirm ไม่ผ่าน: ${stats.longBreakout1hBlocked}`);
     lines.push(...formatSymbolListLines("  ", stats.longBreakout1hBlockedSymbols));
@@ -2500,6 +2522,8 @@ export async function runPublicIndicatorFeedInternal(
           longTwoBarInlineBlockedSymbols: [],
           longBreakout1hBlocked: 0,
           longBreakout1hBlockedSymbols: [],
+          longGradeBMomentumBlocked: 0,
+          longGradeBMomentumBlockedSymbols: [],
           longDeduped: 0,
           longDedupedSymbols: [],
           longWaveBlocked: 0,
@@ -3058,6 +3082,23 @@ export async function runPublicIndicatorFeedInternal(
 
         const longBreakoutGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
 
+        const pack1hTrend = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
+        const trendMomentum: TrendMomentumMetrics | null = calculateTrendMomentumMetrics(pack1hTrend);
+        const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
+
+        if (
+          !intrabar &&
+          longBreakoutGrade === "b_plus" &&
+          snowballGradeBRequiresSustainedMomentum() &&
+          !sustainedBuyingPressure
+        ) {
+          if (snowScanStats) {
+            snowScanStats.longGradeBMomentumBlocked++;
+            pushSnowScanSymList(snowScanStats.longGradeBMomentumBlockedSymbols, `${symbol} LONG`);
+          }
+          return;
+        }
+
         let gradeCShortFade: SnowballGradeCShortFadeResult | null = null;
         if (longBreakoutGrade === "c_plus") {
           const pack1hGradeC = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
@@ -3173,6 +3214,8 @@ export async function runPublicIndicatorFeedInternal(
           inlineTwoBarFootnote,
           breakout1hConfirmUsed: longBreakout1h,
           breakout1hConfirmFootnote: breakout1hFootnote,
+          trendMomentum,
+          sustainedBuyingPressure,
         });
         const longPendingConfirm =
           !twoBarInline && !longBreakout1h && !intrabar && longRiskFlags.length > 0 && Boolean(longConfirmTrigger);
@@ -3212,7 +3255,8 @@ export async function runPublicIndicatorFeedInternal(
                   longBreakoutGrade,
                   dbOn,
                   signalBarOpenSec,
-                  packsDiv1hExtra[idx] ?? pack1hForTwoBar,
+                  pack1hTrend,
+                  { sustainedBuyingPressure },
                 );
                 if (longAutoSide) {
                   const refEntry =
@@ -3221,6 +3265,12 @@ export async function runPublicIndicatorFeedInternal(
                     Number.isFinite(longFade.referenceEntryPrice)
                       ? longFade.referenceEntryPrice
                       : entryClosePx;
+                  const marginScale =
+                    longAutoSide === "long" &&
+                    longBreakoutGrade === "b_plus" &&
+                    sustainedBuyingPressure
+                      ? snowballGradeBSustainedMarginScale()
+                      : undefined;
                   await runSnowballAutoTradeAfterSnowballAlert({
                     contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
                     binanceSymbol: symbol,
@@ -3236,6 +3286,7 @@ export async function runPublicIndicatorFeedInternal(
                         : null,
                     vol: vE!,
                     volSma: vsE!,
+                    ...(marginScale != null ? { marginScale } : {}),
                     ...(longFade?.ok && longFade.entryStrategy
                       ? {
                           gradeCShortEntry: {
@@ -3343,6 +3394,7 @@ export async function runPublicIndicatorFeedInternal(
                   btcPsar4hTrend: longMktCtx?.btcPsar4hTrend ?? null,
                   btcPsar4hClose: longMktCtx?.btcPsar4hClose ?? null,
                   quoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
+                  ...trendMomentumStatsFields(trendMomentum),
                 });
               }
             } catch (statsErr) {

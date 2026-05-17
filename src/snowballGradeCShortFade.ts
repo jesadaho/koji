@@ -4,6 +4,7 @@ import { fetchBinanceUsdmKlines, type BinanceKlinePack } from "./binanceIndicato
 import { emaLine } from "./indicatorMath";
 import type { SnowballLongAlertGrade } from "./snowballAutoTradeExecutor";
 import type { SnowballAutoTradeSide } from "./snowballAutoTradeStateStore";
+import { snowballGradeBAutoOpenSustainedEnabled } from "./snowballTrendMomentumMetrics";
 
 const SEC_1H = 3600;
 const SEC_4H = 4 * SEC_1H;
@@ -323,15 +324,24 @@ export function formatGradeCShortFadeAutotradeLine(
     : `📎 Auto-open Short (fade): ยังไม่ผ่าน — ${fade.detail}`;
 }
 
-/** A+ → long ทันที · C → short เมื่อผ่าน fade gate บน 1h ในกรอบ 4h */
+/** A+ → long ทันที · B + sustained momentum → long (margin scale แยก) · C → short เมื่อผ่าน fade */
 export async function resolveSnowballLongAutotradeSide(
   symbol: string,
   grade: SnowballLongAlertGrade | undefined,
   doubleBarrierOn: boolean,
   signalBarOpenSec: number,
-  pack1hHint?: BinanceKlinePack | null
+  pack1hHint?: BinanceKlinePack | null,
+  opts?: { sustainedBuyingPressure?: boolean },
 ): Promise<{ side: SnowballAutoTradeSide | null; fade: SnowballGradeCShortFadeResult | null }> {
   if (doubleBarrierOn && grade === "a_plus") return { side: "long", fade: null };
+  if (
+    doubleBarrierOn &&
+    grade === "b_plus" &&
+    opts?.sustainedBuyingPressure &&
+    snowballGradeBAutoOpenSustainedEnabled()
+  ) {
+    return { side: "long", fade: null };
+  }
   if (grade !== "c_plus" || !doubleBarrierOn) return { side: null, fade: null };
 
   let pack = pack1hHint ?? null;

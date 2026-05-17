@@ -43,6 +43,10 @@ export type SnowballStatsRow = {
   btcPsar4hClose?: number | null;
   /** quoteVolume 24h ของคู่สัญญาณ (USDT, Binance futures) */
   quoteVol24hUsdt?: number | null;
+  /** Max drawback % จาก 3 แท่ง 1H ปิด (แดงทับเขียว) */
+  maxDrawback1hPct?: number | null;
+  /** Volume เรียงตัวขึ้นต่อเนื่อง 3 แท่ง 1H */
+  volumeCascadeYn?: "Y" | "N" | null;
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
@@ -131,6 +135,17 @@ export function snowballStatsBarRangePctLabel(value: number | null | undefined):
 export function snowballStatsBtcPsar4hLabel(trend: SnowballStatsRow["btcPsar4hTrend"]): string {
   if (trend === "up") return "BTC↑";
   if (trend === "down") return "BTC↓";
+  return "—";
+}
+
+export function snowballStatsMaxDrawback1hLabel(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `${v.toFixed(1)}%`;
+}
+
+export function snowballStatsVolumeCascadeLabel(v: "Y" | "N" | null | undefined): string {
+  if (v === "Y") return "Y";
+  if (v === "N") return "N";
   return "—";
 }
 

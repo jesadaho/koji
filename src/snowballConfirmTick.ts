@@ -30,6 +30,12 @@ import {
   isSnowballStatsEnabled,
 } from "./snowballStatsStore";
 import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
+import {
+  calculateTrendMomentumMetrics,
+  isSustainedBuyingPressure,
+  snowballGradeBSustainedMarginScale,
+  trendMomentumStatsFields,
+} from "./snowballTrendMomentumMetrics";
 
 function labelSide(item: SnowballPendingConfirm): string {
   return item.side === "long" ? "LONG" : "BEAR";
@@ -287,6 +293,8 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                   ? "swing_ll"
                   : "both";
             const sigOpen = iSig >= 0 && typeof barOpen[iSig] === "number" ? barOpen[iSig]! : item.signalClose;
+            const trendMomentum = calculateTrendMomentumMetrics(pack);
+            const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
             let gradeCFadeOk = false;
             if (item.side === "long" && item.qualityTier === "c_plus") {
               const resolved = await resolveSnowballLongAutotradeSide(
@@ -294,6 +302,8 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                 item.qualityTier,
                 snowballDoubleBarrierEnabled(),
                 item.signalBarOpenSec,
+                pack,
+                { sustainedBuyingPressure },
               );
               gradeCFadeOk = Boolean(resolved.fade?.ok);
             }
@@ -335,6 +345,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               btcPsar4hTrend: item.statsBtcPsar4hTrend ?? null,
               btcPsar4hClose: item.statsBtcPsar4hClose ?? null,
               quoteVol24hUsdt: item.statsQuoteVol24hUsdt ?? null,
+              ...trendMomentumStatsFields(trendMomentum),
             });
           } catch (e) {
             console.error("[snowballConfirmTick] append snowball stats after confirm", item.symbol, item.side, e);
@@ -345,11 +356,15 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
           let autoSide: "long" | "short" | null = null;
           let gradeCFade: SnowballGradeCShortFadeResult | null = null;
           if (item.side === "long") {
+            const trendMomentumConfirm = calculateTrendMomentumMetrics(pack);
+            const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentumConfirm);
             const resolved = await resolveSnowballLongAutotradeSide(
               item.symbol,
               longGrade,
               snowballDoubleBarrierEnabled(),
               item.signalBarOpenSec,
+              pack,
+              { sustainedBuyingPressure },
             );
             autoSide = resolved.side;
             gradeCFade = resolved.fade;
@@ -366,6 +381,10 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                 Number.isFinite(gradeCFade.referenceEntryPrice)
                   ? gradeCFade.referenceEntryPrice
                   : cl;
+              const marginScale =
+                autoSide === "long" && longGrade === "b_plus" && sustainedBuyingPressure
+                  ? snowballGradeBSustainedMarginScale()
+                  : undefined;
               await runSnowballAutoTradeAfterSnowballAlert({
                 contractSymbol: mexcContractSymbolFromBinanceSymbol(item.symbol),
                 binanceSymbol: item.symbol,
@@ -376,6 +395,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                 signalBarLow: autoSide === "long" ? lo : null,
                 vol: vo,
                 volSma: volSmaUse,
+                ...(marginScale != null ? { marginScale } : {}),
                 ...(gradeCFade?.ok && gradeCFade.entryStrategy
                   ? {
                       gradeCShortEntry: {
