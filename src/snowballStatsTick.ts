@@ -131,7 +131,7 @@ async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Pr
   }
 
   let updated = 0;
-  for (const [symbol, symRows] of bySymbol) {
+  for (const [symbol, symRows] of Array.from(bySymbol.entries())) {
     const pack1h = await fetchSnowball1hPackForTrendMomentum(symbol);
     const metrics = calculateTrendMomentumMetrics(pack1h);
     const fields = trendMomentumStatsFields(metrics);
