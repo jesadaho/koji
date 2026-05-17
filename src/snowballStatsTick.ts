@@ -112,12 +112,19 @@ function pickHorizonClose(
 function rowNeedsTrendMomentumBackfill(row: SnowballStatsRow): boolean {
   if (row.volumeCascadeYn == null) return true;
   if (row.maxDrawback1hPct == null) return true;
-  /** vol_cascade ถูกแล้ว แต่ DD 1H ยังเป็น 0 จากข้อมูล/สูตรเก่า — รีเฟรชเฉพาะ DD */
-  if (row.outcome === "pending" && row.maxDrawback1hPct === 0) return true;
+  /** รีคำนวณสูตร True Drawback ที่ anchor เวลาแจ้ง (ไม่ใช้แท่งล่าสุด) */
+  if (row.outcome === "pending") return true;
   return false;
 }
 
-/** เติม/อัปเดต DD 1H% และ vol_cascade จากแท่ง 1H จริง */
+function trendMomentumAnchorSec(row: SnowballStatsRow): number {
+  if (Number.isFinite(row.alertedAtMs) && row.alertedAtMs > 0) {
+    return Math.floor(row.alertedAtMs / 1000);
+  }
+  return anchorCloseSec(row);
+}
+
+/** เติม/อัปเดต DD 1H% และ vol_cascade จากแท่ง 1H ณ เวลาแจ้งสัญญาณ */
 async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Promise<number> {
   const need = rows.filter(rowNeedsTrendMomentumBackfill);
   if (need.length === 0) return 0;
@@ -133,10 +140,13 @@ async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Pr
   let updated = 0;
   for (const [symbol, symRows] of Array.from(bySymbol.entries())) {
     const pack1h = await fetchSnowball1hPackForTrendMomentum(symbol);
-    const metrics = calculateTrendMomentumMetrics(pack1h);
-    const fields = trendMomentumStatsFields(metrics);
-    if (fields.maxDrawback1hPct == null && fields.volumeCascadeYn == null) continue;
+    if (!pack1h) continue;
     for (const row of symRows) {
+      const metrics = calculateTrendMomentumMetrics(pack1h, {
+        asOfSec: trendMomentumAnchorSec(row),
+      });
+      const fields = trendMomentumStatsFields(metrics);
+      if (fields.maxDrawback1hPct == null && fields.volumeCascadeYn == null) continue;
       let touched = false;
       if (fields.maxDrawback1hPct != null && row.maxDrawback1hPct !== fields.maxDrawback1hPct) {
         row.maxDrawback1hPct = fields.maxDrawback1hPct;
