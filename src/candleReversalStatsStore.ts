@@ -64,10 +64,17 @@ type LegacyCandleReversalRowV1 = LegacyCandleReversalRow & {
   wickScore?: number | null;
 };
 
+function finiteRank(v: number | null | undefined): number | null {
+  return v != null && Number.isFinite(v) && v >= 1 ? Math.floor(v) : null;
+}
+
 function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleReversalStatsRow {
   return {
     ...r,
     signalBarTf: r.signalBarTf === "1h" ? "1h" : "1d",
+    highRankInLookback: finiteRank(r.highRankInLookback),
+    volRankInLookback: finiteRank(r.volRankInLookback),
+    lookbackBars: finiteRank(r.lookbackBars),
     rangeScore: r.rangeScore != null && Number.isFinite(r.rangeScore) ? r.rangeScore : null,
     wickScore: r.wickScore != null && Number.isFinite(r.wickScore) ? r.wickScore : null,
     price1d: r.price1d ?? r.price4h ?? null,
@@ -123,6 +130,9 @@ export type AppendCandleReversalStatsInput = {
   slPrice: number;
   wickRatioPct?: number | null;
   bodyPct?: number | null;
+  highRankInLookback?: number | null;
+  volRankInLookback?: number | null;
+  lookbackBars?: number | null;
   rangeScore?: number | null;
   wickScore?: number | null;
   afterInvertedDoji?: boolean;
@@ -156,6 +166,9 @@ export async function appendCandleReversalStatsRow(
     wickRatioPct:
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,
     bodyPct: input.bodyPct != null && Number.isFinite(input.bodyPct) ? input.bodyPct : null,
+    highRankInLookback: finiteRank(input.highRankInLookback),
+    volRankInLookback: finiteRank(input.volRankInLookback),
+    lookbackBars: finiteRank(input.lookbackBars),
     rangeScore,
     wickScore,
     afterInvertedDoji: Boolean(input.afterInvertedDoji),

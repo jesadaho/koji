@@ -19,6 +19,11 @@ export type CandleReversalStatsRow = {
   slPrice: number;
   wickRatioPct: number | null;
   bodyPct: number | null;
+  /** อันดับ high ในรอบ lookbackBars (1 = สูงสุด) */
+  highRankInLookback: number | null;
+  /** อันดับ volume ในรอบ lookbackBars (1 = สูงสุด) */
+  volRankInLookback: number | null;
+  lookbackBars: number | null;
   rangeScore: number | null;
   wickScore: number | null;
   afterInvertedDoji: boolean;
@@ -60,6 +65,17 @@ export function candleReversalOutcomeLabel(o: CandleReversalOutcome): string {
 export function candleReversalVolScoreLabel(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return value.toFixed(2);
+}
+
+/** อันดับในรอบ lookback — เช่น 2/24 */
+export function candleReversalLookbackRankCell(
+  rank: number | null | undefined,
+  lookbackBars: number | null | undefined,
+): string {
+  if (rank == null || lookbackBars == null || !Number.isFinite(rank) || !Number.isFinite(lookbackBars)) {
+    return "—";
+  }
+  return `${Math.floor(rank)}/${Math.floor(lookbackBars)}`;
 }
 
 export function candleReversalDayOfWeekBkk(alertedAtIso: string, alertedAtMs?: number | null): string {

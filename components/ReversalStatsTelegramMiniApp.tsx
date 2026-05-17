@@ -13,6 +13,7 @@ import {
   candleReversalModelLabel,
   candleReversalOutcomeLabel,
   candleReversalSignalBarTfLabel,
+  candleReversalLookbackRankCell,
   candleReversalVolScoreLabel,
   type CandleReversalStatsApiPayload,
 } from "@/lib/candleReversalStatsClient";
@@ -219,7 +220,15 @@ export default function ReversalStatsTelegramMiniApp() {
                 <th scope="col">Retest</th>
                 <th scope="col">SL</th>
                 <th scope="col">ไส้%</th>
-                <th scope="col">เนื้อ%</th>
+                <th scope="col" title="ความยาวเนื้อเทียบช่วงแท่ง">
+                  เนื้อ%
+                </th>
+                <th scope="col" title="อันดับ volume ในรอบ lookback · 1 = สูงสุด">
+                  Vol#
+                </th>
+                <th scope="col" title="อันดับ high ในรอบ lookback · 1 = สูงสุด">
+                  High#
+                </th>
                 <th scope="col">Range</th>
                 <th scope="col">Wick</th>
                 <th scope="col">1d</th>
@@ -233,7 +242,7 @@ export default function ReversalStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={18} className="sub">
+                  <td colSpan={20} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1D/1H_ALERTS_ENABLED)
                   </td>
                 </tr>
@@ -252,6 +261,8 @@ export default function ReversalStatsTelegramMiniApp() {
                     <td>{fmtPrice(r.slPrice)}</td>
                     <td>{r.wickRatioPct != null ? `${r.wickRatioPct.toFixed(1)}%` : "—"}</td>
                     <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
+                    <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
+                    <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
                     <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
                     <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
                     <td>{fmtPctCell(r.price1d, r.pct1d)}</td>
