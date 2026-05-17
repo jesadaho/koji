@@ -382,7 +382,9 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                   ? gradeCFade.referenceEntryPrice
                   : cl;
               const marginScale =
-                autoSide === "long" && longGrade === "b_plus" && sustainedBuyingPressure
+                autoSide === "long" &&
+                longGrade === "b_plus" &&
+                isSustainedBuyingPressure(calculateTrendMomentumMetrics(pack))
                   ? snowballGradeBSustainedMarginScale()
                   : undefined;
               await runSnowballAutoTradeAfterSnowballAlert({
