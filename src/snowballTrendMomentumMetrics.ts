@@ -2,18 +2,21 @@ import { fetchBinanceUsdmKlines, type BinanceKlinePack } from "./binanceIndicato
 
 const SNOWBALL_TREND_1H_BARS = 120;
 const ONE_HOUR_SEC = 3600;
+/** จำนวนแท่ง 1H ปิดที่ใช้คำนวณ DD 1H% / Vol↗ (เทียบเท่า slice(-9, -1)) */
+export const SNOWBALL_TREND_1H_LOOKBACK = 8;
 
-/** โมเมนตัมเทรนด์ระยะสั้นจาก 3 แท่ง 1H ปิดล่าสุด */
 export type TrendMomentumMetrics = {
   isLowDrawback: boolean;
   isVolumeCascading: boolean;
   maxDrawbackPercent: number;
-  /** จำนวนแท่ง 1H ที่ใช้คำนวณ (ปกติ 3) */
+  /** จำนวนแท่ง 1H ที่ใช้คำนวณ (ปกติ 8) */
   candleCount: number;
+  /** จำนวนครั้งที่ vol ไม่ยกฐานใน lookback */
+  volumeDropCount: number;
 };
 
 export type TrendMomentumMetricsOpts = {
-  /** Unix sec — ใช้ 3 แท่ง 1H ปิดล่าสุดที่ปิดไม่เกินเวลานี้ (ห้ามใช้แท่งอนาคต) */
+  /** Unix sec — ใช้ 8 แท่ง 1H ปิดล่าสุดที่ปิดไม่เกินเวลานี้ (ห้ามใช้แท่งอนาคต) */
   asOfSec?: number;
 };
 
@@ -21,6 +24,17 @@ function envMaxDrawbackPct(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_TREND_MOMENTUM_MAX_DRAWBACK_PCT?.trim());
   if (Number.isFinite(v) && v >= 0 && v <= 100) return v;
   return 30;
+}
+
+/** ยอมให้ vol ไม่ยกฐานได้กี่ครั้งใน lookback (ดีฟอลต์ 1) */
+function envMaxVolumeDrops(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_TREND_MOMENTUM_MAX_VOL_DROPS?.trim());
+  if (Number.isFinite(v) && v >= 0 && v <= SNOWBALL_TREND_1H_LOOKBACK) return Math.floor(v);
+  return 1;
+}
+
+export function snowballTrendMomentumMaxVolumeDrops(): number {
+  return envMaxVolumeDrops();
 }
 
 export function snowballTrendMomentumMaxDrawbackPct(): number {
@@ -73,21 +87,15 @@ export async function fetchSnowball1hPackForTrendMomentum(
   }
 }
 
-function isGreenBar(open: number, close: number): boolean {
-  return Number.isFinite(open) && Number.isFinite(close) && close > open;
-}
-
-function isRedBar(open: number, close: number): boolean {
-  return Number.isFinite(open) && Number.isFinite(close) && close < open;
-}
-
-/** 3 แท่ง 1H ปิดล่าสุด ณ asOfSec (หรือก่อนแท่งกำลังก่อตัวถ้าไม่ระบุเวลา) */
+/** 8 แท่ง 1H ปิดล่าสุด ณ asOfSec (หรือ slice(-9,-1) เมื่อไม่ระบุเวลา) */
 export function resolveClosed1hWindowIndices(
   pack: BinanceKlinePack,
-  asOfSec?: number
+  asOfSec?: number,
+  lookback = SNOWBALL_TREND_1H_LOOKBACK
 ): { iStart: number; iEnd: number } | null {
   const n = pack.close.length;
-  if (n < 4) return null;
+  const minEnd = lookback - 1;
+  if (n < lookback + 1) return null;
 
   let iEnd: number;
   if (asOfSec != null && Number.isFinite(asOfSec)) {
@@ -96,49 +104,55 @@ export function resolveClosed1hWindowIndices(
       const barCloseSec = pack.timeSec[i]! + ONE_HOUR_SEC;
       if (barCloseSec <= asOfSec) iEnd = i;
     }
-    if (iEnd < 2) return null;
+    if (iEnd < minEnd) return null;
   } else {
     iEnd = n - 2;
-    if (iEnd < 2) return null;
+    if (iEnd < minEnd) return null;
   }
 
-  const iStart = iEnd - 2;
+  const iStart = iEnd - (lookback - 1);
   if (iStart < 0) return null;
   return { iStart, iEnd };
 }
 
 /**
- * True Drawback 1H% — เฉพาะเนื้อแดงย่อสวนหลังแท่งเขียว (Actual Counter-Trend Retracement)
- * ถ้า 3 แท่งเป็นเขียวล้วน → 0%
+ * Flexible Drawback 1H% — ไส้บนแท่งเขียว + ไส้ล่างสะบัดเทียบเนื้อแท่งเขียวก่อนหน้า
+ * (8 แท่งปิดล่าสุดก่อนสัญญาณ)
  */
-export function calculateTrueDrawback1hPercent(
+export function calculateFlexibleDrawback1hPercent(
   open: number[],
+  high: number[],
+  low: number[],
   close: number[],
   iStart: number,
   iEnd: number
 ): number {
-  let allGreen = true;
-  for (let i = iStart; i <= iEnd; i++) {
-    if (!isGreenBar(open[i]!, close[i]!)) {
-      allGreen = false;
-      break;
-    }
-  }
-  if (allGreen) return 0;
-
   let maxDrawbackPercent = 0;
-  for (let i = iStart + 1; i <= iEnd; i++) {
-    const o0 = open[i - 1]!;
-    const c0 = close[i - 1]!;
-    const o1 = open[i]!;
-    const c1 = close[i]!;
 
-    if (isGreenBar(o0, c0) && isRedBar(o1, c1)) {
-      const greenBodyHeight = c0 - o0;
-      const redBodyHeight = o1 - c1;
-      if (greenBodyHeight > 0) {
-        const currentDd = (redBodyHeight / greenBodyHeight) * 100;
-        if (currentDd > maxDrawbackPercent) maxDrawbackPercent = currentDd;
+  for (let i = iStart; i <= iEnd; i++) {
+    const o = open[i]!;
+    const h = high[i]!;
+    const l = low[i]!;
+    const c = close[i]!;
+    if (![o, h, l, c].every(Number.isFinite)) continue;
+
+    const currentRange = h - l;
+    if (currentRange <= 0) continue;
+
+    if (c > o) {
+      const upperWick = h - c;
+      const upperDd = (upperWick / currentRange) * 100;
+      if (upperDd > maxDrawbackPercent) maxDrawbackPercent = upperDd;
+    }
+
+    if (i > iStart) {
+      const prevO = open[i - 1]!;
+      const prevC = close[i - 1]!;
+      const prevBody = prevC - prevO;
+      if (prevBody > 0 && l < o) {
+        const lowerWick = o - l;
+        const lowerDd = (lowerWick / prevBody) * 100;
+        if (lowerDd > maxDrawbackPercent) maxDrawbackPercent = lowerDd;
       }
     }
   }
@@ -146,42 +160,74 @@ export function calculateTrueDrawback1hPercent(
   return parseFloat(maxDrawbackPercent.toFixed(2));
 }
 
+/** @deprecated ใช้ calculateFlexibleDrawback1hPercent — คง export เพื่อ backward compat */
+export function calculateTrueDrawback1hPercent(
+  open: number[],
+  close: number[],
+  iStart: number,
+  iEnd: number,
+  high?: number[],
+  low?: number[]
+): number {
+  if (high?.length && low?.length) {
+    return calculateFlexibleDrawback1hPercent(open, high, low, close, iStart, iEnd);
+  }
+  return calculateFlexibleDrawback1hPercent(
+    open,
+    open.map((_, i) => Math.max(open[i]!, close[i]!)),
+    open.map((_, i) => Math.min(open[i]!, close[i]!)),
+    close,
+    iStart,
+    iEnd
+  );
+}
+
+function countVolumeDrops(volume: number[], iStart: number, iEnd: number): number | null {
+  let volDropCount = 0;
+  for (let i = iStart + 1; i <= iEnd; i++) {
+    const v0 = volume[i - 1]!;
+    const v1 = volume[i]!;
+    if (!Number.isFinite(v0) || !Number.isFinite(v1)) return null;
+    if (v1 <= v0) volDropCount++;
+  }
+  return volDropCount;
+}
+
 /**
- * คำนวณ True Drawback 1H% และ Volume Cascade จาก 3 แท่ง 1H ปิดล่าสุด ณ เวลาอ้างอิง
- * (เทียบเท่า slice(-4, -1) เมื่อไม่ระบุ asOfSec)
+ * DD 1H% + Vol↗ จาก 8 แท่ง 1H ปิดล่าสุด — vol ยอมสะดุดได้ ≤1 ครั้ง (env)
  */
 export function calculateTrendMomentumMetrics(
   pack1h: BinanceKlinePack | null,
   opts?: TrendMomentumMetricsOpts
 ): TrendMomentumMetrics | null {
   if (!pack1h?.close?.length) return null;
-  const { open, close, volume } = pack1h;
+  const { open, high, low, close, volume } = pack1h;
 
   const window = resolveClosed1hWindowIndices(pack1h, opts?.asOfSec);
   if (!window) return null;
   const { iStart, iEnd } = window;
 
-  let isVolumeCascading = true;
-  for (let i = iStart + 1; i <= iEnd; i++) {
-    const v0 = volume[i - 1]!;
-    const v1 = volume[i]!;
-    if (!Number.isFinite(v0) || !Number.isFinite(v1)) return null;
-    if (v1 <= v0) isVolumeCascading = false;
-  }
-
   for (let i = iStart; i <= iEnd; i++) {
     const o = open[i]!;
+    const h = high[i]!;
+    const l = low[i]!;
     const c = close[i]!;
-    if (!Number.isFinite(o) || !Number.isFinite(c)) return null;
+    if (![o, h, l, c].every(Number.isFinite)) return null;
   }
 
-  const maxDrawbackPercent = calculateTrueDrawback1hPercent(open, close, iStart, iEnd);
+  const volumeDropCount = countVolumeDrops(volume, iStart, iEnd);
+  if (volumeDropCount == null) return null;
+
+  const maxVolDrops = envMaxVolumeDrops();
+  const isVolumeCascading = volumeDropCount <= maxVolDrops;
+  const maxDrawbackPercent = calculateFlexibleDrawback1hPercent(open, high, low, close, iStart, iEnd);
   const threshold = envMaxDrawbackPct();
   return {
     isLowDrawback: maxDrawbackPercent <= threshold,
     isVolumeCascading,
     maxDrawbackPercent,
     candleCount: iEnd - iStart + 1,
+    volumeDropCount,
   };
 }
 
@@ -197,12 +243,15 @@ export function trendMomentumStatsFields(metrics: TrendMomentumMetrics | null): 
 }
 
 export function formatTrendMomentumMetricsLine(metrics: TrendMomentumMetrics | null): string {
-  if (!metrics) return "📎 Trend momentum (1H): ข้อมูล 1H ไม่พอ (ต้อง ≥3 แท่งปิด)";
+  if (!metrics) {
+    return `📎 Trend momentum (1H): ข้อมูล 1H ไม่พอ (ต้อง ≥${SNOWBALL_TREND_1H_LOOKBACK + 1} แท่งในชุด)`;
+  }
   const sustained = isSustainedBuyingPressure(metrics);
+  const maxDrops = snowballTrendMomentumMaxVolumeDrops();
   return [
-    "📎 Trend momentum (1H · 3 แท่งปิด):",
-    `  • True drawback (เขียว→แดง): ${metrics.maxDrawbackPercent.toFixed(2)}% (≤${snowballTrendMomentumMaxDrawbackPct()}% = ${metrics.isLowDrawback ? "✓" : "—"})`,
-    `  • Volume cascade: ${metrics.isVolumeCascading ? "✓ เรียงตัวขึ้น" : "— ไม่เรียง"}`,
+    `📎 Trend momentum (1H · ${metrics.candleCount} แท่งปิด):`,
+    `  • Flexible drawback (ไส้บน/ล่าง): ${metrics.maxDrawbackPercent.toFixed(2)}% (≤${snowballTrendMomentumMaxDrawbackPct()}% = ${metrics.isLowDrawback ? "✓" : "—"})`,
+    `  • Volume cascade: ${metrics.isVolumeCascading ? "✓" : "—"} (vol สะดุด ${metrics.volumeDropCount}× · ยอม ≤${maxDrops})`,
     `  • Sustained buying pressure: ${sustained ? "✓" : "—"}`,
   ].join("\n");
 }

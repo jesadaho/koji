@@ -12,6 +12,7 @@ import {
 import {
   calculateTrendMomentumMetrics,
   fetchSnowball1hPackForTrendMomentum,
+  SNOWBALL_TREND_1H_LOOKBACK,
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
 
@@ -112,9 +113,9 @@ function pickHorizonClose(
 function rowNeedsTrendMomentumBackfill(row: SnowballStatsRow): boolean {
   if (row.volumeCascadeYn == null) return true;
   if (row.maxDrawback1hPct == null) return true;
-  /** รีคำนวณสูตร True Drawback ที่ anchor เวลาแจ้ง (ไม่ใช้แท่งล่าสุด) */
+  /** รีคำนวณ 8 แท่ง flexible ณ anchor เวลาแจ้ง — pending ทุกรอบ · แถวเก่ารีคำนวณเมื่อ lookback เปลี่ยน */
   if (row.outcome === "pending") return true;
-  return false;
+  return row.trendMomentumLookback !== SNOWBALL_TREND_1H_LOOKBACK;
 }
 
 function trendMomentumAnchorSec(row: SnowballStatsRow): number {
@@ -154,6 +155,10 @@ async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Pr
       }
       if (fields.volumeCascadeYn != null && row.volumeCascadeYn !== fields.volumeCascadeYn) {
         row.volumeCascadeYn = fields.volumeCascadeYn;
+        touched = true;
+      }
+      if (row.trendMomentumLookback !== SNOWBALL_TREND_1H_LOOKBACK) {
+        row.trendMomentumLookback = SNOWBALL_TREND_1H_LOOKBACK;
         touched = true;
       }
       if (touched) updated += 1;

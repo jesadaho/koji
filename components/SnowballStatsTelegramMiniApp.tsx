@@ -352,10 +352,16 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">R% 2แท่ง</th>
                 <th scope="col">BTC 4h</th>
                 <th scope="col">Vol 24h</th>
-                <th scope="col" title="Max retracement จาก peak high → low ใน 3 แท่ง 1H ปิดล่าสุด">
+                <th
+                  scope="col"
+                  title="Flexible drawback 1H — ไส้บนแท่งเขียว + ไส้ล่างสะบัด (8 แท่ง 1H ปิด ณ แจ้ง)"
+                >
                   DD 1H%
                 </th>
-                <th scope="col" title="vol_cascade — volume 3 แท่ง 1H เรียงขึ้นต่อเนื่อง">
+                <th
+                  scope="col"
+                  title="Vol cascade — volume 8 แท่ง 1H ยอมไม่ยกฐานได้ 1 ครั้ง"
+                >
                   Vol↗
                 </th>
                 <th scope="col">4h</th>
