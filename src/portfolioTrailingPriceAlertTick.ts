@@ -1,11 +1,16 @@
 import type { Client } from "@line/bot-sdk";
 import { sendAlertNotification } from "./alertNotify";
 import { fetchSimplePrices } from "./cryptoService";
-import { fetchAllOpenPositions, type MexcCredentials } from "./mexcFuturesClient";
 import {
-  buildTrailingAlertMessage,
+  fetchAllOpenPositions,
+  fetchContractDetailPublic,
+  type MexcCredentials,
+} from "./mexcFuturesClient";
+import {
+  buildPortfolioTrailingAlertMessage,
+  computePositionUnrealizedFromMark,
+  contractSymbolToPairLabel,
   evaluateTrailingPriceStep,
-  shortContractLabel,
 } from "./pctTrailingAlertUtils";
 import {
   loadPortfolioTrailingAnchors,
@@ -18,6 +23,20 @@ const TG_USER_RE = /^tg:\d+$/;
 
 function isActivePosition(p: { state: number; holdVol: number }): boolean {
   return p.state === 1 && Number(p.holdVol) > 0;
+}
+
+async function loadContractSizeBySymbol(
+  symbols: string[]
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  await Promise.all(
+    symbols.map(async (sym) => {
+      const detail = await fetchContractDetailPublic(sym);
+      const cs = detail?.contractSize != null ? Number(detail.contractSize) : NaN;
+      if (Number.isFinite(cs) && cs > 0) out.set(sym, cs);
+    })
+  );
+  return out;
 }
 
 /** แจ้งเตือน trailing % ของเหรียญใน open MEXC positions — cron ~5 นาที */
@@ -66,7 +85,10 @@ export async function runPortfolioTrailingPriceAlertTick(
 
     if (coinIds.length === 0) continue;
 
-    const prices = await fetchSimplePrices(coinIds);
+    const [prices, contractSizeBySymbol] = await Promise.all([
+      fetchSimplePrices(coinIds),
+      loadContractSizeBySymbol(coinIds),
+    ]);
     const anchorUpdates: Array<{ userId: string; coinId: string; trailingAnchorPrice: number }> =
       [];
 
@@ -81,15 +103,25 @@ export async function runPortfolioTrailingPriceAlertTick(
       const prevAnchor = anchorByUserSymbol.get(`${userId}\0${coinId}`);
       const step = evaluateTrailingPriceStep(p, prevAnchor, stepPct);
       anchorByUserSymbol.set(`${userId}\0${coinId}`, step.nextAnchor);
-      const label = shortContractLabel(coinId);
+      const pairLabel = contractSymbolToPairLabel(coinId);
+      const side: "LONG" | "SHORT" = pos.positionType === 1 ? "LONG" : "SHORT";
+      const pnl = computePositionUnrealizedFromMark(
+        pos,
+        p,
+        contractSizeBySymbol.get(coinId)
+      );
 
       if (step.fired) {
         try {
           await sendAlertNotification(
             client,
             userId,
-            buildTrailingAlertMessage(label, step.prevAnchor, step.price, {
-              titlePrefix: "Portfolio trailing",
+            buildPortfolioTrailingAlertMessage(step.prevAnchor, step.price, {
+              pairLabel,
+              side,
+              entryPrice: pnl.entryPrice,
+              unrealizedUsdt: pnl.unrealizedUsdt,
+              pnlPct: pnl.pnlPct,
             })
           );
           notified += 1;
