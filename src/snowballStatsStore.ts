@@ -11,7 +11,10 @@ import {
 } from "@/lib/snowballStatsClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
-import { SNOWBALL_TREND_1H_LOOKBACK } from "./snowballTrendMomentumMetrics";
+import {
+  SNOWBALL_TREND_1H_DD_LOOKBACK,
+  SNOWBALL_TREND_1H_VOL_LOOKBACK,
+} from "./snowballTrendMomentumMetrics";
 
 export type {
   SnowballStatsApiPayload,
@@ -131,6 +134,7 @@ export type AppendSnowballStatsInput = {
   maxDrawback1hPct?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
   trendMomentumLookback?: number | null;
+  trendMomentumVolLookback?: number | null;
 };
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
@@ -193,7 +197,8 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
         : null,
     volumeCascadeYn:
       input.volumeCascadeYn === "Y" || input.volumeCascadeYn === "N" ? input.volumeCascadeYn : null,
-    trendMomentumLookback: SNOWBALL_TREND_1H_LOOKBACK,
+    trendMomentumLookback: SNOWBALL_TREND_1H_DD_LOOKBACK,
+    trendMomentumVolLookback: SNOWBALL_TREND_1H_VOL_LOOKBACK,
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,
     pct4h: null,

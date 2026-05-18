@@ -12,7 +12,8 @@ import {
 import {
   calculateTrendMomentumMetrics,
   fetchSnowball1hPackForTrendMomentum,
-  SNOWBALL_TREND_1H_LOOKBACK,
+  SNOWBALL_TREND_1H_DD_LOOKBACK,
+  SNOWBALL_TREND_1H_VOL_LOOKBACK,
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
 
@@ -115,7 +116,10 @@ function rowNeedsTrendMomentumBackfill(row: SnowballStatsRow): boolean {
   if (row.maxDrawback1hPct == null) return true;
   /** รีคำนวณ 8 แท่ง flexible ณ anchor เวลาแจ้ง — pending ทุกรอบ · แถวเก่ารีคำนวณเมื่อ lookback เปลี่ยน */
   if (row.outcome === "pending") return true;
-  return row.trendMomentumLookback !== SNOWBALL_TREND_1H_LOOKBACK;
+  return (
+    row.trendMomentumLookback !== SNOWBALL_TREND_1H_DD_LOOKBACK ||
+    row.trendMomentumVolLookback !== SNOWBALL_TREND_1H_VOL_LOOKBACK
+  );
 }
 
 function trendMomentumAnchorSec(row: SnowballStatsRow): number {
@@ -157,8 +161,12 @@ async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Pr
         row.volumeCascadeYn = fields.volumeCascadeYn;
         touched = true;
       }
-      if (row.trendMomentumLookback !== SNOWBALL_TREND_1H_LOOKBACK) {
-        row.trendMomentumLookback = SNOWBALL_TREND_1H_LOOKBACK;
+      if (row.trendMomentumLookback !== SNOWBALL_TREND_1H_DD_LOOKBACK) {
+        row.trendMomentumLookback = SNOWBALL_TREND_1H_DD_LOOKBACK;
+        touched = true;
+      }
+      if (row.trendMomentumVolLookback !== SNOWBALL_TREND_1H_VOL_LOOKBACK) {
+        row.trendMomentumVolLookback = SNOWBALL_TREND_1H_VOL_LOOKBACK;
         touched = true;
       }
       if (touched) updated += 1;

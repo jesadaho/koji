@@ -360,7 +360,7 @@ export default function SnowballStatsTelegramMiniApp() {
                 </th>
                 <th
                   scope="col"
-                  title="Vol cascade — volume 8 แท่ง 1H ยอมไม่ยกฐานได้ 1 ครั้ง"
+                  title="Vol cascade — volume 5 แท่ง 1H ล่าสุด ยอมไม่ยกฐานได้ 1 ครั้ง"
                 >
                   Vol↗
                 </th>

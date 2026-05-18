@@ -45,10 +45,12 @@ export type SnowballStatsRow = {
   quoteVol24hUsdt?: number | null;
   /** DD 1H% — flexible drawback (ไส้บน/ล่าง) ใน 8 แท่ง 1H ปิด ณ เวลาแจ้ง */
   maxDrawback1hPct?: number | null;
-  /** Volume cascade ยืดหยุ่น (ยอมสะดุด ≤1 ครั้งใน 8 แท่ง) */
+  /** Volume cascade ยืดหยุ่น (ยอมสะดุด ≤1 ครั้งใน 5 แท่ง 1H ล่าสุด) */
   volumeCascadeYn?: "Y" | "N" | null;
-  /** lookback 1H ที่ใช้คำนวณ DD/Vol↗ — แถวเก่าไม่มี = รีคำนวณเมื่อ backfill */
+  /** lookback DD 1H% — แถวเก่าไม่ตรง = รีคำนวณเมื่อ backfill */
   trendMomentumLookback?: number | null;
+  /** lookback Vol↗ */
+  trendMomentumVolLookback?: number | null;
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
