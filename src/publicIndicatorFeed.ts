@@ -32,6 +32,9 @@ import {
   buildSnowballLongBreakout1hConfirmGateSteps,
   evaluateSnowballLongBreakout1hConfirm,
   formatSnowballLongBreakout1hCriteriaSummary,
+  snowballLongBreakout1hTwoBarEnabled,
+  snowballLongBreakout1hTwoBarMode,
+  snowballLongBreakout1hVolRankMax,
   type SnowballLongBreakout1hConfirmEval,
 } from "./snowballLongBreakoutConfirm";
 import {
@@ -2266,8 +2269,13 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push(`ข้าม (Stoch แท่งปิดไม่ finite): ${stats.skippedStoch}`);
   lines.push("");
   if (snowballLongBreakout1hConfirmEnabled()) {
+    const twoBarNote = snowballLongBreakout1hTwoBarEnabled()
+      ? snowballLongBreakout1hTwoBarMode() === "strict"
+        ? " · 2-bar strict (แท่งใดแท่งหนึ่งผ่านครบ)"
+        : " · 2-bar split (โครงสร้างแท่งล่าสุด + body/vol จาก 2 แท่ง)"
+      : "";
     lines.push(
-      "โหมด Long Breakout Entry เปิด — ยืนยัน 1H (close > high ก่อนหน้า · body/range · vol×SMA); ไม่ผ่าน → Grade D Long->Short" +
+      `โหมด Long Breakout Entry เปิด — ยืนยัน 1H (vol rank ≤${snowballLongBreakout1hVolRankMax()} ใน 48 แท่ง${twoBarNote}); ไม่ผ่าน → Grade D Long->Short` +
         (snowballLongBreakout1hFailGradeDShortEnabled() ? " (เปิด)" : " (ปิด=บล็อก)"),
     );
     lines.push("");

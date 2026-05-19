@@ -25,12 +25,15 @@ function finite(n: unknown): n is number {
 /**
  * ทิศที่ควรเทรดสำหรับตารางสถิติ (ไม่ใช่ทิศแจ้งเตือน Snowball ตรงๆ)
  * - Bear → short
+ * - Long Grade D (1H confirm fail → Long->Short) → short ก่อนเช็ค confirm>signalHigh
  * - Long + แท่ง confirm แดง (close < open) และ vol สูงกว่าแท่งสัญญาณ → short
  * - Long + confirm ปิดเหนือ signal high → long
- * - Long Grade C (ไม่มี confirm) → short ถ้า fade ผ่าน หรือเป็น thesis fade
+ * - Long Grade C → short (fade thesis)
  */
 export function resolveSnowballStatsTradeSide(input: ResolveSnowballStatsTradeSideInput): "long" | "short" {
   if (input.alertSide === "bear") return "short";
+
+  if (input.qualityTier === "d_plus") return "short";
 
   const confO = input.confirmOpen;
   const confC = input.confirmClose;
@@ -46,8 +49,6 @@ export function resolveSnowballStatsTradeSide(input: ResolveSnowballStatsTradeSi
     const sigH = input.signalHigh;
     if (finite(sigH) && confC > sigH) return "long";
   }
-
-  if (input.qualityTier === "d_plus") return "short";
 
   if (input.qualityTier === "c_plus") {
     if (input.gradeCFadeOk) return "short";
