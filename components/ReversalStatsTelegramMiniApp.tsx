@@ -21,7 +21,7 @@ import {
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const FOOTNOTE =
-  "Binance USDT-M · TF 1D/1H · Short bias · follow-up 1d/3d/7d จากราคาปิด Day · MFE 1H ใช้แท่ง 1H · ผลสรุปที่ 7d";
+  "Binance USDT-M · Short bias · 1H: follow-up 4h/12h/24h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · 1D: follow-up 1d/3d/7d (ปิด Day) · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
 
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
@@ -62,6 +62,18 @@ function fmtPctCell(price: number | null, pct: number | null): ReactNode {
       {fmtPrice(price)} ({fmtPct(pct)})
     </span>
   );
+}
+
+function reversalHorizonCells(r: CandleReversalStatsApiPayload["rows"][number]): ReactNode[] {
+  const tf = r.signalBarTf ?? "1d";
+  if (tf === "1h") {
+    return [
+      fmtPctCell(r.price4h, r.pct4h),
+      fmtPctCell(r.price12h, r.pct12h),
+      fmtPctCell(r.price24h, r.pct24h),
+    ];
+  }
+  return [fmtPctCell(r.price1d, r.pct1d), fmtPctCell(r.price3d, r.pct3d), fmtPctCell(r.price7d, r.pct7d)];
 }
 
 type Phase = "loading" | "setup" | "ready";
@@ -231,9 +243,15 @@ export default function ReversalStatsTelegramMiniApp() {
                 </th>
                 <th scope="col">Range</th>
                 <th scope="col">Wick</th>
-                <th scope="col">1d</th>
-                <th scope="col">3d</th>
-                <th scope="col">7d</th>
+                <th scope="col" title="1H: 4h · 1D: 1d">
+                  4h / 1d
+                </th>
+                <th scope="col" title="1H: 12h · 1D: 3d">
+                  12h / 3d
+                </th>
+                <th scope="col" title="1H: 24h · 1D: 7d">
+                  24h / 7d
+                </th>
                 <th scope="col">Max ROI</th>
                 <th scope="col">Max DD</th>
                 <th scope="col">ผล</th>
@@ -247,7 +265,9 @@ export default function ReversalStatsTelegramMiniApp() {
                   </td>
                 </tr>
               ) : (
-                rows.map((r) => (
+                rows.map((r) => {
+                  const horizons = reversalHorizonCells(r);
+                  return (
                   <tr key={r.id}>
                     <td>{coinLabel(r.symbol)}</td>
                     <td>{candleReversalSignalBarTfLabel(r.signalBarTf ?? "1d")}</td>
@@ -265,14 +285,15 @@ export default function ReversalStatsTelegramMiniApp() {
                     <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
                     <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
                     <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
-                    <td>{fmtPctCell(r.price1d, r.pct1d)}</td>
-                    <td>{fmtPctCell(r.price3d, r.pct3d)}</td>
-                    <td>{fmtPctCell(r.price7d, r.pct7d)}</td>
+                    <td>{horizons[0]}</td>
+                    <td>{horizons[1]}</td>
+                    <td>{horizons[2]}</td>
                     <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
                     <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
                     <td>{candleReversalOutcomeLabel(r.outcome)}</td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

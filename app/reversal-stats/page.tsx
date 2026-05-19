@@ -7,8 +7,9 @@ const ReversalStatsTelegramMiniApp = dynamic(
 );
 
 export const metadata: Metadata = {
-  title: "สถิติ Reversal 1D — Koji",
-  description: "บันทึกสัญญาณกลับตัวจากแท่งเทียน Day (โดจิกลับหัว / แท่งแดงทุบ)",
+  title: "สถิติ Reversal — Koji",
+  description:
+    "บันทึกสัญญาณ Reversal 1D/1H · follow-up 1H แบบ Snowball (4h/12h/24h) · 1D (1d/3d/7d)",
 };
 
 export default function ReversalStatsPage() {

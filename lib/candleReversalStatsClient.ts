@@ -27,6 +27,14 @@ export type CandleReversalStatsRow = {
   rangeScore: number | null;
   wickScore: number | null;
   afterInvertedDoji: boolean;
+  /** 1H signal — checkpoint จากปิดแท่ง 15m (แบบ Snowball) */
+  price4h: number | null;
+  pct4h: number | null;
+  price12h: number | null;
+  pct12h: number | null;
+  price24h: number | null;
+  pct24h: number | null;
+  /** 1D signal — checkpoint จากปิดแท่ง Day */
   price1d: number | null;
   pct1d: number | null;
   price3d: number | null;

@@ -68,6 +68,10 @@ function finiteRank(v: number | null | undefined): number | null {
   return v != null && Number.isFinite(v) && v >= 1 ? Math.floor(v) : null;
 }
 
+function nullNum(v: number | null | undefined): number | null {
+  return v != null && Number.isFinite(v) ? v : null;
+}
+
 function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleReversalStatsRow {
   return {
     ...r,
@@ -77,12 +81,18 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     lookbackBars: finiteRank(r.lookbackBars),
     rangeScore: r.rangeScore != null && Number.isFinite(r.rangeScore) ? r.rangeScore : null,
     wickScore: r.wickScore != null && Number.isFinite(r.wickScore) ? r.wickScore : null,
-    price1d: r.price1d ?? r.price4h ?? null,
-    pct1d: r.pct1d ?? r.pct4h ?? null,
-    price3d: r.price3d ?? r.price12h ?? null,
-    pct3d: r.pct3d ?? r.pct12h ?? null,
-    price7d: r.price7d ?? r.price24h ?? null,
-    pct7d: r.pct7d ?? r.pct24h ?? null,
+    price4h: nullNum(r.price4h),
+    pct4h: nullNum(r.pct4h),
+    price12h: nullNum(r.price12h),
+    pct12h: nullNum(r.pct12h),
+    price24h: nullNum(r.price24h),
+    pct24h: nullNum(r.pct24h),
+    price1d: nullNum(r.price1d),
+    pct1d: nullNum(r.pct1d),
+    price3d: nullNum(r.price3d),
+    pct3d: nullNum(r.pct3d),
+    price7d: nullNum(r.price7d),
+    pct7d: nullNum(r.pct7d),
   };
 }
 
@@ -172,6 +182,12 @@ export async function appendCandleReversalStatsRow(
     rangeScore,
     wickScore,
     afterInvertedDoji: Boolean(input.afterInvertedDoji),
+    price4h: null,
+    pct4h: null,
+    price12h: null,
+    pct12h: null,
+    price24h: null,
+    pct24h: null,
     price1d: null,
     pct1d: null,
     price3d: null,
