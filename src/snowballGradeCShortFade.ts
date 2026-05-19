@@ -342,6 +342,9 @@ export async function resolveSnowballLongAutotradeSide(
   ) {
     return { side: "long", fade: null };
   }
+  if (doubleBarrierOn && grade === "d_plus") {
+    return { side: "short", fade: null };
+  }
   if (grade !== "c_plus" || !doubleBarrierOn) return { side: null, fade: null };
 
   let pack = pack1hHint ?? null;

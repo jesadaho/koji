@@ -167,6 +167,7 @@ function gradeCellClass(tier: SnowballStatsRow["qualityTier"] | undefined): stri
   if (tier === "a_plus") return "snowGradeCell snowGradeCell--a";
   if (tier === "b_plus") return "snowGradeCell snowGradeCell--b";
   if (tier === "c_plus") return "snowGradeCell snowGradeCell--c";
+  if (tier === "d_plus") return "snowGradeCell snowGradeCell--d";
   return "snowGradeCell";
 }
 

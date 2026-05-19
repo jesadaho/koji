@@ -31,11 +31,11 @@ export function isSnowballAutotradeEnabled(): boolean {
 }
 
 /** Grade LONG จากสัญญาณ Snowball (สอดคล้อง publicIndicatorFeed) */
-export type SnowballLongAlertGrade = "a_plus" | "b_plus" | "c_plus";
+export type SnowballLongAlertGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus";
 
-/** เกรดต่ำกว่า B = C เท่านั้น */
+/** เกรดต่ำกว่า B = C หรือ D */
 export function isSnowballLongGradeBelowB(grade: SnowballLongAlertGrade | undefined): boolean {
-  return grade === "c_plus";
+  return grade === "c_plus" || grade === "d_plus";
 }
 
 /**

@@ -516,6 +516,9 @@ code {
 .snowGradeCell--c {
   color: #f97316;
 }
+.snowGradeCell--d {
+  color: #ef4444;
+}
 
 .sparkMatrixPct {
   font-weight: 600;

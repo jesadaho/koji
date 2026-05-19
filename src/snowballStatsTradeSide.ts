@@ -47,6 +47,8 @@ export function resolveSnowballStatsTradeSide(input: ResolveSnowballStatsTradeSi
     if (finite(sigH) && confC > sigH) return "long";
   }
 
+  if (input.qualityTier === "d_plus") return "short";
+
   if (input.qualityTier === "c_plus") {
     if (input.gradeCFadeOk) return "short";
     return "short";

@@ -2,7 +2,7 @@
 
 export type SnowballStatsOutcome = "pending" | "win_trend" | "win_quick_tp30" | "loss" | "flat";
 
-export type SnowballStatsQualityTier = "a_plus" | "b_plus" | "c_plus";
+export type SnowballStatsQualityTier = "a_plus" | "b_plus" | "c_plus" | "d_plus";
 
 /** ทิศสัญญาณ Snowball ตอนแจ้ง (long / bear) */
 export type SnowballStatsAlertSide = "long" | "bear";
@@ -102,6 +102,7 @@ export function snowballStatsGradeLabel(
   if (tier === "a_plus") return "A+";
   if (tier === "b_plus") return "B";
   if (tier === "c_plus") return "C";
+  if (tier === "d_plus") return "D";
   return "—";
 }
 
