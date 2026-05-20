@@ -288,6 +288,16 @@ export default function SnowballStatsTelegramMiniApp() {
     };
   }, [loadStats]);
 
+  const rows = payload?.rows ?? [];
+
+  const exportCsv = useCallback(() => {
+    if (rows.length === 0) {
+      window.alert("ยังไม่มีแถวให้ export");
+      return;
+    }
+    downloadCsv(statsCsvFilename("snowball-stats"), snowballStatsToCsv(rows));
+  }, [rows]);
+
   if (phase === "loading") {
     return (
       <div className="sparkStatsPage sparkStatsPage--wide">
@@ -316,16 +326,6 @@ export default function SnowballStatsTelegramMiniApp() {
       </div>
     );
   }
-
-  const rows = payload?.rows ?? [];
-
-  const exportCsv = useCallback(() => {
-    if (rows.length === 0) {
-      window.alert("ยังไม่มีแถวให้ export");
-      return;
-    }
-    downloadCsv(statsCsvFilename("snowball-stats"), snowballStatsToCsv(rows));
-  }, [rows]);
 
   return (
     <div className="sparkStatsPage sparkStatsPage--wide">
