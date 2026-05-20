@@ -25,6 +25,8 @@ import {
   type CandleReversalStatsSort,
   type CandleReversalStatsSortKey,
 } from "@/lib/candleReversalStatsClient";
+import { candleReversalStatsToCsv } from "@/lib/candleReversalStatsCsvExport";
+import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -147,6 +149,14 @@ export default function ReversalStatsTelegramMiniApp() {
     () => sortCandleReversalStatsRows(payload?.rows ?? [], sort),
     [payload?.rows, sort],
   );
+
+  const exportCsv = useCallback(() => {
+    if (rows.length === 0) {
+      window.alert("ยังไม่มีแถวให้ export");
+      return;
+    }
+    downloadCsv(statsCsvFilename("reversal-stats"), candleReversalStatsToCsv(rows));
+  }, [rows]);
 
   const api = useCallback(async (path: string, init?: RequestInit) => {
     const initData = getTelegramInitData();
@@ -385,6 +395,14 @@ export default function ReversalStatsTelegramMiniApp() {
         <p className="sparkStatsActionRow" style={{ marginTop: "0.75rem" }}>
           <button type="button" className="sparkStatsRefreshBtn" onClick={() => void loadStats()}>
             รีเฟรช
+          </button>
+          <button
+            type="button"
+            className="sparkStatsRefreshBtn"
+            disabled={rows.length === 0}
+            onClick={exportCsv}
+          >
+            Export CSV
           </button>
           {payload?.isAdmin ? (
             <button

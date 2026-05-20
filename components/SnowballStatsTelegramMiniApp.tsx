@@ -25,6 +25,8 @@ import {
   type SnowballStatsApiPayload,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
+import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
+import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -317,6 +319,14 @@ export default function SnowballStatsTelegramMiniApp() {
 
   const rows = payload?.rows ?? [];
 
+  const exportCsv = useCallback(() => {
+    if (rows.length === 0) {
+      window.alert("ยังไม่มีแถวให้ export");
+      return;
+    }
+    downloadCsv(statsCsvFilename("snowball-stats"), snowballStatsToCsv(rows));
+  }, [rows]);
+
   return (
     <div className="sparkStatsPage sparkStatsPage--wide">
       <h1 className="sparkStatsMatrixSectionTitle">
@@ -449,9 +459,17 @@ export default function SnowballStatsTelegramMiniApp() {
         <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
           {FOOTNOTE}
         </p>
-        <p style={{ marginTop: "0.75rem" }}>
+        <p className="sparkStatsActionRow" style={{ marginTop: "0.75rem" }}>
           <button type="button" className="sparkStatsRefreshBtn" onClick={() => void loadStats()}>
             รีเฟรช
+          </button>
+          <button
+            type="button"
+            className="sparkStatsRefreshBtn"
+            disabled={rows.length === 0}
+            onClick={exportCsv}
+          >
+            Export CSV
           </button>
         </p>
       </section>
