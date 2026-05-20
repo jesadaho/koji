@@ -51,6 +51,12 @@ export type SnowballStatsRow = {
   trendMomentumLookback?: number | null;
   /** lookback Vol↗ */
   trendMomentumVolLookback?: number | null;
+  /** แท่งยืนยัน (1H breakout / หรือแท่ง 2 ของ pending): volume ÷ SMA ที่เกณฑ์ใช้นั้นจังหวะนั้น (ไม่มีแท่งยืนยัน = null) */
+  confirmVolVsSma?: number | null;
+  /** อันดับ volume ในรอบ lookback เดียวกับที่ยืนยันใช้ (1 = สูงสุด) */
+  confirmVolRank?: number | null;
+  /** window ของอันดับ vol (จำนวนแท่ง; เก่ามีแถวว่างฟิลด์พวกนี้) */
+  confirmVolRankLb?: number | null;
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
@@ -152,6 +158,23 @@ export function snowballStatsVolumeCascadeLabel(v: "Y" | "N" | null | undefined)
   if (v === "Y") return "Y";
   if (v === "N") return "N";
   return "—";
+}
+
+/** อัตรา vol แท่งยืนยัน ÷ SMA (เช่น 1.85×) */
+export function snowballStatsConfirmVolVsSmaLabel(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v) || v <= 0) return "—";
+  return `${v.toFixed(2)}×`;
+}
+
+/** อันดับ vol ในรอบ N แท่ง เช่น #3/48 */
+export function snowballStatsConfirmVolRankLabel(
+  rank: number | null | undefined,
+  lb: number | null | undefined,
+): string {
+  if (rank == null || !Number.isFinite(rank) || rank < 1) return "—";
+  const r = Math.round(rank);
+  if (lb != null && Number.isFinite(lb) && lb >= 1) return `#${r}/${Math.round(lb)}`;
+  return `#${r}`;
 }
 
 /** แสดง quote vol 24h (USDT) แบบย่อ */

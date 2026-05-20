@@ -3475,6 +3475,17 @@ export async function runPublicIndicatorFeedInternal(
                   btcPsar4hClose: longMktCtx?.btcPsar4hClose ?? null,
                   quoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                   ...trendMomentumStatsFields(trendMomentum),
+                  ...(longBreakout1h && breakout1hEval != null
+                    ? {
+                        confirmVolVsSma: Number.isFinite(breakout1hEval.volRatio)
+                          ? breakout1hEval.volRatio
+                          : null,
+                        confirmVolRank: Number.isFinite(breakout1hEval.volRank)
+                          ? breakout1hEval.volRank
+                          : null,
+                        confirmVolRankLb: breakout1hEval.volRankLookback,
+                      }
+                    : {}),
                 });
               }
             } catch (statsErr) {

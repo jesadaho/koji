@@ -10,6 +10,8 @@ import {
 } from "@/lib/kojiTelegramWebApp";
 import {
   snowballStatsBarRangePctLabel,
+  snowballStatsConfirmVolRankLabel,
+  snowballStatsConfirmVolVsSmaLabel,
   snowballStatsDayOfWeekBkk,
   snowballStatsBtcPsar4hLabel,
   snowballStatsGradeLabel,
@@ -365,6 +367,18 @@ export default function SnowballStatsTelegramMiniApp() {
                 >
                   Vol↗
                 </th>
+                <th
+                  scope="col"
+                  title="แท่งยืนยัน (1H breakout หลังได้สัญญาณ · หรือแท่ง 2 เมื่อรอคิว confirm): volume ÷ SMA ตามเกณฑ์ยืนยันนั้น"
+                >
+                  Vol×SMA
+                </th>
+                <th
+                  scope="col"
+                  title="อันดับวอลุ่มในรอบที่ gate ใช้ (ปกติมาตรฐาน 48 แท่ง 1H; ถ้ามี SMA48 ที่แท่งยืนยันคิว = หน้าต่างเดียวกับ rank นั้น)"
+                >
+                  Vol rank
+                </th>
                 <th scope="col">4h</th>
                 <th scope="col">12h</th>
                 <th scope="col">24h</th>
@@ -379,7 +393,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={24} className="sub">
+                  <td colSpan={26} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -409,6 +423,8 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                     <td>{snowballStatsMaxDrawback1hLabel(r.maxDrawback1hPct)}</td>
                     <td>{snowballStatsVolumeCascadeLabel(r.volumeCascadeYn)}</td>
+                    <td>{snowballStatsConfirmVolVsSmaLabel(r.confirmVolVsSma)}</td>
+                    <td>{snowballStatsConfirmVolRankLabel(r.confirmVolRank, r.confirmVolRankLb)}</td>
                     <td>{fmtPctCell(r.price4h, r.pct4h)}</td>
                     <td>{fmtPctCell(r.price12h, r.pct12h)}</td>
                     <td>{fmtPctCell(r.price24h, r.pct24h)}</td>

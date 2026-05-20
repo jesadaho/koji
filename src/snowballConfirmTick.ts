@@ -389,6 +389,10 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               btcPsar4hClose: item.statsBtcPsar4hClose ?? null,
               quoteVol24hUsdt: item.statsQuoteVol24hUsdt ?? null,
               ...trendMomentumStatsFields(trendMomentum),
+              confirmVolVsSma:
+                volSmaConfirmUse != null && volSmaConfirmUse > 0 ? vo / volSmaConfirmUse : null,
+              confirmVolRank: volRank,
+              confirmVolRankLb: volRank != null && Number.isFinite(volRank) ? volRankLookback : null,
             });
           } catch (e) {
             console.error("[snowballConfirmTick] append snowball stats after confirm", item.symbol, item.side, e);

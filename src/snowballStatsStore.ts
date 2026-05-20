@@ -135,6 +135,10 @@ export type AppendSnowballStatsInput = {
   volumeCascadeYn?: "Y" | "N" | null;
   trendMomentumLookback?: number | null;
   trendMomentumVolLookback?: number | null;
+  /** Snowball LONG 1H breakout / pending confirm bar */
+  confirmVolVsSma?: number | null;
+  confirmVolRank?: number | null;
+  confirmVolRankLb?: number | null;
 };
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
@@ -159,6 +163,17 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
   const barRangePctPrev = normBarRangePct(input.barRangePctPrev);
   const barRangePctSignal = normBarRangePct(input.barRangePctSignal);
   const barRangePct2Sum = normBarRangePct(input.barRangePct2Sum);
+
+  const normFiniteRatio = (v: number | null | undefined): number | null =>
+    v != null && Number.isFinite(v) && v > 0 ? v : null;
+  const normVolRank = (v: number | null | undefined): number | null =>
+    v != null && Number.isFinite(v) && v >= 1 ? Math.round(v) : null;
+  const normVolRankLb = (v: number | null | undefined): number | null =>
+    v != null && Number.isFinite(v) && v >= 1 ? Math.round(v) : null;
+
+  const confirmVolVsSma = normFiniteRatio(input.confirmVolVsSma);
+  const confirmVolRank = normVolRank(input.confirmVolRank);
+  const confirmVolRankLb = confirmVolRank != null ? normVolRankLb(input.confirmVolRankLb) : null;
 
   const row: SnowballStatsRow = {
     id: randomUUID(),
@@ -199,6 +214,9 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       input.volumeCascadeYn === "Y" || input.volumeCascadeYn === "N" ? input.volumeCascadeYn : null,
     trendMomentumLookback: SNOWBALL_TREND_1H_DD_LOOKBACK,
     trendMomentumVolLookback: SNOWBALL_TREND_1H_VOL_LOOKBACK,
+    confirmVolVsSma,
+    confirmVolRank,
+    confirmVolRankLb,
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,
     pct4h: null,
