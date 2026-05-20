@@ -23,6 +23,10 @@ export type SnowballStatsRow = {
   intrabar: boolean;
   triggerKind: string;
   qualityTier?: SnowballStatsQualityTier;
+  /** เกรดตอนแจ้ง — ไม่เปลี่ยนเมื่อ follow-up 4h ปรับ qualityTier */
+  alertQualityTier?: SnowballStatsQualityTier;
+  /** ปรับ qualityTier แล้วหลังครบ 4 ชม. (เช่น D→C) */
+  qualityTier4hAdjusted?: boolean;
   /** Wilder ATR(100) ตอนแจ้ง — baseline ความผันผวน */
   atr100?: number | null;
   /** Max upper wick 100 แท่งก่อนสัญญาณ — เพดานไส้บน */
@@ -99,17 +103,33 @@ export function snowballStatsSideLabel(
   return `${signal}->${trade}`;
 }
 
-/** A+/B/C สำหรับตารางสถิติ (LONG = HH48/HH200/VAH · SHORT = Double Barrier) */
-export function snowballStatsGradeLabel(
-  side: SnowballStatsRow["side"],
-  tier: SnowballStatsRow["qualityTier"] | undefined
-): string {
+function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): string {
   if (!tier) return "—";
   if (tier === "a_plus") return "A+";
   if (tier === "b_plus") return "B";
   if (tier === "c_plus") return "C";
   if (tier === "d_plus") return "D";
   return "—";
+}
+
+/** A+/B/C/D สำหรับตารางสถิติ — ถ้า follow-up 4h ปรับเกรด แสดง C (D) */
+export function snowballStatsGradeLabel(
+  side: SnowballStatsRow["side"],
+  tier: SnowballStatsRow["qualityTier"] | undefined,
+  alertTier?: SnowballStatsRow["alertQualityTier"],
+): string {
+  const cur = snowballStatsGradeLetter(tier);
+  const alert = snowballStatsGradeLetter(alertTier);
+  if (
+    alertTier &&
+    tier &&
+    alertTier !== tier &&
+    alert !== "—" &&
+    cur !== "—"
+  ) {
+    return `${cur} (${alert})`;
+  }
+  return cur;
 }
 
 /** แสดงค่า ATR / Max Wick ในตาราง (ราคา + % ของ entry ถ้ามี) */

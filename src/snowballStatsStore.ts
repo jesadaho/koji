@@ -119,6 +119,7 @@ export type AppendSnowballStatsInput = {
   vol: number;
   volSma: number;
   qualityTier?: SnowballStatsQualityTier;
+  alertQualityTier?: SnowballStatsQualityTier;
   /** Wilder ATR(100) ที่แท่งสัญญาณ — baseline ความผันผวน */
   atr100?: number | null;
   /** Max upper wick ใน 100 แท่งก่อนแท่งสัญญาณ — เพดานไส้บน */
@@ -189,6 +190,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     intrabar: input.intrabar,
     triggerKind: input.triggerKind,
     qualityTier: input.qualityTier,
+    alertQualityTier: input.qualityTier,
     atr100,
     maxUpperWick100,
     rangeScore,

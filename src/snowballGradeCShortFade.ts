@@ -140,18 +140,31 @@ export type SnowballGradeCShortFadeResult = {
   detail: string;
 };
 
+export type SnowballGradeCShortFadeOpts = {
+  /** กรอบ 4h ที่ใช้นับ rejection (default = กรอบของแท่งสัญญาณ) */
+  fourHourOpenSec?: number;
+  /** ใช้แท่ง 1h ที่ปิดไม่เกินเวลานี้ (สำหรับ follow-up T+4h) */
+  asOfSec?: number;
+};
+
 /**
  * นับ rejection บน 1h ในกรอบ 4h · Short เมื่อ close 1h ล่าสุด < EMA และ (reject ≥ 2 หรือ V-Top engulf)
  */
 export function evaluateSnowballGradeCShortFade(
   pack1h: BinanceKlinePack | null,
-  signalBarOpenSec: number
+  signalBarOpenSec: number,
+  opts?: SnowballGradeCShortFadeOpts,
 ): SnowballGradeCShortFadeResult {
   const minRejections = snowballGradeCShortMin1hRejections();
   const wickPctThreshold = snowballGradeCShortUpperWickPctThreshold();
   const vTopEngulfRatio = snowballGradeCShortVTopEngulfRatio();
   const emaPeriod = snowballGradeCShortEmaPeriod();
-  const fourHourOpenSec = containing4hBarOpenSec(signalBarOpenSec);
+  const fourHourOpenSec =
+    opts?.fourHourOpenSec != null && Number.isFinite(opts.fourHourOpenSec)
+      ? Math.floor(opts.fourHourOpenSec)
+      : containing4hBarOpenSec(signalBarOpenSec);
+  const asOfSec =
+    opts?.asOfSec != null && Number.isFinite(opts.asOfSec) ? Math.floor(opts.asOfSec) : null;
 
   const emptyEntry = {
     entryStrategy: null as SnowballGradeCShortEntryStrategy | null,
@@ -194,6 +207,7 @@ export function evaluateSnowballGradeCShortFade(
     const slotOpen = fourHourOpenSec + h * SEC_1H;
     const j = find1hIndexByOpenSec(pack1h, slotOpen);
     if (j < 0) continue;
+    if (asOfSec != null && timeSec[j]! + SEC_1H > asOfSec) continue;
     if (j > latestIdx) latestIdx = j;
     const wickPct = upperWickRangePct(high[j]!, low[j]!, open[j]!, close[j]!);
     if (wickPct != null && wickPct > wickPctThreshold) {

@@ -16,6 +16,8 @@ import {
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
+import { applySnowballStatsGrade4hFollowUp } from "./snowballStatsGrade4hFollowUp";
+import type { BinanceKlinePack } from "./binanceIndicatorKline";
 
 /** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
 const KLINE_GRAN_SEC = 900;
@@ -181,8 +183,19 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
 
   const state = await loadSnowballStatsState();
   let dirty = 0;
+  const nowSec = Math.floor(nowMs / 1000);
 
   dirty += await backfillSnowballTrendMomentumFields(state.rows);
+
+  const pack1hGradeCache = new Map<string, BinanceKlinePack | null>();
+  for (const row of state.rows) {
+    if (row.qualityTier4hAdjusted) continue;
+    const ac = anchorCloseSec(row);
+    if (nowSec < ac + 4 * 3600) continue;
+    if (await applySnowballStatsGrade4hFollowUp(row, nowSec, pack1hGradeCache)) {
+      dirty += 1;
+    }
+  }
 
   for (const row of state.rows) {
     if (row.outcome !== "pending") continue;
@@ -191,7 +204,6 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
     if (!Number.isFinite(entry) || entry <= 0) continue;
 
     const ac = anchorCloseSec(row);
-    const nowSec = Math.floor(nowMs / 1000);
     if (nowSec < ac) continue;
 
     const windowEndSec = Math.min(nowSec, ac + 24 * 3600);

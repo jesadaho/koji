@@ -29,7 +29,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ทิศ = ทิศเทรด · สวนสัญญาณแสดง Long->Short · Grade C Long มัก fade เป็น Short · confirm แดง+vol สูงกว่าแท่งสัญญาณ → Short · Binance USDT-M · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
+  "ทิศ = ทิศเทรด · สวนสัญญาณแสดง Long->Short · Grade C (D) = ปรับเป็น C หลัง 4 ชม. (เกรดตอนแจ้ง D) · ไม่เปลี่ยนทิศเทรด · Binance USDT-M · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -403,7 +403,7 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td className="snowStatsStickyCoin">{coinLabel(r.symbol)}</td>
                     <td>{snowballStatsSideLabel(r)}</td>
                     <td className={`snowStatsStickyGrade ${gradeCellClass(r.qualityTier)}`}>
-                      {snowballStatsGradeLabel(r.side, r.qualityTier)}
+                      {snowballStatsGradeLabel(r.side, r.qualityTier, r.alertQualityTier)}
                     </td>
                     <td>
                       <span style={{ whiteSpace: "nowrap" }}>
