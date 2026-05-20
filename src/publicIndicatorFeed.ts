@@ -3147,7 +3147,8 @@ export async function runPublicIndicatorFeedInternal(
           }
         }
 
-        let longBreakoutGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
+        const structuralLongGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
+        let longBreakoutGrade = structuralLongGrade;
         if (breakout1hFailedGradeD) {
           longBreakoutGrade = "d_plus";
         }
@@ -3429,6 +3430,7 @@ export async function runPublicIndicatorFeedInternal(
                 const longStatsTradeSide = resolveSnowballStatsTradeSide({
                   alertSide: "long",
                   qualityTier: longBreakoutGrade,
+                  breakout1hConfirmFail: breakout1hFailedGradeD,
                   signalOpen: o15[iSig]!,
                   signalClose: clE!,
                   signalHigh: longSignalHigh,
@@ -3471,7 +3473,9 @@ export async function runPublicIndicatorFeedInternal(
                   triggerKind: trig,
                   vol: vE!,
                   volSma: vsE!,
-                  qualityTier: longBreakoutGrade,
+                  qualityTier: structuralLongGrade,
+                  alertQualityTier: breakout1hFailedGradeD ? "d_plus" : structuralLongGrade,
+                  breakout1hConfirmFail: breakout1hFailedGradeD,
                   atr100: longVolSnap.atr100,
                   maxUpperWick100: longVolSnap.maxUpperWick100,
                   rangeScore: longVolSnap.rangeScore,

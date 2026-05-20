@@ -25,8 +25,10 @@ export type SnowballStatsRow = {
   qualityTier?: SnowballStatsQualityTier;
   /** เกรดตอนแจ้ง — ไม่เปลี่ยนเมื่อ follow-up 4h ปรับ qualityTier */
   alertQualityTier?: SnowballStatsQualityTier;
-  /** ปรับ qualityTier แล้วหลังครบ 4 ชม. (เช่น D→C) */
+  /** ปรับ qualityTier แล้วหลังครบ 4 ชม. (เช่น confirm fail → C) */
   qualityTier4hAdjusted?: boolean;
+  /** Long 1H breakout confirm ไม่ผ่าน — ตารางสถิติแสดงเกรด Long (ไม่ใช่ D) */
+  breakout1hConfirmFail?: boolean;
   /** Wilder ATR(100) ตอนแจ้ง — baseline ความผันผวน */
   atr100?: number | null;
   /** Max upper wick 100 แท่งก่อนสัญญาณ — เพดานไส้บน */
@@ -110,18 +112,31 @@ function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): s
   if (tier === "a_plus") return "A+";
   if (tier === "b_plus") return "B";
   if (tier === "c_plus") return "C";
-  if (tier === "d_plus") return "D";
+  if (tier === "d_plus") return "Long";
   return "—";
 }
 
-/** A+/B/C/D สำหรับตารางสถิติ — ถ้า follow-up 4h ปรับเกรด แสดง C (D) */
+/** แถวสถิติที่เคยเป็น Grade D / 1H confirm fail */
+export function snowballStatsIsLongConfirmFailRow(
+  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+): boolean {
+  if (row.breakout1hConfirmFail) return true;
+  if (row.qualityTier === "d_plus" || row.alertQualityTier === "d_plus") return true;
+  return false;
+}
+
+function snowballStatsGradeDisplayLetter(tier: SnowballStatsQualityTier | undefined): string {
+  return snowballStatsGradeLetter(tier);
+}
+
+/** A+/B/C/Long สำหรับตารางสถิติ — d_plus แสดง Long · follow-up 4h แสดง C (Long) */
 export function snowballStatsGradeLabel(
   side: SnowballStatsRow["side"],
   tier: SnowballStatsRow["qualityTier"] | undefined,
   alertTier?: SnowballStatsRow["alertQualityTier"],
 ): string {
-  const cur = snowballStatsGradeLetter(tier);
-  const alert = snowballStatsGradeLetter(alertTier);
+  const cur = snowballStatsGradeDisplayLetter(tier);
+  const alert = snowballStatsGradeDisplayLetter(alertTier);
   if (
     alertTier &&
     tier &&
@@ -132,6 +147,20 @@ export function snowballStatsGradeLabel(
     return `${cur} (${alert})`;
   }
   return cur;
+}
+
+export function snowballStatsGradeCellClass(
+  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+): string {
+  if (snowballStatsIsLongConfirmFailRow(row) && row.qualityTier === "d_plus") {
+    return "snowGradeCell snowGradeCell--long";
+  }
+  const tier = row.qualityTier;
+  if (tier === "a_plus") return "snowGradeCell snowGradeCell--a";
+  if (tier === "b_plus") return "snowGradeCell snowGradeCell--b";
+  if (tier === "c_plus") return "snowGradeCell snowGradeCell--c";
+  if (tier === "d_plus") return "snowGradeCell snowGradeCell--long";
+  return "snowGradeCell";
 }
 
 /** แสดงค่า ATR / Max Wick ในตาราง (ราคา + % ของ entry ถ้ามี) */

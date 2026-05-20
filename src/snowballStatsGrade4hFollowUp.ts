@@ -1,4 +1,7 @@
-import type { SnowballStatsRow } from "@/lib/snowballStatsClient";
+import {
+  snowballStatsIsLongConfirmFailRow,
+  type SnowballStatsRow,
+} from "@/lib/snowballStatsClient";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
 import { fetchBinanceUsdmKlines } from "./binanceIndicatorKline";
 import {
@@ -53,8 +56,7 @@ export async function applySnowballStatsGrade4hFollowUp(
   const ac = anchorCloseSec(row);
   if (nowSec < ac + SEC_4H) return false;
 
-  const alertTier = snowballStatsAlertQualityTier(row);
-  if (alertTier !== "d_plus") return false;
+  if (!snowballStatsIsLongConfirmFailRow(row)) return false;
   if (!inferAlertSideLong(row)) return false;
 
   const sym = row.symbol.trim().toUpperCase();
@@ -77,8 +79,10 @@ export async function applySnowballStatsGrade4hFollowUp(
   });
   if (!fade.ok) return false;
 
-  if (!row.alertQualityTier && row.qualityTier) {
-    row.alertQualityTier = row.qualityTier;
+  if (!row.breakout1hConfirmFail) row.breakout1hConfirmFail = true;
+  if (!row.alertQualityTier) {
+    row.alertQualityTier =
+      row.qualityTier === "d_plus" ? "d_plus" : row.qualityTier;
   }
   row.qualityTier = "c_plus";
   row.qualityTier4hAdjusted = true;

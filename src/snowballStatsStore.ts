@@ -141,7 +141,28 @@ export type AppendSnowballStatsInput = {
   confirmVolRank?: number | null;
   confirmVolRankLb?: number | null;
   greenDaysBeforeSignal?: number | null;
+  breakout1hConfirmFail?: boolean;
+  alertQualityTier?: SnowballStatsQualityTier;
 };
+
+/** แถวเก่า qualityTier=d_plus → ติดป้าย confirm fail + alertQualityTier สำหรับแสดง Long */
+export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (row.qualityTier !== "d_plus") continue;
+    let touched = false;
+    if (!row.breakout1hConfirmFail) {
+      row.breakout1hConfirmFail = true;
+      touched = true;
+    }
+    if (!row.alertQualityTier) {
+      row.alertQualityTier = "d_plus";
+      touched = true;
+    }
+    if (touched) updated += 1;
+  }
+  return updated;
+}
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
   if (!isSnowballStatsEnabled()) return null;
@@ -191,7 +212,8 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     intrabar: input.intrabar,
     triggerKind: input.triggerKind,
     qualityTier: input.qualityTier,
-    alertQualityTier: input.qualityTier,
+    alertQualityTier: input.alertQualityTier ?? input.qualityTier,
+    breakout1hConfirmFail: Boolean(input.breakout1hConfirmFail),
     atr100,
     maxUpperWick100,
     rangeScore,

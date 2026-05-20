@@ -8,6 +8,7 @@ import {
 import {
   isSnowballStatsEnabled,
   loadSnowballStatsState,
+  migrateSnowballStatsLegacyGradeD,
   saveSnowballStatsState,
   type SnowballStatsRow,
 } from "./snowballStatsStore";
@@ -214,6 +215,7 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
   let dirty = 0;
   const nowSec = Math.floor(nowMs / 1000);
 
+  dirty += migrateSnowballStatsLegacyGradeD(state.rows);
   dirty += await backfillSnowballTrendMomentumFields(state.rows);
   dirty += await backfillSnowballGreenDaysBeforeSignal(state.rows);
 

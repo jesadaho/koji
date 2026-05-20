@@ -14,6 +14,7 @@ import {
   snowballStatsConfirmVolVsSmaLabel,
   snowballStatsDayOfWeekBkk,
   snowballStatsBtcPsar4hLabel,
+  snowballStatsGradeCellClass,
   snowballStatsGradeLabel,
   snowballStatsGreenDaysLabel,
   snowballStatsMaxDrawback1hLabel,
@@ -30,7 +31,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ทิศ = ทิศเทรด · สวนสัญญาณแสดง Long->Short · Grade C (D) = ปรับเป็น C หลัง 4 ชม. (เกรดตอนแจ้ง D) · ไม่เปลี่ยนทิศเทรด · Binance USDT-M · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
+  "ทิศ = ทิศเทรด · สวนสัญญาณแสดง Long->Short · Grade Long = 1H confirm ไม่ผ่าน · C (Long) = ปรับเป็น C หลัง 4 ชม. · ไม่เปลี่ยนทิศเทรด · Binance USDT-M · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -166,13 +167,6 @@ function outcomeLabel(o: SnowballStatsRow["outcome"]): string {
   return "Flat";
 }
 
-function gradeCellClass(tier: SnowballStatsRow["qualityTier"] | undefined): string {
-  if (tier === "a_plus") return "snowGradeCell snowGradeCell--a";
-  if (tier === "b_plus") return "snowGradeCell snowGradeCell--b";
-  if (tier === "c_plus") return "snowGradeCell snowGradeCell--c";
-  if (tier === "d_plus") return "snowGradeCell snowGradeCell--d";
-  return "snowGradeCell";
-}
 
 export default function SnowballStatsTelegramMiniApp() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -409,7 +403,7 @@ export default function SnowballStatsTelegramMiniApp() {
                   <tr key={r.id}>
                     <td className="snowStatsStickyCoin">{coinLabel(r.symbol)}</td>
                     <td>{snowballStatsSideLabel(r)}</td>
-                    <td className={`snowStatsStickyGrade ${gradeCellClass(r.qualityTier)}`}>
+                    <td className={`snowStatsStickyGrade ${snowballStatsGradeCellClass(r)}`}>
                       {snowballStatsGradeLabel(r.side, r.qualityTier, r.alertQualityTier)}
                     </td>
                     <td>
