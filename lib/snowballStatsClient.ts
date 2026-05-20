@@ -10,7 +10,7 @@ export type SnowballStatsAlertSide = "long" | "bear";
 export type SnowballStatsRow = {
   id: string;
   symbol: string;
-  /** ทิศเทรดสำหรับสถิติ */
+  /** ทิศวัดผลสถิติ (ROI/DD/outcome) — Grade D = long ตามสัญญาณ */
   side: "long" | "short";
   /** ทิศสัญญาณตอนแจ้ง — แถวเก่าอาจไม่มี */
   alertSide?: SnowballStatsAlertSide;

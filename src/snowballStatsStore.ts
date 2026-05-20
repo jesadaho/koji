@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
+  snowballStatsIsLongConfirmFailRow,
   type SnowballStatsAlertSide,
   type SnowballStatsApiPayload,
   type SnowballStatsQualityTier,
@@ -143,6 +144,34 @@ export type AppendSnowballStatsInput = {
   breakout1hConfirmFail?: boolean;
   alertQualityTier?: SnowballStatsQualityTier;
 };
+
+function resetSnowballStatsFollowUpFields(row: SnowballStatsRow): void {
+  row.price4h = null;
+  row.pct4h = null;
+  row.price12h = null;
+  row.pct12h = null;
+  row.price24h = null;
+  row.pct24h = null;
+  row.maxRoiPct = null;
+  row.durationToMfeHours = null;
+  row.maxDrawdownPct = null;
+  row.resultRr = null;
+  row.outcome = "pending";
+}
+
+/** แถว Grade D / confirm fail ที่เคย side=short → long + รีเซ็ตผลให้ follow-up คำนวณใหม่ */
+export function migrateSnowballStatsConfirmFailSideToLong(rows: SnowballStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (!snowballStatsIsLongConfirmFailRow(row)) continue;
+    if (row.alertSide === "bear") continue;
+    if (row.side !== "short") continue;
+    row.side = "long";
+    resetSnowballStatsFollowUpFields(row);
+    updated += 1;
+  }
+  return updated;
+}
 
 /** แถวเก่า qualityTier=d_plus → ติดป้าย confirm fail + alertQualityTier สำหรับแสดงเกรด D */
 export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): number {

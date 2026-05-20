@@ -16,7 +16,7 @@ export type ResolveSnowballStatsTradeSideInput = {
   confirmVolume?: number | null;
   /** ผ่าน gate Grade C short fade (1h ในกรอบ 4h) */
   gradeCFadeOk?: boolean;
-  /** Long 1H confirm ไม่ผ่าน → short ในสถิติ */
+  /** Long 1H confirm ไม่ผ่าน — สถิติวัดผลตาม Long (ทิศสัญญาณ) */
   breakout1hConfirmFail?: boolean;
 };
 
@@ -35,7 +35,7 @@ function finite(n: unknown): n is number {
 export function resolveSnowballStatsTradeSide(input: ResolveSnowballStatsTradeSideInput): "long" | "short" {
   if (input.alertSide === "bear") return "short";
 
-  if (input.breakout1hConfirmFail || input.qualityTier === "d_plus") return "short";
+  if (input.breakout1hConfirmFail || input.qualityTier === "d_plus") return "long";
 
   const confO = input.confirmOpen;
   const confC = input.confirmClose;
