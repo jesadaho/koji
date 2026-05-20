@@ -39,6 +39,13 @@ import {
   type SnowballLongBreakout1hConfirmEval,
 } from "./snowballLongBreakoutConfirm";
 import {
+  classifyLongBreakoutGrade,
+  resolveSnowballLongBreakoutGrade,
+  type SnowballLongBreakoutGrade,
+} from "./snowballLongBreakoutGrade";
+
+export type { SnowballLongBreakoutGrade };
+import {
   appendSnowballStatsRow,
   isSnowballStatsEnabled,
   loadSnowballStatsState,
@@ -982,21 +989,9 @@ type SnowballDoubleBarrierTier = "a_plus" | "b_plus";
 /**
  * Grade LONG: ทริกเกอร์ผ่าน HH48 หรือ VAH · A+ = HH48+HH200+VAH · B = VAH อย่างเดียว · C = HH48 แต่ไม่ผ่าน HH200 (หรือผ่าน HH200 แต่ไม่มี VAH)
  */
-export type SnowballLongBreakoutGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus";
-
 /** 1H confirm ไม่ผ่าน → Grade D Long->Short ทันที (แทนการบล็อก) */
 export function snowballLongBreakout1hFailGradeDShortEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_LONG_BREAKOUT_1H_FAIL_GRADE_D_SHORT", true);
-}
-
-function classifyLongBreakoutGrade(
-  swing48: boolean,
-  swing200: boolean,
-  vahOk: boolean,
-): SnowballLongBreakoutGrade {
-  if (!swing48 && vahOk) return "b_plus";
-  if (swing48 && swing200 && vahOk) return "a_plus";
-  return "c_plus";
 }
 
 function snowballLongSwingHighBreak(
@@ -2850,7 +2845,10 @@ export async function runPublicIndicatorFeedInternal(
       ): Promise<void> => {
         if (iEval < 1) return;
         const longBreakout1h =
-          !intrabar && snowballLongBreakout1hConfirmEnabled() && Boolean(pack1hForTwoBar?.timeSec?.length);
+          snowTf !== "4h" &&
+          !intrabar &&
+          snowballLongBreakout1hConfirmEnabled() &&
+          Boolean(pack1hForTwoBar?.timeSec?.length);
         const twoBarInline =
           !intrabar && !longBreakout1h && snowballTwoBarInlineModeEnabled() && iEval >= 2;
         const iConf = iEval;
@@ -3147,11 +3145,21 @@ export async function runPublicIndicatorFeedInternal(
           }
         }
 
-        const structuralLongGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
-        let longBreakoutGrade = structuralLongGrade;
-        if (breakout1hFailedGradeD) {
-          longBreakoutGrade = "d_plus";
-        }
+        const signalGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
+        const longBreakoutGrade = longBreakout1h
+          ? resolveSnowballLongBreakoutGrade({
+              longBreakout1h: true,
+              breakout1hFailedGradeD,
+              breakout1hEval,
+              pack1h: pack1hForTwoBar,
+              fallbackGrade: signalGrade,
+              swingLb: snowballLongBreakout1hSwingLookback(),
+              swingEx: snowballLongBreakout1hExcludeRecent(),
+              swingGradeLb,
+              vahLb,
+              longVahOn,
+            })
+          : signalGrade;
 
         const pack1hTrend = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
         const trendMomentum: TrendMomentumMetrics | null = calculateTrendMomentumMetrics(pack1hTrend);
@@ -3358,8 +3366,8 @@ export async function runPublicIndicatorFeedInternal(
                     binanceSymbol: symbol,
                     side: longAutoSide,
                     referenceEntryPrice: refEntry,
-                    signalBarOpenSec: longBreakout1h ? breakout1hEval!.barOpenSec : signalBarOpenSec,
-                    signalBarTf: longBreakout1h ? "1h" : snowTf,
+                    signalBarOpenSec,
+                    signalBarTf: snowTf,
                     signalBarLow:
                       longAutoSide === "long" &&
                       typeof longSignalLow === "number" &&
@@ -3453,8 +3461,8 @@ export async function runPublicIndicatorFeedInternal(
                       : null,
                   gradeCFadeOk: gradeCShortFade?.ok,
                 });
-                const longStatsBarOpenSec = longBreakout1h ? breakout1hEval!.barOpenSec : signalBarOpenSec;
-                const longStatsBarTf = longBreakout1h ? "1h" : snowTf;
+                const longStatsBarOpenSec = signalBarOpenSec;
+                const longStatsBarTf = snowTf;
                 const longGreenDays = await fetchGreenDaysBeforeSignalBar(
                   symbol,
                   longStatsBarOpenSec,
@@ -3473,8 +3481,8 @@ export async function runPublicIndicatorFeedInternal(
                   triggerKind: trig,
                   vol: vE!,
                   volSma: vsE!,
-                  qualityTier: structuralLongGrade,
-                  alertQualityTier: breakout1hFailedGradeD ? "d_plus" : structuralLongGrade,
+                  qualityTier: longBreakoutGrade,
+                  alertQualityTier: longBreakoutGrade,
                   breakout1hConfirmFail: breakout1hFailedGradeD,
                   atr100: longVolSnap.atr100,
                   maxUpperWick100: longVolSnap.maxUpperWick100,
@@ -4780,7 +4788,8 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     snowTf,
   };
 
-  const longBreakout1hChecklistOn = snowballLongBreakout1hConfirmEnabled();
+  const longBreakout1hChecklistOn =
+    snowTf !== "4h" && snowballLongBreakout1hConfirmEnabled();
   const twoBarChecklistOn =
     snowballTwoBarInlineModeEnabled() && iClosed >= 2 && !longBreakout1hChecklistOn;
   const needPack1hChecklist = longBreakout1hChecklistOn || twoBarChecklistOn;

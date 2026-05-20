@@ -321,17 +321,22 @@ function mergeTwoBarStrict(
   };
 }
 
-/**
- * Long Breakout 1H confirm — Dynamic Body + God Volume + Volume rank
- * แท่งปิดล่าสุด = index n−2; โหมด 2-bar ดู n−2 และ n−3
- */
-export function evaluateSnowballLongBreakout1hConfirm(
-  pack1h: BinanceKlinePack | null,
+/** แท่ง 1H ปิดล่าสุดที่ close time ≤ asOfSec */
+export function latestSnowball1hClosedIndexAtOrBefore(timeSec: number[], asOfSec: number): number {
+  let best = -1;
+  for (let i = 0; i < timeSec.length; i++) {
+    const t = timeSec[i]!;
+    if (Number.isFinite(t) && t + 3600 <= asOfSec) best = i;
+  }
+  return best;
+}
+
+function evaluateSnowballLongBreakout1hAtLatestIndex(
+  pack1h: BinanceKlinePack,
+  iLatest: number,
   swingLookback: number,
   excludeRecent: number,
 ): SnowballLongBreakout1hConfirmEval | null {
-  if (!pack1h?.timeSec?.length) return null;
-
   const lb = swingLookback;
   const ex = excludeRecent;
   const params: BarEvalParams = {
@@ -344,10 +349,8 @@ export function evaluateSnowballLongBreakout1hConfirm(
     volPeriod: snowballVolSmaPeriod(),
   };
 
-  const { timeSec } = pack1h;
-  const n = timeSec.length;
-  const iLatest = n - 2;
   const minBars = Math.max(lb + ex + 3, params.volRankLb);
+  const { timeSec } = pack1h;
 
   if (iLatest < minBars) {
     return {
@@ -389,6 +392,33 @@ export function evaluateSnowballLongBreakout1hConfirm(
   }
 
   return mergeTwoBarSplit(latest, prev);
+}
+
+/**
+ * Long Breakout 1H confirm — Dynamic Body + God Volume + Volume rank
+ * แท่งปิดล่าสุด = index n−2; โหมด 2-bar ดู n−2 และ n−3
+ */
+export function evaluateSnowballLongBreakout1hConfirm(
+  pack1h: BinanceKlinePack | null,
+  swingLookback: number,
+  excludeRecent: number,
+): SnowballLongBreakout1hConfirmEval | null {
+  if (!pack1h?.timeSec?.length) return null;
+  const iLatest = pack1h.timeSec.length - 2;
+  return evaluateSnowballLongBreakout1hAtLatestIndex(pack1h, iLatest, swingLookback, excludeRecent);
+}
+
+/** ยืนยัน 2 แท่ง 1H ณ เวลา asOfSec (ใช้ follow-up สถิติ +4h) */
+export function evaluateSnowballLongBreakout1hConfirmAsOf(
+  pack1h: BinanceKlinePack | null,
+  asOfSec: number,
+  swingLookback: number,
+  excludeRecent: number,
+): SnowballLongBreakout1hConfirmEval | null {
+  if (!pack1h?.timeSec?.length) return null;
+  const iLatest = latestSnowball1hClosedIndexAtOrBefore(pack1h.timeSec, asOfSec);
+  if (iLatest < 0) return null;
+  return evaluateSnowballLongBreakout1hAtLatestIndex(pack1h, iLatest, swingLookback, excludeRecent);
 }
 
 export function buildSnowballLongBreakout1hConfirmGateSteps(

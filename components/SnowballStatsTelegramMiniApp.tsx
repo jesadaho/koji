@@ -33,7 +33,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ทิศ = ทิศสัญญาณ Snowball · สวนทิศเทรด = Long->Short · Grade D = 1H confirm ไม่ผ่าน · ผล/ROI วัดตาม Long (รวม Grade D) · C (D) = ปรับเกรดหลัง 4 ชม. · Binance USDT-M · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
+  "ทิศ = ทิศสัญญาณ Snowball · Master 4h = 2 แท่ง 4h ตัดเกรด · C (D) = เกรดตอนแจ้ง (D) → ปรับหลัง +4h · Grade D (TF≠4h) = 1H confirm fail · Binance USDT-M · RR ตาม SNOWBALL_STATS_RR_REWARD_SOURCE";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
