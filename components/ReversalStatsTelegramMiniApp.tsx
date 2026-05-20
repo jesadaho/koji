@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import {
   getTelegramInitData,
@@ -11,13 +11,18 @@ import {
 import {
   candleReversalDayOfWeekBkk,
   CANDLE_REVERSAL_MODEL_SHORT_LEGEND,
+  CANDLE_REVERSAL_STATS_DEFAULT_SORT,
   candleReversalModelLabel,
   candleReversalModelShortLabel,
   candleReversalOutcomeLabel,
   candleReversalSignalBarTfLabel,
   candleReversalLookbackRankCell,
+  candleReversalStatsSortDefaultDir,
+  sortCandleReversalStatsRows,
   candleReversalVolScoreLabel,
   type CandleReversalStatsApiPayload,
+  type CandleReversalStatsSort,
+  type CandleReversalStatsSortKey,
 } from "@/lib/candleReversalStatsClient";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -80,12 +85,67 @@ function reversalHorizonCells(r: CandleReversalStatsApiPayload["rows"][number]):
 
 type Phase = "loading" | "setup" | "ready";
 
+function sortMark(active: boolean, dir: CandleReversalStatsSort["dir"]): string {
+  if (!active) return "";
+  return dir === "asc" ? " ↑" : " ↓";
+}
+
+function SortTh({
+  label,
+  sortKey,
+  title,
+  activeSort,
+  onSort,
+}: {
+  label: string;
+  sortKey: CandleReversalStatsSortKey;
+  title?: string;
+  activeSort: CandleReversalStatsSort;
+  onSort: (key: CandleReversalStatsSortKey) => void;
+}) {
+  const active = activeSort.key === sortKey;
+  return (
+    <th
+      scope="col"
+      title={title ? `${title} · กดเรียง` : "กดเรียง"}
+      className={`sparkStatsSortTh${active ? " sparkStatsSortTh--active" : ""}`}
+      onClick={() => onSort(sortKey)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSort(sortKey);
+        }
+      }}
+      tabIndex={0}
+      role="columnheader"
+      aria-sort={active ? (activeSort.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      {label}
+      {sortMark(active, activeSort.dir)}
+    </th>
+  );
+}
+
 export default function ReversalStatsTelegramMiniApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [payload, setPayload] = useState<CandleReversalStatsApiPayload | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
+
+  const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: candleReversalStatsSortDefaultDir(key) },
+    );
+  }, []);
+
+  const rows = useMemo(
+    () => sortCandleReversalStatsRows(payload?.rows ?? [], sort),
+    [payload?.rows, sort],
+  );
 
   const api = useCallback(async (path: string, init?: RequestInit) => {
     const initData = getTelegramInitData();
@@ -207,8 +267,6 @@ export default function ReversalStatsTelegramMiniApp() {
     );
   }
 
-  const rows = payload?.rows ?? [];
-
   return (
     <div className="sparkStatsPage sparkStatsPage--wide">
       <h1 className="sparkStatsMatrixSectionTitle">
@@ -225,66 +283,44 @@ export default function ReversalStatsTelegramMiniApp() {
           <table className="sparkMatrixTable sparkMatrixTable--compact">
             <thead>
               <tr>
-                <th scope="col" title="สัญลักษณ์">
-                  เหรียญ
-                </th>
-                <th scope="col" title="Timeframe แท่งสัญญาณ">
-                  TF
-                </th>
-                <th scope="col" title={CANDLE_REVERSAL_MODEL_SHORT_LEGEND}>
-                  Mdl
-                </th>
-                <th scope="col" title="วันในสัปดาห์ (BKK)">
-                  วัน
-                </th>
-                <th scope="col" title="เวลาแจ้ง (Asia/Bangkok)">
-                  BKK
-                </th>
-                <th scope="col" title="ราคาเข้า">
-                  Entry
-                </th>
-                <th scope="col" title="Retest">
-                  Retest
-                </th>
-                <th scope="col" title="Stop loss">
-                  SL
-                </th>
-                <th scope="col" title="ไส้บน ÷ ช่วงแท่ง">
-                  ไส้%
-                </th>
-                <th scope="col" title="เนื้อ ÷ ช่วงแท่ง">
-                  เนื้อ%
-                </th>
-                <th scope="col" title="อันดับ volume ในรอบ lookback · 1 = สูงสุด">
-                  Vol#
-                </th>
-                <th scope="col" title="อันดับ high ในรอบ lookback · 1 = สูงสุด">
-                  Hi#
-                </th>
-                <th scope="col" title="Range score">
-                  Rng
-                </th>
-                <th scope="col" title="Wick score">
-                  Wick
-                </th>
-                <th scope="col" title="1H: 4h · 1D: 1d">
-                  4h/1d
-                </th>
-                <th scope="col" title="1H: 12h · 1D: 3d">
-                  12h/3d
-                </th>
-                <th scope="col" title="1H: 24h · 1D: 7d">
-                  24h/7d
-                </th>
-                <th scope="col" title="Max ROI ถึง MFE">
-                  ROI
-                </th>
-                <th scope="col" title="Max drawdown ถึง MFE">
-                  DD
-                </th>
-                <th scope="col" title="ผลหลังครบ horizon">
-                  ผล
-                </th>
+                <SortTh label="เหรียญ" sortKey="symbol" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="TF" sortKey="tf" title="Timeframe แท่งสัญญาณ" activeSort={sort} onSort={onSortColumn} />
+                <SortTh
+                  label="โมเดล"
+                  sortKey="model"
+                  title={CANDLE_REVERSAL_MODEL_SHORT_LEGEND}
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+                <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="ไส้%" sortKey="wickPct" title="ไส้บน ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
+                <SortTh
+                  label="Vol#"
+                  sortKey="volRank"
+                  title="อันดับ volume ในรอบ lookback"
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+                <SortTh
+                  label="High#"
+                  sortKey="highRank"
+                  title="อันดับ high ในรอบ lookback"
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+                <SortTh label="Range" sortKey="range" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="Wick" sortKey="wick" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="4h/1d" sortKey="h1" title="1H: 4h · 1D: 1d (%)" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="12h/3d" sortKey="h2" title="1H: 12h · 1D: 3d (%)" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="24h/7d" sortKey="h3" title="1H: 24h · 1D: 7d (%)" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="ROI" sortKey="roi" title="Max ROI ถึง MFE" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSort={onSortColumn} />
+                <SortTh label="ผล" sortKey="outcome" title="ผลหลังครบ horizon" activeSort={sort} onSort={onSortColumn} />
               </tr>
             </thead>
             <tbody>

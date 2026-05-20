@@ -106,3 +106,149 @@ export function candleReversalDayOfWeekBkk(alertedAtIso: string, alertedAtMs?: n
   if (Number.isNaN(ms)) return "—";
   return new Date(ms).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", weekday: "short" });
 }
+
+export type CandleReversalStatsSortKey =
+  | "symbol"
+  | "tf"
+  | "model"
+  | "day"
+  | "time"
+  | "entry"
+  | "retest"
+  | "sl"
+  | "wickPct"
+  | "bodyPct"
+  | "volRank"
+  | "highRank"
+  | "range"
+  | "wick"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "roi"
+  | "dd"
+  | "outcome";
+
+export type CandleReversalStatsSortDir = "asc" | "desc";
+
+export type CandleReversalStatsSort = {
+  key: CandleReversalStatsSortKey;
+  dir: CandleReversalStatsSortDir;
+};
+
+export const CANDLE_REVERSAL_STATS_DEFAULT_SORT: CandleReversalStatsSort = {
+  key: "time",
+  dir: "desc",
+};
+
+const MODEL_SORT_ORDER: Record<CandleReversalModel, number> = {
+  inverted_doji: 0,
+  marubozu: 1,
+  longest_red_body: 2,
+};
+
+const OUTCOME_SORT_ORDER: Record<CandleReversalOutcome, number> = {
+  win: 0,
+  pending: 1,
+  flat: 2,
+  loss: 3,
+};
+
+function cmpStr(a: string, b: string): number {
+  return a.localeCompare(b, "en", { sensitivity: "base" });
+}
+
+function cmpNumNullLast(a: number | null | undefined, b: number | null | undefined): number {
+  const fa = a != null && Number.isFinite(a);
+  const fb = b != null && Number.isFinite(b);
+  if (!fa && !fb) return 0;
+  if (!fa) return 1;
+  if (!fb) return -1;
+  return a! - b!;
+}
+
+function reversalHorizonPct(row: CandleReversalStatsRow, idx: 0 | 1 | 2): number | null {
+  const tf = row.signalBarTf ?? "1d";
+  if (tf === "1h") {
+    return idx === 0 ? row.pct4h : idx === 1 ? row.pct12h : row.pct24h;
+  }
+  return idx === 0 ? row.pct1d : idx === 1 ? row.pct3d : row.pct7d;
+}
+
+function compareCandleReversalStatsRows(
+  a: CandleReversalStatsRow,
+  b: CandleReversalStatsRow,
+  key: CandleReversalStatsSortKey,
+): number {
+  switch (key) {
+    case "symbol":
+      return cmpStr(a.symbol, b.symbol);
+    case "tf":
+      return cmpStr(a.signalBarTf ?? "1d", b.signalBarTf ?? "1d");
+    case "model":
+      return (
+        (MODEL_SORT_ORDER[a.model] ?? 99) - (MODEL_SORT_ORDER[b.model] ?? 99) ||
+        cmpStr(a.model, b.model)
+      );
+    case "day": {
+      const da = candleReversalDayOfWeekBkk(a.alertedAtIso, a.alertedAtMs);
+      const db = candleReversalDayOfWeekBkk(b.alertedAtIso, b.alertedAtMs);
+      return cmpStr(da, db) || cmpNumNullLast(a.alertedAtMs, b.alertedAtMs);
+    }
+    case "time":
+      return cmpNumNullLast(a.alertedAtMs, b.alertedAtMs);
+    case "entry":
+      return cmpNumNullLast(a.entryPrice, b.entryPrice);
+    case "retest":
+      return cmpNumNullLast(a.retestPrice, b.retestPrice);
+    case "sl":
+      return cmpNumNullLast(a.slPrice, b.slPrice);
+    case "wickPct":
+      return cmpNumNullLast(a.wickRatioPct, b.wickRatioPct);
+    case "bodyPct":
+      return cmpNumNullLast(a.bodyPct, b.bodyPct);
+    case "volRank":
+      return cmpNumNullLast(a.volRankInLookback, b.volRankInLookback);
+    case "highRank":
+      return cmpNumNullLast(a.highRankInLookback, b.highRankInLookback);
+    case "range":
+      return cmpNumNullLast(a.rangeScore, b.rangeScore);
+    case "wick":
+      return cmpNumNullLast(a.wickScore, b.wickScore);
+    case "h1":
+      return cmpNumNullLast(reversalHorizonPct(a, 0), reversalHorizonPct(b, 0));
+    case "h2":
+      return cmpNumNullLast(reversalHorizonPct(a, 1), reversalHorizonPct(b, 1));
+    case "h3":
+      return cmpNumNullLast(reversalHorizonPct(a, 2), reversalHorizonPct(b, 2));
+    case "roi":
+      return cmpNumNullLast(a.maxRoiPct, b.maxRoiPct);
+    case "dd":
+      return cmpNumNullLast(a.maxDrawdownPct, b.maxDrawdownPct);
+    case "outcome": {
+      const oa = OUTCOME_SORT_ORDER[a.outcome] ?? 99;
+      const ob = OUTCOME_SORT_ORDER[b.outcome] ?? 99;
+      return oa - ob || cmpStr(candleReversalOutcomeLabel(a.outcome), candleReversalOutcomeLabel(b.outcome));
+    }
+    default:
+      return 0;
+  }
+}
+
+export function sortCandleReversalStatsRows(
+  rows: CandleReversalStatsRow[],
+  sort: CandleReversalStatsSort,
+): CandleReversalStatsRow[] {
+  const mul = sort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const c = compareCandleReversalStatsRows(a, b, sort.key);
+    return c * mul;
+  });
+}
+
+export function candleReversalStatsSortDefaultDir(key: CandleReversalStatsSortKey): CandleReversalStatsSortDir {
+  if (key === "symbol" || key === "tf" || key === "model" || key === "day" || key === "outcome") {
+    return "asc";
+  }
+  return "desc";
+}

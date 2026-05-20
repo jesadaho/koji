@@ -481,6 +481,22 @@ code {
   background: color-mix(in srgb, var(--card) 88%, var(--border));
 }
 
+.sparkMatrixTable th.sparkStatsSortTh {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sparkMatrixTable th.sparkStatsSortTh:hover {
+  background: color-mix(in srgb, var(--card) 70%, var(--accent, #6ea8fe));
+}
+
+.sparkMatrixTable th.sparkStatsSortTh--active {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .sparkMatrixTable--compact th,
 .sparkMatrixTable--compact td {
   text-align: center;
