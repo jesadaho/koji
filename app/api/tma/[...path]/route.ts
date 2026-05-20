@@ -1,6 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { authenticateTmaRequest } from "@/src/telegramMiniAppAuth";
+import { authenticateTmaFromRequest, authenticateTmaRequest } from "@/src/telegramMiniAppAuth";
+import { candleReversalStatsToCsv } from "@/lib/candleReversalStatsCsvExport";
+import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
+import { statsCsvAttachmentResponse, statsCsvFilename } from "@/lib/statsCsvResponse";
 import { getTmaConfig, getTmaMeta } from "@/src/miniAppService";
 import {
   liffCreateAlert,
@@ -119,6 +122,16 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         headers: { "Cache-Control": "no-store" },
       });
     }
+    if (segs.length === 1 && a === "snowball-stats.csv") {
+      const auth = await authenticateTmaFromRequest(
+        req.headers.get("authorization"),
+        req.nextUrl.searchParams.get("tma"),
+      );
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const data = await liffGetSnowballStats();
+      const csv = snowballStatsToCsv(data.rows);
+      return statsCsvAttachmentResponse(csv, statsCsvFilename("snowball-stats"));
+    }
     if (segs.length === 1 && a === "reversal-stats") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
@@ -127,6 +140,16 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         status: 200,
         headers: { "Cache-Control": "no-store" },
       });
+    }
+    if (segs.length === 1 && a === "reversal-stats.csv") {
+      const auth = await authenticateTmaFromRequest(
+        req.headers.get("authorization"),
+        req.nextUrl.searchParams.get("tma"),
+      );
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const data = await liffGetCandleReversalStats(auth.telegramUserId);
+      const csv = candleReversalStatsToCsv(data.rows);
+      return statsCsvAttachmentResponse(csv, statsCsvFilename("reversal-stats"));
     }
     if (segs.length === 1 && a === "trading-view-mexc") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));

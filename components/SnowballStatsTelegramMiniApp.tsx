@@ -290,12 +290,14 @@ export default function SnowballStatsTelegramMiniApp() {
 
   const rows = payload?.rows ?? [];
 
-  const exportCsv = useCallback(() => {
+  const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
-    downloadCsv(statsCsvFilename("snowball-stats"), snowballStatsToCsv(rows));
+    await downloadCsv(statsCsvFilename("snowball-stats"), snowballStatsToCsv(rows), {
+      telegramExportPath: "/api/tma/snowball-stats.csv",
+    });
   }, [rows]);
 
   if (phase === "loading") {

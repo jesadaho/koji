@@ -150,12 +150,14 @@ export default function ReversalStatsTelegramMiniApp() {
     [payload?.rows, sort],
   );
 
-  const exportCsv = useCallback(() => {
+  const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
-    downloadCsv(statsCsvFilename("reversal-stats"), candleReversalStatsToCsv(rows));
+    await downloadCsv(statsCsvFilename("reversal-stats"), candleReversalStatsToCsv(rows), {
+      telegramExportPath: "/api/tma/reversal-stats.csv",
+    });
   }, [rows]);
 
   const api = useCallback(async (path: string, init?: RequestInit) => {

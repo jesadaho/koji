@@ -92,7 +92,20 @@ export function verifyTelegramInitData(initData: string): { telegramUserId: numb
  * Authorization: tma <initData>
  * หรือ Bearer tma <initData>
  */
-export async function authenticateTmaRequest(authHeader: string | null): Promise<TmaAuthResult> {
+function parseInitDataFromAuthHeader(authHeader: string | null): string | null {
+  if (!authHeader?.trim()) return null;
+  let raw = authHeader.trim();
+  if (raw.toLowerCase().startsWith("bearer ")) raw = raw.slice(7).trim();
+  if (!raw.toLowerCase().startsWith("tma ")) return null;
+  const initData = raw.slice(4).trim();
+  return initData || null;
+}
+
+/** Authorization header หรือ query ?tma= (สำหรับ Telegram.WebApp.downloadFile) */
+export async function authenticateTmaFromRequest(
+  authHeader: string | null,
+  initDataQuery: string | null,
+): Promise<TmaAuthResult> {
   if (!botToken()) {
     return {
       ok: false,
@@ -101,22 +114,9 @@ export async function authenticateTmaRequest(authHeader: string | null): Promise
     };
   }
 
-  if (!authHeader?.trim()) {
-    return { ok: false, status: 401, error: "ต้องล็อกอิน Telegram (ส่ง initData)" };
-  }
-
-  let raw = authHeader.trim();
-  if (raw.toLowerCase().startsWith("bearer ")) {
-    raw = raw.slice(7).trim();
-  }
-
-  if (!raw.toLowerCase().startsWith("tma ")) {
-    return { ok: false, status: 401, error: "ใช้ Authorization: tma <initData>" };
-  }
-
-  const initData = raw.slice(4).trim();
+  const initData = parseInitDataFromAuthHeader(authHeader) ?? initDataQuery?.trim() ?? "";
   if (!initData) {
-    return { ok: false, status: 401, error: "initData ว่าง" };
+    return { ok: false, status: 401, error: "ต้องล็อกอิน Telegram (ส่ง initData)" };
   }
 
   const verified = verifyTelegramInitData(initData);
@@ -129,4 +129,16 @@ export async function authenticateTmaRequest(authHeader: string | null): Promise
     userId: tgUserIdToStoreKey(verified.telegramUserId),
     telegramUserId: verified.telegramUserId,
   };
+}
+
+export async function authenticateTmaRequest(authHeader: string | null): Promise<TmaAuthResult> {
+  if (!botToken()) {
+    return {
+      ok: false,
+      status: 503,
+      error: "ตั้ง TELEGRAM_BOT_TOKEN ในเซิร์ฟเวอร์ก่อน (ใช้ยืนยัน Telegram Mini App)",
+    };
+  }
+
+  return authenticateTmaFromRequest(authHeader, null);
 }
