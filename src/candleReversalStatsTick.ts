@@ -1,8 +1,11 @@
 import type { CandleReversalSignalBarTf } from "@/lib/candleReversalStatsClient";
+import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import {
+  fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesRange,
   isBinanceIndicatorFapiEnabled,
   resetBinanceIndicatorFapi451LogDedupe,
+  type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 import {
   isCandleReversalStatsEnabled,
@@ -261,6 +264,33 @@ async function followUpCandleReversal1dRow(
   return true;
 }
 
+async function backfillGreenDaysBeforeSignal(rows: CandleReversalStatsRow[]): Promise<number> {
+  const need = rows.filter((r) => r.greenDaysBeforeSignal == null);
+  if (need.length === 0) return 0;
+
+  const packBySymbol = new Map<string, BinanceKlinePack | null>();
+  let updated = 0;
+  for (const row of need) {
+    const sym = row.symbol.trim().toUpperCase();
+    let pack = packBySymbol.get(sym);
+    if (pack === undefined) {
+      try {
+        pack = await fetchBinanceUsdmKlines(sym, "1d", 90);
+      } catch (e) {
+        console.error("[candleReversalStatsTick] backfill green days 1d", sym, e);
+        pack = null;
+      }
+      packBySymbol.set(sym, pack);
+    }
+    const tf = signalBarTf(row);
+    const n = countGreenDaysBeforeSignalBar(pack, row.signalBarOpenSec, tf);
+    if (n == null) continue;
+    row.greenDaysBeforeSignal = n;
+    updated += 1;
+  }
+  return updated;
+}
+
 export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise<number> {
   resetBinanceIndicatorFapi451LogDedupe();
   if (!isCandleReversalStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return 0;
@@ -268,6 +298,8 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
   const state = await loadCandleReversalStatsState();
   let dirty = 0;
   const nowSec = Math.floor(nowMs / 1000);
+
+  dirty += await backfillGreenDaysBeforeSignal(state.rows);
 
   for (const row of state.rows) {
     if (row.outcome !== "pending") continue;

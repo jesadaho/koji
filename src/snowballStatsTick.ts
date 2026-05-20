@@ -1,7 +1,9 @@
 import {
+  fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesRange,
   isBinanceIndicatorFapiEnabled,
   resetBinanceIndicatorFapi451LogDedupe,
+  type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 import {
   isSnowballStatsEnabled,
@@ -17,7 +19,7 @@ import {
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
 import { applySnowballStatsGrade4hFollowUp } from "./snowballStatsGrade4hFollowUp";
-import type { BinanceKlinePack } from "./binanceIndicatorKline";
+import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 
 /** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
 const KLINE_GRAN_SEC = 900;
@@ -65,6 +67,33 @@ function outcomeRunTrendMaxDdPct(): number {
   const v = Number(process.env.SNOWBALL_STATS_OUTCOME_RUN_TREND_MAX_DD_PCT);
   if (Number.isFinite(v) && v > 0 && v < 100) return v;
   return 3;
+}
+
+async function backfillSnowballGreenDaysBeforeSignal(rows: SnowballStatsRow[]): Promise<number> {
+  const need = rows.filter((r) => r.greenDaysBeforeSignal == null);
+  if (need.length === 0) return 0;
+
+  const packBySymbol = new Map<string, BinanceKlinePack | null>();
+  let updated = 0;
+  for (const row of need) {
+    const sym = row.symbol.trim().toUpperCase();
+    let pack = packBySymbol.get(sym);
+    if (pack === undefined) {
+      try {
+        pack = await fetchBinanceUsdmKlines(sym, "1d", 90);
+      } catch (e) {
+        console.error("[snowballStatsTick] backfill green days 1d", sym, e);
+        pack = null;
+      }
+      packBySymbol.set(sym, pack);
+    }
+    const tf = row.signalBarTf ?? "15m";
+    const n = countGreenDaysBeforeSignalBar(pack, row.signalBarOpenSec, tf);
+    if (n == null) continue;
+    row.greenDaysBeforeSignal = n;
+    updated += 1;
+  }
+  return updated;
 }
 
 function passesRunTrendGuard(row: SnowballStatsRow): boolean {
@@ -186,6 +215,7 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
   const nowSec = Math.floor(nowMs / 1000);
 
   dirty += await backfillSnowballTrendMomentumFields(state.rows);
+  dirty += await backfillSnowballGreenDaysBeforeSignal(state.rows);
 
   const pack1hGradeCache = new Map<string, BinanceKlinePack | null>();
   for (const row of state.rows) {

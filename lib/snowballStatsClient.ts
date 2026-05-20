@@ -61,6 +61,8 @@ export type SnowballStatsRow = {
   confirmVolRank?: number | null;
   /** window ของอันดับ vol (จำนวนแท่ง; เก่ามีแถวว่างฟิลด์พวกนี้) */
   confirmVolRankLb?: number | null;
+  /** แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ Snowball */
+  greenDaysBeforeSignal?: number | null;
   svpHoleYn: "Y" | "N";
   price4h: number | null;
   pct4h: number | null;
@@ -172,6 +174,11 @@ export function snowballStatsBtcPsar4hLabel(trend: SnowballStatsRow["btcPsar4hTr
 export function snowballStatsMaxDrawback1hLabel(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
   return `${v.toFixed(2)}%`;
+}
+
+export function snowballStatsGreenDaysLabel(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v) || v < 0) return "—";
+  return `${Math.floor(v)} วัน`;
 }
 
 export function snowballStatsVolumeCascadeLabel(v: "Y" | "N" | null | undefined): string {

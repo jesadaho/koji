@@ -9,6 +9,7 @@ import {
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 import { sendPublicIndicatorFeedToSparkGroup, sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
+import { fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import { emaLine, rsiWilder, smaLine, stochRsiLine } from "./indicatorMath";
 import {
   loadIndicatorPublicFeedState,
@@ -3450,14 +3451,21 @@ export async function runPublicIndicatorFeedInternal(
                       : null,
                   gradeCFadeOk: gradeCShortFade?.ok,
                 });
+                const longStatsBarOpenSec = longBreakout1h ? breakout1hEval!.barOpenSec : signalBarOpenSec;
+                const longStatsBarTf = longBreakout1h ? "1h" : snowTf;
+                const longGreenDays = await fetchGreenDaysBeforeSignalBar(
+                  symbol,
+                  longStatsBarOpenSec,
+                  longStatsBarTf,
+                );
                 await appendSnowballStatsRow({
                   symbol,
                   side: longStatsTradeSide,
                   alertSide: "long",
                   alertedAtIso: iso,
                   alertedAtMs: now,
-                  signalBarOpenSec: longBreakout1h ? breakout1hEval!.barOpenSec : signalBarOpenSec,
-                  signalBarTf: longBreakout1h ? "1h" : snowTf,
+                  signalBarOpenSec: longStatsBarOpenSec,
+                  signalBarTf: longStatsBarTf,
                   entryPrice: entryClosePx,
                   intrabar,
                   triggerKind: trig,
@@ -3475,6 +3483,7 @@ export async function runPublicIndicatorFeedInternal(
                   btcPsar4hClose: longMktCtx?.btcPsar4hClose ?? null,
                   quoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                   ...trendMomentumStatsFields(trendMomentum),
+                  greenDaysBeforeSignal: longGreenDays,
                   ...(longBreakout1h && breakout1hEval != null
                     ? {
                         confirmVolVsSma: Number.isFinite(breakout1hEval.volRatio)
@@ -3863,6 +3872,7 @@ export async function runPublicIndicatorFeedInternal(
                   confirmClose: twoBarInline ? c15[iConf]! : null,
                   confirmVolume: twoBarInline ? v15[iConf]! : null,
                 });
+                const bearGreenDays = await fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf);
                 await appendSnowballStatsRow({
                   symbol,
                   side: bearStatsTradeSide,
@@ -3888,6 +3898,7 @@ export async function runPublicIndicatorFeedInternal(
                   btcPsar4hClose: bearMktCtx?.btcPsar4hClose ?? null,
                   quoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
                   ...trendMomentumStatsFields(trendMomentumBear),
+                  greenDaysBeforeSignal: bearGreenDays,
                 });
               }
             } catch (statsErr) {

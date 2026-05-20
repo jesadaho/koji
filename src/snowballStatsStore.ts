@@ -140,6 +140,7 @@ export type AppendSnowballStatsInput = {
   confirmVolVsSma?: number | null;
   confirmVolRank?: number | null;
   confirmVolRankLb?: number | null;
+  greenDaysBeforeSignal?: number | null;
 };
 
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
@@ -219,6 +220,12 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     confirmVolVsSma,
     confirmVolRank,
     confirmVolRankLb,
+    greenDaysBeforeSignal:
+      input.greenDaysBeforeSignal != null &&
+      Number.isFinite(input.greenDaysBeforeSignal) &&
+      input.greenDaysBeforeSignal >= 0
+        ? Math.floor(input.greenDaysBeforeSignal)
+        : null,
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,
     pct4h: null,

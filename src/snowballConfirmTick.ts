@@ -25,6 +25,7 @@ import {
 } from "./snowballConfirmStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import { saveSnowballConfirmLastRoundStats } from "./snowballConfirmRoundStatsStore";
+import { fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import {
   appendSnowballStatsRow,
   isSnowballStatsEnabled,
@@ -363,6 +364,11 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               confirmVolume: vo,
               gradeCFadeOk,
             });
+            const greenDaysBeforeSignal = await fetchGreenDaysBeforeSignalBar(
+              item.symbol,
+              item.signalBarOpenSec,
+              item.snowTf,
+            );
             await appendSnowballStatsRow({
               symbol: item.symbol,
               side: statsTradeSide,
@@ -393,6 +399,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                 volSmaConfirmUse != null && volSmaConfirmUse > 0 ? vo / volSmaConfirmUse : null,
               confirmVolRank: volRank,
               confirmVolRankLb: volRank != null && Number.isFinite(volRank) ? volRankLookback : null,
+              greenDaysBeforeSignal,
             });
           } catch (e) {
             console.error("[snowballConfirmTick] append snowball stats after confirm", item.symbol, item.side, e);

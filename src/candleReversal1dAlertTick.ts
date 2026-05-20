@@ -52,6 +52,7 @@ import {
   type CandleReversalSignal,
   type CandleReversalTf,
 } from "./candleReversalDetect";
+import { fetchGreenDaysBeforeReversalSignal } from "./candleReversalGreenDayStreak";
 import { snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 
 function envFlagOn(key: string, defaultOn: boolean): boolean {
@@ -443,6 +444,11 @@ async function notifyResults(
       const ok = await sendPublicReversalFeedToSparkGroup(row.evals.msg);
       if (ok && isCandleReversalStatsEnabled()) {
         const sig = row.evals.signal;
+        const greenDaysBeforeSignal = await fetchGreenDaysBeforeReversalSignal(
+          row.symbol,
+          sig.barOpenSec,
+          sig.tf,
+        );
         await appendCandleReversalStatsRow({
           symbol: row.symbol,
           model: sig.model,
@@ -461,6 +467,7 @@ async function notifyResults(
           rangeScore: row.evals.rangeScore,
           wickScore: row.evals.wickScore,
           afterInvertedDoji: sig.afterInvertedDoji,
+          greenDaysBeforeSignal,
         });
       }
       if (ok) {

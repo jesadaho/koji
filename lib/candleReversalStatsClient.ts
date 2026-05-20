@@ -27,6 +27,8 @@ export type CandleReversalStatsRow = {
   rangeScore: number | null;
   wickScore: number | null;
   afterInvertedDoji: boolean;
+  /** แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ — ไม่นับแท่งสัญญาณ */
+  greenDaysBeforeSignal?: number | null;
   /** 1H signal — checkpoint จากปิดแท่ง 15m (แบบ Snowball) */
   price4h: number | null;
   pct4h: number | null;
@@ -111,6 +113,7 @@ export type CandleReversalStatsSortKey =
   | "symbol"
   | "tf"
   | "model"
+  | "greenDays"
   | "day"
   | "time"
   | "entry"
@@ -190,6 +193,8 @@ function compareCandleReversalStatsRows(
         (MODEL_SORT_ORDER[a.model] ?? 99) - (MODEL_SORT_ORDER[b.model] ?? 99) ||
         cmpStr(a.model, b.model)
       );
+    case "greenDays":
+      return cmpNumNullLast(a.greenDaysBeforeSignal, b.greenDaysBeforeSignal);
     case "day": {
       const da = candleReversalDayOfWeekBkk(a.alertedAtIso, a.alertedAtMs);
       const db = candleReversalDayOfWeekBkk(b.alertedAtIso, b.alertedAtMs);
@@ -244,6 +249,11 @@ export function sortCandleReversalStatsRows(
     const c = compareCandleReversalStatsRows(a, b, sort.key);
     return c * mul;
   });
+}
+
+export function candleReversalGreenDaysLabel(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v) || v < 0) return "—";
+  return `${Math.floor(v)} วัน`;
 }
 
 export function candleReversalStatsSortDefaultDir(key: CandleReversalStatsSortKey): CandleReversalStatsSortDir {

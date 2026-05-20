@@ -146,6 +146,7 @@ export type AppendCandleReversalStatsInput = {
   rangeScore?: number | null;
   wickScore?: number | null;
   afterInvertedDoji?: boolean;
+  greenDaysBeforeSignal?: number | null;
 };
 
 export async function appendCandleReversalStatsRow(
@@ -182,6 +183,12 @@ export async function appendCandleReversalStatsRow(
     rangeScore,
     wickScore,
     afterInvertedDoji: Boolean(input.afterInvertedDoji),
+    greenDaysBeforeSignal:
+      input.greenDaysBeforeSignal != null &&
+      Number.isFinite(input.greenDaysBeforeSignal) &&
+      input.greenDaysBeforeSignal >= 0
+        ? Math.floor(input.greenDaysBeforeSignal)
+        : null,
     price4h: null,
     pct4h: null,
     price12h: null,

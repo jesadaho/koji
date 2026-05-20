@@ -10,6 +10,7 @@ import {
 } from "@/lib/kojiTelegramWebApp";
 import {
   candleReversalDayOfWeekBkk,
+  candleReversalGreenDaysLabel,
   CANDLE_REVERSAL_MODEL_SHORT_LEGEND,
   CANDLE_REVERSAL_STATS_DEFAULT_SORT,
   candleReversalModelLabel,
@@ -326,7 +327,7 @@ export default function ReversalStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={20} className="sub">
+                  <td colSpan={21} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1D/1H_ALERTS_ENABLED)
                   </td>
                 </tr>
@@ -339,6 +340,9 @@ export default function ReversalStatsTelegramMiniApp() {
                     <td>{candleReversalSignalBarTfLabel(r.signalBarTf ?? "1d")}</td>
                     <td title={candleReversalModelLabel(r.model)}>
                       {candleReversalModelShortLabel(r.model)}
+                    </td>
+                    <td title="แท่ง Day1 เขียวติดก่อนสัญญาณ">
+                      {candleReversalGreenDaysLabel(r.greenDaysBeforeSignal)}
                     </td>
                     <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
                     <td>
