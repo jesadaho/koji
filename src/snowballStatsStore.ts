@@ -144,7 +144,7 @@ export type AppendSnowballStatsInput = {
   alertQualityTier?: SnowballStatsQualityTier;
 };
 
-/** แถวเก่า qualityTier=d_plus → ติดป้าย confirm fail + alertQualityTier สำหรับแสดง Long */
+/** แถวเก่า qualityTier=d_plus → ติดป้าย confirm fail + alertQualityTier สำหรับแสดงเกรด D */
 export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): number {
   let updated = 0;
   for (const row of rows) {

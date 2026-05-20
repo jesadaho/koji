@@ -27,7 +27,7 @@ export type SnowballStatsRow = {
   alertQualityTier?: SnowballStatsQualityTier;
   /** ปรับ qualityTier แล้วหลังครบ 4 ชม. (เช่น confirm fail → C) */
   qualityTier4hAdjusted?: boolean;
-  /** Long 1H breakout confirm ไม่ผ่าน — ตารางสถิติแสดงเกรด Long (ไม่ใช่ D) */
+  /** Long 1H breakout confirm ไม่ผ่าน — เกรด D · ทิศสัญญาณ Long */
   breakout1hConfirmFail?: boolean;
   /** Wilder ATR(100) ตอนแจ้ง — baseline ความผันผวน */
   atr100?: number | null;
@@ -91,11 +91,13 @@ function snowballStatsTradeSideLabel(trade: SnowballStatsRow["side"]): "Long" | 
   return trade === "long" ? "Long" : "Short";
 }
 
-/** ทิศในตาราง: เดียวกัน = Long/Short · สวน = Long->Short */
+/** ทิศในตาราง: ทิศสัญญาณ Snowball (Long/Short) · สวนทิศเทรด = Long->Short */
 export function snowballStatsSideLabel(
-  row: Pick<SnowballStatsRow, "side" | "alertSide" | "triggerKind">,
+  row: Pick<
+    SnowballStatsRow,
+    "side" | "alertSide" | "triggerKind" | "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail"
+  >,
 ): string {
-  const trade = snowballStatsTradeSideLabel(row.side);
   let alert: SnowballStatsAlertSide | null = row.alertSide ?? null;
   if (!alert) {
     if (row.side === "long") alert = "long";
@@ -103,6 +105,9 @@ export function snowballStatsSideLabel(
     else alert = "long";
   }
   const signal = snowballStatsAlertSideLabel(alert);
+  if (snowballStatsIsLongConfirmFailRow(row)) return signal;
+
+  const trade = snowballStatsTradeSideLabel(row.side);
   if (signal === trade) return trade;
   return `${signal}->${trade}`;
 }
@@ -112,7 +117,7 @@ function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): s
   if (tier === "a_plus") return "A+";
   if (tier === "b_plus") return "B";
   if (tier === "c_plus") return "C";
-  if (tier === "d_plus") return "Long";
+  if (tier === "d_plus") return "D";
   return "—";
 }
 
@@ -129,7 +134,7 @@ function snowballStatsGradeDisplayLetter(tier: SnowballStatsQualityTier | undefi
   return snowballStatsGradeLetter(tier);
 }
 
-/** A+/B/C/Long สำหรับตารางสถิติ — d_plus แสดง Long · follow-up 4h แสดง C (Long) */
+/** A+/B/C/D สำหรับตารางสถิติ — follow-up 4h อาจเป็น C (D) */
 export function snowballStatsGradeLabel(
   side: SnowballStatsRow["side"],
   tier: SnowballStatsRow["qualityTier"] | undefined,
@@ -152,14 +157,14 @@ export function snowballStatsGradeLabel(
 export function snowballStatsGradeCellClass(
   row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
 ): string {
-  if (snowballStatsIsLongConfirmFailRow(row) && row.qualityTier === "d_plus") {
-    return "snowGradeCell snowGradeCell--long";
-  }
   const tier = row.qualityTier;
   if (tier === "a_plus") return "snowGradeCell snowGradeCell--a";
   if (tier === "b_plus") return "snowGradeCell snowGradeCell--b";
   if (tier === "c_plus") return "snowGradeCell snowGradeCell--c";
-  if (tier === "d_plus") return "snowGradeCell snowGradeCell--long";
+  if (tier === "d_plus") return "snowGradeCell snowGradeCell--d";
+  if (snowballStatsIsLongConfirmFailRow(row) && row.alertQualityTier === "d_plus") {
+    return "snowGradeCell snowGradeCell--d";
+  }
   return "snowGradeCell";
 }
 

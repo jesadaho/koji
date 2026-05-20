@@ -293,6 +293,13 @@ export default function ReversalStatsTelegramMiniApp() {
                   activeSort={sort}
                   onSort={onSortColumn}
                 />
+                <SortTh
+                  label="เขียว"
+                  sortKey="greenDays"
+                  title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ"
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
                 <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
                 <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
                 <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
@@ -327,7 +334,7 @@ export default function ReversalStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={21} className="sub">
+                  <td colSpan={22} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1D/1H_ALERTS_ENABLED)
                   </td>
                 </tr>
