@@ -2146,6 +2146,20 @@ function pushSnowScanSymList(list: string[], entry: string): void {
   list.push(entry);
 }
 
+function breakout1hFailReasonShort(ev: SnowballLongBreakout1hConfirmEval | null | undefined): string {
+  if (!ev) return "no_eval";
+  const reasons: string[] = [];
+  const bullish = Number.isFinite(ev.close) && Number.isFinite(ev.open) ? ev.close > ev.open : false;
+  if (!bullish) reasons.push("bullish");
+  // ในโหมด 2-bar split เรา overwrite cleanCloseOk = structOk (bullish+cleanClose) ของแท่งล่าสุด
+  if (!ev.cleanCloseOk) reasons.push("clean_close");
+  if (!ev.bodyOk) reasons.push("body");
+  if (!ev.volSmaOk) reasons.push("vol_sma");
+  if (!ev.volRankOk) reasons.push("vol_rank");
+  if (reasons.length === 0) return "unknown";
+  return reasons.join("+");
+}
+
 function formatSymbolListLines(indent: string, symbols: string[]): string[] {
   if (symbols.length === 0) return [];
   const max = snowballScanSummaryMaxSymbols();
@@ -2966,7 +2980,7 @@ export async function runPublicIndicatorFeedInternal(
               snowScanStats.longBreakout1hGradeD++;
               pushSnowScanSymList(
                 snowScanStats.longBreakout1hGradeDSymbols,
-                `${symbol} LONG->Short Grade D (${breakout1hEval!.detail.slice(0, 40)})`,
+                `${symbol} LONG->Short Grade D (${breakout1hFailReasonShort(breakout1hEval)}${breakout1hEval?.twoBarMode ? ` · ${breakout1hEval.twoBarMode}` : ""})`,
               );
             }
           }

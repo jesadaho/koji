@@ -96,11 +96,13 @@ function mexcContractSymbolFromBinanceSymbol(sym: string): string {
   return s;
 }
 
-/** SMA(volume) ย้อนหลังสูงสุด 20 แท่ง จนถึง idx (รวม idx) */
-function volumeSma20AtPackIndex(pack: BinanceKlinePack, idx: number): number {
+/** SMA(volume) จนถึง idx (รวม idx) — align กับ vol rank 48 แท่ง */
+const SNOWBALL_CONFIRM_VOL_SMA_PERIOD = 48;
+
+function volumeSmaAtPackIndex(pack: BinanceKlinePack, idx: number, period: number): number {
   const { volume } = pack;
-  const period = 20;
-  const start = Math.max(0, idx - (period - 1));
+  const p = Math.max(1, Math.floor(period));
+  const start = Math.max(0, idx - (p - 1));
   let sum = 0;
   let n = 0;
   for (let i = start; i <= idx; i++) {
@@ -113,6 +115,24 @@ function volumeSma20AtPackIndex(pack: BinanceKlinePack, idx: number): number {
   return n > 0 ? sum / n : NaN;
 }
 
+function volumeSmaConfirmAtPackIndex(pack: BinanceKlinePack, idx: number): number {
+  return volumeSmaAtPackIndex(pack, idx, SNOWBALL_CONFIRM_VOL_SMA_PERIOD);
+}
+
+/** อันดับ volume ใน window [start,end] — 1 = สูงสุด */
+function volumeRankInWindow(volume: number[], start: number, end: number, idx: number): number | null {
+  const vi = volume[idx]!;
+  if (!Number.isFinite(vi) || vi <= 0) return null;
+  const eps = Math.max(1e-12, Math.abs(vi) * 1e-10);
+  let strictlyHigher = 0;
+  for (let i = start; i <= end; i++) {
+    if (i === idx) continue;
+    const v = volume[i]!;
+    if (Number.isFinite(v) && v > vi + eps) strictlyHigher++;
+  }
+  return strictlyHigher + 1;
+}
+
 function buildConfirmedMessage(opts: {
   item: SnowballPendingConfirm;
   bar2Close: number;
@@ -121,8 +141,12 @@ function buildConfirmedMessage(opts: {
   bar2Volume: number;
   bar2OpenSec: number;
   volRatio: number;
+  volSma: number | null;
+  volRank: number | null;
+  volRankLookback: number;
 }): string {
-  const { item, bar2Close, bar2High, bar2Low, bar2Volume, bar2OpenSec, volRatio } = opts;
+  const { item, bar2Close, bar2High, bar2Low, bar2Volume, bar2OpenSec, volRatio, volSma, volRank, volRankLookback } =
+    opts;
   const sideLabel = item.side === "long" ? "🟢 LONG" : "🔴 SHORT";
   const refLabel = item.side === "long" ? "High" : "Low";
   const refVal = item.side === "long" ? item.signalHigh : item.signalLow;
@@ -134,13 +158,20 @@ function buildConfirmedMessage(opts: {
   const sigOpenBkk = fmtBkkFromUnixSec(item.signalBarOpenSec);
   const sigCloseBkk = fmtBkkFromUnixSec(item.signalBarOpenSec + tfDurationSec(item.snowTf));
   const volPct = Math.round(volRatio * 100);
+  const volVsSma = volSma != null && Number.isFinite(volSma) && volSma > 0 ? bar2Volume / volSma : null;
+  const volSmaStr =
+    volVsSma != null && Number.isFinite(volVsSma)
+      ? `${volVsSma.toFixed(2)}x SMA(${SNOWBALL_CONFIRM_VOL_SMA_PERIOD})`
+      : `SMA(${SNOWBALL_CONFIRM_VOL_SMA_PERIOD})=—`;
+  const volRankStr =
+    volRank != null && Number.isFinite(volRank) ? `อันดับ vol #${volRank}/${volRankLookback}` : `อันดับ vol —/${volRankLookback}`;
   const lines: string[] = [
     `✅ Confirmed (${sideLabel}) — Snowball ${item.snowTf}`,
     `${pairSlashed(item.symbol)} — Binance USDT-M`,
     "",
     `แท่งสัญญาณ: เปิด ${sigOpenBkk} → ปิด ${sigCloseBkk} · ${refLabel}=${refStr}`,
     `แท่งยืนยัน: เปิด ${bar2OpenBkk} → ปิด ${bar2CloseBkk} · ปิด ${closeStr} ${cmp} ${refStr}`,
-    `Volume แท่งยืนยัน = ${volPct}% ของแท่งสัญญาณ (≥ ${Math.round(snowballConfirmVolMinRatio() * 100)}%)`,
+    `Volume แท่งยืนยัน = ${volPct}% ของแท่งสัญญาณ (≥ ${Math.round(snowballConfirmVolMinRatio() * 100)}%) · ${volSmaStr} · ${volRankStr}`,
     "",
     "หมายเหตุ: ยืนยันผ่าน 2-bar confirming แล้ว — แท่งที่ 1 ติด label เสี่ยงเอาไว้ก่อนหน้า",
   ];
@@ -257,6 +288,11 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
       const volRatio = item.signalVolume > 0 ? vo / item.signalVolume : 0;
       const volOk = volRatio >= volMinRatio;
       if (priceOk && volOk) {
+        const volSmaConfirm = volumeSmaConfirmAtPackIndex(pack, idx);
+        const volSmaConfirmUse =
+          Number.isFinite(volSmaConfirm) && volSmaConfirm > 0 ? volSmaConfirm : null;
+        const volRankLookback = Math.min(SNOWBALL_CONFIRM_VOL_SMA_PERIOD, idx + 1);
+        const volRank = volumeRankInWindow(volume, Math.max(0, idx - (volRankLookback - 1)), idx, idx);
         const text = buildConfirmedMessage({
           item,
           bar2Close: cl,
@@ -265,6 +301,9 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
           bar2Volume: vo,
           bar2OpenSec,
           volRatio,
+          volSma: volSmaConfirmUse,
+          volRank,
+          volRankLookback,
         });
         let sendOk = false;
         try {
@@ -287,7 +326,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                 ? item.statsVolSma
                 : NaN;
             if (!Number.isFinite(volSmaSig) && iSig >= 0) {
-              volSmaSig = volumeSma20AtPackIndex(pack, iSig);
+              volSmaSig = volumeSmaConfirmAtPackIndex(pack, iSig);
             }
             if (!Number.isFinite(volSmaSig) || volSmaSig <= 0) volSmaSig = item.signalVolume;
             const trigKind =
@@ -377,7 +416,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
           }
           if (autoSide) {
             try {
-              const volSma = volumeSma20AtPackIndex(pack, idx);
+              const volSma = volumeSmaConfirmAtPackIndex(pack, idx);
               const volSmaUse = Number.isFinite(volSma) && volSma > 0 ? volSma : vo;
               const refEntry =
                 autoSide === "short" &&
