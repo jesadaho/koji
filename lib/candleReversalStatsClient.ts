@@ -57,11 +57,23 @@ export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): s
   return tf.toUpperCase();
 }
 
+/** ชื่อเต็ม (Telegram / ข้อความยาว) */
 export function candleReversalModelLabel(model: CandleReversalModel): string {
   if (model === "inverted_doji") return "โดจิกลับหัว";
   if (model === "longest_red_body") return "แท่งแดงทุบยาว";
   return "แท่งแดงทุบ";
 }
+
+/** ตัวย่อในตารางสถิติ — สอดคล้องสรุปสแกน reversal */
+export function candleReversalModelShortLabel(model: CandleReversalModel): string {
+  if (model === "inverted_doji") return "โดจิ";
+  if (model === "longest_red_body") return "แดงยาว";
+  return "ทุบ";
+}
+
+/** คำอธิบายตัวย่อโมเดล (header / footnote) */
+export const CANDLE_REVERSAL_MODEL_SHORT_LEGEND =
+  "โดจิ=โดจิกลับหัว · ทุบ=แท่งแดงทุบ · แดงยาว=แท่งแดงทุบยาว";
 
 export function candleReversalOutcomeLabel(o: CandleReversalOutcome): string {
   if (o === "pending") return "Pending";

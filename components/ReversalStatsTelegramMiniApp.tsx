@@ -10,7 +10,9 @@ import {
 } from "@/lib/kojiTelegramWebApp";
 import {
   candleReversalDayOfWeekBkk,
+  CANDLE_REVERSAL_MODEL_SHORT_LEGEND,
   candleReversalModelLabel,
+  candleReversalModelShortLabel,
   candleReversalOutcomeLabel,
   candleReversalSignalBarTfLabel,
   candleReversalLookbackRankCell,
@@ -212,7 +214,7 @@ export default function ReversalStatsTelegramMiniApp() {
       <h1 className="sparkStatsMatrixSectionTitle">
         สถิติ Reversal
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-          1D + 1H · โดจิกลับหัว · แท่งแดงทุบ
+          1D + 1H · โดจิ · ทุบ · แดงยาว
         </span>
       </h1>
 
@@ -223,38 +225,66 @@ export default function ReversalStatsTelegramMiniApp() {
           <table className="sparkMatrixTable sparkMatrixTable--compact">
             <thead>
               <tr>
-                <th scope="col">เหรียญ</th>
-                <th scope="col">TF</th>
-                <th scope="col">โมเดล</th>
-                <th scope="col">วัน</th>
-                <th scope="col">เวลา (BKK)</th>
-                <th scope="col">Entry</th>
-                <th scope="col">Retest</th>
-                <th scope="col">SL</th>
-                <th scope="col">ไส้%</th>
-                <th scope="col" title="ความยาวเนื้อเทียบช่วงแท่ง">
+                <th scope="col" title="สัญลักษณ์">
+                  เหรียญ
+                </th>
+                <th scope="col" title="Timeframe แท่งสัญญาณ">
+                  TF
+                </th>
+                <th scope="col" title={CANDLE_REVERSAL_MODEL_SHORT_LEGEND}>
+                  Mdl
+                </th>
+                <th scope="col" title="วันในสัปดาห์ (BKK)">
+                  วัน
+                </th>
+                <th scope="col" title="เวลาแจ้ง (Asia/Bangkok)">
+                  BKK
+                </th>
+                <th scope="col" title="ราคาเข้า">
+                  Entry
+                </th>
+                <th scope="col" title="Retest">
+                  Retest
+                </th>
+                <th scope="col" title="Stop loss">
+                  SL
+                </th>
+                <th scope="col" title="ไส้บน ÷ ช่วงแท่ง">
+                  ไส้%
+                </th>
+                <th scope="col" title="เนื้อ ÷ ช่วงแท่ง">
                   เนื้อ%
                 </th>
                 <th scope="col" title="อันดับ volume ในรอบ lookback · 1 = สูงสุด">
                   Vol#
                 </th>
                 <th scope="col" title="อันดับ high ในรอบ lookback · 1 = สูงสุด">
-                  High#
+                  Hi#
                 </th>
-                <th scope="col">Range</th>
-                <th scope="col">Wick</th>
+                <th scope="col" title="Range score">
+                  Rng
+                </th>
+                <th scope="col" title="Wick score">
+                  Wick
+                </th>
                 <th scope="col" title="1H: 4h · 1D: 1d">
-                  4h / 1d
+                  4h/1d
                 </th>
                 <th scope="col" title="1H: 12h · 1D: 3d">
-                  12h / 3d
+                  12h/3d
                 </th>
                 <th scope="col" title="1H: 24h · 1D: 7d">
-                  24h / 7d
+                  24h/7d
                 </th>
-                <th scope="col">Max ROI</th>
-                <th scope="col">Max DD</th>
-                <th scope="col">ผล</th>
+                <th scope="col" title="Max ROI ถึง MFE">
+                  ROI
+                </th>
+                <th scope="col" title="Max drawdown ถึง MFE">
+                  DD
+                </th>
+                <th scope="col" title="ผลหลังครบ horizon">
+                  ผล
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -271,7 +301,9 @@ export default function ReversalStatsTelegramMiniApp() {
                   <tr key={r.id}>
                     <td>{coinLabel(r.symbol)}</td>
                     <td>{candleReversalSignalBarTfLabel(r.signalBarTf ?? "1d")}</td>
-                    <td>{candleReversalModelLabel(r.model)}</td>
+                    <td title={candleReversalModelLabel(r.model)}>
+                      {candleReversalModelShortLabel(r.model)}
+                    </td>
                     <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
                     <td>
                       <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
@@ -299,6 +331,8 @@ export default function ReversalStatsTelegramMiniApp() {
           </table>
         </div>
         <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
+          {CANDLE_REVERSAL_MODEL_SHORT_LEGEND}
+          <br />
           {FOOTNOTE}
         </p>
         <p className="sparkStatsActionRow" style={{ marginTop: "0.75rem" }}>
