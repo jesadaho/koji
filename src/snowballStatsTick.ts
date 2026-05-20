@@ -114,7 +114,7 @@ function pickHorizonClose(
 function rowNeedsTrendMomentumBackfill(row: SnowballStatsRow): boolean {
   if (row.volumeCascadeYn == null) return true;
   if (row.maxDrawback1hPct == null) return true;
-  /** รีคำนวณ 8 แท่ง flexible ณ anchor เวลาแจ้ง — pending ทุกรอบ · แถวเก่ารีคำนวณเมื่อ lookback เปลี่ยน */
+  /** รีคำนวณ 8 แท่ง 1H ณ anchor เวลาแจ้ง — pending ทุกรอบ · แถวเก่ารีคำนวณเมื่อ lookback เปลี่ยน */
   if (row.outcome === "pending") return true;
   return (
     row.trendMomentumLookback !== SNOWBALL_TREND_1H_DD_LOOKBACK ||

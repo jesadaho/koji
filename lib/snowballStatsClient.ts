@@ -43,7 +43,7 @@ export type SnowballStatsRow = {
   btcPsar4hClose?: number | null;
   /** quoteVolume 24h ของคู่สัญญาณ (USDT, Binance futures) */
   quoteVol24hUsdt?: number | null;
-  /** DD 1H% — flexible drawback (ไส้บน/ล่าง) ใน 8 แท่ง 1H ปิด ณ เวลาแจ้ง */
+  /** DD 1H% — ไส้บนหรือไส้ล่างใหญ่สุดเทียบช่วงแท่ง (H−L) ใน 8 แท่ง 1H (0–100%) */
   maxDrawback1hPct?: number | null;
   /** Volume cascade ยืดหยุ่น (ยอมสะดุด ≤1 ครั้งใน 5 แท่ง 1H ล่าสุด) */
   volumeCascadeYn?: "Y" | "N" | null;

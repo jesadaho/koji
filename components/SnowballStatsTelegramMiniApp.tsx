@@ -355,7 +355,7 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">Vol 24h</th>
                 <th
                   scope="col"
-                  title="Flexible drawback 1H — ไส้บนแท่งเขียว + ไส้ล่างสะบัด (8 แท่ง 1H ปิด ณ แจ้ง)"
+                  title="ไส้บนหรือไส้ล่างที่ยาวสุด เป็น % ของช่วงแท่ง (H−L) ใน 8 แท่ง 1H ปิด ณ เวลาแจ้ง (สูงสุดไม่เกิน 100%)"
                 >
                   DD 1H%
                 </th>

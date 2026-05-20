@@ -2,7 +2,7 @@ import { fetchBinanceUsdmKlines, type BinanceKlinePack } from "./binanceIndicato
 
 const SNOWBALL_TREND_1H_BARS = 120;
 const ONE_HOUR_SEC = 3600;
-/** DD 1H% — 8 แท่ง 1H ปิด (slice(-9, -1)) */
+/** DD 1H% — ไส้สูงสุดเทียบช่วงแท่ง ใน 8 แท่ง 1H ปิด (slice ย้อนหลังจาก anchor) */
 export const SNOWBALL_TREND_1H_DD_LOOKBACK = 8;
 /** Vol↗ — 5 แท่ง 1H ปิดล่าสุดในกรอบเดียวกัน (slice(-6, -1)) */
 export const SNOWBALL_TREND_1H_VOL_LOOKBACK = 5;
@@ -125,8 +125,8 @@ export function resolveClosed1hWindowIndices(
 }
 
 /**
- * Flexible Drawback 1H% — ไส้บนแท่งเขียว + ไส้ล่างสะบัดเทียบเนื้อแท่งเขียวก่อนหน้า
- * (8 แท่งปิดล่าสุดก่อนสัญญาณ)
+ * DD 1H% (แสดงง่าย) — ในแต่ละแท่ง 1H ดูไส้บนและไส้ล่างว่าเป็นกี่ % ของช่วงแท่ง (H−L) แล้วเอาค่าสูงสุดใน 8 แท่ง
+ * ค่าอยู่ 0–100% ไม่เกิดเลขระเบือเมื่อเนื้อแท่งก่อนหน้าเล็ก (เทียบกับของเดิมที่หาร prevBody)
  */
 export function calculateFlexibleDrawback1hPercent(
   open: number[],
@@ -136,7 +136,7 @@ export function calculateFlexibleDrawback1hPercent(
   iStart: number,
   iEnd: number
 ): number {
-  let maxDrawbackPercent = 0;
+  let maxDd = 0;
 
   for (let i = iStart; i <= iEnd; i++) {
     const o = open[i]!;
@@ -145,28 +145,20 @@ export function calculateFlexibleDrawback1hPercent(
     const c = close[i]!;
     if (![o, h, l, c].every(Number.isFinite)) continue;
 
-    const currentRange = h - l;
-    if (currentRange <= 0) continue;
+    const range = h - l;
+    if (range <= 0) continue;
 
-    if (c > o) {
-      const upperWick = h - c;
-      const upperDd = (upperWick / currentRange) * 100;
-      if (upperDd > maxDrawbackPercent) maxDrawbackPercent = upperDd;
-    }
+    const upperWick = h - Math.max(o, c);
+    const upperPct = (upperWick / range) * 100;
 
-    if (i > iStart) {
-      const prevO = open[i - 1]!;
-      const prevC = close[i - 1]!;
-      const prevBody = prevC - prevO;
-      if (prevBody > 0 && l < o) {
-        const lowerWick = o - l;
-        const lowerDd = (lowerWick / prevBody) * 100;
-        if (lowerDd > maxDrawbackPercent) maxDrawbackPercent = lowerDd;
-      }
-    }
+    const lowerWick = Math.min(o, c) - l;
+    const lowerPct = (lowerWick / range) * 100;
+
+    const barMax = Math.max(upperPct, lowerPct);
+    if (barMax > maxDd) maxDd = barMax;
   }
 
-  return parseFloat(maxDrawbackPercent.toFixed(2));
+  return parseFloat(maxDd.toFixed(2));
 }
 
 /** @deprecated ใช้ calculateFlexibleDrawback1hPercent — คง export เพื่อ backward compat */
@@ -273,7 +265,7 @@ export function formatTrendMomentumMetricsLine(metrics: TrendMomentumMetrics | n
   const maxDrops = snowballTrendMomentumMaxVolumeDrops();
   return [
     `📎 Trend momentum (1H · DD ${metrics.candleCount} แท่ง · Vol ${metrics.volumeCandleCount} แท่ง):`,
-    `  • Flexible drawback (ไส้บน/ล่าง): ${metrics.maxDrawbackPercent.toFixed(2)}% (≤${snowballTrendMomentumMaxDrawbackPct()}% = ${metrics.isLowDrawback ? "✓" : "—"})`,
+    `  • ไส้บน/ล่างสูงสุด เทียบช่วงแท่ง: ${metrics.maxDrawbackPercent.toFixed(2)}% (≤${snowballTrendMomentumMaxDrawbackPct()}% = ${metrics.isLowDrawback ? "✓" : "—"})`,
     `  • Volume cascade: ${metrics.isVolumeCascading ? "✓" : "—"} (vol สะดุด ${metrics.volumeDropCount}× ใน ${metrics.volumeCandleCount} แท่ง · ยอม ≤${maxDrops})`,
     `  • Sustained buying pressure: ${sustained ? "✓" : "—"}`,
   ].join("\n");
