@@ -2,13 +2,14 @@ import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
 import type { SnowballLongBreakout1hConfirmEval } from "./snowballLongBreakoutConfirm";
 
-export type SnowballLongBreakoutGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus";
+export type SnowballLongBreakoutGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus";
 
 /**
  * ตัดเกรด Long (โครงสร้างแท่งสัญญาณ / VAH / HH):
  * - A+ / B / C — `classifyLongBreakoutGrade` ตาม HH48 · HH200 · VAH
  * - D — 1H confirm ไม่ผ่าน (`breakout1hFailedGradeD` · TF≠4h) · แจ้ง Long->Short
- * - D+ (Long) — โครงสร้าง A+/B/C + momentum 1H ไม่ผ่าน + 1H confirm ผ่าน (`gradeBMomentumFailGradeD`)
+ * - D+ (Long) — โครงสร้าง A+/B/C + momentum 1H ไม่ผ่าน + 1H confirm ผ่าน
+ * - F (Long) — โครงสร้าง A+/B/C + momentum ไม่ผ่าน + 1H confirm ไม่ผ่าน
  */
 /** A+ / B / C สั้น ๆ สำหรับข้อความ downgrade */
 export function snowballStructureGradeShortLabel(g: SnowballLongBreakoutGrade): string {
@@ -24,6 +25,10 @@ export function snowballLongGradePlusLabel(g: SnowballLongBreakoutGrade): string
   if (g === "b_plus") return "Grade B+ (Long)";
   if (g === "c_plus") return "Grade C+ (Long)";
   return "Grade D+ (Long)";
+}
+
+export function snowballLongGradeFLabel(): string {
+  return "Grade F (Long)";
 }
 
 const SEC_4H = 4 * 3600;

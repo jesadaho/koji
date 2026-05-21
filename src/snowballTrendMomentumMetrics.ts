@@ -65,6 +65,14 @@ export function snowballGradeBMomentumFailGradeDOn1hConfirmPass(): boolean {
   return true;
 }
 
+/** momentum ไม่ผ่าน + 1H confirm ไม่ผ่าน → ส่ง Grade F (Long) แทนบล็อกเงียบ */
+export function snowballGradeFOnMomentumAnd1hConfirmFail(): boolean {
+  const raw =
+    process.env.INDICATOR_PUBLIC_SNOWBALL_GRADE_F_ON_MOMENTUM_AND_1H_FAIL?.trim().toLowerCase();
+  if (raw === "0" || raw === "false" || raw === "no" || raw === "off") return false;
+  return true;
+}
+
 /** Auto-open Grade B เมื่อ sustained momentum (ต้องเปิด Double Barrier) */
 export function snowballGradeBAutoOpenSustainedEnabled(): boolean {
   const raw = process.env.INDICATOR_PUBLIC_SNOWBALL_GRADE_B_AUTO_OPEN_SUSTAINED?.trim().toLowerCase();

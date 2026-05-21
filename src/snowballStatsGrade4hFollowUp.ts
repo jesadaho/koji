@@ -1,4 +1,5 @@
 import {
+  snowballStatsIsGradeFMomentumFailRow,
   snowballStatsIsLongConfirmFailRow,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
@@ -96,6 +97,7 @@ export async function applySnowballStatsGrade4hFollowUp(
   if (nowSec < asOfSec) return false;
 
   if (!inferAlertSideLong(row)) return false;
+  if (snowballStatsIsGradeFMomentumFailRow(row)) return false;
 
   const sym = row.symbol.trim().toUpperCase();
   let pack4h = pack4hCache.get(sym);
@@ -129,7 +131,11 @@ export async function applySnowballStatsGrade4hFollowUp(
   const alertTier = snowballStatsAlertQualityTier(row) as SnowballLongBreakoutGrade | undefined;
   if (!row.alertQualityTier) {
     row.alertQualityTier =
-      alertTier === "a_plus" || alertTier === "b_plus" || alertTier === "c_plus" || alertTier === "d_plus"
+      alertTier === "a_plus" ||
+      alertTier === "b_plus" ||
+      alertTier === "c_plus" ||
+      alertTier === "d_plus" ||
+      alertTier === "f_plus"
         ? alertTier
         : row.qualityTier ?? newGrade;
   }

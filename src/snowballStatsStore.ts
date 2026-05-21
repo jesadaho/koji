@@ -145,6 +145,7 @@ export type AppendSnowballStatsInput = {
   breakout1hConfirmFail?: boolean;
   alertQualityTier?: SnowballStatsQualityTier;
   momentumDowngrade?: boolean;
+  momentumFailGradeF?: boolean;
 };
 
 function resetSnowballStatsFollowUpFields(row: SnowballStatsRow): void {
@@ -272,6 +273,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     alertQualityTier: input.alertQualityTier ?? input.qualityTier,
     breakout1hConfirmFail: Boolean(input.breakout1hConfirmFail),
     momentumDowngrade: input.momentumDowngrade === true,
+    momentumFailGradeF: input.momentumFailGradeF === true,
     atr100,
     maxUpperWick100,
     rangeScore,

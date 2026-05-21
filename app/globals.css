@@ -535,6 +535,9 @@ code {
 .snowGradeCell--d {
   color: #ef4444;
 }
+.snowGradeCell--f {
+  color: #a855f7;
+}
 .snowGradeCell--long {
   color: #4ade80;
   font-weight: 700;

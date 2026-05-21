@@ -48,7 +48,7 @@ export type SnowballPendingConfirm = {
   alertedAtIso: string;
   alertedAtMs: number;
   riskFlags: SnowballPendingConfirmFlag[];
-  qualityTier?: "a_plus" | "b_plus" | "c_plus" | "d_plus";
+  qualityTier?: "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus";
   /**
    * true = แท่ง 1 ไม่ส่ง TG / ไม่ autotrade — ให้เรียก Snowball auto-open หลัง ✅ Confirmed (เมื่อเป็น Super A+)
    */
@@ -120,7 +120,8 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     o.qualityTier === "a_plus" ||
     o.qualityTier === "b_plus" ||
     o.qualityTier === "c_plus" ||
-    o.qualityTier === "d_plus"
+    o.qualityTier === "d_plus" ||
+    o.qualityTier === "f_plus"
       ? o.qualityTier
       : undefined;
   const deferSnowballAutotradeToConfirm =
