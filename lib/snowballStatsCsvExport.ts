@@ -1,5 +1,6 @@
 import {
   snowballStatsBarRangePctLabel,
+  snowballStatsBtcPsar1hLabel,
   snowballStatsBtcPsar4hLabel,
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
@@ -70,6 +71,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     snowballStatsBarRangePctLabel(r.barRangePctSignal),
     snowballStatsBarRangePctLabel(r.barRangePct2Sum),
     snowballStatsBtcPsar4hLabel(r.btcPsar4hTrend),
+    snowballStatsBtcPsar1hLabel(r.btcPsar1hTrend),
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMaxDrawback1hLabel(r.maxDrawback1hPct),
     snowballStatsVolumeCascadeLabel(r.volumeCascadeYn),

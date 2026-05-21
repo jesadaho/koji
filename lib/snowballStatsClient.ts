@@ -49,6 +49,9 @@ export type SnowballStatsRow = {
   btcPsar4hTrend?: "up" | "down" | null;
   /** ปิดแท่ง 4h BTC ล่าสุดที่ปิดแล้ว */
   btcPsar4hClose?: number | null;
+  /** BTC PSAR 1h trend ตอนแจ้ง */
+  btcPsar1hTrend?: "up" | "down" | null;
+  btcPsar1hClose?: number | null;
   /** quoteVolume 24h ของคู่สัญญาณ (USDT, Binance futures) */
   quoteVol24hUsdt?: number | null;
   /** DD 1H% — ไส้บนหรือไส้ล่างใหญ่สุดเทียบช่วงแท่ง (H−L) ใน 8 แท่ง 1H (0–100%) */
@@ -264,10 +267,32 @@ export function snowballStatsBarRangePctLabel(value: number | null | undefined):
 }
 
 /** วันในสัปดาห์ (ปฏิทินไทย / Asia/Bangkok) จากเวลาแจ้งสัญญาณ */
+function snowballStatsBtcPsarTrendChip(
+  tf: "4h" | "1h",
+  trend: "up" | "down" | null | undefined,
+): string {
+  if (trend === "up") return `${tf}↑`;
+  if (trend === "down") return `${tf}↓`;
+  return `${tf}—`;
+}
+
 export function snowballStatsBtcPsar4hLabel(trend: SnowballStatsRow["btcPsar4hTrend"]): string {
-  if (trend === "up") return "BTC↑";
-  if (trend === "down") return "BTC↓";
-  return "—";
+  return snowballStatsBtcPsarTrendChip("4h", trend);
+}
+
+export function snowballStatsBtcPsar1hLabel(trend: SnowballStatsRow["btcPsar1hTrend"]): string {
+  return snowballStatsBtcPsarTrendChip("1h", trend);
+}
+
+/** 4h + 1h ในช่องเดียว (เช่น 4h↑ · 1h↓) */
+export function snowballStatsBtcPsarCombinedLabel(
+  trend4h: SnowballStatsRow["btcPsar4hTrend"],
+  trend1h: SnowballStatsRow["btcPsar1hTrend"],
+): string {
+  const a = snowballStatsBtcPsarTrendChip("4h", trend4h);
+  const b = snowballStatsBtcPsarTrendChip("1h", trend1h);
+  if (a === "4h—" && b === "1h—") return "—";
+  return `${a} · ${b}`;
 }
 
 export function snowballStatsMaxDrawback1hLabel(v: number | null | undefined): string {

@@ -68,6 +68,8 @@ export type SnowballPendingConfirm = {
   statsBarRangePct2Sum?: number | null;
   statsBtcPsar4hTrend?: "up" | "down" | null;
   statsBtcPsar4hClose?: number | null;
+  statsBtcPsar1hTrend?: "up" | "down" | null;
+  statsBtcPsar1hClose?: number | null;
   statsQuoteVol24hUsdt?: number | null;
 };
 
@@ -147,6 +149,10 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     o.statsBtcPsar4hTrend === "up" || o.statsBtcPsar4hTrend === "down" ? o.statsBtcPsar4hTrend : null;
   const statsBtcPsar4hClose = Number(o.statsBtcPsar4hClose);
   const statsBtcPsar4hCloseOk = Number.isFinite(statsBtcPsar4hClose) && statsBtcPsar4hClose > 0;
+  const statsBtcPsar1hTrend =
+    o.statsBtcPsar1hTrend === "up" || o.statsBtcPsar1hTrend === "down" ? o.statsBtcPsar1hTrend : null;
+  const statsBtcPsar1hClose = Number(o.statsBtcPsar1hClose);
+  const statsBtcPsar1hCloseOk = Number.isFinite(statsBtcPsar1hClose) && statsBtcPsar1hClose > 0;
   const statsQuoteVol24hUsdt = Number(o.statsQuoteVol24hUsdt);
   const statsQuoteVol24hUsdtOk = Number.isFinite(statsQuoteVol24hUsdt) && statsQuoteVol24hUsdt > 0;
   return {
@@ -175,6 +181,8 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsBarRangePct2SumOk ? { statsBarRangePct2Sum } : {}),
     ...(statsBtcPsar4hTrend ? { statsBtcPsar4hTrend } : {}),
     ...(statsBtcPsar4hCloseOk ? { statsBtcPsar4hClose } : {}),
+    ...(statsBtcPsar1hTrend ? { statsBtcPsar1hTrend } : {}),
+    ...(statsBtcPsar1hCloseOk ? { statsBtcPsar1hClose } : {}),
     ...(statsQuoteVol24hUsdtOk ? { statsQuoteVol24hUsdt } : {}),
   };
 }

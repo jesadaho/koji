@@ -130,6 +130,8 @@ export type AppendSnowballStatsInput = {
   barRangePct2Sum?: number | null;
   btcPsar4hTrend?: "up" | "down" | null;
   btcPsar4hClose?: number | null;
+  btcPsar1hTrend?: "up" | "down" | null;
+  btcPsar1hClose?: number | null;
   quoteVol24hUsdt?: number | null;
   maxDrawback1hPct?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
@@ -282,6 +284,12 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     btcPsar4hClose:
       input.btcPsar4hClose != null && Number.isFinite(input.btcPsar4hClose) && input.btcPsar4hClose > 0
         ? input.btcPsar4hClose
+        : null,
+    btcPsar1hTrend:
+      input.btcPsar1hTrend === "up" || input.btcPsar1hTrend === "down" ? input.btcPsar1hTrend : null,
+    btcPsar1hClose:
+      input.btcPsar1hClose != null && Number.isFinite(input.btcPsar1hClose) && input.btcPsar1hClose > 0
+        ? input.btcPsar1hClose
         : null,
     quoteVol24hUsdt:
       input.quoteVol24hUsdt != null && Number.isFinite(input.quoteVol24hUsdt) && input.quoteVol24hUsdt > 0

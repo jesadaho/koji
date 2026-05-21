@@ -13,7 +13,7 @@ import {
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
   snowballStatsDayOfWeekBkk,
-  snowballStatsBtcPsar4hLabel,
+  snowballStatsBtcPsarCombinedLabel,
   snowballStatsGradeCellClass,
   snowballStatsGradeLabel,
   snowballStatsGreenDaysLabel,
@@ -361,7 +361,9 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">R% ก่อน</th>
                 <th scope="col">R% สัญญาณ</th>
                 <th scope="col">R% 2แท่ง</th>
-                <th scope="col">BTC 4h</th>
+                <th scope="col" title="BTC PSAR — แท่ง 4h และ 1h ปิดล่าสุด (Binance)">
+                  BTC SAR
+                </th>
                 <th scope="col">Vol 24h</th>
                 <th
                   scope="col"
@@ -434,7 +436,7 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{snowballStatsBarRangePctLabel(r.barRangePctPrev)}</td>
                     <td>{snowballStatsBarRangePctLabel(r.barRangePctSignal)}</td>
                     <td>{snowballStatsBarRangePctLabel(r.barRangePct2Sum)}</td>
-                    <td>{snowballStatsBtcPsar4hLabel(r.btcPsar4hTrend)}</td>
+                    <td>{snowballStatsBtcPsarCombinedLabel(r.btcPsar4hTrend, r.btcPsar1hTrend)}</td>
                     <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                     <td>{snowballStatsMaxDrawback1hLabel(r.maxDrawback1hPct)}</td>
                     <td>{snowballStatsVolumeCascadeLabel(r.volumeCascadeYn)}</td>

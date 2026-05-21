@@ -393,6 +393,8 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               barRangePct2Sum: item.statsBarRangePct2Sum ?? null,
               btcPsar4hTrend: item.statsBtcPsar4hTrend ?? null,
               btcPsar4hClose: item.statsBtcPsar4hClose ?? null,
+              btcPsar1hTrend: item.statsBtcPsar1hTrend ?? null,
+              btcPsar1hClose: item.statsBtcPsar1hClose ?? null,
               quoteVol24hUsdt: item.statsQuoteVol24hUsdt ?? null,
               ...trendMomentumStatsFields(trendMomentum),
               confirmVolVsSma:
