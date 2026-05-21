@@ -119,9 +119,23 @@ function tryAnchorDownload(filename: string, blob: Blob): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+type SaveFilePickerHandle = {
+  createWritable: () => Promise<{
+    write: (data: Blob) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
+};
+
+type WindowWithSavePicker = Window & {
+  showSaveFilePicker?: (options: {
+    suggestedName?: string;
+    types?: Array<{ description: string; accept: Record<string, string[]> }>;
+  }) => Promise<SaveFilePickerHandle>;
+};
+
 /** macOS / Chrome — เลือกที่บันทึก (ได้ไฟล์ .csv ใน Downloads โดยตรง) */
 async function trySaveFilePicker(filename: string, blob: Blob): Promise<boolean> {
-  const picker = window.showSaveFilePicker;
+  const picker = (window as WindowWithSavePicker).showSaveFilePicker;
   if (typeof picker !== "function") return false;
   const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
   try {
