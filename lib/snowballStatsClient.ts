@@ -29,6 +29,8 @@ export type SnowballStatsRow = {
   qualityTier4hAdjusted?: boolean;
   /** Long 1H breakout confirm ไม่ผ่าน — เกรด D · ทิศสัญญาณ Long */
   breakout1hConfirmFail?: boolean;
+  /** ส่ง Grade D+ (Long): momentum 1H ไม่ผ่าน + 1H confirm ผ่าน — ไม่ใช่ Grade C fade */
+  momentumDowngrade?: boolean;
   /** Wilder ATR(100) ตอนแจ้ง — baseline ความผันผวน */
   atr100?: number | null;
   /** Max upper wick 100 แท่งก่อนสัญญาณ — เพดานไส้บน */
@@ -112,15 +114,21 @@ export function snowballStatsSideLabel(
   return `${signal}->${trade}`;
 }
 
-/** momentum ไม่ผ่าน + 1H confirm ผ่าน → ส่ง D+ (Long) · alertQualityTier = โครงสร้างเดิม A+/B/C */
+/** momentum ไม่ผ่าน + 1H confirm ผ่าน → ส่ง D+ (Long) — ไม่รวม Grade C fade (Long->Short) */
 export function snowballStatsIsGradeBMomentumDowngradeRow(
-  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+  row: Pick<
+    SnowballStatsRow,
+    "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail" | "momentumDowngrade"
+  >,
 ): boolean {
+  if (row.momentumDowngrade === true) return true;
+  if (row.momentumDowngrade === false) return false;
   const alert = row.alertQualityTier;
-  if (alert !== "a_plus" && alert !== "b_plus" && alert !== "c_plus") return false;
-  if (row.qualityTier === "d_plus") return true;
-  /** หลัง follow-up 4h ปรับ qualityTier เป็นโครงสร้างเดิม — ยังเป็นแถว D+ */
-  return row.qualityTier === alert;
+  return (
+    row.qualityTier === "d_plus" &&
+    !row.breakout1hConfirmFail &&
+    (alert === "a_plus" || alert === "b_plus" || alert === "c_plus")
+  );
 }
 
 function snowballStatsGradeLetter(

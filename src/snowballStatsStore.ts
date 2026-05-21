@@ -143,6 +143,7 @@ export type AppendSnowballStatsInput = {
   greenDaysBeforeSignal?: number | null;
   breakout1hConfirmFail?: boolean;
   alertQualityTier?: SnowballStatsQualityTier;
+  momentumDowngrade?: boolean;
 };
 
 function resetSnowballStatsFollowUpFields(row: SnowballStatsRow): void {
@@ -185,6 +186,10 @@ export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): numb
     if (isMomentumDPlus) {
       if (row.breakout1hConfirmFail) {
         row.breakout1hConfirmFail = false;
+        touched = true;
+      }
+      if (!row.momentumDowngrade) {
+        row.momentumDowngrade = true;
         touched = true;
       }
       if (touched) updated += 1;
@@ -253,6 +258,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     qualityTier: input.qualityTier,
     alertQualityTier: input.alertQualityTier ?? input.qualityTier,
     breakout1hConfirmFail: Boolean(input.breakout1hConfirmFail),
+    momentumDowngrade: input.momentumDowngrade === true,
     atr100,
     maxUpperWick100,
     rangeScore,

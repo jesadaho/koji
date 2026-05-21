@@ -3575,6 +3575,7 @@ export async function runPublicIndicatorFeedInternal(
                     ? momentumDowngradeFromGrade ?? signalGrade
                     : longBreakoutGrade,
                   breakout1hConfirmFail: breakout1hFailedGradeD,
+                  momentumDowngrade: gradeBMomentumFailGradeD,
                   atr100: longVolSnap.atr100,
                   maxUpperWick100: longVolSnap.maxUpperWick100,
                   rangeScore: longVolSnap.rangeScore,
