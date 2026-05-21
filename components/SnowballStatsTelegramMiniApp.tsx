@@ -33,7 +33,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ทิศ = ทิศสัญญาณ Snowball · Grade D = 1H confirm fail · Grade D+ (Long) = B ไม่ผ่าน momentum แต่ 1H confirm ผ่าน · Long->Short = เช่น Grade C fade · Master 4h = 2 แท่ง 4h · Binance USDT-M";
+  "ทิศ = ทิศสัญญาณ Snowball · Grade D = 1H confirm fail · Grade D+ (Long) = momentum ไม่ผ่าน + 1H confirm ผ่าน (เดิม A+/B/C) · Long->Short = เช่น Grade C fade · Master 4h = 2 แท่ง 4h";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;

@@ -8,9 +8,17 @@ export type SnowballLongBreakoutGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus
  * ตัดเกรด Long (โครงสร้างแท่งสัญญาณ / VAH / HH):
  * - A+ / B / C — `classifyLongBreakoutGrade` ตาม HH48 · HH200 · VAH
  * - D — 1H confirm ไม่ผ่าน (`breakout1hFailedGradeD` · TF≠4h) · แจ้ง Long->Short
- * - D+ (Long) — เฉพาะเดิมเป็น B + ไม่ผ่าน momentum 1H + 1H confirm ผ่าน (`gradeBMomentumFailGradeD`)
+ * - D+ (Long) — โครงสร้าง A+/B/C + momentum 1H ไม่ผ่าน + 1H confirm ผ่าน (`gradeBMomentumFailGradeD`)
  */
-/** ป้าย D+ (Long) — ใช้เฉพาะ B→D+ momentum downgrade ไม่ใช่ Grade D จาก confirm fail */
+/** A+ / B / C สั้น ๆ สำหรับข้อความ downgrade */
+export function snowballStructureGradeShortLabel(g: SnowballLongBreakoutGrade): string {
+  if (g === "a_plus") return "A+";
+  if (g === "b_plus") return "B";
+  if (g === "c_plus") return "C";
+  return "—";
+}
+
+/** ป้าย D+ (Long) — momentum downgrade ไม่ใช่ Grade D จาก confirm fail */
 export function snowballLongGradePlusLabel(g: SnowballLongBreakoutGrade): string {
   if (g === "a_plus") return "Grade A+ (Long)";
   if (g === "b_plus") return "Grade B+ (Long)";

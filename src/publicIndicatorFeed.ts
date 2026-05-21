@@ -42,6 +42,7 @@ import {
   classifyLongBreakoutGrade,
   resolveSnowballLongBreakoutGrade,
   snowballLongGradePlusLabel,
+  snowballStructureGradeShortLabel,
   type SnowballLongBreakoutGrade,
 } from "./snowballLongBreakoutGrade";
 
@@ -1617,8 +1618,9 @@ function buildSnowballTripleCheckMessage(
     breakout1hConfirmUsed?: boolean;
     breakout1hConfirmFailedGradeD?: boolean;
     breakout1hConfirmFootnote?: string;
-    /** Grade B ไม่ผ่าน momentum แต่ 1H confirm ผ่าน → แจ้งเป็น D */
+    /** momentum ไม่ผ่าน + 1H confirm ผ่าน → D+ (เกรดโครงสร้างเดิมไม่จำกัด B) */
     gradeBMomentumFailGradeD?: boolean;
+    momentumDowngradeFromGrade?: SnowballLongBreakoutGrade;
     gradeBMomentumFailFootnote?: string;
     trendMomentum?: TrendMomentumMetrics | null;
     sustainedBuyingPressure?: boolean;
@@ -1757,7 +1759,7 @@ function buildSnowballTripleCheckMessage(
               : "📎 Grade C: ผ่าน HH48+HH200 แต่ยังไม่เบรค VAH proxy (โวลุ่มก้อนอาจยังไม่สนับสนุน)"
             : g === "d_plus"
               ? args.gradeBMomentumFailGradeD
-                ? "📎 Grade D+ (Long): สัญญาณเดิม Grade B (เบรค VAH) แต่ไม่ผ่าน trend momentum 1H — 1H confirm ผ่าน"
+                ? `📎 Grade D+ (Long): สัญญาณเดิม Grade ${snowballStructureGradeShortLabel(args.momentumDowngradeFromGrade ?? "b_plus")} แต่ไม่ผ่าน trend momentum 1H — 1H confirm ผ่าน`
                 : "📎 Grade D: สัญญาณ Long แต่ 1H confirm ไม่ครบ — เทรด Long->Short (ปิดแท่ง 1H ไม่ผ่าน body/vol/clean close)"
               : "";
     const longAutotradeBiasLine =
@@ -2212,10 +2214,10 @@ type Snowball4hScanSummaryStats = {
   /** 1H confirm ไม่ผ่าน → ส่ง Grade D (Long->Short) */
   longBreakout1hGradeD: number;
   longBreakout1hGradeDSymbols: string[];
-  /** Grade B ไม่ผ่าน momentum แต่ 1H confirm ผ่าน → ส่ง Grade D+ (Long) */
+  /** momentum ไม่ผ่าน + 1H confirm ผ่าน → ส่ง Grade D+ (Long) */
   longGradeBMomentumToGradeD: number;
   longGradeBMomentumToGradeDSymbols: string[];
-  /** Grade B ไม่ผ่าน momentum และ 1H confirm ไม่ผ่าน — บล็อก */
+  /** momentum ไม่ผ่าน + 1H confirm ไม่ผ่าน — บล็อก */
   longGradeBMomentumBlocked: number;
   longGradeBMomentumBlockedSymbols: string[];
   longDeduped: number;
@@ -2320,7 +2322,7 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push(...formatSymbolListLines("  ", stats.longBodyRatioBlockedSymbols));
   if (snowballGradeBRequiresSustainedMomentum()) {
     if (snowballGradeBMomentumFailGradeDOn1hConfirmPass()) {
-      lines.push(`Grade B momentum ไม่ผ่าน → Grade D+ (Long): ${stats.longGradeBMomentumToGradeD}`);
+      lines.push(`Momentum ไม่ผ่าน → Grade D+ (Long): ${stats.longGradeBMomentumToGradeD}`);
       lines.push(...formatSymbolListLines("  ", stats.longGradeBMomentumToGradeDSymbols));
     }
     lines.push(`Grade B ไม่ผ่าน trend momentum (บล็อก): ${stats.longGradeBMomentumBlocked}`);
@@ -3190,13 +3192,14 @@ export async function runPublicIndicatorFeedInternal(
         const trendMomentum: TrendMomentumMetrics | null = calculateTrendMomentumMetrics(pack1hTrend);
         const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
 
-        /** B + momentum ไม่ผ่าน + 1H confirm ผ่าน → D+ (Long) · ไม่ใช่ Grade D จาก confirm fail */
+        /** โครงสร้าง A+/B/C + momentum ไม่ผ่าน + 1H confirm ผ่าน → D+ (Long) */
         let gradeBMomentumFailGradeD = false;
+        let momentumDowngradeFromGrade: SnowballLongBreakoutGrade | undefined;
         let gradeBMomentumFailFootnote: string | undefined;
         let gradeBMomentum1hEval: SnowballLongBreakout1hConfirmEval | null = null;
         if (
           !intrabar &&
-          longBreakoutGrade === "b_plus" &&
+          longBreakoutGrade !== "d_plus" &&
           snowballGradeBRequiresSustainedMomentum() &&
           !sustainedBuyingPressure
         ) {
@@ -3214,21 +3217,26 @@ export async function runPublicIndicatorFeedInternal(
             Number.isFinite(eval1hForMomentum.close) &&
             eval1hForMomentum.close > 0
           ) {
+            momentumDowngradeFromGrade = longBreakoutGrade;
             longBreakoutGrade = "d_plus";
             gradeBMomentumFailGradeD = true;
             gradeBMomentum1hEval = eval1hForMomentum;
-            gradeBMomentumFailFootnote = `📎 ${snowballLongGradePlusLabel("d_plus")}: B ไม่ผ่าน momentum · 1H confirm ผ่าน — ปิด ~ ${formatClosedCandleBkk(eval1hForMomentum.barOpenSec)} @ ${formatUsdPrice(eval1hForMomentum.close)} USDT · ${eval1hForMomentum.detail}`;
+            const fromLbl = snowballStructureGradeShortLabel(momentumDowngradeFromGrade);
+            gradeBMomentumFailFootnote = `📎 ${snowballLongGradePlusLabel("d_plus")}: เดิม Grade ${fromLbl} · momentum ไม่ผ่าน · 1H confirm ผ่าน — ปิด ~ ${formatClosedCandleBkk(eval1hForMomentum.barOpenSec)} @ ${formatUsdPrice(eval1hForMomentum.close)} USDT · ${eval1hForMomentum.detail}`;
             if (snowScanStats) {
               snowScanStats.longGradeBMomentumToGradeD++;
               pushSnowScanSymList(
                 snowScanStats.longGradeBMomentumToGradeDSymbols,
-                `${symbol} ${snowballLongGradePlusLabel("d_plus")}`,
+                `${symbol} ${snowballLongGradePlusLabel("d_plus")} (จาก ${fromLbl})`,
               );
             }
           } else {
             if (snowScanStats) {
               snowScanStats.longGradeBMomentumBlocked++;
-              pushSnowScanSymList(snowScanStats.longGradeBMomentumBlockedSymbols, `${symbol} LONG`);
+              pushSnowScanSymList(
+                snowScanStats.longGradeBMomentumBlockedSymbols,
+                `${symbol} LONG (${snowballStructureGradeShortLabel(longBreakoutGrade)})`,
+              );
             }
             return;
           }
@@ -3362,6 +3370,7 @@ export async function runPublicIndicatorFeedInternal(
           breakout1hConfirmFailedGradeD: breakout1hFailedGradeD,
           breakout1hConfirmFootnote: breakout1hFootnote,
           gradeBMomentumFailGradeD,
+          momentumDowngradeFromGrade,
           gradeBMomentumFailFootnote,
           trendMomentum,
           sustainedBuyingPressure,
@@ -3562,7 +3571,9 @@ export async function runPublicIndicatorFeedInternal(
                   vol: vE!,
                   volSma: vsE!,
                   qualityTier: longBreakoutGrade,
-                  alertQualityTier: gradeBMomentumFailGradeD ? signalGrade : longBreakoutGrade,
+                  alertQualityTier: gradeBMomentumFailGradeD
+                    ? momentumDowngradeFromGrade ?? signalGrade
+                    : longBreakoutGrade,
                   breakout1hConfirmFail: breakout1hFailedGradeD,
                   atr100: longVolSnap.atr100,
                   maxUpperWick100: longVolSnap.maxUpperWick100,

@@ -112,14 +112,15 @@ export function snowballStatsSideLabel(
   return `${signal}->${trade}`;
 }
 
-/** B ไม่ผ่าน momentum + 1H confirm ผ่าน → qualityTier D แต่แสดง D+ (Long) */
+/** momentum ไม่ผ่าน + 1H confirm ผ่าน → qualityTier D แต่แสดง D+ (Long) · alert = เกรดโครงสร้างเดิม A+/B/C */
 export function snowballStatsIsGradeBMomentumDowngradeRow(
   row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
 ): boolean {
+  const alert = row.alertQualityTier;
   return (
     row.qualityTier === "d_plus" &&
-    row.alertQualityTier === "b_plus" &&
-    !row.breakout1hConfirmFail
+    !row.breakout1hConfirmFail &&
+    (alert === "a_plus" || alert === "b_plus" || alert === "c_plus")
   );
 }
 
