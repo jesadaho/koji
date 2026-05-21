@@ -173,12 +173,23 @@ export function migrateSnowballStatsConfirmFailSideToLong(rows: SnowballStatsRow
   return updated;
 }
 
-/** แถวเก่า qualityTier=d_plus → ติดป้าย confirm fail + alertQualityTier สำหรับแสดงเกรด D */
+/** แถวเก่า qualityTier=d_plus ที่ไม่มี alertQualityTier → ติดป้าย confirm fail (ไม่แตะ D+ ที่ alert = A+/B/C) */
 export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): number {
   let updated = 0;
   for (const row of rows) {
     if (row.qualityTier !== "d_plus") continue;
+    const alert = row.alertQualityTier;
+    const isMomentumDPlus =
+      alert === "a_plus" || alert === "b_plus" || alert === "c_plus";
     let touched = false;
+    if (isMomentumDPlus) {
+      if (row.breakout1hConfirmFail) {
+        row.breakout1hConfirmFail = false;
+        touched = true;
+      }
+      if (touched) updated += 1;
+      continue;
+    }
     if (!row.breakout1hConfirmFail) {
       row.breakout1hConfirmFail = true;
       touched = true;
