@@ -91,7 +91,7 @@ function snowballStatsTradeSideLabel(trade: SnowballStatsRow["side"]): "Long" | 
   return trade === "long" ? "Long" : "Short";
 }
 
-/** ทิศในตาราง: ทิศสัญญาณ Snowball (Long/Short) · Grade D+ = Long อย่างเดียว · C fade = Long->Short */
+/** ทิศในตาราง: ทิศสัญญาณ Snowball (Long/Short) · Grade D confirm fail = Long (ซ่อน short ใน stats) · C fade = Long->Short */
 export function snowballStatsSideLabel(
   row: Pick<
     SnowballStatsRow,
@@ -112,36 +112,68 @@ export function snowballStatsSideLabel(
   return `${signal}->${trade}`;
 }
 
-function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): string {
+/** B ไม่ผ่าน momentum + 1H confirm ผ่าน → qualityTier D แต่แสดง D+ (Long) */
+export function snowballStatsIsGradeBMomentumDowngradeRow(
+  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+): boolean {
+  return (
+    row.qualityTier === "d_plus" &&
+    row.alertQualityTier === "b_plus" &&
+    !row.breakout1hConfirmFail
+  );
+}
+
+function snowballStatsGradeLetter(
+  tier: SnowballStatsQualityTier | undefined,
+  row?: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+): string {
   if (!tier) return "—";
   if (tier === "a_plus") return "A+";
   if (tier === "b_plus") return "B";
   if (tier === "c_plus") return "C";
-  if (tier === "d_plus") return "D+";
+  if (tier === "d_plus") {
+    if (row && snowballStatsIsGradeBMomentumDowngradeRow({ ...row, qualityTier: tier })) return "D+";
+    return "D";
+  }
   return "—";
 }
 
-/** แถวสถิติที่เคยเป็น Grade D / 1H confirm fail */
+/** แถวสถิติ Grade D จาก 1H confirm fail (ไม่รวม B→D+ momentum downgrade) */
 export function snowballStatsIsLongConfirmFailRow(
   row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
 ): boolean {
   if (row.breakout1hConfirmFail) return true;
-  if (row.qualityTier === "d_plus" || row.alertQualityTier === "d_plus") return true;
+  if (row.qualityTier === "d_plus" || row.alertQualityTier === "d_plus") {
+    return !snowballStatsIsGradeBMomentumDowngradeRow(row);
+  }
   return false;
 }
 
-function snowballStatsGradeDisplayLetter(tier: SnowballStatsQualityTier | undefined): string {
-  return snowballStatsGradeLetter(tier);
+function snowballStatsGradeDisplayLetter(
+  tier: SnowballStatsQualityTier | undefined,
+  row?: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+): string {
+  return snowballStatsGradeLetter(tier, row);
 }
 
-/** A+/B/C/D สำหรับตารางสถิติ — follow-up 4h อาจเป็น C (D) */
+/** A+/B/C/D สำหรับตารางสถิติ — follow-up 4h อาจเป็น C (D) · B→D+ แสดง D+ (B) */
 export function snowballStatsGradeLabel(
   side: SnowballStatsRow["side"],
   tier: SnowballStatsRow["qualityTier"] | undefined,
   alertTier?: SnowballStatsRow["alertQualityTier"],
+  row?: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
 ): string {
-  const cur = snowballStatsGradeDisplayLetter(tier);
-  const alert = snowballStatsGradeDisplayLetter(alertTier);
+  const ctx: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail"> = {
+    qualityTier: tier,
+    alertQualityTier: alertTier,
+    breakout1hConfirmFail: row?.breakout1hConfirmFail ?? false,
+  };
+  const cur = snowballStatsGradeDisplayLetter(tier, ctx);
+  const alert = snowballStatsGradeDisplayLetter(alertTier, {
+    qualityTier: alertTier,
+    alertQualityTier: alertTier,
+    breakout1hConfirmFail: ctx.breakout1hConfirmFail,
+  });
   if (
     alertTier &&
     tier &&

@@ -27,7 +27,7 @@ function finite(n: unknown): n is number {
 /**
  * ทิศที่ควรเทรดสำหรับตารางสถิติ (ไม่ใช่ทิศแจ้งเตือน Snowball ตรงๆ)
  * - Bear → short
- * - Long 1H confirm fail / Grade D+ → long (ทิศสัญญาณ)
+ * - Long 1H confirm fail / Grade D → long (ทิศวัดผลสถิติ · แจ้งเตือนอาจ Long->Short)
  * - Long + แท่ง confirm แดง (close < open) และ vol สูงกว่าแท่งสัญญาณ → short
  * - Long + confirm ปิดเหนือ signal high → long
  * - Long Grade C → short (fade thesis)

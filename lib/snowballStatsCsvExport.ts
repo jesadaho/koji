@@ -59,7 +59,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     r.symbol,
     statsCoinLabel(r.symbol),
     snowballStatsSideLabel(r),
-    snowballStatsGradeLabel(r.side, r.qualityTier, r.alertQualityTier),
+    snowballStatsGradeLabel(r.side, r.qualityTier, r.alertQualityTier, r),
     snowballStatsDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs),
     statsFmtBkk(r.alertedAtIso),
     statsFmtPrice(r.entryPrice),
