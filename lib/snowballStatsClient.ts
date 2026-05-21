@@ -74,6 +74,8 @@ export type SnowballStatsRow = {
   pct12h: number | null;
   price24h: number | null;
   pct24h: number | null;
+  price48h: number | null;
+  pct48h: number | null;
   maxRoiPct: number | null;
   durationToMfeHours: number | null;
   maxDrawdownPct: number | null;
@@ -89,32 +91,18 @@ function snowballStatsAlertSideLabel(alert: SnowballStatsAlertSide): "Long" | "S
   return alert === "long" ? "Long" : "Short";
 }
 
-function snowballStatsTradeSideLabel(trade: SnowballStatsRow["side"]): "Long" | "Short" {
-  return trade === "long" ? "Long" : "Short";
-}
-
-/** ทิศในตาราง: ทิศสัญญาณ Snowball (Long/Short) · Grade D confirm fail = Long (ซ่อน short ใน stats) · C fade = Long->Short */
+/** ทิศในตาราง = ทิศสัญญาณ (Long / Short สำหรับ bear) — สถิติวัดผล long alert เป็น Long เสมอ */
 export function snowballStatsSideLabel(
-  row: Pick<
-    SnowballStatsRow,
-    "side" | "alertSide" | "triggerKind" | "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail"
-  >,
+  row: Pick<SnowballStatsRow, "alertSide" | "triggerKind">,
 ): string {
   let alert: SnowballStatsAlertSide | null = row.alertSide ?? null;
   if (!alert) {
-    if (row.side === "long") alert = "long";
-    else if (row.triggerKind === "swing_ll") alert = "bear";
-    else alert = "long";
+    alert = row.triggerKind === "swing_ll" ? "bear" : "long";
   }
-  const signal = snowballStatsAlertSideLabel(alert);
-  if (snowballStatsIsLongConfirmFailRow(row)) return signal;
-
-  const trade = snowballStatsTradeSideLabel(row.side);
-  if (signal === trade) return trade;
-  return `${signal}->${trade}`;
+  return snowballStatsAlertSideLabel(alert);
 }
 
-/** momentum ไม่ผ่าน + 1H confirm ผ่าน → ส่ง D+ (Long) — ไม่รวม Grade C fade (Long->Short) */
+/** momentum ไม่ผ่าน + 1H confirm ผ่าน → ส่ง D+ (Long) */
 export function snowballStatsIsGradeBMomentumDowngradeRow(
   row: Pick<
     SnowballStatsRow,
@@ -206,13 +194,18 @@ export function snowballStatsGradeLabel(
     momentumDowngrade: row?.momentumDowngrade,
   };
 
-  const cur = snowballStatsGradeDisplayLetter(tier, ctx);
-
-  if (!row?.qualityTier4hAdjusted) {
-    if (snowballStatsIsGradeBMomentumDowngradeRow(ctx)) return "D+";
-    return cur;
+  if (snowballStatsIsGradeBMomentumDowngradeRow(ctx)) {
+    if (!row?.qualityTier4hAdjusted) return "D+";
+    const cur = snowballStatsGradeDisplayLetter(tier, ctx);
+    if (cur === "D+" || cur === "—") return "D+";
+    return `${cur} (D+)`;
   }
 
+  if (!row?.qualityTier4hAdjusted) {
+    return snowballStatsGradeDisplayLetter(tier, ctx);
+  }
+
+  const cur = snowballStatsGradeDisplayLetter(tier, ctx);
   const atAlert = snowballStatsGradeAtAlertLetter(ctx);
   if (atAlert !== "—" && cur !== "—" && cur !== atAlert) {
     return `${cur} (${atAlert})`;

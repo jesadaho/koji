@@ -229,16 +229,22 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
     }
   }
 
-  for (const row of state.rows) {
-    if (row.outcome !== "pending") continue;
+  const SEC_48H = 48 * 3600;
+  const SEC_24H = 24 * 3600;
 
+  for (const row of state.rows) {
     const entry = row.entryPrice;
     if (!Number.isFinite(entry) || entry <= 0) continue;
 
     const ac = anchorCloseSec(row);
     if (nowSec < ac) continue;
 
-    const windowEndSec = Math.min(nowSec, ac + 24 * 3600);
+    const pending = row.outcome === "pending";
+    const needs48h = row.pct48h == null && nowSec >= ac + SEC_48H;
+    if (!pending && !needs48h) continue;
+
+    const windowEndHorizonSec = Math.min(nowSec, ac + SEC_48H);
+    const windowEndMfeSec = Math.min(nowSec, ac + SEC_24H);
 
     const pack = await fetchBinanceUsdmKlinesRange(row.symbol, "15m", {
       startTimeMs: row.signalBarOpenSec * 1000,
@@ -248,7 +254,6 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
     if (!pack || pack.timeSec.length === 0) continue;
 
     const { timeSec, high, low, close } = pack;
-    // เติมฐาน low ของแท่งสัญญาณ (ถ้ายังไม่มี) — ใช้แท่งที่ open time ตรงกับ signalBarOpenSec
     if (row.signalBarLow == null || !Number.isFinite(row.signalBarLow) || row.signalBarLow <= 0) {
       const iSignal = timeSec.findIndex((t) => t === row.signalBarOpenSec);
       if (iSignal >= 0) {
@@ -259,101 +264,171 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
     const iFirst = timeSec.findIndex((t) => t + KLINE_GRAN_SEC >= ac);
     if (iFirst < 0) continue;
 
-    let iLast = iFirst;
+    let iLastHorizon = iFirst;
     for (let i = iFirst; i < timeSec.length; i++) {
-      if (timeSec[i]! + KLINE_GRAN_SEC <= windowEndSec) iLast = i;
+      if (timeSec[i]! + KLINE_GRAN_SEC <= windowEndHorizonSec) iLastHorizon = i;
     }
-    while (iLast >= iFirst && timeSec[iLast]! + KLINE_GRAN_SEC > windowEndSec) {
-      iLast--;
+    while (iLastHorizon >= iFirst && timeSec[iLastHorizon]! + KLINE_GRAN_SEC > windowEndHorizonSec) {
+      iLastHorizon--;
     }
-    if (iLast < iFirst) continue;
+    if (iLastHorizon < iFirst) continue;
 
-    let maxRoi = -Infinity;
-    let mfeIdx = iFirst;
-    if (row.side === "long") {
-      for (let i = iFirst; i <= iLast; i++) {
-        const roi = ((high[i]! - entry) / entry) * 100;
-        if (roi > maxRoi) {
-          maxRoi = roi;
-          mfeIdx = i;
-        }
-      }
-    } else {
-      for (let i = iFirst; i <= iLast; i++) {
-        const roi = ((entry - low[i]!) / entry) * 100;
-        if (roi > maxRoi) {
-          maxRoi = roi;
-          mfeIdx = i;
-        }
-      }
-    }
+    let rowTouched = false;
 
-    if (!Number.isFinite(maxRoi)) continue;
+    const h4 = pickHorizonClose(
+      timeSec,
+      close,
+      iFirst,
+      iLastHorizon,
+      nowSec,
+      ac + 4 * 3600,
+      entry,
+      row.side,
+    );
+    const h12 = pickHorizonClose(
+      timeSec,
+      close,
+      iFirst,
+      iLastHorizon,
+      nowSec,
+      ac + 12 * 3600,
+      entry,
+      row.side,
+    );
+    let h24 = pickHorizonClose(
+      timeSec,
+      close,
+      iFirst,
+      iLastHorizon,
+      nowSec,
+      ac + SEC_24H,
+      entry,
+      row.side,
+    );
+    let h48 = pickHorizonClose(
+      timeSec,
+      close,
+      iFirst,
+      iLastHorizon,
+      nowSec,
+      ac + SEC_48H,
+      entry,
+      row.side,
+    );
 
-    let minLow = Infinity;
-    let maxHigh = -Infinity;
-    for (let i = iFirst; i <= mfeIdx; i++) {
-      minLow = Math.min(minLow, low[i]!);
-      maxHigh = Math.max(maxHigh, high[i]!);
-    }
-    let maxDd = 0;
-    if (row.side === "long") {
-      maxDd = ((entry - minLow) / entry) * 100;
-    } else {
-      maxDd = ((maxHigh - entry) / entry) * 100;
-    }
-    if (!Number.isFinite(maxDd) || maxDd < 0) maxDd = 0;
-
-    const durationHours = (timeSec[mfeIdx]! + KLINE_GRAN_SEC - ac) / 3600;
-
-    const h4 = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + 4 * 3600, entry, row.side);
-    const h12 = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + 12 * 3600, entry, row.side);
-    let h24 = pickHorizonClose(timeSec, close, iFirst, iLast, nowSec, ac + 24 * 3600, entry, row.side);
-
-    if (h24 == null && nowSec >= ac + 24 * 3600 && iLast >= iFirst) {
-      const p = close[iLast]!;
-      h24 = { price: p, pct: pctVsEntry(row.side, entry, p) };
-    }
-
-    row.maxRoiPct = maxRoi;
-    row.durationToMfeHours = durationHours;
-    row.maxDrawdownPct = maxDd;
     if (h4) {
       row.price4h = h4.price;
       row.pct4h = h4.pct;
+      rowTouched = true;
     }
     if (h12) {
       row.price12h = h12.price;
       row.pct12h = h12.pct;
+      rowTouched = true;
     }
     if (h24) {
       row.price24h = h24.price;
       row.pct24h = h24.pct;
+      rowTouched = true;
+    }
+    if (h48) {
+      row.price48h = h48.price;
+      row.pct48h = h48.pct;
+      rowTouched = true;
+    } else if (nowSec >= ac + SEC_48H && iLastHorizon >= iFirst) {
+      const p = close[iLastHorizon]!;
+      row.price48h = p;
+      row.pct48h = pctVsEntry(row.side, entry, p);
+      rowTouched = true;
     }
 
-    const finalized = nowSec >= ac + 24 * 3600 && row.pct24h != null && row.price24h != null;
-    if (finalized) {
-      const winMin = outcomeWinMinPct();
-      const lossMax = outcomeLossMaxPct();
-      const quickTp30 = outcomeQuickTp30MinPct();
-      const pct24 = row.pct24h ?? 0;
-      if (row.maxRoiPct != null && Number.isFinite(row.maxRoiPct) && row.maxRoiPct >= quickTp30) {
-        row.outcome = "win_quick_tp30";
-      } else if (pct24 >= winMin) {
-        row.outcome = "win_trend";
-      } else if (pct24 <= lossMax) {
-        // กติกา “ยังรันเทรนด์ได้” แม้ 24h ติดลบ: ไม่หลุดฐาน + DD ไม่ลึก + ไม่อยู่ใน SVP hole
-        row.outcome = passesRunTrendGuard(row) ? "win_trend" : "loss";
-      } else {
-        row.outcome = "flat";
+    if (pending) {
+      let iLastMfe = iFirst;
+      for (let i = iFirst; i < timeSec.length; i++) {
+        if (timeSec[i]! + KLINE_GRAN_SEC <= windowEndMfeSec) iLastMfe = i;
+      }
+      while (iLastMfe >= iFirst && timeSec[iLastMfe]! + KLINE_GRAN_SEC > windowEndMfeSec) {
+        iLastMfe--;
+      }
+      if (iLastMfe < iFirst) continue;
+
+      if (h24 == null && nowSec >= ac + SEC_24H && iLastMfe >= iFirst) {
+        const p = close[iLastMfe]!;
+        h24 = { price: p, pct: pctVsEntry(row.side, entry, p) };
+        row.price24h = h24.price;
+        row.pct24h = h24.pct;
+        rowTouched = true;
       }
 
-      const reward =
-        rrRewardSource() === "mfe" ? (row.maxRoiPct ?? 0) : (row.pct24h ?? 0);
-      row.resultRr = formatRr(reward, row.maxDrawdownPct ?? 0);
+      let maxRoi = -Infinity;
+      let mfeIdx = iFirst;
+      if (row.side === "long") {
+        for (let i = iFirst; i <= iLastMfe; i++) {
+          const roi = ((high[i]! - entry) / entry) * 100;
+          if (roi > maxRoi) {
+            maxRoi = roi;
+            mfeIdx = i;
+          }
+        }
+      } else {
+        for (let i = iFirst; i <= iLastMfe; i++) {
+          const roi = ((entry - low[i]!) / entry) * 100;
+          if (roi > maxRoi) {
+            maxRoi = roi;
+            mfeIdx = i;
+          }
+        }
+      }
+
+      if (Number.isFinite(maxRoi)) {
+        let minLow = Infinity;
+        let maxHigh = -Infinity;
+        for (let i = iFirst; i <= mfeIdx; i++) {
+          minLow = Math.min(minLow, low[i]!);
+          maxHigh = Math.max(maxHigh, high[i]!);
+        }
+        let maxDd = 0;
+        if (row.side === "long") {
+          maxDd = ((entry - minLow) / entry) * 100;
+        } else {
+          maxDd = ((maxHigh - entry) / entry) * 100;
+        }
+        if (!Number.isFinite(maxDd) || maxDd < 0) maxDd = 0;
+
+        row.maxRoiPct = maxRoi;
+        row.durationToMfeHours = (timeSec[mfeIdx]! + KLINE_GRAN_SEC - ac) / 3600;
+        row.maxDrawdownPct = maxDd;
+        rowTouched = true;
+
+        const finalized =
+          nowSec >= ac + SEC_24H && row.pct24h != null && row.price24h != null;
+        if (finalized) {
+          const winMin = outcomeWinMinPct();
+          const lossMax = outcomeLossMaxPct();
+          const quickTp30 = outcomeQuickTp30MinPct();
+          const pct24 = row.pct24h ?? 0;
+          if (
+            row.maxRoiPct != null &&
+            Number.isFinite(row.maxRoiPct) &&
+            row.maxRoiPct >= quickTp30
+          ) {
+            row.outcome = "win_quick_tp30";
+          } else if (pct24 >= winMin) {
+            row.outcome = "win_trend";
+          } else if (pct24 <= lossMax) {
+            row.outcome = passesRunTrendGuard(row) ? "win_trend" : "loss";
+          } else {
+            row.outcome = "flat";
+          }
+
+          const reward =
+            rrRewardSource() === "mfe" ? (row.maxRoiPct ?? 0) : (row.pct24h ?? 0);
+          row.resultRr = formatRr(reward, row.maxDrawdownPct ?? 0);
+        }
+      }
     }
 
-    dirty += 1;
+    if (rowTouched) dirty += 1;
   }
 
   if (dirty > 0) await saveSnowballStatsState(state);

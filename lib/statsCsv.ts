@@ -23,8 +23,10 @@ export function statsCsvFilename(prefix: string): string {
 }
 
 export type DownloadCsvOptions = {
-  /** เช่น `/api/tma/snowball-stats.csv` — ใช้กับ Telegram.WebApp.downloadFile */
+  /** เช่น `/api/tma/snowball-stats.csv` — fallback สำหรับ Telegram.WebApp.downloadFile */
   telegramExportPath?: string;
+  /** ใน TMA ใช้ CSV จากหน้า (ตรงตาราง) ก่อนดึงจาก API */
+  preferClientCsvInTma?: boolean;
 };
 
 function apiOrigin(): string {
@@ -214,19 +216,23 @@ async function deliverCsvBlob(
   filename: string,
   csv: string,
   exportPath?: string,
+  preferClientCsvInTma?: boolean,
 ): Promise<boolean> {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
   const inTma = isTelegramMiniApp();
+  const clientCsvFirst = Boolean(preferClientCsvInTma && csv.trim());
 
   if (inTma) {
-    if (exportPath && (await tryTelegramDownloadFile(name, exportPath))) {
-      return true;
+    if (clientCsvFirst) {
+      if (!isMobilePlatform() && (await trySaveFilePicker(name, blob))) return true;
+      if (await tryShareCsvFile(name, blob)) return true;
     }
-    if (!isMobilePlatform() && (await trySaveFilePicker(name, blob))) {
-      return true;
+    if (exportPath && (await tryTelegramDownloadFile(name, exportPath))) return true;
+    if (!clientCsvFirst) {
+      if (!isMobilePlatform() && (await trySaveFilePicker(name, blob))) return true;
+      if (await tryShareCsvFile(name, blob)) return true;
     }
-    if (await tryShareCsvFile(name, blob)) return true;
     if (await tryClipboardCsv(csv)) {
       window.alert("คัดลอก CSV ไปคลิปบอร์ดแล้ว — วางใน Numbers / Excel แล้วบันทึกเป็นไฟล์");
       return true;
@@ -261,7 +267,9 @@ export async function downloadCsv(
     content = fetched.csv;
   }
 
-  if (content.trim() && (await deliverCsvBlob(filename, content, exportPath))) {
+  const preferClient = opts?.preferClientCsvInTma;
+
+  if (content.trim() && (await deliverCsvBlob(filename, content, exportPath, preferClient))) {
     return;
   }
 
@@ -271,7 +279,7 @@ export async function downloadCsv(
       window.alert(fetched.error);
       return;
     }
-    if (await deliverCsvBlob(filename, fetched.csv, exportPath)) {
+    if (await deliverCsvBlob(filename, fetched.csv, exportPath, preferClient)) {
       return;
     }
   }

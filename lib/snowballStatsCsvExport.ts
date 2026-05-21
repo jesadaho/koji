@@ -38,6 +38,7 @@ const HEADERS = [
   "4h",
   "12h",
   "24h",
+  "48h",
   "Max ROI",
   "Duration→MFE",
   "Max DD",
@@ -78,6 +79,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     statsFmtPctCell(r.price4h, r.pct4h),
     statsFmtPctCell(r.price12h, r.pct12h),
     statsFmtPctCell(r.price24h, r.pct24h),
+    statsFmtPctCell(r.price48h, r.pct48h),
     r.maxRoiPct != null && Number.isFinite(r.maxRoiPct) ? `${r.maxRoiPct.toFixed(2)}%` : "",
     r.durationToMfeHours != null && Number.isFinite(r.durationToMfeHours)
       ? `${r.durationToMfeHours.toFixed(2)}h`

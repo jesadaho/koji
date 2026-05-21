@@ -33,7 +33,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ทิศ = ทิศสัญญาณ Snowball · D = 1H confirm fail · D+ = momentum อ่อน + 1H confirm ผ่าน · วงเล็บ = เกรดหลัง follow-up 4h (เกรดตอนแจ้ง) · Long->Short = เช่น Grade C fade";
+  "ทิศ = ทิศสัญญาณ Snowball · สถิติวัดผล Long alert เป็น Long เสมอ · D = 1H confirm fail · D+ = momentum อ่อน + 1H confirm ผ่าน · วงเล็บ = เกรดหลัง follow-up 4h";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -297,6 +297,7 @@ export default function SnowballStatsTelegramMiniApp() {
     }
     await downloadCsv(statsCsvFilename("snowball-stats"), snowballStatsToCsv(rows), {
       telegramExportPath: "/api/tma/snowball-stats.csv",
+      preferClientCsvInTma: true,
     });
   }, [rows]);
 
@@ -395,6 +396,7 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">4h</th>
                 <th scope="col">12h</th>
                 <th scope="col">24h</th>
+                <th scope="col">48h</th>
                 <th scope="col">Max ROI</th>
                 <th scope="col">Duration→MFE</th>
                 <th scope="col">Max DD</th>
@@ -406,7 +408,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={27} className="sub">
+                  <td colSpan={28} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -442,6 +444,7 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{fmtPctCell(r.price4h, r.pct4h)}</td>
                     <td>{fmtPctCell(r.price12h, r.pct12h)}</td>
                     <td>{fmtPctCell(r.price24h, r.pct24h)}</td>
+                    <td>{fmtPctCell(r.price48h, r.pct48h)}</td>
                     <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
                     <td>
                       {r.durationToMfeHours != null && Number.isFinite(r.durationToMfeHours)

@@ -4,7 +4,6 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
-  snowballStatsIsLongConfirmFailRow,
   type SnowballStatsAlertSide,
   type SnowballStatsApiPayload,
   type SnowballStatsQualityTier,
@@ -153,6 +152,8 @@ function resetSnowballStatsFollowUpFields(row: SnowballStatsRow): void {
   row.pct12h = null;
   row.price24h = null;
   row.pct24h = null;
+  row.price48h = null;
+  row.pct48h = null;
   row.maxRoiPct = null;
   row.durationToMfeHours = null;
   row.maxDrawdownPct = null;
@@ -160,13 +161,13 @@ function resetSnowballStatsFollowUpFields(row: SnowballStatsRow): void {
   row.outcome = "pending";
 }
 
-/** แถว Grade D / confirm fail ที่เคย side=short → long + รีเซ็ตผลให้ follow-up คำนวณใหม่ */
-export function migrateSnowballStatsConfirmFailSideToLong(rows: SnowballStatsRow[]): number {
+/** แถวสัญญาณ Long ที่เคยบันทึก side=short (fade) → long + รีเซ็ตผล follow-up */
+export function migrateSnowballStatsLongAlertTradeSideToLong(rows: SnowballStatsRow[]): number {
   let updated = 0;
   for (const row of rows) {
-    if (!snowballStatsIsLongConfirmFailRow(row)) continue;
-    if (row.alertSide === "bear") continue;
-    if (row.side !== "short") continue;
+    const alert = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+    if (alert !== "long") continue;
+    if (row.side === "long") continue;
     row.side = "long";
     resetSnowballStatsFollowUpFields(row);
     updated += 1;
@@ -174,9 +175,14 @@ export function migrateSnowballStatsConfirmFailSideToLong(rows: SnowballStatsRow
   return updated;
 }
 
+/** @deprecated ใช้ migrateSnowballStatsLongAlertTradeSideToLong */
+export function migrateSnowballStatsConfirmFailSideToLong(rows: SnowballStatsRow[]): number {
+  return migrateSnowballStatsLongAlertTradeSideToLong(rows);
+}
+
 /** รัน migration แถวสถิติ (เรียกตอนโหลด API + tick follow-up) */
 export function applySnowballStatsRowMigrations(rows: SnowballStatsRow[]): number {
-  return migrateSnowballStatsLegacyGradeD(rows) + migrateSnowballStatsConfirmFailSideToLong(rows);
+  return migrateSnowballStatsLegacyGradeD(rows) + migrateSnowballStatsLongAlertTradeSideToLong(rows);
 }
 
 /** แถวเก่า qualityTier=d_plus ที่ไม่มี alertQualityTier → ติดป้าย confirm fail (ไม่แตะ D+ ที่ alert = A+/B/C) */
@@ -305,6 +311,8 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     pct12h: null,
     price24h: null,
     pct24h: null,
+    price48h: null,
+    pct48h: null,
     maxRoiPct: null,
     durationToMfeHours: null,
     maxDrawdownPct: null,
