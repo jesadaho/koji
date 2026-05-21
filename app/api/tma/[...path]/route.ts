@@ -1,6 +1,16 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { authenticateTmaFromRequest, authenticateTmaRequest } from "@/src/telegramMiniAppAuth";
+import {
+  authenticateTmaFromRequest,
+  authenticateTmaRequest,
+  tgUserIdToStoreKey,
+  type TmaAuthResult,
+} from "@/src/telegramMiniAppAuth";
+import {
+  createTmaCsvExportToken,
+  verifyTmaCsvExportToken,
+  TMA_CSV_EXPORT_PATHS,
+} from "@/src/tmaCsvExportToken";
 import { candleReversalStatsToCsv } from "@/lib/candleReversalStatsCsvExport";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
 import { statsCsvAttachmentResponse, statsCsvFilename } from "@/lib/statsCsvResponse";
@@ -48,6 +58,29 @@ function jsonError(e: unknown, status = 500) {
   console.error("[api/tma]", e);
   const msg = e instanceof Error ? e.message : "Internal Server Error";
   return json({ error: msg }, status);
+}
+
+/** Authorization header หรือ ?csv_token= (สำหรับ Telegram.WebApp.downloadFile) */
+async function authenticateTmaCsvDownload(
+  req: NextRequest,
+  csvPath: string,
+): Promise<TmaAuthResult> {
+  const token = req.nextUrl.searchParams.get("csv_token");
+  if (token) {
+    const telegramUserId = verifyTmaCsvExportToken(token, csvPath);
+    if (telegramUserId == null) {
+      return { ok: false, status: 401, error: "ลิงก์ดาวน์โหลดหมดอายุหรือไม่ถูกต้อง" };
+    }
+    return {
+      ok: true,
+      userId: tgUserIdToStoreKey(telegramUserId),
+      telegramUserId,
+    };
+  }
+  return authenticateTmaFromRequest(
+    req.headers.get("authorization"),
+    req.nextUrl.searchParams.get("tma"),
+  );
 }
 
 export async function GET(req: NextRequest, ctx: Ctx) {
@@ -123,10 +156,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       });
     }
     if (segs.length === 1 && a === "snowball-stats.csv") {
-      const auth = await authenticateTmaFromRequest(
-        req.headers.get("authorization"),
-        req.nextUrl.searchParams.get("tma"),
-      );
+      const auth = await authenticateTmaCsvDownload(req, "snowball-stats.csv");
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const data = await liffGetSnowballStats();
       const csv = snowballStatsToCsv(data.rows);
@@ -142,10 +172,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       });
     }
     if (segs.length === 1 && a === "reversal-stats.csv") {
-      const auth = await authenticateTmaFromRequest(
-        req.headers.get("authorization"),
-        req.nextUrl.searchParams.get("tma"),
-      );
+      const auth = await authenticateTmaCsvDownload(req, "reversal-stats.csv");
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const data = await liffGetCandleReversalStats(auth.telegramUserId);
       const csv = candleReversalStatsToCsv(data.rows);
@@ -168,6 +195,26 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   try {
     const segs = ctx.params.path ?? [];
     const [a] = segs;
+
+    if (segs.length === 1 && a === "csv-export-token") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      let body: { path?: string };
+      try {
+        body = (await req.json()) as { path?: string };
+      } catch {
+        return json({ error: "JSON ไม่ถูกต้อง" }, 400);
+      }
+      const path = typeof body.path === "string" ? body.path.trim() : "";
+      if (!path || !TMA_CSV_EXPORT_PATHS.has(path)) {
+        return json({ error: "path ไม่รองรับ" }, 400);
+      }
+      const token = createTmaCsvExportToken(auth.telegramUserId, path);
+      if (!token) {
+        return json({ error: "สร้างลิงก์ดาวน์โหลดไม่ได้" }, 500);
+      }
+      return json({ token, path, expiresSec: 120 });
+    }
 
     if (segs.length === 1 && a === "alerts") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
