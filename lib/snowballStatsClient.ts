@@ -124,16 +124,17 @@ export function snowballStatsIsGradeBMomentumDowngradeRow(
   if (row.momentumDowngrade === true) return true;
   if (row.momentumDowngrade === false) return false;
   const alert = row.alertQualityTier;
-  return (
-    row.qualityTier === "d_plus" &&
-    !row.breakout1hConfirmFail &&
-    (alert === "a_plus" || alert === "b_plus" || alert === "c_plus")
-  );
+  if (alert !== "a_plus" && alert !== "b_plus" && alert !== "c_plus") return false;
+  /** qualityTier d_plus + alert โครงสร้าง = D+ (แม้แถวเก่ามี breakout1hConfirmFail ผิดจาก migration) */
+  return row.qualityTier === "d_plus";
 }
 
 function snowballStatsGradeLetter(
   tier: SnowballStatsQualityTier | undefined,
-  row?: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+  row?: Pick<
+    SnowballStatsRow,
+    "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail" | "momentumDowngrade"
+  >,
 ): string {
   if (!tier) return "—";
   if (tier === "a_plus") return "A+";
@@ -158,14 +159,20 @@ export function snowballStatsIsLongConfirmFailRow(
 
 function snowballStatsGradeDisplayLetter(
   tier: SnowballStatsQualityTier | undefined,
-  row?: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+  row?: Pick<
+    SnowballStatsRow,
+    "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail" | "momentumDowngrade"
+  >,
 ): string {
   return snowballStatsGradeLetter(tier, row);
 }
 
 /** เกรดตอนแจ้ง (สำหรับวงเล็บหลัง follow-up 4h) */
 function snowballStatsGradeAtAlertLetter(
-  ctx: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+  ctx: Pick<
+    SnowballStatsRow,
+    "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail" | "momentumDowngrade"
+  >,
 ): string {
   if (snowballStatsIsGradeBMomentumDowngradeRow(ctx)) return "D+";
   return snowballStatsGradeDisplayLetter(ctx.alertQualityTier, {
@@ -182,13 +189,21 @@ export function snowballStatsGradeLabel(
   alertTier?: SnowballStatsRow["alertQualityTier"],
   row?: Pick<
     SnowballStatsRow,
-    "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail" | "qualityTier4hAdjusted"
+    | "qualityTier"
+    | "alertQualityTier"
+    | "breakout1hConfirmFail"
+    | "momentumDowngrade"
+    | "qualityTier4hAdjusted"
   >,
 ): string {
-  const ctx: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail"> = {
+  const ctx: Pick<
+    SnowballStatsRow,
+    "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail" | "momentumDowngrade"
+  > = {
     qualityTier: tier,
     alertQualityTier: alertTier,
     breakout1hConfirmFail: row?.breakout1hConfirmFail ?? false,
+    momentumDowngrade: row?.momentumDowngrade,
   };
 
   const cur = snowballStatsGradeDisplayLetter(tier, ctx);
@@ -206,8 +221,14 @@ export function snowballStatsGradeLabel(
 }
 
 export function snowballStatsGradeCellClass(
-  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+  row: Pick<
+    SnowballStatsRow,
+    "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail" | "momentumDowngrade"
+  >,
 ): string {
+  if (snowballStatsIsGradeBMomentumDowngradeRow(row)) {
+    return "snowGradeCell snowGradeCell--d";
+  }
   const tier = row.qualityTier;
   if (tier === "a_plus") return "snowGradeCell snowGradeCell--a";
   if (tier === "b_plus") return "snowGradeCell snowGradeCell--b";

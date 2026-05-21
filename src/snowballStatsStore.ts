@@ -174,6 +174,11 @@ export function migrateSnowballStatsConfirmFailSideToLong(rows: SnowballStatsRow
   return updated;
 }
 
+/** รัน migration แถวสถิติ (เรียกตอนโหลด API + tick follow-up) */
+export function applySnowballStatsRowMigrations(rows: SnowballStatsRow[]): number {
+  return migrateSnowballStatsLegacyGradeD(rows) + migrateSnowballStatsConfirmFailSideToLong(rows);
+}
+
 /** แถวเก่า qualityTier=d_plus ที่ไม่มี alertQualityTier → ติดป้าย confirm fail (ไม่แตะ D+ ที่ alert = A+/B/C) */
 export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): number {
   let updated = 0;

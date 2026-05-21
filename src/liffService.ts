@@ -51,7 +51,11 @@ import {
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
 import type { SnowballStatsApiPayload } from "@/lib/snowballStatsClient";
-import { loadSnowballStatsState } from "./snowballStatsStore";
+import {
+  applySnowballStatsRowMigrations,
+  loadSnowballStatsState,
+  saveSnowballStatsState,
+} from "./snowballStatsStore";
 import { isAdminTelegramUserId } from "./adminIds";
 import { loadCandleReversalStatsState, resetCandleReversalStatsState } from "./candleReversalStatsStore";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
@@ -705,6 +709,8 @@ export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
 /** สถิติ Snowball (global) — ต้องผ่าน auth เหมือน spark-stats */
 export async function liffGetSnowballStats(): Promise<SnowballStatsApiPayload> {
   const st = await loadSnowballStatsState();
+  const migrated = applySnowballStatsRowMigrations(st.rows);
+  if (migrated > 0) await saveSnowballStatsState(st);
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
   return { rows };
 }
