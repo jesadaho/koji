@@ -68,7 +68,7 @@ import {
   type TrendMomentumMetrics,
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
-import { addSnowballPendingConfirm } from "./snowballConfirmStore";
+import { addSnowballPendingConfirm, loadSnowballPendingConfirms } from "./snowballConfirmStore";
 import {
   loadSnowballConfirmLastRoundStats,
   type SnowballConfirmLastRoundStats,
@@ -2572,28 +2572,31 @@ export async function runPublicIndicatorFeedInternal(
   let notified = 0;
   let snowballScanSummaryText: string | undefined;
 
-  // กัน Snowball ยิงซ้ำข้าม type (SUPER/WATCHLIST/…) โดยดู “pending” ในสถิติ
-  // ถ้ามี pending อยู่แล้วสำหรับ (symbol, tf, side) ให้ข้ามแจ้งเตือนเพิ่มจนกว่าจะ finalize
-  const snowballPendingKeys = new Set<string>();
+  /** เหรียญที่มีสัญญาณ pending — ห้ามแจ้ง Snowball ซ้ำจน outcome ไม่ pending / คิว confirm หาย */
+  const snowballPendingSymbols = new Set<string>();
   if (snowballOn) {
+    const pendingMaxAgeMs = 30 * 3600 * 1000;
     try {
       const stats = await loadSnowballStatsState();
       const rows = (stats?.rows ?? []) as SnowballStatsRow[];
       for (const r of rows) {
         if (!r || r.outcome !== "pending") continue;
         const sym = typeof r.symbol === "string" ? r.symbol.trim().toUpperCase() : "";
-        const tf = r.signalBarTf ?? "15m";
-        const side = r.side;
         const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
-        // กันค้างยาวผิดปกติ: ถ้าเกิน ~30h ถือว่าไม่เอามาบล็อกแล้ว
-        if (atMs > 0 && now - atMs > 30 * 3600 * 1000) continue;
-        if (!sym) continue;
-        const alertSide = r.alertSide ?? (r.side === "short" || r.triggerKind === "swing_ll" ? "bear" : "long");
-        const pendingSide = alertSide === "bear" ? "short" : "long";
-        snowballPendingKeys.add(`${sym}|${tf}|${pendingSide}`);
+        if (atMs > 0 && now - atMs > pendingMaxAgeMs) continue;
+        if (sym) snowballPendingSymbols.add(sym);
       }
     } catch (e) {
       console.error("[indicatorPublicFeed] load snowball stats for pending dedupe failed", e);
+    }
+    try {
+      const pend = await loadSnowballPendingConfirms();
+      for (const it of pend.items) {
+        const sym = typeof it.symbol === "string" ? it.symbol.trim().toUpperCase() : "";
+        if (sym) snowballPendingSymbols.add(sym);
+      }
+    } catch (e) {
+      console.error("[indicatorPublicFeed] load snowball pending confirm for dedupe failed", e);
     }
   }
 
@@ -2896,6 +2899,16 @@ export async function runPublicIndicatorFeedInternal(
         pack1hForTwoBar: BinanceKlinePack | null,
       ): Promise<void> => {
         if (iEval < 1) return;
+        if (!intrabar && snowballPendingSymbols.has(symbol)) {
+          if (snowScanStats) {
+            snowScanStats.longDeduped++;
+            pushSnowScanSymList(
+              snowScanStats.longDedupedSymbols,
+              `${symbol} LONG (สถิติ/คิว pending)`,
+            );
+          }
+          return;
+        }
         const longBreakout1h =
           snowTf !== "4h" &&
           !intrabar &&
@@ -3044,20 +3057,6 @@ export async function runPublicIndicatorFeedInternal(
 
         const signalBarOpenSec = t15[iSig];
         if (typeof signalBarOpenSec !== "number" || !Number.isFinite(signalBarOpenSec)) return;
-
-        if (
-          !intrabar &&
-          snowballPendingKeys.has(`${symbol}|${snowTf}|long|${signalBarOpenSec}`)
-        ) {
-          if (snowScanStats) {
-            snowScanStats.longDeduped++;
-            pushSnowScanSymList(
-              snowScanStats.longDedupedSymbols,
-              `${symbol} LONG (pending แท่งเดิม)`,
-            );
-          }
-          return;
-        }
 
         if (twoBarInline) {
           const tfDur = tfBarDurationSecForSummary(snowTf);
@@ -3239,26 +3238,31 @@ export async function runPublicIndicatorFeedInternal(
           snowballGradeBRequiresSustainedMomentum() &&
           !sustainedBuyingPressure
         ) {
-          const eval1hForMomentum =
-            longBreakout1h && breakout1hEval
+          /** two-bar inline ผ่าน pullback/vol/1h min-low แล้ว — ไม่ใช้ Breakout 1H eval แยก (เกณฑ์ต่างกัน) */
+          const inline1hConfirmOk = twoBarInline;
+          const eval1hForMomentum = inline1hConfirmOk
+            ? null
+            : longBreakout1h && breakout1hEval
               ? breakout1hEval
               : evaluateSnowballLongBreakout1hConfirm(
                   pack1hTrend,
                   snowballLongBreakout1hSwingLookback(),
                   snowballLongBreakout1hExcludeRecent(),
                 );
-          if (
-            snowballGradeBMomentumFailGradeDOn1hConfirmPass() &&
-            eval1hForMomentum?.ok &&
-            Number.isFinite(eval1hForMomentum.close) &&
-            eval1hForMomentum.close > 0
-          ) {
+          const confirm1hOk =
+            inline1hConfirmOk ||
+            (eval1hForMomentum?.ok === true &&
+              Number.isFinite(eval1hForMomentum.close) &&
+              eval1hForMomentum.close > 0);
+          if (snowballGradeBMomentumFailGradeDOn1hConfirmPass() && confirm1hOk) {
             momentumDowngradeFromGrade = longBreakoutGrade;
             longBreakoutGrade = "d_plus";
             gradeBMomentumFailGradeD = true;
             gradeBMomentum1hEval = eval1hForMomentum;
             const fromLbl = snowballStructureGradeShortLabel(momentumDowngradeFromGrade);
-            gradeBMomentumFailFootnote = `📎 ${snowballLongGradePlusLabel("d_plus")}: เดิม Grade ${fromLbl} · momentum ไม่ผ่าน · 1H confirm ผ่าน — ปิด ~ ${formatClosedCandleBkk(eval1hForMomentum.barOpenSec)} @ ${formatUsdPrice(eval1hForMomentum.close)} USDT · ${eval1hForMomentum.detail}`;
+            gradeBMomentumFailFootnote = inline1hConfirmOk
+              ? `📎 ${snowballLongGradePlusLabel("d_plus")}: เดิม Grade ${fromLbl} · momentum ไม่ผ่าน · two-bar inline confirm ผ่าน — ปิด ~ ${formatClosedCandleBkk(t15[iConf]!)} @ ${formatUsdPrice(c15[iConf]!)} USDT`
+              : `📎 ${snowballLongGradePlusLabel("d_plus")}: เดิม Grade ${fromLbl} · momentum ไม่ผ่าน · 1H confirm ผ่าน — ปิด ~ ${formatClosedCandleBkk(eval1hForMomentum!.barOpenSec)} @ ${formatUsdPrice(eval1hForMomentum!.close)} USDT · ${eval1hForMomentum!.detail}`;
             if (snowScanStats) {
               snowScanStats.longGradeBMomentumToGradeD++;
               pushSnowScanSymList(
@@ -3266,7 +3270,7 @@ export async function runPublicIndicatorFeedInternal(
                 `${symbol} ${snowballLongGradePlusLabel("d_plus")} (จาก ${fromLbl})`,
               );
             }
-          } else if (snowballGradeFOnMomentumAnd1hConfirmFail()) {
+          } else if (!inline1hConfirmOk && snowballGradeFOnMomentumAnd1hConfirmFail()) {
             momentumDowngradeFromGrade = longBreakoutGrade;
             longBreakoutGrade = "f_plus";
             gradeBMomentumFailGradeF = true;
@@ -3601,32 +3605,38 @@ export async function runPublicIndicatorFeedInternal(
                   signalVolume: vE!,
                   confirmOpen:
                     gradeBMomentumFailGradeD || gradeBMomentumFailGradeF
-                    ? gradeBMomentum1hEval
-                      ? pack1hTrend?.open?.[gradeBMomentum1hEval.i1h] ?? null
-                      : null
-                    : longBreakout1h
-                      ? pack1hForTwoBar?.open?.[breakout1hEval!.i1h] ?? null
-                      : twoBarInline
+                      ? twoBarInline
                         ? o15[iConf]!
-                        : null,
+                        : gradeBMomentum1hEval
+                          ? pack1hTrend?.open?.[gradeBMomentum1hEval.i1h] ?? null
+                          : null
+                      : longBreakout1h
+                        ? pack1hForTwoBar?.open?.[breakout1hEval!.i1h] ?? null
+                        : twoBarInline
+                          ? o15[iConf]!
+                          : null,
                   confirmClose:
                     gradeBMomentumFailGradeD || gradeBMomentumFailGradeF
-                    ? gradeBMomentum1hEval?.close ?? null
-                    : longBreakout1h
-                      ? breakout1hEval!.close
-                      : twoBarInline
+                      ? twoBarInline
                         ? c15[iConf]!
-                        : null,
+                        : gradeBMomentum1hEval?.close ?? null
+                      : longBreakout1h
+                        ? breakout1hEval!.close
+                        : twoBarInline
+                          ? c15[iConf]!
+                          : null,
                   confirmVolume:
                     gradeBMomentumFailGradeD || gradeBMomentumFailGradeF
-                    ? gradeBMomentum1hEval
-                      ? pack1hTrend?.volume?.[gradeBMomentum1hEval.i1h] ?? null
-                      : null
-                    : longBreakout1h
-                      ? pack1hForTwoBar?.volume?.[breakout1hEval!.i1h] ?? null
-                      : twoBarInline
+                      ? twoBarInline
                         ? v15[iConf]!
-                        : null,
+                        : gradeBMomentum1hEval
+                          ? pack1hTrend?.volume?.[gradeBMomentum1hEval.i1h] ?? null
+                          : null
+                      : longBreakout1h
+                        ? pack1hForTwoBar?.volume?.[breakout1hEval!.i1h] ?? null
+                        : twoBarInline
+                          ? v15[iConf]!
+                          : null,
                   gradeCFadeOk: gradeCShortFade?.ok,
                 });
                 const longStatsBarOpenSec = signalBarOpenSec;
@@ -3711,6 +3721,16 @@ export async function runPublicIndicatorFeedInternal(
         pack1hForTwoBar: BinanceKlinePack | null,
       ): Promise<void> => {
         if (iEval < 1) return;
+        if (!intrabar && snowballPendingSymbols.has(symbol)) {
+          if (snowScanStats) {
+            snowScanStats.bearDeduped++;
+            pushSnowScanSymList(
+              snowScanStats.bearDedupedSymbols,
+              `${symbol} BEAR (สถิติ/คิว pending)`,
+            );
+          }
+          return;
+        }
         const twoBarInline = !intrabar && snowballTwoBarInlineModeEnabled() && iEval >= 2;
         const iConf = iEval;
         const iSig = twoBarInline ? iEval - 1 : iEval;
@@ -3750,19 +3770,6 @@ export async function runPublicIndicatorFeedInternal(
 
         const signalBarOpenSec = t15[iSig];
         if (typeof signalBarOpenSec !== "number" || !Number.isFinite(signalBarOpenSec)) return;
-        if (
-          !intrabar &&
-          snowballPendingKeys.has(`${symbol}|${snowTf}|short|${signalBarOpenSec}`)
-        ) {
-          if (snowScanStats) {
-            snowScanStats.bearDeduped++;
-            pushSnowScanSymList(
-              snowScanStats.bearDedupedSymbols,
-              `${symbol} BEAR (pending แท่งเดิม)`,
-            );
-          }
-          return;
-        }
 
         if (!twoBarInline && !intrabar && snowballBodyToRangeFilterEnabled()) {
           const oE = o15[iSig];
