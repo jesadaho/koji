@@ -37,6 +37,20 @@ function isTelegramMiniApp(): boolean {
   return typeof window !== "undefined" && Boolean(window.Telegram?.WebApp?.initData);
 }
 
+/** iOS/Android เท่านั้น — macOS / Telegram Desktop / web ถือเป็น desktop (ใช้ดาวน์โหลดไฟล์) */
+function isMobilePlatform(): boolean {
+  if (typeof window === "undefined") return false;
+  const p = window.Telegram?.WebApp?.platform?.toLowerCase() ?? "";
+  if (p === "ios" || p === "android") return true;
+  if (p === "macos" || p === "tdesktop" || p === "web" || p === "weba" || p === "unknown") {
+    return false;
+  }
+  if (typeof navigator !== "undefined" && /iphone|ipad|ipod|android/i.test(navigator.userAgent ?? "")) {
+    return true;
+  }
+  return false;
+}
+
 function parseApiErrorBody(text: string, fallback: string): string {
   const t = text.trim();
   if (!t) return fallback;
@@ -96,13 +110,33 @@ function tryAnchorDownload(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = filename;
+  a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
   a.rel = "noopener";
   a.style.display = "none";
   document.body.appendChild(a);
   a.click();
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/** macOS / Chrome — เลือกที่บันทึก (ได้ไฟล์ .csv ใน Downloads โดยตรง) */
+async function trySaveFilePicker(filename: string, blob: Blob): Promise<boolean> {
+  const picker = window.showSaveFilePicker;
+  if (typeof picker !== "function") return false;
+  const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+  try {
+    const handle = await picker({
+      suggestedName: name,
+      types: [{ description: "CSV", accept: { "text/csv": [".csv"] } }],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return true;
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") return true;
+    return false;
+  }
 }
 
 async function tryClipboardCsv(csv: string): Promise<boolean> {
@@ -115,20 +149,23 @@ async function tryClipboardCsv(csv: string): Promise<boolean> {
   }
 }
 
-async function deliverCsvBlob(filename: string, csv: string): Promise<boolean> {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const inTma = isTelegramMiniApp();
+type DeliverCsvResult = "save" | "download" | "share" | "clipboard" | false;
 
-  if (!inTma) {
-    tryAnchorDownload(filename, blob);
-    return true;
+async function deliverCsvBlob(filename: string, csv: string): Promise<DeliverCsvResult> {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+
+  if (!isMobilePlatform()) {
+    if (await trySaveFilePicker(name, blob)) return "save";
+    tryAnchorDownload(name, blob);
+    return "download";
   }
 
-  if (await tryShareCsvFile(filename, blob)) return true;
+  if (await tryShareCsvFile(name, blob)) return "share";
 
   if (await tryClipboardCsv(csv)) {
     window.alert("คัดลอก CSV ไปคลิปบอร์ดแล้ว — วางใน Numbers / Excel แล้วบันทึกเป็นไฟล์");
-    return true;
+    return "clipboard";
   }
 
   return false;
@@ -136,8 +173,9 @@ async function deliverCsvBlob(filename: string, csv: string): Promise<boolean> {
 
 /**
  * ดาวน์โหลด CSV
- * · ใช้เนื้อหา `csv` ที่สร้างในหน้า (หลังโหลดตารางด้วย Authorization แล้ว) — ไม่ยิง ?tma= ซ้ำ
- * · ถ้าไม่มีเนื้อหา ค่อย fetch ด้วย Authorization: tma
+ * · Desktop / Telegram macOS: Save dialog หรือ a[download] ลง Downloads
+ * · มือถือ: Share sheet / คลิปบอร์ด
+ * · ใช้เนื้อหาในหน้าก่อน — ไม่ยิง ?tma= ใน URL
  */
 export async function downloadCsv(
   filename: string,
