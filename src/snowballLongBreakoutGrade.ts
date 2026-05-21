@@ -4,6 +4,14 @@ import type { SnowballLongBreakout1hConfirmEval } from "./snowballLongBreakoutCo
 
 export type SnowballLongBreakoutGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus";
 
+/** ป้ายเกรด Long สำหรับหัวข้อ Telegram — รูปแบบ Grade X+ (Long) */
+export function snowballLongGradePlusLabel(g: SnowballLongBreakoutGrade): string {
+  if (g === "a_plus") return "Grade A+ (Long)";
+  if (g === "b_plus") return "Grade B+ (Long)";
+  if (g === "c_plus") return "Grade C+ (Long)";
+  return "Grade D+ (Long)";
+}
+
 const SEC_4H = 4 * 3600;
 const SEC_1H = 3600;
 const SEC_15M = 900;

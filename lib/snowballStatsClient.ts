@@ -91,7 +91,7 @@ function snowballStatsTradeSideLabel(trade: SnowballStatsRow["side"]): "Long" | 
   return trade === "long" ? "Long" : "Short";
 }
 
-/** ทิศในตาราง: ทิศสัญญาณ Snowball (Long/Short) · สวนทิศเทรด = Long->Short */
+/** ทิศในตาราง: ทิศสัญญาณ Snowball (Long/Short) · Grade D+ = Long อย่างเดียว · C fade = Long->Short */
 export function snowballStatsSideLabel(
   row: Pick<
     SnowballStatsRow,
@@ -117,7 +117,7 @@ function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): s
   if (tier === "a_plus") return "A+";
   if (tier === "b_plus") return "B";
   if (tier === "c_plus") return "C";
-  if (tier === "d_plus") return "D";
+  if (tier === "d_plus") return "D+";
   return "—";
 }
 

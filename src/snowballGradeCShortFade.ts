@@ -356,9 +356,8 @@ export async function resolveSnowballLongAutotradeSide(
   ) {
     return { side: "long", fade: null };
   }
-  if (doubleBarrierOn && grade === "d_plus") {
-    return { side: "short", fade: null };
-  }
+  /** Grade D+ (Long) — ไม่ auto-open Short (ทั้ง 1H confirm fail และ B+momentum fail) */
+  if (grade === "d_plus") return { side: null, fade: null };
   if (grade !== "c_plus" || !doubleBarrierOn) return { side: null, fade: null };
 
   let pack = pack1hHint ?? null;

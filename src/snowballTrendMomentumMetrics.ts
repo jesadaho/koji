@@ -57,7 +57,7 @@ export function snowballGradeBRequiresSustainedMomentum(): boolean {
   return true;
 }
 
-/** Grade B ไม่ผ่าน momentum แต่ 1H confirm ผ่าน → ส่ง Grade D (Long->Short) แทนบล็อก */
+/** Grade B ไม่ผ่าน momentum แต่ 1H confirm ผ่าน → ส่ง Grade D+ (Long) แทนบล็อก */
 export function snowballGradeBMomentumFailGradeDOn1hConfirmPass(): boolean {
   const raw =
     process.env.INDICATOR_PUBLIC_SNOWBALL_GRADE_B_MOMENTUM_FAIL_GRADE_D_ON_1H_CONFIRM?.trim().toLowerCase();
