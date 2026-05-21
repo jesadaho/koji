@@ -37,6 +37,26 @@ function isTelegramMiniApp(): boolean {
   return typeof window !== "undefined" && Boolean(window.Telegram?.WebApp?.initData);
 }
 
+function isMobileUserAgent(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iphone|ipad|ipod|android/i.test(navigator.userAgent ?? "");
+}
+
+/** macOS / Telegram Desktop / เว็บบนคอม — ไม่ใช้กลยุทธ์มือถือ (share / clipboard ก่อน) */
+function isDesktopPlatform(): boolean {
+  if (typeof window === "undefined") return false;
+  const p = window.Telegram?.WebApp?.platform?.toLowerCase() ?? "";
+  if (p === "macos" || p === "tdesktop" || p === "web" || p === "weba" || p === "unknown") return true;
+  if (p === "ios" || p === "android") return false;
+  return !isMobileUserAgent();
+}
+
+function buildAuthenticatedCsvUrl(exportPath: string): string | null {
+  const initData = getTelegramInitData();
+  if (!initData) return null;
+  return `${apiOrigin()}${exportPath}?tma=${encodeURIComponent(initData)}`;
+}
+
 type TgWebAppDownload = {
   downloadFile?: (
     params: { url: string; file_name: string },
@@ -87,6 +107,22 @@ function tryAnchorDownload(filename: string, blob: Blob): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+/** ดาวน์โหลดผ่าน URL จริง (ไม่ใช้ blob:) — เหมาะกับ Telegram Desktop บน Mac */
+function tryHttpsCsvDownload(exportPath: string): boolean {
+  const url = buildAuthenticatedCsvUrl(exportPath);
+  if (!url) return false;
+  try {
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;width:0;height:0;border:0;opacity:0;pointer-events:none";
+    iframe.src = url;
+    document.body.appendChild(iframe);
+    window.setTimeout(() => iframe.remove(), 120_000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function tryClipboardCsv(csv: string): Promise<boolean> {
   if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return false;
   try {
@@ -98,7 +134,9 @@ async function tryClipboardCsv(csv: string): Promise<boolean> {
 }
 
 /**
- * ดาวน์โหลด CSV — ใน Telegram Mini App (iOS) หลีกเลี่ยง blob: ที่ขึ้น "Open Link"
+ * ดาวน์โหลด CSV
+ * · Mac / Desktop: โหลดจาก URL API (ไม่ใช้ blob: ใน Telegram) หรือ a[download] นอก Telegram
+ * · มือถือใน Telegram: downloadFile / Share / คลิปบอร์ด
  */
 export async function downloadCsv(
   filename: string,
@@ -106,30 +144,33 @@ export async function downloadCsv(
   opts?: DownloadCsvOptions,
 ): Promise<void> {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const exportPath = opts?.telegramExportPath;
+  const inTma = isTelegramMiniApp();
+  const desktop = isDesktopPlatform();
 
-  if (opts?.telegramExportPath && isTelegramMiniApp()) {
-    const ok = await tryTelegramDownloadFile(filename, opts.telegramExportPath);
+  if (inTma && exportPath) {
+    const ok = await tryTelegramDownloadFile(filename, exportPath);
     if (ok) return;
+  }
+
+  if (desktop) {
+    if (exportPath && tryHttpsCsvDownload(exportPath)) return;
+    if (!inTma) {
+      tryAnchorDownload(filename, blob);
+      return;
+    }
+    window.alert("ดาวน์โหลดไม่สำเร็จ — ลองปิดแล้วเปิด Mini App ใหม่ หรืออัปเดต Telegram Desktop");
+    return;
   }
 
   if (await tryShareCsvFile(filename, blob)) return;
 
-  const ios =
-    typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent ?? "");
-
-  if (!ios && !isTelegramMiniApp()) {
-    tryAnchorDownload(filename, blob);
-    return;
-  }
-
   if (await tryClipboardCsv(csv)) {
-    window.alert("คัดลอก CSV ไปคลิปบอร์ดแล้ว — วางใน Notes / Sheets / Excel แล้วบันทึกเป็นไฟล์");
+    window.alert("คัดลอก CSV ไปคลิปบอร์ดแล้ว — วางใน Numbers / Excel แล้วบันทึกเป็นไฟล์");
     return;
   }
 
-  window.alert(
-    "ดาวน์โหลดอัตโนมัติไม่รองรับบนอุปกรณ์นี้ — ลองเปิด Mini App ใน Telegram เวอร์ชันล่าสุด หรือใช้เครื่องคอมพิวเตอร์",
-  );
+  window.alert("ดาวน์โหลดไม่สำเร็จ — ลองอัปเดต Telegram หรือเปิด Mini App ในเบราว์เซอร์");
 }
 
 export function statsFmtPrice(p: number | null | undefined): string {

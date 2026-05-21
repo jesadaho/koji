@@ -58,6 +58,7 @@ import {
   calculateTrendMomentumMetrics,
   formatTrendMomentumMetricsLine,
   isSustainedBuyingPressure,
+  snowballGradeBMomentumFailGradeDOn1hConfirmPass,
   snowballGradeBRequiresSustainedMomentum,
   snowballGradeBSustainedMarginScale,
   type TrendMomentumMetrics,
@@ -1615,6 +1616,9 @@ function buildSnowballTripleCheckMessage(
     breakout1hConfirmUsed?: boolean;
     breakout1hConfirmFailedGradeD?: boolean;
     breakout1hConfirmFootnote?: string;
+    /** Grade B ไม่ผ่าน momentum แต่ 1H confirm ผ่าน → แจ้งเป็น D */
+    gradeBMomentumFailGradeD?: boolean;
+    gradeBMomentumFailFootnote?: string;
     trendMomentum?: TrendMomentumMetrics | null;
     sustainedBuyingPressure?: boolean;
   }
@@ -1751,11 +1755,15 @@ function buildSnowballTripleCheckMessage(
               ? "📎 Grade C: ทะลุย Swing HH48 แต่ยังไม่เหนือ HH200 — เบรกสั้น ยังไม่ยืนยันโครงสร้างใหญ่"
               : "📎 Grade C: ผ่าน HH48+HH200 แต่ยังไม่เบรค VAH proxy (โวลุ่มก้อนอาจยังไม่สนับสนุน)"
             : g === "d_plus"
-              ? "📎 Grade D: สัญญาณ Long แต่ 1H confirm ไม่ครบ — เทรด Long->Short (ปิดแท่ง 1H ไม่ผ่าน body/vol/clean close)"
+              ? args.gradeBMomentumFailGradeD
+                ? "📎 Grade D: สัญญาณเดิม Grade B (เบรค VAH) แต่ไม่ผ่าน trend momentum 1H — 1H confirm ผ่าน → Long->Short"
+                : "📎 Grade D: สัญญาณ Long แต่ 1H confirm ไม่ครบ — เทรด Long->Short (ปิดแท่ง 1H ไม่ผ่าน body/vol/clean close)"
               : "";
     const longAutotradeBiasLine =
       g === "d_plus"
-        ? "📎 Auto-open: Grade D — Long->Short ทันที (1H confirm ไม่ผ่าน · ไม่รอ fade gate)"
+        ? args.gradeBMomentumFailGradeD
+          ? "📎 Auto-open: Grade D — Long->Short (B ไม่ผ่าน momentum 1H · 1H confirm ผ่าน)"
+          : "📎 Auto-open: Grade D — Long->Short ทันที (1H confirm ไม่ผ่าน · ไม่รอ fade gate)"
         : g === "c_plus"
           ? formatGradeCShortFadeAutotradeLine(args.gradeCShortFade)
           : g === "b_plus"
@@ -1767,6 +1775,9 @@ function buildSnowballTripleCheckMessage(
       const sfx = sniperSuffix;
       if (args.breakout1hConfirmFailedGradeD) {
         return `🔴 [Grade D · LONG->Short · 1H Confirm Fail] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+      }
+      if (args.gradeBMomentumFailGradeD) {
+        return `🔴 [Grade D · LONG->Short · B ไม่ผ่าน momentum · 1H confirm ผ่าน] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
       }
       if (args.breakout1hConfirmUsed) {
         return `🟢 [Breakout Entry · 1H Confirm] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
@@ -1811,6 +1822,9 @@ function buildSnowballTripleCheckMessage(
     }
     if (args.breakout1hConfirmFootnote) {
       out.splice(out.length - 1, 0, "", args.breakout1hConfirmFootnote);
+    }
+    if (args.gradeBMomentumFailFootnote) {
+      out.splice(out.length - 1, 0, "", args.gradeBMomentumFailFootnote);
     }
     return out.join("\n");
   }
@@ -2197,7 +2211,10 @@ type Snowball4hScanSummaryStats = {
   /** 1H confirm ไม่ผ่าน → ส่ง Grade D (Long->Short) */
   longBreakout1hGradeD: number;
   longBreakout1hGradeDSymbols: string[];
-  /** Grade B ไม่ผ่าน sustained momentum (1H drawback / vol cascade) */
+  /** Grade B ไม่ผ่าน momentum แต่ 1H confirm ผ่าน → ส่ง Grade D */
+  longGradeBMomentumToGradeD: number;
+  longGradeBMomentumToGradeDSymbols: string[];
+  /** Grade B ไม่ผ่าน momentum และ 1H confirm ไม่ผ่าน — บล็อก */
   longGradeBMomentumBlocked: number;
   longGradeBMomentumBlockedSymbols: string[];
   longDeduped: number;
@@ -2301,7 +2318,11 @@ function formatSnowball4hScanSummaryMessage(opts: {
     lines.push(`ติดกรองเนื้อเทียน/ช่วง (ไส้ยาว): ${stats.longBodyRatioBlocked}`);
   lines.push(...formatSymbolListLines("  ", stats.longBodyRatioBlockedSymbols));
   if (snowballGradeBRequiresSustainedMomentum()) {
-    lines.push(`Grade B ไม่ผ่าน trend momentum (1H): ${stats.longGradeBMomentumBlocked}`);
+    if (snowballGradeBMomentumFailGradeDOn1hConfirmPass()) {
+      lines.push(`Grade B momentum ไม่ผ่าน → Grade D (1H confirm ผ่าน): ${stats.longGradeBMomentumToGradeD}`);
+      lines.push(...formatSymbolListLines("  ", stats.longGradeBMomentumToGradeDSymbols));
+    }
+    lines.push(`Grade B ไม่ผ่าน trend momentum (บล็อก): ${stats.longGradeBMomentumBlocked}`);
     lines.push(...formatSymbolListLines("  ", stats.longGradeBMomentumBlockedSymbols));
   }
   if (snowballLongBreakout1hConfirmEnabled()) {
@@ -2568,6 +2589,8 @@ export async function runPublicIndicatorFeedInternal(
           longBreakout1hBlockedSymbols: [],
           longBreakout1hGradeD: 0,
           longBreakout1hGradeDSymbols: [],
+          longGradeBMomentumToGradeD: 0,
+          longGradeBMomentumToGradeDSymbols: [],
           longGradeBMomentumBlocked: 0,
           longGradeBMomentumBlockedSymbols: [],
           longDeduped: 0,
@@ -3146,7 +3169,7 @@ export async function runPublicIndicatorFeedInternal(
         }
 
         const signalGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
-        const longBreakoutGrade = longBreakout1h
+        let longBreakoutGrade: SnowballLongBreakoutGrade = longBreakout1h
           ? resolveSnowballLongBreakoutGrade({
               longBreakout1h: true,
               breakout1hFailedGradeD,
@@ -3165,17 +3188,47 @@ export async function runPublicIndicatorFeedInternal(
         const trendMomentum: TrendMomentumMetrics | null = calculateTrendMomentumMetrics(pack1hTrend);
         const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
 
+        let gradeBMomentumFailGradeD = false;
+        let gradeBMomentumFailFootnote: string | undefined;
+        let gradeBMomentum1hEval: SnowballLongBreakout1hConfirmEval | null = null;
         if (
           !intrabar &&
           longBreakoutGrade === "b_plus" &&
           snowballGradeBRequiresSustainedMomentum() &&
           !sustainedBuyingPressure
         ) {
-          if (snowScanStats) {
-            snowScanStats.longGradeBMomentumBlocked++;
-            pushSnowScanSymList(snowScanStats.longGradeBMomentumBlockedSymbols, `${symbol} LONG`);
+          const eval1hForMomentum =
+            longBreakout1h && breakout1hEval
+              ? breakout1hEval
+              : evaluateSnowballLongBreakout1hConfirm(
+                  pack1hTrend,
+                  snowballLongBreakout1hSwingLookback(),
+                  snowballLongBreakout1hExcludeRecent(),
+                );
+          if (
+            snowballGradeBMomentumFailGradeDOn1hConfirmPass() &&
+            eval1hForMomentum?.ok &&
+            Number.isFinite(eval1hForMomentum.close) &&
+            eval1hForMomentum.close > 0
+          ) {
+            longBreakoutGrade = "d_plus";
+            gradeBMomentumFailGradeD = true;
+            gradeBMomentum1hEval = eval1hForMomentum;
+            gradeBMomentumFailFootnote = `📎 Grade D (Long->Short · B ไม่ผ่าน momentum · 1H confirm ผ่าน): ปิด ~ ${formatClosedCandleBkk(eval1hForMomentum.barOpenSec)} @ ${formatUsdPrice(eval1hForMomentum.close)} USDT · ${eval1hForMomentum.detail}`;
+            if (snowScanStats) {
+              snowScanStats.longGradeBMomentumToGradeD++;
+              pushSnowScanSymList(
+                snowScanStats.longGradeBMomentumToGradeDSymbols,
+                `${symbol} LONG->Short Grade D (B momentum fail · 1H ok)`,
+              );
+            }
+          } else {
+            if (snowScanStats) {
+              snowScanStats.longGradeBMomentumBlocked++;
+              pushSnowScanSymList(snowScanStats.longGradeBMomentumBlockedSymbols, `${symbol} LONG`);
+            }
+            return;
           }
-          return;
         }
 
         let gradeCShortFade: SnowballGradeCShortFadeResult | null = null;
@@ -3243,11 +3296,15 @@ export async function runPublicIndicatorFeedInternal(
               : `📎 Breakout Entry (1H confirm): ปิด ~ ${formatClosedCandleBkk(breakout1hEval.barOpenSec)} @ ${formatUsdPrice(breakout1hEval.close)} USDT · ${breakout1hEval.detail}`
             : undefined;
         const entryClosePx =
-          longBreakout1h && breakout1hEval && Number.isFinite(breakout1hEval.close)
-            ? breakout1hEval.close
-            : twoBarInline
-              ? c15[iConf]!
-              : clE!;
+          gradeBMomentumFailGradeD &&
+          gradeBMomentum1hEval &&
+          Number.isFinite(gradeBMomentum1hEval.close)
+            ? gradeBMomentum1hEval.close
+            : longBreakout1h && breakout1hEval && Number.isFinite(breakout1hEval.close)
+              ? breakout1hEval.close
+              : twoBarInline
+                ? c15[iConf]!
+                : clE!;
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bull", signalBarOpenSec, {
           close: entryClosePx,
@@ -3298,9 +3355,11 @@ export async function runPublicIndicatorFeedInternal(
                 ? { side: "long", refLevel: longConfirmTrigger.refLevel, volMinRatio: longConfirmTrigger.volMinRatio }
                 : undefined,
           inlineTwoBarFootnote,
-          breakout1hConfirmUsed: longBreakout1h && !breakout1hFailedGradeD,
+          breakout1hConfirmUsed: longBreakout1h && !breakout1hFailedGradeD && !gradeBMomentumFailGradeD,
           breakout1hConfirmFailedGradeD: breakout1hFailedGradeD,
           breakout1hConfirmFootnote: breakout1hFootnote,
+          gradeBMomentumFailGradeD,
+          gradeBMomentumFailFootnote,
           trendMomentum,
           sustainedBuyingPressure,
         });
@@ -3334,7 +3393,9 @@ export async function runPublicIndicatorFeedInternal(
                 snowScanStats.longSent++;
                 pushSnowScanSymList(
                   snowScanStats.longSentSymbols,
-                  breakout1hFailedGradeD ? `${symbol} LONG->Short` : `${symbol} LONG`,
+                  breakout1hFailedGradeD || gradeBMomentumFailGradeD
+                    ? `${symbol} LONG->Short`
+                    : `${symbol} LONG`,
                 );
               }
             }
@@ -3444,21 +3505,31 @@ export async function runPublicIndicatorFeedInternal(
                   signalHigh: longSignalHigh,
                   signalLow: longSignalLow,
                   signalVolume: vE!,
-                  confirmOpen: longBreakout1h
-                    ? pack1hForTwoBar?.open?.[breakout1hEval!.i1h] ?? null
-                    : twoBarInline
-                      ? o15[iConf]!
-                      : null,
-                  confirmClose: longBreakout1h
-                    ? breakout1hEval!.close
-                    : twoBarInline
-                      ? c15[iConf]!
-                      : null,
-                  confirmVolume: longBreakout1h
-                    ? pack1hForTwoBar?.volume?.[breakout1hEval!.i1h] ?? null
-                    : twoBarInline
-                      ? v15[iConf]!
-                      : null,
+                  confirmOpen: gradeBMomentumFailGradeD
+                    ? gradeBMomentum1hEval
+                      ? pack1hTrend?.open?.[gradeBMomentum1hEval.i1h] ?? null
+                      : null
+                    : longBreakout1h
+                      ? pack1hForTwoBar?.open?.[breakout1hEval!.i1h] ?? null
+                      : twoBarInline
+                        ? o15[iConf]!
+                        : null,
+                  confirmClose: gradeBMomentumFailGradeD
+                    ? gradeBMomentum1hEval?.close ?? null
+                    : longBreakout1h
+                      ? breakout1hEval!.close
+                      : twoBarInline
+                        ? c15[iConf]!
+                        : null,
+                  confirmVolume: gradeBMomentumFailGradeD
+                    ? gradeBMomentum1hEval
+                      ? pack1hTrend?.volume?.[gradeBMomentum1hEval.i1h] ?? null
+                      : null
+                    : longBreakout1h
+                      ? pack1hForTwoBar?.volume?.[breakout1hEval!.i1h] ?? null
+                      : twoBarInline
+                        ? v15[iConf]!
+                        : null,
                   gradeCFadeOk: gradeCShortFade?.ok,
                 });
                 const longStatsBarOpenSec = signalBarOpenSec;
@@ -3482,7 +3553,7 @@ export async function runPublicIndicatorFeedInternal(
                   vol: vE!,
                   volSma: vsE!,
                   qualityTier: longBreakoutGrade,
-                  alertQualityTier: longBreakoutGrade,
+                  alertQualityTier: gradeBMomentumFailGradeD ? signalGrade : longBreakoutGrade,
                   breakout1hConfirmFail: breakout1hFailedGradeD,
                   atr100: longVolSnap.atr100,
                   maxUpperWick100: longVolSnap.maxUpperWick100,
@@ -3496,16 +3567,16 @@ export async function runPublicIndicatorFeedInternal(
                   quoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                   ...trendMomentumStatsFields(trendMomentum),
                   greenDaysBeforeSignal: longGreenDays,
-                  ...(longBreakout1h && breakout1hEval != null
-                    ? {
-                        confirmVolVsSma: Number.isFinite(breakout1hEval.volRatio)
-                          ? breakout1hEval.volRatio
-                          : null,
-                        confirmVolRank: Number.isFinite(breakout1hEval.volRank)
-                          ? breakout1hEval.volRank
-                          : null,
-                        confirmVolRankLb: breakout1hEval.volRankLookback,
-                      }
+                  ...((longBreakout1h && breakout1hEval != null) ||
+                  (gradeBMomentumFailGradeD && gradeBMomentum1hEval != null)
+                    ? (() => {
+                        const ev = gradeBMomentumFailGradeD ? gradeBMomentum1hEval! : breakout1hEval!;
+                        return {
+                          confirmVolVsSma: Number.isFinite(ev.volRatio) ? ev.volRatio : null,
+                          confirmVolRank: Number.isFinite(ev.volRank) ? ev.volRank : null,
+                          confirmVolRankLb: ev.volRankLookback,
+                        };
+                      })()
                     : {}),
                 });
               }
