@@ -8,6 +8,8 @@ declare global {
         ready: () => void;
         expand: () => void;
         initData: string;
+        /** ios | android | macos | tdesktop | web | weba | … */
+        platform?: string;
         initDataUnsafe?: {
           user?: {
             id?: number;
@@ -18,6 +20,10 @@ declare global {
           };
         };
         close?: () => void;
+        downloadFile?: (
+          params: { url: string; file_name: string },
+          callback?: (accepted: boolean) => void,
+        ) => void;
       };
     };
   }
