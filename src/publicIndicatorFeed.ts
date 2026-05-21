@@ -3169,6 +3169,7 @@ export async function runPublicIndicatorFeedInternal(
           }
         }
 
+        /** เกรดโครงสร้างจากแท่งสัญญาณ (A+/B/C) — หรือ D ถ้าโหมด 1H confirm ไม่ผ่าน */
         const signalGrade = classifyLongBreakoutGrade(swing48, swing200, vahOk);
         let longBreakoutGrade: SnowballLongBreakoutGrade = longBreakout1h
           ? resolveSnowballLongBreakoutGrade({
@@ -3189,6 +3190,7 @@ export async function runPublicIndicatorFeedInternal(
         const trendMomentum: TrendMomentumMetrics | null = calculateTrendMomentumMetrics(pack1hTrend);
         const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
 
+        /** B + momentum ไม่ผ่าน + 1H confirm ผ่าน → D+ (Long) · ไม่ใช่ Grade D จาก confirm fail */
         let gradeBMomentumFailGradeD = false;
         let gradeBMomentumFailFootnote: string | undefined;
         let gradeBMomentum1hEval: SnowballLongBreakout1hConfirmEval | null = null;

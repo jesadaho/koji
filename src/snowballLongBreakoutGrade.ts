@@ -4,7 +4,13 @@ import type { SnowballLongBreakout1hConfirmEval } from "./snowballLongBreakoutCo
 
 export type SnowballLongBreakoutGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus";
 
-/** ป้ายเกรด Long สำหรับหัวข้อ Telegram — รูปแบบ Grade X+ (Long) */
+/**
+ * ตัดเกรด Long (โครงสร้างแท่งสัญญาณ / VAH / HH):
+ * - A+ / B / C — `classifyLongBreakoutGrade` ตาม HH48 · HH200 · VAH
+ * - D — 1H confirm ไม่ผ่าน (`breakout1hFailedGradeD` · TF≠4h) · แจ้ง Long->Short
+ * - D+ (Long) — เฉพาะเดิมเป็น B + ไม่ผ่าน momentum 1H + 1H confirm ผ่าน (`gradeBMomentumFailGradeD`)
+ */
+/** ป้าย D+ (Long) — ใช้เฉพาะ B→D+ momentum downgrade ไม่ใช่ Grade D จาก confirm fail */
 export function snowballLongGradePlusLabel(g: SnowballLongBreakoutGrade): string {
   if (g === "a_plus") return "Grade A+ (Long)";
   if (g === "b_plus") return "Grade B+ (Long)";
