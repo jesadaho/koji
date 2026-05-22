@@ -538,6 +538,19 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
     lines.push("");
   }
 
+  if (res.gradeDebug) {
+    if (res.gradeDebug.long.length > 0) {
+      lines.push("— grade LONG (โครงสร้าง + momentum + confirm → เกรดสุทธิ) —");
+      for (const l of res.gradeDebug.long) lines.push(`  ${l}`);
+      lines.push("");
+    }
+    if (res.gradeDebug.bear.length > 0) {
+      lines.push("— grade BEAR (SHORT) —");
+      for (const l of res.gradeDebug.bear) lines.push(`  ${l}`);
+      lines.push("");
+    }
+  }
+
   if (res.twoBarInlineNotes && res.twoBarInlineNotes.length > 0) {
     lines.push("— two-bar inline —");
     for (const n of res.twoBarInlineNotes) lines.push(`  • ${n}`);
@@ -548,6 +561,9 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
 
   if (res.long.closed || res.long.intrabar) {
     lines.push("— LONG (BULL) —");
+    if (res.gradeDebug?.long.length) {
+      lines.push("  (สรุป grade ด้านบน — ด้านล่างเป็น checklist ทีละขั้น)");
+    }
     if (res.longBreakout1hConfirmGateRows?.length) {
       lines.push(
         "  โหมด Breakout Entry: สัญญาณ = แท่ง Snowball ปิดล่าสุด · ยืนยัน = แท่ง 1H ปิดล่าสุด (ไม่ใช้ two-bar inline ฝั่ง Long)",
@@ -588,6 +604,9 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
 
   if (res.bear.closed || res.bear.intrabar) {
     lines.push("— BEAR (SHORT) —");
+    if (res.gradeDebug?.bear.length) {
+      lines.push("  (สรุป grade BEAR ด้านบน)");
+    }
     const twoBarDualBear = Boolean(res.twoBarConfirmGateRows);
     if (twoBarDualBear) {
       lines.push(

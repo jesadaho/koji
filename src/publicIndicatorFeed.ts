@@ -49,6 +49,7 @@ import {
   snowballLongGradeShortLabel,
   type SnowballLongBreakoutGrade,
   type SnowballLongGradeResolution,
+  type SnowballLongStructureTier,
 } from "./snowballLongBreakoutGrade";
 
 export type { SnowballLongBreakoutGrade };
@@ -4200,8 +4201,179 @@ export type SnowballChecklistResult = {
   longBreakout1hConfirmGateRows?: SnowballCheckStep[] | null;
   /** หมายเหตุโหมด Breakout 1H */
   longBreakout1hNotes?: string[];
+  /** สรุปโครงสร้าง + momentum + confirm → เกรดสุทธิ (เดียวกับ live tick) */
+  gradeDebug?: { long: string[]; bear: string[] };
   errors: string[];
 };
+
+function snowballLongStructureTierHint(tier: SnowballLongStructureTier): string {
+  if (tier === "a_plus") return "HH48+HH200+VAH";
+  if (tier === "b_plus") return "VAH only";
+  return "HH48 (C)";
+}
+
+function snowballLongGradeResolutionSummaryLines(res: SnowballLongGradeResolution): string[] {
+  if (res.kind === "block") {
+    return [
+      `เกรดสุทธิ: ❌ BLOCK — ${res.reason}`,
+      `  ${res.detail}`,
+      "  (checklist สัญญาณผ่านอย่างเดียวไม่พอ — scan จะ return ก่อนยิง TG)",
+    ];
+  }
+  const g = res.grade;
+  const lines: string[] = [
+    `โครงสร้าง 4H: ${snowballLongGradeShortLabel(res.structureTier)} (${snowballLongStructureTierHint(res.structureTier)})`,
+    `momentum 1H (sustained): ${res.momentumOk ? "✅ ผ่าน" : "❌ ไม่ผ่าน"}${
+      snowballGradeBRequiresSustainedMomentum() ? "" : " · ไม่บังคับ (INDICATOR_PUBLIC_SNOWBALL_GRADE_B_REQUIRES_SUSTAINED_MOMENTUM=0)"
+    }`,
+    `1H confirm: ${res.confirm1hOk ? "✅ ผ่าน" : "❌ ไม่ผ่าน"}${
+      res.confirm1hEval?.detail ? ` · ${res.confirm1hEval.detail.slice(0, 120)}` : ""
+    }`,
+    `เกรดสุทธิที่แจ้ง: ${snowballLongGradeDisplayLabel(g)} [${snowballLongGradeShortLabel(g)}]`,
+  ];
+  if (res.nearMissVolume) {
+    lines.push("  vol near-miss: ใช่ (ผ่านทาง SMA×near ไม่ถึง strict)");
+  }
+  if (snowballIsGradeDPlusLong(g)) {
+    lines.push("  auto-open: ไม่สั่ง (Grade D+)");
+  } else if (snowballIsGradeF(g)) {
+    lines.push("  auto-open: ไม่สั่ง (Grade F)");
+  } else if (g === "b_plus" && snowballGradeBRequiresSustainedMomentum()) {
+    lines.push(
+      res.momentumOk
+        ? `  auto-open Grade B: ครึ่งไม้ ~${(snowballGradeBSustainedMarginScale() * 100).toFixed(0)}% margin (เมื่อเปิด Double Barrier)`
+        : "  auto-open Grade B: ไม่สั่ง (ต้อง sustained momentum)",
+    );
+  } else if (g === "a_plus") {
+    lines.push("  auto-open: Long ได้เมื่อเปิด Double Barrier + ผ่าน gate อื่น");
+  }
+  return lines;
+}
+
+function buildSnowballChecklistGradeDebug(input: {
+  snowTf: BinanceIndicatorTf;
+  iClosed: number;
+  close: number[];
+  high: number[];
+  low: number[];
+  volume: number[];
+  volSmaArr: number[];
+  volMult: number;
+  swingLb: number;
+  swingGradeLb: number;
+  swingEx: number;
+  vahLb: number;
+  longVahOn: boolean;
+  longBreakout1hChecklistOn: boolean;
+  twoBarChecklistOn: boolean;
+  pack1h: BinanceKlinePack | null;
+  twoBarConfirmGateRows: { long: SnowballCheckStep[]; bear: SnowballCheckStep[] } | null | undefined;
+  dbOn: boolean;
+}): { long: string[]; bear: string[] } {
+  const iSig = input.twoBarChecklistOn ? input.iClosed - 1 : input.iClosed;
+  if (iSig < 1) {
+    return { long: ["แท่งสัญญาณ index ไม่พร้อม"], bear: [] };
+  }
+
+  const { close, high, low, volume, volSmaArr, volMult, swingLb, swingGradeLb, swingEx, vahLb, longVahOn, snowTf } =
+    input;
+
+  const swing48 = snowballLongSwingHighBreak(high, close, iSig, swingLb, swingEx, false);
+  const swing200 = snowballLongSwingHighBreak(high, close, iSig, swingGradeLb, swingEx, false);
+  const vahH = longVahOn ? highVolumeNodeBarHigh(volume, high, low, iSig, vahLb) : null;
+  const iPrev = iSig - 1;
+  const clE = close[iSig]!;
+  const hiPrev = high[iPrev]!;
+  const clPrev = close[iPrev]!;
+  const vahOk =
+    longVahOn &&
+    vahH != null &&
+    Number.isFinite(vahH) &&
+    Number.isFinite(clE) &&
+    Number.isFinite(clPrev) &&
+    clE > vahH &&
+    clPrev <= vahH;
+
+  const twoBarPassed = input.twoBarConfirmGateRows?.long?.every((s) => s.ok) ?? false;
+  const longBreakout1h = snowTf !== "4h" && snowballLongBreakout1hConfirmEnabled();
+  const breakout1hEval = longBreakout1h
+    ? evaluateSnowballLongBreakout1hConfirm(
+        input.pack1h,
+        snowballLongBreakout1hSwingLookback(),
+        snowballLongBreakout1hExcludeRecent(),
+      )
+    : null;
+
+  const vE = volume[iSig]!;
+  const vsE = volSmaArr[iSig];
+  const volNearMult = snowballVolNearMissMultiplier(volMult);
+  const volStrictOk = snowballVolumeOk(false, vE, vsE, volMult);
+  const volNearMissOnly = snowballVolumeNearMissOnly(false, vE, vsE, volMult, volNearMult);
+
+  const trendMomentum = calculateTrendMomentumMetrics(input.pack1h);
+  const sustained = isSustainedBuyingPressure(trendMomentum);
+
+  const gradeRes = resolveSnowballLongFinalGrade({
+    snowTf,
+    swing48,
+    swing200,
+    vahOk,
+    twoBarInlinePassed: twoBarPassed,
+    longBreakout1h,
+    breakout1hEval,
+    momentumRequired: snowballGradeBRequiresSustainedMomentum(),
+    momentumOk: sustained,
+    gradeDPlusOnMomentumFail: snowballGradeBMomentumFailGradeDOn1hConfirmPass(),
+    gradeFOnMomentumAndConfirmFail: snowballGradeFOnMomentumAnd1hConfirmFail(),
+    volumeStrictOk: volStrictOk,
+    volumeNearMissOnly: volNearMissOnly,
+    gradeDPlusNearMissVolumeEnabled: snowballGradeBNearMissVolumeEnabled(),
+  });
+
+  const modeLabel = input.longBreakout1hChecklistOn
+    ? "Breakout 1H (สัญญาณ = แท่ง Snowball ปิดล่าสุด)"
+    : input.twoBarChecklistOn
+      ? "two-bar inline (สัญญาณ = แท่งปิดก่อนล่าสุด)"
+      : "แท่งเดียว (สัญญาณ = แท่งปิดล่าสุด)";
+
+  const longLines: string[] = [
+    `โหมด: ${modeLabel} · แท่งสัญญาณ i=${iSig}`,
+  ];
+  longLines.push(
+    `Swing/VAH: HH${swingLb}=${swing48 ? "ผ่าน" : "—"} · HH${swingGradeLb}=${swing200 ? "ผ่าน" : "—"} · VAH=${vahOk ? "เบรค" : longVahOn ? "ยังไม่" : "ปิด"}`,
+    `Vol×SMA: ${volStrictOk ? "strict ผ่าน" : volNearMissOnly ? `near-miss (>${volNearMult}× ไม่ถึง ${volMult}×)` : "ไม่ผ่าน"}`,
+  );
+  if (input.twoBarChecklistOn) {
+    longLines.push(
+      `two-bar confirm LONG: ${twoBarPassed ? "✅ ผ่าน" : "❌ ไม่ผ่าน"} (ต้องผ่านก่อนได้เกรด A+/B/C/D+/F)`,
+    );
+  } else if (longBreakout1h && breakout1hEval) {
+    longLines.push(
+      `Breakout 1H confirm: ${breakout1hEval.ok ? "✅ ผ่าน" : "❌ ไม่ผ่าน"} · ${breakout1hEval.detail.slice(0, 100)}`,
+    );
+  }
+  longLines.push(...snowballLongGradeResolutionSummaryLines(gradeRes));
+
+  const bearLines: string[] = [];
+  if (input.dbOn) {
+    const cls = classifyShortDoubleBarrierTier(low, iSig, clE);
+    const tierLabel = cls.tier === "a_plus" ? "A+ (Super)" : "B (Barrier ในโซน Watchlist)";
+    bearLines.push(
+      `Double Barrier SHORT: ${tierLabel}${
+        cls.nearestUnderfoot != null ? ` · แนวใต้ ~${fmtNum(cls.nearestUnderfoot)} (−${cls.distPct?.toFixed(2) ?? "—"}%)` : " · ไม่พบ Low ใต้ราคา"
+      }`,
+    );
+    bearLines.push("  A+ = defer TG/autotrade รอ confirm · B = แจ้งทันทีเมื่อ checklist ผ่าน");
+  } else {
+    bearLines.push("Double Barrier: ปิด — ไม่จัด tier SHORT ใน TG");
+  }
+  if (input.twoBarConfirmGateRows?.bear?.length) {
+    const bearConfirmOk = input.twoBarConfirmGateRows.bear.every((s) => s.ok);
+    bearLines.push(`two-bar confirm BEAR: ${bearConfirmOk ? "✅ ผ่าน (พร้อมยิงถ้า checklist สัญญาณผ่าน)" : "❌ ไม่ผ่าน"}`);
+  }
+
+  return { long: longLines, bear: bearLines };
+}
 
 function buildSnowballConfirmRiskStatus(
   side: "long" | "bear",
@@ -5141,6 +5313,27 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     }
     baseResult.twoBarInlineNotes = notes;
   }
+
+  baseResult.gradeDebug = buildSnowballChecklistGradeDebug({
+    snowTf,
+    iClosed,
+    close,
+    high,
+    low,
+    volume,
+    volSmaArr,
+    volMult,
+    swingLb,
+    swingGradeLb,
+    swingEx,
+    vahLb,
+    longVahOn,
+    longBreakout1hChecklistOn,
+    twoBarChecklistOn,
+    pack1h: pack1hForTwoBarChecklist,
+    twoBarConfirmGateRows: baseResult.twoBarConfirmGateRows,
+    dbOn: dbOnChecklist,
+  });
 
   return baseResult;
 }
