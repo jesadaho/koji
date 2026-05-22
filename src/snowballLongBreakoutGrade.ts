@@ -23,7 +23,7 @@ export type SnowballLongGradeResolution =
       momentumOk: boolean;
       confirm1hEval: SnowballLongBreakout1hConfirmEval | null;
       footnote?: string;
-      /** D+ เพราะ vol ใกล้เกณฑ์ (ผ่าน near-miss แต่ไม่ถึง SMA×strict) */
+      /** เกรดสุทธิ B เพราะ vol ใกล้เกณฑ์ (ผ่าน near-miss แต่ไม่ถึง SMA×strict) */
       nearMissVolume?: boolean;
     }
   | {
@@ -87,6 +87,13 @@ export function snowballLongStructurePassesMain(swing48: boolean, vahOk: boolean
   return swing48 || vahOk;
 }
 
+/** Breakout Entry 1H confirm ผ่าน (body/vol/clean close บนแท่ง 1H) */
+export function snowballLongBreakout1hEvalPasses(
+  ev: SnowballLongBreakout1hConfirmEval | null | undefined,
+): boolean {
+  return ev?.ok === true && Number.isFinite(ev.close) && ev.close > 0;
+}
+
 function resolveConfirm1hOk(input: ResolveSnowballLongFinalGradeInput): {
   ok: boolean;
   eval: SnowballLongBreakout1hConfirmEval | null;
@@ -95,9 +102,7 @@ function resolveConfirm1hOk(input: ResolveSnowballLongFinalGradeInput): {
     return { ok: true, eval: input.breakout1hEval };
   }
   const ev = input.breakout1hEval;
-  const ok =
-    ev?.ok === true && Number.isFinite(ev.close) && ev.close > 0;
-  return { ok, eval: ev };
+  return { ok: snowballLongBreakout1hEvalPasses(ev), eval: ev };
 }
 
 /** @deprecated Grade D (Long->Short) ถูกถอดแล้ว — ใช้แถวสถิติเก่าที่ breakout1hConfirmFail เท่านั้น */
@@ -151,7 +156,7 @@ export function snowballStructureGradeShortLabel(g: SnowballLongBreakoutGrade): 
 
 /**
  * Single-Layer Matrix — คืนเกรดสุทธิหรือ BLOCK ครั้งเดียว
- * ลำดับ: D+ near-miss vol → A+/B/C (structure+momentum+confirm+vol strict) → D+ momentum → F → BLOCK
+ * ลำดับ: B near-miss (1H eval ผ่าน) → F near-miss (1H eval ไม่ผ่าน) → A+/B/C → D+ → F คลาสสิก → BLOCK
  */
 export function resolveSnowballLongFinalGrade(
   input: ResolveSnowballLongFinalGradeInput,
@@ -166,17 +171,37 @@ export function resolveSnowballLongFinalGrade(
   const confirmOk = confirm.ok;
   const momentumOk = !input.momentumRequired || input.momentumOk;
 
+  const confirm1hEvalOk = snowballLongBreakout1hEvalPasses(confirm.eval);
+
   if (
     input.gradeDPlusNearMissVolumeEnabled &&
     input.volumeNearMissOnly &&
     confirmOk &&
+    confirm1hEvalOk &&
     momentumOk
   ) {
     return {
       kind: "grade",
-      grade: "d_plus",
+      grade: "b_plus",
       structureTier,
       confirm1hOk: true,
+      momentumOk: true,
+      confirm1hEval: confirm.eval,
+      nearMissVolume: true,
+    };
+  }
+
+  if (
+    input.volumeNearMissOnly &&
+    momentumOk &&
+    !confirm1hEvalOk &&
+    input.gradeFOnMomentumAndConfirmFail
+  ) {
+    return {
+      kind: "grade",
+      grade: "f_plus",
+      structureTier,
+      confirm1hOk: false,
       momentumOk: true,
       confirm1hEval: confirm.eval,
       nearMissVolume: true,

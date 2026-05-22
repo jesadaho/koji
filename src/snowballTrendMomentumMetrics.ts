@@ -57,12 +57,22 @@ export function snowballGradeBRequiresSustainedMomentum(): boolean {
   return true;
 }
 
-/** โครงสร้าง+confirm+momentum ผ่าน แต่ vol ไม่ถึง SMA×strict — ส่ง Grade D+ (Near-Miss LONG) */
-export function snowballGradeDPlusNearMissVolumeEnabled(): boolean {
+/** โครงสร้าง+momentum+1H confirm ผ่าน แต่ vol ไม่ถึง SMA×strict — ส่ง Grade B (vol near-miss) */
+export function snowballGradeBNearMissVolumeEnabled(): boolean {
   const raw =
-    process.env.INDICATOR_PUBLIC_SNOWBALL_GRADE_D_PLUS_NEAR_MISS_VOLUME?.trim().toLowerCase();
+    (
+      process.env.INDICATOR_PUBLIC_SNOWBALL_GRADE_B_NEAR_MISS_VOLUME ??
+      process.env.INDICATOR_PUBLIC_SNOWBALL_GRADE_D_PLUS_NEAR_MISS_VOLUME
+    )
+      ?.trim()
+      .toLowerCase();
   if (raw === "0" || raw === "false" || raw === "no" || raw === "off") return false;
   return true;
+}
+
+/** @deprecated ใช้ snowballGradeBNearMissVolumeEnabled */
+export function snowballGradeDPlusNearMissVolumeEnabled(): boolean {
+  return snowballGradeBNearMissVolumeEnabled();
 }
 
 /** momentum ไม่ผ่าน แต่ 1H confirm ผ่าน → ส่ง Grade D+ (Long) แทนบล็อก (ไม่จำกัดแค่ B) */

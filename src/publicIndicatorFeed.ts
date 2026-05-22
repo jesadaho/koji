@@ -66,7 +66,7 @@ import {
   formatTrendMomentumMetricsLine,
   isSustainedBuyingPressure,
   snowballGradeBMomentumFailGradeDOn1hConfirmPass,
-  snowballGradeDPlusNearMissVolumeEnabled,
+  snowballGradeBNearMissVolumeEnabled,
   snowballGradeFOnMomentumAnd1hConfirmFail,
   snowballGradeBRequiresSustainedMomentum,
   snowballGradeBSustainedMarginScale,
@@ -1394,7 +1394,7 @@ function snowballVolumeOk(relax: boolean, vol: number, volSma: number, mult: num
   return Number.isFinite(volSma) && vol > volSma * mult;
 }
 
-/** Vol near-miss สำหรับ Grade D+ — ต่ำกว่า strict mult (default 2.0 เมื่อ strict 2.5) */
+/** Vol near-miss สำหรับ Grade B — ต่ำกว่า strict mult (default 2.0 เมื่อ strict 2.5) */
 function snowballVolNearMissMultiplier(strictMult: number): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_VOL_NEAR_MISS_MULT);
   if (Number.isFinite(v) && v >= 1 && v < strictMult) return v;
@@ -1409,7 +1409,7 @@ function snowballVolumeNearMissOnly(
   strictMult: number,
   nearMult: number,
 ): boolean {
-  if (relax || !snowballGradeDPlusNearMissVolumeEnabled()) return false;
+  if (relax || !snowballGradeBNearMissVolumeEnabled()) return false;
   if (snowballVolumeOk(false, vol, volSma, strictMult)) return false;
   if (!Number.isFinite(vol) || vol <= 0 || !Number.isFinite(volSma) || volSma <= 0) return false;
   return vol > volSma * nearMult;
@@ -3209,7 +3209,7 @@ export async function runPublicIndicatorFeedInternal(
               gradeFOnMomentumAndConfirmFail: snowballGradeFOnMomentumAnd1hConfirmFail(),
               volumeStrictOk: volStrictOk,
               volumeNearMissOnly: volNearMissOnly,
-              gradeDPlusNearMissVolumeEnabled: snowballGradeDPlusNearMissVolumeEnabled(),
+              gradeDPlusNearMissVolumeEnabled: snowballGradeBNearMissVolumeEnabled(),
             })
           : {
               kind: "grade",
@@ -3242,17 +3242,10 @@ export async function runPublicIndicatorFeedInternal(
         const longBreakoutGrade = gradeResolution.grade;
         const gradeBMomentum1hEval = gradeResolution.confirm1hEval;
         let gradeFootnote: string | undefined;
-        if (gradeResolution.grade === "d_plus") {
-          if (gradeResolution.nearMissVolume) {
-            gradeFootnote = `📎 Grade D+ (Near-Miss LONG): โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)} · momentum+1H ผ่าน · vol > SMA×${volNearMult} แต่ไม่ถึง ×${volMult} (vol=${fmtNum(vE!, 0)} · SMA×${volMult}=${fmtNum((vsE ?? 0) * volMult, 0)})`;
-            if (snowScanStats) {
-              snowScanStats.longGradeBMomentumToGradeD++;
-              pushSnowScanSymList(
-                snowScanStats.longGradeBMomentumToGradeDSymbols,
-                `${symbol} D+ Near-Miss vol (โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)})`,
-              );
-            }
-          } else if (!gradeResolution.momentumOk) {
+        if (gradeResolution.nearMissVolume && gradeResolution.grade === "b_plus") {
+          gradeFootnote = `📎 Grade B (vol near-miss): โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)} · momentum+1H confirm ผ่าน · vol > SMA×${volNearMult} แต่ไม่ถึง ×${volMult} (vol=${fmtNum(vE!, 0)} · SMA×${volMult}=${fmtNum((vsE ?? 0) * volMult, 0)})`;
+        } else if (gradeResolution.grade === "d_plus") {
+          if (!gradeResolution.momentumOk) {
             gradeFootnote = twoBarInlinePassed
               ? `📎 ${snowballLongGradePlusLabel("d_plus")}: โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)} · momentum ไม่ผ่าน · two-bar inline confirm ผ่าน — ปิด ~ ${formatClosedCandleBkk(t15[iConf]!)} @ ${formatUsdPrice(c15[iConf]!)} USDT`
               : gradeBMomentum1hEval
@@ -3268,7 +3261,9 @@ export async function runPublicIndicatorFeedInternal(
           }
         } else if (gradeResolution.grade === "f_plus") {
           const failDetail = gradeBMomentum1hEval?.detail ?? "1H confirm ไม่ผ่าน";
-          gradeFootnote = `📎 ${snowballLongGradeFLabel()}: โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)} · momentum ไม่ผ่าน · ${failDetail}`;
+          gradeFootnote = gradeResolution.nearMissVolume
+            ? `📎 ${snowballLongGradeFLabel()} (vol near-miss): โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)} · momentum ผ่าน · 1H confirm ไม่ผ่าน · vol > SMA×${volNearMult} แต่ไม่ถึง ×${volMult} · ${failDetail}`
+            : `📎 ${snowballLongGradeFLabel()}: โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)} · momentum ไม่ผ่าน · ${failDetail}`;
           if (snowScanStats) {
             snowScanStats.longGradeBMomentumToGradeF++;
             pushSnowScanSymList(
@@ -4521,7 +4516,7 @@ function evaluateSnowballLongAt(
     detail: relaxVol
       ? `intrabar relax — ผ่าน (vol=${fmtNum(vE!, 0)})`
       : volNearMissOnly
-        ? `near-miss D+ — vol=${fmtNum(vE!, 0)} > SMA×${volNearMult} แต่ ≤ SMA×${ctx.volMult} = ${fmtNum((vsE ?? 0) * ctx.volMult, 0)}`
+        ? `near-miss Grade B — vol=${fmtNum(vE!, 0)} > SMA×${volNearMult} แต่ ≤ SMA×${ctx.volMult} = ${fmtNum((vsE ?? 0) * ctx.volMult, 0)}`
         : `vol=${fmtNum(vE!, 0)} ${volStrictOk ? ">" : "≤"} SMA*${ctx.volMult} = ${fmtNum((vsE ?? 0) * ctx.volMult, 0)}`,
   });
 
