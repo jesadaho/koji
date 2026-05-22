@@ -1,5 +1,10 @@
 /** Client-safe Snowball stats types + Grade label (no Node.js / Redis). */
 
+import {
+  snowballGradeChecklistMark,
+  snowballStatsGradeChecklist,
+  snowballStatsGradeChecklistFooter,
+} from "@/lib/snowballGradeChecklist";
 import { statsFmtPctCell } from "@/lib/statsCsv";
 import { formatFunding } from "@/src/marketsFormat";
 import {
@@ -68,6 +73,12 @@ export type SnowballStatsRow = {
   volumeCascadeYn?: "Y" | "N" | null;
   trendMomentumLookback?: number | null;
   trendMomentumVolLookback?: number | null;
+  /** Vol แท่งสัญญาณ ÷ SMA ณ เวลาแจ้ง */
+  signalVolVsSma?: number | null;
+  volStrictOk?: boolean | null;
+  volNearMissOnly?: boolean | null;
+  volMultAtAlert?: number | null;
+  volNearMultAtAlert?: number | null;
   confirmVolVsSma?: number | null;
   confirmVolRank?: number | null;
   confirmVolRankLb?: number | null;
@@ -171,58 +182,29 @@ export function snowballStatsGradeDisplayLabel(
   return snowballStatsGradeLetter(effectiveQualityTier(row));
 }
 
-/** บรรทัดสำหรับ popup รายละเอียดเกรด */
-export function snowballStatsGradeDetailLines(
-  row: Pick<
-    SnowballStatsRow,
-    | "symbol"
-    | "alertSide"
-    | "triggerKind"
-    | "qualityTier"
-    | "alertQualityTier"
-    | "structureTier"
-    | "qualityTier4hAdjusted"
-    | "momentumDowngrade"
-    | "momentumFailGradeF"
-  >,
-): string[] {
-  const lines: string[] = [];
-  const alert = effectiveQualityTier(row);
-  const alertAt = row.alertQualityTier ?? alert;
-  const struct =
-    row.structureTier && snowballStatsIsStructureTier(row.structureTier)
-      ? row.structureTier
-      : null;
-  const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+export type { SnowballGradeChecklistItem } from "@/lib/snowballGradeChecklist";
+export {
+  snowballGradeChecklistMark,
+  snowballStatsGradeChecklist,
+  snowballStatsGradeChecklistFooter,
+} from "@/lib/snowballGradeChecklist";
 
-  if (alert) {
-    lines.push(`เกรดแจ้ง (สุทธิ): ${snowballLongGradeShortLabel(alert)}`);
+/** @deprecated ใช้ snowballStatsGradeChecklist + footer ใน popup */
+export function snowballStatsGradeDetailLines(
+  row: Pick<SnowballStatsRow, "alertSide" | "triggerKind" | "signalBarTf" | "structureTier" | "qualityTier" | "alertQualityTier" | "qualityTier4hAdjusted" | "momentumDowngrade" | "momentumFailGradeF" | "breakout1hConfirmFail" | "signalVolVsSma" | "volStrictOk" | "volNearMissOnly" | "volMultAtAlert" | "volNearMultAtAlert">,
+): string[] {
+  const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+  if (side === "bear") {
+    const grade = effectiveQualityTier(row);
+    const bear: string[] = ["— grade SHORT —"];
+    if (grade) bear.push(`เกรดสุทธิ: ${snowballLongGradeShortLabel(grade)}`);
+    return bear;
   }
-  if (struct && alert && struct !== alert && side === "long") {
-    lines.push(
-      `โครงสร้าง HH48/VAH: ${snowballLongGradeShortLabel(struct)} (${snowballStatsStructureTierHint(struct)})`,
-    );
-    lines.push(
-      "หมายเหตุ: โครงสร้างไม่ใช่เกรดที่สอง — เป็น A+/B/C จาก HH/VAH ก่อนปรับด้วย momentum / vol / confirm",
-    );
-  } else if (struct && side === "long") {
-    lines.push(
-      `โครงสร้าง HH48/VAH: ${snowballLongGradeShortLabel(struct)} (${snowballStatsStructureTierHint(struct)})`,
-    );
-  } else if (side === "long") {
-    lines.push("โครงสร้าง HH48/VAH: — (แถวเก่าหรือไม่บันทึก)");
-  }
-  if (alertAt && alertAt !== alert) {
-    lines.push(`เกรดตอนแจ้ง (snapshot): ${snowballLongGradeShortLabel(alertAt)}`);
-  }
-  if (row.qualityTier4hAdjusted && row.qualityTier && row.qualityTier !== alertAt) {
-    lines.push(`เกรดหลังปรับ 4h: ${snowballLongGradeShortLabel(row.qualityTier)}`);
-  }
-  if (row.momentumFailGradeF || snowballIsGradeF(alert)) {
-    lines.push("ทำไมเป็น F: momentum และ/หรือ confirm ไม่ผ่านตาม matrix");
-  } else if (row.momentumDowngrade || snowballIsGradeDPlusLong(alert)) {
-    lines.push("ทำไมเป็น D+: โครงสร้างผ่าน · confirm ผ่าน · momentum 1H ไม่ผ่าน");
-  }
+  const items = snowballStatsGradeChecklist(row);
+  const lines = items.map(
+    (it) => `${snowballGradeChecklistMark(it.status)} ${it.title}${it.detail ? ` — ${it.detail}` : ""}`,
+  );
+  lines.push(...snowballStatsGradeChecklistFooter(row));
   return lines;
 }
 

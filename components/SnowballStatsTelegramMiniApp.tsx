@@ -16,7 +16,9 @@ import {
   snowballStatsHorizonDue,
   snowballStatsBtcPsarCombinedLabel,
   snowballStatsGradeCellClass,
-  snowballStatsGradeDetailLines,
+  snowballGradeChecklistMark,
+  snowballStatsGradeChecklist,
+  snowballStatsGradeChecklistFooter,
   snowballStatsGradeDisplayLabel,
   snowballStatsGreenDaysLabel,
   snowballStatsMaxDrawback1hLabel,
@@ -543,11 +545,29 @@ export default function SnowballStatsTelegramMiniApp() {
               <p className={`snowGradeDetailCard__grade ${snowballStatsGradeCellClass(gradeDetailRow)}`}>
                 {snowballStatsGradeDisplayLabel(gradeDetailRow)}
               </p>
-              <ul className="snowGradeDetailCard__list">
-                {snowballStatsGradeDetailLines(gradeDetailRow).map((line) => (
-                  <li key={line}>{line}</li>
+              <ol className="snowGradeChecklist">
+                {snowballStatsGradeChecklist(gradeDetailRow).map((item) => (
+                  <li
+                    key={item.id}
+                    className={`snowGradeChecklist__item snowGradeChecklist__item--${item.status}`}
+                  >
+                    <span className="snowGradeChecklist__mark" aria-hidden>
+                      {snowballGradeChecklistMark(item.status)}
+                    </span>
+                    <div className="snowGradeChecklist__body">
+                      <span className="snowGradeChecklist__title">{item.title}</span>
+                      <span className="snowGradeChecklist__detail">{item.detail}</span>
+                    </div>
+                  </li>
                 ))}
-              </ul>
+              </ol>
+              {snowballStatsGradeChecklistFooter(gradeDetailRow).length > 0 ? (
+                <ul className="snowGradeDetailCard__list snowGradeDetailCard__list--footer">
+                  {snowballStatsGradeChecklistFooter(gradeDetailRow).map((line, i) => (
+                    <li key={`f-${i}-${line}`}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           </div>
         ) : null}

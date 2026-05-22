@@ -3545,6 +3545,14 @@ export async function runPublicIndicatorFeedInternal(
                   statsQuoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                   statsMarketCapUsd: longMktCtx?.marketCapUsd ?? null,
                   statsFundingRate: longMktCtx?.fundingRate ?? null,
+                  statsSignalVolVsSma:
+                    typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
+                      ? vE! / vsE
+                      : undefined,
+                  statsVolStrictOk: volStrictOk,
+                  statsVolNearMissOnly: volNearMissOnly,
+                  statsVolMultAtAlert: volMult,
+                  statsVolNearMultAtAlert: volNearMult,
                   ...(gradeResolution.kind === "grade"
                     ? { statsStructureTier: gradeResolution.structureTier }
                     : {}),
@@ -3627,6 +3635,12 @@ export async function runPublicIndicatorFeedInternal(
                   quoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                   marketCapUsd: longMktCtx?.marketCapUsd ?? null,
                   fundingRate: longMktCtx?.fundingRate ?? null,
+                  signalVolVsSma:
+                    typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
+                  volStrictOk,
+                  volNearMissOnly,
+                  volMultAtAlert: volMult,
+                  volNearMultAtAlert: volNearMult,
                   ...trendMomentumStatsFields(trendMomentum),
                   greenDaysBeforeSignal: longGreenDays,
                   ...((longBreakout1h && breakout1hEval != null) ||

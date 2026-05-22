@@ -137,6 +137,11 @@ export type AppendSnowballStatsInput = {
   quoteVol24hUsdt?: number | null;
   marketCapUsd?: number | null;
   fundingRate?: number | null;
+  signalVolVsSma?: number | null;
+  volStrictOk?: boolean | null;
+  volNearMissOnly?: boolean | null;
+  volMultAtAlert?: number | null;
+  volNearMultAtAlert?: number | null;
   maxDrawback1hPct?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
   trendMomentumLookback?: number | null;
@@ -330,6 +335,25 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
         : null,
     fundingRate:
       input.fundingRate != null && Number.isFinite(input.fundingRate) ? input.fundingRate : null,
+    signalVolVsSma:
+      input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0
+        ? input.signalVolVsSma
+        : input.volSma > 0 && Number.isFinite(input.vol) && input.vol > 0
+          ? input.vol / input.volSma
+          : null,
+    volStrictOk: input.volStrictOk === true ? true : input.volStrictOk === false ? false : null,
+    volNearMissOnly:
+      input.volNearMissOnly === true ? true : input.volNearMissOnly === false ? false : null,
+    volMultAtAlert:
+      input.volMultAtAlert != null && Number.isFinite(input.volMultAtAlert) && input.volMultAtAlert > 0
+        ? input.volMultAtAlert
+        : null,
+    volNearMultAtAlert:
+      input.volNearMultAtAlert != null &&
+      Number.isFinite(input.volNearMultAtAlert) &&
+      input.volNearMultAtAlert > 0
+        ? input.volNearMultAtAlert
+        : null,
     maxDrawback1hPct:
       input.maxDrawback1hPct != null && Number.isFinite(input.maxDrawback1hPct) && input.maxDrawback1hPct >= 0
         ? input.maxDrawback1hPct

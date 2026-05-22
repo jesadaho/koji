@@ -73,6 +73,11 @@ export type SnowballPendingConfirm = {
   statsQuoteVol24hUsdt?: number | null;
   statsMarketCapUsd?: number | null;
   statsFundingRate?: number | null;
+  statsSignalVolVsSma?: number | null;
+  statsVolStrictOk?: boolean;
+  statsVolNearMissOnly?: boolean;
+  statsVolMultAtAlert?: number | null;
+  statsVolNearMultAtAlert?: number | null;
   /** โครงสร้าง HH48/HH200/VAH ตอนแจ้ง (LONG) */
   statsStructureTier?: "a_plus" | "b_plus" | "c_plus";
 };
@@ -201,6 +206,11 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsQuoteVol24hUsdtOk ? { statsQuoteVol24hUsdt } : {}),
     ...(statsMarketCapUsdOk ? { statsMarketCapUsd } : {}),
     ...(statsFundingRateOk ? { statsFundingRate } : {}),
+    ...(statsSignalVolVsSmaOk ? { statsSignalVolVsSma } : {}),
+    ...(statsVolStrictOk !== undefined ? { statsVolStrictOk } : {}),
+    ...(statsVolNearMissOnly !== undefined ? { statsVolNearMissOnly } : {}),
+    ...(statsVolMultAtAlertOk ? { statsVolMultAtAlert } : {}),
+    ...(statsVolNearMultAtAlertOk ? { statsVolNearMultAtAlert } : {}),
     ...(statsStructureTier ? { statsStructureTier } : {}),
   };
 }
