@@ -1,7 +1,6 @@
 /** Client-safe Snowball stats types + Grade label (no Node.js / Redis). */
 
 import {
-  snowballIsGradeDLongToShort,
   snowballIsGradeDPlusLong,
   snowballIsGradeF,
   snowballLongGradeShortLabel,
@@ -18,7 +17,7 @@ export type SnowballStatsAlertSide = "long" | "bear";
 export type SnowballStatsRow = {
   id: string;
   symbol: string;
-  /** ทิศวัดผลสถิติ (ROI/DD/outcome) — Grade D = long ตามสัญญาณ */
+  /** ทิศวัดผลสถิติ (ROI/DD/outcome) — Long alert = long เสมอ */
   side: "long" | "short";
   /** ทิศสัญญาณตอนแจ้ง — แถวเก่าอาจไม่มี */
   alertSide?: SnowballStatsAlertSide;
@@ -36,7 +35,7 @@ export type SnowballStatsRow = {
   alertQualityTier?: SnowballStatsQualityTier;
   /** ปรับ qualityTier แล้วหลังครบ 4 ชม. */
   qualityTier4hAdjusted?: boolean;
-  /** Long 1H Breakout confirm fail → Grade D (Long->Short) */
+  /** @deprecated แถวเก่า Grade D (Long->Short) — ไม่สร้างใหม่ */
   breakout1hConfirmFail?: boolean;
   /** @deprecated อ่านจาก qualityTier=d_plus + !breakout1hConfirmFail */
   momentumDowngrade?: boolean;
@@ -100,15 +99,11 @@ function effectiveQualityTier(row: Pick<SnowballStatsRow, "qualityTier" | "alert
   return row.qualityTier ?? row.alertQualityTier;
 }
 
-/** แถวสถิติ Grade D จาก 1H confirm fail (Long->Short) */
+/** แถวสถิติเก่า Grade D (Long->Short) — ใช้ปรับเกรด 4h follow-up เท่านั้น */
 export function snowballStatsIsLongConfirmFailRow(
-  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+  row: Pick<SnowballStatsRow, "breakout1hConfirmFail">,
 ): boolean {
-  const tier = effectiveQualityTier(row);
-  if (snowballIsGradeF(tier)) return false;
-  if (snowballIsGradeDPlusLong(tier, row.breakout1hConfirmFail)) return false;
-  if (row.breakout1hConfirmFail) return true;
-  return snowballIsGradeDLongToShort(tier, row.breakout1hConfirmFail);
+  return row.breakout1hConfirmFail === true;
 }
 
 /** @deprecated ใช้ qualityTier === f_plus */
@@ -130,15 +125,11 @@ export function snowballStatsIsGradeBMomentumDowngradeRow(
   if (row.momentumFailGradeF) return false;
   if (row.momentumDowngrade === true) return true;
   if (row.momentumDowngrade === false) return false;
-  return snowballIsGradeDPlusLong(effectiveQualityTier(row), row.breakout1hConfirmFail);
+  return snowballIsGradeDPlusLong(effectiveQualityTier(row));
 }
 
-function snowballStatsGradeLetter(
-  tier: SnowballStatsQualityTier | undefined,
-  row?: Pick<SnowballStatsRow, "breakout1hConfirmFail">,
-): string {
+function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): string {
   if (!tier) return "—";
-  if (snowballIsGradeDLongToShort(tier, row?.breakout1hConfirmFail)) return "D";
   return snowballLongGradeShortLabel(tier);
 }
 
@@ -147,10 +138,9 @@ export function snowballStatsGradeLabel(
   _side: SnowballStatsRow["side"],
   tier: SnowballStatsRow["qualityTier"] | undefined,
   _alertTier?: SnowballStatsRow["alertQualityTier"],
-  row?: Pick<SnowballStatsRow, "breakout1hConfirmFail" | "qualityTier4hAdjusted" | "qualityTier">,
+  _row?: Pick<SnowballStatsRow, "qualityTier4hAdjusted" | "qualityTier">,
 ): string {
-  const effective = tier ?? row?.qualityTier;
-  return snowballStatsGradeLetter(effective, row);
+  return snowballStatsGradeLetter(tier);
 }
 
 export function snowballStatsGradeCellClass(
@@ -158,15 +148,12 @@ export function snowballStatsGradeCellClass(
 ): string {
   const tier = effectiveQualityTier(row);
   if (snowballIsGradeF(tier)) return "snowGradeCell snowGradeCell--f";
-  if (snowballIsGradeDPlusLong(tier, row.breakout1hConfirmFail)) {
+  if (snowballIsGradeDPlusLong(tier)) {
     return "snowGradeCell snowGradeCell--d";
   }
   if (tier === "a_plus") return "snowGradeCell snowGradeCell--a";
   if (tier === "b_plus") return "snowGradeCell snowGradeCell--b";
   if (tier === "c_plus") return "snowGradeCell snowGradeCell--c";
-  if (snowballIsGradeDLongToShort(tier, row.breakout1hConfirmFail)) {
-    return "snowGradeCell snowGradeCell--d";
-  }
   return "snowGradeCell";
 }
 
