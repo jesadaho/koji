@@ -169,6 +169,19 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsMarketCapUsdOk = Number.isFinite(statsMarketCapUsd) && statsMarketCapUsd > 0;
   const statsFundingRate = Number(o.statsFundingRate);
   const statsFundingRateOk = Number.isFinite(statsFundingRate);
+  const statsSignalVolVsSma = Number(o.statsSignalVolVsSma);
+  const statsSignalVolVsSmaOk = Number.isFinite(statsSignalVolVsSma) && statsSignalVolVsSma > 0;
+  const statsVolStrictOk =
+    o.statsVolStrictOk === true || o.statsVolStrictOk === false ? o.statsVolStrictOk : undefined;
+  const statsVolNearMissOnly =
+    o.statsVolNearMissOnly === true || o.statsVolNearMissOnly === false
+      ? o.statsVolNearMissOnly
+      : undefined;
+  const statsVolMultAtAlert = Number(o.statsVolMultAtAlert);
+  const statsVolMultAtAlertOk = Number.isFinite(statsVolMultAtAlert) && statsVolMultAtAlert > 0;
+  const statsVolNearMultAtAlert = Number(o.statsVolNearMultAtAlert);
+  const statsVolNearMultAtAlertOk =
+    Number.isFinite(statsVolNearMultAtAlert) && statsVolNearMultAtAlert > 0;
   const statsStructureTier =
     o.statsStructureTier === "a_plus" ||
     o.statsStructureTier === "b_plus" ||
