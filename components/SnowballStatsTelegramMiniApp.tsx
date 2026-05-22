@@ -13,12 +13,14 @@ import {
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
   snowballStatsDayOfWeekBkk,
+  snowballStatsHorizonDue,
   snowballStatsBtcPsarCombinedLabel,
   snowballStatsGradeCellClass,
   snowballStatsGradeLabel,
   snowballStatsGreenDaysLabel,
   snowballStatsMaxDrawback1hLabel,
   snowballStatsSideLabel,
+  snowballStatsFundingRateLabel,
   snowballStatsQuoteVol24hLabel,
   snowballStatsVolScoreLabel,
   snowballStatsVolumeCascadeLabel,
@@ -27,6 +29,7 @@ import {
 } from "@/lib/snowballStatsClient";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
 import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
+import { fundingRateVisualClass } from "@/src/marketsFormat";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -159,6 +162,16 @@ function fmtPctCell(price: number | null, pct: number | null): ReactNode {
       {fmtPrice(price)} ({fmtPct(pct)})
     </span>
   );
+}
+
+function fmtSnowballHorizonCell(
+  row: SnowballStatsRow,
+  horizonHours: number,
+  price: number | null,
+  pct: number | null,
+): ReactNode {
+  if (!snowballStatsHorizonDue(row, horizonHours)) return "-";
+  return fmtPctCell(price, pct);
 }
 
 function outcomeLabel(o: SnowballStatsRow["outcome"]): string {
@@ -367,6 +380,12 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">Vol 24h</th>
                 <th
                   scope="col"
+                  title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)"
+                >
+                  Funding
+                </th>
+                <th
+                  scope="col"
                   title="ไส้บนหรือไส้ล่างที่ยาวสุด เป็น % ของช่วงแท่ง (H−L) ใน 8 แท่ง 1H ปิด ณ เวลาแจ้ง (สูงสุดไม่เกิน 100%)"
                 >
                   DD 1H%
@@ -410,7 +429,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={28} className="sub">
+                  <td colSpan={29} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -438,15 +457,24 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{snowballStatsBarRangePctLabel(r.barRangePct2Sum)}</td>
                     <td>{snowballStatsBtcPsarCombinedLabel(r.btcPsar4hTrend, r.btcPsar1hTrend)}</td>
                     <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
+                    <td
+                      className={
+                        r.fundingRate != null && Number.isFinite(r.fundingRate)
+                          ? fundingRateVisualClass(r.fundingRate)
+                          : undefined
+                      }
+                    >
+                      {snowballStatsFundingRateLabel(r.fundingRate)}
+                    </td>
                     <td>{snowballStatsMaxDrawback1hLabel(r.maxDrawback1hPct)}</td>
                     <td>{snowballStatsVolumeCascadeLabel(r.volumeCascadeYn)}</td>
                     <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal)}</td>
                     <td>{snowballStatsConfirmVolVsSmaLabel(r.confirmVolVsSma)}</td>
                     <td>{snowballStatsConfirmVolRankLabel(r.confirmVolRank, r.confirmVolRankLb)}</td>
                     <td>{fmtPctCell(r.price4h, r.pct4h)}</td>
-                    <td>{fmtPctCell(r.price12h, r.pct12h)}</td>
-                    <td>{fmtPctCell(r.price24h, r.pct24h)}</td>
-                    <td>{fmtPctCell(r.price48h, r.pct48h)}</td>
+                    <td>{fmtSnowballHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
+                    <td>{fmtSnowballHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
+                    <td>{fmtSnowballHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
                     <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
                     <td>
                       {r.durationToMfeHours != null && Number.isFinite(r.durationToMfeHours)

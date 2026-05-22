@@ -133,6 +133,7 @@ export type AppendSnowballStatsInput = {
   btcPsar1hTrend?: "up" | "down" | null;
   btcPsar1hClose?: number | null;
   quoteVol24hUsdt?: number | null;
+  fundingRate?: number | null;
   maxDrawback1hPct?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
   trendMomentumLookback?: number | null;
@@ -297,6 +298,8 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       input.quoteVol24hUsdt != null && Number.isFinite(input.quoteVol24hUsdt) && input.quoteVol24hUsdt > 0
         ? input.quoteVol24hUsdt
         : null,
+    fundingRate:
+      input.fundingRate != null && Number.isFinite(input.fundingRate) ? input.fundingRate : null,
     maxDrawback1hPct:
       input.maxDrawback1hPct != null && Number.isFinite(input.maxDrawback1hPct) && input.maxDrawback1hPct >= 0
         ? input.maxDrawback1hPct

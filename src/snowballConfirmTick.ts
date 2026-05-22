@@ -396,6 +396,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               btcPsar1hTrend: item.statsBtcPsar1hTrend ?? null,
               btcPsar1hClose: item.statsBtcPsar1hClose ?? null,
               quoteVol24hUsdt: item.statsQuoteVol24hUsdt ?? null,
+              fundingRate: item.statsFundingRate ?? null,
               ...trendMomentumStatsFields(trendMomentum),
               confirmVolVsSma:
                 volSmaConfirmUse != null && volSmaConfirmUse > 0 ? vo / volSmaConfirmUse : null,

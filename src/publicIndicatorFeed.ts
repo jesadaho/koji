@@ -3542,6 +3542,7 @@ export async function runPublicIndicatorFeedInternal(
                   statsBtcPsar1hTrend: longMktCtx?.btcPsar1hTrend ?? null,
                   statsBtcPsar1hClose: longMktCtx?.btcPsar1hClose ?? null,
                   statsQuoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
+                  statsFundingRate: longMktCtx?.fundingRate ?? null,
                   ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3616,6 +3617,7 @@ export async function runPublicIndicatorFeedInternal(
                   btcPsar1hTrend: longMktCtx?.btcPsar1hTrend ?? null,
                   btcPsar1hClose: longMktCtx?.btcPsar1hClose ?? null,
                   quoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
+                  fundingRate: longMktCtx?.fundingRate ?? null,
                   ...trendMomentumStatsFields(trendMomentum),
                   greenDaysBeforeSignal: longGreenDays,
                   ...((longBreakout1h && breakout1hEval != null) ||
@@ -3995,6 +3997,7 @@ export async function runPublicIndicatorFeedInternal(
                   statsBtcPsar1hTrend: bearMktCtx?.btcPsar1hTrend ?? null,
                   statsBtcPsar1hClose: bearMktCtx?.btcPsar1hClose ?? null,
                   statsQuoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
+                  statsFundingRate: bearMktCtx?.fundingRate ?? null,
                   ...(skipBearTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -4042,6 +4045,7 @@ export async function runPublicIndicatorFeedInternal(
                   btcPsar1hTrend: bearMktCtx?.btcPsar1hTrend ?? null,
                   btcPsar1hClose: bearMktCtx?.btcPsar1hClose ?? null,
                   quoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
+                  fundingRate: bearMktCtx?.fundingRate ?? null,
                   ...trendMomentumStatsFields(trendMomentumBear),
                   greenDaysBeforeSignal: bearGreenDays,
                 });

@@ -1,5 +1,7 @@
 /** Client-safe Snowball stats types + Grade label (no Node.js / Redis). */
 
+import { statsFmtPctCell } from "@/lib/statsCsv";
+import { formatFunding } from "@/src/marketsFormat";
 import {
   snowballIsGradeDPlusLong,
   snowballIsGradeF,
@@ -53,6 +55,8 @@ export type SnowballStatsRow = {
   btcPsar1hTrend?: "up" | "down" | null;
   btcPsar1hClose?: number | null;
   quoteVol24hUsdt?: number | null;
+  /** Funding rate MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม) */
+  fundingRate?: number | null;
   maxDrawback1hPct?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
   trendMomentumLookback?: number | null;
@@ -249,6 +253,46 @@ export function snowballStatsQuoteVol24hLabel(value: number | null | undefined):
   if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
   if (value >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
   return value.toFixed(0);
+}
+
+export function snowballStatsFundingRateLabel(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return formatFunding(value);
+}
+
+export function snowballStatsSignalBarDurationSec(tf: SnowballStatsRow["signalBarTf"]): number {
+  if (tf === "4h") return 4 * 3600;
+  if (tf === "1h") return 3600;
+  return 900;
+}
+
+/** เวลาปิดแท่งสัญญาณ (anchor) — นับ horizon 12h/24h/48h จากจุดนี้ */
+export function snowballStatsAnchorCloseSec(
+  row: Pick<SnowballStatsRow, "signalBarOpenSec" | "signalBarTf">,
+): number {
+  return row.signalBarOpenSec + snowballStatsSignalBarDurationSec(row.signalBarTf ?? "15m");
+}
+
+export function snowballStatsHorizonDue(
+  row: Pick<SnowballStatsRow, "signalBarOpenSec" | "signalBarTf">,
+  horizonHours: number,
+  nowMs: number = Date.now(),
+): boolean {
+  const ac = snowballStatsAnchorCloseSec(row);
+  return nowMs / 1000 >= ac + horizonHours * 3600;
+}
+
+/** ราคา+% หลังครบ horizon — ยังไม่ครบเวลาแสดง "-" */
+export function snowballStatsFmtHorizonPctCell(
+  row: Pick<SnowballStatsRow, "signalBarOpenSec" | "signalBarTf">,
+  horizonHours: number,
+  price: number | null | undefined,
+  pct: number | null | undefined,
+  nowMs: number = Date.now(),
+): string {
+  if (!snowballStatsHorizonDue(row, horizonHours, nowMs)) return "-";
+  const cell = statsFmtPctCell(price, pct);
+  return cell || "—";
 }
 
 export function snowballStatsDayOfWeekBkk(

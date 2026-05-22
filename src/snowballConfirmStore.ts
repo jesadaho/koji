@@ -71,6 +71,7 @@ export type SnowballPendingConfirm = {
   statsBtcPsar1hTrend?: "up" | "down" | null;
   statsBtcPsar1hClose?: number | null;
   statsQuoteVol24hUsdt?: number | null;
+  statsFundingRate?: number | null;
 };
 
 export type SnowballPendingConfirmState = {
@@ -156,6 +157,8 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsBtcPsar1hCloseOk = Number.isFinite(statsBtcPsar1hClose) && statsBtcPsar1hClose > 0;
   const statsQuoteVol24hUsdt = Number(o.statsQuoteVol24hUsdt);
   const statsQuoteVol24hUsdtOk = Number.isFinite(statsQuoteVol24hUsdt) && statsQuoteVol24hUsdt > 0;
+  const statsFundingRate = Number(o.statsFundingRate);
+  const statsFundingRateOk = Number.isFinite(statsFundingRate);
   return {
     id: typeof o.id === "string" && o.id ? o.id : randomUUID(),
     symbol,
@@ -185,6 +188,7 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsBtcPsar1hTrend ? { statsBtcPsar1hTrend } : {}),
     ...(statsBtcPsar1hCloseOk ? { statsBtcPsar1hClose } : {}),
     ...(statsQuoteVol24hUsdtOk ? { statsQuoteVol24hUsdt } : {}),
+    ...(statsFundingRateOk ? { statsFundingRate } : {}),
   };
 }
 

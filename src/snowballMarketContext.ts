@@ -2,8 +2,10 @@
  * บริบทตลาดตอนแจ้ง Snowball stats — BTC PSAR 4h + 1h + quote vol 24h ของคู่สัญญาณ
  */
 
+import { resolveContractSymbol } from "./coinMap";
 import { fetchBinanceUsdmKlines, fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { computeParabolicSarLast } from "./indicatorMath";
+import { fetchContractTickerSingle } from "./mexcMarkets";
 
 const BTC_SYMBOL = "BTCUSDT";
 
@@ -24,7 +26,17 @@ export type SnowballAlertMarketContext = {
   btcPsar1hTrend: "up" | "down" | null;
   btcPsar1hClose: number | null;
   quoteVol24hUsdt: number | null;
+  /** Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม เช่น 0.0001 = 0.01%) */
+  fundingRate: number | null;
 };
+
+function binanceUsdtPerpToMexcContract(binanceSymbol: string): string | null {
+  const sym = binanceSymbol.trim().toUpperCase();
+  if (!sym.endsWith("USDT") || sym.length < 5) return null;
+  const base = sym.slice(0, -4);
+  const resolved = resolveContractSymbol(base);
+  return resolved?.contractSymbol ?? `${base}_USDT`;
+}
 
 function snowballBtcPsarBars(tf: "4h" | "1h"): number {
   const raw =
@@ -94,19 +106,24 @@ export async function fetchBtcPsar1hSnapshot(): Promise<BtcPsarSnapshot | null> 
   return snap;
 }
 
-/** BTC PSAR 4h + 1h + vol 24h ของสัญญาณ (Binance USDT-M) */
+/** BTC PSAR 4h + 1h + vol 24h (Binance) + funding (MEXC สัญญาเดียวกับ checklist) */
 export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Promise<SnowballAlertMarketContext> {
   const sym = binanceSymbol.trim().toUpperCase();
-  const [btc4h, btc1h, quoteVol24hUsdt] = await Promise.all([
+  const mexcContract = binanceUsdtPerpToMexcContract(sym);
+  const [btc4h, btc1h, quoteVol24hUsdt, mexcTicker] = await Promise.all([
     fetchBtcPsar4hSnapshot(),
     fetchBtcPsar1hSnapshot(),
     fetchBinanceUsdmQuoteVol24h(sym),
+    mexcContract ? fetchContractTickerSingle(mexcContract) : Promise.resolve(null),
   ]);
+  const fr = mexcTicker?.fundingRate;
+  const fundingRate = typeof fr === "number" && Number.isFinite(fr) ? fr : null;
   return {
     btcPsar4hTrend: btc4h?.trend ?? null,
     btcPsar4hClose: btc4h?.close ?? null,
     btcPsar1hTrend: btc1h?.trend ?? null,
     btcPsar1hClose: btc1h?.close ?? null,
     quoteVol24hUsdt,
+    fundingRate,
   };
 }
