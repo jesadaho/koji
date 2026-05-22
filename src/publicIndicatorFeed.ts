@@ -3544,6 +3544,9 @@ export async function runPublicIndicatorFeedInternal(
                   statsBtcPsar1hClose: longMktCtx?.btcPsar1hClose ?? null,
                   statsQuoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                   statsFundingRate: longMktCtx?.fundingRate ?? null,
+                  ...(gradeResolution.kind === "grade"
+                    ? { statsStructureTier: gradeResolution.structureTier }
+                    : {}),
                   ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3603,6 +3606,9 @@ export async function runPublicIndicatorFeedInternal(
                   volSma: vsE!,
                   qualityTier: longBreakoutGrade,
                   alertQualityTier: longBreakoutGrade,
+                  ...(gradeResolution.kind === "grade"
+                    ? { structureTier: gradeResolution.structureTier }
+                    : {}),
                   breakout1hConfirmFail: false,
                   momentumDowngrade: snowballIsGradeDPlusLong(longBreakoutGrade),
                   momentumFailGradeF: snowballIsGradeF(longBreakoutGrade),

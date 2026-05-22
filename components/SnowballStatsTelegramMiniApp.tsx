@@ -16,7 +16,8 @@ import {
   snowballStatsHorizonDue,
   snowballStatsBtcPsarCombinedLabel,
   snowballStatsGradeCellClass,
-  snowballStatsGradeLabel,
+  snowballStatsGradeDetailLines,
+  snowballStatsGradeDisplayLabel,
   snowballStatsGreenDaysLabel,
   snowballStatsMaxDrawback1hLabel,
   snowballStatsSideLabel,
@@ -36,7 +37,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ทิศ = ทิศสัญญาณ Snowball · สถิติวัดผล Long alert เป็น Long เสมอ · D = 1H confirm fail · D+ = momentum อ่อน + 1H confirm ผ่าน · วงเล็บ = เกรดหลัง follow-up 4h";
+  "ทิศ = ทิศสัญญาณ Snowball · Grade = เกรดแจ้ง (วงเล็บ = โครงสร้าง A+/B/C) · คลิก Grade ดูรายละเอียด · D+ = momentum อ่อน + confirm ผ่าน";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -188,6 +189,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [payload, setPayload] = useState<SnowballStatsApiPayload | null>(null);
   const [loadErr, setLoadErr] = useState("");
+  const [gradeDetailRow, setGradeDetailRow] = useState<SnowballStatsRow | null>(null);
 
   const api = useCallback(async (path: string, opts: RequestInit = {}) => {
     const initData = getTelegramInitData();
@@ -363,7 +365,11 @@ export default function SnowballStatsTelegramMiniApp() {
                   เหรียญ
                 </th>
                 <th scope="col">ทิศ</th>
-                <th scope="col" className="snowStatsStickyGrade">
+                <th
+                  scope="col"
+                  className="snowStatsStickyGrade"
+                  title="เกรดแจ้ง (วงเล็บ = โครงสร้าง HH48/HH200/VAH) — คลิกดูรายละเอียด"
+                >
                   Grade
                 </th>
                 <th scope="col">วัน</th>
@@ -439,7 +445,14 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td className="snowStatsStickyCoin">{coinLabel(r.symbol)}</td>
                     <td>{snowballStatsSideLabel(r)}</td>
                     <td className={`snowStatsStickyGrade ${snowballStatsGradeCellClass(r)}`}>
-                      {snowballStatsGradeLabel(r.side, r.qualityTier, r.alertQualityTier, r)}
+                      <button
+                        type="button"
+                        className="snowGradeCellBtn"
+                        title="ดูรายละเอียดเกรด"
+                        onClick={() => setGradeDetailRow(r)}
+                      >
+                        {snowballStatsGradeDisplayLabel(r)}
+                      </button>
                     </td>
                     <td>
                       <span style={{ whiteSpace: "nowrap" }}>
@@ -494,6 +507,42 @@ export default function SnowballStatsTelegramMiniApp() {
         <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
           {FOOTNOTE}
         </p>
+        {gradeDetailRow ? (
+          <div
+            className="snowGradeDetailBackdrop"
+            role="presentation"
+            onClick={() => setGradeDetailRow(null)}
+          >
+            <div
+              className="snowGradeDetailCard"
+              role="dialog"
+              aria-labelledby="snowGradeDetailTitle"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="snowGradeDetailCard__head">
+                <h2 id="snowGradeDetailTitle" className="snowGradeDetailCard__title">
+                  {gradeDetailRow.symbol} · {snowballStatsSideLabel(gradeDetailRow)}
+                </h2>
+                <button
+                  type="button"
+                  className="snowGradeDetailCard__close"
+                  aria-label="ปิด"
+                  onClick={() => setGradeDetailRow(null)}
+                >
+                  ×
+                </button>
+              </div>
+              <p className={`snowGradeDetailCard__grade ${snowballStatsGradeCellClass(gradeDetailRow)}`}>
+                {snowballStatsGradeDisplayLabel(gradeDetailRow)}
+              </p>
+              <ul className="snowGradeDetailCard__list">
+                {snowballStatsGradeDetailLines(gradeDetailRow).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        ) : null}
         <p className="sparkStatsActionRow" style={{ marginTop: "0.75rem" }}>
           <button type="button" className="sparkStatsRefreshBtn" onClick={() => void loadStats()}>
             รีเฟรช

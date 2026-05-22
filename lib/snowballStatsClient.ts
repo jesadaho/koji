@@ -7,7 +7,10 @@ import {
   snowballIsGradeF,
   snowballLongGradeShortLabel,
   type SnowballLongBreakoutGrade,
+  type SnowballLongStructureTier,
 } from "@/src/snowballLongBreakoutGrade";
+
+export type { SnowballLongStructureTier };
 
 export type SnowballStatsOutcome = "pending" | "win_trend" | "win_quick_tp30" | "loss" | "flat";
 
@@ -33,7 +36,9 @@ export type SnowballStatsRow = {
   triggerKind: string;
   /** เกรดสุทธิตอนแจ้ง (Single-Layer Matrix) */
   qualityTier?: SnowballStatsQualityTier;
-  /** @deprecated ใช้ qualityTier — คงไว้สำหรับแถวเก่า */
+  /** โครงสร้าง HH48/HH200/VAH ตอนแจ้ง (A+/B/C) — คงที่แม้ qualityTier เป็น D+/F */
+  structureTier?: SnowballLongStructureTier;
+  /** snapshot เกรดตอนแจ้งครั้งแรก (ก่อน follow-up 4h) */
   alertQualityTier?: SnowballStatsQualityTier;
   /** ปรับ qualityTier แล้วหลังครบ 4 ชม. */
   qualityTier4hAdjusted?: boolean;
@@ -137,13 +142,93 @@ function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): s
   return snowballLongGradeShortLabel(tier);
 }
 
-/** เกรดสุทธิ — ไม่ใช้วงเล็บประวัติโครงสร้างเดิม (Single-Layer) */
+function snowballStatsStructureTierHint(tier: SnowballLongStructureTier): string {
+  if (tier === "a_plus") return "HH48+HH200+VAH";
+  if (tier === "b_plus") return "VAH only";
+  return "HH48 (C)";
+}
+
+function snowballStatsIsStructureTier(
+  tier: string | undefined,
+): tier is SnowballLongStructureTier {
+  return tier === "a_plus" || tier === "b_plus" || tier === "c_plus";
+}
+
+/** ป้ายคอลัมน์ Grade — เกรดแจ้ง + โครงสร้างในวงเล็บเมื่อต่างกัน */
+export function snowballStatsStructureTierLabel(
+  tier: SnowballLongStructureTier | null | undefined,
+): string {
+  if (!tier || !snowballStatsIsStructureTier(tier)) return "—";
+  return snowballLongGradeShortLabel(tier);
+}
+
+export function snowballStatsGradeDisplayLabel(
+  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "structureTier">,
+): string {
+  const alert = effectiveQualityTier(row);
+  const struct = row.structureTier;
+  const alertLabel = snowballStatsGradeLetter(alert);
+  if (!struct || !snowballStatsIsStructureTier(struct)) return alertLabel;
+  const structLabel = snowballLongGradeShortLabel(struct);
+  if (!alert || alert === struct) return structLabel;
+  return `${alertLabel} (${structLabel})`;
+}
+
+/** บรรทัดสำหรับ popup รายละเอียดเกรด */
+export function snowballStatsGradeDetailLines(
+  row: Pick<
+    SnowballStatsRow,
+    | "symbol"
+    | "alertSide"
+    | "triggerKind"
+    | "qualityTier"
+    | "alertQualityTier"
+    | "structureTier"
+    | "qualityTier4hAdjusted"
+    | "momentumDowngrade"
+    | "momentumFailGradeF"
+  >,
+): string[] {
+  const lines: string[] = [];
+  const alert = effectiveQualityTier(row);
+  const alertAt = row.alertQualityTier ?? alert;
+  if (alert) {
+    lines.push(`เกรดแจ้ง: ${snowballLongGradeShortLabel(alert)}`);
+  }
+  if (alertAt && alertAt !== alert) {
+    lines.push(`เกรดตอนแจ้ง (snapshot): ${snowballLongGradeShortLabel(alertAt)}`);
+  }
+  if (row.qualityTier4hAdjusted && row.qualityTier && row.qualityTier !== alertAt) {
+    lines.push(`เกรดหลังปรับ 4h: ${snowballLongGradeShortLabel(row.qualityTier)}`);
+  }
+  const struct = row.structureTier;
+  if (struct && snowballStatsIsStructureTier(struct)) {
+    lines.push(
+      `โครงสร้าง 4H: ${snowballLongGradeShortLabel(struct)} (${snowballStatsStructureTierHint(struct)})`,
+    );
+  } else {
+    const side =
+      row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+    if (side === "long") {
+      lines.push("โครงสร้าง 4H: — (แถวเก่าหรือไม่บันทึก)");
+    }
+  }
+  if (row.momentumFailGradeF || snowballIsGradeF(alert)) {
+    lines.push("Momentum: ไม่ผ่าน · 1H confirm ไม่ผ่าน (Grade F)");
+  } else if (row.momentumDowngrade || snowballIsGradeDPlusLong(alert)) {
+    lines.push("Momentum: ไม่ผ่าน · confirm ผ่าน (Grade D+)");
+  }
+  return lines;
+}
+
+/** เกรดสุทธิอย่างเดียว (CSV compat / sort) */
 export function snowballStatsGradeLabel(
   _side: SnowballStatsRow["side"],
   tier: SnowballStatsRow["qualityTier"] | undefined,
   _alertTier?: SnowballStatsRow["alertQualityTier"],
-  _row?: Pick<SnowballStatsRow, "qualityTier4hAdjusted" | "qualityTier">,
+  _row?: Pick<SnowballStatsRow, "qualityTier4hAdjusted" | "qualityTier" | "structureTier">,
 ): string {
+  if (_row) return snowballStatsGradeDisplayLabel(_row);
   return snowballStatsGradeLetter(tier);
 }
 

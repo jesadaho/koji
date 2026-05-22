@@ -543,6 +543,84 @@ code {
   font-weight: 700;
 }
 
+.snowGradeCellBtn {
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 0.15em;
+}
+
+.snowGradeDetailBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.snowGradeDetailCard {
+  width: min(100%, 22rem);
+  max-height: min(80vh, 24rem);
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.snowGradeDetailCard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.snowGradeDetailCard__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.snowGradeDetailCard__close {
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--muted);
+  background: none;
+  border: none;
+  padding: 0.15rem 0.35rem;
+  cursor: pointer;
+}
+
+.snowGradeDetailCard__grade {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+}
+
+.snowGradeDetailCard__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.snowGradeDetailCard__list li + li {
+  margin-top: 0.35rem;
+}
+
 .sparkMatrixPct {
   font-weight: 600;
 }

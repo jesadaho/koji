@@ -72,6 +72,8 @@ export type SnowballPendingConfirm = {
   statsBtcPsar1hClose?: number | null;
   statsQuoteVol24hUsdt?: number | null;
   statsFundingRate?: number | null;
+  /** โครงสร้าง HH48/HH200/VAH ตอนแจ้ง (LONG) */
+  statsStructureTier?: "a_plus" | "b_plus" | "c_plus";
 };
 
 export type SnowballPendingConfirmState = {
@@ -159,6 +161,12 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsQuoteVol24hUsdtOk = Number.isFinite(statsQuoteVol24hUsdt) && statsQuoteVol24hUsdt > 0;
   const statsFundingRate = Number(o.statsFundingRate);
   const statsFundingRateOk = Number.isFinite(statsFundingRate);
+  const statsStructureTier =
+    o.statsStructureTier === "a_plus" ||
+    o.statsStructureTier === "b_plus" ||
+    o.statsStructureTier === "c_plus"
+      ? o.statsStructureTier
+      : undefined;
   return {
     id: typeof o.id === "string" && o.id ? o.id : randomUUID(),
     symbol,
@@ -189,6 +197,7 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsBtcPsar1hCloseOk ? { statsBtcPsar1hClose } : {}),
     ...(statsQuoteVol24hUsdtOk ? { statsQuoteVol24hUsdt } : {}),
     ...(statsFundingRateOk ? { statsFundingRate } : {}),
+    ...(statsStructureTier ? { statsStructureTier } : {}),
   };
 }
 

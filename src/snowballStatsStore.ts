@@ -9,6 +9,7 @@ import {
   type SnowballStatsQualityTier,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
+import type { SnowballLongStructureTier } from "@/src/snowballLongBreakoutGrade";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 import {
@@ -119,6 +120,7 @@ export type AppendSnowballStatsInput = {
   vol: number;
   volSma: number;
   qualityTier?: SnowballStatsQualityTier;
+  structureTier?: SnowballLongStructureTier;
   /** Wilder ATR(100) ที่แท่งสัญญาณ — baseline ความผันผวน */
   atr100?: number | null;
   /** Max upper wick ใน 100 แท่งก่อนแท่งสัญญาณ — เพดานไส้บน */
@@ -184,9 +186,27 @@ export function migrateSnowballStatsConfirmFailSideToLong(rows: SnowballStatsRow
   return migrateSnowballStatsLongAlertTradeSideToLong(rows);
 }
 
+/** แถวเก่า — ถ้า qualityTier เป็น A+/B/C ให้ copy เป็น structureTier */
+export function migrateSnowballStatsStructureTier(rows: SnowballStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (row.structureTier) continue;
+    const src = row.alertQualityTier ?? row.qualityTier;
+    if (src === "a_plus" || src === "b_plus" || src === "c_plus") {
+      row.structureTier = src;
+      updated += 1;
+    }
+  }
+  return updated;
+}
+
 /** รัน migration แถวสถิติ (เรียกตอนโหลด API + tick follow-up) */
 export function applySnowballStatsRowMigrations(rows: SnowballStatsRow[]): number {
-  return migrateSnowballStatsLegacyGradeD(rows) + migrateSnowballStatsLongAlertTradeSideToLong(rows);
+  return (
+    migrateSnowballStatsLegacyGradeD(rows) +
+    migrateSnowballStatsLongAlertTradeSideToLong(rows) +
+    migrateSnowballStatsStructureTier(rows)
+  );
 }
 
 /** แถวเก่า qualityTier=d_plus ที่ไม่มี alertQualityTier → ติดป้าย confirm fail (ไม่แตะ D+ ที่ alert = A+/B/C) */
@@ -271,6 +291,11 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     intrabar: input.intrabar,
     triggerKind: input.triggerKind,
     qualityTier: input.qualityTier,
+    ...(input.structureTier === "a_plus" ||
+    input.structureTier === "b_plus" ||
+    input.structureTier === "c_plus"
+      ? { structureTier: input.structureTier }
+      : {}),
     alertQualityTier: input.alertQualityTier ?? input.qualityTier,
     breakout1hConfirmFail: Boolean(input.breakout1hConfirmFail),
     momentumDowngrade: input.momentumDowngrade === true,
