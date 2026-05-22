@@ -22,6 +22,7 @@ import {
   snowballStatsMaxDrawback1hLabel,
   snowballStatsSideLabel,
   snowballStatsFundingRateLabel,
+  snowballStatsMarketCapUsdLabel,
   snowballStatsQuoteVol24hLabel,
   snowballStatsVolScoreLabel,
   snowballStatsVolumeCascadeLabel,
@@ -386,6 +387,12 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">Vol 24h</th>
                 <th
                   scope="col"
+                  title="Market cap USD (CoinGecko) ณ เวลาแจ้ง"
+                >
+                  Mcap
+                </th>
+                <th
+                  scope="col"
                   title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)"
                 >
                   Funding
@@ -435,7 +442,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={29} className="sub">
+                  <td colSpan={30} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -470,6 +477,7 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{snowballStatsBarRangePctLabel(r.barRangePct2Sum)}</td>
                     <td>{snowballStatsBtcPsarCombinedLabel(r.btcPsar4hTrend, r.btcPsar1hTrend)}</td>
                     <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
+                    <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                     <td
                       className={
                         r.fundingRate != null && Number.isFinite(r.fundingRate)

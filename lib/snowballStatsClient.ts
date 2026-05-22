@@ -60,6 +60,8 @@ export type SnowballStatsRow = {
   btcPsar1hTrend?: "up" | "down" | null;
   btcPsar1hClose?: number | null;
   quoteVol24hUsdt?: number | null;
+  /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
+  marketCapUsd?: number | null;
   /** Funding rate MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม) */
   fundingRate?: number | null;
   maxDrawback1hPct?: number | null;
@@ -341,6 +343,15 @@ export function snowballStatsQuoteVol24hLabel(value: number | null | undefined):
   if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
   if (value >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
   return value.toFixed(0);
+}
+
+/** Market cap USD — รูปแบบเดียวกับ Vol 24h ($ prefix) */
+export function snowballStatsMarketCapUsdLabel(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value) || value <= 0) return "—";
+  if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+  if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+  if (value >= 1e3) return `$${(value / 1e3).toFixed(0)}K`;
+  return `$${value.toFixed(0)}`;
 }
 
 export function snowballStatsFundingRateLabel(value: number | null | undefined): string {

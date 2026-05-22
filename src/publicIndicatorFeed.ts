@@ -3543,6 +3543,7 @@ export async function runPublicIndicatorFeedInternal(
                   statsBtcPsar1hTrend: longMktCtx?.btcPsar1hTrend ?? null,
                   statsBtcPsar1hClose: longMktCtx?.btcPsar1hClose ?? null,
                   statsQuoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
+                  statsMarketCapUsd: longMktCtx?.marketCapUsd ?? null,
                   statsFundingRate: longMktCtx?.fundingRate ?? null,
                   ...(gradeResolution.kind === "grade"
                     ? { statsStructureTier: gradeResolution.structureTier }
@@ -3624,6 +3625,7 @@ export async function runPublicIndicatorFeedInternal(
                   btcPsar1hTrend: longMktCtx?.btcPsar1hTrend ?? null,
                   btcPsar1hClose: longMktCtx?.btcPsar1hClose ?? null,
                   quoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
+                  marketCapUsd: longMktCtx?.marketCapUsd ?? null,
                   fundingRate: longMktCtx?.fundingRate ?? null,
                   ...trendMomentumStatsFields(trendMomentum),
                   greenDaysBeforeSignal: longGreenDays,
@@ -4004,6 +4006,7 @@ export async function runPublicIndicatorFeedInternal(
                   statsBtcPsar1hTrend: bearMktCtx?.btcPsar1hTrend ?? null,
                   statsBtcPsar1hClose: bearMktCtx?.btcPsar1hClose ?? null,
                   statsQuoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
+                  statsMarketCapUsd: bearMktCtx?.marketCapUsd ?? null,
                   statsFundingRate: bearMktCtx?.fundingRate ?? null,
                   ...(skipBearTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
@@ -4052,6 +4055,7 @@ export async function runPublicIndicatorFeedInternal(
                   btcPsar1hTrend: bearMktCtx?.btcPsar1hTrend ?? null,
                   btcPsar1hClose: bearMktCtx?.btcPsar1hClose ?? null,
                   quoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
+                  marketCapUsd: bearMktCtx?.marketCapUsd ?? null,
                   fundingRate: bearMktCtx?.fundingRate ?? null,
                   ...trendMomentumStatsFields(trendMomentumBear),
                   greenDaysBeforeSignal: bearGreenDays,

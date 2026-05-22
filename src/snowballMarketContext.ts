@@ -2,6 +2,7 @@
  * บริบทตลาดตอนแจ้ง Snowball stats — BTC PSAR 4h + 1h + quote vol 24h ของคู่สัญญาณ
  */
 
+import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { resolveContractSymbol } from "./coinMap";
 import { fetchBinanceUsdmKlines, fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { computeParabolicSarLast } from "./indicatorMath";
@@ -26,6 +27,8 @@ export type SnowballAlertMarketContext = {
   btcPsar1hTrend: "up" | "down" | null;
   btcPsar1hClose: number | null;
   quoteVol24hUsdt: number | null;
+  /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
+  marketCapUsd: number | null;
   /** Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม เช่น 0.0001 = 0.01%) */
   fundingRate: number | null;
 };
@@ -50,12 +53,32 @@ function snowballBtcPsarBars(tf: "4h" | "1h"): number {
 
 let btcPsar4hCache: { atMs: number; snap: BtcPsarSnapshot | null } | null = null;
 let btcPsar1hCache: { atMs: number; snap: BtcPsarSnapshot | null } | null = null;
+const mcapCache = new Map<string, { atMs: number; mcap: number | null }>();
 const BTC_PSAR_CACHE_MS = 5 * 60 * 1000;
+const MCAP_CACHE_MS = 15 * 60 * 1000;
+
+function binanceUsdtPerpBase(binanceSymbol: string): string | null {
+  const sym = binanceSymbol.trim().toUpperCase();
+  if (!sym.endsWith("USDT") || sym.length < 5) return null;
+  return sym.slice(0, -4);
+}
+
+async function fetchMarketCapUsdCached(base: string): Promise<number | null> {
+  const key = base.trim().toUpperCase();
+  if (!key) return null;
+  const now = Date.now();
+  const hit = mcapCache.get(key);
+  if (hit && now - hit.atMs < MCAP_CACHE_MS) return hit.mcap;
+  const mcap = await fetchCoinGeckoMarketCapUsd(key);
+  mcapCache.set(key, { atMs: now, mcap });
+  return mcap;
+}
 
 /** ล้าง cache BTC PSAR — เรียกต้นรอบสแกน Snowball */
 export function resetSnowballBtcPsarCache(): void {
   btcPsar4hCache = null;
   btcPsar1hCache = null;
+  mcapCache.clear();
 }
 
 /** @deprecated ใช้ resetSnowballBtcPsarCache */
@@ -106,14 +129,16 @@ export async function fetchBtcPsar1hSnapshot(): Promise<BtcPsarSnapshot | null> 
   return snap;
 }
 
-/** BTC PSAR 4h + 1h + vol 24h (Binance) + funding (MEXC สัญญาเดียวกับ checklist) */
+/** BTC PSAR 4h + 1h + vol 24h (Binance) + mcap (CoinGecko) + funding (MEXC) */
 export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Promise<SnowballAlertMarketContext> {
   const sym = binanceSymbol.trim().toUpperCase();
   const mexcContract = binanceUsdtPerpToMexcContract(sym);
-  const [btc4h, btc1h, quoteVol24hUsdt, mexcTicker] = await Promise.all([
+  const base = binanceUsdtPerpBase(sym);
+  const [btc4h, btc1h, quoteVol24hUsdt, marketCapUsd, mexcTicker] = await Promise.all([
     fetchBtcPsar4hSnapshot(),
     fetchBtcPsar1hSnapshot(),
     fetchBinanceUsdmQuoteVol24h(sym),
+    base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
     mexcContract ? fetchContractTickerSingle(mexcContract) : Promise.resolve(null),
   ]);
   const fr = mexcTicker?.fundingRate;
@@ -124,6 +149,7 @@ export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Pr
     btcPsar1hTrend: btc1h?.trend ?? null,
     btcPsar1hClose: btc1h?.close ?? null,
     quoteVol24hUsdt,
+    marketCapUsd,
     fundingRate,
   };
 }
