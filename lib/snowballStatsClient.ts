@@ -154,7 +154,7 @@ function snowballStatsIsStructureTier(
   return tier === "a_plus" || tier === "b_plus" || tier === "c_plus";
 }
 
-/** ป้ายคอลัมน์ Grade — เกรดแจ้ง + โครงสร้างในวงเล็บเมื่อต่างกัน */
+/** ป้ายคอลัมน์โครงสร้าง (CSV / วิเคราะห์) */
 export function snowballStatsStructureTierLabel(
   tier: SnowballLongStructureTier | null | undefined,
 ): string {
@@ -162,16 +162,11 @@ export function snowballStatsStructureTierLabel(
   return snowballLongGradeShortLabel(tier);
 }
 
+/** ป้ายคอลัมน์ Grade — เกรดสุทธิชั้นเดียว (โครงสร้างดูใน popup) */
 export function snowballStatsGradeDisplayLabel(
-  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "structureTier">,
+  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier">,
 ): string {
-  const alert = effectiveQualityTier(row);
-  const struct = row.structureTier;
-  const alertLabel = snowballStatsGradeLetter(alert);
-  if (!struct || !snowballStatsIsStructureTier(struct)) return alertLabel;
-  const structLabel = snowballLongGradeShortLabel(struct);
-  if (!alert || alert === struct) return structLabel;
-  return `${alertLabel} (${structLabel})`;
+  return snowballStatsGradeLetter(effectiveQualityTier(row));
 }
 
 /** บรรทัดสำหรับ popup รายละเอียดเกรด */
@@ -192,8 +187,28 @@ export function snowballStatsGradeDetailLines(
   const lines: string[] = [];
   const alert = effectiveQualityTier(row);
   const alertAt = row.alertQualityTier ?? alert;
+  const struct =
+    row.structureTier && snowballStatsIsStructureTier(row.structureTier)
+      ? row.structureTier
+      : null;
+  const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+
   if (alert) {
-    lines.push(`เกรดแจ้ง: ${snowballLongGradeShortLabel(alert)}`);
+    lines.push(`เกรดแจ้ง (สุทธิ): ${snowballLongGradeShortLabel(alert)}`);
+  }
+  if (struct && alert && struct !== alert && side === "long") {
+    lines.push(
+      `โครงสร้าง HH48/VAH: ${snowballLongGradeShortLabel(struct)} (${snowballStatsStructureTierHint(struct)})`,
+    );
+    lines.push(
+      "หมายเหตุ: โครงสร้างไม่ใช่เกรดที่สอง — เป็น A+/B/C จาก HH/VAH ก่อนปรับด้วย momentum / vol / confirm",
+    );
+  } else if (struct && side === "long") {
+    lines.push(
+      `โครงสร้าง HH48/VAH: ${snowballLongGradeShortLabel(struct)} (${snowballStatsStructureTierHint(struct)})`,
+    );
+  } else if (side === "long") {
+    lines.push("โครงสร้าง HH48/VAH: — (แถวเก่าหรือไม่บันทึก)");
   }
   if (alertAt && alertAt !== alert) {
     lines.push(`เกรดตอนแจ้ง (snapshot): ${snowballLongGradeShortLabel(alertAt)}`);
@@ -201,22 +216,10 @@ export function snowballStatsGradeDetailLines(
   if (row.qualityTier4hAdjusted && row.qualityTier && row.qualityTier !== alertAt) {
     lines.push(`เกรดหลังปรับ 4h: ${snowballLongGradeShortLabel(row.qualityTier)}`);
   }
-  const struct = row.structureTier;
-  if (struct && snowballStatsIsStructureTier(struct)) {
-    lines.push(
-      `โครงสร้าง 4H: ${snowballLongGradeShortLabel(struct)} (${snowballStatsStructureTierHint(struct)})`,
-    );
-  } else {
-    const side =
-      row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
-    if (side === "long") {
-      lines.push("โครงสร้าง 4H: — (แถวเก่าหรือไม่บันทึก)");
-    }
-  }
   if (row.momentumFailGradeF || snowballIsGradeF(alert)) {
-    lines.push("Momentum: ไม่ผ่าน · 1H confirm ไม่ผ่าน (Grade F)");
+    lines.push("ทำไมเป็น F: momentum และ/หรือ confirm ไม่ผ่านตาม matrix");
   } else if (row.momentumDowngrade || snowballIsGradeDPlusLong(alert)) {
-    lines.push("Momentum: ไม่ผ่าน · confirm ผ่าน (Grade D+)");
+    lines.push("ทำไมเป็น D+: โครงสร้างผ่าน · confirm ผ่าน · momentum 1H ไม่ผ่าน");
   }
   return lines;
 }

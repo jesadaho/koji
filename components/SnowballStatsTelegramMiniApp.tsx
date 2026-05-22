@@ -37,7 +37,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ทิศ = ทิศสัญญาณ Snowball · Grade = เกรดแจ้ง (วงเล็บ = โครงสร้าง A+/B/C) · คลิก Grade ดูรายละเอียด · D+ = momentum อ่อน + confirm ผ่าน";
+  "ทิศ = ทิศสัญญาณ Snowball · Grade = เกรดสุทธิชั้นเดียว · คลิก Grade ดูโครงสร้าง HH48/VAH และเหตุผล D+/F";
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -368,7 +368,7 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th
                   scope="col"
                   className="snowStatsStickyGrade"
-                  title="เกรดแจ้ง (วงเล็บ = โครงสร้าง HH48/HH200/VAH) — คลิกดูรายละเอียด"
+                  title="เกรดสุทธิ (A+/B/C/D+/F) — คลิกดูโครงสร้าง HH48/VAH และเหตุผล"
                 >
                   Grade
                 </th>
@@ -448,7 +448,7 @@ export default function SnowballStatsTelegramMiniApp() {
                       <button
                         type="button"
                         className="snowGradeCellBtn"
-                        title="ดูรายละเอียดเกรด"
+                        title="ดูโครงสร้างและเหตุผลเกรด"
                         onClick={() => setGradeDetailRow(r)}
                       >
                         {snowballStatsGradeDisplayLabel(r)}
