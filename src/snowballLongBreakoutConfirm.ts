@@ -118,6 +118,20 @@ export function snowballLongBreakout1hGodBodyMinRatio(): number {
   return 0.25;
 }
 
+/** Swing HH/LL บน 1H — ดีฟอลต์เท่า INDICATOR_PUBLIC_SNOWBALL_SWING_LOOKBACK (48 แท่ง) */
+function snowballSwingLookbackBarsDefault(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_LOOKBACK);
+  if (Number.isFinite(v) && v >= 5 && v <= 400) return Math.floor(v);
+  return 48;
+}
+
+/** Lookback สำหรับ high24h_before บน 1H — ค่าเริ่มเท่า Swing HH48 */
+export function snowballLongBreakout1hSwingLookback(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_BREAKOUT_1H_SWING_LOOKBACK);
+  if (Number.isFinite(v) && v >= 5 && v <= 400) return Math.floor(v);
+  return snowballSwingLookbackBarsDefault();
+}
+
 /** อันดับวอลุ่มในรอบ lookback 1H (default 48 แท่ง ≈ 2 วัน) */
 export function snowballLongBreakout1hVolRankLookback(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_BREAKOUT_1H_VOL_RANK_LOOKBACK);

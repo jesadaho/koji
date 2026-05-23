@@ -33,6 +33,7 @@ import {
   buildSnowballLongBreakout1hConfirmGateSteps,
   evaluateSnowballLongBreakout1hConfirm,
   formatSnowballLongBreakout1hCriteriaSummary,
+  snowballLongBreakout1hSwingLookback,
   snowballLongBreakout1hTwoBarEnabled,
   snowballLongBreakout1hTwoBarMode,
   snowballLongBreakout1hVolRankMax,
@@ -269,16 +270,10 @@ export function snowballLongBreakout1hConfirmEnabled(): boolean {
 export {
   snowballLongBreakout1hBodyMinRatio,
   snowballLongBreakout1hVolMult,
+  snowballLongBreakout1hSwingLookback,
   evaluateSnowballLongBreakout1hConfirm,
   type SnowballLongBreakout1hConfirmEval,
 } from "./snowballLongBreakoutConfirm";
-
-/** Lookback สำหรับ high24h_before บน 1H — ค่าเริ่มเท่า Swing HH48 */
-function snowballLongBreakout1hSwingLookback(): number {
-  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_BREAKOUT_1H_SWING_LOOKBACK);
-  if (Number.isFinite(v) && v >= 5 && v <= 400) return Math.floor(v);
-  return snowballSwingLookbackBars();
-}
 
 /** ไม่นับ high แท่งล่าสุด N แท่งบน 1H ก่อนแท่ง confirm — ค่าเริ่ม 3 (ช่วง 3–4 แท่ง) */
 function snowballLongBreakout1hExcludeRecent(): number {
