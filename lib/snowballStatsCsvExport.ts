@@ -18,7 +18,7 @@ import {
   snowballStatsVolumeCascadeLabel,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
-import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
+import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
   "symbol",
@@ -87,7 +87,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal),
     snowballStatsConfirmVolVsSmaLabel(r.confirmVolVsSma),
     snowballStatsConfirmVolRankLabel(r.confirmVolRank, r.confirmVolRankLb),
-    statsFmtPctCell(r.price4h, r.pct4h),
+    snowballStatsFmtHorizonPctCell(r, 4, r.price4h, r.pct4h),
     snowballStatsFmtHorizonPctCell(r, 12, r.price12h, r.pct12h),
     snowballStatsFmtHorizonPctCell(r, 24, r.price24h, r.pct24h),
     snowballStatsFmtHorizonPctCell(r, 48, r.price48h, r.pct48h),

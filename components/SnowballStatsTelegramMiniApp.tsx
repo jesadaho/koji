@@ -494,7 +494,7 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal)}</td>
                     <td>{snowballStatsConfirmVolVsSmaLabel(r.confirmVolVsSma)}</td>
                     <td>{snowballStatsConfirmVolRankLabel(r.confirmVolRank, r.confirmVolRankLb)}</td>
-                    <td>{fmtPctCell(r.price4h, r.pct4h)}</td>
+                    <td>{fmtSnowballHorizonCell(r, 4, r.price4h, r.pct4h)}</td>
                     <td>{fmtSnowballHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
                     <td>{fmtSnowballHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
                     <td>{fmtSnowballHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
