@@ -60,6 +60,7 @@ import {
   type SnowballStatsRow,
 } from "./snowballStatsStore";
 import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
+import { buildSnowballLongConfirmGateStepsForStats } from "./snowballStatsGateSteps";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import {
@@ -3507,6 +3508,25 @@ export async function runPublicIndicatorFeedInternal(
             }
             const longVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
             const longMktCtx = !intrabar ? await fetchSnowballAlertMarketContext(symbol) : null;
+            const longConfirmGateSteps = buildSnowballLongConfirmGateStepsForStats(
+              snowTf,
+              twoBarInline,
+              pack1hTrend ?? pack1hForTwoBar,
+              twoBarInline
+                ? {
+                    close: c15,
+                    high: h15,
+                    low: l15,
+                    volume: v15,
+                    timeSec: t15,
+                    iSig,
+                    iConf,
+                    snowTf,
+                    pack1h: pack1hForTwoBar,
+                  }
+                : null,
+              swingEx,
+            );
             if (
               !twoBarInline &&
               !longBreakout1h &&
@@ -3553,6 +3573,9 @@ export async function runPublicIndicatorFeedInternal(
                   statsVolNearMissOnly: volNearMissOnly,
                   statsVolMultAtAlert: volMult,
                   statsVolNearMultAtAlert: volNearMult,
+                  ...(longConfirmGateSteps.length > 0
+                    ? { statsConfirmGateSteps: longConfirmGateSteps }
+                    : {}),
                   ...(gradeResolution.kind === "grade"
                     ? { statsStructureTier: gradeResolution.structureTier }
                     : {}),
@@ -3641,6 +3664,7 @@ export async function runPublicIndicatorFeedInternal(
                   volNearMissOnly,
                   volMultAtAlert: volMult,
                   volNearMultAtAlert: volNearMult,
+                  ...(longConfirmGateSteps.length > 0 ? { confirmGateSteps: longConfirmGateSteps } : {}),
                   ...trendMomentumStatsFields(trendMomentum),
                   greenDaysBeforeSignal: longGreenDays,
                   ...((longBreakout1h && breakout1hEval != null) ||

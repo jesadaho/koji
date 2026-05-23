@@ -78,6 +78,7 @@ export type SnowballPendingConfirm = {
   statsVolNearMissOnly?: boolean;
   statsVolMultAtAlert?: number | null;
   statsVolNearMultAtAlert?: number | null;
+  statsConfirmGateSteps?: Array<{ label: string; ok: boolean; detail: string }>;
   /** โครงสร้าง HH48/HH200/VAH ตอนแจ้ง (LONG) */
   statsStructureTier?: "a_plus" | "b_plus" | "c_plus";
 };
@@ -182,6 +183,22 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsVolNearMultAtAlert = Number(o.statsVolNearMultAtAlert);
   const statsVolNearMultAtAlertOk =
     Number.isFinite(statsVolNearMultAtAlert) && statsVolNearMultAtAlert > 0;
+  const statsConfirmGateSteps = (() => {
+    const raw = o.statsConfirmGateSteps;
+    if (!Array.isArray(raw)) return undefined;
+    const steps = raw
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const s = item as Record<string, unknown>;
+        const label = typeof s.label === "string" ? s.label : "";
+        const detail = typeof s.detail === "string" ? s.detail : "";
+        const ok = s.ok === true || s.ok === false ? s.ok : null;
+        if (!label || ok == null) return null;
+        return { label, ok, detail };
+      })
+      .filter((s): s is { label: string; ok: boolean; detail: string } => s != null);
+    return steps.length > 0 ? steps : undefined;
+  })();
   const statsStructureTier =
     o.statsStructureTier === "a_plus" ||
     o.statsStructureTier === "b_plus" ||
@@ -224,6 +241,7 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsVolNearMissOnly !== undefined ? { statsVolNearMissOnly } : {}),
     ...(statsVolMultAtAlertOk ? { statsVolMultAtAlert } : {}),
     ...(statsVolNearMultAtAlertOk ? { statsVolNearMultAtAlert } : {}),
+    ...(statsConfirmGateSteps ? { statsConfirmGateSteps } : {}),
     ...(statsStructureTier ? { statsStructureTier } : {}),
   };
 }

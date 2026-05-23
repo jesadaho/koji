@@ -24,6 +24,13 @@ export type SnowballStatsQualityTier = SnowballLongBreakoutGrade;
 /** ทิศสัญญาณ Snowball ตอนแจ้ง (long / bear) */
 export type SnowballStatsAlertSide = "long" | "bear";
 
+/** ขั้น confirm ตอนแจ้ง — ใช้ใน popup เมื่อไม่ผ่าน */
+export type SnowballStatsGateStep = {
+  label: string;
+  ok: boolean;
+  detail: string;
+};
+
 export type SnowballStatsRow = {
   id: string;
   symbol: string;
@@ -79,6 +86,7 @@ export type SnowballStatsRow = {
   volNearMissOnly?: boolean | null;
   volMultAtAlert?: number | null;
   volNearMultAtAlert?: number | null;
+  confirmGateSteps?: SnowballStatsGateStep[];
   confirmVolVsSma?: number | null;
   confirmVolRank?: number | null;
   confirmVolRankLb?: number | null;
@@ -190,9 +198,7 @@ export {
 } from "@/lib/snowballGradeChecklist";
 
 /** @deprecated ใช้ snowballStatsGradeChecklist + footer ใน popup */
-export function snowballStatsGradeDetailLines(
-  row: Pick<SnowballStatsRow, "alertSide" | "triggerKind" | "signalBarTf" | "structureTier" | "qualityTier" | "alertQualityTier" | "qualityTier4hAdjusted" | "momentumDowngrade" | "momentumFailGradeF" | "breakout1hConfirmFail" | "signalVolVsSma" | "volStrictOk" | "volNearMissOnly" | "volMultAtAlert" | "volNearMultAtAlert">,
-): string[] {
+export function snowballStatsGradeDetailLines(row: SnowballStatsRow): string[] {
   const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
   if (side === "bear") {
     const grade = effectiveQualityTier(row);

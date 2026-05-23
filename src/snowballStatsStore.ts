@@ -7,6 +7,7 @@ import {
   type SnowballStatsAlertSide,
   type SnowballStatsApiPayload,
   type SnowballStatsQualityTier,
+  type SnowballStatsGateStep,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
 import type { SnowballLongStructureTier } from "@/src/snowballLongBreakoutGrade";
@@ -142,6 +143,7 @@ export type AppendSnowballStatsInput = {
   volNearMissOnly?: boolean | null;
   volMultAtAlert?: number | null;
   volNearMultAtAlert?: number | null;
+  confirmGateSteps?: SnowballStatsGateStep[];
   maxDrawback1hPct?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
   trendMomentumLookback?: number | null;
@@ -354,6 +356,16 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       input.volNearMultAtAlert > 0
         ? input.volNearMultAtAlert
         : null,
+    confirmGateSteps:
+      Array.isArray(input.confirmGateSteps) && input.confirmGateSteps.length > 0
+        ? input.confirmGateSteps.filter(
+            (s) =>
+              s &&
+              typeof s.label === "string" &&
+              typeof s.detail === "string" &&
+              (s.ok === true || s.ok === false),
+          )
+        : undefined,
     maxDrawback1hPct:
       input.maxDrawback1hPct != null && Number.isFinite(input.maxDrawback1hPct) && input.maxDrawback1hPct >= 0
         ? input.maxDrawback1hPct

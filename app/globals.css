@@ -669,6 +669,18 @@ code {
   color: var(--muted, #9ca3af);
 }
 
+.snowGradeChecklist__fails {
+  margin: 0.25rem 0 0;
+  padding-left: 1rem;
+  font-size: 0.8125rem;
+  color: var(--muted, #9ca3af);
+  list-style: disc;
+}
+
+.snowGradeChecklist__fails li + li {
+  margin-top: 0.2rem;
+}
+
 .snowGradeChecklist__item--fail .snowGradeChecklist__title {
   color: var(--text);
 }

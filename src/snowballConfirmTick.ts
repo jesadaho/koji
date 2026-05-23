@@ -408,6 +408,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               volNearMissOnly: item.statsVolNearMissOnly ?? null,
               volMultAtAlert: item.statsVolMultAtAlert ?? null,
               volNearMultAtAlert: item.statsVolNearMultAtAlert ?? null,
+              confirmGateSteps: item.statsConfirmGateSteps ?? undefined,
               ...trendMomentumStatsFields(trendMomentum),
               confirmVolVsSma:
                 volSmaConfirmUse != null && volSmaConfirmUse > 0 ? vo / volSmaConfirmUse : null,

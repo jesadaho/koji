@@ -7,6 +7,12 @@ import {
   snowballLongGradeShortLabel,
   type SnowballLongStructureTier,
 } from "@/src/snowballLongBreakoutGrade";
+import {
+  SNOWBALL_TREND_1H_DD_LOOKBACK,
+  SNOWBALL_TREND_1H_VOL_LOOKBACK,
+  snowballTrendMomentumMaxDrawbackPct,
+  snowballTrendMomentumMaxVolumeDrops,
+} from "@/src/snowballTrendMomentumMetrics";
 import type { SnowballStatsQualityTier, SnowballStatsRow } from "@/lib/snowballStatsClient";
 
 function effectiveQualityTier(
@@ -22,10 +28,12 @@ export const SNOWBALL_STATS_VOL_NEAR_MISS_MULT = 2.0;
 export type SnowballGradeChecklistStatus = "pass" | "fail" | "unknown";
 
 export type SnowballGradeChecklistItem = {
-  id: "structure" | "confirm" | "vol_strict_momentum" | "vol_near_miss";
+  id: "structure" | "confirm" | "vol_strict" | "vol_near_miss" | "momentum";
   title: string;
   status: SnowballGradeChecklistStatus;
   detail: string;
+  /** เกณฑ์ที่ไม่ผ่าน (เมื่อ status = fail) */
+  failCriteria?: string[];
 };
 
 function checklistMark(status: SnowballGradeChecklistStatus): string {
@@ -68,6 +76,61 @@ function momentumOk(
   return grade === "a_plus" || grade === "b_plus" || grade === "c_plus";
 }
 
+function momentumFailCriteria(
+  row: Pick<SnowballStatsRow, "maxDrawback1hPct" | "volumeCascadeYn" | "qualityTier" | "alertQualityTier" | "momentumDowngrade" | "momentumFailGradeF">,
+): string[] {
+  if (momentumOk(row)) return [];
+  const fails: string[] = [];
+  const ddMax = snowballTrendMomentumMaxDrawbackPct();
+  if (row.maxDrawback1hPct == null || !Number.isFinite(row.maxDrawback1hPct)) {
+    fails.push(`DD 1H% — ไม่มีข้อมูล (${SNOWBALL_TREND_1H_DD_LOOKBACK} แท่ง 1H ปิด)`);
+  } else if (row.maxDrawback1hPct > ddMax) {
+    fails.push(
+      `DD 1H% เกินเกณฑ์ (${row.maxDrawback1hPct.toFixed(2)}% > ${ddMax}% · ไส้สูงสุดใน ${SNOWBALL_TREND_1H_DD_LOOKBACK} แท่ง)`,
+    );
+  }
+  const maxDrops = snowballTrendMomentumMaxVolumeDrops();
+  if (row.volumeCascadeYn == null) {
+    fails.push(`Vol↗ — ไม่มีข้อมูล (${SNOWBALL_TREND_1H_VOL_LOOKBACK} แท่ง 1H)`);
+  } else if (row.volumeCascadeYn !== "Y") {
+    fails.push(
+      `Vol↗ ไม่ผ่าน (volume cascade · ยอม vol ไม่ยกฐานได้ ≤${maxDrops} ครั้งใน ${SNOWBALL_TREND_1H_VOL_LOOKBACK} แท่ง)`,
+    );
+  }
+  if (fails.length === 0) {
+    fails.push("Sustained buying pressure ไม่ผ่าน (DD 1H% + Vol↗ รวมกัน)");
+  }
+  return fails;
+}
+
+function confirmFailCriteria(
+  row: Pick<
+    SnowballStatsRow,
+    | "qualityTier"
+    | "alertQualityTier"
+    | "breakout1hConfirmFail"
+    | "momentumFailGradeF"
+    | "confirmGateSteps"
+    | "signalBarTf"
+  >,
+): string[] {
+  if (confirmOk(row)) return [];
+  const steps = row.confirmGateSteps;
+  if (steps?.length) {
+    return steps
+      .filter((s) => !s.ok)
+      .map((s) => (s.detail ? `${s.label}: ${s.detail}` : s.label));
+  }
+  if (row.breakout1hConfirmFail) {
+    return ["1H confirm ไม่ผ่าน (breakout1hConfirmFail)"];
+  }
+  const tf = row.signalBarTf ?? "15m";
+  if (tf === "4h") {
+    return ["two-bar inline confirm ไม่ผ่าน (แถวเก่า — ไม่บันทึกขั้นตอน)"];
+  }
+  return ["Breakout 1H confirm ไม่ผ่าน (แถวเก่า — ไม่บันทึกขั้นตอน)"];
+}
+
 function resolveVolStrict(
   row: Pick<SnowballStatsRow, "signalVolVsSma" | "volStrictOk">,
   strictMult: number,
@@ -105,7 +168,7 @@ function mainTfLabel(tf: SnowballStatsRow["signalBarTf"]): string {
   return "Main TF";
 }
 
-/** Checklist 4 ข้อตาม matrix แจ้งเกรด LONG */
+/** Checklist LONG — โครงสร้าง · confirm · vol strict · vol near-miss · momentum */
 export function snowballStatsGradeChecklist(
   row: Pick<
     SnowballStatsRow,
@@ -123,6 +186,9 @@ export function snowballStatsGradeChecklist(
     | "volNearMissOnly"
     | "volMultAtAlert"
     | "volNearMultAtAlert"
+    | "confirmGateSteps"
+    | "maxDrawback1hPct"
+    | "volumeCascadeYn"
   >,
 ): SnowballGradeChecklistItem[] {
   const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
@@ -149,8 +215,7 @@ export function snowballStatsGradeChecklist(
 
   const struct =
     row.structureTier && isStructureTier(row.structureTier) ? row.structureTier : null;
-  const tf = row.signalBarTf ?? "15m";
-  const tfLabel = mainTfLabel(tf);
+  const tfLabel = mainTfLabel(row.signalBarTf ?? "15m");
   const cOk = confirmOk(row);
   const mOk = momentumOk(row);
   const volStrict = resolveVolStrict(row, strictMult);
@@ -161,14 +226,8 @@ export function snowballStatsGradeChecklist(
       ? `${row.signalVolVsSma.toFixed(2)}×`
       : "—";
 
-  const confirmDetail =
-    tf === "4h"
-      ? cOk
-        ? "two-bar inline ผ่าน"
-        : "two-bar inline ไม่ผ่าน"
-      : cOk
-        ? "Breakout 1H ผ่าน"
-        : "Breakout 1H ไม่ผ่าน";
+  const confirmFails = confirmFailCriteria(row);
+  const momentumFails = momentumFailCriteria(row);
 
   return [
     {
@@ -183,24 +242,45 @@ export function snowballStatsGradeChecklist(
       id: "confirm",
       title: "เงื่อนไขฝั่งหน้างานล่าสุด (1H Confirm)",
       status: cOk ? "pass" : "fail",
-      detail: confirmDetail,
+      detail: cOk
+        ? row.signalBarTf === "4h"
+          ? "two-bar inline ผ่านครบ"
+          : "Breakout 1H ผ่านครบ"
+        : "ไม่ผ่าน",
+      failCriteria: cOk ? undefined : confirmFails,
     },
     {
-      id: "vol_strict_momentum",
-      title: `Vol×SMA ≥${strictMult}× และ Momentum`,
-      status:
-        volStrict === "pass" && mOk
-          ? "pass"
-          : row.signalVolVsSma == null && row.volStrictOk == null
-            ? "unknown"
-            : "fail",
-      detail: `Vol แท่งสัญญาณ ${volRatioStr} (เกณฑ์ ≥${strictMult}×) · Momentum 1H ${mOk ? "ผ่าน" : "ไม่ผ่าน"}`,
+      id: "vol_strict",
+      title: `Vol×SMA ≥${strictMult}×`,
+      status: volStrict,
+      detail: `Vol แท่งสัญญาณ ${volRatioStr} (เกณฑ์ ≥${strictMult}×)`,
+      failCriteria:
+        volStrict === "fail"
+          ? [`Vol แท่งสัญญาณ ${volRatioStr} ไม่ถึง ≥${strictMult}× SMA`]
+          : undefined,
     },
     {
       id: "vol_near_miss",
       title: `Vol ไม่ถึง ${strictMult}× แต่ยืนเหนือ ${nearMult}×`,
       status: volNear,
       detail: `Vol แท่งสัญญาณ ${volRatioStr} (ช่วง ${nearMult}–${strictMult}×)`,
+      failCriteria:
+        volNear === "fail"
+          ? [
+              `Vol แท่งสัญญาณ ${volRatioStr} ไม่อยู่ในช่วง near-miss (${nearMult}×–${strictMult}×)`,
+            ]
+          : undefined,
+    },
+    {
+      id: "momentum",
+      title: "Momentum 1H (sustained)",
+      status: mOk ? "pass" : "fail",
+      detail: mOk
+        ? `DD 1H% + Vol↗ ผ่าน`
+        : row.maxDrawback1hPct != null && row.volumeCascadeYn != null
+          ? `DD 1H% ${row.maxDrawback1hPct.toFixed(2)}% · Vol↗ ${row.volumeCascadeYn}`
+          : "ไม่ผ่าน",
+      failCriteria: mOk ? undefined : momentumFails,
     },
   ];
 }

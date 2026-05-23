@@ -557,6 +557,13 @@ export default function SnowballStatsTelegramMiniApp() {
                     <div className="snowGradeChecklist__body">
                       <span className="snowGradeChecklist__title">{item.title}</span>
                       <span className="snowGradeChecklist__detail">{item.detail}</span>
+                      {item.failCriteria && item.failCriteria.length > 0 ? (
+                        <ul className="snowGradeChecklist__fails">
+                          {item.failCriteria.map((c, j) => (
+                            <li key={`${item.id}-fail-${j}`}>{c}</li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </div>
                   </li>
                 ))}
