@@ -6,6 +6,7 @@ import { sendTelegramPublicBroadcastMessage, telegramSparkSystemGroupConfigured 
 import {
   isIndicatorPublicFeedEnabled,
   isPublicSnowballTripleCheckEnabled,
+  notifySnowballScanSkippedToChat,
   runPublicIndicatorFeedInternal,
 } from "./publicIndicatorFeed";
 import { runSnowballConfirmFollowUpTick } from "./snowballConfirmTick";

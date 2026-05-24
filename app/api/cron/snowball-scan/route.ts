@@ -22,19 +22,13 @@ export async function GET(req: NextRequest) {
   const atIso = new Date().toISOString();
   try {
     const client = createLineClientForCron();
-    let r = await runSnowballPublicScanTick(client);
-    const lockBusy =
-      typeof r.scanSkippedReason === "string" &&
-      r.scanSkippedReason.includes("feed lock");
-    if (lockBusy) {
-      await new Promise((resolve) => setTimeout(resolve, 45_000));
-      r = await runSnowballPublicScanTick(client);
-    }
+    const r = await runSnowballPublicScanTick(client);
     return NextResponse.json({
       ok: true,
       notified: r.notified,
       detail: r.detail,
       ...(r.scanSkippedReason ? { scanSkippedReason: r.scanSkippedReason } : {}),
+      ...(r.scanSkipNoticeSent ? { scanSkipNoticeSent: true } : {}),
       ...(r.snowballScanSummaryText
         ? {
             snowballScanSummaryText: r.snowballScanSummaryText,

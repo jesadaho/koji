@@ -420,6 +420,40 @@ export function snowballAlertStaleSkipEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_ALERT_STALE_SKIP", false);
 }
 
+/** แจ้งกลุ่ม Snowball เมื่อรอบสแกนไม่รัน / ติด skip (ค่าเริ่มเปิด) */
+export function snowballScanSkipNoticeToChatEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_SCAN_SKIP_NOTIFY", true);
+}
+
+/** ส่งข้อความเตือนเมื่อ cron/manual snowball-scan ข้ามหรือล้มเหลว (ไม่ส่งถ้ารอบนั้นมีสรุปสแกนปกติแล้ว) */
+export async function notifySnowballScanSkippedToChat(args: {
+  atMs: number;
+  reason: string;
+  confirmFollowUpN?: number;
+  lockRetried?: boolean;
+}): Promise<boolean> {
+  if (!snowballScanSkipNoticeToChatEnabled()) return false;
+  if (!telegramSparkSystemGroupConfigured()) return false;
+  const iso = new Date(args.atMs).toISOString();
+  const snowTf = snowballBinanceTf();
+  const lines = [
+    `⚠️ Snowball ${snowTf} scan — ข้าม / ไม่สำเร็จ`,
+    `UTC: ${iso}`,
+    `เวลา BKK: ${fmtBkkFromUnixSecForSummary(Math.floor(args.atMs / 1000))}`,
+    "",
+    `สาเหตุ: ${args.reason}`,
+  ];
+  if (typeof args.confirmFollowUpN === "number" && args.confirmFollowUpN > 0) {
+    lines.push(`confirm แท่ง 2 (ก่อนสแกน): ${args.confirmFollowUpN}`);
+  }
+  if (args.lockRetried) {
+    lines.push("", "ลองรอ feed lock 45 วินาทีแล้วสแกนซ้ำ — ยังไม่สำเร็จ");
+  }
+  lines.push("", "แนะนำ: admin → run cron snowball · รอ price-sync จบ (~1–2 นาที)");
+  lines.push("ปิดข้อความนี้: INDICATOR_PUBLIC_SNOWBALL_SCAN_SKIP_NOTIFY=0");
+  return sendPublicSnowballFeedToSparkGroup(lines.join("\n"));
+}
+
 /** หลังปิดแท่ง confirm — เกินนี้ไม่ส่ง TG (ใช้เมื่อเปิด STALE_SKIP; ดีฟอลต์ 900 = 15 นาที) */
 export function snowballAlertMaxAgeSec(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_ALERT_MAX_AGE_SEC);
