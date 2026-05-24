@@ -19,6 +19,7 @@ import {
   snowballGradeChecklistMark,
   snowballStatsGradeChecklist,
   snowballStatsGradeChecklistFooter,
+  snowballStatsStagedPopupText,
   snowballStatsGradeDisplayLabel,
   snowballStatsGreenDaysLabel,
   snowballStatsMaxDrawback1hLabel,
@@ -616,36 +617,46 @@ export default function SnowballStatsTelegramMiniApp() {
               <p className={`snowGradeDetailCard__grade ${snowballStatsGradeCellClass(gradeDetailRow)}`}>
                 {snowballStatsGradeDisplayLabel(gradeDetailRow)}
               </p>
-              <ol className="snowGradeChecklist">
-                {snowballStatsGradeChecklist(gradeDetailRow).map((item) => (
-                  <li
-                    key={item.id}
-                    className={`snowGradeChecklist__item snowGradeChecklist__item--${item.status}`}
-                  >
-                    <span className="snowGradeChecklist__mark" aria-hidden>
-                      {snowballGradeChecklistMark(item.status)}
-                    </span>
-                    <div className="snowGradeChecklist__body">
-                      <span className="snowGradeChecklist__title">{item.title}</span>
-                      <span className="snowGradeChecklist__detail">{item.detail}</span>
-                      {item.failCriteria && item.failCriteria.length > 0 ? (
-                        <ul className="snowGradeChecklist__fails">
-                          {item.failCriteria.map((c, j) => (
-                            <li key={`${item.id}-fail-${j}`}>{c}</li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-              {snowballStatsGradeChecklistFooter(gradeDetailRow).length > 0 ? (
-                <ul className="snowGradeDetailCard__list snowGradeDetailCard__list--footer">
-                  {snowballStatsGradeChecklistFooter(gradeDetailRow).map((line, i) => (
-                    <li key={`f-${i}-${line}`}>{line}</li>
-                  ))}
-                </ul>
-              ) : null}
+              {(() => {
+                const staged = snowballStatsStagedPopupText(gradeDetailRow);
+                if (staged) {
+                  return <pre className="snowGradeStagedPre">{staged}</pre>;
+                }
+                return (
+                  <>
+                    <ol className="snowGradeChecklist">
+                      {snowballStatsGradeChecklist(gradeDetailRow).map((item) => (
+                        <li
+                          key={item.id}
+                          className={`snowGradeChecklist__item snowGradeChecklist__item--${item.status}`}
+                        >
+                          <span className="snowGradeChecklist__mark" aria-hidden>
+                            {snowballGradeChecklistMark(item.status)}
+                          </span>
+                          <div className="snowGradeChecklist__body">
+                            <span className="snowGradeChecklist__title">{item.title}</span>
+                            <span className="snowGradeChecklist__detail">{item.detail}</span>
+                            {item.failCriteria && item.failCriteria.length > 0 ? (
+                              <ul className="snowGradeChecklist__fails">
+                                {item.failCriteria.map((c, j) => (
+                                  <li key={`${item.id}-fail-${j}`}>{c}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                    {snowballStatsGradeChecklistFooter(gradeDetailRow).length > 0 ? (
+                      <ul className="snowGradeDetailCard__list snowGradeDetailCard__list--footer">
+                        {snowballStatsGradeChecklistFooter(gradeDetailRow).map((line, i) => (
+                          <li key={`f-${i}-${line}`}>{line}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </>
+                );
+              })()}
               {isAdmin ? (
                 <div className="snowGradeDetailCard__actions">
                   <button

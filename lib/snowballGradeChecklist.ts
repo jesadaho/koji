@@ -473,6 +473,176 @@ export function snowballGradeChecklistMark(status: SnowballGradeChecklistStatus)
   return checklistMark(status);
 }
 
+function coinSlash(symbol: string): string {
+  const u = symbol.toUpperCase();
+  const base = u.endsWith("USDT") ? u.slice(0, -4) : u;
+  return `${base}/USDT`;
+}
+
+function stageLineMark(ok: boolean): string {
+  return ok ? "✓" : "❌";
+}
+
+type StagedPopupRow = Pick<
+  SnowballStatsRow,
+  | "symbol"
+  | "alertSide"
+  | "triggerKind"
+  | "signalBarTf"
+  | "structureTier"
+  | "qualityTier"
+  | "alertQualityTier"
+  | "momentumFailGradeF"
+  | "breakout1hConfirmFail"
+  | "signalVolVsSma"
+  | "volStrictOk"
+  | "volMultAtAlert"
+  | "confirmGateSteps"
+  | "maxDrawback1hPct"
+  | "volumeCascadeYn"
+  | "qualityTier4hAdjusted"
+  | "alertedAtIso"
+>;
+
+/**
+ * Popup สถิติ Snowball 4h LONG — รูปแบบ 3 ด่าน (จาก snapshot ตอนแจ้ง ไม่ต้องรอสัญญาณใหม่)
+ * คืน null ถ้าไม่ใช่ 4h LONG → ใช้ checklist แบบเดิม
+ */
+export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null {
+  const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+  if (side !== "long" || row.signalBarTf !== "4h") return null;
+
+  const struct =
+    row.structureTier && isStructureTier(row.structureTier) ? row.structureTier : null;
+  const strictMult =
+    row.volMultAtAlert != null && Number.isFinite(row.volMultAtAlert) && row.volMultAtAlert > 0
+      ? row.volMultAtAlert
+      : SNOWBALL_STATS_VOL_STRICT_MULT;
+
+  const swing48Ok = struct != null;
+  const vahOk = struct === "a_plus" || struct === "b_plus";
+  const stage1Pass = swing48Ok;
+
+  const twoBarPass = snowballStatsConfirmGateStepsAllPass(row);
+  const steps = row.confirmGateSteps ?? [];
+  const hasTwoBarSteps = steps.length >= 3;
+
+  const ddMax = snowballTrendMomentumMaxDrawbackPct();
+  const maxVolDrops = snowballTrendMomentumMaxVolumeDrops();
+  const ddPct = row.maxDrawback1hPct;
+  const ddOk =
+    ddPct != null && Number.isFinite(ddPct) && ddPct <= ddMax;
+  const volDrops =
+    row.volumeCascadeYn === "Y"
+      ? 0
+      : row.volumeCascadeYn === "N"
+        ? maxVolDrops + 1
+        : null;
+  const volCascadeOk = row.volumeCascadeYn === "Y";
+  const volStrictOk =
+    row.volStrictOk === true ||
+    (row.volStrictOk !== false &&
+      row.signalVolVsSma != null &&
+      Number.isFinite(row.signalVolVsSma) &&
+      row.signalVolVsSma >= strictMult);
+
+  let failCount = 0;
+  if (!ddOk) failCount += 1;
+  if (!volCascadeOk) failCount += 1;
+  if (!volStrictOk) failCount += 1;
+
+  const volCascadeGradeC =
+    volCascadeOk &&
+    snowballVolSmaMeetsGradeCMin(row.signalVolVsSma) &&
+    failCount > 0;
+
+  let stage3Head: string;
+  if (!twoBarPass) {
+    stage3Head = "— (ไม่ถึง — Stage 2 ไม่ผ่าน)";
+  } else if (failCount === 0) {
+    stage3Head = "PASS (Status: Active)";
+  } else if (volCascadeGradeC) {
+    stage3Head = `PARTIAL (Status: Grade C — Vol↗+Vol×SMA≥${SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C}×)`;
+  } else if (failCount === 1) {
+    stage3Head = "FAIL 1 ITEM (Status: Downgrade to D+)";
+  } else {
+    stage3Head = `FAIL ${failCount} ITEMS (Status: Downgrade to F)`;
+  }
+
+  const grade = effectiveQualityTier(row);
+  const volRatioStr =
+    row.signalVolVsSma != null && Number.isFinite(row.signalVolVsSma)
+      ? row.signalVolVsSma.toFixed(2)
+      : "—";
+
+  const lines: string[] = [
+    "==================================================",
+    `❄️ SNOWBALL 4H — ${coinSlash(row.symbol)} (snapshot ตอนแจ้ง)`,
+    "==================================================",
+    "",
+    `🟢 [STAGE 1: 4H STRUCTURE] -> ${stage1Pass ? "PASS" : "FAIL"} (Status: ${stage1Pass ? "Active" : "Blocked"})`,
+    `  [${stageLineMark(swing48Ok)}] Swing HH48 Check — โครงสร้าง ${struct ? snowballLongGradeShortLabel(struct) : "—"} (${struct ? structureTierHint(struct) : "ไม่บันทึก"})`,
+    `  [${stageLineMark(vahOk)}] VAH Proxy Escape${struct === "b_plus" ? " (Grade B path)" : struct === "a_plus" ? " (A+ path)" : " — ไม่ถึง VAH (Grade C)"}`,
+    `  [—] EMA Trend Check — ไม่บันทึกในแถวสถิติ (ดู debug snowball สดได้)`,
+    "",
+    `🔵 [STAGE 2: TWO-BAR INLINE 4H] -> ${twoBarPass ? "PASS" : "FAIL"} (Status: ${twoBarPass ? "Secure" : "BLOCK ตอนสแกนใหม่ / ไม่ผ่านตอนแจ้ง"})`,
+  ];
+
+  if (hasTwoBarSteps) {
+    for (const s of steps) {
+      lines.push(`  [${stageLineMark(s.ok)}] ${s.label}: ${s.detail}`);
+    }
+  } else {
+    const confirmFails = confirmFailCriteria(row);
+    const uniqueFails = [...new Set(confirmFails)];
+    for (const f of uniqueFails.slice(0, 4)) {
+      lines.push(`  [❌] ${f}`);
+    }
+    if (uniqueFails.length === 0) {
+      lines.push(`  [❌] two-bar inline — ไม่มี confirmGateSteps ในแถว (แถวเก่า)`);
+    }
+  }
+
+  lines.push(
+    "",
+    `🟡 [STAGE 3: MOMENTUM & VOL 1H] -> ${stage3Head}`,
+    `  [${stageLineMark(ddOk)}] DD 1H% (${SNOWBALL_TREND_1H_DD_LOOKBACK} Bars) : Max Wick ${ddPct != null ? ddPct.toFixed(2) : "—"}% (Limit <= ${ddMax}%)${!ddOk ? " -> [FAILED]" : ""}`,
+    `  [${stageLineMark(volCascadeOk)}] Vol Cascade ${SNOWBALL_TREND_1H_VOL_LOOKBACK}B  : ${volDrops != null ? volDrops : "—"} Times Drop  (Limit <= ${maxVolDrops} Time)${!volCascadeOk ? " -> [FAILED]" : ""}`,
+    `  [${stageLineMark(volStrictOk)}] Signal Vol Spurt: ${volRatioStr}x SMA      (Limit > ${strictMult}x)${!volStrictOk ? " -> [FAILED]" : ""}`,
+    "",
+    "--------------------------------------------------",
+    "🎯 FINAL GRADE DETERMINATION:",
+    `- Stage 1: ${stage1Pass ? "PASS" : "FAIL"}`,
+    `- Stage 2: ${twoBarPass ? "PASS" : "FAIL"}`,
+    `- Stage 3: ${
+      !twoBarPass
+        ? "—"
+        : failCount === 0
+          ? "PASS"
+          : volCascadeGradeC
+            ? "Vol↗ path → C"
+            : failCount === 1
+              ? "Drop 1 Item"
+              : `Drop ${failCount} Items`
+    }`,
+    `- Result: [ ${grade ? snowballLongGradeDisplayLabel(grade) : "—"} ] ตอนแจ้ง`,
+  );
+
+  if (row.qualityTier4hAdjusted && row.qualityTier && row.alertQualityTier && row.qualityTier !== row.alertQualityTier) {
+    lines.push(
+      `- หมายเหตุ: หลัง follow-up 4h ปรับเป็น ${snowballLongGradeShortLabel(row.qualityTier)} (ตอนแจ้ง ${snowballLongGradeShortLabel(row.alertQualityTier)})`,
+    );
+  }
+
+  lines.push(
+    "",
+    "📎 แถวนี้ = snapshot ตอนส่ง Telegram · สำหรับค่าสดบนกราฟใช้คำสั่ง debug snowball <SYMBOL>",
+    "==================================================",
+  );
+
+  return lines.join("\n");
+}
+
 export function snowballStatsGradeChecklistFooter(
   row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "qualityTier4hAdjusted">,
 ): string[] {

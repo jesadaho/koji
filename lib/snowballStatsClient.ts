@@ -205,6 +205,7 @@ export {
   snowballStatsGradeChecklist,
   snowballStatsGradeChecklistFooter,
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
+  snowballStatsStagedPopupText,
 } from "@/lib/snowballGradeChecklist";
 
 /** @deprecated ใช้ snowballStatsGradeChecklist + footer ใน popup */
