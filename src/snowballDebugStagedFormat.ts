@@ -5,6 +5,7 @@ import {
   snowballLongGradeDisplayLabel,
   snowballLongGradeShortLabel,
   snowballLongStructurePassesMain,
+  snowballTfBarDurationSec,
   type SnowballLongGradeResolution,
 } from "./snowballLongBreakoutGrade";
 import {
@@ -28,7 +29,6 @@ import {
   snowballConfirmVolMinRatio,
   snowballMinLow1hBetweenClosedBars,
   snowballTwoBarInlinePullbackMaxFrac,
-  snowballTfBarDurationSec,
 } from "./snowballTwoBarInline";
 
 export type Snowball4hStagedDebugInput = {
