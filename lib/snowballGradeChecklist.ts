@@ -594,7 +594,7 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
     }
   } else {
     const confirmFails = confirmFailCriteria(row);
-    const uniqueFails = [...new Set(confirmFails)];
+    const uniqueFails = confirmFails.filter((f, i, arr) => arr.indexOf(f) === i);
     for (const f of uniqueFails.slice(0, 4)) {
       lines.push(`  [❌] ${f}`);
     }
