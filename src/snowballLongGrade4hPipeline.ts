@@ -10,14 +10,36 @@ import {
 } from "./snowballLongBreakoutGrade";
 import type { SnowballTwoBarInlineEval } from "./snowballTwoBarInline";
 
+/** Vol×SMA ขั้นต่ำสำหรับเกรด C เมื่อ Vol↗ ผ่านแต่ momentum อ่อน (แยกจาก strict 2.5× สำหรับ A+/B/C เต็ม) */
+export const SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C = 2;
+
 export type SnowballLong4hPipelineInput = {
   swing48: boolean;
   swing200: boolean;
   vahOk: boolean;
   twoBar: SnowballTwoBarInlineEval;
   trendMomentum: TrendMomentumMetrics | null;
+  /** Vol แท่งสัญญาณ ÷ SMA */
+  signalVolVsSma: number | null;
   volumeStrictOk: boolean;
 };
+
+export function snowballVolSmaMeetsGradeCMin(signalVolVsSma: number | null | undefined): boolean {
+  return (
+    signalVolVsSma != null &&
+    Number.isFinite(signalVolVsSma) &&
+    signalVolVsSma >= SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C
+  );
+}
+
+/** Vol↗ ผ่าน + Vol×SMA ≥ 2× แต่ยังมี momentum ไม่ครบ → เกรด C */
+export function qualifiesVolCascadeGradeC(
+  volCascadeOk: boolean,
+  signalVolVsSma: number | null | undefined,
+  failCount: number,
+): boolean {
+  return failCount > 0 && volCascadeOk && snowballVolSmaMeetsGradeCMin(signalVolVsSma);
+}
 
 function countMomentumFails(input: SnowballLong4hPipelineInput): {
   failCount: number;
@@ -48,7 +70,7 @@ function momentumMissParts(ddOk: boolean, volCascadeOk: boolean, volStrictOk: bo
  * Snowball LONG Master 4h — เลเยอร์เดียว
  * 1) โครงสร้าง 4H ไม่ผ่าน → BLOCK
  * 2) Two-bar inline ไม่ผ่าน → F
- * 3) Momentum ผ่านครบ → A+/B/C (โครงสร้าง) · Vol↗ ผ่านแต่ติดอย่างอื่น → C · อื่น ๆ D+ / F
+ * 3) Momentum ผ่านครบ → A+/B/C · Vol↗ + Vol×SMA≥2 แต่ติดอย่างอื่น (เช่น DD) → C · อื่น ๆ D+ / F
  */
 export function resolveSnowballLong4hPipeline(input: SnowballLong4hPipelineInput): SnowballLongGradeResolution {
   if (!snowballLongStructurePassesMain(input.swing48, input.vahOk)) {
@@ -80,8 +102,12 @@ export function resolveSnowballLong4hPipeline(input: SnowballLong4hPipelineInput
   const { failCount, ddOk, volCascadeOk, volStrictOk } = countMomentumFails(input);
   const momentumOk = failCount === 0;
 
-  if (failCount > 0 && volCascadeOk) {
+  if (qualifiesVolCascadeGradeC(volCascadeOk, input.signalVolVsSma, failCount)) {
     const miss = momentumMissParts(ddOk, volCascadeOk, volStrictOk);
+    const volRatio =
+      input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma)
+        ? input.signalVolVsSma.toFixed(2)
+        : "—";
     return {
       kind: "grade",
       grade: "c_plus",
@@ -89,7 +115,7 @@ export function resolveSnowballLong4hPipeline(input: SnowballLong4hPipelineInput
       confirm1hOk: true,
       momentumOk: false,
       confirm1hEval: null,
-      footnote: `📎 Grade C (Long): โครงสร้าง ${snowballLongGradeShortLabel(structureTier)} · two-bar ผ่าน · Vol↗ ผ่าน · momentum อ่อน (${miss})`,
+      footnote: `📎 Grade C (Long): โครงสร้าง ${snowballLongGradeShortLabel(structureTier)} · two-bar ผ่าน · Vol↗ ผ่าน · Vol×SMA ${volRatio}× (≥${SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C}) · momentum อ่อน (${miss})`,
     };
   }
 

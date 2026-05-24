@@ -3142,6 +3142,8 @@ export async function runPublicIndicatorFeedInternal(
               vahOk,
               twoBarEval,
               trendMomentum,
+              signalVolVsSma:
+                typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
               twoBarInlinePassed,
               longBreakout1h,
               breakout1hEval,

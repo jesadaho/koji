@@ -8,6 +8,10 @@ import {
   type SnowballLongStructureTier,
 } from "@/src/snowballLongBreakoutGrade";
 import {
+  SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C,
+  snowballVolSmaMeetsGradeCMin,
+} from "@/src/snowballLongGrade4hPipeline";
+import {
   SNOWBALL_TREND_1H_DD_LOOKBACK,
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
   snowballTrendMomentumMaxDrawbackPct,
@@ -130,6 +134,7 @@ function isVolCascadePassPartialMomentumC(
 ): boolean {
   const grade = effectiveQualityTier(row);
   if (grade !== "c_plus" || row.volumeCascadeYn !== "Y") return false;
+  if (!snowballVolSmaMeetsGradeCMin(row.signalVolVsSma)) return false;
   const ddMax = snowballTrendMomentumMaxDrawbackPct();
   const strictMult =
     row.volMultAtAlert != null && Number.isFinite(row.volMultAtAlert) && row.volMultAtAlert > 0
@@ -186,7 +191,9 @@ function momentumFailCriteria(
   if (momentumOk(row)) return [];
   const fails: string[] = [];
   if (isVolCascadePassPartialMomentumC(row)) {
-    fails.push("Vol↗ ผ่าน — เกรดสุดทธิปรับเป็น C (โครงสร้างสูงกว่าได้)");
+    fails.push(
+      `Vol↗ ผ่าน + Vol×SMA ≥${SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C}× — เกรดสุทธิ C (โครงสร้างสูงกว่าได้)`,
+    );
   }
   const ddMax = snowballTrendMomentumMaxDrawbackPct();
   if (row.maxDrawback1hPct == null || !Number.isFinite(row.maxDrawback1hPct)) {

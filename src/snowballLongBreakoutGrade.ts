@@ -43,6 +43,8 @@ export type ResolveSnowballLongFinalGradeInput = {
   /** ผล two-bar inline (4h) — ใช้ pipeline 4h */
   twoBarEval?: SnowballTwoBarInlineEval | null;
   trendMomentum?: TrendMomentumMetrics | null;
+  /** Vol แท่งสัญญาณ ÷ SMA (4h pipeline) */
+  signalVolVsSma?: number | null;
   /** ผ่าน two-bar inline (pullback / vol / 1h min-low) แล้ว — ถือ 1H confirm ผ่าน */
   twoBarInlinePassed: boolean;
   /** Snowball TF ≠ 4h และเปิด Long Breakout 1H */
@@ -183,6 +185,7 @@ export function resolveSnowballLongFinalGrade(
       vahOk: input.vahOk,
       twoBar,
       trendMomentum: input.trendMomentum ?? null,
+      signalVolVsSma: input.signalVolVsSma ?? null,
       volumeStrictOk: input.volumeStrictOk,
     });
   }
