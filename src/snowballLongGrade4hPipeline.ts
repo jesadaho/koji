@@ -41,7 +41,7 @@ export function qualifiesVolCascadeGradeC(
   return failCount > 0 && volCascadeOk && snowballVolSmaMeetsGradeCMin(signalVolVsSma);
 }
 
-function countMomentumFails(input: SnowballLong4hPipelineInput): {
+export function countSnowball4hMomentumFails(input: SnowballLong4hPipelineInput): {
   failCount: number;
   ddOk: boolean;
   volCascadeOk: boolean;
@@ -69,7 +69,7 @@ function momentumMissParts(ddOk: boolean, volCascadeOk: boolean, volStrictOk: bo
 /**
  * Snowball LONG Master 4h — เลเยอร์เดียว
  * 1) โครงสร้าง 4H ไม่ผ่าน → BLOCK
- * 2) Two-bar inline ไม่ผ่าน → F
+ * 2) Two-bar inline ไม่ผ่าน → BLOCK (ไม่ส่ง TG)
  * 3) Momentum ผ่านครบ → A+/B/C · Vol↗ + Vol×SMA≥2 แต่ติดอย่างอื่น (เช่น DD) → C · อื่น ๆ D+ / F
  */
 export function resolveSnowballLong4hPipeline(input: SnowballLong4hPipelineInput): SnowballLongGradeResolution {
@@ -89,17 +89,13 @@ export function resolveSnowballLong4hPipeline(input: SnowballLong4hPipelineInput
 
   if (!input.twoBar.ok) {
     return {
-      kind: "grade",
-      grade: "f_plus",
-      structureTier,
-      confirm1hOk: false,
-      momentumOk: false,
-      confirm1hEval: null,
-      footnote: `📎 ${snowballLongGradeFLabel()}: โครงสร้าง ${snowballLongGradeShortLabel(structureTier)} · two-bar inline ไม่ผ่าน · ${input.twoBar.detail}`,
+      kind: "block",
+      reason: "two_bar_inline_fail",
+      detail: `two-bar inline ไม่ผ่าน · ${input.twoBar.detail}`,
     };
   }
 
-  const { failCount, ddOk, volCascadeOk, volStrictOk } = countMomentumFails(input);
+  const { failCount, ddOk, volCascadeOk, volStrictOk } = countSnowball4hMomentumFails(input);
   const momentumOk = failCount === 0;
 
   if (qualifiesVolCascadeGradeC(volCascadeOk, input.signalVolVsSma, failCount)) {

@@ -12,6 +12,7 @@ export type SnowballLongStructureTier = "a_plus" | "b_plus" | "c_plus";
 
 export type SnowballLongGradeBlockReason =
   | "structure_fail"
+  | "two_bar_inline_fail"
   | "breakout_1h_fail"
   | "momentum_and_confirm_fail"
   | "momentum_fail_d_plus_off"

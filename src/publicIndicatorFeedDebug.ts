@@ -517,6 +517,19 @@ export async function formatSnowballChecklistDebugMessage(rawSymbol: string): Pr
     return `debug snowball ล้มเหลว — ${(e instanceof Error ? e.message : String(e)).slice(0, 500)}`;
   }
 
+  if (res.stagedDebugLong) {
+    const staged = res.stagedDebugLong;
+    const extras: string[] = [];
+    if (!res.enabled) extras.push("⚠️ Snowball ปิด (INDICATOR_PUBLIC_SNOWBALL)");
+    if (res.errors.length > 0) {
+      extras.push("", "— errors —", ...res.errors.map((e) => `  ❌ ${e}`));
+    }
+    extras.push("", `UTC: ${new Date().toISOString()}`, "checklist จาก kline ล่าสุด · รอบสแกน 4h หลักที่ /api/cron/snowball-scan");
+    let out = [staged, ...extras].join("\n");
+    if (out.length > MAX_OUT) out = `${out.slice(0, MAX_OUT - 20)}\n…(truncated)`;
+    return out;
+  }
+
   lines.push(`🟦 Snowball checklist — ${res.symbol || "(no symbol)"}`);
   lines.push(`UTC: ${new Date().toISOString()}`);
   lines.push(`Snowball enabled: ${res.enabled ? "on" : "off"} · TF=${res.snowTf} · bars=${res.bars ?? "—"}`);

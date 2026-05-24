@@ -64,6 +64,7 @@ import {
 } from "./snowballStatsStore";
 import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 import { buildSnowballLongConfirmGateStepsForStats } from "./snowballStatsGateSteps";
+import { formatSnowball4hStagedDebugChecklist } from "./snowballDebugStagedFormat";
 import {
   evaluateSnowballTwoBarInlineLong,
   snowballMinLow1hBetweenClosedBars,
@@ -1849,13 +1850,17 @@ function buildSnowballTripleCheckMessage(
               ? "📎 Grade C: ทะลุย Swing HH48 แต่ยังไม่เหนือ HH200 — เบรกสั้น ยังไม่ยืนยันโครงสร้างใหญ่"
               : "📎 Grade C: ผ่าน HH48+HH200 แต่ยังไม่เบรค VAH proxy (โวลุ่มก้อนอาจยังไม่สนับสนุน)"
             : gradeF
-              ? `📎 ${snowballLongGradeFLabel()}: โครงสร้างผ่าน · momentum 1H ไม่ผ่าน · 1H confirm ไม่ผ่าน — แจ้งเพื่อติดตาม`
+              ? args.gradeFootnote?.includes("two-bar inline ไม่ผ่าน")
+                ? `📎 ${snowballLongGradeFLabel()}: โครงสร้างผ่าน · two-bar confirm ไม่ผ่าน — แจ้งเพื่อติดตาม (ไม่ใช่สัญญาณเข้า)`
+                : `📎 ${snowballLongGradeFLabel()}: โครงสร้างผ่าน · momentum 1H ไม่ผ่าน · 1H confirm ไม่ผ่าน — แจ้งเพื่อติดตาม`
               : gradeDPlus
                 ? "📎 Grade D+ (Long): โครงสร้างผ่าน · momentum 1H ไม่ผ่าน · 1H confirm ผ่าน"
                 : "";
     const longAutotradeBiasLine =
       gradeF
-        ? "📎 Auto-open: Grade F (Long) — ไม่สั่งเปิดอัตโนมัติ (momentum + 1H confirm ไม่ผ่าน)"
+        ? args.gradeFootnote?.includes("two-bar inline ไม่ผ่าน")
+          ? "📎 Auto-open: Grade F (Long) — ไม่สั่งเปิดอัตโนมัติ (two-bar confirm ไม่ผ่าน)"
+          : "📎 Auto-open: Grade F (Long) — ไม่สั่งเปิดอัตโนมัติ (momentum + 1H confirm ไม่ผ่าน)"
         : gradeDPlus
           ? "📎 Auto-open: Grade D+ (Long) — ไม่สั่งเปิดอัตโนมัติ (momentum อ่อน · 1H confirm ผ่าน)"
           : g === "c_plus"
@@ -3163,13 +3168,6 @@ export async function runPublicIndicatorFeedInternal(
             pack1h: pack1hForTwoBar,
           });
           twoBarInlinePassed = twoBarEval.ok;
-          if (!twoBarEval.ok && snowScanStats && !intrabar) {
-            snowScanStats.longTwoBarInlineBlocked++;
-            pushSnowScanSymList(
-              snowScanStats.longTwoBarInlineBlockedSymbols,
-              `${symbol} LONG (two-bar → F)`,
-            );
-          }
         }
 
         if (snowScanStats && !intrabar) {
@@ -3238,6 +3236,8 @@ export async function runPublicIndicatorFeedInternal(
           (emaLongSlope2Arr![iSig]! > emaLongSlope2Arr![iPrev]!);
 
         let master4hTradePlan: SnowballMaster4hLongTradePlan | null = null;
+        const planBarIdx = twoBarInline ? iConf : iSig;
+        const planEntryPx = twoBarInline ? c15[iConf]! : clE!;
         if (snowTf === "4h") {
           try {
             master4hTradePlan = await buildSnowballMaster4hLongTradePlan(
@@ -3246,10 +3246,10 @@ export async function runPublicIndicatorFeedInternal(
               h15,
               l15,
               v15,
-              iSig,
+              planBarIdx,
               swingLb,
               swingEx,
-              clE!
+              planEntryPx
             );
           } catch (e) {
             console.error("[indicatorPublicFeed] snowball 4h trade plan", symbol, e);
@@ -3298,7 +3298,13 @@ export async function runPublicIndicatorFeedInternal(
 
         if (gradeResolution.kind === "block") {
           if (snowScanStats && !intrabar) {
-            if (gradeResolution.reason === "breakout_1h_fail") {
+            if (gradeResolution.reason === "two_bar_inline_fail") {
+              snowScanStats.longTwoBarInlineBlocked++;
+              pushSnowScanSymList(
+                snowScanStats.longTwoBarInlineBlockedSymbols,
+                `${symbol} LONG (${gradeResolution.detail.slice(0, 56)})`,
+              );
+            } else if (gradeResolution.reason === "breakout_1h_fail") {
               snowScanStats.longBreakout1hBlocked++;
               pushSnowScanSymList(
                 snowScanStats.longBreakout1hBlockedSymbols,
@@ -4358,6 +4364,8 @@ export type SnowballChecklistResult = {
   longBreakout1hNotes?: string[];
   /** สรุปโครงสร้าง + momentum + confirm → เกรดสุทธิ (เดียวกับ live tick) */
   gradeDebug?: { long: string[]; bear: string[] };
+  /** Master 4h two-bar — รายงาน 3 ด่าน (debug snowball) */
+  stagedDebugLong?: string;
   errors: string[];
 };
 
@@ -4500,7 +4508,7 @@ function buildSnowballChecklistGradeDebug(input: {
   );
   if (input.twoBarChecklistOn) {
     longLines.push(
-      `two-bar confirm LONG: ${twoBarPassed ? "✅ ผ่าน" : "❌ ไม่ผ่าน"} (ต้องผ่านก่อนได้เกรด A+/B/C/D+/F)`,
+      `two-bar confirm LONG: ${twoBarPassed ? "✅ ผ่าน" : "❌ ไม่ผ่าน"} (ต้องผ่านก่อนได้เกรด A+/B/C/D+/F — ไม่ผ่าน = BLOCK ไม่ส่ง TG)`,
     );
   } else if (longBreakout1h && breakout1hEval) {
     longLines.push(
@@ -5489,6 +5497,101 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     twoBarConfirmGateRows: baseResult.twoBarConfirmGateRows,
     dbOn: dbOnChecklist,
   });
+
+  if (snowTf === "4h" && iClosed >= 2) {
+    const iSigSt = iClosed - 1;
+    const iConfSt = iClosed;
+    const iPrevSt = iSigSt - 1;
+    const iPrev2St = iSigSt - 2;
+    const clSt = close[iSigSt]!;
+    const hiPrevSt = high[iPrevSt]!;
+    const clPrevSt = close[iPrevSt]!;
+    const priorMaxSt = maxHighPriorWindow(high, iSigSt, swingLb, swingEx);
+    const swing48St = snowballLongSwingHighBreak(high, close, iSigSt, swingLb, swingEx, false);
+    const swing200St = snowballLongSwingHighBreak(high, close, iSigSt, swingGradeLb, swingEx, false);
+    const vahHSt = longVahOn ? highVolumeNodeBarHigh(volume, high, low, iSigSt, vahLb) : null;
+    const vahOkSt =
+      longVahOn &&
+      vahHSt != null &&
+      Number.isFinite(vahHSt) &&
+      Number.isFinite(clSt) &&
+      Number.isFinite(clPrevSt) &&
+      clSt > vahHSt &&
+      clPrevSt <= vahHSt;
+    const innerHvnSt = highVolumeNodeBarRange(volume, high, low, iSigSt, svpInnerLb);
+    const innerClearedSt =
+      !longRequireInnerHvnClear ||
+      (innerHvnSt != null &&
+        Number.isFinite(innerHvnSt.high) &&
+        Number.isFinite(close[iSigSt]!) &&
+        close[iSigSt]! > innerHvnSt.high);
+    const eNowSt = emaLongSlopeArr[iSigSt];
+    const ePrevSt = emaLongSlopeArr[iPrevSt];
+    const ePrev2St = iPrev2St >= 0 ? emaLongSlopeArr[iPrev2St] : NaN;
+    const emaSlopeOkSt =
+      !longSlopeEmaOn ||
+      (typeof eNowSt === "number" &&
+        typeof ePrevSt === "number" &&
+        Number.isFinite(eNowSt) &&
+        Number.isFinite(ePrevSt) &&
+        eNowSt > ePrevSt &&
+        (longSlopeMinUpBars < 2 ||
+          (typeof ePrev2St === "number" && Number.isFinite(ePrev2St) && ePrevSt > ePrev2St)));
+    const a2 = emaLongSlope2Arr?.[iSigSt];
+    const b2 = emaLongSlope2Arr?.[iPrevSt];
+    const c2 = iPrev2St >= 0 ? emaLongSlope2Arr?.[iPrev2St] : undefined;
+    const ema2OkSt =
+      !longEma2On ||
+      (typeof a2 === "number" &&
+        typeof b2 === "number" &&
+        Number.isFinite(a2) &&
+        Number.isFinite(b2) &&
+        a2 > b2 &&
+        (longSlopeMinUpBars < 2 ||
+          (typeof c2 === "number" && Number.isFinite(c2) && b2 > c2)));
+    const vsSt = volSmaArr[iSigSt];
+    const vSt = volume[iSigSt]!;
+    const volNearMultSt = snowballVolNearMissMultiplier(volMult);
+    const volStrictOkSt = snowballVolumeOk(false, vSt, vsSt, volMult);
+    const volNearMissSt = snowballVolumeNearMissOnly(false, vSt, vsSt, volMult, volNearMultSt);
+    baseResult.stagedDebugLong = formatSnowball4hStagedDebugChecklist({
+      symbol,
+      snowTf,
+      iSig: iSigSt,
+      iConf: iConfSt,
+      close,
+      high,
+      low,
+      volume,
+      timeSec,
+      pack1h: pack1hForTwoBarChecklist,
+      swingLb,
+      swingGradeLb,
+      swingEx,
+      priorMaxHigh: Number.isFinite(priorMaxSt) ? priorMaxSt : null,
+      swing48: swing48St,
+      swing200: swing200St,
+      vahOk: vahOkSt,
+      vahHigh: vahHSt,
+      longVahOn,
+      longSlopeEmaOn,
+      longSlopeEmaP,
+      longSlopeMinUpBars,
+      emaSlopeOk: emaSlopeOkSt,
+      longEma2On,
+      longEma2P,
+      ema2SlopeOk: ema2OkSt,
+      longRequireInnerHvnClear,
+      innerHvnCleared: innerClearedSt,
+      innerHvnHigh: innerHvnSt?.high ?? null,
+      volMult,
+      volNearMult: volNearMultSt,
+      volStrictOk: volStrictOkSt,
+      volNearMissOnly: volNearMissSt,
+      signalVolVsSma:
+        typeof vsSt === "number" && Number.isFinite(vsSt) && vsSt > 0 ? vSt / vsSt : null,
+    });
+  }
 
   return baseResult;
 }
