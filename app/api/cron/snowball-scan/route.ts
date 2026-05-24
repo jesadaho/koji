@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Snowball 4h — cron หลักหลังปิดแท่ง (vercel.json: 5 0,4,8,12,16,20 * * * UTC ≈ +5 นาทีหลังปิด 4h)
+ * Snowball 4h — cron หลักหลังปิดแท่ง (vercel.json: 10 0,4,8,12,16,20 * * * UTC ≈ +10 นาทีหลังปิด 4h — หลีก price-sync ที่ :00/:15)
  * รันเฉพาะ public Snowball (Binance) ตาม TF env + สรุปสแกน 4h (เข้ากลุ่มเมื่อเปิด env; ข้อความเต็มใน JSON `snowballScanSummaryText`)
  * ไม่รัน RSI/EMA/Div ของ public feed, ไม่รัน price-sync อื่น ๆ
  * GET + Authorization: Bearer CRON_SECRET
@@ -22,7 +22,14 @@ export async function GET(req: NextRequest) {
   const atIso = new Date().toISOString();
   try {
     const client = createLineClientForCron();
-    const r = await runSnowballPublicScanTick(client);
+    let r = await runSnowballPublicScanTick(client);
+    const lockBusy =
+      typeof r.scanSkippedReason === "string" &&
+      r.scanSkippedReason.includes("feed lock");
+    if (lockBusy) {
+      await new Promise((resolve) => setTimeout(resolve, 45_000));
+      r = await runSnowballPublicScanTick(client);
+    }
     return NextResponse.json({
       ok: true,
       notified: r.notified,

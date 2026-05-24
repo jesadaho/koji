@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/snowball-scan",
-      "schedule": "5 0,4,8,12,16,20 * * *"
+      "schedule": "10 0,4,8,12,16,20 * * *"
     },
     {
       "path": "/api/cron/price-alerts",
