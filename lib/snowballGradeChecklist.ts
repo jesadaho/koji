@@ -128,7 +128,18 @@ function momentumOk(
 }
 
 function momentumFailCriteria(
-  row: Pick<SnowballStatsRow, "maxDrawback1hPct" | "volumeCascadeYn" | "qualityTier" | "alertQualityTier" | "momentumDowngrade" | "momentumFailGradeF">,
+  row: Pick<
+    SnowballStatsRow,
+    | "maxDrawback1hPct"
+    | "volumeCascadeYn"
+    | "qualityTier"
+    | "alertQualityTier"
+    | "momentumDowngrade"
+    | "momentumFailGradeF"
+    | "signalVolVsSma"
+    | "volStrictOk"
+    | "volMultAtAlert"
+  >,
 ): string[] {
   if (momentumOk(row)) return [];
   const fails: string[] = [];
