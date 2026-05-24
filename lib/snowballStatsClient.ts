@@ -114,6 +114,8 @@ export type SnowballStatsRow = {
 
 export type SnowballStatsApiPayload = {
   rows: SnowballStatsRow[];
+  /** ลบแถว / ล้างสถิติทั้งหมด — เฉพาะ KOJI_ADMIN_IDS */
+  isAdmin?: boolean;
 };
 
 function snowballStatsAlertSideLabel(alert: SnowballStatsAlertSide): "Long" | "Short" {

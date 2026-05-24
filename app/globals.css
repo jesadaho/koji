@@ -685,6 +685,37 @@ code {
   color: var(--text);
 }
 
+.snowGradeDetailCard__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.snowStatsDelCol {
+  width: 3rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.snowStatsRowDelBtn {
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  border: 1px solid var(--danger);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.snowStatsRowDelBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .snowGradeDetailCard__list--footer {
   margin-top: 0.75rem;
   padding-top: 0.65rem;

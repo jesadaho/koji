@@ -193,6 +193,12 @@ export default function SnowballStatsTelegramMiniApp() {
   const [payload, setPayload] = useState<SnowballStatsApiPayload | null>(null);
   const [loadErr, setLoadErr] = useState("");
   const [gradeDetailRow, setGradeDetailRow] = useState<SnowballStatsRow | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetErr, setResetErr] = useState<string | null>(null);
+
+  const isAdmin = payload?.isAdmin === true;
 
   const api = useCallback(async (path: string, opts: RequestInit = {}) => {
     const initData = getTelegramInitData();
@@ -217,7 +223,55 @@ export default function SnowballStatsTelegramMiniApp() {
     const data = (await api("/snowball-stats")) as SnowballStatsApiPayload;
     setPayload(data);
     setLoadErr("");
+    setDeleteErr(null);
+    setResetErr(null);
   }, [api]);
+
+  const deleteRow = useCallback(
+    async (row: SnowballStatsRow) => {
+      const label = `${coinLabel(row.symbol)} · ${snowballStatsGradeDisplayLabel(row)} · ${formatBkk(row.alertedAtIso)}`;
+      if (
+        !window.confirm(
+          `ลบแถวสถิติ Snowball นี้?\n\n${label}\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้`,
+        )
+      ) {
+        return;
+      }
+      setDeleteBusy(true);
+      setDeleteErr(null);
+      try {
+        await api(`/snowball-stats/${encodeURIComponent(row.id)}`, { method: "DELETE" });
+        setGradeDetailRow(null);
+        await loadStats();
+      } catch (e) {
+        setDeleteErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setDeleteBusy(false);
+      }
+    },
+    [api, loadStats],
+  );
+
+  const resetAllStats = useCallback(async () => {
+    if (
+      !window.confirm(
+        "ล้างสถิติ Snowball ทั้งหมด?\n\nแถวในตารางจะหายจนมีสัญญาณใหม่ — การดำเนินการนี้ไม่สามารถย้อนกลับได้",
+      )
+    ) {
+      return;
+    }
+    setResetBusy(true);
+    setResetErr(null);
+    try {
+      await api("/snowball-stats", { method: "POST" });
+      setGradeDetailRow(null);
+      await loadStats();
+    } catch (e) {
+      setResetErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setResetBusy(false);
+    }
+  }, [api, loadStats]);
 
   useEffect(() => {
     let cancelled = false;
@@ -439,12 +493,13 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">SVP Hole</th>
                 <th scope="col">RR</th>
                 <th scope="col">ผล</th>
+                {isAdmin ? <th scope="col" className="snowStatsDelCol" aria-label="ลบ" /> : null}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={30} className="sub">
+                  <td colSpan={isAdmin ? 31 : 30} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -508,6 +563,22 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{r.svpHoleYn}</td>
                     <td>{r.resultRr ?? "—"}</td>
                     <td>{outcomeLabel(r.outcome)}</td>
+                    {isAdmin ? (
+                      <td className="snowStatsDelCol">
+                        <button
+                          type="button"
+                          className="snowStatsRowDelBtn"
+                          title="ลบแถวนี้"
+                          disabled={deleteBusy}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteRow(r);
+                          }}
+                        >
+                          ลบ
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}
@@ -575,6 +646,23 @@ export default function SnowballStatsTelegramMiniApp() {
                   ))}
                 </ul>
               ) : null}
+              {isAdmin ? (
+                <div className="snowGradeDetailCard__actions">
+                  <button
+                    type="button"
+                    className="sparkStatsRefreshBtn danger"
+                    disabled={deleteBusy}
+                    onClick={() => void deleteRow(gradeDetailRow)}
+                  >
+                    {deleteBusy ? "กำลังลบ…" : "ลบแถวนี้"}
+                  </button>
+                </div>
+              ) : null}
+              {deleteErr ? (
+                <p className="sub" style={{ color: "var(--danger)", marginTop: "0.5rem" }}>
+                  {deleteErr}
+                </p>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -590,7 +678,22 @@ export default function SnowballStatsTelegramMiniApp() {
           >
             Export CSV
           </button>
+          {isAdmin ? (
+            <button
+              type="button"
+              className="sparkStatsRefreshBtn danger"
+              disabled={resetBusy || rows.length === 0}
+              onClick={() => void resetAllStats()}
+            >
+              {resetBusy ? "กำลังล้าง…" : "ล้างสถิติทั้งหมด"}
+            </button>
+          ) : null}
         </p>
+        {resetErr ? (
+          <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
+            {resetErr}
+          </p>
+        ) : null}
       </section>
     </div>
   );

@@ -509,6 +509,17 @@ export async function resetSnowballStatsState(): Promise<void> {
   await saveSnowballStatsState(EMPTY_SNOWBALL_STATS_STATE);
 }
 
+/** ลบแถวสถิติ Snowball ตาม id — คืน false ถ้าไม่พบ */
+export async function deleteSnowballStatsRowById(id: string): Promise<boolean> {
+  const trimmed = id.trim();
+  if (!trimmed) return false;
+  const state = await loadSnowballStatsState();
+  const next = state.rows.filter((r) => r.id !== trimmed);
+  if (next.length === state.rows.length) return false;
+  await saveSnowballStatsState({ rows: next });
+  return true;
+}
+
 function normalizeSymbol(s: string): string {
   return s.trim().toUpperCase();
 }

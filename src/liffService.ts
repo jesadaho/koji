@@ -56,7 +56,9 @@ import {
 } from "@/lib/snowballStatsClient";
 import {
   applySnowballStatsRowMigrations,
+  deleteSnowballStatsRowById,
   loadSnowballStatsState,
+  resetSnowballStatsState,
   saveSnowballStatsState,
 } from "./snowballStatsStore";
 import {
@@ -714,7 +716,7 @@ export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
 }
 
 /** สถิติ Snowball (global) — ต้องผ่าน auth เหมือน spark-stats */
-export async function liffGetSnowballStats(): Promise<SnowballStatsApiPayload> {
+export async function liffGetSnowballStats(telegramUserId?: number): Promise<SnowballStatsApiPayload> {
   const st = await loadSnowballStatsState();
   const migrated = applySnowballStatsRowMigrations(st.rows);
   const confirmBackfill = await backfillSnowballConfirmGateSteps(st.rows);
@@ -731,11 +733,41 @@ export async function liffGetSnowballStats(): Promise<SnowballStatsApiPayload> {
     await runSnowballStatsFollowUpTick(Date.now());
     const refreshed = await loadSnowballStatsState();
     const rows = [...refreshed.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
-    return { rows };
+    return {
+      rows,
+      ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
+    };
   }
 
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
-  return { rows };
+  return {
+    rows,
+    ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
+  };
+}
+
+export async function liffDeleteSnowballStatsRow(
+  telegramUserId: number,
+  rowId: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  const found = await deleteSnowballStatsRowById(rowId);
+  if (!found) {
+    return { ok: false, status: 404, error: "ไม่พบแถวนี้ (อาจถูกลบแล้ว)" };
+  }
+  return { ok: true };
+}
+
+export async function liffResetSnowballStats(
+  telegramUserId: number,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  await resetSnowballStatsState();
+  return { ok: true };
 }
 
 export async function liffGetCandleReversalStats(

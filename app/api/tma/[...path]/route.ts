@@ -39,6 +39,8 @@ import {
   liffDeleteIndicatorAlert,
   liffGetSparkStats,
   liffGetSnowballStats,
+  liffDeleteSnowballStatsRow,
+  liffResetSnowballStats,
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
   liffGetTradingViewMexcSettings,
@@ -149,7 +151,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     if (segs.length === 1 && a === "snowball-stats") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
-      const data = await liffGetSnowballStats();
+      const data = await liffGetSnowballStats(auth.telegramUserId);
       return NextResponse.json(data, {
         status: 200,
         headers: { "Cache-Control": "no-store" },
@@ -307,6 +309,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       if (!r.ok) return json({ error: r.error }, r.status);
       return json({ ok: true });
     }
+    if (segs.length === 1 && a === "snowball-stats") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const r = await liffResetSnowballStats(auth.telegramUserId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({ ok: true });
+    }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);
   } catch (e) {
@@ -387,6 +396,13 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
         return new NextResponse(null, { status: 204 });
       }
       return json(r.json ?? {}, r.status);
+    }
+    if (segs.length === 2 && a === "snowball-stats" && id) {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const r = await liffDeleteSnowballStatsRow(auth.telegramUserId, decodeURIComponent(id));
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return new NextResponse(null, { status: 204 });
     }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);
