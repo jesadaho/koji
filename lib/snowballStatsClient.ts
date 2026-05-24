@@ -319,6 +319,53 @@ export function snowballStatsConfirmVolVsSmaLabel(v: number | null | undefined):
   return `${v.toFixed(2)}×`;
 }
 
+/** Vol×SMA ในตาราง — 4h ใช้ signal (ตรง debug Signal Vol Spurt) · อื่นๆ ใช้ 1H confirm ก่อน */
+export function snowballStatsVolVsSmaDisplay(
+  row: Pick<SnowballStatsRow, "confirmVolVsSma" | "signalVolVsSma" | "signalBarTf">,
+): number | null {
+  const tf = row.signalBarTf ?? "15m";
+  if (
+    tf === "4h" &&
+    row.signalVolVsSma != null &&
+    Number.isFinite(row.signalVolVsSma) &&
+    row.signalVolVsSma > 0
+  ) {
+    return row.signalVolVsSma;
+  }
+  if (row.confirmVolVsSma != null && Number.isFinite(row.confirmVolVsSma) && row.confirmVolVsSma > 0) {
+    return row.confirmVolVsSma;
+  }
+  if (row.signalVolVsSma != null && Number.isFinite(row.signalVolVsSma) && row.signalVolVsSma > 0) {
+    return row.signalVolVsSma;
+  }
+  return null;
+}
+
+export function snowballStatsVolVsSmaColumnTitle(signalBarTf?: SnowballStatsRow["signalBarTf"]): string {
+  if (signalBarTf === "4h") {
+    return "Vol แท่งสัญญาณ 4H ÷ SMA(4H) — ตรง Signal Vol Spurt ใน debug";
+  }
+  return "แท่งยืนยัน 1H breakout · หรือ Vol แท่งสัญญาณเมื่อไม่มี 1H confirm";
+}
+
+export type SnowballStats1hVolEvalSnapshot = {
+  volRatio: number;
+  volRank: number;
+  volRankLookback: number;
+};
+
+/** บันทึก Vol×SMA / Vol rank จาก 1H confirm eval (รวมแจ้ง Master 4h ที่มี breakout1hEval) */
+export function snowballStatsConfirmVolFieldsFrom1hEval(
+  ev: SnowballStats1hVolEvalSnapshot | null | undefined,
+): Pick<SnowballStatsRow, "confirmVolVsSma" | "confirmVolRank" | "confirmVolRankLb"> | Record<string, never> {
+  if (!ev) return {};
+  return {
+    confirmVolVsSma: Number.isFinite(ev.volRatio) ? ev.volRatio : null,
+    confirmVolRank: Number.isFinite(ev.volRank) ? ev.volRank : null,
+    confirmVolRankLb: ev.volRankLookback,
+  };
+}
+
 export function snowballStatsConfirmVolRankLabel(
   rank: number | null | undefined,
   lb: number | null | undefined,

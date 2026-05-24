@@ -86,6 +86,7 @@ import {
   type TrendMomentumMetrics,
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
+import { snowballStatsConfirmVolFieldsFrom1hEval } from "@/lib/snowballStatsClient";
 import { addSnowballPendingConfirm, loadSnowballPendingConfirms } from "./snowballConfirmStore";
 import {
   loadSnowballConfirmLastRoundStats,
@@ -3773,18 +3774,10 @@ export async function runPublicIndicatorFeedInternal(
                   ...(longConfirmGateSteps.length > 0 ? { confirmGateSteps: longConfirmGateSteps } : {}),
                   ...trendMomentumStatsFields(trendMomentum),
                   greenDaysBeforeSignal: longGreenDays,
-                  ...((longBreakout1h && breakout1hEval != null) ||
-                  (gradeBMomentum1hEval != null &&
-                    (snowballIsGradeDPlusLong(longBreakoutGrade) || snowballIsGradeF(longBreakoutGrade)))
-                    ? (() => {
-                        const ev = gradeBMomentum1hEval ?? breakout1hEval!;
-                        return {
-                          confirmVolVsSma: Number.isFinite(ev.volRatio) ? ev.volRatio : null,
-                          confirmVolRank: Number.isFinite(ev.volRank) ? ev.volRank : null,
-                          confirmVolRankLb: ev.volRankLookback,
-                        };
-                      })()
-                    : {}),
+                  ...snowballStatsConfirmVolFieldsFrom1hEval(
+                    gradeBMomentum1hEval ??
+                      (longBreakout1h || snowTf === "4h" ? breakout1hEval : null),
+                  ),
                 });
               }
             } catch (statsErr) {

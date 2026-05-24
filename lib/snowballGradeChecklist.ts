@@ -15,7 +15,11 @@ import {
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
   snowballTrendMomentumMaxVolumeDrops,
 } from "@/src/snowballTrendMomentumMetrics";
-import type { SnowballStatsQualityTier, SnowballStatsRow } from "@/lib/snowballStatsClient";
+import {
+  snowballStatsVolVsSmaDisplay,
+  type SnowballStatsQualityTier,
+  type SnowballStatsRow,
+} from "@/lib/snowballStatsClient";
 
 function effectiveQualityTier(
   row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier">,
@@ -216,11 +220,20 @@ function momentumFailCriteria(
 }
 
 function confirmVolSnapshotLines(
-  row: Pick<SnowballStatsRow, "confirmVolVsSma" | "confirmVolRank" | "confirmVolRankLb">,
+  row: Pick<
+    SnowballStatsRow,
+    "confirmVolVsSma" | "signalVolVsSma" | "signalBarTf" | "confirmVolRank" | "confirmVolRankLb"
+  >,
 ): string[] {
   const lines: string[] = [];
-  if (row.confirmVolVsSma != null && Number.isFinite(row.confirmVolVsSma)) {
-    lines.push(`Vol แท่ง 1H confirm ≈ ${row.confirmVolVsSma.toFixed(2)}× SMA`);
+  const volDisplay = snowballStatsVolVsSmaDisplay(row);
+  if (volDisplay != null) {
+    const tf = row.signalBarTf ?? "15m";
+    lines.push(
+      tf === "4h"
+        ? `Vol แท่งสัญญาณ 4H ≈ ${volDisplay.toFixed(2)}× SMA`
+        : `Vol แท่ง 1H confirm ≈ ${volDisplay.toFixed(2)}× SMA`,
+    );
   }
   if (row.confirmVolRank != null && Number.isFinite(row.confirmVolRank)) {
     const lb = row.confirmVolRankLb ?? 48;

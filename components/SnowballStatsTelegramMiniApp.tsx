@@ -12,6 +12,7 @@ import {
   snowballStatsBarRangePctLabel,
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
+  snowballStatsVolVsSmaDisplay,
   snowballStatsDayOfWeekBkk,
   snowballStatsHorizonDue,
   snowballStatsBtcPsarCombinedLabel,
@@ -467,13 +468,13 @@ export default function SnowballStatsTelegramMiniApp() {
                 </th>
                 <th
                   scope="col"
-                  title="แท่งยืนยัน (1H breakout หลังได้สัญญาณ · หรือแท่ง 2 เมื่อรอคิว confirm): volume ÷ SMA ตามเกณฑ์ยืนยันนั้น"
+                  title="4h = Vol แท่งสัญญาณ ÷ SMA(4H) (Signal Vol Spurt) · อื่นๆ = 1H confirm หรือ signal"
                 >
                   Vol×SMA
                 </th>
                 <th
                   scope="col"
-                  title="อันดับวอลุ่มในรอบที่ gate ใช้ (ปกติมาตรฐาน 48 แท่ง 1H; ถ้ามี SMA48 ที่แท่งยืนยันคิว = หน้าต่างเดียวกับ rank นั้น)"
+                  title="อันดับ vol 1H จาก breakout confirm eval (48 แท่งมาตรฐาน) — บันทึกทุกแจ้ง 4h ที่มีข้อมูล 1H"
                 >
                   Vol rank
                 </th>
@@ -540,7 +541,7 @@ export default function SnowballStatsTelegramMiniApp() {
                     </td>
                     <td>{snowballStatsVolumeCascadeLabel(r.volumeCascadeYn)}</td>
                     <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal)}</td>
-                    <td>{snowballStatsConfirmVolVsSmaLabel(r.confirmVolVsSma)}</td>
+                    <td>{snowballStatsConfirmVolVsSmaLabel(snowballStatsVolVsSmaDisplay(r))}</td>
                     <td>{snowballStatsConfirmVolRankLabel(r.confirmVolRank, r.confirmVolRankLb)}</td>
                     <td>{fmtSnowballHorizonCell(r, 4, r.price4h, r.pct4h)}</td>
                     <td>{fmtSnowballHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
