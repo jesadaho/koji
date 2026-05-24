@@ -23,7 +23,32 @@ import { applySnowballStatsGrade4hFollowUp } from "./snowballStatsGrade4hFollowU
 import { buildSnowballLongConfirmGateStepsForStats } from "./snowballStatsGateSteps";
 import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
-import { snowballStatsAnchorCloseSec } from "@/lib/snowballStatsClient";
+import { snowballStatsAnchorCloseSec, snowballStatsHorizonDue } from "@/lib/snowballStatsClient";
+import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
+
+export type SnowballStatsFollowUpResult = {
+  dirty: number;
+  migrations: number;
+  trendMomentum: number;
+  confirmGateSteps: number;
+  greenDays: number;
+  grade4h: number;
+  horizonRows: number;
+};
+
+export type SnowballStatsAdminBackfillResult = {
+  ok: boolean;
+  skippedReason?: string;
+  symbol?: string;
+  totalRows: number;
+  durationMs: number;
+  followUp: SnowballStatsFollowUpResult;
+  /** แถว 4h ที่ครบเวลา 4h แต่ pct4h ยังว่าง (ก่อนรัน) */
+  missingHorizon4hBefore: number;
+  /** หลังรัน */
+  missingHorizon4hAfter: number;
+  samplesFilled: string[];
+};
 
 /** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
 const KLINE_GRAN_SEC = 900;
@@ -241,25 +266,62 @@ export async function backfillSnowballConfirmGateSteps(rows: SnowballStatsRow[])
   return updated;
 }
 
-export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<number> {
+function countMissingHorizon4h(rows: SnowballStatsRow[], nowMs: number, symbol?: string): number {
+  let n = 0;
+  for (const row of rows) {
+    if (symbol && row.symbol.trim().toUpperCase() !== symbol) continue;
+    if (row.signalBarTf !== "4h") continue;
+    if (row.pct4h != null) continue;
+    if (!snowballStatsHorizonDue(row, 4, nowMs)) continue;
+    n += 1;
+  }
+  return n;
+}
+
+export async function runSnowballStatsFollowUpTick(
+  nowMs: number,
+  opts?: { symbol?: string },
+): Promise<SnowballStatsFollowUpResult> {
+  const empty: SnowballStatsFollowUpResult = {
+    dirty: 0,
+    migrations: 0,
+    trendMomentum: 0,
+    confirmGateSteps: 0,
+    greenDays: 0,
+    grade4h: 0,
+    horizonRows: 0,
+  };
   resetBinanceIndicatorFapi451LogDedupe();
-  if (!isSnowballStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return 0;
+  if (!isSnowballStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return empty;
+
+  const symbolFilter = opts?.symbol?.trim()
+    ? toBinanceUsdtPerpSymbol(opts.symbol.trim()).toUpperCase()
+    : undefined;
+  const rowInScope = (row: SnowballStatsRow) =>
+    !symbolFilter || row.symbol.trim().toUpperCase() === symbolFilter;
 
   const state = await loadSnowballStatsState();
   let dirty = 0;
   const nowSec = Math.floor(nowMs / 1000);
 
-  dirty += applySnowballStatsRowMigrations(state.rows);
-  dirty += await backfillSnowballTrendMomentumFields(state.rows);
-  dirty += await backfillSnowballConfirmGateSteps(state.rows);
-  dirty += await backfillSnowballGreenDaysBeforeSignal(state.rows);
+  const migrations = applySnowballStatsRowMigrations(state.rows);
+  dirty += migrations;
+  const trendMomentum = await backfillSnowballTrendMomentumFields(state.rows);
+  dirty += trendMomentum;
+  const confirmGateSteps = await backfillSnowballConfirmGateSteps(state.rows);
+  dirty += confirmGateSteps;
+  const greenDays = await backfillSnowballGreenDaysBeforeSignal(state.rows);
+  dirty += greenDays;
 
+  let grade4h = 0;
   const pack1hGradeCache = new Map<string, BinanceKlinePack | null>();
   for (const row of state.rows) {
+    if (!rowInScope(row)) continue;
     if (row.qualityTier4hAdjusted) continue;
     const ac = snowballStatsAnchorCloseSec(row);
     if (nowSec < ac + 4 * 3600) continue;
     if (await applySnowballStatsGrade4hFollowUp(row, nowSec, pack1hGradeCache)) {
+      grade4h += 1;
       dirty += 1;
     }
   }
@@ -267,7 +329,10 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
   const SEC_48H = 48 * 3600;
   const SEC_24H = 24 * 3600;
 
+  let horizonRows = 0;
+
   for (const row of state.rows) {
+    if (!rowInScope(row)) continue;
     const entry = row.entryPrice;
     if (!Number.isFinite(entry) || entry <= 0) continue;
 
@@ -468,9 +533,100 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
       }
     }
 
-    if (rowTouched) dirty += 1;
+    if (rowTouched) {
+      horizonRows += 1;
+      dirty += 1;
+    }
   }
 
   if (dirty > 0) await saveSnowballStatsState(state);
-  return dirty;
+  return {
+    dirty,
+    migrations,
+    trendMomentum,
+    confirmGateSteps,
+    greenDays,
+    grade4h,
+    horizonRows,
+  };
+}
+
+/** Admin — รีเติม migration / horizon / trend momentum / gate steps (ไม่สแกนสัญญาณใหม่) */
+export async function runSnowballStatsAdminBackfill(opts?: {
+  symbol?: string;
+  nowMs?: number;
+}): Promise<SnowballStatsAdminBackfillResult> {
+  const nowMs = opts?.nowMs ?? Date.now();
+  const symbol = opts?.symbol?.trim()
+    ? toBinanceUsdtPerpSymbol(opts.symbol.trim()).toUpperCase()
+    : undefined;
+
+  if (!isSnowballStatsEnabled()) {
+    return {
+      ok: false,
+      skippedReason: "SNOWBALL_STATS_ENABLED=0",
+      symbol,
+      totalRows: 0,
+      durationMs: 0,
+      followUp: {
+        dirty: 0,
+        migrations: 0,
+        trendMomentum: 0,
+        confirmGateSteps: 0,
+        greenDays: 0,
+        grade4h: 0,
+        horizonRows: 0,
+      },
+      missingHorizon4hBefore: 0,
+      missingHorizon4hAfter: 0,
+      samplesFilled: [],
+    };
+  }
+  if (!isBinanceIndicatorFapiEnabled()) {
+    return {
+      ok: false,
+      skippedReason: "Binance USDM indicator ปิด (BINANCE_INDICATOR_FAPI_ENABLED=0)",
+      symbol,
+      totalRows: 0,
+      durationMs: 0,
+      followUp: {
+        dirty: 0,
+        migrations: 0,
+        trendMomentum: 0,
+        confirmGateSteps: 0,
+        greenDays: 0,
+        grade4h: 0,
+        horizonRows: 0,
+      },
+      missingHorizon4hBefore: 0,
+      missingHorizon4hAfter: 0,
+      samplesFilled: [],
+    };
+  }
+
+  const before = await loadSnowballStatsState();
+  const missingHorizon4hBefore = countMissingHorizon4h(before.rows, nowMs, symbol);
+  const started = Date.now();
+  const followUp = await runSnowballStatsFollowUpTick(nowMs, { symbol });
+  const after = await loadSnowballStatsState();
+  const missingHorizon4hAfter = countMissingHorizon4h(after.rows, nowMs, symbol);
+
+  const samplesFilled: string[] = [];
+  for (const row of after.rows) {
+    if (symbol && row.symbol.trim().toUpperCase() !== symbol) continue;
+    if (row.signalBarTf !== "4h" || row.pct4h == null || !Number.isFinite(row.pct4h)) continue;
+    samplesFilled.push(`${row.symbol} pct4h=${row.pct4h.toFixed(2)}%`);
+    if (samplesFilled.length >= 8) break;
+  }
+
+  return {
+    ok: true,
+    symbol,
+    totalRows: after.rows.length,
+    durationMs: Date.now() - started,
+    followUp,
+    missingHorizon4hBefore,
+    missingHorizon4hAfter,
+    samplesFilled,
+  };
 }

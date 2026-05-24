@@ -50,13 +50,19 @@ import {
 } from "./volumeSignalAlertTick";
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
-import type { SnowballStatsApiPayload } from "@/lib/snowballStatsClient";
+import {
+  snowballStatsHorizonDue,
+  type SnowballStatsApiPayload,
+} from "@/lib/snowballStatsClient";
 import {
   applySnowballStatsRowMigrations,
   loadSnowballStatsState,
   saveSnowballStatsState,
 } from "./snowballStatsStore";
-import { backfillSnowballConfirmGateSteps } from "./snowballStatsTick";
+import {
+  backfillSnowballConfirmGateSteps,
+  runSnowballStatsFollowUpTick,
+} from "./snowballStatsTick";
 import { isAdminTelegramUserId } from "./adminIds";
 import { loadCandleReversalStatsState, resetCandleReversalStatsState } from "./candleReversalStatsStore";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
@@ -713,6 +719,21 @@ export async function liffGetSnowballStats(): Promise<SnowballStatsApiPayload> {
   const migrated = applySnowballStatsRowMigrations(st.rows);
   const confirmBackfill = await backfillSnowballConfirmGateSteps(st.rows);
   if (migrated > 0 || confirmBackfill > 0) await saveSnowballStatsState(st);
+
+  const needsHorizonRefill = st.rows.some(
+    (r) =>
+      r.signalBarTf === "4h" &&
+      r.horizonAnchorV2 === true &&
+      r.pct4h == null &&
+      snowballStatsHorizonDue(r, 4),
+  );
+  if (needsHorizonRefill) {
+    await runSnowballStatsFollowUpTick(Date.now());
+    const refreshed = await loadSnowballStatsState();
+    const rows = [...refreshed.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
+    return { rows };
+  }
+
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
   return { rows };
 }

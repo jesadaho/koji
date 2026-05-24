@@ -261,20 +261,35 @@ export function migrateSnowballStatsClearSupersededBreakout1hConfirmFail(
   return updated;
 }
 
-/** รีเซ็ต horizon แถว 4h หลังแก้ anchor (เคยชี้ปิดแท่ง signal → pct4h = 0%) */
+function snowballStatsRowHasHorizonData(row: SnowballStatsRow): boolean {
+  return (
+    row.price4h != null ||
+    row.pct4h != null ||
+    row.price12h != null ||
+    row.pct12h != null ||
+    row.price24h != null ||
+    row.pct24h != null ||
+    row.price48h != null ||
+    row.pct48h != null
+  );
+}
+
+/** รีเซ็ต horizon แถว 4h หลังแก้ anchor (เคยชี้ปิดแท่ง signal → pct4h ≈ 0%) */
 export function migrateSnowballStats4hHorizonAnchorV2(rows: SnowballStatsRow[]): number {
   let updated = 0;
   for (const row of rows) {
     if (row.signalBarTf !== "4h") continue;
     if (row.horizonAnchorV2 === true) continue;
-    row.price4h = null;
-    row.pct4h = null;
-    row.price12h = null;
-    row.pct12h = null;
-    row.price24h = null;
-    row.pct24h = null;
-    row.price48h = null;
-    row.pct48h = null;
+    if (snowballStatsRowHasHorizonData(row)) {
+      row.price4h = null;
+      row.pct4h = null;
+      row.price12h = null;
+      row.pct12h = null;
+      row.price24h = null;
+      row.pct24h = null;
+      row.price48h = null;
+      row.pct48h = null;
+    }
     row.horizonAnchorV2 = true;
     updated += 1;
   }
@@ -365,6 +380,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     signalBarOpenSec: input.signalBarOpenSec,
     signalBarLow: input.signalBarLow ?? null,
     signalBarTf: input.signalBarTf ?? "15m",
+    ...(input.signalBarTf === "4h" ? { horizonAnchorV2: true as const } : {}),
     entryPrice: input.entryPrice,
     intrabar: input.intrabar,
     triggerKind: input.triggerKind,

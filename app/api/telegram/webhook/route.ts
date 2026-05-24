@@ -44,6 +44,10 @@ import {
   toBinanceUsdtPerpSymbol,
 } from "@/src/snowballManualSymbolClear";
 import {
+  runSnowballStatsAdminBackfill,
+  type SnowballStatsAdminBackfillResult,
+} from "@/src/snowballStatsTick";
+import {
   formatPublicIndicatorFeedDebugMessage,
   formatReversalRiskDebugMessage,
   formatSnowballChecklistDebugMessage,
@@ -201,6 +205,65 @@ function isSnowballStatsClear4hBreakout1hConfirmFailCommand(trimmed: string, nor
   );
 }
 
+/** รีเติมสถิติ Snowball (horizon / migration / trend momentum) — admin only */
+function parseSnowballStatsBackfillCommand(
+  trimmed: string,
+  normalized: string,
+): { symbol?: string } | null {
+  const t = trimmed.trim();
+  const n = normalized.trim().replace(/\s+/g, " ").toLowerCase();
+
+  let m = t.match(
+    /^\/?snowball\s+stats\s+backfill(?:@\S+)?(?:\s+(\S+))?\s*$/i,
+  );
+  if (m) return { symbol: m[1]?.trim() || undefined };
+
+  m = t.match(/^\/?snowball\s+backfill(?:@\S+)?(?:\s+stats)?(?:\s+(\S+))?\s*$/i);
+  if (m) return { symbol: m[1]?.trim() || undefined };
+
+  m = n.match(/^(?:backfill\s+snowball(?:\s+stats)?|snowball\s+stats\s+backfill)(?:\s+(\S+))?$/i);
+  if (m) return { symbol: m[1]?.trim() || undefined };
+
+  if (t === "#snowballstatsbackfill") return {};
+  m = t.match(/^#snowballstatsbackfill\s+(\S+)\s*$/i);
+  if (m?.[1]) return { symbol: m[1].trim() };
+
+  const th = n.match(/^(?:รีเติม|เติม)\s*(?:สถิติ\s*)?(?:snowball|สโนว์บอล)(?:\s+stats)?(?:\s+(\S+))?$/);
+  if (th) return { symbol: th[1]?.trim() || undefined };
+
+  return null;
+}
+
+function formatSnowballStatsBackfillReply(r: SnowballStatsAdminBackfillResult): string {
+  if (!r.ok) {
+    return [`❌ Snowball stats backfill — ข้าม`, "", r.skippedReason ?? "ไม่ทราบสาเหตุ"].join("\n");
+  }
+  const f = r.followUp;
+  const lines = [
+    "✅ Snowball stats backfill",
+    r.symbol ? `เหรียญ: ${r.symbol}` : "เหรียญ: ทุกเหรียญในตาราง",
+    `durationMs: ${r.durationMs}`,
+    `แถวในตาราง: ${r.totalRows}`,
+    "",
+    `migration: ${f.migrations} · trend 1H: ${f.trendMomentum} · gate steps: ${f.confirmGateSteps}`,
+    `green days: ${f.greenDays} · grade 4h follow-up: ${f.grade4h} · horizon/MFE: ${f.horizonRows}`,
+    `รวมแถวที่แตะ (dirty): ${f.dirty}`,
+    "",
+    `4h ครบเวลาแต่ pct4h ว่าง — ก่อน: ${r.missingHorizon4hBefore} · หลัง: ${r.missingHorizon4hAfter}`,
+  ];
+  if (r.missingHorizon4hBefore > r.missingHorizon4hAfter) {
+    lines.push(`เติม horizon 4h ได้ประมาณ ${r.missingHorizon4hBefore - r.missingHorizon4hAfter} แถว`);
+  } else if (r.missingHorizon4hBefore > 0 && r.missingHorizon4hAfter === r.missingHorizon4hBefore) {
+    lines.push("", "ยังเติมไม่ได้ — อาจดึง kline ไม่ครบ / แถวยังไม่ครบ 4h หลัง anchor");
+  }
+  if (r.samplesFilled.length > 0) {
+    lines.push("", "ตัวอย่างแถวที่มี pct4h แล้ว:");
+    for (const s of r.samplesFilled) lines.push(`  · ${s}`);
+  }
+  lines.push("", "รีเฟรช Mini App «สถิติ Snowball»");
+  return lines.join("\n");
+}
+
 /** ลบแถวสถิติ Snowball + ปลดล็อกยิงซ้ำต่อสัญญา — admin only */
 function parseSnowballStatsRemoveSymbolCommand(trimmed: string, normalized: string): string | null {
   const t = trimmed.trim();
@@ -279,6 +342,7 @@ function parseRunCronCmd(t: string): { scope: CronRunScope; verbose: boolean } |
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
  * /start … · debug public feed / debug snowball / debug reversal risk (admin) · run cron price-sync | snowball | spark (admin — KOJI_ADMIN_IDS)
  * · snowball stats remove SYMBOL — ลบแถวสถิติ + ปลดล็อกยิง Snowball ต่อสัญญา (admin)
+ * · snowball stats backfill [SYMBOL] — รีเติม horizon/migration สถิติ (admin)
  * · snowball clear 4h confirm / #snowball4hconfirmclear — ล้าง breakout1hConfirmFail แถว 4h (admin)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
@@ -1065,6 +1129,44 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessageToChat(String(chatId), `ทำไม่สำเร็จ — ${detail.slice(0, 300)}`, threadOpts);
       } catch (sendErr) {
         console.error("[telegram/webhook] snowball 4h confirm clear error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  const snowBackfill = parseSnowballStatsBackfillCommand(text, normalized);
+  if (snowBackfill) {
+    if (!isAdminTelegramUserId(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          [
+            "ไม่ได้รับอนุญาตให้ backfill สถิติ Snowball",
+            "",
+            "ตั้งค่า env: KOJI_ADMIN_IDS=<Telegram user id ของคุณ>",
+            "(หลายคนคั่นด้วยจุลภาค) แล้ว redeploy",
+          ].join("\n"),
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] snowball stats backfill deny reply", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const sym = snowBackfill.symbol;
+      const r = await runSnowballStatsAdminBackfill({
+        nowMs: Date.now(),
+        symbol: sym,
+      });
+      await sendTelegramMessageToChat(String(chatId), formatSnowballStatsBackfillReply(r), threadOpts);
+    } catch (e) {
+      console.error("[telegram/webhook] snowball stats backfill", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(String(chatId), `backfill ไม่สำเร็จ — ${detail.slice(0, 400)}`, threadOpts);
+      } catch (sendErr) {
+        console.error("[telegram/webhook] snowball stats backfill error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

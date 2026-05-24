@@ -341,7 +341,8 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const snowballConfirmN = await runSnowballConfirmFollowUpTick(now);
   const publicRes = isIndicatorPublicFeedEnabled() ? await runPublicIndicatorFeedInternal(client, now) : { notified: 0 };
   const publicN = publicRes.notified;
-  const snowballStatsN = await runSnowballStatsFollowUpTick(now);
+  const snowballStatsRes = await runSnowballStatsFollowUpTick(now);
+  const snowballStatsN = snowballStatsRes.dirty;
   const snowballQuickTpClosed = await runSnowballAutoTradeQuickTpTick(now);
   const snowball24hClosed = await runSnowballAutoTrade24hGuardTick(now);
   const watch612 = await runEma612ContractWatchAlertTick(client);
