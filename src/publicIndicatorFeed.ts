@@ -415,7 +415,12 @@ export function snowballDedicatedCronOnlyEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_DEDICATED_CRON_ONLY", true);
 }
 
-/** หลังปิดแท่ง confirm — เกินนี้ไม่ส่ง TG (ดีฟอลต์ 15 นาที) */
+/** ข้ามส่ง TG เมื่อสแกนช้าเกิน N วินาทีหลังปิดแท่ง confirm — ค่าเริ่มปิด */
+export function snowballAlertStaleSkipEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_ALERT_STALE_SKIP", false);
+}
+
+/** หลังปิดแท่ง confirm — เกินนี้ไม่ส่ง TG (ใช้เมื่อเปิด STALE_SKIP; ดีฟอลต์ 900 = 15 นาที) */
 export function snowballAlertMaxAgeSec(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_ALERT_MAX_AGE_SEC);
   if (Number.isFinite(v) && v >= 60 && v <= 7200) return Math.floor(v);
@@ -438,6 +443,7 @@ function snowballAlertIsStale(
   nowMs: number,
   maxAgeSec: number = snowballAlertMaxAgeSec(),
 ): boolean {
+  if (!snowballAlertStaleSkipEnabled()) return false;
   const ageSec = Math.floor(nowMs / 1000) - anchorCloseSec;
   return ageSec > maxAgeSec;
 }
@@ -2401,10 +2407,12 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push(...formatSymbolListLines("  ", stats.longSentSymbols));
   lines.push(`แท่ง 1 คิวรอ confirm (ไม่ส่ง TG): ${stats.longPendingSkipTg}`);
   lines.push(...formatSymbolListLines("  ", stats.longPendingSkipTgSymbols));
-  lines.push(
-    `ข้ามส่ง (เกิน ${Math.round(snowballAlertMaxAgeSec() / 60)} นาทีหลังปิดแท่ง confirm): ${stats.longStaleSkipped}`,
-  );
-  lines.push(...formatSymbolListLines("  ", stats.longStaleSkippedSymbols));
+  if (snowballAlertStaleSkipEnabled()) {
+    lines.push(
+      `ข้ามส่ง (เกิน ${Math.round(snowballAlertMaxAgeSec() / 60)} นาทีหลังปิดแท่ง confirm): ${stats.longStaleSkipped}`,
+    );
+    lines.push(...formatSymbolListLines("  ", stats.longStaleSkippedSymbols));
+  }
   lines.push("");
   lines.push("— Bear (แท่งปิด) —");
   lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.bearTechPass}`);
@@ -2423,10 +2431,12 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push(...formatSymbolListLines("  ", stats.bearSentSymbols));
   lines.push(`แท่ง 1 คิวรอ confirm (ไม่ส่ง TG): ${stats.bearPendingSkipTg}`);
   lines.push(...formatSymbolListLines("  ", stats.bearPendingSkipTgSymbols));
-  lines.push(
-    `ข้ามส่ง (เกิน ${Math.round(snowballAlertMaxAgeSec() / 60)} นาทีหลังปิดแท่ง confirm): ${stats.bearStaleSkipped}`,
-  );
-  lines.push(...formatSymbolListLines("  ", stats.bearStaleSkippedSymbols));
+  if (snowballAlertStaleSkipEnabled()) {
+    lines.push(
+      `ข้ามส่ง (เกิน ${Math.round(snowballAlertMaxAgeSec() / 60)} นาทีหลังปิดแท่ง confirm): ${stats.bearStaleSkipped}`,
+    );
+    lines.push(...formatSymbolListLines("  ", stats.bearStaleSkippedSymbols));
+  }
 
   lines.push("");
   lines.push("— Confirm แท่ง 2 (รอบ cron snowballConfirm ก่อนสแกนนี้) —");
