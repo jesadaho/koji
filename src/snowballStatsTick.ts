@@ -20,6 +20,8 @@ import {
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
 import { applySnowballStatsGrade4hFollowUp } from "./snowballStatsGrade4hFollowUp";
+import { buildSnowballLongConfirmGateStepsForStats } from "./snowballStatsGateSteps";
+import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 
 /** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
@@ -207,6 +209,48 @@ async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Pr
   return updated;
 }
 
+function rowNeedsConfirmGateStepsBackfill(row: SnowballStatsRow): boolean {
+  if ((row.alertSide ?? "long") === "bear") return false;
+  const tf = row.signalBarTf ?? "15m";
+  if (tf === "4h") return false;
+  return !row.confirmGateSteps?.length;
+}
+
+/** เติม confirmGateSteps สำหรับแถว LONG 1h/15m ที่ยังไม่บันทึกขั้น (ณ เวลาแจ้ง) */
+export async function backfillSnowballConfirmGateSteps(rows: SnowballStatsRow[]): Promise<number> {
+  const need = rows.filter(rowNeedsConfirmGateStepsBackfill);
+  if (need.length === 0) return 0;
+
+  const bySymbol = new Map<string, SnowballStatsRow[]>();
+  for (const row of need) {
+    const sym = row.symbol.trim().toUpperCase();
+    const arr = bySymbol.get(sym) ?? [];
+    arr.push(row);
+    bySymbol.set(sym, arr);
+  }
+
+  let updated = 0;
+  for (const [symbol, symRows] of Array.from(bySymbol.entries())) {
+    const pack1h = await fetchSnowball1hPackForTrendMomentum(symbol);
+    if (!pack1h) continue;
+    for (const row of symRows) {
+      const tf = (row.signalBarTf ?? "15m") as BinanceIndicatorTf;
+      const steps = buildSnowballLongConfirmGateStepsForStats(
+        tf,
+        false,
+        pack1h,
+        null,
+        3,
+        trendMomentumAnchorSec(row),
+      );
+      if (steps.length === 0) continue;
+      row.confirmGateSteps = steps;
+      updated += 1;
+    }
+  }
+  return updated;
+}
+
 export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<number> {
   resetBinanceIndicatorFapi451LogDedupe();
   if (!isSnowballStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return 0;
@@ -217,6 +261,7 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
 
   dirty += applySnowballStatsRowMigrations(state.rows);
   dirty += await backfillSnowballTrendMomentumFields(state.rows);
+  dirty += await backfillSnowballConfirmGateSteps(state.rows);
   dirty += await backfillSnowballGreenDaysBeforeSignal(state.rows);
 
   const pack1hGradeCache = new Map<string, BinanceKlinePack | null>();

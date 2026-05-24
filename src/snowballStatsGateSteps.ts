@@ -5,6 +5,7 @@
 import type { BinanceIndicatorTf, BinanceKlinePack } from "./binanceIndicatorKline";
 import {
   buildSnowballLongBreakout1hConfirmGateSteps,
+  snowballLongBreakout1hExcludeRecent,
   snowballLongBreakout1hSwingLookback,
 } from "./snowballLongBreakoutConfirm";
 import { snowballTfBarDurationSec } from "./snowballLongBreakoutGrade";
@@ -121,15 +122,21 @@ export function buildSnowballLongConfirmGateStepsForStats(
   pack1h: BinanceKlinePack | null,
   twoBarInput: Parameters<typeof buildSnowballTwoBarLongConfirmGateSteps>[0] | null,
   swingExcludeRecent: number,
+  asOfSec?: number,
 ): SnowballStatsGateStep[] {
   if (twoBarInline && twoBarInput) {
     return buildSnowballTwoBarLongConfirmGateSteps(twoBarInput);
   }
   if (snowTf !== "4h" && pack1h) {
+    const ex =
+      Number.isFinite(swingExcludeRecent) && swingExcludeRecent >= 3 && swingExcludeRecent <= 4
+        ? Math.floor(swingExcludeRecent)
+        : snowballLongBreakout1hExcludeRecent();
     return buildSnowballLongBreakout1hConfirmGateSteps(
       pack1h,
       snowballLongBreakout1hSwingLookback(),
-      swingExcludeRecent,
+      ex,
+      asOfSec,
     ).map((s) => ({ label: s.label, ok: s.ok, detail: s.detail }));
   }
   return [];

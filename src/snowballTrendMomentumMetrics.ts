@@ -32,7 +32,7 @@ export type TrendMomentumMetricsOpts = {
 function envMaxDrawbackPct(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_TREND_MOMENTUM_MAX_DRAWBACK_PCT?.trim());
   if (Number.isFinite(v) && v >= 0 && v <= 100) return v;
-  return 30;
+  return 60;
 }
 
 /** ยอมให้ vol ไม่ยกฐานได้กี่ครั้งใน lookback (ดีฟอลต์ 1) */

@@ -125,6 +125,15 @@ function snowballSwingLookbackBarsDefault(): number {
   return 48;
 }
 
+/** ไม่นับ high แท่งล่าสุด N แท่งบน 1H ก่อนแท่ง confirm — ค่าเริ่ม 3 */
+export function snowballLongBreakout1hExcludeRecent(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_BREAKOUT_1H_EXCLUDE_RECENT);
+  if (Number.isFinite(v) && v >= 3 && v <= 4) return Math.floor(v);
+  const ex = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_SWING_EXCLUDE_RECENT_BARS);
+  if (Number.isFinite(ex) && ex >= 3 && ex <= 4) return Math.floor(ex);
+  return 3;
+}
+
 /** Lookback สำหรับ high24h_before บน 1H — ค่าเริ่มเท่า Swing HH48 */
 export function snowballLongBreakout1hSwingLookback(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_LONG_BREAKOUT_1H_SWING_LOOKBACK);
@@ -439,8 +448,13 @@ export function buildSnowballLongBreakout1hConfirmGateSteps(
   pack1h: BinanceKlinePack | null,
   swingLookback: number,
   excludeRecent: number,
+  /** Unix sec — ยืนยัน 1H ณ เวลาแจ้ง (backfill สถิติ); ไม่ใส่ = แท่งปิดล่าสุด */
+  asOfSec?: number,
 ): SnowballLongBreakout1hGateStep[] {
-  const ev = evaluateSnowballLongBreakout1hConfirm(pack1h, swingLookback, excludeRecent);
+  const ev =
+    asOfSec != null && Number.isFinite(asOfSec)
+      ? evaluateSnowballLongBreakout1hConfirmAsOf(pack1h, asOfSec, swingLookback, excludeRecent)
+      : evaluateSnowballLongBreakout1hConfirm(pack1h, swingLookback, excludeRecent);
   if (!ev) {
     return [
       {

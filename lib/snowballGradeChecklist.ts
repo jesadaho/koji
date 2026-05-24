@@ -103,6 +103,20 @@ function momentumFailCriteria(
   return fails;
 }
 
+function confirmVolSnapshotLines(
+  row: Pick<SnowballStatsRow, "confirmVolVsSma" | "confirmVolRank" | "confirmVolRankLb">,
+): string[] {
+  const lines: string[] = [];
+  if (row.confirmVolVsSma != null && Number.isFinite(row.confirmVolVsSma)) {
+    lines.push(`Vol แท่ง 1H confirm ≈ ${row.confirmVolVsSma.toFixed(2)}× SMA`);
+  }
+  if (row.confirmVolRank != null && Number.isFinite(row.confirmVolRank)) {
+    const lb = row.confirmVolRankLb ?? 48;
+    lines.push(`อันดับ vol 1H = ${row.confirmVolRank} ใน ${lb} แท่ง`);
+  }
+  return lines;
+}
+
 function confirmFailCriteria(
   row: Pick<
     SnowballStatsRow,
@@ -112,23 +126,68 @@ function confirmFailCriteria(
     | "momentumFailGradeF"
     | "confirmGateSteps"
     | "signalBarTf"
+    | "confirmVolVsSma"
+    | "confirmVolRank"
+    | "confirmVolRankLb"
   >,
 ): string[] {
   if (confirmOk(row)) return [];
-  const steps = row.confirmGateSteps;
-  if (steps?.length) {
-    return steps
-      .filter((s) => !s.ok)
-      .map((s) => (s.detail ? `${s.label}: ${s.detail}` : s.label));
-  }
+
+  const failedFromSteps =
+    row.confirmGateSteps
+      ?.filter((s) => !s.ok)
+      .map((s) => (s.detail ? `${s.label}: ${s.detail}` : s.label)) ?? [];
+  if (failedFromSteps.length > 0) return failedFromSteps;
+
+  const fails: string[] = [];
+  const grade = effectiveQualityTier(row);
+
   if (row.breakout1hConfirmFail) {
-    return ["1H confirm ไม่ผ่าน (breakout1hConfirmFail)"];
+    fails.push("1H confirm ไม่ผ่าน (breakout1hConfirmFail — แถวเก่า)");
+  } else if (snowballIsGradeF(grade) || row.momentumFailGradeF) {
+    fails.push("เกรด F (Long): momentum และ/หรือ 1H confirm ไม่ผ่านตอนแจ้งเตือน");
+  } else {
+    const tf = row.signalBarTf ?? "15m";
+    fails.push(
+      tf === "4h"
+        ? "two-bar inline confirm ไม่ผ่าน (ไม่มีรายละเอียดขั้น)"
+        : "Breakout 1H confirm ไม่ผ่าน (ไม่มีรายละเอียดขั้น)",
+    );
   }
-  const tf = row.signalBarTf ?? "15m";
-  if (tf === "4h") {
-    return ["two-bar inline confirm ไม่ผ่าน (แถวเก่า — ไม่บันทึกขั้นตอน)"];
+
+  fails.push(...confirmVolSnapshotLines(row));
+
+  if (row.confirmGateSteps?.length) {
+    fails.push("ขั้นใน snapshot บันทึกว่าผ่านหมด — ดูรายการด้านล่าง");
+    fails.push(...row.confirmGateSteps.map((s) => `${s.ok ? "✓" : "✗"} ${s.label}: ${s.detail}`));
   }
-  return ["Breakout 1H confirm ไม่ผ่าน (แถวเก่า — ไม่บันทึกขั้นตอน)"];
+
+  if (fails.length === 0) {
+    fails.push("1H confirm ไม่ผ่าน (ไม่มีข้อมูลขั้น)");
+  }
+  return fails;
+}
+
+function confirmFailDetail(
+  row: Pick<
+    SnowballStatsRow,
+    | "qualityTier"
+    | "alertQualityTier"
+    | "breakout1hConfirmFail"
+    | "momentumFailGradeF"
+    | "confirmGateSteps"
+    | "signalBarTf"
+    | "confirmVolVsSma"
+    | "confirmVolRank"
+    | "confirmVolRankLb"
+  >,
+  confirmFails: string[],
+): string {
+  if (confirmFails.length > 0) {
+    const first = confirmFails[0]!;
+    return first.length > 120 ? `${first.slice(0, 117)}…` : first;
+  }
+  return "ไม่ผ่าน";
 }
 
 function resolveVolStrict(
@@ -187,6 +246,9 @@ export function snowballStatsGradeChecklist(
     | "volMultAtAlert"
     | "volNearMultAtAlert"
     | "confirmGateSteps"
+    | "confirmVolVsSma"
+    | "confirmVolRank"
+    | "confirmVolRankLb"
     | "maxDrawback1hPct"
     | "volumeCascadeYn"
   >,
@@ -246,8 +308,8 @@ export function snowballStatsGradeChecklist(
         ? row.signalBarTf === "4h"
           ? "two-bar inline ผ่านครบ"
           : "Breakout 1H ผ่านครบ"
-        : "ไม่ผ่าน",
-      failCriteria: cOk ? undefined : confirmFails,
+        : confirmFailDetail(row, confirmFails),
+      failCriteria: cOk ? undefined : confirmFails.length > 0 ? confirmFails : ["1H confirm ไม่ผ่าน"],
     },
     {
       id: "vol_strict",
