@@ -13,6 +13,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/snowball-scan",
+      "schedule": "5 0,4,8,12,16,20 * * *"
+    },
+    {
       "path": "/api/cron/price-alerts",
       "schedule": "0 * * * *"
     },

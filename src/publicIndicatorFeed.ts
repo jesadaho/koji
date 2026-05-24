@@ -410,6 +410,38 @@ function snowballIntrabarEnabled(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR", false);
 }
 
+/** Snowball 4h สแกนผ่าน /api/cron/snowball-scan หลังปิดแท่ง — ไม่สแกนซ้ำใน price-sync */
+export function snowballDedicatedCronOnlyEnabled(): boolean {
+  return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_DEDICATED_CRON_ONLY", true);
+}
+
+/** หลังปิดแท่ง confirm — เกินนี้ไม่ส่ง TG (ดีฟอลต์ 15 นาที) */
+export function snowballAlertMaxAgeSec(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_ALERT_MAX_AGE_SEC);
+  if (Number.isFinite(v) && v >= 60 && v <= 7200) return Math.floor(v);
+  return 900;
+}
+
+function snowballAlertAnchorCloseSec(
+  barOpenSec: number,
+  tf: BinanceIndicatorTf,
+): number {
+  return barOpenSec + tfBarDurationSecForSummary(tf);
+}
+
+function formatSnowballBarCloseBkk(barOpenSec: number, tf: BinanceIndicatorTf): string {
+  return formatClosedCandleBkk(snowballAlertAnchorCloseSec(barOpenSec, tf));
+}
+
+function snowballAlertIsStale(
+  anchorCloseSec: number,
+  nowMs: number,
+  maxAgeSec: number = snowballAlertMaxAgeSec(),
+): boolean {
+  const ageSec = Math.floor(nowMs / 1000) - anchorCloseSec;
+  return ageSec > maxAgeSec;
+}
+
 /** ในโหมด intrabar: ไม่บังคับ Vol > SMA — ค่าเริ่มปิด */
 function snowballIntrabarRelaxVolume(): boolean {
   return envFlagOn("INDICATOR_PUBLIC_SNOWBALL_INTRABAR_RELAX_VOLUME", false);
@@ -1628,10 +1660,23 @@ function buildSnowballTripleCheckMessage(
     gradeFootnote?: string;
     trendMomentum?: TrendMomentumMetrics | null;
     sustainedBuyingPressure?: boolean;
+    /** เปิดแท่งที่ใช้แสดงเวลาปิดในหัวข้อ (two-bar = แท่ง confirm) */
+    alertClosedBarOpenSec?: number;
   }
 ): string {
   const pair = pairSlashNoDollar(symbol);
-  const bkk = formatClosedCandleBkk(barTimeSec);
+  const closedOpenSec =
+    typeof args.alertClosedBarOpenSec === "number" && Number.isFinite(args.alertClosedBarOpenSec)
+      ? args.alertClosedBarOpenSec
+      : barTimeSec;
+  const tfForClose =
+    args.snowballTfDisplay === "1h" || args.snowballTfDisplay === "15m"
+      ? args.snowballTfDisplay
+      : "4h";
+  const bkk =
+    args.intrabar || tfForClose === "1h" || tfForClose === "15m"
+      ? formatClosedCandleBkk(closedOpenSec)
+      : formatSnowballBarCloseBkk(closedOpenSec, tfForClose);
   const px = formatUsdPrice(args.close);
   const playbookRefPx = formatUsdPrice(args.refSwing);
   const emaPx = formatUsdPrice(args.emaResistance);
@@ -2236,6 +2281,8 @@ type Snowball4hScanSummaryStats = {
   /** แท่ง 1 ผ่านแล้วคิวรอ confirm (ไม่ส่ง TG) */
   longPendingSkipTg: number;
   longPendingSkipTgSymbols: string[];
+  longStaleSkipped: number;
+  longStaleSkippedSymbols: string[];
   bearTechPass: number;
   bearTechPassSymbols: string[];
   /** เนื้อเทียนเทียบช่วงต่ำกว่าเกณฑ์ (ไส้ยาว) */
@@ -2252,6 +2299,8 @@ type Snowball4hScanSummaryStats = {
   bearSentSymbols: string[];
   bearPendingSkipTg: number;
   bearPendingSkipTgSymbols: string[];
+  bearStaleSkipped: number;
+  bearStaleSkippedSymbols: string[];
   errors: string[];
 };
 
@@ -2352,6 +2401,10 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push(...formatSymbolListLines("  ", stats.longSentSymbols));
   lines.push(`แท่ง 1 คิวรอ confirm (ไม่ส่ง TG): ${stats.longPendingSkipTg}`);
   lines.push(...formatSymbolListLines("  ", stats.longPendingSkipTgSymbols));
+  lines.push(
+    `ข้ามส่ง (เกิน ${Math.round(snowballAlertMaxAgeSec() / 60)} นาทีหลังปิดแท่ง confirm): ${stats.longStaleSkipped}`,
+  );
+  lines.push(...formatSymbolListLines("  ", stats.longStaleSkippedSymbols));
   lines.push("");
   lines.push("— Bear (แท่งปิด) —");
   lines.push(`ครบเกณฑ์ (ถึงก่อน dedupe/cooldown): ${stats.bearTechPass}`);
@@ -2370,6 +2423,10 @@ function formatSnowball4hScanSummaryMessage(opts: {
   lines.push(...formatSymbolListLines("  ", stats.bearSentSymbols));
   lines.push(`แท่ง 1 คิวรอ confirm (ไม่ส่ง TG): ${stats.bearPendingSkipTg}`);
   lines.push(...formatSymbolListLines("  ", stats.bearPendingSkipTgSymbols));
+  lines.push(
+    `ข้ามส่ง (เกิน ${Math.round(snowballAlertMaxAgeSec() / 60)} นาทีหลังปิดแท่ง confirm): ${stats.bearStaleSkipped}`,
+  );
+  lines.push(...formatSymbolListLines("  ", stats.bearStaleSkippedSymbols));
 
   lines.push("");
   lines.push("— Confirm แท่ง 2 (รอบ cron snowballConfirm ก่อนสแกนนี้) —");
@@ -2456,6 +2513,9 @@ export async function runPublicIndicatorFeedInternal(
   const divOn = isPublicRsiDivergenceEnabled();
   const snowballOn = isPublicSnowballTripleCheckEnabled();
   const snowballOnly = Boolean(opts?.snowballOnly);
+  const snowballDedicatedCron = snowballDedicatedCronOnlyEnabled();
+  const effectiveSnowballOn =
+    snowballOn && (snowballOnly || !snowballDedicatedCron);
   if (snowballOnly && !snowballOn) {
     return { notified: 0, skippedReason: "Snowball ปิดใน env (INDICATOR_PUBLIC_SNOWBALL_ENABLED)" };
   }
@@ -2468,7 +2528,7 @@ export async function runPublicIndicatorFeedInternal(
   const divergenceTfs = effectiveDivOn ? publicRsiDivergenceTfs() : [];
   const needDiv1hExtra = effectiveDivOn && divergenceTfs.includes("1h") && rsiEmaTf !== "1h";
   const needDiv4hExtra = effectiveDivOn && divergenceTfs.includes("4h") && rsiEmaTf !== "4h";
-  if (!effectiveRsiOn && !effectiveEmaOn && !effectiveDivOn && !snowballOn) {
+  if (!effectiveRsiOn && !effectiveEmaOn && !effectiveDivOn && !effectiveSnowballOn) {
     return {
       notified: 0,
       skippedReason: "สัญญาณ public ปิดหมดใน env (RSI / EMA / Div / Snowball)",
@@ -2477,7 +2537,7 @@ export async function runPublicIndicatorFeedInternal(
 
   const baseTopAlts = topAltsCount();
   const snowballTopAlts = snowballUniverseTopAltsCount();
-  const fetchUniverseTopN = snowballOn ? Math.max(baseTopAlts, snowballTopAlts) : baseTopAlts;
+  const fetchUniverseTopN = effectiveSnowballOn ? Math.max(baseTopAlts, snowballTopAlts) : baseTopAlts;
   const symbols = await getUniverseSymbols(fetchUniverseTopN);
   if (symbols.length === 0) {
     return { notified: 0, skippedReason: "universe สัญญาว่าง (ดึงรายการไม่ได้หรือกรองหมด)" };
@@ -2501,7 +2561,7 @@ export async function runPublicIndicatorFeedInternal(
   const snowSwingGradeLb = snowballSwingGradeLookbackBars();
   const snowSwingEx = snowballSwingExcludeRecentBars();
   const snowVolLb = snowballVolatilityLookbackBars();
-  const snowFetchBars = snowballOn
+  const snowFetchBars = effectiveSnowballOn
     ? Math.max(
         250,
         (snowballDoubleBarrierEnabled() ? snowballDoubleBarrierLookbackBars() : 0) + 50,
@@ -2541,7 +2601,7 @@ export async function runPublicIndicatorFeedInternal(
     } else {
       packsDiv4hExtra.push(...chunk.map(() => null));
     }
-    if (snowballOn) {
+    if (effectiveSnowballOn) {
       const partSb = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, snowTf, snowFetchBars)));
       snowballPacks.push(...partSb);
     } else {
@@ -2557,7 +2617,7 @@ export async function runPublicIndicatorFeedInternal(
   const snowballPendingSymbols = new Set<string>();
   /** แท่งที่เคยยิง F แล้วติด lastFiredBarSec เก่า — อนุญาตยิงซ้ำแท่งเดิมได้ */
   const snowballFBarDedupeExempt = new Set<string>();
-  if (snowballOn) {
+  if (effectiveSnowballOn) {
     const pendingMaxAgeMs = 30 * 3600 * 1000;
     try {
       const stats = await loadSnowballStatsState();
@@ -2601,7 +2661,7 @@ export async function runPublicIndicatorFeedInternal(
   }
 
   const collectSnowScanStats =
-    snowballOn && snowTf === "4h" && (isSnowball4hScanSummaryToChatEnabled() || snowballOnly);
+    effectiveSnowballOn && snowTf === "4h" && (isSnowball4hScanSummaryToChatEnabled() || snowballOnly);
   const snowScanStats: Snowball4hScanSummaryStats | null = collectSnowScanStats
       ? {
           closedBarOpenSec: null,
@@ -2631,6 +2691,8 @@ export async function runPublicIndicatorFeedInternal(
           longSentSymbols: [],
           longPendingSkipTg: 0,
           longPendingSkipTgSymbols: [],
+          longStaleSkipped: 0,
+          longStaleSkippedSymbols: [],
           bearTechPass: 0,
           bearTechPassSymbols: [],
           bearBodyRatioBlocked: 0,
@@ -2645,18 +2707,20 @@ export async function runPublicIndicatorFeedInternal(
           bearSentSymbols: [],
           bearPendingSkipTg: 0,
           bearPendingSkipTgSymbols: [],
+          bearStaleSkipped: 0,
+          bearStaleSkippedSymbols: [],
           errors: [],
         }
       : null;
 
-  if (snowballOn) resetSnowballBtcPsar4hCache();
+  if (effectiveSnowballOn) resetSnowballBtcPsar4hCache();
 
   for (let idx = 0; idx < symbols.length; idx++) {
     const symbol = symbols[idx]!;
     const pack = packsCore[idx];
     const packSbEarly = snowballPacks[idx];
     /* Snowball ใช้ snowballPacks — อย่า continue เพราะ packsCore ล้มเหลว (timeout ฯลฯ) ไม่งั้นข้าม Snowball ทั้งเหรียญ */
-    if (!pack && !(snowballOn && packSbEarly)) continue;
+    if (!pack && !(effectiveSnowballOn && packSbEarly)) continue;
 
     const iso = new Date().toISOString();
 
@@ -2804,7 +2868,7 @@ export async function runPublicIndicatorFeedInternal(
       }
     }
 
-    if (snowballOn) {
+    if (effectiveSnowballOn) {
       const packSb = snowballPacks[idx];
       if (!packSb) {
         if (snowScanStats) snowScanStats.noPack++;
@@ -3215,7 +3279,7 @@ export async function runPublicIndicatorFeedInternal(
         } else if (!gradeFootnote && gradeResolution.grade === "d_plus") {
           if (!gradeResolution.momentumOk) {
             gradeFootnote = twoBarInlinePassed
-              ? `📎 ${snowballLongGradePlusLabel("d_plus")}: โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)} · momentum ไม่ผ่าน · two-bar inline confirm ผ่าน — ปิด ~ ${formatClosedCandleBkk(t15[iConf]!)} @ ${formatUsdPrice(c15[iConf]!)} USDT`
+              ? `📎 ${snowballLongGradePlusLabel("d_plus")}: โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)} · momentum ไม่ผ่าน · two-bar inline confirm ผ่าน — ปิด ~ ${formatSnowballBarCloseBkk(t15[iConf]!, snowTf)} @ ${formatUsdPrice(c15[iConf]!)} USDT`
               : gradeBMomentum1hEval
                 ? `📎 ${snowballLongGradePlusLabel("d_plus")}: โครงสร้าง ${snowballLongGradeShortLabel(gradeResolution.structureTier)} · momentum ไม่ผ่าน · 1H confirm ผ่าน — ปิด ~ ${formatClosedCandleBkk(gradeBMomentum1hEval.barOpenSec)} @ ${formatUsdPrice(gradeBMomentum1hEval.close)} USDT · ${gradeBMomentum1hEval.detail}`
                 : undefined;
@@ -3297,7 +3361,7 @@ export async function runPublicIndicatorFeedInternal(
             : null;
         const inlineTwoBarFootnote =
           twoBarInline && Number.isFinite(confCloseForFoot)
-            ? `📎 Two-bar inline: แท่งสัญญาณปิด ~ ${formatClosedCandleBkk(t15[iSig]!)} · แท่ง confirm ปิด ~ ${formatClosedCandleBkk(t15[iConf]!)} @ ${formatUsdPrice(confCloseForFoot)} USDT · 1h min-low ในช่วงสองแท่ง = ${minL1hForFoot != null ? formatUsdPrice(minL1hForFoot) : "—"} (เทียบ low สัญญาณ ${longSignalLow != null && Number.isFinite(longSignalLow) ? formatUsdPrice(longSignalLow) : "—"})`
+            ? `📎 Two-bar inline: แท่งสัญญาณปิด ~ ${formatSnowballBarCloseBkk(t15[iSig]!, snowTf)} · แท่ง confirm ปิด ~ ${formatSnowballBarCloseBkk(t15[iConf]!, snowTf)} @ ${formatUsdPrice(confCloseForFoot)} USDT · 1h min-low ในช่วงสองแท่ง = ${minL1hForFoot != null ? formatUsdPrice(minL1hForFoot) : "—"} (เทียบ low สัญญาณ ${longSignalLow != null && Number.isFinite(longSignalLow) ? formatUsdPrice(longSignalLow) : "—"})`
             : undefined;
         const breakout1hFootnote =
           longBreakout1h && breakout1hEval
@@ -3313,6 +3377,21 @@ export async function runPublicIndicatorFeedInternal(
               : twoBarInline
                 ? c15[iConf]!
                 : clE!;
+
+        if (!intrabar && snowTf === "4h") {
+          const alertBarOpen = twoBarInline ? t15[iConf]! : signalBarOpenSec;
+          const anchorClose = snowballAlertAnchorCloseSec(alertBarOpen, snowTf);
+          if (snowballAlertIsStale(anchorClose, now)) {
+            console.info(
+              `[indicatorPublicFeed] Snowball LONG skip stale (${Math.floor((now / 1000 - anchorClose) / 60)}m after bar close) ${symbol} ${snowTf}`,
+            );
+            if (snowScanStats) {
+              snowScanStats.longStaleSkipped++;
+              pushSnowScanSymList(snowScanStats.longStaleSkippedSymbols, `${symbol} LONG`);
+            }
+            return;
+          }
+        }
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bull", signalBarOpenSec, {
           close: entryClosePx,
@@ -3371,6 +3450,7 @@ export async function runPublicIndicatorFeedInternal(
           gradeFootnote,
           trendMomentum,
           sustainedBuyingPressure,
+          alertClosedBarOpenSec: twoBarInline ? t15[iConf]! : signalBarOpenSec,
         });
         const longPendingConfirm =
           !twoBarInline && !longBreakout1h && !intrabar && longRiskFlags.length > 0 && Boolean(longConfirmTrigger);
@@ -3890,8 +3970,23 @@ export async function runPublicIndicatorFeedInternal(
             : null;
         const inlineTwoBarFootnoteBear =
           twoBarInline && Number.isFinite(confCloseForFootB)
-            ? `📎 Two-bar inline: แท่งสัญญาณปิด ~ ${formatClosedCandleBkk(t15[iSig]!)} · แท่ง confirm ปิด ~ ${formatClosedCandleBkk(t15[iConf]!)} @ ${formatUsdPrice(confCloseForFootB)} USDT · 1h max-high ในช่วงสองแท่ง = ${maxH1hForFoot != null ? formatUsdPrice(maxH1hForFoot) : "—"} (เทียบ high สัญญาณ ${bearSignalHigh != null && Number.isFinite(bearSignalHigh) ? formatUsdPrice(bearSignalHigh) : "—"})`
+            ? `📎 Two-bar inline: แท่งสัญญาณปิด ~ ${formatSnowballBarCloseBkk(t15[iSig]!, snowTf)} · แท่ง confirm ปิด ~ ${formatSnowballBarCloseBkk(t15[iConf]!, snowTf)} @ ${formatUsdPrice(confCloseForFootB)} USDT · 1h max-high ในช่วงสองแท่ง = ${maxH1hForFoot != null ? formatUsdPrice(maxH1hForFoot) : "—"} (เทียบ high สัญญาณ ${bearSignalHigh != null && Number.isFinite(bearSignalHigh) ? formatUsdPrice(bearSignalHigh) : "—"})`
             : undefined;
+
+        if (!intrabar && snowTf === "4h") {
+          const alertBarOpen = twoBarInline ? t15[iConf]! : signalBarOpenSec;
+          const anchorClose = snowballAlertAnchorCloseSec(alertBarOpen, snowTf);
+          if (snowballAlertIsStale(anchorClose, now)) {
+            console.info(
+              `[indicatorPublicFeed] Snowball BEAR skip stale (${Math.floor((now / 1000 - anchorClose) / 60)}m after bar close) ${symbol} ${snowTf}`,
+            );
+            if (snowScanStats) {
+              snowScanStats.bearStaleSkipped++;
+              pushSnowScanSymList(snowScanStats.bearStaleSkippedSymbols, `${symbol} BEAR`);
+            }
+            return;
+          }
+        }
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", signalBarOpenSec, {
           close: clE!,
@@ -3927,6 +4022,7 @@ export async function runPublicIndicatorFeedInternal(
               ? { side: "bear", refLevel: bearConfirmTrigger.refLevel, volMinRatio: bearConfirmTrigger.volMinRatio }
               : undefined,
           inlineTwoBarFootnote: inlineTwoBarFootnoteBear,
+          alertClosedBarOpenSec: twoBarInline ? t15[iConf]! : signalBarOpenSec,
         });
         const bearPendingConfirm =
           !twoBarInline && !intrabar && bearRiskFlags.length > 0 && Boolean(bearConfirmTrigger);
