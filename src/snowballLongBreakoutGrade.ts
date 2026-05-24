@@ -263,11 +263,7 @@ export function resolveSnowballLongFinalGrade(
     };
   }
 
-  if (
-    input.snowTf !== "4h" &&
-    input.longBreakout1h &&
-    !confirmOk
-  ) {
+  if (input.longBreakout1h && !confirmOk) {
     return {
       kind: "block",
       reason: "breakout_1h_fail",
