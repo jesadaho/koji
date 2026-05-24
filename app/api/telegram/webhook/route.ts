@@ -657,6 +657,9 @@ export async function POST(req: NextRequest) {
           `detail: ${r.detail}`,
         ];
         if (r.scanSkippedReason) lines.push("", `scanSkippedReason: ${r.scanSkippedReason}`);
+        if (r.scanSkipNoticeSent) {
+          lines.push("", "ส่งแจ้งเตือนข้ามสแกนไปกลุ่ม Snowball แล้ว (⚠️ scan skip)");
+        }
         if (r.snowballScanSummaryText) {
           const raw = r.snowballScanSummaryText;
           const max = 3200;

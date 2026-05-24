@@ -297,16 +297,30 @@ export async function runSnowballPublicScanTick(client: Client): Promise<{
   scanSkippedReason?: string;
   /** ข้อความ 🧪 Snowball 4h scan summary (เมื่อรันสแกนและประกอบได้) */
   snowballScanSummaryText?: string;
+  scanSkipNoticeSent?: boolean;
 }> {
   const now = Date.now();
   if (!isIndicatorPublicFeedEnabled()) {
-    return { notified: 0, detail: "INDICATOR_PUBLIC_FEED_ENABLED=0 — ข้าม" };
+    const reason = "INDICATOR_PUBLIC_FEED_ENABLED=0 — ข้ามสแกน";
+    const scanSkipNoticeSent = await notifySnowballScanSkippedToChat({ atMs: now, reason });
+    return { notified: 0, detail: reason, scanSkippedReason: reason, scanSkipNoticeSent };
   }
   if (!isPublicSnowballTripleCheckEnabled()) {
-    return { notified: 0, detail: "Snowball public ปิด (INDICATOR_PUBLIC_SNOWBALL) — ข้าม" };
+    const reason = "Snowball public ปิด (INDICATOR_PUBLIC_SNOWBALL) — ข้ามสแกน";
+    const scanSkipNoticeSent = await notifySnowballScanSkippedToChat({ atMs: now, reason });
+    return { notified: 0, detail: reason, scanSkippedReason: reason, scanSkipNoticeSent };
   }
   const confirmN = await runSnowballConfirmFollowUpTick(now);
-  const scanRes = await runPublicIndicatorFeedInternal(client, now, { snowballOnly: true });
+  let scanRes = await runPublicIndicatorFeedInternal(client, now, { snowballOnly: true });
+  let lockRetried = false;
+  if (
+    typeof scanRes.skippedReason === "string" &&
+    scanRes.skippedReason.includes("feed lock")
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 45_000));
+    lockRetried = true;
+    scanRes = await runPublicIndicatorFeedInternal(client, now, { snowballOnly: true });
+  }
   const n = scanRes.notified;
   const total = confirmN + n;
   const parts: string[] = [];
@@ -321,14 +335,26 @@ export async function runSnowballPublicScanTick(client: Client): Promise<{
     detail = `สแกนครบ (ไม่มีแจ้งเตือนใหม่) — confirm ${confirmN} · สแกน 0; ถ้าควรมีสัญญาณลอง debug snowball <SYMBOL>`;
   }
   if (scanRes.snowballScanSummaryText) {
-    const n = scanRes.snowballScanSummaryText.length;
-    detail = `${detail} · สรุปสแกน 4h: ${n} ตัวอักษร (ดู JSON snowballScanSummaryText / กลุ่มสาธารณะ)`;
+    const summaryChars = scanRes.snowballScanSummaryText.length;
+    detail = `${detail} · สรุปสแกน 4h: ${summaryChars} ตัวอักษร (ดู JSON snowballScanSummaryText / กลุ่มสาธารณะ)`;
   }
+
+  let scanSkipNoticeSent = false;
+  if (scanRes.skippedReason && !scanRes.snowballScanSummaryText) {
+    scanSkipNoticeSent = await notifySnowballScanSkippedToChat({
+      atMs: now,
+      reason: scanRes.skippedReason,
+      confirmFollowUpN: confirmN,
+      lockRetried,
+    });
+  }
+
   return {
     notified: total,
     detail,
     scanSkippedReason: scanRes.skippedReason,
     snowballScanSummaryText: scanRes.snowballScanSummaryText,
+    scanSkipNoticeSent,
   };
 }
 
