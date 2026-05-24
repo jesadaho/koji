@@ -34,7 +34,11 @@ import { runSpotFutBasisAlertTick } from "@/src/spotFutBasisAlertTick";
 import { runThreeGreenDailyTechnicalAlertTick } from "@/src/threeGreenDailyAlertTick";
 import { isAdminTelegramUserId } from "@/src/adminIds";
 import { resetCandleReversalStatsState } from "@/src/candleReversalStatsStore";
-import { removeSnowballStatsDuplicatesInLastHours, resetSnowballStatsState } from "@/src/snowballStatsStore";
+import {
+  clearSnowball4hBreakout1hConfirmFail,
+  removeSnowballStatsDuplicatesInLastHours,
+  resetSnowballStatsState,
+} from "@/src/snowballStatsStore";
 import {
   clearSnowballSymbolForManualRetry,
   toBinanceUsdtPerpSymbol,
@@ -175,6 +179,28 @@ function parseSnowballStatsDedupeCommand(trimmed: string, normalized: string): {
   return null;
 }
 
+/** ล้าง breakout1hConfirmFail บนแถว signalBarTf=4h (ป้าย legacy) — admin only */
+function isSnowballStatsClear4hBreakout1hConfirmFailCommand(trimmed: string, normalized: string): boolean {
+  const t = trimmed.trim();
+  const n = normalized.trim().replace(/\s+/g, " ").toLowerCase();
+  if (
+    /^\/?snowball\s+stats\s+clear\s+4h(?:@\S+)?(?:\s+(?:confirm|breakout1h|breakout|legacy))?\s*$/i.test(t)
+  ) {
+    return true;
+  }
+  if (/^\/?snowball\s+clear\s+4h(?:@\S+)?(?:\s+(?:confirm|breakout1h|breakout|legacy))?\s*$/i.test(t)) {
+    return true;
+  }
+  if (t === "#snowball4hconfirmclear" || t === "#snowball4hconfirmfix") return true;
+  return (
+    n === "snowball clear 4h confirm" ||
+    n === "snowball stats clear 4h" ||
+    n === "ล้าง breakout1h 4h" ||
+    n === "ล้าง snowball 4h confirm" ||
+    n === "ล้างป้าย 4h snowball"
+  );
+}
+
 /** ลบแถวสถิติ Snowball + ปลดล็อกยิงซ้ำต่อสัญญา — admin only */
 function parseSnowballStatsRemoveSymbolCommand(trimmed: string, normalized: string): string | null {
   const t = trimmed.trim();
@@ -253,6 +279,7 @@ function parseRunCronCmd(t: string): { scope: CronRunScope; verbose: boolean } |
  * Telegram Bot webhook — รับข้อความจากผู้ใช้ (โดยทั่วไปแชทส่วนตัวกับบอท)
  * /start … · debug public feed / debug snowball / debug reversal risk (admin) · run cron price-sync | snowball | spark (admin — KOJI_ADMIN_IDS)
  * · snowball stats remove SYMBOL — ลบแถวสถิติ + ปลดล็อกยิง Snowball ต่อสัญญา (admin)
+ * · snowball clear 4h confirm / #snowball4hconfirmclear — ล้าง breakout1hConfirmFail แถว 4h (admin)
  * กลุ่มสาธารณะ (TELEGRAM_PUBLIC_*) ใช้แค่ส่งแจ้งเตือนจาก cron — ไม่ต้องคุยคำสั่งในกลุ่มก็ได้
  * ถ้าไปพิมพ์คำสั่งใน supergroup แทน DM และเปิด Group Privacy ต้องใช้ `/short btc` ฯลฯ
  * ตั้ง webhook: `https://api.telegram.org/bot<TOKEN>/setWebhook?url=<https://host>/api/telegram/webhook`
@@ -988,6 +1015,56 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessageToChat(String(chatId), `ทำไม่สำเร็จ — ${detail.slice(0, 300)}`, threadOpts);
       } catch (sendErr) {
         console.error("[telegram/webhook] snowball stats dedupe error reply", sendErr);
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (isSnowballStatsClear4hBreakout1hConfirmFailCommand(text, normalized)) {
+    if (!isAdminTelegramUserId(fromUserId)) {
+      try {
+        await sendTelegramMessageToChat(
+          String(chatId),
+          [
+            "ไม่ได้รับอนุญาตให้ล้างป้าย breakout1hConfirmFail (4h)",
+            "",
+            "ตั้งค่า env: KOJI_ADMIN_IDS=<Telegram user id ของคุณ>",
+            "(หลายคนคั่นด้วยจุลภาค) แล้ว redeploy",
+          ].join("\n"),
+          threadOpts,
+        );
+      } catch (e) {
+        console.error("[telegram/webhook] snowball 4h confirm clear deny reply", e);
+      }
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const r = await clearSnowball4hBreakout1hConfirmFail();
+      const lines = [
+        "✅ Snowball stats — ล้าง breakout1hConfirmFail (แถว 4h)",
+        "",
+        `แถวทั้งหมดในตาราง: ${r.totalRows}`,
+        `แถวที่ตรงเงื่อนไข (4h + flag=true): ${r.matched}`,
+        `อัปเดตเป็น false: ${r.updated}`,
+      ];
+      if (r.samples.length > 0) {
+        lines.push("", "ตัวอย่างแถวที่แก้:");
+        for (const s of r.samples) lines.push(`  · ${s}`);
+        if (r.matched > r.samples.length) {
+          lines.push(`  … และอีก ${r.matched - r.samples.length} แถว`);
+        }
+      } else if (r.updated === 0) {
+        lines.push("", "ไม่มีแถวที่ต้องแก้ — ป้ายถูกล้างครบแล้ว");
+      }
+      lines.push("", "รีเฟรช Mini App «สถิติ Snowball» เพื่อดู checklist 1H Confirm ใหม่");
+      await sendTelegramMessageToChat(String(chatId), lines.join("\n"), threadOpts);
+    } catch (e) {
+      console.error("[telegram/webhook] snowball 4h confirm clear", e);
+      const detail = e instanceof Error ? e.message : String(e);
+      try {
+        await sendTelegramMessageToChat(String(chatId), `ทำไม่สำเร็จ — ${detail.slice(0, 300)}`, threadOpts);
+      } catch (sendErr) {
+        console.error("[telegram/webhook] snowball 4h confirm clear error reply", sendErr);
       }
     }
     return NextResponse.json({ ok: true });

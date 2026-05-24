@@ -2,8 +2,11 @@
 
 import {
   snowballGradeChecklistMark,
+  snowballStatsConfirmGateStepsAllPass,
+  snowballStatsConfirmOk,
   snowballStatsGradeChecklist,
   snowballStatsGradeChecklistFooter,
+  snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
 import { statsFmtPctCell } from "@/lib/statsCsv";
 import { formatFunding } from "@/src/marketsFormat";
@@ -193,8 +196,11 @@ export function snowballStatsGradeDisplayLabel(
 export type { SnowballGradeChecklistItem } from "@/lib/snowballGradeChecklist";
 export {
   snowballGradeChecklistMark,
+  snowballStatsConfirmGateStepsAllPass,
+  snowballStatsConfirmOk,
   snowballStatsGradeChecklist,
   snowballStatsGradeChecklistFooter,
+  snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
 
 /** @deprecated ใช้ snowballStatsGradeChecklist + footer ใน popup */

@@ -52,16 +52,65 @@ function isStructureTier(tier: string | undefined): tier is SnowballLongStructur
   return tier === "a_plus" || tier === "b_plus" || tier === "c_plus";
 }
 
-function confirmOk(
+/** confirmGateSteps บันทึกครบและทุกขั้น ok */
+export function snowballStatsConfirmGateStepsAllPass(
+  row: Pick<SnowballStatsRow, "confirmGateSteps">,
+): boolean {
+  const steps = row.confirmGateSteps;
+  return Array.isArray(steps) && steps.length > 0 && steps.every((s) => s.ok === true);
+}
+
+/**
+ * ป้ายเก่า breakout1hConfirmFail — ไม่ใช้เมื่อ Master 4h หรือ snapshot gate ผ่านครบ
+ * (ใช้ร่วม checklist + migration API)
+ */
+export function snowballStatsLegacyBreakout1hConfirmFailIgnored(
+  row: Pick<SnowballStatsRow, "breakout1hConfirmFail" | "signalBarTf" | "confirmGateSteps">,
+): boolean {
+  if (row.breakout1hConfirmFail !== true) return false;
+  return row.signalBarTf === "4h" || snowballStatsConfirmGateStepsAllPass(row);
+}
+
+/** ผ่านหัวข้อ 1H Confirm / two-bar ตาม snapshot หน้างาน (ไม่สะท้อนเกรด F จาก momentum) */
+export function snowballStatsConfirmOk(
   row: Pick<
     SnowballStatsRow,
-    "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail" | "momentumFailGradeF"
+    | "qualityTier"
+    | "alertQualityTier"
+    | "breakout1hConfirmFail"
+    | "momentumFailGradeF"
+    | "confirmGateSteps"
+    | "signalBarTf"
   >,
 ): boolean {
+  if (snowballStatsConfirmGateStepsAllPass(row)) return true;
+
+  if (row.signalBarTf === "4h") {
+    const steps = row.confirmGateSteps;
+    if (steps?.length) return false;
+    return true;
+  }
+
+  if (snowballStatsLegacyBreakout1hConfirmFailIgnored(row)) return true;
+
   const grade = effectiveQualityTier(row);
   if (!grade || snowballIsGradeF(grade) || row.momentumFailGradeF) return false;
   if (row.breakout1hConfirmFail === true) return false;
   return true;
+}
+
+function confirmOk(
+  row: Pick<
+    SnowballStatsRow,
+    | "qualityTier"
+    | "alertQualityTier"
+    | "breakout1hConfirmFail"
+    | "momentumFailGradeF"
+    | "confirmGateSteps"
+    | "signalBarTf"
+  >,
+): boolean {
+  return snowballStatsConfirmOk(row);
 }
 
 function momentumOk(
@@ -142,7 +191,7 @@ function confirmFailCriteria(
   const fails: string[] = [];
   const grade = effectiveQualityTier(row);
 
-  if (row.breakout1hConfirmFail) {
+  if (row.breakout1hConfirmFail && !snowballStatsLegacyBreakout1hConfirmFailIgnored(row)) {
     fails.push("1H confirm ไม่ผ่าน (breakout1hConfirmFail — แถวเก่า)");
   } else if (snowballIsGradeF(grade) || row.momentumFailGradeF) {
     fails.push("เกรด F (Long): momentum และ/หรือ 1H confirm ไม่ผ่านตอนแจ้งเตือน");
@@ -156,11 +205,6 @@ function confirmFailCriteria(
   }
 
   fails.push(...confirmVolSnapshotLines(row));
-
-  if (row.confirmGateSteps?.length) {
-    fails.push("ขั้นใน snapshot บันทึกว่าผ่านหมด — ดูรายการด้านล่าง");
-    fails.push(...row.confirmGateSteps.map((s) => `${s.ok ? "✓" : "✗"} ${s.label}: ${s.detail}`));
-  }
 
   if (fails.length === 0) {
     fails.push("1H confirm ไม่ผ่าน (ไม่มีข้อมูลขั้น)");
@@ -306,8 +350,12 @@ export function snowballStatsGradeChecklist(
       status: cOk ? "pass" : "fail",
       detail: cOk
         ? row.signalBarTf === "4h"
-          ? "two-bar inline ผ่านครบ"
-          : "Breakout 1H ผ่านครบ"
+          ? snowballStatsConfirmGateStepsAllPass(row)
+            ? "two-bar inline ผ่านครบ"
+            : "two-bar inline (4H)"
+          : snowballStatsConfirmGateStepsAllPass(row)
+            ? "Breakout 1H ผ่านครบ"
+            : "Breakout 1H ผ่าน"
         : confirmFailDetail(row, confirmFails),
       failCriteria: cOk ? undefined : confirmFails.length > 0 ? confirmFails : ["1H confirm ไม่ผ่าน"],
     },

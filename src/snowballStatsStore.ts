@@ -14,6 +14,9 @@ import type { SnowballLongStructureTier } from "@/src/snowballLongBreakoutGrade"
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 import {
+  snowballStatsLegacyBreakout1hConfirmFailIgnored,
+} from "@/lib/snowballGradeChecklist";
+import {
   SNOWBALL_TREND_1H_DD_LOOKBACK,
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
 } from "./snowballTrendMomentumMetrics";
@@ -208,10 +211,61 @@ export function migrateSnowballStatsStructureTier(rows: SnowballStatsRow[]): num
   return updated;
 }
 
+export type ClearSnowball4hBreakout1hConfirmFailResult = {
+  totalRows: number;
+  matched: number;
+  updated: number;
+  samples: string[];
+};
+
+/** ล้าง breakout1hConfirmFail บนแถว Master 4h (ป้าย legacy) */
+export function migrateSnowball4hBreakout1hConfirmFail(rows: SnowballStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (row.signalBarTf === "4h" && row.breakout1hConfirmFail === true) {
+      row.breakout1hConfirmFail = false;
+      updated += 1;
+    }
+  }
+  return updated;
+}
+
+/** โหลด stats → ล้างป้าย 4h → บันทึก (ใช้จาก Telegram admin / script) */
+export async function clearSnowball4hBreakout1hConfirmFail(): Promise<ClearSnowball4hBreakout1hConfirmFailResult> {
+  const state = await loadSnowballStatsState();
+  const matched = state.rows.filter((r) => r.signalBarTf === "4h" && r.breakout1hConfirmFail === true);
+  const samples = matched
+    .slice(0, 12)
+    .map((r) => `${r.symbol} · ${r.alertedAtIso ?? String(r.alertedAtMs)}`);
+  const updated = migrateSnowball4hBreakout1hConfirmFail(state.rows);
+  if (updated > 0) await saveSnowballStatsState(state);
+  return {
+    totalRows: state.rows.length,
+    matched: matched.length,
+    updated,
+    samples,
+  };
+}
+
+/** ล้าง breakout1hConfirmFail เมื่อ 4h หรือ confirmGateSteps ผ่านครบ (ป้ายเก่าไม่ตรง snapshot) */
+export function migrateSnowballStatsClearSupersededBreakout1hConfirmFail(
+  rows: SnowballStatsRow[],
+): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (row.breakout1hConfirmFail !== true) continue;
+    if (!snowballStatsLegacyBreakout1hConfirmFailIgnored(row)) continue;
+    row.breakout1hConfirmFail = false;
+    updated += 1;
+  }
+  return updated;
+}
+
 /** รัน migration แถวสถิติ (เรียกตอนโหลด API + tick follow-up) */
 export function applySnowballStatsRowMigrations(rows: SnowballStatsRow[]): number {
   return (
     migrateSnowballStatsLegacyGradeD(rows) +
+    migrateSnowballStatsClearSupersededBreakout1hConfirmFail(rows) +
     migrateSnowballStatsLongAlertTradeSideToLong(rows) +
     migrateSnowballStatsStructureTier(rows)
   );

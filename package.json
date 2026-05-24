@@ -6,7 +6,9 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev -p 3001",
-    "start": "next start -p 3001"
+    "start": "next start -p 3001",
+    "snowball:clear-4h-breakout1h-fail": "node scripts/clear-snowball-4h-breakout1h-confirm-fail.mjs",
+    "snowball:clear-4h-breakout1h-fail:dry": "node scripts/clear-snowball-4h-breakout1h-confirm-fail.mjs --dry-run"
   },
   "engines": {
     "node": ">=20"
