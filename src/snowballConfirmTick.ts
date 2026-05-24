@@ -386,7 +386,6 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               qualityTier: item.qualityTier,
               alertQualityTier: item.qualityTier,
               ...(item.statsStructureTier ? { structureTier: item.statsStructureTier } : {}),
-              breakout1hConfirmFail: false,
               momentumDowngrade: item.qualityTier === "d_plus",
               momentumFailGradeF: item.qualityTier === "f_plus",
               atr100: item.statsAtr100 ?? null,

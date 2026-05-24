@@ -110,6 +110,8 @@ function confirmOk(
     | "signalBarTf"
   >,
 ): boolean {
+  const grade = effectiveQualityTier(row);
+  if (!grade || snowballIsGradeF(grade) || row.momentumFailGradeF) return false;
   return snowballStatsConfirmOk(row);
 }
 
@@ -145,6 +147,15 @@ function momentumFailCriteria(
     fails.push(
       `Vol↗ ไม่ผ่าน (volume cascade · ยอม vol ไม่ยกฐานได้ ≤${maxDrops} ครั้งใน ${SNOWBALL_TREND_1H_VOL_LOOKBACK} แท่ง)`,
     );
+  }
+  const strictMult =
+    row.volMultAtAlert != null && Number.isFinite(row.volMultAtAlert) && row.volMultAtAlert > 0
+      ? row.volMultAtAlert
+      : SNOWBALL_STATS_VOL_STRICT_MULT;
+  if (row.volStrictOk === false) {
+    fails.push(`Vol แท่งสัญญาณไม่ถึง ≥${strictMult}× SMA`);
+  } else if (row.volStrictOk == null && row.signalVolVsSma != null && row.signalVolVsSma < strictMult) {
+    fails.push(`Vol แท่งสัญญาณ ${row.signalVolVsSma.toFixed(2)}× < ${strictMult}× SMA`);
   }
   if (fails.length === 0) {
     fails.push("Sustained buying pressure ไม่ผ่าน (DD 1H% + Vol↗ รวมกัน)");

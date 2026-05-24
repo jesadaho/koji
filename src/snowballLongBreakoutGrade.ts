@@ -1,6 +1,9 @@
 import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
 import type { SnowballLongBreakout1hConfirmEval } from "./snowballLongBreakoutConfirm";
+import { resolveSnowballLong4hPipeline } from "./snowballLongGrade4hPipeline";
+import type { TrendMomentumMetrics } from "./snowballTrendMomentumMetrics";
+import type { SnowballTwoBarInlineEval } from "./snowballTwoBarInline";
 
 /** เกรดสุทธิที่แจ้ง / บันทึกสถิติ (Single-Layer Matrix) */
 export type SnowballLongBreakoutGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus";
@@ -37,6 +40,9 @@ export type ResolveSnowballLongFinalGradeInput = {
   swing48: boolean;
   swing200: boolean;
   vahOk: boolean;
+  /** ผล two-bar inline (4h) — ใช้ pipeline 4h */
+  twoBarEval?: SnowballTwoBarInlineEval | null;
+  trendMomentum?: TrendMomentumMetrics | null;
   /** ผ่าน two-bar inline (pullback / vol / 1h min-low) แล้ว — ถือ 1H confirm ผ่าน */
   twoBarInlinePassed: boolean;
   /** Snowball TF ≠ 4h และเปิด Long Breakout 1H */
@@ -156,11 +162,31 @@ export function snowballStructureGradeShortLabel(g: SnowballLongBreakoutGrade): 
 
 /**
  * Single-Layer Matrix — คืนเกรดสุทธิหรือ BLOCK ครั้งเดียว
- * ลำดับ: B near-miss (1H eval ผ่าน) → F near-miss (1H eval ไม่ผ่าน) → A+/B/C → D+ → F คลาสสิก → BLOCK
+ * Master 4h → resolveSnowballLong4hPipeline (โครงสร้าง → two-bar → momentum)
  */
 export function resolveSnowballLongFinalGrade(
   input: ResolveSnowballLongFinalGradeInput,
 ): SnowballLongGradeResolution {
+  if (input.snowTf === "4h") {
+    const twoBar =
+      input.twoBarEval ??
+      ({
+        ok: input.twoBarInlinePassed,
+        pullbackOk: input.twoBarInlinePassed,
+        volRatioOk: input.twoBarInlinePassed,
+        minLow1hOk: input.twoBarInlinePassed,
+        detail: input.twoBarInlinePassed ? "two-bar inline ผ่าน" : "two-bar inline ไม่ผ่าน",
+      } satisfies SnowballTwoBarInlineEval);
+    return resolveSnowballLong4hPipeline({
+      swing48: input.swing48,
+      swing200: input.swing200,
+      vahOk: input.vahOk,
+      twoBar,
+      trendMomentum: input.trendMomentum ?? null,
+      volumeStrictOk: input.volumeStrictOk,
+    });
+  }
+
   const structureOk = snowballLongStructurePassesMain(input.swing48, input.vahOk);
   if (!structureOk) {
     return { kind: "block", reason: "structure_fail", detail: "โครงสร้าง 4H ไม่ผ่าน (ไม่มี Swing HH48 / VAH)" };

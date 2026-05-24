@@ -140,7 +140,7 @@ export async function applySnowballStatsGrade4hFollowUp(
         : row.qualityTier ?? newGrade;
   }
 
-  if (snowballStatsIsLongConfirmFailRow(row) || row.breakout1hConfirmFail) {
+  if (snowballStatsIsLongConfirmFailRow(row)) {
     let pack1h = pack4hCache.get(`${sym}|1h`);
     if (pack1h === undefined) {
       try {
@@ -160,10 +160,9 @@ export async function applySnowballStatsGrade4hFollowUp(
     }
   }
 
-  if (row.qualityTier === newGrade && row.breakout1hConfirmFail === false) return false;
+  if (row.qualityTier === newGrade) return false;
 
   row.qualityTier = newGrade;
-  row.breakout1hConfirmFail = false;
   row.qualityTier4hAdjusted = true;
   return true;
 }

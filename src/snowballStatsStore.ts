@@ -271,29 +271,24 @@ export function applySnowballStatsRowMigrations(rows: SnowballStatsRow[]): numbe
   );
 }
 
-/** แถวเก่า qualityTier=d_plus ที่ไม่มี alertQualityTier → ติดป้าย confirm fail (ไม่แตะ D+ ที่ alert = A+/B/C) */
+/** แถวเก่า — ล้าง breakout1hConfirmFail · เติม momentumDowngrade บน D+ จากโครงสร้าง */
 export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): number {
   let updated = 0;
   for (const row of rows) {
-    if (row.qualityTier !== "d_plus") continue;
-    const alert = row.alertQualityTier;
-    const isMomentumDPlus =
-      alert === "a_plus" || alert === "b_plus" || alert === "c_plus";
     let touched = false;
-    if (isMomentumDPlus) {
-      if (row.breakout1hConfirmFail) {
-        row.breakout1hConfirmFail = false;
-        touched = true;
-      }
-      if (!row.momentumDowngrade) {
-        row.momentumDowngrade = true;
-        touched = true;
-      }
+    if (row.breakout1hConfirmFail === true) {
+      row.breakout1hConfirmFail = false;
+      touched = true;
+    }
+    if (row.qualityTier !== "d_plus") {
       if (touched) updated += 1;
       continue;
     }
-    if (!row.breakout1hConfirmFail) {
-      row.breakout1hConfirmFail = true;
+    const alert = row.alertQualityTier;
+    const isMomentumDPlus =
+      alert === "a_plus" || alert === "b_plus" || alert === "c_plus";
+    if (isMomentumDPlus && !row.momentumDowngrade) {
+      row.momentumDowngrade = true;
       touched = true;
     }
     if (!row.alertQualityTier) {
@@ -359,7 +354,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       ? { structureTier: input.structureTier }
       : {}),
     alertQualityTier: input.alertQualityTier ?? input.qualityTier,
-    breakout1hConfirmFail: Boolean(input.breakout1hConfirmFail),
+    ...(input.breakout1hConfirmFail === true ? { breakout1hConfirmFail: true } : {}),
     momentumDowngrade: input.momentumDowngrade === true,
     momentumFailGradeF: input.momentumFailGradeF === true,
     atr100,
