@@ -12,9 +12,7 @@ import {
   snowballVolSmaMeetsGradeCMin,
 } from "@/src/snowballLongGrade4hPipeline";
 import {
-  SNOWBALL_TREND_1H_DD_LOOKBACK,
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
-  snowballTrendMomentumMaxDrawbackPct,
   snowballTrendMomentumMaxVolumeDrops,
 } from "@/src/snowballTrendMomentumMetrics";
 import type { SnowballStatsQualityTier, SnowballStatsRow } from "@/lib/snowballStatsClient";
@@ -119,13 +117,14 @@ function confirmOk(
   return snowballStatsConfirmOk(row);
 }
 
-/** Vol↗ ผ่าน แต่ DD หรือ Vol×SMA ไม่ผ่าน → เกรดสุดทธิ C (โครงสร้างอาจสูงกว่า) */
+/** Vol↗ ผ่าน แต่ momentum ไม่ครบ / Vol×SMA ไม่ผ่าน → เกรดสุดทธิ C */
 function isVolCascadePassPartialMomentumC(
   row: Pick<
     SnowballStatsRow,
     | "qualityTier"
     | "alertQualityTier"
-    | "maxDrawback1hPct"
+    | "momentumDowngrade"
+    | "momentumFailGradeF"
     | "volumeCascadeYn"
     | "signalVolVsSma"
     | "volStrictOk"
@@ -135,22 +134,17 @@ function isVolCascadePassPartialMomentumC(
   const grade = effectiveQualityTier(row);
   if (grade !== "c_plus" || row.volumeCascadeYn !== "Y") return false;
   if (!snowballVolSmaMeetsGradeCMin(row.signalVolVsSma)) return false;
-  const ddMax = snowballTrendMomentumMaxDrawbackPct();
   const strictMult =
     row.volMultAtAlert != null && Number.isFinite(row.volMultAtAlert) && row.volMultAtAlert > 0
       ? row.volMultAtAlert
       : SNOWBALL_STATS_VOL_STRICT_MULT;
-  const ddFail =
-    row.maxDrawback1hPct == null ||
-    !Number.isFinite(row.maxDrawback1hPct) ||
-    row.maxDrawback1hPct > ddMax;
   const volStrictFail =
     row.volStrictOk === false ||
     (row.volStrictOk == null &&
       row.signalVolVsSma != null &&
       Number.isFinite(row.signalVolVsSma) &&
       row.signalVolVsSma < strictMult);
-  return ddFail || volStrictFail;
+  return volStrictFail || row.momentumDowngrade === true || row.momentumFailGradeF === true;
 }
 
 function momentumOk(
@@ -160,7 +154,6 @@ function momentumOk(
     | "alertQualityTier"
     | "momentumDowngrade"
     | "momentumFailGradeF"
-    | "maxDrawback1hPct"
     | "volumeCascadeYn"
     | "signalVolVsSma"
     | "volStrictOk"
@@ -177,7 +170,6 @@ function momentumOk(
 function momentumFailCriteria(
   row: Pick<
     SnowballStatsRow,
-    | "maxDrawback1hPct"
     | "volumeCascadeYn"
     | "qualityTier"
     | "alertQualityTier"
@@ -195,13 +187,10 @@ function momentumFailCriteria(
       `Vol↗ ผ่าน + Vol×SMA ≥${SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C}× — เกรดสุทธิ C (โครงสร้างสูงกว่าได้)`,
     );
   }
-  const ddMax = snowballTrendMomentumMaxDrawbackPct();
-  if (row.maxDrawback1hPct == null || !Number.isFinite(row.maxDrawback1hPct)) {
-    fails.push(`DD 1H% — ไม่มีข้อมูล (${SNOWBALL_TREND_1H_DD_LOOKBACK} แท่ง 1H ปิด)`);
-  } else if (row.maxDrawback1hPct > ddMax) {
-    fails.push(
-      `DD 1H% เกินเกณฑ์ (${row.maxDrawback1hPct.toFixed(2)}% > ${ddMax}% · ไส้สูงสุดใน ${SNOWBALL_TREND_1H_DD_LOOKBACK} แท่ง)`,
-    );
+  if (row.momentumFailGradeF) {
+    fails.push("Momentum ไม่ผ่าน (2+ รายการ)");
+  } else if (row.momentumDowngrade) {
+    fails.push("Momentum ลดเกรด (1 รายการ)");
   }
   const maxDrops = snowballTrendMomentumMaxVolumeDrops();
   if (row.volumeCascadeYn == null) {
@@ -221,7 +210,7 @@ function momentumFailCriteria(
     fails.push(`Vol แท่งสัญญาณ ${row.signalVolVsSma.toFixed(2)}× < ${strictMult}× SMA`);
   }
   if (fails.length === 0) {
-    fails.push("Sustained buying pressure ไม่ผ่าน (DD 1H% + Vol↗ รวมกัน)");
+    fails.push("Sustained buying pressure ไม่ผ่าน (Vol↗ / Vol×SMA)");
   }
   return fails;
 }
@@ -367,7 +356,6 @@ export function snowballStatsGradeChecklist(
     | "confirmVolVsSma"
     | "confirmVolRank"
     | "confirmVolRankLb"
-    | "maxDrawback1hPct"
     | "volumeCascadeYn"
   >,
 ): SnowballGradeChecklistItem[] {
@@ -460,9 +448,9 @@ export function snowballStatsGradeChecklist(
       title: "Momentum 1H (sustained)",
       status: mOk ? "pass" : "fail",
       detail: mOk
-        ? `DD 1H% + Vol↗ ผ่าน`
-        : row.maxDrawback1hPct != null && row.volumeCascadeYn != null
-          ? `DD 1H% ${row.maxDrawback1hPct.toFixed(2)}% · Vol↗ ${row.volumeCascadeYn}`
+        ? `Vol↗ ผ่าน · Vol×SMA ผ่าน`
+        : row.volumeCascadeYn != null
+          ? `Vol↗ ${row.volumeCascadeYn}${row.momentumDowngrade ? " · ลดเกรด" : ""}${row.momentumFailGradeF ? " · F-path" : ""}`
           : "ไม่ผ่าน",
       failCriteria: mOk ? undefined : momentumFails,
     },
@@ -498,8 +486,9 @@ type StagedPopupRow = Pick<
   | "volStrictOk"
   | "volMultAtAlert"
   | "confirmGateSteps"
-  | "maxDrawback1hPct"
   | "volumeCascadeYn"
+  | "momentumDowngrade"
+  | "momentumFailGradeF"
   | "qualityTier4hAdjusted"
   | "alertedAtIso"
 >;
@@ -527,11 +516,7 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
   const steps = row.confirmGateSteps ?? [];
   const hasTwoBarSteps = steps.length >= 3;
 
-  const ddMax = snowballTrendMomentumMaxDrawbackPct();
   const maxVolDrops = snowballTrendMomentumMaxVolumeDrops();
-  const ddPct = row.maxDrawback1hPct;
-  const ddOk =
-    ddPct != null && Number.isFinite(ddPct) && ddPct <= ddMax;
   const volDrops =
     row.volumeCascadeYn === "Y"
       ? 0
@@ -547,9 +532,10 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
       row.signalVolVsSma >= strictMult);
 
   let failCount = 0;
-  if (!ddOk) failCount += 1;
   if (!volCascadeOk) failCount += 1;
   if (!volStrictOk) failCount += 1;
+  if (row.momentumFailGradeF) failCount = Math.max(failCount, 2);
+  else if (row.momentumDowngrade) failCount = Math.max(failCount, 1);
 
   const volCascadeGradeC =
     volCascadeOk &&
@@ -606,7 +592,6 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
   lines.push(
     "",
     `🟡 [STAGE 3: MOMENTUM & VOL 1H] -> ${stage3Head}`,
-    `  [${stageLineMark(ddOk)}] DD 1H% (${SNOWBALL_TREND_1H_DD_LOOKBACK} Bars) : Max Wick ${ddPct != null ? ddPct.toFixed(2) : "—"}% (Limit <= ${ddMax}%)${!ddOk ? " -> [FAILED]" : ""}`,
     `  [${stageLineMark(volCascadeOk)}] Vol Cascade ${SNOWBALL_TREND_1H_VOL_LOOKBACK}B  : ${volDrops != null ? volDrops : "—"} Times Drop  (Limit <= ${maxVolDrops} Time)${!volCascadeOk ? " -> [FAILED]" : ""}`,
     `  [${stageLineMark(volStrictOk)}] Signal Vol Spurt: ${volRatioStr}x SMA      (Limit > ${strictMult}x)${!volStrictOk ? " -> [FAILED]" : ""}`,
     "",

@@ -17,7 +17,6 @@ import {
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
 import {
-  SNOWBALL_TREND_1H_DD_LOOKBACK,
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
 } from "./snowballTrendMomentumMetrics";
 
@@ -147,9 +146,7 @@ export type AppendSnowballStatsInput = {
   volMultAtAlert?: number | null;
   volNearMultAtAlert?: number | null;
   confirmGateSteps?: SnowballStatsGateStep[];
-  maxDrawback1hPct?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
-  trendMomentumLookback?: number | null;
   trendMomentumVolLookback?: number | null;
   /** Snowball LONG 1H breakout / pending confirm bar */
   confirmVolVsSma?: number | null;
@@ -452,13 +449,8 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
               (s.ok === true || s.ok === false),
           )
         : undefined,
-    maxDrawback1hPct:
-      input.maxDrawback1hPct != null && Number.isFinite(input.maxDrawback1hPct) && input.maxDrawback1hPct >= 0
-        ? input.maxDrawback1hPct
-        : null,
     volumeCascadeYn:
       input.volumeCascadeYn === "Y" || input.volumeCascadeYn === "N" ? input.volumeCascadeYn : null,
-    trendMomentumLookback: SNOWBALL_TREND_1H_DD_LOOKBACK,
     trendMomentumVolLookback: SNOWBALL_TREND_1H_VOL_LOOKBACK,
     confirmVolVsSma,
     confirmVolRank,

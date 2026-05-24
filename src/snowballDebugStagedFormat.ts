@@ -21,7 +21,7 @@ import {
   snowballGradeFOnMomentumAnd1hConfirmFail,
   snowballTrendMomentumMaxDrawbackPct,
   snowballTrendMomentumMaxVolumeDrops,
-  SNOWBALL_TREND_1H_DD_LOOKBACK,
+  SNOWBALL_TREND_15M_DD_LOOKBACK,
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
 } from "./snowballTrendMomentumMetrics";
 import {
@@ -42,6 +42,7 @@ export type Snowball4hStagedDebugInput = {
   volume: number[];
   timeSec: number[];
   pack1h: BinanceKlinePack | null;
+  pack15m?: BinanceKlinePack | null;
   swingLb: number;
   swingGradeLb: number;
   swingEx: number;
@@ -176,7 +177,7 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     minL = snowballMinLow1hBetweenClosedBars(pack1h.timeSec, pack1h.low, sigOpen, confEnd);
   }
 
-  const trendMomentum = calculateTrendMomentumMetrics(pack1h);
+  const trendMomentum = calculateTrendMomentumMetrics(pack1h, { pack15m: input.pack15m ?? null });
   const pipelineInput = {
     swing48: input.swing48,
     swing200: input.swing200,
@@ -262,7 +263,7 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     `  [${stageMark(twoBar.minLow1hOk)}] Min-Low 1H Check: Min ${minL != null ? fmtPx(minL) : "—"} >= Signal Low ${fmtPx(sigL)}`,
     "",
     `🟡 [STAGE 3: MOMENTUM & VOL 1H] -> ${stage3Head}`,
-    `  [${stageMark(ddOk)}] DD 1H% (${SNOWBALL_TREND_1H_DD_LOOKBACK} Bars) : Max Wick ${ddPct != null ? ddPct.toFixed(2) : "—"}% (Limit <= ${ddMax}%)${!ddOk ? " -> [FAILED]" : ""}`,
+    `  [${stageMark(ddOk)}] Max DD 15m (${SNOWBALL_TREND_15M_DD_LOOKBACK} Bars) : ${ddPct != null ? ddPct.toFixed(2) : "—"}% (Limit <= ${ddMax}%)${!ddOk ? " -> [FAILED]" : ""}`,
     `  [${stageMark(volCascadeOk)}] Vol Cascade ${SNOWBALL_TREND_1H_VOL_LOOKBACK}B  : ${volDrops != null ? volDrops : "—"} Times Drop  (Limit <= ${maxVolDrops} Time)${!volCascadeOk ? " -> [FAILED]" : ""}`,
     `  [${stageMark(volStrictOk)}] Signal Vol Spurt: ${signalVolVsSma != null ? `${signalVolVsSma.toFixed(2)}x` : "—"} SMA      (Limit > ${volMult}x)${!volStrictOk ? " -> [FAILED]" : ""}`,
     "",

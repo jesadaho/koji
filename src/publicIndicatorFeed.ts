@@ -82,6 +82,7 @@ import {
   snowballGradeFOnMomentumAnd1hConfirmFail,
   snowballGradeBRequiresSustainedMomentum,
   snowballGradeBSustainedMarginScale,
+  SNOWBALL_TREND_15M_DD_BARS,
   type TrendMomentumMetrics,
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
@@ -2604,6 +2605,7 @@ export async function runPublicIndicatorFeedInternal(
   const packsCore: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   const packsDiv1hExtra: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   const packsDiv4hExtra: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
+  const packs15mMomentum: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   const snowTf = snowballBinanceTf();
   const snowballPacks: (Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> | null)[] = [];
   const snowSwingLb = snowballSwingLookbackBars();
@@ -2651,10 +2653,15 @@ export async function runPublicIndicatorFeedInternal(
       packsDiv4hExtra.push(...chunk.map(() => null));
     }
     if (effectiveSnowballOn) {
-      const partSb = await Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, snowTf, snowFetchBars)));
+      const [partSb, part15m] = await Promise.all([
+        Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, snowTf, snowFetchBars))),
+        Promise.all(chunk.map((s) => fetchBinanceUsdmKlines(s, "15m", SNOWBALL_TREND_15M_DD_BARS))),
+      ]);
       snowballPacks.push(...partSb);
+      packs15mMomentum.push(...part15m);
     } else {
       snowballPacks.push(...chunk.map(() => null));
+      packs15mMomentum.push(...chunk.map(() => null));
     }
   }
 
@@ -3263,7 +3270,9 @@ export async function runPublicIndicatorFeedInternal(
         }
 
         const pack1hTrend = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
-        const trendMomentum: TrendMomentumMetrics | null = calculateTrendMomentumMetrics(pack1hTrend);
+        const trendMomentum: TrendMomentumMetrics | null = calculateTrendMomentumMetrics(pack1hTrend, {
+          pack15m: packs15mMomentum[idx] ?? null,
+        });
         const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
 
         const gradeResolution: SnowballLongGradeResolution = !intrabar
@@ -4129,7 +4138,9 @@ export async function runPublicIndicatorFeedInternal(
             const bearVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
             const bearMktCtx = !intrabar ? await fetchSnowballAlertMarketContext(symbol) : null;
             const pack1hTrendBear = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
-            const trendMomentumBear = calculateTrendMomentumMetrics(pack1hTrendBear);
+            const trendMomentumBear = calculateTrendMomentumMetrics(pack1hTrendBear, {
+              pack15m: packs15mMomentum[idx] ?? null,
+            });
             if (!twoBarInline && !intrabar && bearConfirmTrigger && bearRiskFlags.length > 0) {
               try {
                 await addSnowballPendingConfirm({
@@ -4430,6 +4441,7 @@ function buildSnowballChecklistGradeDebug(input: {
   longBreakout1hChecklistOn: boolean;
   twoBarChecklistOn: boolean;
   pack1h: BinanceKlinePack | null;
+  pack15m?: BinanceKlinePack | null;
   twoBarConfirmGateRows: { long: SnowballCheckStep[]; bear: SnowballCheckStep[] } | null | undefined;
   dbOn: boolean;
 }): { long: string[]; bear: string[] } {
@@ -4473,7 +4485,9 @@ function buildSnowballChecklistGradeDebug(input: {
   const volStrictOk = snowballVolumeOk(false, vE, vsE, volMult);
   const volNearMissOnly = snowballVolumeNearMissOnly(false, vE, vsE, volMult, volNearMult);
 
-  const trendMomentum = calculateTrendMomentumMetrics(input.pack1h);
+  const trendMomentum = calculateTrendMomentumMetrics(input.pack1h, {
+    pack15m: input.pack15m ?? null,
+  });
   const sustained = isSustainedBuyingPressure(trendMomentum);
 
   const gradeRes = resolveSnowballLongFinalGrade({
@@ -5277,12 +5291,18 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     snowballTwoBarInlineModeEnabled() && iClosed >= 2 && !longBreakout1hChecklistOn;
   const needPack1hChecklist = longBreakout1hChecklistOn || twoBarChecklistOn;
   let pack1hForTwoBarChecklist: BinanceKlinePack | null = null;
+  let pack15mForMomentumChecklist: BinanceKlinePack | null = null;
   if (needPack1hChecklist) {
     try {
       pack1hForTwoBarChecklist = await fetchBinanceUsdmKlines(symbol, "1h", 120);
     } catch (e) {
       errors.push(`checklist 1h: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120));
     }
+  }
+  try {
+    pack15mForMomentumChecklist = await fetchBinanceUsdmKlines(symbol, "15m", SNOWBALL_TREND_15M_DD_BARS);
+  } catch (e) {
+    errors.push(`checklist 15m momentum: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120));
   }
 
   if (longBreakout1hChecklistOn) {
@@ -5494,6 +5514,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     longBreakout1hChecklistOn,
     twoBarChecklistOn,
     pack1h: pack1hForTwoBarChecklist,
+    pack15m: pack15mForMomentumChecklist,
     twoBarConfirmGateRows: baseResult.twoBarConfirmGateRows,
     dbOn: dbOnChecklist,
   });
@@ -5565,6 +5586,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
       volume,
       timeSec,
       pack1h: pack1hForTwoBarChecklist,
+      pack15m: pack15mForMomentumChecklist,
       swingLb,
       swingGradeLb,
       swingEx,

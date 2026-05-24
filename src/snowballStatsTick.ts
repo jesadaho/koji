@@ -13,11 +13,9 @@ import {
   type SnowballStatsRow,
 } from "./snowballStatsStore";
 import {
-  calculateTrendMomentumMetrics,
+  calculateTrendMomentumVolumeCascadeYn,
   fetchSnowball1hPackForTrendMomentum,
-  SNOWBALL_TREND_1H_DD_LOOKBACK,
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
-  trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
 import { applySnowballStatsGrade4hFollowUp } from "./snowballStatsGrade4hFollowUp";
 import { buildSnowballLongConfirmGateStepsForStats } from "./snowballStatsGateSteps";
@@ -162,13 +160,8 @@ function pickHorizonClose(
 
 function rowNeedsTrendMomentumBackfill(row: SnowballStatsRow): boolean {
   if (row.volumeCascadeYn == null) return true;
-  if (row.maxDrawback1hPct == null) return true;
-  /** รีคำนวณ 8 แท่ง 1H ณ anchor เวลาแจ้ง — pending ทุกรอบ · แถวเก่ารีคำนวณเมื่อ lookback เปลี่ยน */
   if (row.outcome === "pending") return true;
-  return (
-    row.trendMomentumLookback !== SNOWBALL_TREND_1H_DD_LOOKBACK ||
-    row.trendMomentumVolLookback !== SNOWBALL_TREND_1H_VOL_LOOKBACK
-  );
+  return row.trendMomentumVolLookback !== SNOWBALL_TREND_1H_VOL_LOOKBACK;
 }
 
 function trendMomentumAnchorSec(row: SnowballStatsRow): number {
@@ -178,7 +171,7 @@ function trendMomentumAnchorSec(row: SnowballStatsRow): number {
   return snowballStatsAnchorCloseSec(row);
 }
 
-/** เติม/อัปเดต DD 1H% และ vol_cascade จากแท่ง 1H ณ เวลาแจ้งสัญญาณ */
+/** เติม/อัปเดต Vol↗ จากแท่ง 1H ณ เวลาแจ้งสัญญาณ */
 async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Promise<number> {
   const need = rows.filter(rowNeedsTrendMomentumBackfill);
   if (need.length === 0) return 0;
@@ -196,22 +189,13 @@ async function backfillSnowballTrendMomentumFields(rows: SnowballStatsRow[]): Pr
     const pack1h = await fetchSnowball1hPackForTrendMomentum(symbol);
     if (!pack1h) continue;
     for (const row of symRows) {
-      const metrics = calculateTrendMomentumMetrics(pack1h, {
+      const volumeCascadeYn = calculateTrendMomentumVolumeCascadeYn(pack1h, {
         asOfSec: trendMomentumAnchorSec(row),
       });
-      const fields = trendMomentumStatsFields(metrics);
-      if (fields.maxDrawback1hPct == null && fields.volumeCascadeYn == null) continue;
+      if (volumeCascadeYn == null) continue;
       let touched = false;
-      if (fields.maxDrawback1hPct != null && row.maxDrawback1hPct !== fields.maxDrawback1hPct) {
-        row.maxDrawback1hPct = fields.maxDrawback1hPct;
-        touched = true;
-      }
-      if (fields.volumeCascadeYn != null && row.volumeCascadeYn !== fields.volumeCascadeYn) {
-        row.volumeCascadeYn = fields.volumeCascadeYn;
-        touched = true;
-      }
-      if (row.trendMomentumLookback !== SNOWBALL_TREND_1H_DD_LOOKBACK) {
-        row.trendMomentumLookback = SNOWBALL_TREND_1H_DD_LOOKBACK;
+      if (row.volumeCascadeYn !== volumeCascadeYn) {
+        row.volumeCascadeYn = volumeCascadeYn;
         touched = true;
       }
       if (row.trendMomentumVolLookback !== SNOWBALL_TREND_1H_VOL_LOOKBACK) {

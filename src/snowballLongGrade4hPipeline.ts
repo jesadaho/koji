@@ -60,7 +60,7 @@ export function countSnowball4hMomentumFails(input: SnowballLong4hPipelineInput)
 
 function momentumMissParts(ddOk: boolean, volCascadeOk: boolean, volStrictOk: boolean): string {
   const parts: string[] = [];
-  if (!ddOk) parts.push("DD 1H%");
+  if (!ddOk) parts.push("Max DD");
   if (!volCascadeOk) parts.push("Vol↗");
   if (!volStrictOk) parts.push("Vol×SMA");
   return parts.length > 0 ? parts.join(" + ") : "momentum";

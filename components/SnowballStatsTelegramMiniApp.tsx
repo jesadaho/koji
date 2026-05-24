@@ -22,7 +22,6 @@ import {
   snowballStatsStagedPopupText,
   snowballStatsGradeDisplayLabel,
   snowballStatsGreenDaysLabel,
-  snowballStatsMaxDrawback1hLabel,
   snowballStatsSideLabel,
   snowballStatsFundingRateLabel,
   snowballStatsMarketCapUsdLabel,
@@ -456,12 +455,6 @@ export default function SnowballStatsTelegramMiniApp() {
                 </th>
                 <th
                   scope="col"
-                  title="ไส้บนหรือไส้ล่างที่ยาวสุด เป็น % ของช่วงแท่ง (H−L) ใน 8 แท่ง 1H ปิด ณ เวลาแจ้ง (สูงสุดไม่เกิน 100%)"
-                >
-                  DD 1H%
-                </th>
-                <th
-                  scope="col"
                   title="Vol cascade — volume 5 แท่ง 1H ล่าสุด ยอมไม่ยกฐานได้ 1 ครั้ง"
                 >
                   Vol↗
@@ -545,7 +538,6 @@ export default function SnowballStatsTelegramMiniApp() {
                     >
                       {snowballStatsFundingRateLabel(r.fundingRate)}
                     </td>
-                    <td>{snowballStatsMaxDrawback1hLabel(r.maxDrawback1hPct)}</td>
                     <td>{snowballStatsVolumeCascadeLabel(r.volumeCascadeYn)}</td>
                     <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal)}</td>
                     <td>{snowballStatsConfirmVolVsSmaLabel(r.confirmVolVsSma)}</td>

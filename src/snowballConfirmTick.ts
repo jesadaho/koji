@@ -34,6 +34,7 @@ import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 import {
   calculateTrendMomentumMetrics,
   isSustainedBuyingPressure,
+  SNOWBALL_TREND_15M_DD_BARS,
   snowballGradeBSustainedMarginScale,
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
@@ -232,10 +233,12 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
     const snowTf = first.snowTf;
     let pack: Awaited<ReturnType<typeof fetchBinanceUsdmKlines>> = null;
     let pack1hTrend: BinanceKlinePack | null = null;
+    let pack15mTrend: BinanceKlinePack | null = null;
     try {
-      [pack, pack1hTrend] = await Promise.all([
+      [pack, pack1hTrend, pack15mTrend] = await Promise.all([
         fetchBinanceUsdmKlines(symbol, snowTf, 80),
         fetchBinanceUsdmKlines(symbol, "1h", 120),
+        fetchBinanceUsdmKlines(symbol, "15m", SNOWBALL_TREND_15M_DD_BARS),
       ]);
     } catch (e) {
       console.error("[snowballConfirmTick] fetch kline", symbol, snowTf, e);
@@ -337,7 +340,9 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                   ? "swing_ll"
                   : "both";
             const sigOpen = iSig >= 0 && typeof barOpen[iSig] === "number" ? barOpen[iSig]! : item.signalClose;
-            const trendMomentum = calculateTrendMomentumMetrics(pack1hTrend);
+            const trendMomentum = calculateTrendMomentumMetrics(pack1hTrend, {
+              pack15m: pack15mTrend,
+            });
             const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
             let gradeCFadeOk = false;
             if (item.side === "long" && item.qualityTier === "c_plus") {
@@ -424,7 +429,9 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
           let autoSide: "long" | "short" | null = null;
           let gradeCFade: SnowballGradeCShortFadeResult | null = null;
           if (item.side === "long") {
-            const trendMomentumConfirm = calculateTrendMomentumMetrics(pack1hTrend);
+            const trendMomentumConfirm = calculateTrendMomentumMetrics(pack1hTrend, {
+              pack15m: pack15mTrend,
+            });
             const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentumConfirm);
             const resolved = await resolveSnowballLongAutotradeSide(
               item.symbol,
@@ -452,7 +459,9 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               const marginScale =
                 autoSide === "long" &&
                 longGrade === "b_plus" &&
-                isSustainedBuyingPressure(calculateTrendMomentumMetrics(pack1hTrend))
+                isSustainedBuyingPressure(
+                  calculateTrendMomentumMetrics(pack1hTrend, { pack15m: pack15mTrend })
+                )
                   ? snowballGradeBSustainedMarginScale()
                   : undefined;
               await runSnowballAutoTradeAfterSnowballAlert({

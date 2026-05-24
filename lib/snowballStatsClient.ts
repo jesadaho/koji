@@ -79,9 +79,7 @@ export type SnowballStatsRow = {
   marketCapUsd?: number | null;
   /** Funding rate MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม) */
   fundingRate?: number | null;
-  maxDrawback1hPct?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
-  trendMomentumLookback?: number | null;
   trendMomentumVolLookback?: number | null;
   /** Vol แท่งสัญญาณ ÷ SMA ณ เวลาแจ้ง */
   signalVolVsSma?: number | null;
@@ -303,11 +301,6 @@ export function snowballStatsBtcPsarCombinedLabel(
   const b = snowballStatsBtcPsarTrendChip("1h", trend1h);
   if (a === "4h—" && b === "1h—") return "—";
   return `${a} · ${b}`;
-}
-
-export function snowballStatsMaxDrawback1hLabel(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return "—";
-  return `${v.toFixed(2)}%`;
 }
 
 export function snowballStatsGreenDaysLabel(v: number | null | undefined): string {
