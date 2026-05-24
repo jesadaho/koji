@@ -36,11 +36,19 @@ function countMomentumFails(input: SnowballLong4hPipelineInput): {
   return { failCount, ddOk, volCascadeOk, volStrictOk };
 }
 
+function momentumMissParts(ddOk: boolean, volCascadeOk: boolean, volStrictOk: boolean): string {
+  const parts: string[] = [];
+  if (!ddOk) parts.push("DD 1H%");
+  if (!volCascadeOk) parts.push("Vol↗");
+  if (!volStrictOk) parts.push("Vol×SMA");
+  return parts.length > 0 ? parts.join(" + ") : "momentum";
+}
+
 /**
  * Snowball LONG Master 4h — เลเยอร์เดียว
  * 1) โครงสร้าง 4H ไม่ผ่าน → BLOCK
  * 2) Two-bar inline ไม่ผ่าน → F
- * 3) Momentum: 0 fail → A+/B/C · 1 fail → D+ · 2+ fail → F
+ * 3) Momentum ผ่านครบ → A+/B/C (โครงสร้าง) · Vol↗ ผ่านแต่ติดอย่างอื่น → C · อื่น ๆ D+ / F
  */
 export function resolveSnowballLong4hPipeline(input: SnowballLong4hPipelineInput): SnowballLongGradeResolution {
   if (!snowballLongStructurePassesMain(input.swing48, input.vahOk)) {
@@ -72,11 +80,21 @@ export function resolveSnowballLong4hPipeline(input: SnowballLong4hPipelineInput
   const { failCount, ddOk, volCascadeOk, volStrictOk } = countMomentumFails(input);
   const momentumOk = failCount === 0;
 
+  if (failCount > 0 && volCascadeOk) {
+    const miss = momentumMissParts(ddOk, volCascadeOk, volStrictOk);
+    return {
+      kind: "grade",
+      grade: "c_plus",
+      structureTier,
+      confirm1hOk: true,
+      momentumOk: false,
+      confirm1hEval: null,
+      footnote: `📎 Grade C (Long): โครงสร้าง ${snowballLongGradeShortLabel(structureTier)} · two-bar ผ่าน · Vol↗ ผ่าน · momentum อ่อน (${miss})`,
+    };
+  }
+
   if (failCount >= 2) {
-    const parts: string[] = [];
-    if (!ddOk) parts.push("DD 1H%");
-    if (!volCascadeOk) parts.push("Vol↗");
-    if (!volStrictOk) parts.push("Vol×SMA");
+    const miss = momentumMissParts(ddOk, volCascadeOk, volStrictOk);
     return {
       kind: "grade",
       grade: "f_plus",
@@ -84,19 +102,12 @@ export function resolveSnowballLong4hPipeline(input: SnowballLong4hPipelineInput
       confirm1hOk: true,
       momentumOk: false,
       confirm1hEval: null,
-      footnote: `📎 ${snowballLongGradeFLabel()}: โครงสร้าง ${snowballLongGradeShortLabel(structureTier)} · two-bar ผ่าน · momentum ไม่ผ่าน ${parts.length > 0 ? `(${parts.join(" + ")})` : ""}`,
+      footnote: `📎 ${snowballLongGradeFLabel()}: โครงสร้าง ${snowballLongGradeShortLabel(structureTier)} · two-bar ผ่าน · momentum ไม่ผ่าน (${miss})`,
     };
   }
 
   if (failCount === 1) {
-    const miss =
-      !ddOk && !volCascadeOk
-        ? "DD 1H% + Vol↗"
-        : !ddOk
-          ? "DD 1H%"
-          : !volCascadeOk
-            ? "Vol↗"
-            : "Vol×SMA < เกณฑ์";
+    const miss = momentumMissParts(ddOk, volCascadeOk, volStrictOk);
     return {
       kind: "grade",
       grade: "d_plus",

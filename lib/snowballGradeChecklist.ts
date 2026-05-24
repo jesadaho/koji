@@ -115,15 +115,57 @@ function confirmOk(
   return snowballStatsConfirmOk(row);
 }
 
+/** Vol↗ ผ่าน แต่ DD หรือ Vol×SMA ไม่ผ่าน → เกรดสุดทธิ C (โครงสร้างอาจสูงกว่า) */
+function isVolCascadePassPartialMomentumC(
+  row: Pick<
+    SnowballStatsRow,
+    | "qualityTier"
+    | "alertQualityTier"
+    | "maxDrawback1hPct"
+    | "volumeCascadeYn"
+    | "signalVolVsSma"
+    | "volStrictOk"
+    | "volMultAtAlert"
+  >,
+): boolean {
+  const grade = effectiveQualityTier(row);
+  if (grade !== "c_plus" || row.volumeCascadeYn !== "Y") return false;
+  const ddMax = snowballTrendMomentumMaxDrawbackPct();
+  const strictMult =
+    row.volMultAtAlert != null && Number.isFinite(row.volMultAtAlert) && row.volMultAtAlert > 0
+      ? row.volMultAtAlert
+      : SNOWBALL_STATS_VOL_STRICT_MULT;
+  const ddFail =
+    row.maxDrawback1hPct == null ||
+    !Number.isFinite(row.maxDrawback1hPct) ||
+    row.maxDrawback1hPct > ddMax;
+  const volStrictFail =
+    row.volStrictOk === false ||
+    (row.volStrictOk == null &&
+      row.signalVolVsSma != null &&
+      Number.isFinite(row.signalVolVsSma) &&
+      row.signalVolVsSma < strictMult);
+  return ddFail || volStrictFail;
+}
+
 function momentumOk(
   row: Pick<
     SnowballStatsRow,
-    "qualityTier" | "alertQualityTier" | "momentumDowngrade" | "momentumFailGradeF"
+    | "qualityTier"
+    | "alertQualityTier"
+    | "momentumDowngrade"
+    | "momentumFailGradeF"
+    | "maxDrawback1hPct"
+    | "volumeCascadeYn"
+    | "signalVolVsSma"
+    | "volStrictOk"
+    | "volMultAtAlert"
   >,
 ): boolean {
   const grade = effectiveQualityTier(row);
   if (!grade || snowballIsGradeF(grade) || row.momentumFailGradeF) return false;
   if (row.momentumDowngrade === true || snowballIsGradeDPlusLong(grade)) return false;
+  if (isVolCascadePassPartialMomentumC(row)) return false;
   return grade === "a_plus" || grade === "b_plus" || grade === "c_plus";
 }
 
@@ -143,6 +185,9 @@ function momentumFailCriteria(
 ): string[] {
   if (momentumOk(row)) return [];
   const fails: string[] = [];
+  if (isVolCascadePassPartialMomentumC(row)) {
+    fails.push("Vol↗ ผ่าน — เกรดสุดทธิปรับเป็น C (โครงสร้างสูงกว่าได้)");
+  }
   const ddMax = snowballTrendMomentumMaxDrawbackPct();
   if (row.maxDrawback1hPct == null || !Number.isFinite(row.maxDrawback1hPct)) {
     fails.push(`DD 1H% — ไม่มีข้อมูล (${SNOWBALL_TREND_1H_DD_LOOKBACK} แท่ง 1H ปิด)`);
