@@ -108,6 +108,8 @@ export type SnowballStatsRow = {
   maxDrawdownPct: number | null;
   resultRr: string | null;
   outcome: SnowballStatsOutcome;
+  /** migration: รีเซ็ต horizon หลังแก้ anchor 4h two-bar (ปิดแท่ง confirm) */
+  horizonAnchorV2?: boolean;
 };
 
 export type SnowballStatsApiPayload = {
@@ -359,11 +361,19 @@ export function snowballStatsSignalBarDurationSec(tf: SnowballStatsRow["signalBa
   return 900;
 }
 
-/** เวลาปิดแท่งสัญญาณ (anchor) — นับ horizon 12h/24h/48h จากจุดนี้ */
+/**
+ * เวลาปิด anchor สำหรับ horizon 4h/12h/24h/48h
+ * - 15m/1h: ปิดแท่งสัญญาณ
+ * - 4h two-bar: ปิดแท่ง confirm (แท่งที่สอง) = signal open + 8h — ตรง entry/เวลาแจ้ง
+ */
 export function snowballStatsAnchorCloseSec(
   row: Pick<SnowballStatsRow, "signalBarOpenSec" | "signalBarTf">,
 ): number {
-  return row.signalBarOpenSec + snowballStatsSignalBarDurationSec(row.signalBarTf ?? "15m");
+  const dur = snowballStatsSignalBarDurationSec(row.signalBarTf ?? "15m");
+  if (row.signalBarTf === "4h") {
+    return row.signalBarOpenSec + 2 * dur;
+  }
+  return row.signalBarOpenSec + dur;
 }
 
 export function snowballStatsHorizonDue(

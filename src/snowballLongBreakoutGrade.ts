@@ -130,6 +130,23 @@ export function snowballIsGradeF(grade: SnowballLongBreakoutGrade | undefined): 
   return grade === "f_plus";
 }
 
+/** Grade F ไม่บล็อก pending dedupe และไม่ตั้ง lastFiredBarSec — ให้สแกนรอบถัดไปยิงเกรดจริงได้ */
+export function snowballLongGradeSkipsFeedDedupe(
+  grade: SnowballLongBreakoutGrade | undefined,
+): boolean {
+  return grade === "f_plus";
+}
+
+export function snowballStatsRowSkipsFeedDedupe(row: {
+  qualityTier?: string;
+  alertQualityTier?: string;
+  momentumFailGradeF?: boolean;
+}): boolean {
+  if (row.momentumFailGradeF === true) return true;
+  const t = row.alertQualityTier ?? row.qualityTier;
+  return t === "f_plus";
+}
+
 export function snowballLongGradeShortLabel(g: SnowballLongBreakoutGrade): string {
   if (g === "a_plus") return "A+";
   if (g === "b_plus") return "B";

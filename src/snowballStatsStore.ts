@@ -261,13 +261,34 @@ export function migrateSnowballStatsClearSupersededBreakout1hConfirmFail(
   return updated;
 }
 
+/** รีเซ็ต horizon แถว 4h หลังแก้ anchor (เคยชี้ปิดแท่ง signal → pct4h = 0%) */
+export function migrateSnowballStats4hHorizonAnchorV2(rows: SnowballStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (row.signalBarTf !== "4h") continue;
+    if (row.horizonAnchorV2 === true) continue;
+    row.price4h = null;
+    row.pct4h = null;
+    row.price12h = null;
+    row.pct12h = null;
+    row.price24h = null;
+    row.pct24h = null;
+    row.price48h = null;
+    row.pct48h = null;
+    row.horizonAnchorV2 = true;
+    updated += 1;
+  }
+  return updated;
+}
+
 /** รัน migration แถวสถิติ (เรียกตอนโหลด API + tick follow-up) */
 export function applySnowballStatsRowMigrations(rows: SnowballStatsRow[]): number {
   return (
     migrateSnowballStatsLegacyGradeD(rows) +
     migrateSnowballStatsClearSupersededBreakout1hConfirmFail(rows) +
     migrateSnowballStatsLongAlertTradeSideToLong(rows) +
-    migrateSnowballStatsStructureTier(rows)
+    migrateSnowballStatsStructureTier(rows) +
+    migrateSnowballStats4hHorizonAnchorV2(rows)
   );
 }
 

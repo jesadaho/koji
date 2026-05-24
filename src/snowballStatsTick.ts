@@ -23,20 +23,10 @@ import { applySnowballStatsGrade4hFollowUp } from "./snowballStatsGrade4hFollowU
 import { buildSnowballLongConfirmGateStepsForStats } from "./snowballStatsGateSteps";
 import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
+import { snowballStatsAnchorCloseSec } from "@/lib/snowballStatsClient";
 
 /** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
 const KLINE_GRAN_SEC = 900;
-
-function signalBarDurationSec(row: SnowballStatsRow): number {
-  const tf = row.signalBarTf ?? "15m";
-  if (tf === "4h") return 4 * 3600;
-  if (tf === "1h") return 3600;
-  return 900;
-}
-
-function anchorCloseSec(row: SnowballStatsRow): number {
-  return row.signalBarOpenSec + signalBarDurationSec(row);
-}
 
 function pctVsEntry(side: "long" | "short", entry: number, price: number): number {
   if (side === "long") return ((price - entry) / entry) * 100;
@@ -267,7 +257,7 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
   const pack1hGradeCache = new Map<string, BinanceKlinePack | null>();
   for (const row of state.rows) {
     if (row.qualityTier4hAdjusted) continue;
-    const ac = anchorCloseSec(row);
+    const ac = snowballStatsAnchorCloseSec(row);
     if (nowSec < ac + 4 * 3600) continue;
     if (await applySnowballStatsGrade4hFollowUp(row, nowSec, pack1hGradeCache)) {
       dirty += 1;
@@ -281,12 +271,17 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
     const entry = row.entryPrice;
     if (!Number.isFinite(entry) || entry <= 0) continue;
 
-    const ac = anchorCloseSec(row);
+    const ac = snowballStatsAnchorCloseSec(row);
     if (nowSec < ac) continue;
 
     const pending = row.outcome === "pending";
     const needs48h = row.pct48h == null && nowSec >= ac + SEC_48H;
-    if (!pending && !needs48h) continue;
+    const needsHorizonBackfill =
+      (row.pct4h == null && nowSec >= ac + 4 * 3600) ||
+      (row.pct12h == null && nowSec >= ac + 12 * 3600) ||
+      (row.pct24h == null && nowSec >= ac + SEC_24H) ||
+      (row.pct48h == null && nowSec >= ac + SEC_48H);
+    if (!pending && !needs48h && !needsHorizonBackfill) continue;
 
     const windowEndHorizonSec = Math.min(nowSec, ac + SEC_48H);
     const windowEndMfeSec = Math.min(nowSec, ac + SEC_24H);
@@ -361,22 +356,22 @@ export async function runSnowballStatsFollowUpTick(nowMs: number): Promise<numbe
       row.side,
     );
 
-    if (h4) {
+    if (h4 && nowSec >= ac + 4 * 3600) {
       row.price4h = h4.price;
       row.pct4h = h4.pct;
       rowTouched = true;
     }
-    if (h12) {
+    if (h12 && nowSec >= ac + 12 * 3600) {
       row.price12h = h12.price;
       row.pct12h = h12.pct;
       rowTouched = true;
     }
-    if (h24) {
+    if (h24 && nowSec >= ac + SEC_24H) {
       row.price24h = h24.price;
       row.pct24h = h24.pct;
       rowTouched = true;
     }
-    if (h48) {
+    if (h48 && nowSec >= ac + SEC_48H) {
       row.price48h = h48.price;
       row.pct48h = h48.pct;
       rowTouched = true;

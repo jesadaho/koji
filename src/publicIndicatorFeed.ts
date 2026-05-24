@@ -44,6 +44,8 @@ import {
   resolveSnowballLongFinalGrade,
   snowballIsGradeDPlusLong,
   snowballIsGradeF,
+  snowballLongGradeSkipsFeedDedupe,
+  snowballStatsRowSkipsFeedDedupe,
   snowballLongGradeDisplayLabel,
   snowballLongGradeFLabel,
   snowballLongGradePlusLabel,
@@ -2551,8 +2553,10 @@ export async function runPublicIndicatorFeedInternal(
   let notified = 0;
   let snowballScanSummaryText: string | undefined;
 
-  /** เหรียญที่มีสัญญาณ pending — ห้ามแจ้ง Snowball ซ้ำจน outcome ไม่ pending / คิว confirm หาย */
+  /** เหรียญที่มีสัญญาณ pending — ห้ามแจ้ง Snowball ซ้ำจน outcome ไม่ pending / คิว confirm หาย (ยกเว้น Grade F) */
   const snowballPendingSymbols = new Set<string>();
+  /** แท่งที่เคยยิง F แล้วติด lastFiredBarSec เก่า — อนุญาตยิงซ้ำแท่งเดิมได้ */
+  const snowballFBarDedupeExempt = new Set<string>();
   if (snowballOn) {
     const pendingMaxAgeMs = 30 * 3600 * 1000;
     try {
@@ -2563,6 +2567,22 @@ export async function runPublicIndicatorFeedInternal(
         const sym = typeof r.symbol === "string" ? r.symbol.trim().toUpperCase() : "";
         const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
         if (atMs > 0 && now - atMs > pendingMaxAgeMs) continue;
+        if (snowballStatsRowSkipsFeedDedupe(r)) {
+          const tf =
+            typeof r.signalBarTf === "string" && r.signalBarTf.trim() ? r.signalBarTf.trim() : snowTf;
+          const sideKey = r.alertSide === "bear" ? "BEAR" : "BULL";
+          const barSec =
+            typeof r.signalBarOpenSec === "number" && Number.isFinite(r.signalBarOpenSec)
+              ? r.signalBarOpenSec
+              : 0;
+          if (sym && barSec > 0) {
+            const feedKey = `${sym}|SNOWBALL|${tf}|${sideKey}`;
+            if (state.lastFiredBarSec[feedKey] === barSec) {
+              snowballFBarDedupeExempt.add(`${feedKey}|${barSec}`);
+            }
+          }
+          continue;
+        }
         if (sym) snowballPendingSymbols.add(sym);
       }
     } catch (e) {
@@ -2571,6 +2591,7 @@ export async function runPublicIndicatorFeedInternal(
     try {
       const pend = await loadSnowballPendingConfirms();
       for (const it of pend.items) {
+        if (snowballLongGradeSkipsFeedDedupe(it.qualityTier)) continue;
         const sym = typeof it.symbol === "string" ? it.symbol.trim().toUpperCase() : "";
         if (sym) snowballPendingSymbols.add(sym);
       }
@@ -3049,7 +3070,10 @@ export async function runPublicIndicatorFeedInternal(
         }
 
         const key = `${symbol}|SNOWBALL|${snowTf}|BULL`;
-        if (snowballSymbolDedupeBlocks(state, key, signalBarOpenSec)) {
+        const barDedupeExempt = snowballFBarDedupeExempt.has(`${key}|${signalBarOpenSec}`);
+        const barDedupeBlocked =
+          snowballSymbolDedupeBlocks(state, key, signalBarOpenSec) && !barDedupeExempt;
+        if (barDedupeBlocked) {
           if (snowScanStats && !intrabar) {
             snowScanStats.longDeduped++;
             pushSnowScanSymList(
@@ -3364,14 +3388,17 @@ export async function runPublicIndicatorFeedInternal(
             }
           }
           if (ok) {
-            await updatePublicFeedFiredKey(
-              state,
-              key,
-              signalBarOpenSec,
-              iso,
-              now,
-              entryClosePx,
-            );
+            const skipFiredKeyForF = snowballLongGradeSkipsFeedDedupe(longBreakoutGrade);
+            if (!skipFiredKeyForF) {
+              await updatePublicFeedFiredKey(
+                state,
+                key,
+                signalBarOpenSec,
+                iso,
+                now,
+                entryClosePx,
+              );
+            }
             if (!skipSnowballTgForPending) {
               notified += 1;
               if (snowScanStats && !intrabar) {
