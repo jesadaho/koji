@@ -150,7 +150,7 @@ function trendMomentumAnchorSec(row: SnowballStatsRow): number {
   if (Number.isFinite(row.alertedAtMs) && row.alertedAtMs > 0) {
     return Math.floor(row.alertedAtMs / 1000);
   }
-  return anchorCloseSec(row);
+  return snowballStatsAnchorCloseSec(row);
 }
 
 /** เติม/อัปเดต DD 1H% และ vol_cascade จากแท่ง 1H ณ เวลาแจ้งสัญญาณ */
