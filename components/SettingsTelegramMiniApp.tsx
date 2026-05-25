@@ -128,6 +128,12 @@ type SnowballAutoTradeApiBundle = {
   quickTpMaxHours?: number | null;
 };
 
+type ReversalAutoTradeApiBundle = {
+  enabled?: boolean;
+  marginUsdt?: number | null;
+  leverage?: number | null;
+};
+
 type TradingViewMexcResponse = {
   exchange?: string;
   userId?: string;
@@ -149,6 +155,10 @@ type TradingViewMexcResponse = {
     enabled?: boolean;
     stepPct?: number | null;
   };
+  /** false เมื่อเซิร์ฟตั้ง REVERSAL_AUTOTRADE_ENABLED=0 (kill switch) */
+  reversalAutotradeServerEnabled?: boolean;
+  reversalAutoTradeNote?: string;
+  reversalAutoTrade?: ReversalAutoTradeApiBundle;
 };
 
 export default function SettingsTelegramMiniApp() {
@@ -199,6 +209,13 @@ export default function SettingsTelegramMiniApp() {
   const [portfolioTrailingSaveOk, setPortfolioTrailingSaveOk] = useState("");
   const [portfolioTrailingSaving, setPortfolioTrailingSaving] = useState(false);
 
+  const [revEnabled, setRevEnabled] = useState(false);
+  const [revMargin, setRevMargin] = useState("");
+  const [revLeverage, setRevLeverage] = useState("");
+  const [revSaveErr, setRevSaveErr] = useState("");
+  const [revSaveOk, setRevSaveOk] = useState("");
+  const [revSaving, setRevSaving] = useState(false);
+
   useEffect(() => {
     if (!sparkSaveOk.trim()) return;
     const t = window.setTimeout(() => setSparkSaveOk(""), 6000);
@@ -216,6 +233,12 @@ export default function SettingsTelegramMiniApp() {
     const t = window.setTimeout(() => setPortfolioTrailingSaveOk(""), 6000);
     return () => window.clearTimeout(t);
   }, [portfolioTrailingSaveOk]);
+
+  useEffect(() => {
+    if (!revSaveOk.trim()) return;
+    const t = window.setTimeout(() => setRevSaveOk(""), 6000);
+    return () => window.clearTimeout(t);
+  }, [revSaveOk]);
 
   /** sync จาก GET — อย่ากระทำเมื่อ user แก้อยู่: ให้ hydrate จาก tvSettings เท่านั้น */
   useEffect(() => {
@@ -287,6 +310,15 @@ export default function SettingsTelegramMiniApp() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.portfolioTrailingAlert]);
+
+  useEffect(() => {
+    const st = tvSettings?.reversalAutoTrade;
+    if (!st) return;
+    setRevEnabled(Boolean(st.enabled));
+    setRevMargin(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
+    setRevLeverage(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
+  }, [tvSettings?.webhookToken, tvSettings?.reversalAutoTrade]);
 
   useEffect(() => {
     let cancelled = false;
@@ -717,6 +749,85 @@ export default function SettingsTelegramMiniApp() {
     }
   };
 
+  const onSaveReversalAuto = async () => {
+    setRevSaveErr("");
+    setRevSaveOk("");
+    const initData = getTelegramInitData();
+    if (!initData) {
+      setRevSaveErr("ไม่พบ initData");
+      return;
+    }
+
+    const marginParsed = revMargin.trim() ? parseNumRaw(revMargin) : null;
+    const levParsed = revLeverage.trim() ? parseNumRaw(revLeverage) : null;
+
+    if (revMargin.trim() && marginParsed == null) {
+      setRevSaveErr("Margin ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (revLeverage.trim() && levParsed == null) {
+      setRevSaveErr("Leverage ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (revMargin.trim() && marginParsed != null && marginParsed <= 0) {
+      setRevSaveErr("Margin ต้องเป็นเลขบวก");
+      return;
+    }
+    if (revLeverage.trim() && levParsed != null && levParsed < 1) {
+      setRevSaveErr("Leverage ต้อง ≥ 1");
+      return;
+    }
+    if (revEnabled) {
+      if (marginParsed == null || marginParsed <= 0) {
+        setRevSaveErr("เปิดใช้แล้วต้องระบุ Margin (เลขบวก)");
+        return;
+      }
+      if (levParsed == null || levParsed < 1) {
+        setRevSaveErr("เปิดใช้แล้วต้องระบุ Leverage (≥ 1)");
+        return;
+      }
+    }
+
+    setRevSaving(true);
+    try {
+      const reversalAutoTrade: Record<string, unknown> = {
+        enabled: revEnabled,
+        marginUsdt: revMargin.trim() ? marginParsed : null,
+        leverage: revLeverage.trim() ? levParsed : null,
+      };
+      const body: Record<string, unknown> = {
+        rotateWebhookToken: false,
+        clearMexcCreds: false,
+        reversalAutoTrade,
+      };
+      if (mexcKeyInput.trim()) body.mexcApiKey = mexcKeyInput.trim();
+      if (mexcSecretInput.trim()) body.mexcSecret = mexcSecretInput.trim();
+      const url = `${apiBase}/api/tma/trading-view-mexc`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `tma ${initData}` },
+        body: JSON.stringify(body),
+      });
+      const { text, parsed } = await readApiResponse(res);
+      if (!res.ok) {
+        setRevSaveErr(messageFromParsed(parsed, res.statusText) + (text ? ` (${res.status})` : ""));
+        return;
+      }
+      setTvSettings(parsed as TradingViewMexcResponse);
+      setMexcKeyInput("");
+      setMexcSecretInput("");
+      setRevSaveOk(
+        revEnabled
+          ? "บันทึกแล้ว · เปิดใช้ Reversal auto-open (SHORT)"
+          : "บันทึกแล้ว · ปิด Reversal auto-open"
+      );
+    } catch (e) {
+      setRevSaveErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRevSaving(false);
+    }
+  };
+
   const exampleJsonText = tvSettings?.exampleJson
     ? JSON.stringify(tvSettings.exampleJson, null, 2)
     : "";
@@ -747,6 +858,8 @@ export default function SettingsTelegramMiniApp() {
         <a href="#spark-auto-open">Spark auto-open</a>
         {" · "}
         <a href="#snowball-auto-open">Snowball auto-open</a>
+        {" · "}
+        <a href="#reversal-auto-open">Reversal auto-open</a>
         <span className="siteNavSep" aria-hidden>
           |
         </span>
@@ -1328,6 +1441,100 @@ export default function SettingsTelegramMiniApp() {
         {snowSaveOk && !snowSaveErr ? (
           <p className="sub" style={{ color: "#2a9d6a", marginTop: "0.5rem" }} role="status">
             {snowSaveOk}
+          </p>
+        ) : null}
+      </div>
+
+      <div id="reversal-auto-open" className="card" style={{ marginTop: "1.25rem" }}>
+        <h2>Reversal auto-open (MEXC) — SHORT</h2>
+        <p className="sub" style={{ marginTop: 0 }}>
+          เมื่อ <strong>Reversal alert ส่งสำเร็จในกลุ่ม</strong> ระบบจะสั่ง MEXC เปิด <strong>SHORT</strong> เฉพาะแท่งสัญญาณที่{" "}
+          <strong>เนื้อเทียน (body)</strong> หรือ <strong>ไส้บน (upper wick)</strong> มากกว่า <strong>80%</strong> ของช่วงแท่ง
+          {" · "} entry แบบ hybrid ตาม <strong>EMA50 บน TF 15m</strong>:
+        </p>
+        <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
+          <li>ราคาตลาดอยู่<strong>เหนือ</strong> EMA50 15m → เปิด <strong>Market SHORT</strong> ทันที</li>
+          <li>ราคาตลาดอยู่<strong>ใต้/เท่ากับ</strong> EMA50 15m → ตั้ง <strong>Limit SHORT</strong> ที่ราคา EMA50 (ดักรีเทสต์)</li>
+        </ul>
+        {tvSettings?.reversalAutotradeServerEnabled === false ? (
+          <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
+            เซิร์ฟเวอร์ปิด Reversal auto-open ฉุกเฉินอยู่ (<code style={{ fontSize: "0.92em" }}>REVERSAL_AUTOTRADE_ENABLED=0</code>) — ลบตัวแปรนี้หรือตั้งเป็น{" "}
+            <code style={{ fontSize: "0.92em" }}>1</code>/<code style={{ fontSize: "0.92em" }}>true</code> แล้วรีสตาร์ทแอป
+          </p>
+        ) : null}
+        {tvSettings?.reversalAutoTradeNote ? (
+          <p className="sub" style={{ marginTop: "0.65rem", opacity: 0.92 }}>
+            {tvSettings.reversalAutoTradeNote}
+          </p>
+        ) : null}
+        {tvSettings && !tvSettings.mexcCredsComplete ? (
+          <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
+            ใส่ MEXC API ด้านบนและกด <strong>บันทึก API</strong> ก่อน — auto-open ถึงจะเรียก MEXC ได้
+          </p>
+        ) : null}
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "1rem" }}>
+          <input type="checkbox" checked={revEnabled} onChange={(e) => setRevEnabled(e.target.checked)} />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>เปิดใช้ Reversal auto-open (SHORT)</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              จำกัด 1 order/เหรียญ/วันไทย (BKK) — กันสั่งซ้ำในเหรียญเดียวกันต่อวัน
+            </span>
+          </span>
+        </label>
+
+        <p className="sub" style={{ marginTop: "0.85rem", fontWeight: 600 }}>
+          Margin / เลเวเรจ
+        </p>
+        <p className="sub" style={{ marginTop: 0 }}>
+          ใช้กับทุกสัญญาณที่ผ่าน gate body/wick &gt; 80%
+        </p>
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            Margin (USDT)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 100"
+              value={revMargin}
+              onChange={(e) => setRevMargin(e.target.value)}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            Leverage
+            <input
+              type="text"
+              inputMode="numeric"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 10"
+              value={revLeverage}
+              onChange={(e) => setRevLeverage(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <p style={{ marginTop: "0.95rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+          <button
+            type="button"
+            className="primary"
+            style={{ width: "auto", marginTop: 0 }}
+            disabled={revSaving || tvSaving}
+            onClick={() => void onSaveReversalAuto()}
+          >
+            {revSaving ? "กำลังบันทึก…" : "บันทึก Reversal auto-open"}
+          </button>
+        </p>
+        {revSaveErr ? (
+          <p className="sub" style={{ color: "var(--danger, #c44)", marginTop: "0.5rem" }}>
+            {revSaveErr}
+          </p>
+        ) : null}
+        {revSaveOk && !revSaveErr ? (
+          <p className="sub" style={{ color: "#2a9d6a", marginTop: "0.5rem" }} role="status">
+            {revSaveOk}
           </p>
         ) : null}
       </div>

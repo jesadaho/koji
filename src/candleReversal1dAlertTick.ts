@@ -54,6 +54,7 @@ import {
 } from "./candleReversalDetect";
 import { fetchGreenDaysBeforeReversalSignal } from "./candleReversalGreenDayStreak";
 import { snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
+import { runReversalAutoTradeAfterReversalAlert } from "./reversalAutoTradeExecutor";
 
 function envFlagOn(key: string, defaultOn: boolean): boolean {
   const raw = process.env[key]?.trim().toLowerCase();
@@ -476,6 +477,19 @@ async function notifyResults(
         scanStats.sent += 1;
         scanStats.sentByModel[sig.model] += 1;
         pushReversalScanSymList(scanStats.sentSymbols, row.symbol);
+
+        try {
+          await runReversalAutoTradeAfterReversalAlert({
+            binanceSymbol: row.symbol,
+            signalBarTf: sig.tf,
+            model: sig.model,
+            signalBarOpenSec: sig.barOpenSec,
+            bodyRatio: sig.bodyRatio,
+            wickRatio: sig.wickRatio,
+          });
+        } catch (e) {
+          console.error("[candleReversalAlertTick] reversal autotrade", row.symbol, sig.tf, e);
+        }
       }
     } catch (e) {
       const tf = row.evals?.signal?.tf ?? "?";

@@ -93,10 +93,15 @@ import {
 import type { SparkVolBand } from "./sparkTierContext";
 import { newTvWebhookNonce } from "./tradingViewWebhookNonceStore";
 import { isSnowballAutotradeEnabled } from "./snowballAutoTradeExecutor";
+import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
 
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
   "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — Grade A+ → Long · Grade C Short (fade): gate 1h ในกรอบ 4h แล้วเข้าแบบ Limit retest ไส้ (สาย rejection) หรือ Market V-Top (สายทุบกลืน) · Grade B ไม่ auto-open — ต้องเปิด Double Barrier + SNOWBALL_AUTOTRADE_ENABLED — 1 order/เหรียญ/วัน (นับเมื่อ fill สำหรับ Limit)";
+
+/** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
+const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
+  "Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จในกลุ่ม — เฉพาะแท่งสัญญาณที่เนื้อเทียนหรือไส้บน > 80% ของช่วงแท่ง — entry ใช้ EMA50 ของ TF 15m: ถ้าราคาปัจจุบันอยู่เหนือ EMA50 จะเปิด Market SHORT ทันที, ถ้ายังต่ำกว่า EMA จะวาง Limit SHORT รอ retest ที่ EMA50 — 1 order/เหรียญ/วัน (BKK) · ปิดเซิร์ฟทั้งหมดด้วย REVERSAL_AUTOTRADE_ENABLED=0";
 
 export function getLiffConfig() {
   return {
@@ -923,6 +928,16 @@ export function tradingViewPortfolioTrailingPayloadFromRow(
   };
 }
 
+export function tradingViewReversalAutoTradePayloadFromRow(
+  row: TradingViewMexcUserSettings
+): Record<string, unknown> {
+  return {
+    enabled: row.reversalAutoTradeEnabled ?? false,
+    marginUsdt: row.reversalAutoTradeMarginUsdt ?? null,
+    leverage: row.reversalAutoTradeLeverage ?? null,
+  };
+}
+
 function parsePortfolioTrailingAlertNested(
   raw: unknown
 ):
@@ -1206,6 +1221,59 @@ function parseSnowballAutoTradeNested(
   return { ok: true, patch: patchPart };
 }
 
+function parseReversalAutoTradeNested(
+  raw: unknown
+):
+  | { ok: false; error: string }
+  | { ok: true; patch: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret"> } {
+  if (raw === undefined || raw === null) return { ok: false, error: "missing_reversal_bundle" };
+  if (typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: "reversal_must_object" };
+  const o = raw as Record<string, unknown>;
+
+  let enabled = false;
+  if (typeof o.enabled === "boolean") enabled = o.enabled;
+  else if (o.enabled === "1" || o.enabled === 1 || o.enabled === "true") enabled = true;
+
+  const numOrEmpty = (
+    key: string
+  ): { v: number | null | undefined; err?: string } => {
+    if (!(key in o)) return { v: undefined };
+    const x = o[key];
+    if (x === null || x === "" || x === undefined) return { v: null };
+    const n = typeof x === "number" ? x : Number(String(x).replace(/,/g, "").trim());
+    if (!Number.isFinite(n)) return { v: undefined, err: `${key}_not_number` };
+    return { v: n };
+  };
+
+  const mMargin = numOrEmpty("marginUsdt");
+  const mLev = numOrEmpty("leverage");
+  if (mMargin.err || mLev.err) return { ok: false, error: "reversal_numeric_invalid" };
+
+  if (enabled) {
+    const m = mMargin.v;
+    const l = mLev.v;
+    if (m == null || !(typeof m === "number" && Number.isFinite(m) && m > 0)) {
+      return { ok: false, error: "reversal_margin_required" };
+    }
+    if (l == null || !(typeof l === "number" && Number.isFinite(l) && l >= 1)) {
+      return { ok: false, error: "reversal_leverage_required" };
+    }
+  }
+
+  const patchPart: Omit<
+    SaveTradingViewMexcInput,
+    "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
+  > = {
+    reversalAutoTradeEnabled: enabled,
+    reversalAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
+    reversalAutoTradeLeverage:
+      mLev.v == null
+        ? (mLev.v as number | null | undefined)
+        : (Math.floor(mLev.v) as number),
+  };
+  return { ok: true, patch: patchPart };
+}
+
 export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
   status: number;
   json: Record<string, unknown>;
@@ -1239,6 +1307,9 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
       snowballAutoTradeNote: SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH,
       snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),
       portfolioTrailingAlert: tradingViewPortfolioTrailingPayloadFromRow(row),
+      reversalAutotradeServerEnabled: isReversalAutotradeEnabled(),
+      reversalAutoTradeNote: REVERSAL_AUTO_TRADE_LIFF_NOTE_TH,
+      reversalAutoTrade: tradingViewReversalAutoTradePayloadFromRow(row),
     },
   };
 }
@@ -1327,6 +1398,17 @@ export async function liffSetTradingViewMexcSettings(
     }
   }
 
+  const reversalBundle = b.reversalAutoTrade;
+  const hasReversalNested = reversalBundle !== undefined && reversalBundle !== null;
+  let reversalPatchMerged: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret"> | undefined;
+  if (hasReversalNested) {
+    const parsed = parseReversalAutoTradeNested(reversalBundle);
+    if (!parsed.ok) {
+      return { status: 400, json: { error: parsed.error } };
+    }
+    reversalPatchMerged = parsed.patch;
+  }
+
   const row = await saveTradingViewMexcSettings(userId, {
     mexcApiKey: key,
     mexcSecret: sec,
@@ -1336,6 +1418,7 @@ export async function liffSetTradingViewMexcSettings(
     ...(sparkPatchMerged ?? {}),
     ...(snowballPatchMerged ?? {}),
     ...(portfolioPatchMerged ?? {}),
+    ...(reversalPatchMerged ?? {}),
   });
 
   const { origin, path } = publicAppBaseForTvWebhook();
@@ -1366,6 +1449,9 @@ export async function liffSetTradingViewMexcSettings(
       snowballAutoTradeNote: SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH,
       snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),
       portfolioTrailingAlert: tradingViewPortfolioTrailingPayloadFromRow(row),
+      reversalAutotradeServerEnabled: isReversalAutotradeEnabled(),
+      reversalAutoTradeNote: REVERSAL_AUTO_TRADE_LIFF_NOTE_TH,
+      reversalAutoTrade: tradingViewReversalAutoTradePayloadFromRow(row),
     },
   };
 }

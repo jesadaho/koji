@@ -60,6 +60,11 @@ export type TradingViewMexcUserSettings = {
   /** แจ้งเตือน trailing % ของเหรียญใน open positions (cron ~5 นาที) */
   portfolioTrailingAlertEnabled?: boolean;
   portfolioTrailingStepPct?: number;
+
+  /** Reversal auto-open Short บน MEXC — ทำงานหลัง Reversal alert ส่งสำเร็จ */
+  reversalAutoTradeEnabled?: boolean;
+  reversalAutoTradeMarginUsdt?: number;
+  reversalAutoTradeLeverage?: number;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -193,6 +198,10 @@ export type SaveTradingViewMexcInput = {
 
   portfolioTrailingAlertEnabled?: boolean;
   portfolioTrailingStepPct?: number | null;
+
+  reversalAutoTradeEnabled?: boolean;
+  reversalAutoTradeMarginUsdt?: number | null;
+  reversalAutoTradeLeverage?: number | null;
 };
 
 /**
@@ -242,6 +251,11 @@ export async function saveTradingViewMexcSettings(
   const touchedPortfolioTrailingPatch =
     input.portfolioTrailingAlertEnabled !== undefined ||
     input.portfolioTrailingStepPct !== undefined;
+
+  const touchedReversalPatch =
+    input.reversalAutoTradeEnabled !== undefined ||
+    input.reversalAutoTradeMarginUsdt !== undefined ||
+    input.reversalAutoTradeLeverage !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -368,10 +382,30 @@ export async function saveTradingViewMexcSettings(
         : input.portfolioTrailingStepPct !== undefined
           ? input.portfolioTrailingStepPct
           : prev?.portfolioTrailingStepPct,
+
+    reversalAutoTradeEnabled:
+      input.reversalAutoTradeEnabled !== undefined
+        ? input.reversalAutoTradeEnabled
+        : prev?.reversalAutoTradeEnabled ?? false,
+
+    reversalAutoTradeMarginUsdt:
+      input.reversalAutoTradeMarginUsdt === null
+        ? undefined
+        : input.reversalAutoTradeMarginUsdt !== undefined
+          ? input.reversalAutoTradeMarginUsdt
+          : prev?.reversalAutoTradeMarginUsdt,
+
+    reversalAutoTradeLeverage:
+      input.reversalAutoTradeLeverage === null
+        ? undefined
+        : input.reversalAutoTradeLeverage !== undefined
+          ? input.reversalAutoTradeLeverage
+          : prev?.reversalAutoTradeLeverage,
   };
 
   void touchedSnowballPatch;
   void touchedPortfolioTrailingPatch;
+  void touchedReversalPatch;
   m[userId] = row;
   await saveMap(m);
   return row;
