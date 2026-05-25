@@ -32,29 +32,32 @@ const HEADERS = [
   "H1",
   "H2",
   "H3",
+  "H4",
   "Max ROI",
   "Max DD",
   "ผล",
 ];
 
-function reversalHorizonCsvCells(r: CandleReversalStatsRow): [string, string, string] {
+function reversalHorizonCsvCells(r: CandleReversalStatsRow): [string, string, string, string] {
   const tf = r.signalBarTf ?? "1d";
   if (tf === "1h") {
     return [
       statsFmtPctCell(r.price4h, r.pct4h),
       statsFmtPctCell(r.price12h, r.pct12h),
       statsFmtPctCell(r.price24h, r.pct24h),
+      statsFmtPctCell(r.price48h, r.pct48h),
     ];
   }
   return [
     statsFmtPctCell(r.price1d, r.pct1d),
     statsFmtPctCell(r.price3d, r.pct3d),
     statsFmtPctCell(r.price7d, r.pct7d),
+    "",
   ];
 }
 
 function candleReversalStatsRowToCsvCells(r: CandleReversalStatsRow): string[] {
-  const [h1, h2, h3] = reversalHorizonCsvCells(r);
+  const [h1, h2, h3, h4] = reversalHorizonCsvCells(r);
   return [
     r.symbol,
     statsCoinLabel(r.symbol),
@@ -76,6 +79,7 @@ function candleReversalStatsRowToCsvCells(r: CandleReversalStatsRow): string[] {
     h1,
     h2,
     h3,
+    h4,
     r.maxRoiPct != null && Number.isFinite(r.maxRoiPct) ? `${r.maxRoiPct.toFixed(2)}%` : "",
     r.maxDrawdownPct != null && Number.isFinite(r.maxDrawdownPct) ? `${r.maxDrawdownPct.toFixed(2)}%` : "",
     candleReversalOutcomeLabel(r.outcome),

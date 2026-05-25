@@ -56,6 +56,8 @@ type LegacyCandleReversalRow = CandleReversalStatsRow & {
   pct12h?: number | null;
   price24h?: number | null;
   pct24h?: number | null;
+  price48h?: number | null;
+  pct48h?: number | null;
 };
 
 type LegacyCandleReversalRowV1 = LegacyCandleReversalRow & {
@@ -87,6 +89,8 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     pct12h: nullNum(r.pct12h),
     price24h: nullNum(r.price24h),
     pct24h: nullNum(r.pct24h),
+    price48h: nullNum(r.price48h),
+    pct48h: nullNum(r.pct48h),
     price1d: nullNum(r.price1d),
     pct1d: nullNum(r.pct1d),
     price3d: nullNum(r.price3d),
@@ -195,6 +199,8 @@ export async function appendCandleReversalStatsRow(
     pct12h: null,
     price24h: null,
     pct24h: null,
+    price48h: null,
+    pct48h: null,
     price1d: null,
     pct1d: null,
     price3d: null,

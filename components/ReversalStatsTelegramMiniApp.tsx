@@ -34,7 +34,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const FOOTNOTE_1D =
   "Binance USDT-M · Short bias · 1D: follow-up 1d/3d/7d (ปิด Day) · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
 const FOOTNOTE_1H =
-  "Binance USDT-M · Short bias · 1H: follow-up 4h/12h/24h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · ไม่ส่ง Telegram follow-up";
+  "Binance USDT-M · Short bias · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 48h · ไม่ส่ง Telegram follow-up";
 
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
@@ -84,6 +84,7 @@ function reversalHorizonCells(r: CandleReversalStatsRow): ReactNode[] {
       fmtPctCell(r.price4h, r.pct4h),
       fmtPctCell(r.price12h, r.pct12h),
       fmtPctCell(r.price24h, r.pct24h),
+      fmtPctCell(r.price48h, r.pct48h),
     ];
   }
   return [fmtPctCell(r.price1d, r.pct1d), fmtPctCell(r.price3d, r.pct3d), fmtPctCell(r.price7d, r.pct7d)];
@@ -198,17 +199,19 @@ function ReversalStatsSection({
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
   const winrateText = useMemo(() => reversalWinrateSummary(filteredRows), [filteredRows]);
 
-  const horizonLabels = useMemo<[string, string, string]>(
-    () => (tf === "1h" ? ["4h", "12h", "24h"] : ["1d", "3d", "7d"]),
+  const horizonLabels = useMemo<[string, string, string, string | null]>(
+    () => (tf === "1h" ? ["4h", "12h", "24h", "48h"] : ["1d", "3d", "7d", null]),
     [tf],
   );
-  const horizonTitles = useMemo<[string, string, string]>(
+  const horizonTitles = useMemo<[string, string, string, string | null]>(
     () =>
       tf === "1h"
-        ? ["1H follow-up 4h (%)", "1H follow-up 12h (%)", "1H follow-up 24h (%)"]
-        : ["1D follow-up 1d (%)", "1D follow-up 3d (%)", "1D follow-up 7d (%)"],
+        ? ["1H follow-up 4h (%)", "1H follow-up 12h (%)", "1H follow-up 24h (%)", "1H follow-up 48h (%)"]
+        : ["1D follow-up 1d (%)", "1D follow-up 3d (%)", "1D follow-up 7d (%)", null],
     [tf],
   );
+  const has48h = tf === "1h";
+  const emptyColSpan = has48h ? 21 : 20;
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -313,6 +316,15 @@ function ReversalStatsSection({
                 activeSort={sort}
                 onSort={onSortColumn}
               />
+              {has48h && horizonLabels[3] && horizonTitles[3] ? (
+                <SortTh
+                  label={horizonLabels[3]}
+                  sortKey="h4"
+                  title={horizonTitles[3]}
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+              ) : null}
               <SortTh label="ROI" sortKey="roi" title="Max ROI ถึง MFE" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="ผล" sortKey="outcome" title="ผลหลังครบ horizon" activeSort={sort} onSort={onSortColumn} />
@@ -321,7 +333,7 @@ function ReversalStatsSection({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={20} className="sub">
+                <td colSpan={emptyColSpan} className="sub">
                   {rawRows.length > 0 ? `ไม่มีแถวที่ตรงตัวกรอง: ${reversalShapeFilterLabel(shapeFilter)}` : emptyHint}
                 </td>
               </tr>
@@ -353,6 +365,7 @@ function ReversalStatsSection({
                     <td>{horizons[0]}</td>
                     <td>{horizons[1]}</td>
                     <td>{horizons[2]}</td>
+                    {has48h ? <td>{horizons[3]}</td> : null}
                     <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
                     <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
                     <td>{candleReversalOutcomeLabel(r.outcome)}</td>
@@ -563,7 +576,7 @@ export default function ReversalStatsTelegramMiniApp() {
       <ReversalStatsSection
         tf="1h"
         title="สถิติ Reversal · 1H"
-        subtitle="Intraday candle · follow-up 4h / 12h / 24h (ผลที่ 24h)"
+        subtitle="Intraday candle · follow-up 4h / 12h / 24h / 48h (ผลที่ 48h)"
         emptyHint="ยังไม่มีแถว 1H — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
         footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H}`}
         csvPrefix="reversal-stats-1h"

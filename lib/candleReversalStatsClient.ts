@@ -36,6 +36,8 @@ export type CandleReversalStatsRow = {
   pct12h: number | null;
   price24h: number | null;
   pct24h: number | null;
+  price48h: number | null;
+  pct48h: number | null;
   /** 1D signal — checkpoint จากปิดแท่ง Day */
   price1d: number | null;
   pct1d: number | null;
@@ -128,6 +130,7 @@ export type CandleReversalStatsSortKey =
   | "h1"
   | "h2"
   | "h3"
+  | "h4"
   | "roi"
   | "dd"
   | "outcome";
@@ -170,10 +173,13 @@ function cmpNumNullLast(a: number | null | undefined, b: number | null | undefin
   return a! - b!;
 }
 
-function reversalHorizonPct(row: CandleReversalStatsRow, idx: 0 | 1 | 2): number | null {
+function reversalHorizonPct(row: CandleReversalStatsRow, idx: 0 | 1 | 2 | 3): number | null {
   const tf = row.signalBarTf ?? "1d";
   if (tf === "1h") {
-    return idx === 0 ? row.pct4h : idx === 1 ? row.pct12h : row.pct24h;
+    if (idx === 0) return row.pct4h;
+    if (idx === 1) return row.pct12h;
+    if (idx === 2) return row.pct24h;
+    return row.pct48h;
   }
   return idx === 0 ? row.pct1d : idx === 1 ? row.pct3d : row.pct7d;
 }
@@ -226,6 +232,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(reversalHorizonPct(a, 1), reversalHorizonPct(b, 1));
     case "h3":
       return cmpNumNullLast(reversalHorizonPct(a, 2), reversalHorizonPct(b, 2));
+    case "h4":
+      return cmpNumNullLast(reversalHorizonPct(a, 3), reversalHorizonPct(b, 3));
     case "roi":
       return cmpNumNullLast(a.maxRoiPct, b.maxRoiPct);
     case "dd":

@@ -32,8 +32,8 @@ function anchorCloseSec(row: CandleReversalStatsRow): number {
 
 function followup1hHours(): number {
   const v = Number(process.env.CANDLE_REVERSAL_1H_STATS_FOLLOWUP_HOURS?.trim());
-  if (Number.isFinite(v) && v >= 4 && v <= 168) return Math.floor(v);
-  return 24;
+  if (Number.isFinite(v) && v >= 4 && v <= 168) return Math.max(48, Math.floor(v));
+  return 48;
 }
 
 function followup1dDays(): number {
@@ -176,10 +176,11 @@ async function followUpCandleReversal1hRow(
 
   const h4 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, ac + 4 * HOUR_SEC, entry);
   const h12 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, ac + 12 * HOUR_SEC, entry);
-  let h24 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, ac + followSec, entry);
-  if (h24 == null && nowSec >= ac + followSec && i15Last >= i15First) {
+  const h24 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, ac + 24 * HOUR_SEC, entry);
+  let h48 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, ac + 48 * HOUR_SEC, entry);
+  if (h48 == null && nowSec >= ac + 48 * HOUR_SEC && i15Last >= i15First) {
     const p = c15[i15Last]!;
-    h24 = { price: p, pct: pctVsEntryShort(entry, p) };
+    h48 = { price: p, pct: pctVsEntryShort(entry, p) };
   }
 
   row.maxRoiPct = mfe.maxRoi;
@@ -197,10 +198,14 @@ async function followUpCandleReversal1hRow(
     row.price24h = h24.price;
     row.pct24h = h24.pct;
   }
+  if (h48) {
+    row.price48h = h48.price;
+    row.pct48h = h48.pct;
+  }
 
-  const finalized = nowSec >= ac + followSec && row.pct24h != null;
+  const finalized = nowSec >= ac + 48 * HOUR_SEC && row.pct48h != null;
   if (finalized) {
-    applyOutcomeFromPct(row, row.pct24h ?? 0);
+    applyOutcomeFromPct(row, row.pct48h ?? 0);
   }
 
   return true;
