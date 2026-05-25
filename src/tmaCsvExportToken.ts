@@ -1,7 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /** path ใน token (ไม่มี /api/tma/) */
-export const TMA_CSV_EXPORT_PATHS = new Set(["snowball-stats.csv", "reversal-stats.csv"]);
+export const TMA_CSV_EXPORT_PATHS = new Set([
+  "snowball-stats.csv",
+  "reversal-stats.csv",
+  "divergence-stats.csv",
+]);
 
 const TTL_SEC = 120;
 

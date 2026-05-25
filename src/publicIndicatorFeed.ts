@@ -1,6 +1,7 @@
 import type { Client } from "@line/bot-sdk";
 import {
   fetchBinanceUsdmKlines,
+  fetchBinanceUsdmQuoteVol24h,
   fetchTopUsdmUsdtSymbolsByQuoteVolume,
   isBinanceIndicatorFapiEnabled,
   resetBinanceIndicatorFapi451LogDedupe,
@@ -8,6 +9,11 @@ import {
   type SnowballBinanceTf,
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
+import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
+import {
+  appendRsiDivergenceStatsRow,
+  isRsiDivergenceStatsEnabled,
+} from "./rsiDivergenceStatsStore";
 import { sendPublicIndicatorFeedToSparkGroup, sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
 import { fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import { emaLine, rsiWilder, smaLine, stochRsiLine } from "./indicatorMath";
@@ -2919,6 +2925,44 @@ export async function runPublicIndicatorFeedInternal(
                 if (ok) {
                   await updatePublicFeedFiredKey(state, divKey, confirmBarSec, iso, now);
                   notified += 1;
+                  if (isRsiDivergenceStatsEnabled()) {
+                    try {
+                      const base = symbol.toUpperCase().endsWith("USDT")
+                        ? symbol.slice(0, -4)
+                        : null;
+                      const [quoteVol24hUsdt, marketCapUsd] = await Promise.all([
+                        fetchBinanceUsdmQuoteVol24h(symbol).catch(() => null),
+                        base ? fetchCoinGeckoMarketCapUsd(base).catch(() => null) : Promise.resolve(null),
+                      ]);
+                      await appendRsiDivergenceStatsRow({
+                        symbol,
+                        tf: divTf === "1h" ? "1h" : "4h",
+                        kind: hit.kind,
+                        trigger: hit.trigger,
+                        alertedAtIso: iso,
+                        alertedAtMs: now,
+                        signalBarOpenSec: confirmBarSec,
+                        entryPrice: dc[lastClosed]!,
+                        refLevel: hit.refLevel,
+                        priceW1: hit.priceW1,
+                        priceW2: hit.priceW2,
+                        rsiW1: hit.rsiW1,
+                        rsiW2: hit.rsiW2,
+                        barsBetween: hit.wave2Idx - hit.wave1Idx,
+                        strongDelta: strongD,
+                        quoteVol24hUsdt,
+                        marketCapUsd,
+                      });
+                    } catch (e) {
+                      console.error(
+                        "[indicatorPublicFeed] RSI divergence stats append",
+                        symbol,
+                        divTf,
+                        hit.kind,
+                        e,
+                      );
+                    }
+                  }
                 }
               } catch (e) {
                 console.error("[indicatorPublicFeed] RSI divergence Telegram", symbol, divTf, hit.kind, e);

@@ -12,6 +12,7 @@ import {
   TMA_CSV_EXPORT_PATHS,
 } from "@/src/tmaCsvExportToken";
 import { candleReversalStatsToCsv } from "@/lib/candleReversalStatsCsvExport";
+import { rsiDivergenceStatsToCsv } from "@/lib/rsiDivergenceStatsCsvExport";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
 import { statsCsvAttachmentResponse, statsCsvFilename } from "@/lib/statsCsvResponse";
 import { getTmaConfig, getTmaMeta } from "@/src/miniAppService";
@@ -43,6 +44,8 @@ import {
   liffResetSnowballStats,
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
+  liffGetRsiDivergenceStats,
+  liffResetRsiDivergenceStats,
   liffGetTradingViewMexcSettings,
   liffSetTradingViewMexcSettings,
 } from "@/src/liffService";
@@ -186,6 +189,26 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const filenamePrefix = tfFilter ? `reversal-stats-${tfFilter}` : "reversal-stats";
       return statsCsvAttachmentResponse(csv, statsCsvFilename(filenamePrefix));
     }
+    if (segs.length === 1 && a === "divergence-stats") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const data = await liffGetRsiDivergenceStats(auth.telegramUserId);
+      return NextResponse.json(data, {
+        status: 200,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    if (segs.length === 1 && a === "divergence-stats.csv") {
+      const auth = await authenticateTmaCsvDownload(req, "divergence-stats.csv");
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const data = await liffGetRsiDivergenceStats(auth.telegramUserId);
+      const kindRaw = req.nextUrl.searchParams.get("kind")?.toLowerCase();
+      const kindFilter = kindRaw === "bullish" || kindRaw === "bearish" ? kindRaw : null;
+      const rows = kindFilter ? data.rows.filter((r) => r.kind === kindFilter) : data.rows;
+      const csv = rsiDivergenceStatsToCsv(rows);
+      const filenamePrefix = kindFilter ? `divergence-stats-${kindFilter}` : "divergence-stats";
+      return statsCsvAttachmentResponse(csv, statsCsvFilename(filenamePrefix));
+    }
     if (segs.length === 1 && a === "trading-view-mexc") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
@@ -312,6 +335,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await liffResetCandleReversalStats(auth.telegramUserId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({ ok: true });
+    }
+    if (segs.length === 1 && a === "divergence-stats") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const r = await liffResetRsiDivergenceStats(auth.telegramUserId);
       if (!r.ok) return json({ error: r.error }, r.status);
       return json({ ok: true });
     }

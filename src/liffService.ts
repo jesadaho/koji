@@ -68,6 +68,11 @@ import {
 import { isAdminTelegramUserId } from "./adminIds";
 import { loadCandleReversalStatsState, resetCandleReversalStatsState } from "./candleReversalStatsStore";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
+import {
+  loadRsiDivergenceStatsState,
+  resetRsiDivergenceStatsState,
+} from "./rsiDivergenceStatsStore";
+import type { RsiDivergenceStatsApiPayload } from "@/lib/rsiDivergenceStatsClient";
 import { isPctStepPresetValue, PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import { clearPortfolioTrailingStateForUser } from "./portfolioTrailingAlertStateStore";
 import {
@@ -788,6 +793,27 @@ export async function liffResetCandleReversalStats(
     return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
   }
   await resetCandleReversalStatsState();
+  return { ok: true };
+}
+
+export async function liffGetRsiDivergenceStats(
+  telegramUserId?: number,
+): Promise<RsiDivergenceStatsApiPayload> {
+  const st = await loadRsiDivergenceStatsState();
+  const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
+  return {
+    rows,
+    ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
+  };
+}
+
+export async function liffResetRsiDivergenceStats(
+  telegramUserId: number,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  await resetRsiDivergenceStatsState();
   return { ok: true };
 }
 

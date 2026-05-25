@@ -8,7 +8,7 @@ type Props = {
   style?: CSSProperties;
 };
 
-/** ลิงก์สถิติ Snowball + Reversal — ใช้ซ้ำใน Mini App / LIFF */
+/** ลิงก์สถิติ Snowball + Reversal + Divergence — ใช้ซ้ำใน Mini App / LIFF */
 export function MiniAppStatsNav({ showHome = false, className = "sub tmaQuickNav", style }: Props): ReactNode {
   return (
     <p className={className} style={style}>
@@ -25,6 +25,10 @@ export function MiniAppStatsNav({ showHome = false, className = "sub tmaQuickNav
         |
       </span>
       <Link href="/reversal-stats">Reversal</Link>
+      <span className="siteNavSep" aria-hidden>
+        |
+      </span>
+      <Link href="/divergence-stats">Divergence</Link>
     </p>
   );
 }

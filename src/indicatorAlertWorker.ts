@@ -16,6 +16,7 @@ import { runSnowballAutoTrade24hGuardTick } from "./snowballAutoTrade24hGuardTic
 import { runDownsideReversalAlertTick } from "./downsideReversalAlertTick";
 import { runCandleReversalAlertTick } from "./candleReversal1dAlertTick";
 import { runCandleReversalStatsFollowUpTick } from "./candleReversalStatsTick";
+import { runRsiDivergenceStatsFollowUpTick } from "./rsiDivergenceStatsTick";
 import { emaLine, rsiWilder } from "./indicatorMath";
 import {
   loadActiveEmaCrossAlerts,
@@ -377,6 +378,7 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const candleReversalRes = await runCandleReversalAlertTick(now);
   const candleReversalN = candleReversalRes.notified;
   const candleReversalStatsN = await runCandleReversalStatsFollowUpTick(now);
+  const rsiDivergenceStatsN = await runRsiDivergenceStatsFollowUpTick(now);
   const total = rsiN + emaN + publicN + snowballConfirmN + watch612 + downsideN + candleReversalN;
 
   const parts: string[] = [`RSI/EMA (MEXC) ${rsiN + emaN}`];
@@ -390,6 +392,7 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   if (downsideN > 0) parts.push(`downside reversal (Binance) ${downsideN}`);
   if (candleReversalN > 0) parts.push(`candle reversal ${candleReversalN}`);
   if (candleReversalStatsN > 0) parts.push(`candle reversal stats ${candleReversalStatsN}`);
+  if (rsiDivergenceStatsN > 0) parts.push(`rsi divergence stats ${rsiDivergenceStatsN}`);
   let detail: string | undefined;
   if (total > 0) detail = `แจ้ง ${total} ครั้ง (${parts.join(" · ")})`;
   else if (publicRes.skippedReason) detail = `ไม่แจ้ง (0) · ${parts.join(" · ")}`;
