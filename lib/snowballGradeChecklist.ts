@@ -12,7 +12,9 @@ import {
   snowballVolSmaMeetsGradeCMin,
 } from "@/src/snowballLongGrade4hPipeline";
 import {
+  SNOWBALL_TREND_15M_DD_LOOKBACK,
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
+  snowballTrendMomentumMaxDrawbackPct,
   snowballTrendMomentumMaxVolumeDrops,
 } from "@/src/snowballTrendMomentumMetrics";
 import {
@@ -502,6 +504,7 @@ type StagedPopupRow = Pick<
   | "volMultAtAlert"
   | "confirmGateSteps"
   | "volumeCascadeYn"
+  | "signalMaxDdPct"
   | "momentumDowngrade"
   | "momentumFailGradeF"
   | "qualityTier4hAdjusted"
@@ -551,10 +554,26 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
       Number.isFinite(row.signalVolVsSma) &&
       row.signalVolVsSma >= strictMult);
 
+  const ddLimit = snowballTrendMomentumMaxDrawbackPct();
+  const ddPct =
+    row.signalMaxDdPct != null && Number.isFinite(row.signalMaxDdPct) && row.signalMaxDdPct >= 0
+      ? row.signalMaxDdPct
+      : null;
+  let ddOk: boolean | null;
+  if (ddPct != null) {
+    ddOk = ddPct <= ddLimit;
+  } else if (row.momentumFailCount != null) {
+    const otherFails = (volCascadeOk ? 0 : 1) + (volStrictOk ? 0 : 1);
+    ddOk = row.momentumFailCount === otherFails;
+  } else {
+    ddOk = null;
+  }
+
   let failCount: number = row.momentumFailCount != null ? row.momentumFailCount : 0;
   if (row.momentumFailCount == null) {
     if (!volCascadeOk) failCount += 1;
     if (!volStrictOk) failCount += 1;
+    if (ddOk === false) failCount += 1;
     if (row.momentumFailGradeF) failCount = Math.max(failCount, 2);
     else if (row.momentumDowngrade) failCount = Math.max(failCount, 1);
   }
@@ -618,9 +637,13 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
     }
   }
 
+  const ddMark = ddOk == null ? "—" : stageLineMark(ddOk);
+  const ddValueStr = ddPct != null ? `${ddPct.toFixed(2)}%` : "—";
+  const ddSuffix = ddOk === false ? " -> [FAILED]" : ddOk == null ? " -> [แถวเก่า ไม่บันทึก %]" : "";
   lines.push(
     "",
     `🟡 [STAGE 3: MOMENTUM & VOL 1H] -> ${stage3Head}`,
+    `  [${ddMark}] Max DD 15m (${SNOWBALL_TREND_15M_DD_LOOKBACK} Bars): ${ddValueStr} (Limit <= ${ddLimit}%)${ddSuffix}`,
     `  [${stageLineMark(volCascadeOk)}] Vol Cascade ${SNOWBALL_TREND_1H_VOL_LOOKBACK}B  : ${volDrops != null ? volDrops : "—"} Times Drop  (Limit <= ${maxVolDrops} Time)${!volCascadeOk ? " -> [FAILED]" : ""}`,
     `  [${stageLineMark(volStrictOk)}] Signal Vol Spurt: ${volRatioStr}x SMA      (Limit > ${strictMult}x)${!volStrictOk ? " -> [FAILED]" : ""}`,
     "",

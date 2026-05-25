@@ -147,6 +147,7 @@ export type AppendSnowballStatsInput = {
   volNearMultAtAlert?: number | null;
   confirmGateSteps?: SnowballStatsGateStep[];
   volumeCascadeYn?: "Y" | "N" | null;
+  signalMaxDdPct?: number | null;
   trendMomentumVolLookback?: number | null;
   /** Snowball LONG 1H breakout / pending confirm bar */
   confirmVolVsSma?: number | null;
@@ -482,6 +483,12 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
         : undefined,
     volumeCascadeYn:
       input.volumeCascadeYn === "Y" || input.volumeCascadeYn === "N" ? input.volumeCascadeYn : null,
+    signalMaxDdPct:
+      input.signalMaxDdPct != null &&
+      Number.isFinite(input.signalMaxDdPct) &&
+      input.signalMaxDdPct >= 0
+        ? input.signalMaxDdPct
+        : null,
     trendMomentumVolLookback: SNOWBALL_TREND_1H_VOL_LOOKBACK,
     confirmVolVsSma,
     confirmVolRank,

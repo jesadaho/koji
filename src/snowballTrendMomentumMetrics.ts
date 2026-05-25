@@ -38,7 +38,7 @@ export type TrendMomentumMetricsOpts = {
 function envMaxDrawbackPct(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_TREND_MOMENTUM_MAX_DRAWBACK_PCT?.trim());
   if (Number.isFinite(v) && v >= 0 && v <= 100) return v;
-  return 5;
+  return 7;
 }
 
 function envMomentumMaxDdLookbackBars(): number {
@@ -381,10 +381,15 @@ export function calculateTrendMomentumMetrics(
 
 export function trendMomentumStatsFields(metrics: TrendMomentumMetrics | null): {
   volumeCascadeYn: "Y" | "N" | null;
+  signalMaxDdPct: number | null;
 } {
-  if (!metrics) return { volumeCascadeYn: null };
+  if (!metrics) return { volumeCascadeYn: null, signalMaxDdPct: null };
   return {
     volumeCascadeYn: metrics.isVolumeCascading ? "Y" : "N",
+    signalMaxDdPct:
+      Number.isFinite(metrics.maxDrawbackPercent) && metrics.maxDrawbackPercent >= 0
+        ? metrics.maxDrawbackPercent
+        : null,
   };
 }
 

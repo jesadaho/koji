@@ -80,6 +80,8 @@ export type SnowballStatsRow = {
   /** Funding rate MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม) */
   fundingRate?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
+  /** Max DD% (stats-style 15m, lookback 32 แท่ง) ณ เวลาแจ้ง — undefined = แถวเก่าก่อนเพิ่ม field */
+  signalMaxDdPct?: number | null;
   trendMomentumVolLookback?: number | null;
   /** Vol แท่งสัญญาณ ÷ SMA ณ เวลาแจ้ง */
   signalVolVsSma?: number | null;
