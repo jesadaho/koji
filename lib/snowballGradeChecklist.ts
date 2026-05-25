@@ -514,7 +514,19 @@ type StagedPopupRow = Pick<
   | "gradeNotch"
   | "displayGrade"
   | "actionPlan"
+  | "maxRoiPct"
+  | "durationToMfeHours"
+  | "maxDrawdownPct"
+  | "outcome"
 >;
+
+function snowballStatsOutcomeLabel(o: SnowballStatsRow["outcome"]): string {
+  if (o === "win_trend") return "Win (Trend)";
+  if (o === "win_quick_tp30") return "Win (Quick TP30)";
+  if (o === "loss") return "Loss";
+  if (o === "flat") return "Flat";
+  return "Pending";
+}
 
 /**
  * Popup สถิติ Snowball 4h LONG — รูปแบบ 3 ด่าน (จาก snapshot ตอนแจ้ง ไม่ต้องรอสัญญาณใหม่)
@@ -686,6 +698,33 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
   if (row.qualityTier4hAdjusted && row.qualityTier && row.alertQualityTier && row.qualityTier !== row.alertQualityTier) {
     lines.push(
       `- หมายเหตุ: หลัง follow-up 4h ปรับเป็น ${snowballLongGradeShortLabel(row.qualityTier)} (ตอนแจ้ง ${snowballLongGradeShortLabel(row.alertQualityTier)})`,
+    );
+  }
+
+  const hasOutcome =
+    row.outcome !== "pending" ||
+    (row.maxRoiPct != null && Number.isFinite(row.maxRoiPct)) ||
+    (row.maxDrawdownPct != null && Number.isFinite(row.maxDrawdownPct));
+  if (hasOutcome) {
+    const roiStr =
+      row.maxRoiPct != null && Number.isFinite(row.maxRoiPct)
+        ? `${row.maxRoiPct >= 0 ? "+" : ""}${row.maxRoiPct.toFixed(2)}%`
+        : "—";
+    const mfeStr =
+      row.durationToMfeHours != null && Number.isFinite(row.durationToMfeHours)
+        ? `${row.durationToMfeHours.toFixed(1)}h`
+        : "—";
+    const ddPostStr =
+      row.maxDrawdownPct != null && Number.isFinite(row.maxDrawdownPct)
+        ? `${row.maxDrawdownPct.toFixed(2)}%`
+        : "—";
+    lines.push(
+      "",
+      "--------------------------------------------------",
+      "📊 OUTCOME (หลังแจ้ง):",
+      `- Outcome   : ${snowballStatsOutcomeLabel(row.outcome)}`,
+      `- Max ROI   : ${roiStr} (MFE ${mfeStr})`,
+      `- Max DD    : ${ddPostStr} (DD หลังเข้า — ตัดเทียบ entry)`,
     );
   }
 
