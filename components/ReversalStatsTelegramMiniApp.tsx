@@ -181,10 +181,9 @@ function ReversalStatsSection({
       return;
     }
     await downloadCsv(statsCsvFilename(csvPrefix), candleReversalStatsToCsv(rows), {
-      telegramExportPath: "/api/tma/reversal-stats.csv",
-      preferClientCsvInTma: true,
+      telegramExportPath: `/api/tma/reversal-stats.csv?tf=${tf}`,
     });
-  }, [csvPrefix, rows]);
+  }, [csvPrefix, rows, tf]);
 
   return (
     <section className="sparkStatsMatrixSection" style={{ marginTop: "1.5rem" }}>

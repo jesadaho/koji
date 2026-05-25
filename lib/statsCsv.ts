@@ -54,7 +54,9 @@ function isMobilePlatform(): boolean {
 }
 
 function csvPathFromExportPath(exportPath: string): string | null {
-  const m = exportPath.trim().match(/\/([^/]+\.csv)$/i);
+  const trimmed = exportPath.trim();
+  const noQuery = trimmed.split("?")[0] ?? trimmed;
+  const m = noQuery.match(/\/([^/]+\.csv)$/i);
   return m ? m[1]! : null;
 }
 
@@ -129,7 +131,8 @@ async function tryTelegramDownloadFile(filename: string, exportPath: string): Pr
   const token = await fetchCsvExportToken(csvPath);
   if (!token) return false;
 
-  const url = `${apiOrigin()}${exportPath}?csv_token=${encodeURIComponent(token)}`;
+  const sep = exportPath.includes("?") ? "&" : "?";
+  const url = `${apiOrigin()}${exportPath}${sep}csv_token=${encodeURIComponent(token)}`;
   const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
 
   return new Promise((resolve) => {

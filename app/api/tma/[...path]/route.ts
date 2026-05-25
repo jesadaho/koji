@@ -177,8 +177,14 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const auth = await authenticateTmaCsvDownload(req, "reversal-stats.csv");
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const data = await liffGetCandleReversalStats(auth.telegramUserId);
-      const csv = candleReversalStatsToCsv(data.rows);
-      return statsCsvAttachmentResponse(csv, statsCsvFilename("reversal-stats"));
+      const tfRaw = req.nextUrl.searchParams.get("tf")?.toLowerCase();
+      const tfFilter = tfRaw === "1d" || tfRaw === "1h" ? tfRaw : null;
+      const rows = tfFilter
+        ? data.rows.filter((r) => (r.signalBarTf ?? "1d") === tfFilter)
+        : data.rows;
+      const csv = candleReversalStatsToCsv(rows);
+      const filenamePrefix = tfFilter ? `reversal-stats-${tfFilter}` : "reversal-stats";
+      return statsCsvAttachmentResponse(csv, statsCsvFilename(filenamePrefix));
     }
     if (segs.length === 1 && a === "trading-view-mexc") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
