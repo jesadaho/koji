@@ -16,12 +16,13 @@ import {
   candleReversalModelLabel,
   candleReversalModelShortLabel,
   candleReversalOutcomeLabel,
-  candleReversalSignalBarTfLabel,
   candleReversalLookbackRankCell,
   candleReversalStatsSortDefaultDir,
   sortCandleReversalStatsRows,
   candleReversalVolScoreLabel,
+  type CandleReversalSignalBarTf,
   type CandleReversalStatsApiPayload,
+  type CandleReversalStatsRow,
   type CandleReversalStatsSort,
   type CandleReversalStatsSortKey,
 } from "@/lib/candleReversalStatsClient";
@@ -30,8 +31,10 @@ import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
-const FOOTNOTE =
-  "Binance USDT-M · Short bias · 1H: follow-up 4h/12h/24h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · 1D: follow-up 1d/3d/7d (ปิด Day) · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
+const FOOTNOTE_1D =
+  "Binance USDT-M · Short bias · 1D: follow-up 1d/3d/7d (ปิด Day) · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
+const FOOTNOTE_1H =
+  "Binance USDT-M · Short bias · 1H: follow-up 4h/12h/24h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · ไม่ส่ง Telegram follow-up";
 
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
@@ -74,7 +77,7 @@ function fmtPctCell(price: number | null, pct: number | null): ReactNode {
   );
 }
 
-function reversalHorizonCells(r: CandleReversalStatsApiPayload["rows"][number]): ReactNode[] {
+function reversalHorizonCells(r: CandleReversalStatsRow): ReactNode[] {
   const tf = r.signalBarTf ?? "1d";
   if (tf === "1h") {
     return [
@@ -129,12 +132,25 @@ function SortTh({
   );
 }
 
-export default function ReversalStatsTelegramMiniApp() {
-  const [phase, setPhase] = useState<Phase>("loading");
-  const [setupBody, setSetupBody] = useState<ReactNode>(null);
-  const [payload, setPayload] = useState<CandleReversalStatsApiPayload | null>(null);
-  const [resetBusy, setResetBusy] = useState(false);
-  const [resetError, setResetError] = useState<string | null>(null);
+type ReversalStatsSectionProps = {
+  tf: CandleReversalSignalBarTf;
+  title: string;
+  subtitle: string;
+  emptyHint: string;
+  footnote: string;
+  csvPrefix: string;
+  rows: CandleReversalStatsRow[];
+};
+
+function ReversalStatsSection({
+  tf,
+  title,
+  subtitle,
+  emptyHint,
+  footnote,
+  csvPrefix,
+  rows: rawRows,
+}: ReversalStatsSectionProps) {
   const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
@@ -145,9 +161,18 @@ export default function ReversalStatsTelegramMiniApp() {
     );
   }, []);
 
-  const rows = useMemo(
-    () => sortCandleReversalStatsRows(payload?.rows ?? [], sort),
-    [payload?.rows, sort],
+  const rows = useMemo(() => sortCandleReversalStatsRows(rawRows, sort), [rawRows, sort]);
+
+  const horizonLabels = useMemo<[string, string, string]>(
+    () => (tf === "1h" ? ["4h", "12h", "24h"] : ["1d", "3d", "7d"]),
+    [tf],
+  );
+  const horizonTitles = useMemo<[string, string, string]>(
+    () =>
+      tf === "1h"
+        ? ["1H follow-up 4h (%)", "1H follow-up 12h (%)", "1H follow-up 24h (%)"]
+        : ["1D follow-up 1d (%)", "1D follow-up 3d (%)", "1D follow-up 7d (%)"],
+    [tf],
   );
 
   const exportCsv = useCallback(async () => {
@@ -155,10 +180,170 @@ export default function ReversalStatsTelegramMiniApp() {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
-    await downloadCsv(statsCsvFilename("reversal-stats"), candleReversalStatsToCsv(rows), {
+    await downloadCsv(statsCsvFilename(csvPrefix), candleReversalStatsToCsv(rows), {
       telegramExportPath: "/api/tma/reversal-stats.csv",
+      preferClientCsvInTma: true,
     });
-  }, [rows]);
+  }, [csvPrefix, rows]);
+
+  return (
+    <section className="sparkStatsMatrixSection" style={{ marginTop: "1.5rem" }}>
+      <h2 className="sparkStatsMatrixSectionTitle" style={{ marginTop: 0 }}>
+        {title}
+        <span
+          className="tmaTabEn"
+          style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}
+        >
+          {subtitle}
+        </span>
+      </h2>
+      <div className="sparkMatrixScroll">
+        <table className="sparkMatrixTable sparkMatrixTable--compact">
+          <thead>
+            <tr>
+              <SortTh label="เหรียญ" sortKey="symbol" activeSort={sort} onSort={onSortColumn} />
+              <SortTh
+                label="โมเดล"
+                sortKey="model"
+                title={CANDLE_REVERSAL_MODEL_SHORT_LEGEND}
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label="เขียว"
+                sortKey="greenDays"
+                title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="ไส้%" sortKey="wickPct" title="ไส้บน ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
+              <SortTh
+                label="Vol#"
+                sortKey="volRank"
+                title="อันดับ volume ในรอบ lookback"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label="High#"
+                sortKey="highRank"
+                title="อันดับ high ในรอบ lookback"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh label="Range" sortKey="range" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="Wick" sortKey="wick" activeSort={sort} onSort={onSortColumn} />
+              <SortTh
+                label={horizonLabels[0]}
+                sortKey="h1"
+                title={horizonTitles[0]}
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label={horizonLabels[1]}
+                sortKey="h2"
+                title={horizonTitles[1]}
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label={horizonLabels[2]}
+                sortKey="h3"
+                title={horizonTitles[2]}
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh label="ROI" sortKey="roi" title="Max ROI ถึง MFE" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="ผล" sortKey="outcome" title="ผลหลังครบ horizon" activeSort={sort} onSort={onSortColumn} />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={20} className="sub">
+                  {emptyHint}
+                </td>
+              </tr>
+            ) : (
+              rows.map((r) => {
+                const horizons = reversalHorizonCells(r);
+                return (
+                  <tr key={r.id}>
+                    <td>{coinLabel(r.symbol)}</td>
+                    <td title={candleReversalModelLabel(r.model)}>
+                      {candleReversalModelShortLabel(r.model)}
+                    </td>
+                    <td title="แท่ง Day1 เขียวติดก่อนสัญญาณ">
+                      {candleReversalGreenDaysLabel(r.greenDaysBeforeSignal)}
+                    </td>
+                    <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
+                    <td>
+                      <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
+                    </td>
+                    <td>{fmtPrice(r.entryPrice)}</td>
+                    <td>{fmtPrice(r.retestPrice)}</td>
+                    <td>{fmtPrice(r.slPrice)}</td>
+                    <td>{r.wickRatioPct != null ? `${r.wickRatioPct.toFixed(1)}%` : "—"}</td>
+                    <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
+                    <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
+                    <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
+                    <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
+                    <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
+                    <td>{horizons[0]}</td>
+                    <td>{horizons[1]}</td>
+                    <td>{horizons[2]}</td>
+                    <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
+                    <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
+                    <td>{candleReversalOutcomeLabel(r.outcome)}</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
+        {footnote}
+      </p>
+      <p className="sparkStatsActionRow" style={{ marginTop: "0.5rem" }}>
+        <button
+          type="button"
+          className="sparkStatsRefreshBtn"
+          disabled={rows.length === 0}
+          onClick={exportCsv}
+        >
+          Export CSV
+        </button>
+      </p>
+    </section>
+  );
+}
+
+export default function ReversalStatsTelegramMiniApp() {
+  const [phase, setPhase] = useState<Phase>("loading");
+  const [setupBody, setSetupBody] = useState<ReactNode>(null);
+  const [payload, setPayload] = useState<CandleReversalStatsApiPayload | null>(null);
+  const [resetBusy, setResetBusy] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  const allRows = payload?.rows ?? [];
+
+  const dayRows = useMemo(
+    () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1d"),
+    [allRows],
+  );
+  const hourRows = useMemo(
+    () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1h"),
+    [allRows],
+  );
 
   const api = useCallback(async (path: string, init?: RequestInit) => {
     const initData = getTelegramInitData();
@@ -291,138 +476,46 @@ export default function ReversalStatsTelegramMiniApp() {
 
       <MiniAppStatsNav showHome style={{ marginTop: "0.75rem" }} />
 
-      <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
-        <div className="sparkMatrixScroll">
-          <table className="sparkMatrixTable sparkMatrixTable--compact">
-            <thead>
-              <tr>
-                <SortTh label="เหรียญ" sortKey="symbol" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="TF" sortKey="tf" title="Timeframe แท่งสัญญาณ" activeSort={sort} onSort={onSortColumn} />
-                <SortTh
-                  label="โมเดล"
-                  sortKey="model"
-                  title={CANDLE_REVERSAL_MODEL_SHORT_LEGEND}
-                  activeSort={sort}
-                  onSort={onSortColumn}
-                />
-                <SortTh
-                  label="เขียว"
-                  sortKey="greenDays"
-                  title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ"
-                  activeSort={sort}
-                  onSort={onSortColumn}
-                />
-                <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="ไส้%" sortKey="wickPct" title="ไส้บน ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
-                <SortTh
-                  label="Vol#"
-                  sortKey="volRank"
-                  title="อันดับ volume ในรอบ lookback"
-                  activeSort={sort}
-                  onSort={onSortColumn}
-                />
-                <SortTh
-                  label="High#"
-                  sortKey="highRank"
-                  title="อันดับ high ในรอบ lookback"
-                  activeSort={sort}
-                  onSort={onSortColumn}
-                />
-                <SortTh label="Range" sortKey="range" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="Wick" sortKey="wick" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="4h/1d" sortKey="h1" title="1H: 4h · 1D: 1d (%)" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="12h/3d" sortKey="h2" title="1H: 12h · 1D: 3d (%)" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="24h/7d" sortKey="h3" title="1H: 24h · 1D: 7d (%)" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="ROI" sortKey="roi" title="Max ROI ถึง MFE" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSort={onSortColumn} />
-                <SortTh label="ผล" sortKey="outcome" title="ผลหลังครบ horizon" activeSort={sort} onSort={onSortColumn} />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={22} className="sub">
-                    ยังไม่มีแถว — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1D/1H_ALERTS_ENABLED)
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r) => {
-                  const horizons = reversalHorizonCells(r);
-                  return (
-                  <tr key={r.id}>
-                    <td>{coinLabel(r.symbol)}</td>
-                    <td>{candleReversalSignalBarTfLabel(r.signalBarTf ?? "1d")}</td>
-                    <td title={candleReversalModelLabel(r.model)}>
-                      {candleReversalModelShortLabel(r.model)}
-                    </td>
-                    <td title="แท่ง Day1 เขียวติดก่อนสัญญาณ">
-                      {candleReversalGreenDaysLabel(r.greenDaysBeforeSignal)}
-                    </td>
-                    <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
-                    <td>
-                      <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
-                    </td>
-                    <td>{fmtPrice(r.entryPrice)}</td>
-                    <td>{fmtPrice(r.retestPrice)}</td>
-                    <td>{fmtPrice(r.slPrice)}</td>
-                    <td>{r.wickRatioPct != null ? `${r.wickRatioPct.toFixed(1)}%` : "—"}</td>
-                    <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
-                    <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
-                    <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
-                    <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
-                    <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
-                    <td>{horizons[0]}</td>
-                    <td>{horizons[1]}</td>
-                    <td>{horizons[2]}</td>
-                    <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
-                    <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
-                    <td>{candleReversalOutcomeLabel(r.outcome)}</td>
-                  </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
-          {CANDLE_REVERSAL_MODEL_SHORT_LEGEND}
-          <br />
-          {FOOTNOTE}
-        </p>
-        <p className="sparkStatsActionRow" style={{ marginTop: "0.75rem" }}>
-          <button type="button" className="sparkStatsRefreshBtn" onClick={() => void loadStats()}>
-            รีเฟรช
-          </button>
+      <p className="sparkStatsActionRow" style={{ marginTop: "0.75rem" }}>
+        <button type="button" className="sparkStatsRefreshBtn" onClick={() => void loadStats()}>
+          รีเฟรช
+        </button>
+        {payload?.isAdmin ? (
           <button
             type="button"
-            className="sparkStatsRefreshBtn"
-            disabled={rows.length === 0}
-            onClick={exportCsv}
+            className="sparkStatsRefreshBtn danger"
+            disabled={resetBusy}
+            onClick={() => void resetStats()}
           >
-            Export CSV
+            {resetBusy ? "กำลังล้าง…" : "ล้างสถิติ"}
           </button>
-          {payload?.isAdmin ? (
-            <button
-              type="button"
-              className="sparkStatsRefreshBtn danger"
-              disabled={resetBusy}
-              onClick={() => void resetStats()}
-            >
-              {resetBusy ? "กำลังล้าง…" : "ล้างสถิติ"}
-            </button>
-          ) : null}
-        </p>
-        {resetError ? (
-          <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
-            {resetError}
-          </p>
         ) : null}
-      </section>
+      </p>
+      {resetError ? (
+        <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
+          {resetError}
+        </p>
+      ) : null}
+
+      <ReversalStatsSection
+        tf="1d"
+        title="สถิติ Reversal · 1D"
+        subtitle="Day candle · follow-up 1d / 3d / 7d (ผลที่ 7d)"
+        emptyHint="ยังไม่มีแถว 1D — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1D_ALERTS_ENABLED)"
+        footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1D}`}
+        csvPrefix="reversal-stats-1d"
+        rows={dayRows}
+      />
+
+      <ReversalStatsSection
+        tf="1h"
+        title="สถิติ Reversal · 1H"
+        subtitle="Intraday candle · follow-up 4h / 12h / 24h (ผลที่ 24h)"
+        emptyHint="ยังไม่มีแถว 1H — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
+        footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H}`}
+        csvPrefix="reversal-stats-1h"
+        rows={hourRows}
+      />
     </div>
   );
 }
