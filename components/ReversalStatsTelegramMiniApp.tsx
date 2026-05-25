@@ -132,6 +132,35 @@ function SortTh({
   );
 }
 
+type ReversalShapeFilter = "all" | "wick80" | "body80" | "wickOrBody80";
+
+function reversalShapeFilterLabel(filter: ReversalShapeFilter): string {
+  if (filter === "wick80") return "ไส้ >= 80%";
+  if (filter === "body80") return "เนื้อ >= 80%";
+  if (filter === "wickOrBody80") return "ไส้หรือเนื้อ >= 80%";
+  return "ทั้งหมด";
+}
+
+function reversalRowMatchesShapeFilter(row: CandleReversalStatsRow, filter: ReversalShapeFilter): boolean {
+  if (filter === "all") return true;
+  const wickOk = row.wickRatioPct != null && Number.isFinite(row.wickRatioPct) && row.wickRatioPct >= 80;
+  const bodyOk = row.bodyPct != null && Number.isFinite(row.bodyPct) && row.bodyPct >= 80;
+  if (filter === "wick80") return wickOk;
+  if (filter === "body80") return bodyOk;
+  return wickOk || bodyOk;
+}
+
+function reversalWinrateSummary(rows: CandleReversalStatsRow[]): string {
+  const done = rows.filter((r) => r.outcome !== "pending");
+  const wins = done.filter((r) => r.outcome === "win").length;
+  const pending = rows.length - done.length;
+  if (done.length === 0) {
+    return `Winrate: — · ปิดผล 0/${rows.length}${pending > 0 ? ` · Pending ${pending}` : ""}`;
+  }
+  const winrate = (wins / done.length) * 100;
+  return `Winrate: ${winrate.toFixed(1)}% (${wins}/${done.length})${pending > 0 ? ` · Pending ${pending}` : ""}`;
+}
+
 type ReversalStatsSectionProps = {
   tf: CandleReversalSignalBarTf;
   title: string;
@@ -152,6 +181,7 @@ function ReversalStatsSection({
   rows: rawRows,
 }: ReversalStatsSectionProps) {
   const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
+  const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -161,7 +191,12 @@ function ReversalStatsSection({
     );
   }, []);
 
-  const rows = useMemo(() => sortCandleReversalStatsRows(rawRows, sort), [rawRows, sort]);
+  const filteredRows = useMemo(
+    () => rawRows.filter((r) => reversalRowMatchesShapeFilter(r, shapeFilter)),
+    [rawRows, shapeFilter],
+  );
+  const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
+  const winrateText = useMemo(() => reversalWinrateSummary(filteredRows), [filteredRows]);
 
   const horizonLabels = useMemo<[string, string, string]>(
     () => (tf === "1h" ? ["4h", "12h", "24h"] : ["1d", "3d", "7d"]),
@@ -196,6 +231,25 @@ function ReversalStatsSection({
           {subtitle}
         </span>
       </h2>
+      <div className="sparkStatsActionRow" style={{ marginTop: "0.75rem", alignItems: "center" }}>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          กรองแท่ง
+          <select
+            value={shapeFilter}
+            onChange={(e) => setShapeFilter(e.currentTarget.value as ReversalShapeFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "11rem" }}
+          >
+            <option value="all">{reversalShapeFilterLabel("all")}</option>
+            <option value="wick80">{reversalShapeFilterLabel("wick80")}</option>
+            <option value="body80">{reversalShapeFilterLabel("body80")}</option>
+            <option value="wickOrBody80">{reversalShapeFilterLabel("wickOrBody80")}</option>
+          </select>
+        </label>
+        <span className="sub">
+          แสดง {filteredRows.length}/{rawRows.length} · {winrateText}
+        </span>
+      </div>
       <div className="sparkMatrixScroll">
         <table className="sparkMatrixTable sparkMatrixTable--compact">
           <thead>
@@ -268,7 +322,7 @@ function ReversalStatsSection({
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={20} className="sub">
-                  {emptyHint}
+                  {rawRows.length > 0 ? `ไม่มีแถวที่ตรงตัวกรอง: ${reversalShapeFilterLabel(shapeFilter)}` : emptyHint}
                 </td>
               </tr>
             ) : (
