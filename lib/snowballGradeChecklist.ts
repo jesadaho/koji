@@ -551,7 +551,7 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
       Number.isFinite(row.signalVolVsSma) &&
       row.signalVolVsSma >= strictMult);
 
-  let failCount = row.momentumFailCount != null ? row.momentumFailCount : 0;
+  let failCount: number = row.momentumFailCount != null ? row.momentumFailCount : 0;
   if (row.momentumFailCount == null) {
     if (!volCascadeOk) failCount += 1;
     if (!volStrictOk) failCount += 1;
