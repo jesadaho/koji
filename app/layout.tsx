@@ -28,11 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <span className="siteNavSep" aria-hidden>
             |
           </span>
-          <Link href="/snowball-stats">Snowball</Link>
-          <span className="siteNavSep" aria-hidden>
-            |
-          </span>
-          <Link href="/reversal-stats">Reversal</Link>
+          <Link href="/stats">Stats</Link>
           <span className="siteNavSep" aria-hidden>
             |
           </span>
