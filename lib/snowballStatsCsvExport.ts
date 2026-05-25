@@ -47,7 +47,8 @@ const HEADERS = [
   "48h",
   "Max ROI",
   "Duration→MFE",
-  "Max DD",
+  "Max DD ก่อน",
+  "Max DD หลัง",
   "SVP Hole",
   "RR",
   "ผล",
@@ -93,6 +94,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     r.durationToMfeHours != null && Number.isFinite(r.durationToMfeHours)
       ? `${r.durationToMfeHours.toFixed(2)}h`
       : "",
+    r.signalMaxDdPct != null && Number.isFinite(r.signalMaxDdPct) ? `${r.signalMaxDdPct.toFixed(2)}%` : "",
     r.maxDrawdownPct != null && Number.isFinite(r.maxDrawdownPct) ? `${r.maxDrawdownPct.toFixed(2)}%` : "",
     r.svpHoleYn ?? "",
     r.resultRr ?? "",

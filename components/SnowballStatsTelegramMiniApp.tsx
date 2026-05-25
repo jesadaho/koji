@@ -484,7 +484,18 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col">48h</th>
                 <th scope="col">Max ROI</th>
                 <th scope="col">Duration→MFE</th>
-                <th scope="col">Max DD</th>
+                <th
+                  scope="col"
+                  title="Max DD ก่อนแจ้ง — 15m ย้อนหลัง 32 แท่ง (8 ชม.) · เกณฑ์ momentum Stage 3 (≤ default 7%)"
+                >
+                  Max DD ก่อน
+                </th>
+                <th
+                  scope="col"
+                  title="Max DD หลังแจ้ง — drawdown สูงสุดจาก entry (ติดตามผล)"
+                >
+                  Max DD หลัง
+                </th>
                 <th scope="col">SVP Hole</th>
                 <th scope="col">RR</th>
                 <th scope="col">ผล</th>
@@ -494,7 +505,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 31 : 30} className="sub">
+                  <td colSpan={isAdmin ? 32 : 31} className="sub">
                     ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
                   </td>
                 </tr>
@@ -551,6 +562,11 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>
                       {r.durationToMfeHours != null && Number.isFinite(r.durationToMfeHours)
                         ? `${r.durationToMfeHours.toFixed(2)}h`
+                        : "—"}
+                    </td>
+                    <td>
+                      {r.signalMaxDdPct != null && Number.isFinite(r.signalMaxDdPct)
+                        ? `${r.signalMaxDdPct.toFixed(2)}%`
                         : "—"}
                     </td>
                     <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
