@@ -93,6 +93,27 @@ export type SnowballStatsRow = {
   confirmVolRankLb?: number | null;
   greenDaysBeforeSignal?: number | null;
   svpHoleYn: "Y" | "N";
+  /** Stage 1 ceiling จาก Base-Offset matrix (A / B / C) — 4h เท่านั้น */
+  structureCeiling?: "A" | "B" | "C" | null;
+  /** จำนวนข้อ Stage 3 ที่พลาด (0–3) — 4h เท่านั้น */
+  momentumFailCount?: 0 | 1 | 2 | 3 | null;
+  /** notch จาก ceiling (+1 / 0 / -1 / -2) — 4h เท่านั้น */
+  gradeNotch?: 1 | 0 | -1 | -2 | null;
+  /** Display grade (A+ / A / A- / B+ / B / B- / C+ / C / C- / D) — 4h เท่านั้น */
+  displayGrade?:
+    | "A+"
+    | "A"
+    | "A-"
+    | "B+"
+    | "B"
+    | "B-"
+    | "C+"
+    | "C"
+    | "C-"
+    | "D"
+    | null;
+  /** Action plan — ผูก margin scale / auto-open */
+  actionPlan?: "full" | "standard" | "light" | "monitor" | null;
   price4h: number | null;
   pct4h: number | null;
   price12h: number | null;
@@ -161,6 +182,32 @@ export function snowballStatsIsGradeBMomentumDowngradeRow(
   if (row.momentumDowngrade === true) return true;
   if (row.momentumDowngrade === false) return false;
   return snowballIsGradeDPlusLong(effectiveQualityTier(row));
+}
+
+/** Label สำหรับ Action Plan (ใช้ใน popup + TG footer) */
+export function snowballStatsActionPlanLabel(
+  plan: SnowballStatsRow["actionPlan"] | undefined,
+): string {
+  if (plan === "full") return "Full (1.0×)";
+  if (plan === "standard") return "Standard (1.0×)";
+  if (plan === "light") return "Light (0.5×)";
+  if (plan === "monitor") return "Monitor (no auto-open)";
+  return "—";
+}
+
+/** เทียบ qualityTier เก่ากับ schema ใหม่ (สำหรับแถวที่ไม่มี displayGrade) */
+export function snowballStatsDerivedDisplayGrade(
+  row: Pick<SnowballStatsRow, "displayGrade" | "qualityTier" | "alertQualityTier" | "momentumDowngrade" | "momentumFailGradeF">,
+): string | null {
+  if (row.displayGrade) return row.displayGrade;
+  if (row.momentumFailGradeF) return "F";
+  const tier = row.qualityTier ?? row.alertQualityTier;
+  if (tier === "a_plus") return "A+";
+  if (tier === "b_plus") return "B";
+  if (tier === "c_plus") return "C";
+  if (tier === "d_plus") return row.momentumDowngrade ? "D+" : "D";
+  if (tier === "f_plus") return "F";
+  return null;
 }
 
 function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): string {

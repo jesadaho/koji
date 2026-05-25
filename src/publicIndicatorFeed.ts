@@ -54,6 +54,10 @@ import {
   type SnowballLongGradeResolution,
   type SnowballLongStructureTier,
 } from "./snowballLongBreakoutGrade";
+import {
+  snowballActionPlanAutoOpenEnabled,
+  snowballActionPlanMarginScale,
+} from "./snowballLongGradeMatrix";
 
 export type { SnowballLongBreakoutGrade };
 import {
@@ -3553,11 +3557,16 @@ export async function runPublicIndicatorFeedInternal(
                 );
               }
             }
+            const longActionPlan =
+              gradeResolution.kind === "grade" ? gradeResolution.actionPlan ?? null : null;
+            const longActionPlanAutoOpen =
+              longActionPlan == null ? true : snowballActionPlanAutoOpenEnabled(longActionPlan);
             if (
               !intrabar &&
               !skipSnowballTgForPending &&
               !snowballIsGradeF(longBreakoutGrade) &&
-              !snowballIsGradeDPlusLong(longBreakoutGrade)
+              !snowballIsGradeDPlusLong(longBreakoutGrade) &&
+              longActionPlanAutoOpen
             ) {
               try {
                 const longAutoGrade =
@@ -3579,12 +3588,20 @@ export async function runPublicIndicatorFeedInternal(
                     Number.isFinite(longFade.referenceEntryPrice)
                       ? longFade.referenceEntryPrice
                       : entryClosePx;
-                  const marginScale =
+                  const actionPlanMargin =
+                    longAutoSide === "long" && longActionPlan != null
+                      ? snowballActionPlanMarginScale(longActionPlan)
+                      : null;
+                  const sustainedMargin =
                     longAutoSide === "long" &&
                     longBreakoutGrade === "b_plus" &&
                     sustainedBuyingPressure
                       ? snowballGradeBSustainedMarginScale()
-                      : undefined;
+                      : null;
+                  const marginScale =
+                    actionPlanMargin != null && actionPlanMargin !== 1.0
+                      ? actionPlanMargin
+                      : sustainedMargin ?? undefined;
                   await runSnowballAutoTradeAfterSnowballAlert({
                     contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
                     binanceSymbol: symbol,
@@ -3748,6 +3765,21 @@ export async function runPublicIndicatorFeedInternal(
                   alertQualityTier: longBreakoutGrade,
                   ...(gradeResolution.kind === "grade"
                     ? { structureTier: gradeResolution.structureTier }
+                    : {}),
+                  ...(gradeResolution.kind === "grade" && gradeResolution.structureCeiling
+                    ? { structureCeiling: gradeResolution.structureCeiling }
+                    : {}),
+                  ...(gradeResolution.kind === "grade" && gradeResolution.momentumFailCount != null
+                    ? { momentumFailCount: gradeResolution.momentumFailCount }
+                    : {}),
+                  ...(gradeResolution.kind === "grade" && gradeResolution.gradeNotch != null
+                    ? { gradeNotch: gradeResolution.gradeNotch }
+                    : {}),
+                  ...(gradeResolution.kind === "grade" && gradeResolution.displayGrade
+                    ? { displayGrade: gradeResolution.displayGrade }
+                    : {}),
+                  ...(gradeResolution.kind === "grade" && gradeResolution.actionPlan
+                    ? { actionPlan: gradeResolution.actionPlan }
                     : {}),
                   momentumDowngrade: snowballIsGradeDPlusLong(longBreakoutGrade),
                   momentumFailGradeF: snowballIsGradeF(longBreakoutGrade),

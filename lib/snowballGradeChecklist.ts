@@ -16,6 +16,8 @@ import {
   snowballTrendMomentumMaxVolumeDrops,
 } from "@/src/snowballTrendMomentumMetrics";
 import {
+  snowballStatsActionPlanLabel,
+  snowballStatsDerivedDisplayGrade,
   snowballStatsVolVsSmaDisplay,
   type SnowballStatsQualityTier,
   type SnowballStatsRow,
@@ -504,6 +506,11 @@ type StagedPopupRow = Pick<
   | "momentumFailGradeF"
   | "qualityTier4hAdjusted"
   | "alertedAtIso"
+  | "structureCeiling"
+  | "momentumFailCount"
+  | "gradeNotch"
+  | "displayGrade"
+  | "actionPlan"
 >;
 
 /**
@@ -544,20 +551,28 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
       Number.isFinite(row.signalVolVsSma) &&
       row.signalVolVsSma >= strictMult);
 
-  let failCount = 0;
-  if (!volCascadeOk) failCount += 1;
-  if (!volStrictOk) failCount += 1;
-  if (row.momentumFailGradeF) failCount = Math.max(failCount, 2);
-  else if (row.momentumDowngrade) failCount = Math.max(failCount, 1);
+  let failCount = row.momentumFailCount != null ? row.momentumFailCount : 0;
+  if (row.momentumFailCount == null) {
+    if (!volCascadeOk) failCount += 1;
+    if (!volStrictOk) failCount += 1;
+    if (row.momentumFailGradeF) failCount = Math.max(failCount, 2);
+    else if (row.momentumDowngrade) failCount = Math.max(failCount, 1);
+  }
 
+  const hasMatrix = row.displayGrade != null || row.structureCeiling != null;
   const volCascadeGradeC =
+    !hasMatrix &&
     volCascadeOk &&
     snowballVolSmaMeetsGradeCMin(row.signalVolVsSma) &&
     failCount > 0;
 
+  const actionPlanLabel = row.actionPlan ? snowballStatsActionPlanLabel(row.actionPlan) : null;
   let stage3Head: string;
   if (!twoBarPass) {
     stage3Head = "— (ไม่ถึง — Stage 2 ไม่ผ่าน)";
+  } else if (hasMatrix && row.displayGrade) {
+    const tail = actionPlanLabel ? ` · ${actionPlanLabel}` : "";
+    stage3Head = `${failCount === 0 ? "PASS" : `FAIL ${failCount}/3`} (Grade ${row.displayGrade}${tail})`;
   } else if (failCount === 0) {
     stage3Head = "PASS (Status: Active)";
   } else if (volCascadeGradeC) {
@@ -569,6 +584,7 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
   }
 
   const grade = effectiveQualityTier(row);
+  const derivedDisplay = snowballStatsDerivedDisplayGrade(row);
   const volRatioStr =
     row.signalVolVsSma != null && Number.isFinite(row.signalVolVsSma)
       ? row.signalVolVsSma.toFixed(2)
@@ -610,21 +626,39 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
     "",
     "--------------------------------------------------",
     "🎯 FINAL GRADE DETERMINATION:",
-    `- Stage 1: ${stage1Pass ? "PASS" : "FAIL"}`,
-    `- Stage 2: ${twoBarPass ? "PASS" : "FAIL"}`,
-    `- Stage 3: ${
-      !twoBarPass
-        ? "—"
-        : failCount === 0
-          ? "PASS"
-          : volCascadeGradeC
-            ? "Vol↗ path → C"
-            : failCount === 1
-              ? "Drop 1 Item"
-              : `Drop ${failCount} Items`
-    }`,
-    `- Result: [ ${grade ? snowballLongGradeDisplayLabel(grade) : "—"} ] ตอนแจ้ง`,
   );
+
+  if (hasMatrix && row.structureCeiling) {
+    const notchStr =
+      row.gradeNotch != null
+        ? `${row.gradeNotch >= 0 ? "+" : ""}${row.gradeNotch}`
+        : "—";
+    lines.push(
+      `- Stage 1 (Ceiling)   : ${row.structureCeiling}  (${stage1Pass ? "PASS" : "FAIL"})`,
+      `- Stage 2 (Gatekeeper): ${twoBarPass ? "PASS" : "FAIL"}`,
+      `- Stage 3 (Adjuster)  : ${!twoBarPass ? "—" : `พลาด ${failCount}/3 · notch ${notchStr}`}`,
+      `- Decision Matrix     : ${row.structureCeiling} × พลาด ${failCount} → ${row.displayGrade ?? derivedDisplay ?? "—"}`,
+      `- Action Plan         : ${actionPlanLabel ?? "—"}`,
+      `- Result              : [ ${derivedDisplay ?? (grade ? snowballLongGradeDisplayLabel(grade) : "—")} ] ตอนแจ้ง`,
+    );
+  } else {
+    lines.push(
+      `- Stage 1: ${stage1Pass ? "PASS" : "FAIL"}`,
+      `- Stage 2: ${twoBarPass ? "PASS" : "FAIL"}`,
+      `- Stage 3: ${
+        !twoBarPass
+          ? "—"
+          : failCount === 0
+            ? "PASS"
+            : volCascadeGradeC
+              ? "Vol↗ path → C"
+              : failCount === 1
+                ? "Drop 1 Item"
+                : `Drop ${failCount} Items`
+      }`,
+      `- Result: [ ${grade ? snowballLongGradeDisplayLabel(grade) : "—"} ] ตอนแจ้ง`,
+    );
+  }
 
   if (row.qualityTier4hAdjusted && row.qualityTier && row.alertQualityTier && row.qualityTier !== row.alertQualityTier) {
     lines.push(

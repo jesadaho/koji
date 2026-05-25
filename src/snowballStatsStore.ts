@@ -157,6 +157,11 @@ export type AppendSnowballStatsInput = {
   alertQualityTier?: SnowballStatsQualityTier;
   momentumDowngrade?: boolean;
   momentumFailGradeF?: boolean;
+  structureCeiling?: SnowballStatsRow["structureCeiling"];
+  momentumFailCount?: SnowballStatsRow["momentumFailCount"];
+  gradeNotch?: SnowballStatsRow["gradeNotch"];
+  displayGrade?: SnowballStatsRow["displayGrade"];
+  actionPlan?: SnowballStatsRow["actionPlan"];
 };
 
 function resetSnowballStatsFollowUpFields(row: SnowballStatsRow): void {
@@ -391,6 +396,32 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     ...(input.breakout1hConfirmFail === true ? { breakout1hConfirmFail: true } : {}),
     momentumDowngrade: input.momentumDowngrade === true,
     momentumFailGradeF: input.momentumFailGradeF === true,
+    ...(input.structureCeiling === "A" ||
+    input.structureCeiling === "B" ||
+    input.structureCeiling === "C"
+      ? { structureCeiling: input.structureCeiling }
+      : {}),
+    ...(input.momentumFailCount === 0 ||
+    input.momentumFailCount === 1 ||
+    input.momentumFailCount === 2 ||
+    input.momentumFailCount === 3
+      ? { momentumFailCount: input.momentumFailCount }
+      : {}),
+    ...(input.gradeNotch === 1 ||
+    input.gradeNotch === 0 ||
+    input.gradeNotch === -1 ||
+    input.gradeNotch === -2
+      ? { gradeNotch: input.gradeNotch }
+      : {}),
+    ...(input.displayGrade
+      ? { displayGrade: input.displayGrade }
+      : {}),
+    ...(input.actionPlan === "full" ||
+    input.actionPlan === "standard" ||
+    input.actionPlan === "light" ||
+    input.actionPlan === "monitor"
+      ? { actionPlan: input.actionPlan }
+      : {}),
     atr100,
     maxUpperWick100,
     rangeScore,

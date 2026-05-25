@@ -2,6 +2,11 @@ import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
 import type { SnowballLongBreakout1hConfirmEval } from "./snowballLongBreakoutConfirm";
 import { resolveSnowballLong4hPipeline } from "./snowballLongGrade4hPipeline";
+import type {
+  SnowballActionPlan,
+  SnowballDisplayGrade,
+  SnowballStructureCeiling,
+} from "./snowballLongGradeMatrix";
 import type { TrendMomentumMetrics } from "./snowballTrendMomentumMetrics";
 import type { SnowballTwoBarInlineEval } from "./snowballTwoBarInline";
 
@@ -29,6 +34,16 @@ export type SnowballLongGradeResolution =
       footnote?: string;
       /** เกรดสุทธิ B เพราะ vol ใกล้เกณฑ์ (ผ่าน near-miss แต่ไม่ถึง SMA×strict) */
       nearMissVolume?: boolean;
+      /** Stage 1 ceiling (Base-Offset matrix สำหรับ 4h) */
+      structureCeiling?: SnowballStructureCeiling;
+      /** Stage 3 — จำนวนข้อที่พลาด (0–3) */
+      momentumFailCount?: 0 | 1 | 2 | 3;
+      /** Notch จาก ceiling: +1 / 0 / -1 / -2 */
+      gradeNotch?: 1 | 0 | -1 | -2;
+      /** ป้ายเกรดสำหรับแสดงผล (A+ / B- / D ฯลฯ) */
+      displayGrade?: SnowballDisplayGrade;
+      /** แผนเทรด — กำหนด marginScale และการ auto-open */
+      actionPlan?: SnowballActionPlan;
     }
   | {
       kind: "block";
