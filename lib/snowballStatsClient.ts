@@ -487,7 +487,7 @@ export const SNOWBALL_STATS_WIN_MIN_PCT_DEFAULT = 3;
 export const SNOWBALL_STATS_LOSS_MAX_PCT_DEFAULT = -3;
 
 export type SnowballHorizonWinrate = {
-  /** จำนวนแถวที่ pct มีค่า (ครบ horizon นั้น) */
+  /** จำนวนแถวที่ pct มีค่า (ครบ horizon นั้น) — wins + losses + flats */
   done: number;
   /** จำนวนแถวที่ pct >= WIN_MIN_PCT_DEFAULT */
   wins: number;
@@ -495,7 +495,9 @@ export type SnowballHorizonWinrate = {
   losses: number;
   /** done - wins - losses */
   flats: number;
-  /** wins / done × 100 — null ถ้า done = 0 */
+  /** wins + losses — decisive trades (ไม่นับ flat band ±3%) */
+  decisive: number;
+  /** wins / decisive × 100 — null ถ้า decisive = 0 (ไม่นับ flat) */
   winratePct: number | null;
 };
 
@@ -530,19 +532,27 @@ export function snowballHorizonWinrate(
     else if (o === "loss") losses += 1;
   }
   const flats = done - wins - losses;
-  const winratePct = done > 0 ? (wins / done) * 100 : null;
-  return { done, wins, losses, flats, winratePct };
+  const decisive = wins + losses;
+  const winratePct = decisive > 0 ? (wins / decisive) * 100 : null;
+  return { done, wins, losses, flats, decisive, winratePct };
 }
 
-/** สรุป winrate ราย horizon เป็นข้อความสั้น เช่น "12h: 60.0% (3/5) · 24h: … · 48h: …" */
+/**
+ * สรุป winrate ราย horizon เป็นข้อความสั้น เช่น "12h: 60.0% (3/5) · 24h: … · 48h: …"
+ * ตัวเลขในวงเล็บคือ wins/decisive (ไม่นับ flat) — ถ้ามี flat ในรายการนั้นจะต่อท้ายด้วย "+Nf"
+ */
 export function snowballHorizonWinrateSummary(
   rows: SnowballStatsRow[],
   horizons: ReadonlyArray<{ label: string; pctKey: SnowballHorizonPctKey }>,
 ): string {
   const parts = horizons.map((h) => {
     const w = snowballHorizonWinrate(rows, h.pctKey);
-    if (w.done === 0) return `${h.label}: —`;
-    return `${h.label}: ${w.winratePct!.toFixed(1)}% (${w.wins}/${w.done})`;
+    if (w.decisive === 0) {
+      if (w.flats > 0) return `${h.label}: — (0/0 +${w.flats}f)`;
+      return `${h.label}: —`;
+    }
+    const flatTag = w.flats > 0 ? ` +${w.flats}f` : "";
+    return `${h.label}: ${w.winratePct!.toFixed(1)}% (${w.wins}/${w.decisive}${flatTag})`;
   });
   return parts.join(" · ");
 }

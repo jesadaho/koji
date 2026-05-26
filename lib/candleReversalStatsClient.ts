@@ -281,7 +281,7 @@ export const CANDLE_REVERSAL_STATS_WIN_MIN_PCT_DEFAULT = 3;
 export const CANDLE_REVERSAL_STATS_LOSS_MAX_PCT_DEFAULT = -3;
 
 export type CandleReversalHorizonWinrate = {
-  /** จำนวน row ที่มีค่า pct ครบ — นับเป็น sample size */
+  /** จำนวน row ที่มีค่า pct ครบ — wins + losses + flats */
   done: number;
   /** จำนวน row ที่ pct >= WIN_MIN_PCT — Short bias (pct = (entry - price) / entry × 100) */
   wins: number;
@@ -289,7 +289,9 @@ export type CandleReversalHorizonWinrate = {
   losses: number;
   /** done - wins - losses */
   flats: number;
-  /** wins / done × 100 — null ถ้า done = 0 */
+  /** wins + losses — decisive trades (ไม่นับ flat band ±3%) */
+  decisive: number;
+  /** wins / decisive × 100 — null ถ้า decisive = 0 (ไม่นับ flat) */
   winratePct: number | null;
 };
 
@@ -316,11 +318,15 @@ export function candleReversalHorizonWinrate(
     else if (o === "loss") losses += 1;
   }
   const flats = done - wins - losses;
-  const winratePct = done > 0 ? (wins / done) * 100 : null;
-  return { done, wins, losses, flats, winratePct };
+  const decisive = wins + losses;
+  const winratePct = decisive > 0 ? (wins / decisive) * 100 : null;
+  return { done, wins, losses, flats, decisive, winratePct };
 }
 
-/** สรุป winrate ราย horizon เป็นข้อความสั้น "WR 12h 50.0% (5/10) · 24h … · 48h …" */
+/**
+ * สรุป winrate ราย horizon เป็นข้อความสั้น "WR 12h 50.0% (5/10) · 24h … · 48h …"
+ * ตัวเลขในวงเล็บคือ wins/decisive (ไม่นับ flat) — ถ้ามี flat ในรายการนั้นจะต่อท้ายด้วย "+Nf"
+ */
 export function candleReversalHorizonWinrateSummary(
   rows: CandleReversalStatsRow[],
   horizons: ReadonlyArray<{
@@ -330,8 +336,12 @@ export function candleReversalHorizonWinrateSummary(
 ): string {
   const parts = horizons.map((h) => {
     const w = candleReversalHorizonWinrate(rows, h.pctKey);
-    if (w.done === 0) return `${h.label}: —`;
-    return `${h.label}: ${w.winratePct!.toFixed(1)}% (${w.wins}/${w.done})`;
+    if (w.decisive === 0) {
+      if (w.flats > 0) return `${h.label}: — (0/0 +${w.flats}f)`;
+      return `${h.label}: —`;
+    }
+    const flatTag = w.flats > 0 ? ` +${w.flats}f` : "";
+    return `${h.label}: ${w.winratePct!.toFixed(1)}% (${w.wins}/${w.decisive}${flatTag})`;
   });
   return parts.join(" · ");
 }

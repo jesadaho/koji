@@ -155,12 +155,22 @@ function reversalRowMatchesShapeFilter(row: CandleReversalStatsRow, filter: Reve
 function reversalWinrateSummary(rows: CandleReversalStatsRow[]): string {
   const done = rows.filter((r) => r.outcome !== "pending");
   const wins = done.filter((r) => r.outcome === "win").length;
+  const losses = done.filter((r) => r.outcome === "loss").length;
+  const decisive = wins + losses;
+  const flats = done.length - decisive;
   const pending = rows.length - done.length;
-  if (done.length === 0) {
-    return `Winrate: — · ปิดผล 0/${rows.length}${pending > 0 ? ` · Pending ${pending}` : ""}`;
+
+  const pendingTag = pending > 0 ? ` · Pending ${pending}` : "";
+  const flatTag = flats > 0 ? ` +${flats}f` : "";
+
+  if (decisive === 0) {
+    if (flats > 0) {
+      return `Winrate: — (0/0${flatTag}) · ปิดผล ${done.length}/${rows.length}${pendingTag}`;
+    }
+    return `Winrate: — · ปิดผล 0/${rows.length}${pendingTag}`;
   }
-  const winrate = (wins / done.length) * 100;
-  return `Winrate: ${winrate.toFixed(1)}% (${wins}/${done.length})${pending > 0 ? ` · Pending ${pending}` : ""}`;
+  const winrate = (wins / decisive) * 100;
+  return `Winrate: ${winrate.toFixed(1)}% (${wins}/${decisive}${flatTag}) · ปิดผล ${done.length}/${rows.length}${pendingTag}`;
 }
 
 type ReversalStatsSectionProps = {
@@ -267,7 +277,7 @@ function ReversalStatsSection({
         {horizonWinrateText ? (
           <span
             className="sub"
-            title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +3% · Loss ≤ -3%"
+            title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +3% · Loss ≤ -3% · WR ไม่นับ flat (decisive = wins + losses), +Nf = จำนวน flat"
             style={{ display: "block", marginTop: "0.15rem" }}
           >
             WR · {horizonWinrateText}

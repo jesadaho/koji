@@ -558,7 +558,7 @@ export default function SnowballStatsTelegramMiniApp() {
         </div>
         <p
           className="sub"
-          title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +3% · Loss ≤ -3% · ทิศของสัญญาณถูกปรับให้บวก = ฝั่งกำไรแล้ว"
+          title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +3% · Loss ≤ -3% · ทิศของสัญญาณถูกปรับให้บวก = ฝั่งกำไรแล้ว · WR ไม่นับ flat (decisive = wins + losses), +Nf = จำนวน flat"
           style={{ marginBottom: "0.5rem" }}
         >
           WR · {horizonWinrateText}
