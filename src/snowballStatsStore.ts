@@ -124,6 +124,7 @@ export type AppendSnowballStatsInput = {
   volSma: number;
   qualityTier?: SnowballStatsQualityTier;
   structureTier?: SnowballLongStructureTier;
+  swing200Ok?: boolean | null;
   /** Wilder ATR(100) ที่แท่งสัญญาณ — baseline ความผันผวน */
   atr100?: number | null;
   /** Max upper wick ใน 100 แท่งก่อนแท่งสัญญาณ — เพดานไส้บน */
@@ -393,6 +394,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     input.structureTier === "c_plus"
       ? { structureTier: input.structureTier }
       : {}),
+    ...(typeof input.swing200Ok === "boolean" ? { swing200Ok: input.swing200Ok } : {}),
     alertQualityTier: input.alertQualityTier ?? input.qualityTier,
     ...(input.breakout1hConfirmFail === true ? { breakout1hConfirmFail: true } : {}),
     momentumDowngrade: input.momentumDowngrade === true,

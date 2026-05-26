@@ -3127,7 +3127,7 @@ export async function runPublicIndicatorFeedInternal(
           (intrabar ? hiE! > vahH && hiPrev! <= vahH : clE! > vahH && clPrev! <= vahH);
         const vahOk = Boolean(vahCross);
 
-        if (!classicSwing && !vahOk) return;
+        if (!classicSwing && !vahOk && !swing200) return;
 
         const innerHvn = highVolumeNodeBarRange(v15, h15, l15, iSig, svpInnerLb);
         if (longRequireInnerHvnClear) {
@@ -3749,6 +3749,7 @@ export async function runPublicIndicatorFeedInternal(
                   ...(gradeResolution.kind === "grade"
                     ? { statsStructureTier: gradeResolution.structureTier }
                     : {}),
+                  statsSwing200Ok: swing200,
                   ...(skipSnowballTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -3810,6 +3811,7 @@ export async function runPublicIndicatorFeedInternal(
                   ...(gradeResolution.kind === "grade"
                     ? { structureTier: gradeResolution.structureTier }
                     : {}),
+                  swing200Ok: swing200,
                   ...(gradeResolution.kind === "grade" && gradeResolution.structureCeiling
                     ? { structureCeiling: gradeResolution.structureCeiling }
                     : {}),
@@ -5597,6 +5599,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
     const hiPrevSt = high[iPrevSt]!;
     const clPrevSt = close[iPrevSt]!;
     const priorMaxSt = maxHighPriorWindow(high, iSigSt, swingLb, swingEx);
+    const priorMaxGradeSt = maxHighPriorWindow(high, iSigSt, swingGradeLb, swingEx);
     const swing48St = snowballLongSwingHighBreak(high, close, iSigSt, swingLb, swingEx, false);
     const swing200St = snowballLongSwingHighBreak(high, close, iSigSt, swingGradeLb, swingEx, false);
     const vahHSt = longVahOn ? highVolumeNodeBarHigh(volume, high, low, iSigSt, vahLb) : null;
@@ -5660,6 +5663,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
       swingGradeLb,
       swingEx,
       priorMaxHigh: Number.isFinite(priorMaxSt) ? priorMaxSt : null,
+      priorMaxHighGrade: Number.isFinite(priorMaxGradeSt) ? priorMaxGradeSt : null,
       swing48: swing48St,
       swing200: swing200St,
       vahOk: vahOkSt,

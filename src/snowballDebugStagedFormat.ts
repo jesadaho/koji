@@ -48,6 +48,7 @@ export type Snowball4hStagedDebugInput = {
   swingGradeLb: number;
   swingEx: number;
   priorMaxHigh: number | null;
+  priorMaxHighGrade?: number | null;
   swing48: boolean;
   swing200: boolean;
   vahOk: boolean;
@@ -116,8 +117,11 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     timeSec,
     pack1h,
     swingLb,
+    swingGradeLb,
     priorMaxHigh,
+    priorMaxHighGrade,
     swing48,
+    swing200,
     vahOk,
     vahHigh,
     longVahOn,
@@ -252,6 +256,7 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     "",
     `🟢 [STAGE 1: 4H STRUCTURE] -> ${stage1Pass ? "PASS" : "FAIL"} (Status: ${stage1Pass ? "Active" : "Blocked"})`,
     `  [${stageMark(swing48)}] Swing HH${swingLb} Check (Close > Reference ${priorMaxHigh != null ? fmtPx(priorMaxHigh) : "—"})`,
+    `  [${stageMark(swing200)}] Swing HH${swingGradeLb} Check (Close > Reference ${priorMaxHighGrade != null && Number.isFinite(priorMaxHighGrade) ? fmtPx(priorMaxHighGrade) : "—"}) — โครงสร้างใหญ่ จัดเกรด`,
     longVahOn
       ? `  [${stageMark(vahOk)}] VAH Proxy Escape (Price > Vol Peak ${vahHigh != null ? fmtPx(vahHigh) : "—"})`
       : `  [—] VAH Proxy Escape (ปิด — INDICATOR_PUBLIC_SNOWBALL_LONG_VAH_BREAK)`,

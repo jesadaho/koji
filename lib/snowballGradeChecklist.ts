@@ -495,6 +495,7 @@ type StagedPopupRow = Pick<
   | "triggerKind"
   | "signalBarTf"
   | "structureTier"
+  | "swing200Ok"
   | "qualityTier"
   | "alertQualityTier"
   | "momentumFailGradeF"
@@ -545,6 +546,18 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
 
   const swing48Ok = struct != null;
   const vahOk = struct === "a_plus" || struct === "b_plus";
+  // HH200 ผ่านหรือไม่ — ใช้ค่าจริงถ้ามี ไม่งั้นอนุมานจาก structureTier
+  // a_plus = HH48+HH200+VAH ครบ → HH200 ✓
+  // c_plus = HH48 หรือ VAH อย่างเดียว (swing200→swing48 มีเสมอ) → HH200 ✗
+  // b_plus = สองอย่าง (ไม่รู้แน่ว่ามี HH200 ไหม) → null
+  const swing200Ok: boolean | null =
+    typeof row.swing200Ok === "boolean"
+      ? row.swing200Ok
+      : struct === "a_plus"
+        ? true
+        : struct === "c_plus"
+          ? false
+          : null;
   const stage1Pass = swing48Ok;
 
   const twoBarPass = snowballStatsConfirmGateStepsAllPass(row);
@@ -628,6 +641,13 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
     "",
     `🟢 [STAGE 1: 4H STRUCTURE] -> ${stage1Pass ? "PASS" : "FAIL"} (Status: ${stage1Pass ? "Active" : "Blocked"})`,
     `  [${stageLineMark(swing48Ok)}] Swing HH48 Check — โครงสร้าง ${struct ? snowballLongGradeShortLabel(struct) : "—"} (${struct ? structureTierHint(struct) : "ไม่บันทึก"})`,
+    `  [${swing200Ok == null ? "—" : stageLineMark(swing200Ok)}] Swing HH200 Check${
+      swing200Ok === true
+        ? " — โครงสร้างใหญ่ผ่าน (ช่วยดันเกรด)"
+        : swing200Ok === false
+          ? " — ไม่ผ่าน HH200 (ตัดเพดานเกรด)"
+          : " — แถวเก่าไม่บันทึก (อนุมานจาก " + (struct ? snowballLongGradeShortLabel(struct) : "—") + " ไม่ได้)"
+    }`,
     `  [${stageLineMark(vahOk)}] VAH Proxy Escape${struct === "b_plus" ? " (Grade B path)" : struct === "a_plus" ? " (A+ path)" : " — ไม่ถึง VAH (Grade C)"}`,
     `  [—] EMA Trend Check — ไม่บันทึกในแถวสถิติ (ดู debug snowball สดได้)`,
     "",

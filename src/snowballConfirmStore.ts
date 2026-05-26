@@ -81,6 +81,8 @@ export type SnowballPendingConfirm = {
   statsConfirmGateSteps?: Array<{ label: string; ok: boolean; detail: string }>;
   /** โครงสร้าง HH48/HH200/VAH ตอนแจ้ง (LONG) */
   statsStructureTier?: "a_plus" | "b_plus" | "c_plus";
+  /** Stage 1 — Swing HH200 (โครงสร้างใหญ่) ผ่านหรือไม่ ตอนแจ้ง (LONG) */
+  statsSwing200Ok?: boolean;
 };
 
 export type SnowballPendingConfirmState = {
@@ -205,6 +207,8 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     o.statsStructureTier === "c_plus"
       ? o.statsStructureTier
       : undefined;
+  const statsSwing200Ok =
+    o.statsSwing200Ok === true || o.statsSwing200Ok === false ? o.statsSwing200Ok : undefined;
   return {
     id: typeof o.id === "string" && o.id ? o.id : randomUUID(),
     symbol,
@@ -243,6 +247,7 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsVolNearMultAtAlertOk ? { statsVolNearMultAtAlert } : {}),
     ...(statsConfirmGateSteps ? { statsConfirmGateSteps } : {}),
     ...(statsStructureTier ? { statsStructureTier } : {}),
+    ...(statsSwing200Ok !== undefined ? { statsSwing200Ok } : {}),
   };
 }
 

@@ -53,6 +53,8 @@ export type SnowballStatsRow = {
   qualityTier?: SnowballStatsQualityTier;
   /** โครงสร้าง HH48/HH200/VAH ตอนแจ้ง (A+/B/C) — คงที่แม้ qualityTier เป็น D+/F */
   structureTier?: SnowballLongStructureTier;
+  /** Stage 1 — Swing HH200 (โครงสร้างใหญ่) ผ่านหรือไม่ ตอนแจ้ง */
+  swing200Ok?: boolean | null;
   /** snapshot เกรดตอนแจ้งครั้งแรก (ก่อน follow-up 4h) */
   alertQualityTier?: SnowballStatsQualityTier;
   /** ปรับ qualityTier แล้วหลังครบ 4 ชม. */
