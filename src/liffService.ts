@@ -68,6 +68,7 @@ import {
 import { isAdminTelegramUserId } from "./adminIds";
 import { loadCandleReversalStatsState, resetCandleReversalStatsState } from "./candleReversalStatsStore";
 import { runCandleReversalStatsFollowUpTick } from "./candleReversalStatsTick";
+import { correctSnowballStatsOutcomeFromPct24h } from "./snowballStatsTick";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
 import {
   loadRsiDivergenceStatsState,
@@ -779,6 +780,28 @@ export async function liffResetSnowballStats(
   }
   await resetSnowballStatsState();
   return { ok: true };
+}
+
+/**
+ * Admin — บังคับ recompute `outcome` + `resultRr` ของทุกแถวที่มี `pct24h` แล้ว (ข้าม pending guard)
+ * ใช้ค่า pct24h / maxRoiPct ที่บันทึกอยู่แล้ว (ไม่ refetch kline)
+ */
+export async function liffCorrectSnowballStatsOutcome(
+  telegramUserId: number,
+  opts?: { symbol?: string },
+): Promise<
+  | { ok: true; scanned: number; changedOutcome: number; changedRr: number }
+  | { ok: false; status: number; error: string }
+> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  try {
+    const r = await correctSnowballStatsOutcomeFromPct24h({ symbol: opts?.symbol });
+    return { ok: true, ...r };
+  } catch (e) {
+    return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function liffGetCandleReversalStats(

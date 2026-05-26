@@ -10,6 +10,7 @@ import {
   loadSnowballStatsState,
   applySnowballStatsRowMigrations,
   saveSnowballStatsState,
+  type SnowballStatsOutcome,
   type SnowballStatsRow,
 } from "./snowballStatsStore";
 import {
@@ -504,6 +505,71 @@ export async function runSnowballStatsFollowUpTick(
     grade4h,
     horizonRows,
   };
+}
+
+/**
+ * Admin — ปรับ `outcome` + `resultRr` ของทุกแถวที่มี `pct24h` แล้ว
+ * โดยข้าม pending guard (จะ overwrite แม้ outcome เดิมจะเป็น loss/win_trend/win_quick_tp30/flat)
+ *
+ * ใช้สำหรับกรณีกฎ outcome เปลี่ยน / เคยถูก finalize ก่อนกฎใหม่ / ต้องการ recalc ให้ตรงกับ pct24h ที่บันทึกอยู่
+ *
+ * ไม่ refetch kline / ไม่แก้ pct24h — ใช้ค่าที่เก็บไว้ในแถวเท่านั้น
+ */
+export async function correctSnowballStatsOutcomeFromPct24h(opts?: {
+  symbol?: string;
+}): Promise<{ scanned: number; changedOutcome: number; changedRr: number }> {
+  const symbolFilter = opts?.symbol?.trim()
+    ? toBinanceUsdtPerpSymbol(opts.symbol.trim()).toUpperCase()
+    : undefined;
+
+  const state = await loadSnowballStatsState();
+  let scanned = 0;
+  let changedOutcome = 0;
+  let changedRr = 0;
+
+  const winMin = outcomeWinMinPct();
+  const quickTp30 = outcomeQuickTp30MinPct();
+  const rewardSrc = rrRewardSource();
+
+  for (const row of state.rows) {
+    if (symbolFilter && row.symbol.trim().toUpperCase() !== symbolFilter) continue;
+    if (row.pct24h == null || !Number.isFinite(row.pct24h)) continue;
+    scanned += 1;
+
+    const pct24 = row.pct24h;
+    let nextOutcome: SnowballStatsOutcome;
+    if (
+      row.maxRoiPct != null &&
+      Number.isFinite(row.maxRoiPct) &&
+      row.maxRoiPct >= quickTp30
+    ) {
+      nextOutcome = "win_quick_tp30";
+    } else if (pct24 < 0) {
+      nextOutcome = "loss";
+    } else if (pct24 >= winMin) {
+      nextOutcome = "win_trend";
+    } else {
+      nextOutcome = "flat";
+    }
+
+    const reward = rewardSrc === "mfe" ? (row.maxRoiPct ?? 0) : pct24;
+    const nextRr = formatRr(reward, row.maxDrawdownPct ?? 0);
+
+    if (row.outcome !== nextOutcome) {
+      row.outcome = nextOutcome;
+      changedOutcome += 1;
+    }
+    if (row.resultRr !== nextRr) {
+      row.resultRr = nextRr;
+      changedRr += 1;
+    }
+  }
+
+  if (changedOutcome > 0 || changedRr > 0) {
+    await saveSnowballStatsState(state);
+  }
+
+  return { scanned, changedOutcome, changedRr };
 }
 
 /** Admin — รีเติม migration / horizon / trend momentum / gate steps (ไม่สแกนสัญญาณใหม่) */

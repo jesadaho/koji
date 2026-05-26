@@ -42,6 +42,7 @@ import {
   liffGetSnowballStats,
   liffDeleteSnowballStatsRow,
   liffResetSnowballStats,
+  liffCorrectSnowballStatsOutcome,
   liffBackfillCandleReversalStats,
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
@@ -359,6 +360,27 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       const r = await liffResetSnowballStats(auth.telegramUserId);
       if (!r.ok) return json({ error: r.error }, r.status);
       return json({ ok: true });
+    }
+    if (segs.length === 2 && a === "snowball-stats" && segs[1] === "correct") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      let symbol: string | undefined;
+      try {
+        const body = (await req.json()) as { symbol?: unknown } | null;
+        if (body && typeof body === "object" && typeof body.symbol === "string" && body.symbol.trim()) {
+          symbol = body.symbol.trim();
+        }
+      } catch {
+        /* no body or invalid JSON = correct ทั้งตาราง */
+      }
+      const r = await liffCorrectSnowballStatsOutcome(auth.telegramUserId, { symbol });
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({
+        ok: true,
+        scanned: r.scanned,
+        changedOutcome: r.changedOutcome,
+        changedRr: r.changedRr,
+      });
     }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);

@@ -198,6 +198,9 @@ export default function SnowballStatsTelegramMiniApp() {
   const [deleteErr, setDeleteErr] = useState<string | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetErr, setResetErr] = useState<string | null>(null);
+  const [correctBusy, setCorrectBusy] = useState(false);
+  const [correctErr, setCorrectErr] = useState<string | null>(null);
+  const [correctOk, setCorrectOk] = useState<string | null>(null);
 
   const isAdmin = payload?.isAdmin === true;
 
@@ -271,6 +274,38 @@ export default function SnowballStatsTelegramMiniApp() {
       setResetErr(e instanceof Error ? e.message : String(e));
     } finally {
       setResetBusy(false);
+    }
+  }, [api, loadStats]);
+
+  const correctOutcomeFromPct24h = useCallback(async () => {
+    if (
+      !window.confirm(
+        "ปรับ result ทุกแถวให้ตรงกับ pct24h?\n\nระบบจะ recompute outcome/RR จากค่า pct24h ที่บันทึกอยู่ — ทับของเดิม โดยไม่สนใจ pending guard",
+      )
+    ) {
+      return;
+    }
+    setCorrectBusy(true);
+    setCorrectErr(null);
+    setCorrectOk(null);
+    try {
+      const r = (await api("/snowball-stats/correct", { method: "POST", body: "{}" })) as {
+        ok?: boolean;
+        scanned?: number;
+        changedOutcome?: number;
+        changedRr?: number;
+      } | null;
+      const scanned = typeof r?.scanned === "number" ? r.scanned : 0;
+      const changedOutcome = typeof r?.changedOutcome === "number" ? r.changedOutcome : 0;
+      const changedRr = typeof r?.changedRr === "number" ? r.changedRr : 0;
+      setCorrectOk(
+        `ปรับเสร็จ — สแกน ${scanned} แถว · เปลี่ยน outcome ${changedOutcome} · เปลี่ยน RR ${changedRr}`,
+      );
+      await loadStats();
+    } catch (e) {
+      setCorrectErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setCorrectBusy(false);
     }
   }, [api, loadStats]);
 
@@ -701,6 +736,17 @@ export default function SnowballStatsTelegramMiniApp() {
           {isAdmin ? (
             <button
               type="button"
+              className="sparkStatsRefreshBtn"
+              disabled={correctBusy || rows.length === 0}
+              onClick={() => void correctOutcomeFromPct24h()}
+              title="Recompute outcome/RR ทุกแถวจาก pct24h ที่บันทึกอยู่ — ข้าม pending guard"
+            >
+              {correctBusy ? "กำลังปรับ…" : "ปรับ result จาก 24h"}
+            </button>
+          ) : null}
+          {isAdmin ? (
+            <button
+              type="button"
               className="sparkStatsRefreshBtn danger"
               disabled={resetBusy || rows.length === 0}
               onClick={() => void resetAllStats()}
@@ -709,6 +755,16 @@ export default function SnowballStatsTelegramMiniApp() {
             </button>
           ) : null}
         </p>
+        {correctErr ? (
+          <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
+            {correctErr}
+          </p>
+        ) : null}
+        {correctOk && !correctErr ? (
+          <p className="sub" style={{ marginTop: "0.5rem", color: "#2a9d6a" }} role="status">
+            {correctOk}
+          </p>
+        ) : null}
         {resetErr ? (
           <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
             {resetErr}
