@@ -65,6 +65,19 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeEnabled?: boolean;
   reversalAutoTradeMarginUsdt?: number;
   reversalAutoTradeLeverage?: number;
+
+  /**
+   * Reversal TP/SL strategy (ทำงานบน cron tick หลังเปิด Market):
+   * - TP1 PricePct% drop → ปิด TP1 PartialPct% ของ holdVol + ตั้ง MEXC plan SL @ entry
+   * - TP2 PricePct% drop → ปิดทั้งหมด + cancel SL plan
+   * - ครบ MaxHoldHours ชม. → ปิดทั้งหมด (force) + cancel SL plan
+   * default: TP1 10% · partial 50% · TP2 25% · maxHold 48h
+   */
+  reversalAutoTradeTpSlEnabled?: boolean;
+  reversalAutoTradeTp1PricePct?: number;
+  reversalAutoTradeTp1PartialPct?: number;
+  reversalAutoTradeTp2PricePct?: number;
+  reversalAutoTradeMaxHoldHours?: number;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -202,6 +215,11 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeEnabled?: boolean;
   reversalAutoTradeMarginUsdt?: number | null;
   reversalAutoTradeLeverage?: number | null;
+  reversalAutoTradeTpSlEnabled?: boolean;
+  reversalAutoTradeTp1PricePct?: number | null;
+  reversalAutoTradeTp1PartialPct?: number | null;
+  reversalAutoTradeTp2PricePct?: number | null;
+  reversalAutoTradeMaxHoldHours?: number | null;
 };
 
 /**
@@ -255,7 +273,12 @@ export async function saveTradingViewMexcSettings(
   const touchedReversalPatch =
     input.reversalAutoTradeEnabled !== undefined ||
     input.reversalAutoTradeMarginUsdt !== undefined ||
-    input.reversalAutoTradeLeverage !== undefined;
+    input.reversalAutoTradeLeverage !== undefined ||
+    input.reversalAutoTradeTpSlEnabled !== undefined ||
+    input.reversalAutoTradeTp1PricePct !== undefined ||
+    input.reversalAutoTradeTp1PartialPct !== undefined ||
+    input.reversalAutoTradeTp2PricePct !== undefined ||
+    input.reversalAutoTradeMaxHoldHours !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -401,6 +424,39 @@ export async function saveTradingViewMexcSettings(
         : input.reversalAutoTradeLeverage !== undefined
           ? input.reversalAutoTradeLeverage
           : prev?.reversalAutoTradeLeverage,
+
+    reversalAutoTradeTpSlEnabled:
+      input.reversalAutoTradeTpSlEnabled !== undefined
+        ? input.reversalAutoTradeTpSlEnabled
+        : prev?.reversalAutoTradeTpSlEnabled ?? true,
+
+    reversalAutoTradeTp1PricePct:
+      input.reversalAutoTradeTp1PricePct === null
+        ? undefined
+        : input.reversalAutoTradeTp1PricePct !== undefined
+          ? input.reversalAutoTradeTp1PricePct
+          : prev?.reversalAutoTradeTp1PricePct,
+
+    reversalAutoTradeTp1PartialPct:
+      input.reversalAutoTradeTp1PartialPct === null
+        ? undefined
+        : input.reversalAutoTradeTp1PartialPct !== undefined
+          ? input.reversalAutoTradeTp1PartialPct
+          : prev?.reversalAutoTradeTp1PartialPct,
+
+    reversalAutoTradeTp2PricePct:
+      input.reversalAutoTradeTp2PricePct === null
+        ? undefined
+        : input.reversalAutoTradeTp2PricePct !== undefined
+          ? input.reversalAutoTradeTp2PricePct
+          : prev?.reversalAutoTradeTp2PricePct,
+
+    reversalAutoTradeMaxHoldHours:
+      input.reversalAutoTradeMaxHoldHours === null
+        ? undefined
+        : input.reversalAutoTradeMaxHoldHours !== undefined
+          ? input.reversalAutoTradeMaxHoldHours
+          : prev?.reversalAutoTradeMaxHoldHours,
   };
 
   void touchedSnowballPatch;

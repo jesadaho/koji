@@ -4,6 +4,7 @@ import {
   getContractTickerPublic,
   getOpenPositions,
   type MexcCredentials,
+  type OpenPositionRow,
 } from "./mexcFuturesClient";
 import { fetchBinanceUsdmKlines } from "./binanceIndicatorKline";
 import { emaLine } from "./indicatorMath";
@@ -18,9 +19,16 @@ import {
   loadReversalAutoTradeState,
   saveReversalAutoTradeState,
   withRecordedReversalPlaced,
+  withReversalActiveOpen,
 } from "./reversalAutoTradeStateStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 import type { CandleReversalModel, CandleReversalTf } from "./candleReversalDetect";
+
+/** ค่าเริ่มต้นกลยุทธ์ TP/SL เมื่อ user ยังไม่ตั้งค่า (อ่านจาก settings ของ user) */
+const REVERSAL_TPSL_DEFAULT_TP1_PCT = 10;
+const REVERSAL_TPSL_DEFAULT_TP1_PARTIAL = 50;
+const REVERSAL_TPSL_DEFAULT_TP2_PCT = 25;
+const REVERSAL_TPSL_DEFAULT_MAX_HOURS = 48;
 
 /** ค่าเริ่มต้นเปิด — ตั้ง REVERSAL_AUTOTRADE_ENABLED=0/false/off/no เพื่อปิดเซิร์ฟทั้งหมด */
 export function isReversalAutotradeEnabled(): boolean {
@@ -65,6 +73,49 @@ function hasActiveUsdtPosition(
 ): boolean {
   const sym = contractSymbol.trim();
   return positions.some((p) => p.symbol === sym && p.state === 1 && Number(p.holdVol) > 0);
+}
+
+function readMexcAvgEntryPriceShort(
+  positions: OpenPositionRow[],
+  contractSymbol: string
+): number | null {
+  const sym = contractSymbol.trim();
+  const p = positions.find(
+    (x) => x.symbol === sym && x.state === 1 && Number(x.holdVol) > 0 && x.positionType === 2
+  );
+  if (!p) return null;
+  const o = Number(p.openAvgPrice);
+  if (Number.isFinite(o) && o > 0) return o;
+  const h = Number(p.holdAvgPrice);
+  if (Number.isFinite(h) && h > 0) return h;
+  return null;
+}
+
+function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings): {
+  enabled: boolean;
+  tp1PricePct: number;
+  tp1PartialPct: number;
+  tp2PricePct: number;
+  maxHoldHours: number;
+} {
+  const en = row.reversalAutoTradeTpSlEnabled !== false;
+  const t1 =
+    typeof row.reversalAutoTradeTp1PricePct === "number" && Number.isFinite(row.reversalAutoTradeTp1PricePct) && row.reversalAutoTradeTp1PricePct > 0
+      ? row.reversalAutoTradeTp1PricePct
+      : REVERSAL_TPSL_DEFAULT_TP1_PCT;
+  const t1p =
+    typeof row.reversalAutoTradeTp1PartialPct === "number" && Number.isFinite(row.reversalAutoTradeTp1PartialPct) && row.reversalAutoTradeTp1PartialPct > 0
+      ? row.reversalAutoTradeTp1PartialPct
+      : REVERSAL_TPSL_DEFAULT_TP1_PARTIAL;
+  const t2 =
+    typeof row.reversalAutoTradeTp2PricePct === "number" && Number.isFinite(row.reversalAutoTradeTp2PricePct) && row.reversalAutoTradeTp2PricePct > 0
+      ? row.reversalAutoTradeTp2PricePct
+      : REVERSAL_TPSL_DEFAULT_TP2_PCT;
+  const mh =
+    typeof row.reversalAutoTradeMaxHoldHours === "number" && Number.isFinite(row.reversalAutoTradeMaxHoldHours) && row.reversalAutoTradeMaxHoldHours > 0
+      ? row.reversalAutoTradeMaxHoldHours
+      : REVERSAL_TPSL_DEFAULT_MAX_HOURS;
+  return { enabled: en, tp1PricePct: t1, tp1PartialPct: Math.min(100, t1p), tp2PricePct: t2, maxHoldHours: mh };
 }
 
 export type ReversalAutoTradeInput = {
@@ -277,6 +328,61 @@ export async function runReversalAutoTradeAfterReversalAlert(
       const bodyPct = bodyRatio * 100;
       const wickPct = wickRatio * 100;
 
+      const plan = resolveReversalTpSlPlanFromRow(row);
+
+      let mexcAvgEntry: number | null = null;
+      let trackedTpSl = false;
+      if (aboveEma && plan.enabled) {
+        try {
+          const posAfter = await getOpenPositions(creds, contractSymbol);
+          mexcAvgEntry = readMexcAvgEntryPriceShort(posAfter, contractSymbol);
+        } catch (e) {
+          console.error("[reversalAutoTrade] getOpenPositions after open", contractSymbol, userId, e);
+        }
+        if (typeof mexcAvgEntry === "number" && mexcAvgEntry > 0) {
+          state = withReversalActiveOpen(
+            state,
+            userId,
+            {
+              contractSymbol,
+              binanceSymbol,
+              side: "short",
+              openedAtMs: Date.now(),
+              referenceEntryPrice: markPrice,
+              mexcAvgEntryPrice: mexcAvgEntry,
+              leverage: lev,
+              tp1PricePct: plan.tp1PricePct,
+              tp1PartialPct: plan.tp1PartialPct,
+              tp2PricePct: plan.tp2PricePct,
+              maxHoldHours: plan.maxHoldHours,
+            },
+            dayKey
+          );
+          trackedTpSl = true;
+        }
+      }
+
+      const tpSlLines: string[] = [];
+      if (plan.enabled) {
+        if (aboveEma) {
+          if (trackedTpSl && mexcAvgEntry != null) {
+            tpSlLines.push(
+              `ราคาเข้าเฉลี่ย MEXC: ${fmtReversalAutoTradePrice(mexcAvgEntry)} USDT — ใช้คำนวณ % drop จริง`,
+              `กลยุทธ์: TP1 -${plan.tp1PricePct}% ปิด ${plan.tp1PartialPct}% · TP2 -${plan.tp2PricePct}% ปิดทั้งหมด`,
+              `กติกา ${plan.maxHoldHours} ชม.: ถ้าถือครบจะปิด market ทั้งหมด · SL บังทุนตั้งหลัง TP1`
+            );
+          } else {
+            tpSlLines.push(
+              "⚠️ ดึงราคาเข้าเฉลี่ย MEXC ไม่สำเร็จ — กลยุทธ์ TP/SL จะไม่ทำงานในรอบนี้ (ตั้งเองได้)"
+            );
+          }
+        } else {
+          tpSlLines.push(
+            `กลยุทธ์ TP/SL: รอ Limit fill ก่อนเริ่ม track (TP1 -${plan.tp1PricePct}% · TP2 -${plan.tp2PricePct}% · ${plan.maxHoldHours} ชม.)`
+          );
+        }
+      }
+
       await notifyLines(userId, [
         "Koji — Reversal auto-open (MEXC)",
         aboveEma
@@ -289,6 +395,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         aboveEma
           ? `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} > EMA50 15m ~${fmtReversalAutoTradePrice(ema50)}`
           : `Limit ~${fmtReversalAutoTradePrice(ema50)} (EMA50 15m) · ราคาปัจจุบัน ~${fmtReversalAutoTradePrice(markPrice)}`,
+        ...tpSlLines,
         "1 order/เหรียญ/วัน (BKK) — จะไม่สั่งซ้ำในเหรียญนี้วันนี้",
       ]);
     } catch (e) {

@@ -132,6 +132,11 @@ type ReversalAutoTradeApiBundle = {
   enabled?: boolean;
   marginUsdt?: number | null;
   leverage?: number | null;
+  tpSlEnabled?: boolean;
+  tp1PricePct?: number | null;
+  tp1PartialPct?: number | null;
+  tp2PricePct?: number | null;
+  maxHoldHours?: number | null;
 };
 
 type TradingViewMexcResponse = {
@@ -212,6 +217,11 @@ export default function SettingsTelegramMiniApp() {
   const [revEnabled, setRevEnabled] = useState(false);
   const [revMargin, setRevMargin] = useState("");
   const [revLeverage, setRevLeverage] = useState("");
+  const [revTpSlEnabled, setRevTpSlEnabled] = useState(true);
+  const [revTp1PricePct, setRevTp1PricePct] = useState("");
+  const [revTp1PartialPct, setRevTp1PartialPct] = useState("");
+  const [revTp2PricePct, setRevTp2PricePct] = useState("");
+  const [revMaxHoldHours, setRevMaxHoldHours] = useState("");
   const [revSaveErr, setRevSaveErr] = useState("");
   const [revSaveOk, setRevSaveOk] = useState("");
   const [revSaving, setRevSaving] = useState(false);
@@ -317,6 +327,19 @@ export default function SettingsTelegramMiniApp() {
     setRevEnabled(Boolean(st.enabled));
     setRevMargin(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
     setRevLeverage(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
+    setRevTpSlEnabled(st.tpSlEnabled !== false);
+    setRevTp1PricePct(
+      st.tp1PricePct != null && Number.isFinite(st.tp1PricePct) ? String(st.tp1PricePct) : ""
+    );
+    setRevTp1PartialPct(
+      st.tp1PartialPct != null && Number.isFinite(st.tp1PartialPct) ? String(st.tp1PartialPct) : ""
+    );
+    setRevTp2PricePct(
+      st.tp2PricePct != null && Number.isFinite(st.tp2PricePct) ? String(st.tp2PricePct) : ""
+    );
+    setRevMaxHoldHours(
+      st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.reversalAutoTrade]);
 
@@ -760,6 +783,10 @@ export default function SettingsTelegramMiniApp() {
 
     const marginParsed = revMargin.trim() ? parseNumRaw(revMargin) : null;
     const levParsed = revLeverage.trim() ? parseNumRaw(revLeverage) : null;
+    const tp1Parsed = revTp1PricePct.trim() ? parseNumRaw(revTp1PricePct) : null;
+    const tp1PartialParsed = revTp1PartialPct.trim() ? parseNumRaw(revTp1PartialPct) : null;
+    const tp2Parsed = revTp2PricePct.trim() ? parseNumRaw(revTp2PricePct) : null;
+    const maxHoldParsed = revMaxHoldHours.trim() ? parseNumRaw(revMaxHoldHours) : null;
 
     if (revMargin.trim() && marginParsed == null) {
       setRevSaveErr("Margin ไม่ใช่ตัวเลข");
@@ -787,6 +814,26 @@ export default function SettingsTelegramMiniApp() {
         return;
       }
     }
+    if (revTp1PricePct.trim() && (tp1Parsed == null || !(tp1Parsed > 0 && tp1Parsed < 100))) {
+      setRevSaveErr("TP1 ราคาดิ่ง % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (revTp1PartialPct.trim() && (tp1PartialParsed == null || !(tp1PartialParsed > 0 && tp1PartialParsed < 100))) {
+      setRevSaveErr("TP1 ปิด % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (revTp2PricePct.trim() && (tp2Parsed == null || !(tp2Parsed > 0 && tp2Parsed < 100))) {
+      setRevSaveErr("TP2 ราคาดิ่ง % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (revMaxHoldHours.trim() && (maxHoldParsed == null || !(maxHoldParsed > 0 && maxHoldParsed <= 720))) {
+      setRevSaveErr("ชั่วโมงถือสูงสุดต้อง > 0 และ ≤ 720");
+      return;
+    }
+    if (tp1Parsed != null && tp2Parsed != null && !(tp2Parsed > tp1Parsed)) {
+      setRevSaveErr("TP2 ต้องมากกว่า TP1");
+      return;
+    }
 
     setRevSaving(true);
     try {
@@ -794,6 +841,11 @@ export default function SettingsTelegramMiniApp() {
         enabled: revEnabled,
         marginUsdt: revMargin.trim() ? marginParsed : null,
         leverage: revLeverage.trim() ? levParsed : null,
+        tpSlEnabled: revTpSlEnabled,
+        tp1PricePct: revTp1PricePct.trim() ? tp1Parsed : null,
+        tp1PartialPct: revTp1PartialPct.trim() ? tp1PartialParsed : null,
+        tp2PricePct: revTp2PricePct.trim() ? tp2Parsed : null,
+        maxHoldHours: revMaxHoldHours.trim() ? maxHoldParsed : null,
       };
       const body: Record<string, unknown> = {
         rotateWebhookToken: false,
@@ -1512,6 +1564,85 @@ export default function SettingsTelegramMiniApp() {
               placeholder="เช่น 10"
               value={revLeverage}
               onChange={(e) => setRevLeverage(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <p className="sub" style={{ marginTop: "1.1rem", fontWeight: 600 }}>
+          กลยุทธ์ TP/SL (รัน cron tick หลังเปิด Market)
+        </p>
+        <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
+          <li><strong>TP1</strong>: ราคาดิ่ง ≥ <code>TP1 %</code> → ปิด <code>TP1 ปิด %</code> ของ vol และตั้ง MEXC SL บังทุน @ entry</li>
+          <li><strong>TP2</strong>: ราคาดิ่ง ≥ <code>TP2 %</code> → ปิดทั้งหมด + ยกเลิก SL plan</li>
+          <li><strong>ครบ {revMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force market) + ยกเลิก SL plan</li>
+          <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
+        </ul>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={revTpSlEnabled}
+            onChange={(e) => setRevTpSlEnabled(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>เปิดใช้กลยุทธ์ TP/SL</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              ถ้าปิด ระบบจะเปิด SHORT อย่างเดียว ไม่ tick TP1/TP2/48h ให้
+            </span>
+          </span>
+        </label>
+
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            TP1 ราคาดิ่ง % (default 10)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 10"
+              value={revTp1PricePct}
+              onChange={(e) => setRevTp1PricePct(e.target.value)}
+              disabled={!revTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            TP1 ปิด % ของ vol (default 50)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 50"
+              value={revTp1PartialPct}
+              onChange={(e) => setRevTp1PartialPct(e.target.value)}
+              disabled={!revTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            TP2 ราคาดิ่ง % (default 25)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 25"
+              value={revTp2PricePct}
+              onChange={(e) => setRevTp2PricePct(e.target.value)}
+              disabled={!revTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            ครบกี่ ชม. → ปิดทั้งหมด (default 48)
+            <input
+              type="text"
+              inputMode="numeric"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 48"
+              value={revMaxHoldHours}
+              onChange={(e) => setRevMaxHoldHours(e.target.value)}
+              disabled={!revTpSlEnabled}
             />
           </label>
         </div>

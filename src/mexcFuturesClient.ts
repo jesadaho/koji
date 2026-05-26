@@ -622,6 +622,141 @@ export async function createCloseOrder(
 }
 
 /**
+ * ปัด vol ลงให้ตรงกับ volUnit + volScale ของ contract — ใช้คำนวณ partial close vol
+ * คืน 0 ถ้าปัดแล้วต่ำกว่า minVol หรือผลลัพธ์ไม่ถูกต้อง
+ */
+export function roundVolDown(volRaw: number, detail: MexcContractDetailPublic): number {
+  if (!(volRaw > 0) || !Number.isFinite(volRaw)) return 0;
+  const volScale = Number.isFinite(Number(detail.volScale)) ? Math.max(0, Math.floor(Number(detail.volScale))) : 0;
+  const minV = Number(detail.minVol);
+  const factor = 10 ** volScale;
+  let vol = Math.floor(volRaw * factor + 1e-12) / factor;
+  if (!Number.isFinite(vol) || vol <= 0) return 0;
+  const vu = Number(detail.volUnit);
+  if (Number.isFinite(vu) && vu > 0) {
+    vol = Math.floor(vol / vu) * vu;
+  }
+  if (Number.isFinite(minV) && vol < minV) return 0;
+  return vol > 0 ? vol : 0;
+}
+
+/**
+ * Partial close: เหมือน createCloseOrder แต่ระบุ vol เอง (ต้อง ≤ holdVol และปัดให้ตรง volUnit แล้ว)
+ * ใช้ type 5 (market) + flashClose=false เพราะระบุ vol เอง (ไม่ใช่ปิดเต็ม)
+ */
+export async function createPartialCloseOrder(
+  creds: MexcCredentials,
+  p: {
+    symbol: string;
+    position: OpenPositionRow;
+    vol: number;
+    markPrice: number;
+    positionMode: 1 | 2;
+  }
+): Promise<MexcOk<OrderCreateData>> {
+  const { position } = p;
+  if (!(p.vol > 0) || !Number.isFinite(p.vol)) {
+    return { success: false, code: -1, message: "partial vol ไม่ถูกต้อง" };
+  }
+  if (!(position.holdVol > 0) || p.vol > position.holdVol) {
+    return { success: false, code: -1, message: "partial vol > holdVol" };
+  }
+  const side = position.positionType === 1 ? 4 : position.positionType === 2 ? 2 : 0;
+  if (side === 0) {
+    return { success: false, code: -1, message: "positionType ไม่รองรับ" };
+  }
+  const openType = position.openType === 2 ? 2 : 1;
+  const body: Record<string, unknown> = {
+    symbol: p.symbol,
+    price: p.markPrice,
+    vol: p.vol,
+    side,
+    type: 5,
+    openType,
+    flashClose: false,
+    positionId: position.positionId,
+  };
+  if (position.leverage != null && Number.isFinite(position.leverage)) {
+    body.leverage = position.leverage;
+  }
+  body.positionMode = p.positionMode;
+  if (p.positionMode === 2) {
+    body.reduceOnly = true;
+  }
+  return mexcPrivatePost<OrderCreateData>(creds, "/api/v1/private/order/create", body);
+}
+
+export type PlanOrderCreateData = { orderId?: string; ts?: number };
+
+/**
+ * วาง plan/trigger order (MEXC `/api/v1/private/planorder/place`)
+ * สำหรับ "SL บังทุน" หลัง partial close:
+ *   - SHORT (positionType=2) → close side = 2; triggerType = 1 (price ≥ triggerPrice)
+ *   - LONG  (positionType=1) → close side = 4; triggerType = 2 (price ≤ triggerPrice)
+ * executeCycle: 2 = 7 วัน · orderType: 5 = market
+ */
+export async function placePlanOrderStopLoss(
+  creds: MexcCredentials,
+  p: {
+    contractSymbol: string;
+    position: OpenPositionRow;
+    triggerPrice: number;
+    positionMode: 1 | 2;
+  }
+): Promise<MexcOk<PlanOrderCreateData>> {
+  const { position } = p;
+  if (!(p.triggerPrice > 0) || !Number.isFinite(p.triggerPrice)) {
+    return { success: false, code: -1, message: "triggerPrice ไม่ถูกต้อง" };
+  }
+  if (!(position.holdVol > 0) || !Number.isFinite(position.holdVol)) {
+    return { success: false, code: -1, message: "holdVol ไม่ถูกต้อง" };
+  }
+  const isShort = position.positionType === 2;
+  const isLong = position.positionType === 1;
+  if (!isShort && !isLong) {
+    return { success: false, code: -1, message: "positionType ไม่รองรับ" };
+  }
+  const side = isShort ? 2 : 4;
+  const triggerType = isShort ? 1 : 2;
+  const openType = position.openType === 2 ? 2 : 1;
+  const body: Record<string, unknown> = {
+    symbol: p.contractSymbol.trim(),
+    vol: position.holdVol,
+    side,
+    openType,
+    triggerPrice: p.triggerPrice,
+    triggerType,
+    executeCycle: 2,
+    orderType: 5,
+    trend: 1,
+    price: p.triggerPrice,
+    positionMode: p.positionMode,
+  };
+  if (position.leverage != null && Number.isFinite(position.leverage)) {
+    body.leverage = position.leverage;
+  }
+  if (p.positionMode === 2) {
+    body.reduceOnly = true;
+  }
+  return mexcPrivatePost<PlanOrderCreateData>(creds, "/api/v1/private/planorder/place", body);
+}
+
+/**
+ * ยกเลิก plan/trigger order ตาม orderId list (MEXC `/api/v1/private/planorder/cancel`)
+ * ไม่ throw — fail แบบ silent (เก็บผลใน return)
+ */
+export async function cancelPlanOrders(
+  creds: MexcCredentials,
+  orderIds: string[]
+): Promise<{ success: boolean; code?: number; message?: string }> {
+  const ids = (orderIds ?? []).filter((s) => typeof s === "string" && s.trim());
+  if (ids.length === 0) return { success: true };
+  const body: Record<string, unknown>[] = ids.map((id) => ({ orderId: id }));
+  const res = await mexcPrivatePost<unknown>(creds, "/api/v1/private/planorder/cancel", body as unknown as Record<string, unknown>);
+  return { success: res.success, code: res.code, message: res.message };
+}
+
+/**
  * ปิดทุก open position ของ symbol นี้ (state=1, holdVol>0)
  */
 export async function closeAllOpenForSymbol(

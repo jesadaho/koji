@@ -21,9 +21,35 @@ export function bkkReversalAutoTradeDayKeyNow(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 }
 
+export type ReversalAutoTradeActive = {
+  contractSymbol: string;
+  binanceSymbol: string;
+  /** ปัจจุบัน Reversal auto-open เปิดเฉพาะ SHORT — เก็บไว้เผื่ออนาคต */
+  side: "short" | "long";
+  openedAtMs: number;
+  /** Binance close ของแท่งสัญญาณ — เผื่อ fallback / แสดงผล */
+  referenceEntryPrice: number;
+  /** ราคาเข้าเฉลี่ยจาก MEXC — ใช้คำนวณ % drop จริง */
+  mexcAvgEntryPrice: number;
+  leverage: number;
+  /** TP1 ปิด partial แล้วหรือยัง — กันยิงซ้ำ */
+  tp1Done: boolean;
+  /** % drop จาก entry ที่จะปิดบางส่วน */
+  tp1PricePct: number;
+  /** % ของ holdVol ที่จะปิดเมื่อ TP1 hit */
+  tp1PartialPct: number;
+  /** % drop จาก entry ที่จะปิดทั้งหมด */
+  tp2PricePct: number;
+  /** ครบกี่ ชม. แล้วบังคับปิดทั้งหมด */
+  maxHoldHours: number;
+  /** orderId ของ plan SL ที่ตั้งหลัง TP1 — ใช้ cancel ตอน TP2/48h */
+  slPlanOrderId?: string;
+};
+
 export type ReversalAutoTradePerUserState = {
   dailyKeyBkk: string;
   placedContractSymbolsToday: string[];
+  active?: ReversalAutoTradeActive[];
 };
 
 export type ReversalAutoTradeState = Record<string, ReversalAutoTradePerUserState>;
@@ -47,13 +73,90 @@ async function ensureJsonFile(): Promise<void> {
   }
 }
 
+function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ReversalAutoTradeActive[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object" || Array.isArray(x)) continue;
+    const o = x as Record<string, unknown>;
+    const sym = typeof o.contractSymbol === "string" ? o.contractSymbol.trim().toUpperCase() : "";
+    const binanceSymbol =
+      typeof o.binanceSymbol === "string" ? o.binanceSymbol.trim().toUpperCase() : "";
+    const side: "short" | "long" = o.side === "long" ? "long" : "short";
+    const openedAtMs =
+      typeof o.openedAtMs === "number" && Number.isFinite(o.openedAtMs) ? o.openedAtMs : NaN;
+    const refEntry =
+      typeof o.referenceEntryPrice === "number" && Number.isFinite(o.referenceEntryPrice)
+        ? o.referenceEntryPrice
+        : NaN;
+    const mexcEntry =
+      typeof o.mexcAvgEntryPrice === "number" && Number.isFinite(o.mexcAvgEntryPrice) && o.mexcAvgEntryPrice > 0
+        ? o.mexcAvgEntryPrice
+        : NaN;
+    const lev =
+      typeof o.leverage === "number" && Number.isFinite(o.leverage) ? Math.floor(o.leverage) : NaN;
+    const tp1Done = Boolean(o.tp1Done);
+    const tp1Pct =
+      typeof o.tp1PricePct === "number" && Number.isFinite(o.tp1PricePct) && o.tp1PricePct > 0
+        ? o.tp1PricePct
+        : 10;
+    const tp1Partial =
+      typeof o.tp1PartialPct === "number" && Number.isFinite(o.tp1PartialPct) && o.tp1PartialPct > 0
+        ? o.tp1PartialPct
+        : 50;
+    const tp2Pct =
+      typeof o.tp2PricePct === "number" && Number.isFinite(o.tp2PricePct) && o.tp2PricePct > 0
+        ? o.tp2PricePct
+        : 25;
+    const maxH =
+      typeof o.maxHoldHours === "number" && Number.isFinite(o.maxHoldHours) && o.maxHoldHours > 0
+        ? o.maxHoldHours
+        : 48;
+    const slId =
+      typeof o.slPlanOrderId === "string" && o.slPlanOrderId.trim() ? o.slPlanOrderId.trim() : undefined;
+    if (
+      !sym ||
+      !binanceSymbol ||
+      !Number.isFinite(openedAtMs) ||
+      !Number.isFinite(refEntry) ||
+      !(refEntry > 0) ||
+      !Number.isFinite(mexcEntry) ||
+      !Number.isFinite(lev) ||
+      lev < 1
+    ) {
+      continue;
+    }
+    const row: ReversalAutoTradeActive = {
+      contractSymbol: sym,
+      binanceSymbol,
+      side,
+      openedAtMs,
+      referenceEntryPrice: refEntry,
+      mexcAvgEntryPrice: mexcEntry,
+      leverage: lev,
+      tp1Done,
+      tp1PricePct: tp1Pct,
+      tp1PartialPct: tp1Partial,
+      tp2PricePct: tp2Pct,
+      maxHoldHours: maxH,
+    };
+    if (slId) row.slPlanOrderId = slId;
+    out.push(row);
+  }
+  const bySym = new Map<string, ReversalAutoTradeActive>();
+  for (const e of out) bySym.set(`${e.contractSymbol}|${e.side}`, e);
+  const deduped: ReversalAutoTradeActive[] = [];
+  bySym.forEach((v) => deduped.push(v));
+  return deduped;
+}
+
 function normalizeState(raw: unknown): ReversalAutoTradeState {
   if (!raw || typeof raw !== "object") return {};
   const out: ReversalAutoTradeState = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!k?.trim()) continue;
     if (!v || typeof v !== "object" || Array.isArray(v)) continue;
-    const o = v as { dailyKeyBkk?: unknown; placedContractSymbolsToday?: unknown };
+    const o = v as { dailyKeyBkk?: unknown; placedContractSymbolsToday?: unknown; active?: unknown };
     const dk = typeof o.dailyKeyBkk === "string" && o.dailyKeyBkk.trim() ? o.dailyKeyBkk.trim() : "";
     if (!dk) continue;
     let syms: string[] = [];
@@ -62,10 +165,13 @@ function normalizeState(raw: unknown): ReversalAutoTradeState {
         .filter((x) => typeof x === "string" && x.trim())
         .map((x) => (x as string).trim().toUpperCase());
     }
-    out[k.trim()] = {
+    const active = normalizeActive(o.active);
+    const entry: ReversalAutoTradePerUserState = {
       dailyKeyBkk: dk,
       placedContractSymbolsToday: dedupeStringsInOrder(syms),
     };
+    if (active.length) entry.active = active;
+    out[k.trim()] = entry;
   }
   return out;
 }
@@ -75,14 +181,23 @@ function userStateFresh(
   dayKey: string
 ): ReversalAutoTradePerUserState {
   if (!u || u.dailyKeyBkk !== dayKey) {
-    return { dailyKeyBkk: dayKey, placedContractSymbolsToday: [] };
+    const active = normalizeActive(u?.active);
+    const base: ReversalAutoTradePerUserState = {
+      dailyKeyBkk: dayKey,
+      placedContractSymbolsToday: [],
+    };
+    if (active.length) base.active = active;
+    return base;
   }
-  return {
+  const activeIn = normalizeActive(u.active);
+  const next: ReversalAutoTradePerUserState = {
     dailyKeyBkk: dayKey,
     placedContractSymbolsToday: dedupeStringsInOrder(
       u.placedContractSymbolsToday.map((s) => s.toUpperCase())
     ),
   };
+  if (activeIn.length) next.active = activeIn;
+  return next;
 }
 
 export async function loadReversalAutoTradeState(): Promise<ReversalAutoTradeState> {
@@ -139,11 +254,114 @@ export function withRecordedReversalPlaced(
   const placed = fresh.placedContractSymbolsToday.includes(sym)
     ? fresh.placedContractSymbolsToday
     : [...fresh.placedContractSymbolsToday, sym];
+  const next: ReversalAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    placedContractSymbolsToday: placed,
+  };
+  if (fresh.active && fresh.active.length) next.active = fresh.active;
+  return {
+    ...state,
+    [uid]: next,
+  };
+}
+
+export function withReversalActiveOpen(
+  state: ReversalAutoTradeState,
+  userId: string,
+  p: {
+    contractSymbol: string;
+    binanceSymbol: string;
+    side: "short" | "long";
+    openedAtMs: number;
+    referenceEntryPrice: number;
+    mexcAvgEntryPrice: number;
+    leverage: number;
+    tp1PricePct: number;
+    tp1PartialPct: number;
+    tp2PricePct: number;
+    maxHoldHours: number;
+  },
+  dayKey: string
+): ReversalAutoTradeState {
+  const uid = userId.trim();
+  const sym = p.contractSymbol.trim().toUpperCase();
+  const prev = state[uid];
+  const fresh = userStateFresh(prev, dayKey);
+  const activePrev = normalizeActive(fresh.active);
+  const activeNext = activePrev.filter((x) => !(x.contractSymbol === sym && x.side === p.side));
+  const row: ReversalAutoTradeActive = {
+    contractSymbol: sym,
+    binanceSymbol: p.binanceSymbol.trim().toUpperCase(),
+    side: p.side,
+    openedAtMs: p.openedAtMs,
+    referenceEntryPrice: p.referenceEntryPrice,
+    mexcAvgEntryPrice: p.mexcAvgEntryPrice,
+    leverage: Math.max(1, Math.floor(p.leverage)),
+    tp1Done: false,
+    tp1PricePct: p.tp1PricePct > 0 ? p.tp1PricePct : 10,
+    tp1PartialPct: p.tp1PartialPct > 0 ? p.tp1PartialPct : 50,
+    tp2PricePct: p.tp2PricePct > 0 ? p.tp2PricePct : 25,
+    maxHoldHours: p.maxHoldHours > 0 ? p.maxHoldHours : 48,
+  };
+  activeNext.push(row);
   return {
     ...state,
     [uid]: {
       dailyKeyBkk: dayKey,
-      placedContractSymbolsToday: placed,
+      placedContractSymbolsToday: fresh.placedContractSymbolsToday,
+      active: activeNext,
+    },
+  };
+}
+
+export function withReversalActiveRemoved(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: "short" | "long"
+): ReversalAutoTradeState {
+  const uid = userId.trim();
+  const prev = state[uid];
+  if (!prev?.active?.length) return state;
+  const sym = contractSymbol.trim().toUpperCase();
+  const nextActive = normalizeActive(prev.active).filter(
+    (x) => !(x.contractSymbol === sym && x.side === side)
+  );
+  const nextEntry: ReversalAutoTradePerUserState = {
+    dailyKeyBkk: prev.dailyKeyBkk,
+    placedContractSymbolsToday: prev.placedContractSymbolsToday,
+  };
+  if (nextActive.length) nextEntry.active = nextActive;
+  return {
+    ...state,
+    [uid]: nextEntry,
+  };
+}
+
+export function withReversalTp1Done(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: "short" | "long",
+  slPlanOrderId?: string
+): ReversalAutoTradeState {
+  const uid = userId.trim();
+  const prev = state[uid];
+  if (!prev?.active?.length) return state;
+  const sym = contractSymbol.trim().toUpperCase();
+  const nextActive = normalizeActive(prev.active).map((x) => {
+    if (x.contractSymbol === sym && x.side === side) {
+      const updated: ReversalAutoTradeActive = { ...x, tp1Done: true };
+      if (slPlanOrderId && slPlanOrderId.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
+      return updated;
+    }
+    return x;
+  });
+  return {
+    ...state,
+    [uid]: {
+      ...prev,
+      active: nextActive,
     },
   };
 }

@@ -951,6 +951,11 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     enabled: row.reversalAutoTradeEnabled ?? false,
     marginUsdt: row.reversalAutoTradeMarginUsdt ?? null,
     leverage: row.reversalAutoTradeLeverage ?? null,
+    tpSlEnabled: row.reversalAutoTradeTpSlEnabled ?? true,
+    tp1PricePct: row.reversalAutoTradeTp1PricePct ?? null,
+    tp1PartialPct: row.reversalAutoTradeTp1PartialPct ?? null,
+    tp2PricePct: row.reversalAutoTradeTp2PricePct ?? null,
+    maxHoldHours: row.reversalAutoTradeMaxHoldHours ?? null,
   };
 }
 
@@ -1263,7 +1268,20 @@ function parseReversalAutoTradeNested(
 
   const mMargin = numOrEmpty("marginUsdt");
   const mLev = numOrEmpty("leverage");
-  if (mMargin.err || mLev.err) return { ok: false, error: "reversal_numeric_invalid" };
+  const mTp1 = numOrEmpty("tp1PricePct");
+  const mTp1Partial = numOrEmpty("tp1PartialPct");
+  const mTp2 = numOrEmpty("tp2PricePct");
+  const mMaxH = numOrEmpty("maxHoldHours");
+  if (
+    mMargin.err ||
+    mLev.err ||
+    mTp1.err ||
+    mTp1Partial.err ||
+    mTp2.err ||
+    mMaxH.err
+  ) {
+    return { ok: false, error: "reversal_numeric_invalid" };
+  }
 
   if (enabled) {
     const m = mMargin.v;
@@ -1276,6 +1294,31 @@ function parseReversalAutoTradeNested(
     }
   }
 
+  if (typeof mTp1.v === "number" && !(mTp1.v > 0 && mTp1.v < 100)) {
+    return { ok: false, error: "reversal_tp1_price_pct_out_of_range" };
+  }
+  if (typeof mTp1Partial.v === "number" && !(mTp1Partial.v > 0 && mTp1Partial.v < 100)) {
+    return { ok: false, error: "reversal_tp1_partial_pct_out_of_range" };
+  }
+  if (typeof mTp2.v === "number" && !(mTp2.v > 0 && mTp2.v < 100)) {
+    return { ok: false, error: "reversal_tp2_price_pct_out_of_range" };
+  }
+  if (typeof mMaxH.v === "number" && !(mMaxH.v > 0 && mMaxH.v <= 24 * 30)) {
+    return { ok: false, error: "reversal_max_hold_hours_out_of_range" };
+  }
+  if (
+    typeof mTp1.v === "number" &&
+    typeof mTp2.v === "number" &&
+    !(mTp2.v > mTp1.v)
+  ) {
+    return { ok: false, error: "reversal_tp2_must_gt_tp1" };
+  }
+
+  let tpSlEnabled: boolean | undefined;
+  if (typeof o.tpSlEnabled === "boolean") tpSlEnabled = o.tpSlEnabled;
+  else if (o.tpSlEnabled === "1" || o.tpSlEnabled === 1 || o.tpSlEnabled === "true") tpSlEnabled = true;
+  else if (o.tpSlEnabled === "0" || o.tpSlEnabled === 0 || o.tpSlEnabled === "false") tpSlEnabled = false;
+
   const patchPart: Omit<
     SaveTradingViewMexcInput,
     "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
@@ -1286,7 +1329,13 @@ function parseReversalAutoTradeNested(
       mLev.v == null
         ? (mLev.v as number | null | undefined)
         : (Math.floor(mLev.v) as number),
+    reversalAutoTradeTp1PricePct: mTp1.v as number | null | undefined,
+    reversalAutoTradeTp1PartialPct: mTp1Partial.v as number | null | undefined,
+    reversalAutoTradeTp2PricePct: mTp2.v as number | null | undefined,
+    reversalAutoTradeMaxHoldHours:
+      mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
   };
+  if (tpSlEnabled !== undefined) patchPart.reversalAutoTradeTpSlEnabled = tpSlEnabled;
   return { ok: true, patch: patchPart };
 }
 
