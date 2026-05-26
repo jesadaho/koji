@@ -67,7 +67,14 @@ import {
 } from "./snowballStatsTick";
 import { isAdminTelegramUserId } from "./adminIds";
 import { loadCandleReversalStatsState, resetCandleReversalStatsState } from "./candleReversalStatsStore";
-import { runCandleReversalStatsFollowUpTick } from "./candleReversalStatsTick";
+import {
+  correctCandleReversalStatsOutcome,
+  runCandleReversalStatsFollowUpTick,
+} from "./candleReversalStatsTick";
+import {
+  correctRsiDivergenceStatsOutcome,
+  runRsiDivergenceStatsFollowUpTick,
+} from "./rsiDivergenceStatsTick";
 import { correctSnowballStatsOutcomeFromPct24h } from "./snowballStatsTick";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
 import {
@@ -825,16 +832,23 @@ export async function liffResetCandleReversalStats(
   return { ok: true };
 }
 
-/** Backfill Reversal stats: รัน follow-up tick แบบ manual — refetch pct ที่ Binance + re-evaluate outcome (1H → 24h) */
+/**
+ * Backfill Reversal stats: รัน follow-up tick (refetch pct ที่ Binance + auto-finalize)
+ * + force-recompute outcome ทุกแถวจาก horizon pct (1H→pct24h · 1D→pct7d) โดยข้าม pending guard
+ */
 export async function liffBackfillCandleReversalStats(
   telegramUserId: number,
-): Promise<{ ok: true; updated: number } | { ok: false; status: number; error: string }> {
+): Promise<
+  | { ok: true; updated: number; scanned: number; changedOutcome: number }
+  | { ok: false; status: number; error: string }
+> {
   if (!isAdminTelegramUserId(telegramUserId)) {
     return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
   }
   try {
     const updated = await runCandleReversalStatsFollowUpTick(Date.now());
-    return { ok: true, updated };
+    const { scanned, changedOutcome } = await correctCandleReversalStatsOutcome();
+    return { ok: true, updated, scanned, changedOutcome };
   } catch (e) {
     return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
   }
@@ -859,6 +873,28 @@ export async function liffResetRsiDivergenceStats(
   }
   await resetRsiDivergenceStatsState();
   return { ok: true };
+}
+
+/**
+ * Backfill RSI Divergence stats: รัน follow-up tick (refetch horizon ที่ Binance + auto-finalize)
+ * + force-recompute outcome ทุกแถวจาก pct7d โดยข้าม pending guard
+ */
+export async function liffBackfillRsiDivergenceStats(
+  telegramUserId: number,
+): Promise<
+  | { ok: true; updated: number; scanned: number; changedOutcome: number }
+  | { ok: false; status: number; error: string }
+> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  try {
+    const updated = await runRsiDivergenceStatsFollowUpTick(Date.now());
+    const { scanned, changedOutcome } = await correctRsiDivergenceStatsOutcome();
+    return { ok: true, updated, scanned, changedOutcome };
+  } catch (e) {
+    return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 function publicAppBaseForTvWebhook(): { origin: string; path: string } {

@@ -741,7 +741,7 @@ export default function SnowballStatsTelegramMiniApp() {
               onClick={() => void correctOutcomeFromPct24h()}
               title="Recompute outcome/RR ทุกแถวจาก pct24h ที่บันทึกอยู่ — ข้าม pending guard"
             >
-              {correctBusy ? "กำลังปรับ…" : "ปรับ result จาก 24h"}
+              {correctBusy ? "กำลังปรับ…" : "ปรับ result และ backfill"}
             </button>
           ) : null}
           {isAdmin ? (

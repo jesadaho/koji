@@ -44,6 +44,7 @@ import {
   liffResetSnowballStats,
   liffCorrectSnowballStatsOutcome,
   liffBackfillCandleReversalStats,
+  liffBackfillRsiDivergenceStats,
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
   liffGetRsiDivergenceStats,
@@ -345,7 +346,12 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const r = await liffBackfillCandleReversalStats(auth.telegramUserId);
       if (!r.ok) return json({ error: r.error }, r.status);
-      return json({ ok: true, updated: r.updated });
+      return json({
+        ok: true,
+        updated: r.updated,
+        scanned: r.scanned,
+        changedOutcome: r.changedOutcome,
+      });
     }
     if (segs.length === 1 && a === "divergence-stats") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
@@ -353,6 +359,18 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       const r = await liffResetRsiDivergenceStats(auth.telegramUserId);
       if (!r.ok) return json({ error: r.error }, r.status);
       return json({ ok: true });
+    }
+    if (segs.length === 2 && a === "divergence-stats" && segs[1] === "backfill") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const r = await liffBackfillRsiDivergenceStats(auth.telegramUserId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({
+        ok: true,
+        updated: r.updated,
+        scanned: r.scanned,
+        changedOutcome: r.changedOutcome,
+      });
     }
     if (segs.length === 1 && a === "snowball-stats") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));

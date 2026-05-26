@@ -477,9 +477,10 @@ export default function ReversalStatsTelegramMiniApp() {
   const backfillStats = useCallback(async () => {
     if (
       !window.confirm(
-        "Backfill Reversal stats?\n\n" +
-          "จะรัน follow-up ทันที — refetch pct จาก Binance + re-evaluate outcome (1H ปิดผลที่ 24h)\n" +
-          "อาจใช้เวลาหลายวินาทีขึ้นกับจำนวนแถว pending",
+        "ปรับ result และ backfill Reversal stats?\n\n" +
+          "1) Refetch pct horizons จาก Binance + auto-finalize แถวที่ครบเวลา\n" +
+          "2) Recompute outcome ทุกแถวจาก pct (1H→pct24h · 1D→pct7d) — ทับของเดิม โดยไม่สนใจ pending guard\n\n" +
+          "อาจใช้เวลาหลายวินาทีขึ้นกับจำนวนแถว",
       )
     ) {
       return;
@@ -490,9 +491,16 @@ export default function ReversalStatsTelegramMiniApp() {
       const res = (await api("/reversal-stats/backfill", { method: "POST" })) as unknown as {
         ok?: boolean;
         updated?: number;
+        scanned?: number;
+        changedOutcome?: number;
       };
-      const n = typeof res?.updated === "number" ? res.updated : 0;
-      setBackfillMsg({ kind: "ok", text: `Backfill สำเร็จ — อัพเดท ${n} แถว` });
+      const updated = typeof res?.updated === "number" ? res.updated : 0;
+      const scanned = typeof res?.scanned === "number" ? res.scanned : 0;
+      const changedOutcome = typeof res?.changedOutcome === "number" ? res.changedOutcome : 0;
+      setBackfillMsg({
+        kind: "ok",
+        text: `ปรับเสร็จ — backfill ${updated} แถว · สแกน ${scanned} · เปลี่ยน outcome ${changedOutcome}`,
+      });
       await loadStats();
     } catch (e) {
       setBackfillMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) });
@@ -607,10 +615,10 @@ export default function ReversalStatsTelegramMiniApp() {
             type="button"
             className="sparkStatsRefreshBtn"
             disabled={backfillBusy}
-            title="รัน follow-up ทันที — refetch pct จาก Binance + re-evaluate outcome"
+            title="Refetch pct จาก Binance + recompute outcome ทุกแถวจาก horizon pct (1H→pct24h · 1D→pct7d) — ข้าม pending guard"
             onClick={() => void backfillStats()}
           >
-            {backfillBusy ? "กำลัง backfill…" : "Backfill"}
+            {backfillBusy ? "กำลังปรับ…" : "ปรับ result และ backfill"}
           </button>
         ) : null}
         {payload?.isAdmin ? (

@@ -176,6 +176,32 @@ async function followUpRow(
   return true;
 }
 
+/**
+ * Admin — force-recompute outcome ทุกแถวจาก pct7d ที่บันทึกอยู่
+ * ข้าม pending guard (ถ้า pct7d มีค่าแล้ว → re-evaluate ทันที)
+ */
+export async function correctRsiDivergenceStatsOutcome(opts?: {
+  symbol?: string;
+}): Promise<{ scanned: number; changedOutcome: number }> {
+  const symbolFilter = opts?.symbol?.trim().toUpperCase() || undefined;
+  const state = await loadRsiDivergenceStatsState();
+  let scanned = 0;
+  let changedOutcome = 0;
+
+  for (const row of state.rows) {
+    if (symbolFilter && row.symbol.trim().toUpperCase() !== symbolFilter) continue;
+    if (row.pct7d == null || !Number.isFinite(row.pct7d)) continue;
+    scanned += 1;
+
+    const prev = row.outcome;
+    applyOutcomeFromPct(row, row.pct7d);
+    if (row.outcome !== prev) changedOutcome += 1;
+  }
+
+  if (changedOutcome > 0) await saveRsiDivergenceStatsState(state);
+  return { scanned, changedOutcome };
+}
+
 export async function runRsiDivergenceStatsFollowUpTick(nowMs: number): Promise<number> {
   resetBinanceIndicatorFapi451LogDedupe();
   if (!isRsiDivergenceStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return 0;

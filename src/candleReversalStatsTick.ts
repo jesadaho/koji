@@ -333,6 +333,36 @@ async function backfillGreenDaysBeforeSignal(rows: CandleReversalStatsRow[]): Pr
   return updated;
 }
 
+/**
+ * Admin — force-recompute outcome ทุกแถวจาก horizon pct ที่บันทึกอยู่
+ *   1H signal → ใช้ pct24h
+ *   1D signal → ใช้ pct7d
+ * ข้าม pending guard (ถ้า pct ที่ใช้สรุปผลมีค่าแล้ว → re-evaluate ทันที)
+ */
+export async function correctCandleReversalStatsOutcome(opts?: {
+  symbol?: string;
+}): Promise<{ scanned: number; changedOutcome: number }> {
+  const symbolFilter = opts?.symbol?.trim().toUpperCase() || undefined;
+  const state = await loadCandleReversalStatsState();
+  let scanned = 0;
+  let changedOutcome = 0;
+
+  for (const row of state.rows) {
+    if (symbolFilter && row.symbol.trim().toUpperCase() !== symbolFilter) continue;
+    const tf = signalBarTf(row);
+    const pct = tf === "1h" ? row.pct24h : row.pct7d;
+    if (pct == null || !Number.isFinite(pct)) continue;
+    scanned += 1;
+
+    const prev = row.outcome;
+    applyOutcomeFromPct(row, pct);
+    if (row.outcome !== prev) changedOutcome += 1;
+  }
+
+  if (changedOutcome > 0) await saveCandleReversalStatsState(state);
+  return { scanned, changedOutcome };
+}
+
 export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise<number> {
   resetBinanceIndicatorFapi451LogDedupe();
   if (!isCandleReversalStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return 0;

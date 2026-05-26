@@ -298,6 +298,10 @@ export default function DivergenceStatsTelegramMiniApp() {
   const [payload, setPayload] = useState<RsiDivergenceStatsApiPayload | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(
+    null,
+  );
 
   const allRows = payload?.rows ?? [];
 
@@ -337,6 +341,43 @@ export default function DivergenceStatsTelegramMiniApp() {
     setPayload(data);
     setResetError(null);
   }, [api]);
+
+  const backfillStats = useCallback(async () => {
+    if (
+      !window.confirm(
+        "ปรับ result และ backfill RSI Divergence stats?\n\n" +
+          "1) Refetch horizon (1d/3d/7d) จาก Binance + auto-finalize แถวที่ครบเวลา\n" +
+          "2) Recompute outcome ทุกแถวจาก pct7d — ทับของเดิม โดยไม่สนใจ pending guard\n\n" +
+          "อาจใช้เวลาหลายวินาทีขึ้นกับจำนวนแถว",
+      )
+    ) {
+      return;
+    }
+    setBackfillBusy(true);
+    setBackfillMsg(null);
+    try {
+      const res = (await api("/divergence-stats/backfill", {
+        method: "POST",
+      })) as unknown as {
+        ok?: boolean;
+        updated?: number;
+        scanned?: number;
+        changedOutcome?: number;
+      };
+      const updated = typeof res?.updated === "number" ? res.updated : 0;
+      const scanned = typeof res?.scanned === "number" ? res.scanned : 0;
+      const changedOutcome = typeof res?.changedOutcome === "number" ? res.changedOutcome : 0;
+      setBackfillMsg({
+        kind: "ok",
+        text: `ปรับเสร็จ — backfill ${updated} แถว · สแกน ${scanned} · เปลี่ยน outcome ${changedOutcome}`,
+      });
+      await loadStats();
+    } catch (e) {
+      setBackfillMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBackfillBusy(false);
+    }
+  }, [api, loadStats]);
 
   const resetStats = useCallback(async () => {
     if (
@@ -442,6 +483,17 @@ export default function DivergenceStatsTelegramMiniApp() {
         {payload?.isAdmin ? (
           <button
             type="button"
+            className="sparkStatsRefreshBtn"
+            disabled={backfillBusy}
+            title="Refetch horizon (1d/3d/7d) จาก Binance + recompute outcome ทุกแถวจาก pct7d — ข้าม pending guard"
+            onClick={() => void backfillStats()}
+          >
+            {backfillBusy ? "กำลังปรับ…" : "ปรับ result และ backfill"}
+          </button>
+        ) : null}
+        {payload?.isAdmin ? (
+          <button
+            type="button"
             className="sparkStatsRefreshBtn danger"
             disabled={resetBusy}
             onClick={() => void resetStats()}
@@ -450,6 +502,17 @@ export default function DivergenceStatsTelegramMiniApp() {
           </button>
         ) : null}
       </p>
+      {backfillMsg ? (
+        <p
+          className="sub"
+          style={{
+            marginTop: "0.5rem",
+            color: backfillMsg.kind === "error" ? "var(--danger)" : undefined,
+          }}
+        >
+          {backfillMsg.text}
+        </p>
+      ) : null}
       {resetError ? (
         <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
           {resetError}

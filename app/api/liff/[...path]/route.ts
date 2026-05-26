@@ -318,7 +318,12 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       }
       const r = await liffBackfillCandleReversalStats(tgId);
       if (!r.ok) return json({ error: r.error }, r.status);
-      return json({ ok: true, updated: r.updated });
+      return json({
+        ok: true,
+        updated: r.updated,
+        scanned: r.scanned,
+        changedOutcome: r.changedOutcome,
+      });
     }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);
