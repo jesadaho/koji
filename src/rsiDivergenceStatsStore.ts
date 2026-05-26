@@ -249,7 +249,7 @@ export function rsiDivergenceStatsOutcomeWinMinPct(): number {
   if (Number.isFinite(own) && own > -100 && own < 100) return own;
   const inherited = Number(process.env.CANDLE_REVERSAL_STATS_WIN_MIN_PCT);
   if (Number.isFinite(inherited) && inherited > -100 && inherited < 100) return inherited;
-  return 0.5;
+  return 3;
 }
 
 export function rsiDivergenceStatsOutcomeLossMaxPct(): number {
@@ -258,5 +258,5 @@ export function rsiDivergenceStatsOutcomeLossMaxPct(): number {
   if (Number.isFinite(own) && own > -100 && own < 100) return own;
   const inherited = Number(process.env.CANDLE_REVERSAL_STATS_LOSS_MAX_PCT);
   if (Number.isFinite(inherited) && inherited > -100 && inherited < 100) return inherited;
-  return -0.5;
+  return -3;
 }

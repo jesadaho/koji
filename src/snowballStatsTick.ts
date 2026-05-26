@@ -62,10 +62,14 @@ function rrRewardSource(): "close_24h" | "mfe" {
   return v === "mfe" ? "mfe" : "close_24h";
 }
 
+/**
+ * Threshold สำหรับ win_trend (= pct24h) — pct24h ≥ winMin → win_trend, pct24h ≤ -winMin → loss, else flat
+ * Default 3% (เพื่อให้ "flat band" กว้างพอที่จะไม่ตัดสินว่าแพ้/ชนะจากการขยับเล็กน้อย)
+ */
 function outcomeWinMinPct(): number {
   const v = Number(process.env.SNOWBALL_STATS_OUTCOME_WIN_MIN_PCT);
-  if (Number.isFinite(v) && v > -100 && v < 100) return v;
-  return 0.3;
+  if (Number.isFinite(v) && v > 0 && v < 100) return v;
+  return 3;
 }
 
 function outcomeQuickTp30MinPct(): number {
@@ -474,10 +478,10 @@ export async function runSnowballStatsFollowUpTick(
             row.maxRoiPct >= quickTp30
           ) {
             row.outcome = "win_quick_tp30";
-          } else if (pct24 < 0) {
-            row.outcome = "loss";
           } else if (pct24 >= winMin) {
             row.outcome = "win_trend";
+          } else if (pct24 <= -winMin) {
+            row.outcome = "loss";
           } else {
             row.outcome = "flat";
           }
@@ -544,10 +548,10 @@ export async function correctSnowballStatsOutcomeFromPct24h(opts?: {
       row.maxRoiPct >= quickTp30
     ) {
       nextOutcome = "win_quick_tp30";
-    } else if (pct24 < 0) {
-      nextOutcome = "loss";
     } else if (pct24 >= winMin) {
       nextOutcome = "win_trend";
+    } else if (pct24 <= -winMin) {
+      nextOutcome = "loss";
     } else {
       nextOutcome = "flat";
     }
