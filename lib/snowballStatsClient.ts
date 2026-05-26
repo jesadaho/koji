@@ -479,6 +479,74 @@ export function snowballStatsHorizonDue(
   return nowMs / 1000 >= ac + horizonHours * 3600;
 }
 
+/**
+ * เกณฑ์ default สำหรับ horizon winrate (ใช้ใน UI สรุป — ต้องตรงกับ server-side outcome rule)
+ * Win  = pct >= +3% · Loss = pct <= -3% · ที่เหลือเป็น flat
+ */
+export const SNOWBALL_STATS_WIN_MIN_PCT_DEFAULT = 3;
+export const SNOWBALL_STATS_LOSS_MAX_PCT_DEFAULT = -3;
+
+export type SnowballHorizonWinrate = {
+  /** จำนวนแถวที่ pct มีค่า (ครบ horizon นั้น) */
+  done: number;
+  /** จำนวนแถวที่ pct >= WIN_MIN_PCT_DEFAULT */
+  wins: number;
+  /** จำนวนแถวที่ pct <= LOSS_MAX_PCT_DEFAULT */
+  losses: number;
+  /** done - wins - losses */
+  flats: number;
+  /** wins / done × 100 — null ถ้า done = 0 */
+  winratePct: number | null;
+};
+
+type SnowballHorizonPctKey =
+  | "pct4h"
+  | "pct12h"
+  | "pct24h"
+  | "pct48h";
+
+function snowballPctToHorizonOutcome(
+  pct: number | null | undefined,
+): "win" | "loss" | "flat" | null {
+  if (pct == null || !Number.isFinite(pct)) return null;
+  if (pct >= SNOWBALL_STATS_WIN_MIN_PCT_DEFAULT) return "win";
+  if (pct <= SNOWBALL_STATS_LOSS_MAX_PCT_DEFAULT) return "loss";
+  return "flat";
+}
+
+/** Winrate ราย horizon — นับเฉพาะแถวที่ pct horizon นั้นมีค่า (ครบเวลา) */
+export function snowballHorizonWinrate(
+  rows: SnowballStatsRow[],
+  pctKey: SnowballHorizonPctKey,
+): SnowballHorizonWinrate {
+  let wins = 0;
+  let losses = 0;
+  let done = 0;
+  for (const r of rows) {
+    const o = snowballPctToHorizonOutcome(r[pctKey]);
+    if (o == null) continue;
+    done += 1;
+    if (o === "win") wins += 1;
+    else if (o === "loss") losses += 1;
+  }
+  const flats = done - wins - losses;
+  const winratePct = done > 0 ? (wins / done) * 100 : null;
+  return { done, wins, losses, flats, winratePct };
+}
+
+/** สรุป winrate ราย horizon เป็นข้อความสั้น เช่น "12h: 60.0% (3/5) · 24h: … · 48h: …" */
+export function snowballHorizonWinrateSummary(
+  rows: SnowballStatsRow[],
+  horizons: ReadonlyArray<{ label: string; pctKey: SnowballHorizonPctKey }>,
+): string {
+  const parts = horizons.map((h) => {
+    const w = snowballHorizonWinrate(rows, h.pctKey);
+    if (w.done === 0) return `${h.label}: —`;
+    return `${h.label}: ${w.winratePct!.toFixed(1)}% (${w.wins}/${w.done})`;
+  });
+  return parts.join(" · ");
+}
+
 /** ราคา+% หลังครบ horizon — ยังไม่ครบเวลาแสดง "-" */
 export function snowballStatsFmtHorizonPctCell(
   row: Pick<SnowballStatsRow, "signalBarOpenSec" | "signalBarTf">,

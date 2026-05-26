@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import {
   getTelegramInitData,
@@ -9,6 +9,7 @@ import {
   prepareTelegramMiniAppShell,
 } from "@/lib/kojiTelegramWebApp";
 import {
+  snowballHorizonWinrateSummary,
   snowballStatsBarRangePctLabel,
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
@@ -42,6 +43,28 @@ const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
   "ทิศ = ทิศสัญญาณ Snowball · Grade = เกรดสุทธิชั้นเดียว · คลิก Grade ดูโครงสร้าง HH48/VAH และเหตุผล D+/F";
+
+type SnowballDayFilter = "all" | "7" | "30" | "90";
+type SnowballGradeFilter = "all" | "A+" | "B" | "C" | "D+" | "F";
+
+const SNOWBALL_DAY_FILTER_OPTIONS: ReadonlyArray<{ value: SnowballDayFilter; label: string }> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "7", label: "7 วัน" },
+  { value: "30", label: "30 วัน" },
+  { value: "90", label: "90 วัน" },
+];
+
+const SNOWBALL_GRADE_FILTER_OPTIONS: ReadonlyArray<{
+  value: SnowballGradeFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทุก grade" },
+  { value: "A+", label: "A+" },
+  { value: "B", label: "B" },
+  { value: "C", label: "C" },
+  { value: "D+", label: "D+" },
+  { value: "F", label: "F" },
+];
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -201,6 +224,8 @@ export default function SnowballStatsTelegramMiniApp() {
   const [correctBusy, setCorrectBusy] = useState(false);
   const [correctErr, setCorrectErr] = useState<string | null>(null);
   const [correctOk, setCorrectOk] = useState<string | null>(null);
+  const [dayFilter, setDayFilter] = useState<SnowballDayFilter>("all");
+  const [gradeFilter, setGradeFilter] = useState<SnowballGradeFilter>("all");
 
   const isAdmin = payload?.isAdmin === true;
 
@@ -396,7 +421,39 @@ export default function SnowballStatsTelegramMiniApp() {
     };
   }, [loadStats]);
 
-  const rows = payload?.rows ?? [];
+  const allRows = payload?.rows ?? [];
+
+  const rows = useMemo(() => {
+    let result = allRows;
+
+    if (dayFilter !== "all") {
+      const days = Number(dayFilter);
+      const cutoffMs = Date.now() - days * 24 * 3600 * 1000;
+      result = result.filter((r) => {
+        const ms =
+          r.alertedAtMs != null && Number.isFinite(r.alertedAtMs)
+            ? r.alertedAtMs
+            : Date.parse(r.alertedAtIso);
+        return Number.isFinite(ms) && ms >= cutoffMs;
+      });
+    }
+
+    if (gradeFilter !== "all") {
+      result = result.filter((r) => snowballStatsGradeDisplayLabel(r) === gradeFilter);
+    }
+
+    return result;
+  }, [allRows, dayFilter, gradeFilter]);
+
+  const horizonWinrateText = useMemo(
+    () =>
+      snowballHorizonWinrateSummary(rows, [
+        { label: "12h", pctKey: "pct12h" },
+        { label: "24h", pctKey: "pct24h" },
+        { label: "48h", pctKey: "pct48h" },
+      ]),
+    [rows],
+  );
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -450,6 +507,62 @@ export default function SnowballStatsTelegramMiniApp() {
       <MiniAppStatsNav showHome style={{ marginTop: "0.75rem" }} />
 
       <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
+        <div
+          className="sparkStatsActionRow"
+          style={{
+            marginBottom: "0.5rem",
+            alignItems: "center",
+            flexWrap: "wrap",
+            rowGap: "0.4rem",
+          }}
+        >
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            ย้อนหลัง
+            <select
+              value={dayFilter}
+              onChange={(e) => setDayFilter(e.currentTarget.value as SnowballDayFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7rem" }}
+            >
+              {SNOWBALL_DAY_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            Grade
+            <select
+              value={gradeFilter}
+              onChange={(e) => setGradeFilter(e.currentTarget.value as SnowballGradeFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7rem" }}
+            >
+              {SNOWBALL_GRADE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="sub">
+            แสดง {rows.length}/{allRows.length}
+          </span>
+        </div>
+        <p
+          className="sub"
+          title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +3% · Loss ≤ -3% · ทิศของสัญญาณถูกปรับให้บวก = ฝั่งกำไรแล้ว"
+          style={{ marginBottom: "0.5rem" }}
+        >
+          WR · {horizonWinrateText}
+        </p>
         <div className="sparkMatrixScroll">
           <table className="sparkMatrixTable sparkMatrixTable--compact">
             <thead>
@@ -541,7 +654,9 @@ export default function SnowballStatsTelegramMiniApp() {
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={isAdmin ? 32 : 31} className="sub">
-                    ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED
+                    {allRows.length === 0
+                      ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
+                      : "ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade"}
                   </td>
                 </tr>
               ) : (
@@ -737,9 +852,9 @@ export default function SnowballStatsTelegramMiniApp() {
             <button
               type="button"
               className="sparkStatsRefreshBtn"
-              disabled={correctBusy || rows.length === 0}
+              disabled={correctBusy || allRows.length === 0}
               onClick={() => void correctOutcomeFromPct24h()}
-              title="Recompute outcome/RR ทุกแถวจาก pct24h ที่บันทึกอยู่ — ข้าม pending guard"
+              title="Recompute outcome/RR ทุกแถวจาก pct24h ที่บันทึกอยู่ — ข้าม pending guard (ทำงานบน dataset ทั้งหมด ไม่สนใจ filter)"
             >
               {correctBusy ? "กำลังปรับ…" : "ปรับ result และ backfill"}
             </button>
@@ -748,7 +863,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <button
               type="button"
               className="sparkStatsRefreshBtn danger"
-              disabled={resetBusy || rows.length === 0}
+              disabled={resetBusy || allRows.length === 0}
               onClick={() => void resetAllStats()}
             >
               {resetBusy ? "กำลังล้าง…" : "ล้างสถิติทั้งหมด"}
