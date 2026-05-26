@@ -205,12 +205,30 @@ async function followUpCandleReversal1hRow(
 
   // Reversal 1H: ปิดผลเร็วขึ้นที่ 24h (ใช้ pct24h)
   // pct48h ยังคำนวณเก็บไว้สำหรับ winrate horizon 48h ในตาราง
+  // เซต outcome เฉพาะตอนที่ยัง pending — ป้องกัน follow-up ครั้งหลัง flip ผล
   const finalized = nowSec >= ac + 24 * HOUR_SEC && row.pct24h != null;
-  if (finalized) {
+  if (finalized && row.outcome === "pending") {
     applyOutcomeFromPct(row, row.pct24h ?? 0);
   }
 
   return true;
+}
+
+/** ตัดสินว่าควรเรียก follow-up เพิ่มเติมไหม — ใช่ ถ้า pending หรือมี pct horizon ใดยังว่างทั้งที่เลย horizon นั้นแล้ว */
+function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number): boolean {
+  if (row.outcome === "pending") return true;
+  const ac = anchorCloseSec(row);
+  if (signalBarTf(row) === "1h") {
+    if (row.pct4h == null && nowSec >= ac + 4 * HOUR_SEC) return true;
+    if (row.pct12h == null && nowSec >= ac + 12 * HOUR_SEC) return true;
+    if (row.pct24h == null && nowSec >= ac + 24 * HOUR_SEC) return true;
+    if (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC) return true;
+    return false;
+  }
+  if (row.pct1d == null && nowSec >= ac + DAY_SEC) return true;
+  if (row.pct3d == null && nowSec >= ac + 3 * DAY_SEC) return true;
+  if (row.pct7d == null && nowSec >= ac + 7 * DAY_SEC) return true;
+  return false;
 }
 
 /**
@@ -281,7 +299,7 @@ async function followUpCandleReversal1dRow(
   }
 
   const finalized = nowSec >= ac + followSec && row.pct7d != null;
-  if (finalized) {
+  if (finalized && row.outcome === "pending") {
     applyOutcomeFromPct(row, row.pct7d ?? 0);
   }
 
@@ -327,7 +345,7 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
   dirty += backfill1hOutcomeTo24h(state.rows);
 
   for (const row of state.rows) {
-    if (row.outcome !== "pending") continue;
+    if (!shouldFollowUpReversalRow(row, nowSec)) continue;
 
     const entry = row.entryPrice;
     if (!Number.isFinite(entry) || entry <= 0) continue;
