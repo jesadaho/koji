@@ -270,3 +270,63 @@ export function candleReversalStatsSortDefaultDir(key: CandleReversalStatsSortKe
   }
   return "desc";
 }
+
+/** เกณฑ์ default — ใช้ฝั่ง client คำนวณ per-horizon winrate (sync กับ CANDLE_REVERSAL_STATS_WIN_MIN_PCT / LOSS_MAX_PCT) */
+export const CANDLE_REVERSAL_STATS_WIN_MIN_PCT_DEFAULT = 0.5;
+export const CANDLE_REVERSAL_STATS_LOSS_MAX_PCT_DEFAULT = -0.5;
+
+export type CandleReversalHorizonWinrate = {
+  /** จำนวน row ที่มีค่า pct ครบ — นับเป็น sample size */
+  done: number;
+  /** จำนวน row ที่ pct >= WIN_MIN_PCT — Short bias (pct = (entry - price) / entry × 100) */
+  wins: number;
+  /** จำนวน row ที่ pct <= LOSS_MAX_PCT */
+  losses: number;
+  /** done - wins - losses */
+  flats: number;
+  /** wins / done × 100 — null ถ้า done = 0 */
+  winratePct: number | null;
+};
+
+function pctToOutcomeWithDefaults(pct: number | null | undefined): "win" | "loss" | "flat" | null {
+  if (pct == null || !Number.isFinite(pct)) return null;
+  if (pct >= CANDLE_REVERSAL_STATS_WIN_MIN_PCT_DEFAULT) return "win";
+  if (pct <= CANDLE_REVERSAL_STATS_LOSS_MAX_PCT_DEFAULT) return "loss";
+  return "flat";
+}
+
+/** คำนวณ winrate จาก pct horizon (12h / 24h / 48h ฯลฯ) — ใช้เกณฑ์ default */
+export function candleReversalHorizonWinrate(
+  rows: CandleReversalStatsRow[],
+  pctKey: keyof Pick<CandleReversalStatsRow, "pct4h" | "pct12h" | "pct24h" | "pct48h" | "pct1d" | "pct3d" | "pct7d">,
+): CandleReversalHorizonWinrate {
+  let wins = 0;
+  let losses = 0;
+  let done = 0;
+  for (const r of rows) {
+    const o = pctToOutcomeWithDefaults(r[pctKey]);
+    if (o == null) continue;
+    done += 1;
+    if (o === "win") wins += 1;
+    else if (o === "loss") losses += 1;
+  }
+  const flats = done - wins - losses;
+  const winratePct = done > 0 ? (wins / done) * 100 : null;
+  return { done, wins, losses, flats, winratePct };
+}
+
+/** สรุป winrate ราย horizon เป็นข้อความสั้น "WR 12h 50.0% (5/10) · 24h … · 48h …" */
+export function candleReversalHorizonWinrateSummary(
+  rows: CandleReversalStatsRow[],
+  horizons: ReadonlyArray<{
+    label: string;
+    pctKey: keyof Pick<CandleReversalStatsRow, "pct4h" | "pct12h" | "pct24h" | "pct48h" | "pct1d" | "pct3d" | "pct7d">;
+  }>,
+): string {
+  const parts = horizons.map((h) => {
+    const w = candleReversalHorizonWinrate(rows, h.pctKey);
+    if (w.done === 0) return `${h.label}: —`;
+    return `${h.label}: ${w.winratePct!.toFixed(1)}% (${w.wins}/${w.done})`;
+  });
+  return parts.join(" · ");
+}

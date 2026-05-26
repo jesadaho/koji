@@ -11,6 +11,7 @@ import {
 import {
   candleReversalDayOfWeekBkk,
   candleReversalGreenDaysLabel,
+  candleReversalHorizonWinrateSummary,
   CANDLE_REVERSAL_MODEL_SHORT_LEGEND,
   CANDLE_REVERSAL_STATS_DEFAULT_SORT,
   candleReversalModelLabel,
@@ -34,7 +35,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const FOOTNOTE_1D =
   "Binance USDT-M · Short bias · 1D: follow-up 1d/3d/7d (ปิด Day) · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
 const FOOTNOTE_1H =
-  "Binance USDT-M · Short bias · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 48h · ไม่ส่ง Telegram follow-up";
+  "Binance USDT-M · Short bias · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · winrate แยก 12h/24h/48h · ไม่ส่ง Telegram follow-up";
 
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
@@ -198,6 +199,17 @@ function ReversalStatsSection({
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
   const winrateText = useMemo(() => reversalWinrateSummary(filteredRows), [filteredRows]);
+  const horizonWinrateText = useMemo(
+    () =>
+      tf === "1h"
+        ? candleReversalHorizonWinrateSummary(filteredRows, [
+            { label: "12h", pctKey: "pct12h" },
+            { label: "24h", pctKey: "pct24h" },
+            { label: "48h", pctKey: "pct48h" },
+          ])
+        : null,
+    [filteredRows, tf],
+  );
 
   const horizonLabels = useMemo<[string, string, string, string | null]>(
     () => (tf === "1h" ? ["4h", "12h", "24h", "48h"] : ["1d", "3d", "7d", null]),
@@ -252,6 +264,15 @@ function ReversalStatsSection({
         <span className="sub">
           แสดง {filteredRows.length}/{rawRows.length} · {winrateText}
         </span>
+        {horizonWinrateText ? (
+          <span
+            className="sub"
+            title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +0.5% · Loss ≤ -0.5%"
+            style={{ display: "block", marginTop: "0.15rem" }}
+          >
+            WR · {horizonWinrateText}
+          </span>
+        ) : null}
       </div>
       <div className="sparkMatrixScroll">
         <table className="sparkMatrixTable sparkMatrixTable--compact">
@@ -327,7 +348,13 @@ function ReversalStatsSection({
               ) : null}
               <SortTh label="ROI" sortKey="roi" title="Max ROI ถึง MFE" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSort={onSortColumn} />
-              <SortTh label="ผล" sortKey="outcome" title="ผลหลังครบ horizon" activeSort={sort} onSort={onSortColumn} />
+              <SortTh
+                label="ผล"
+                sortKey="outcome"
+                title={tf === "1h" ? "ผลที่ 24h (ปิดเร็ว) · winrate ราย horizon ดูด้านบน" : "ผลหลังครบ horizon"}
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
             </tr>
           </thead>
           <tbody>
@@ -399,6 +426,8 @@ export default function ReversalStatsTelegramMiniApp() {
   const [payload, setPayload] = useState<CandleReversalStatsApiPayload | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillMsg, setBackfillMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
 
   const allRows = payload?.rows ?? [];
 
@@ -444,6 +473,33 @@ export default function ReversalStatsTelegramMiniApp() {
     setPayload(data);
     setResetError(null);
   }, [api]);
+
+  const backfillStats = useCallback(async () => {
+    if (
+      !window.confirm(
+        "Backfill Reversal stats?\n\n" +
+          "จะรัน follow-up ทันที — refetch pct จาก Binance + re-evaluate outcome (1H ปิดผลที่ 24h)\n" +
+          "อาจใช้เวลาหลายวินาทีขึ้นกับจำนวนแถว pending",
+      )
+    ) {
+      return;
+    }
+    setBackfillBusy(true);
+    setBackfillMsg(null);
+    try {
+      const res = (await api("/reversal-stats/backfill", { method: "POST" })) as unknown as {
+        ok?: boolean;
+        updated?: number;
+      };
+      const n = typeof res?.updated === "number" ? res.updated : 0;
+      setBackfillMsg({ kind: "ok", text: `Backfill สำเร็จ — อัพเดท ${n} แถว` });
+      await loadStats();
+    } catch (e) {
+      setBackfillMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBackfillBusy(false);
+    }
+  }, [api, loadStats]);
 
   const resetStats = useCallback(async () => {
     if (
@@ -549,6 +605,17 @@ export default function ReversalStatsTelegramMiniApp() {
         {payload?.isAdmin ? (
           <button
             type="button"
+            className="sparkStatsRefreshBtn"
+            disabled={backfillBusy}
+            title="รัน follow-up ทันที — refetch pct จาก Binance + re-evaluate outcome"
+            onClick={() => void backfillStats()}
+          >
+            {backfillBusy ? "กำลัง backfill…" : "Backfill"}
+          </button>
+        ) : null}
+        {payload?.isAdmin ? (
+          <button
+            type="button"
             className="sparkStatsRefreshBtn danger"
             disabled={resetBusy}
             onClick={() => void resetStats()}
@@ -557,6 +624,17 @@ export default function ReversalStatsTelegramMiniApp() {
           </button>
         ) : null}
       </p>
+      {backfillMsg ? (
+        <p
+          className="sub"
+          style={{
+            marginTop: "0.5rem",
+            color: backfillMsg.kind === "error" ? "var(--danger)" : undefined,
+          }}
+        >
+          {backfillMsg.text}
+        </p>
+      ) : null}
       {resetError ? (
         <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
           {resetError}

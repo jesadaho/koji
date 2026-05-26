@@ -203,12 +203,31 @@ async function followUpCandleReversal1hRow(
     row.pct48h = h48.pct;
   }
 
-  const finalized = nowSec >= ac + 48 * HOUR_SEC && row.pct48h != null;
+  // Reversal 1H: ปิดผลเร็วขึ้นที่ 24h (ใช้ pct24h)
+  // pct48h ยังคำนวณเก็บไว้สำหรับ winrate horizon 48h ในตาราง
+  const finalized = nowSec >= ac + 24 * HOUR_SEC && row.pct24h != null;
   if (finalized) {
-    applyOutcomeFromPct(row, row.pct48h ?? 0);
+    applyOutcomeFromPct(row, row.pct24h ?? 0);
   }
 
   return true;
+}
+
+/**
+ * Backfill: แถว 1H เก่าเคยปิดผลที่ 48h → re-evaluate ใหม่ที่ 24h
+ * (รันต่อแต่ละ tick · no-op หลังครั้งแรกเมื่อ outcome ตรงกับ pct24h แล้ว)
+ */
+function backfill1hOutcomeTo24h(rows: CandleReversalStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (signalBarTf(row) !== "1h") continue;
+    if (row.outcome === "pending") continue;
+    if (row.pct24h == null || !Number.isFinite(row.pct24h)) continue;
+    const prev = row.outcome;
+    applyOutcomeFromPct(row, row.pct24h);
+    if (row.outcome !== prev) updated += 1;
+  }
+  return updated;
 }
 
 async function followUpCandleReversal1dRow(
@@ -305,6 +324,7 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
   const nowSec = Math.floor(nowMs / 1000);
 
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
+  dirty += backfill1hOutcomeTo24h(state.rows);
 
   for (const row of state.rows) {
     if (row.outcome !== "pending") continue;

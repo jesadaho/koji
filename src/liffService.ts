@@ -67,6 +67,7 @@ import {
 } from "./snowballStatsTick";
 import { isAdminTelegramUserId } from "./adminIds";
 import { loadCandleReversalStatsState, resetCandleReversalStatsState } from "./candleReversalStatsStore";
+import { runCandleReversalStatsFollowUpTick } from "./candleReversalStatsTick";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
 import {
   loadRsiDivergenceStatsState,
@@ -799,6 +800,21 @@ export async function liffResetCandleReversalStats(
   }
   await resetCandleReversalStatsState();
   return { ok: true };
+}
+
+/** Backfill Reversal stats: รัน follow-up tick แบบ manual — refetch pct ที่ Binance + re-evaluate outcome (1H → 24h) */
+export async function liffBackfillCandleReversalStats(
+  telegramUserId: number,
+): Promise<{ ok: true; updated: number } | { ok: false; status: number; error: string }> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  try {
+    const updated = await runCandleReversalStatsFollowUpTick(Date.now());
+    return { ok: true, updated };
+  } catch (e) {
+    return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function liffGetRsiDivergenceStats(

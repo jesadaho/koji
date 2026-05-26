@@ -27,6 +27,7 @@ import {
   liffDeleteIndicatorAlert,
   liffGetSparkStats,
   liffGetSnowballStats,
+  liffBackfillCandleReversalStats,
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
 } from "@/src/liffService";
@@ -306,6 +307,18 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
       const r = await liffResetCandleReversalStats(tgId);
       if (!r.ok) return json({ error: r.error }, r.status);
       return json({ ok: true });
+    }
+    if (segs.length === 2 && a === "reversal-stats" && segs[1] === "backfill") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const tgRaw = tgStoreKeyToTelegramUserIdString(auth.userId);
+      const tgId = tgRaw != null ? Number(tgRaw) : NaN;
+      if (!Number.isFinite(tgId)) {
+        return json({ error: "Backfill รองรับเฉพาะ Telegram Mini App" }, 403);
+      }
+      const r = await liffBackfillCandleReversalStats(tgId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({ ok: true, updated: r.updated });
     }
 
     return json({ error: "ไม่พบเส้นทาง" }, 404);

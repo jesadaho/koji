@@ -42,6 +42,7 @@ import {
   liffGetSnowballStats,
   liffDeleteSnowballStatsRow,
   liffResetSnowballStats,
+  liffBackfillCandleReversalStats,
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
   liffGetRsiDivergenceStats,
@@ -337,6 +338,13 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       const r = await liffResetCandleReversalStats(auth.telegramUserId);
       if (!r.ok) return json({ error: r.error }, r.status);
       return json({ ok: true });
+    }
+    if (segs.length === 2 && a === "reversal-stats" && segs[1] === "backfill") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const r = await liffBackfillCandleReversalStats(auth.telegramUserId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({ ok: true, updated: r.updated });
     }
     if (segs.length === 1 && a === "divergence-stats") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
