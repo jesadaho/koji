@@ -46,6 +46,7 @@ const FOOTNOTE =
 
 type SnowballDayFilter = "all" | "7" | "30" | "90";
 type SnowballGradeFilter = "all" | "A+" | "B" | "C" | "D+" | "F";
+type SnowballDowFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5" | "6";
 
 const SNOWBALL_DAY_FILTER_OPTIONS: ReadonlyArray<{ value: SnowballDayFilter; label: string }> = [
   { value: "all", label: "ทั้งหมด" },
@@ -65,6 +66,23 @@ const SNOWBALL_GRADE_FILTER_OPTIONS: ReadonlyArray<{
   { value: "D+", label: "D+" },
   { value: "F", label: "F" },
 ];
+
+const SNOWBALL_DOW_FILTER_OPTIONS: ReadonlyArray<{ value: SnowballDowFilter; label: string }> = [
+  { value: "all", label: "ทุกวัน" },
+  { value: "1", label: "จันทร์" },
+  { value: "2", label: "อังคาร" },
+  { value: "3", label: "พุธ" },
+  { value: "4", label: "พฤหัส" },
+  { value: "5", label: "ศุกร์" },
+  { value: "6", label: "เสาร์" },
+  { value: "0", label: "อาทิตย์" },
+];
+
+/** BKK = UTC+7 (no DST) — 0 = Sunday, 1 = Monday, ..., 6 = Saturday */
+function bkkDayOfWeekIndex(ms: number): number {
+  if (!Number.isFinite(ms)) return -1;
+  return new Date(ms + 7 * 3600 * 1000).getUTCDay();
+}
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
@@ -226,6 +244,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [correctOk, setCorrectOk] = useState<string | null>(null);
   const [dayFilter, setDayFilter] = useState<SnowballDayFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<SnowballGradeFilter>("all");
+  const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
 
   const isAdmin = payload?.isAdmin === true;
 
@@ -442,8 +461,19 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => snowballStatsGradeDisplayLabel(r) === gradeFilter);
     }
 
+    if (dowFilter !== "all") {
+      const targetDow = Number(dowFilter);
+      result = result.filter((r) => {
+        const ms =
+          r.alertedAtMs != null && Number.isFinite(r.alertedAtMs)
+            ? r.alertedAtMs
+            : Date.parse(r.alertedAtIso);
+        return Number.isFinite(ms) && bkkDayOfWeekIndex(ms) === targetDow;
+      });
+    }
+
     return result;
-  }, [allRows, dayFilter, gradeFilter]);
+  }, [allRows, dayFilter, gradeFilter, dowFilter]);
 
   const horizonWinrateText = useMemo(
     () =>
@@ -546,6 +576,25 @@ export default function SnowballStatsTelegramMiniApp() {
               style={{ width: "auto", minWidth: "7rem" }}
             >
               {SNOWBALL_GRADE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            วัน
+            <select
+              value={dowFilter}
+              onChange={(e) => setDowFilter(e.currentTarget.value as SnowballDowFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7rem" }}
+              title="วันในสัปดาห์ที่ส่งสัญญาณ (อิง BKK timezone)"
+            >
+              {SNOWBALL_DOW_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -656,7 +705,7 @@ export default function SnowballStatsTelegramMiniApp() {
                   <td colSpan={isAdmin ? 32 : 31} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                      : "ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade"}
+                      : "ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / ทุกวัน"}
                   </td>
                 </tr>
               ) : (
