@@ -463,6 +463,7 @@ async function notifyResults(
           wickRatioPct: Number.isFinite(sig.wickRatio) ? sig.wickRatio * 100 : null,
           bodyPct: sig.bodyRatio * 100,
           highRankInLookback: sig.highRankInLookback ?? null,
+          rangeRankInLookback: sig.rangeRankInLookback ?? null,
           volRankInLookback: sig.volRankInLookback ?? null,
           lookbackBars: sig.lookbackBars ?? null,
           rangeScore: row.evals.rangeScore,

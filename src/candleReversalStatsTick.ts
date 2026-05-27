@@ -130,6 +130,58 @@ function indexRangeThrough(
   return iLast;
 }
 
+function signalBarDurationSecByTf(tf: CandleReversalSignalBarTf): number {
+  return tf === "1h" ? HOUR_SEC : DAY_SEC;
+}
+
+function computeRangeRankInLookbackFromPack(pack: BinanceKlinePack, i: number, lookbackBars: number): number | null {
+  const lb = Math.floor(lookbackBars);
+  if (!(Number.isFinite(lb) && lb >= 2)) return null;
+  const start = Math.max(0, i - lb + 1);
+  const end = i;
+  const vi = pack.high[i]! - pack.low[i]!;
+  const eps = Math.max(1e-12, Math.abs(vi) * 1e-10);
+  let strictlyHigher = 0;
+  for (let j = start; j <= end; j++) {
+    if (j === i) continue;
+    const vj = pack.high[j]! - pack.low[j]!;
+    if (vj > vi + eps) strictlyHigher++;
+  }
+  return strictlyHigher + 1;
+}
+
+async function backfillRangeRankInLookback(rows: CandleReversalStatsRow[]): Promise<number> {
+  let updated = 0;
+  for (const row of rows) {
+    if (row.rangeRankInLookback != null && Number.isFinite(row.rangeRankInLookback)) continue;
+    const lb = row.lookbackBars;
+    if (!(lb != null && Number.isFinite(lb) && lb >= 2)) continue;
+
+    const tf = signalBarTf(row);
+    const barDur = signalBarDurationSecByTf(tf);
+    const windowStartSec = row.signalBarOpenSec - (Math.floor(lb) + 2) * barDur;
+    const windowEndSec = row.signalBarOpenSec + barDur;
+
+    try {
+      const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
+        startTimeMs: windowStartSec * 1000,
+        endTimeMs: windowEndSec * 1000,
+        limit: 800,
+      });
+      if (!pack || pack.timeSec.length === 0) continue;
+      const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
+      if (iSig < 0) continue;
+      const rank = computeRangeRankInLookbackFromPack(pack, iSig, lb);
+      if (rank == null) continue;
+      row.rangeRankInLookback = rank;
+      updated += 1;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] backfill range rank", row.symbol, tf, e);
+    }
+  }
+  return updated;
+}
+
 async function followUpCandleReversal1hRow(
   row: CandleReversalStatsRow,
   nowMs: number,
@@ -371,6 +423,7 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
   let dirty = 0;
   const nowSec = Math.floor(nowMs / 1000);
 
+  dirty += await backfillRangeRankInLookback(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += backfill1hOutcomeTo24h(state.rows);
 

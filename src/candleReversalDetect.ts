@@ -20,6 +20,8 @@ export type CandleReversalSignal = {
   afterInvertedDoji: boolean;
   /** อันดับ high ในรอบ lookbackBars (1 = สูงสุด) */
   highRankInLookback?: number;
+  /** อันดับ “ความยาวแท่ง” (high-low) ในรอบ lookbackBars (1 = ยาวสุด) */
+  rangeRankInLookback?: number;
   /** อันดับ volume ในรอบ lookbackBars (1 = สูงสุด) */
   volRankInLookback?: number;
   lookbackBars?: number;
@@ -73,6 +75,18 @@ function highRankInWindow(high: number[], start: number, end: number, i: number)
 
 function volumeRankInWindow(volume: number[], start: number, end: number, i: number): number {
   return valueRankInWindow(volume, start, end, i);
+}
+
+function rangeRankInWindow(high: number[], low: number[], start: number, end: number, i: number): number {
+  const vi = high[i]! - low[i]!;
+  const eps = Math.max(1e-12, Math.abs(vi) * 1e-10);
+  let strictlyHigher = 0;
+  for (let j = start; j <= end; j++) {
+    if (j === i) continue;
+    const vj = high[j]! - low[j]!;
+    if (vj > vi + eps) strictlyHigher++;
+  }
+  return strictlyHigher + 1;
 }
 
 /** % ระยะปิดจาก EMA — บวก = เหนือเส้น · ลบ = ใต้เส้น */
@@ -178,6 +192,10 @@ function buildSignal(
   lookback?: CandleReversalSignalLookbackMeta,
 ): CandleReversalSignal {
   const { open: o, high: h, low: l, close: c, timeSec: t } = pack;
+  const lbRaw = lookback?.lookbackBars;
+  const lb = lbRaw != null && Number.isFinite(lbRaw) && lbRaw >= 2 ? Math.floor(lbRaw) : null;
+  const rangeRankInLookback =
+    lb != null ? rangeRankInWindow(h, l, Math.max(0, i - lb + 1), i, i) : undefined;
   return {
     tf,
     model,
@@ -191,6 +209,7 @@ function buildSignal(
     retestPrice,
     slPrice,
     afterInvertedDoji,
+    ...(rangeRankInLookback != null ? { rangeRankInLookback } : {}),
     ...lookback,
   };
 }

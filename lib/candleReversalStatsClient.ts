@@ -21,6 +21,8 @@ export type CandleReversalStatsRow = {
   bodyPct: number | null;
   /** อันดับ high ในรอบ lookbackBars (1 = สูงสุด) */
   highRankInLookback: number | null;
+  /** อันดับ “ความยาวแท่ง” (high-low) ในรอบ lookbackBars (1 = ยาวสุด) */
+  rangeRankInLookback: number | null;
   /** อันดับ volume ในรอบ lookbackBars (1 = สูงสุด) */
   volRankInLookback: number | null;
   lookbackBars: number | null;
@@ -123,6 +125,7 @@ export type CandleReversalStatsSortKey =
   | "sl"
   | "wickPct"
   | "bodyPct"
+  | "rangeRank"
   | "volRank"
   | "highRank"
   | "range"
@@ -218,6 +221,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.wickRatioPct, b.wickRatioPct);
     case "bodyPct":
       return cmpNumNullLast(a.bodyPct, b.bodyPct);
+    case "rangeRank":
+      return cmpNumNullLast(a.rangeRankInLookback, b.rangeRankInLookback);
     case "volRank":
       return cmpNumNullLast(a.volRankInLookback, b.volRankInLookback);
     case "highRank":

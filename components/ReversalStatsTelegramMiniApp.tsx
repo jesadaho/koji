@@ -233,7 +233,7 @@ function ReversalStatsSection({
     [tf],
   );
   const has48h = tf === "1h";
-  const emptyColSpan = has48h ? 21 : 20;
+  const emptyColSpan = has48h ? 22 : 21;
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -310,6 +310,13 @@ function ReversalStatsSection({
               <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="ไส้%" sortKey="wickPct" title="ไส้บน ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
+              <SortTh
+                label="Len#"
+                sortKey="rangeRank"
+                title="อันดับความยาวแท่ง (high-low) ในรอบ lookback"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
               <SortTh
                 label="Vol#"
                 sortKey="volRank"
@@ -395,6 +402,7 @@ function ReversalStatsSection({
                     <td>{fmtPrice(r.slPrice)}</td>
                     <td>{r.wickRatioPct != null ? `${r.wickRatioPct.toFixed(1)}%` : "—"}</td>
                     <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
+                    <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
                     <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
                     <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
                     <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
