@@ -17,6 +17,7 @@ import {
   type SnowballLongBreakoutGrade,
   type SnowballLongStructureTier,
 } from "@/src/snowballLongBreakoutGrade";
+import { displayGradeToQualityTier } from "@/src/snowballLongGradeMatrix";
 
 export type { SnowballLongStructureTier };
 
@@ -239,11 +240,52 @@ export function snowballStatsStructureTierLabel(
   return snowballLongGradeShortLabel(tier);
 }
 
-/** ป้ายคอลัมน์ Grade — เกรดสุทธิชั้นเดียว (โครงสร้างดูใน popup) */
-export function snowballStatsGradeDisplayLabel(
-  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier">,
-): string {
-  return snowballStatsGradeLetter(effectiveQualityTier(row));
+type SnowballStatsGradeDisplayRow = Pick<
+  SnowballStatsRow,
+  | "displayGrade"
+  | "qualityTier"
+  | "alertQualityTier"
+  | "qualityTier4hAdjusted"
+  | "momentumDowngrade"
+  | "momentumFailGradeF"
+>;
+
+/** ป้ายเกรดตอนแจ้ง — ใช้ displayGrade (B-/A-/…) ถ้ามี ไม่ใช้แค่ qualityTier หยาบ (B- → c_plus → "C") */
+export function snowballStatsGradeAtAlertLabel(row: SnowballStatsGradeDisplayRow): string {
+  return snowballStatsDerivedDisplayGrade(row) ?? snowballStatsGradeLetter(effectiveQualityTier(row));
+}
+
+/**
+ * ป้ายคอลัมน์ Grade — เกรดสุทธิชั้นเดียว (โครงสร้างดูใน popup)
+ * แถว 4h ที่ follow-up ปรับ qualityTier แล้ว → "B- → C"
+ */
+export function snowballStatsGradeDisplayLabel(row: SnowballStatsGradeDisplayRow): string {
+  const atAlert = snowballStatsGradeAtAlertLabel(row);
+  if (row.qualityTier4hAdjusted && row.qualityTier) {
+    const after4h = snowballStatsGradeLetter(row.qualityTier);
+    if (after4h !== "—" && after4h !== atAlert) {
+      return `${atAlert} → ${after4h}`;
+    }
+  }
+  return atAlert;
+}
+
+/** กรอง dropdown Grade — รองรับ B-/B+/C- และรูปแบบ "B- → C" หลังปรับ 4h */
+export function snowballStatsGradeMatchesFilter(
+  row: SnowballStatsGradeDisplayRow,
+  filter: string,
+): boolean {
+  if (filter === "all") return true;
+  const label = snowballStatsGradeDisplayLabel(row);
+  if (label === filter) return true;
+  const parts = label.split(" → ").map((s) => s.trim());
+  if (parts.some((p) => p === filter)) return true;
+  if (filter === "B" && parts.some((p) => p.startsWith("B"))) return true;
+  if (filter === "C" && parts.some((p) => p.startsWith("C"))) return true;
+  if (filter === "A+" && parts.some((p) => p.startsWith("A"))) return true;
+  if (filter === "D+" && parts.some((p) => p.startsWith("D"))) return true;
+  if (filter === "F" && parts.some((p) => p === "F" || p.startsWith("F"))) return true;
+  return false;
 }
 
 export type { SnowballGradeChecklistItem } from "@/lib/snowballGradeChecklist";
@@ -285,10 +327,21 @@ export function snowballStatsGradeLabel(
   return snowballStatsGradeLetter(tier);
 }
 
+function snowballStatsGradeTierForStyle(
+  row: Pick<SnowballStatsRow, "displayGrade" | "qualityTier" | "alertQualityTier" | "qualityTier4hAdjusted">,
+): SnowballStatsQualityTier | undefined {
+  if (row.qualityTier4hAdjusted && row.qualityTier) return row.qualityTier;
+  if (row.displayGrade) return displayGradeToQualityTier(row.displayGrade);
+  return effectiveQualityTier(row);
+}
+
 export function snowballStatsGradeCellClass(
-  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail">,
+  row: Pick<
+    SnowballStatsRow,
+    "displayGrade" | "qualityTier" | "alertQualityTier" | "qualityTier4hAdjusted" | "breakout1hConfirmFail"
+  >,
 ): string {
-  const tier = effectiveQualityTier(row);
+  const tier = snowballStatsGradeTierForStyle(row);
   if (snowballIsGradeF(tier)) return "snowGradeCell snowGradeCell--f";
   if (snowballIsGradeDPlusLong(tier)) {
     return "snowGradeCell snowGradeCell--d";

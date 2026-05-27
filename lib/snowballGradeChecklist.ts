@@ -20,6 +20,7 @@ import {
 import {
   snowballStatsActionPlanLabel,
   snowballStatsDerivedDisplayGrade,
+  snowballStatsGradeAtAlertLabel,
   snowballStatsVolVsSmaDisplay,
   type SnowballStatsQualityTier,
   type SnowballStatsRow,
@@ -694,7 +695,7 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
       `- Stage 3 (Adjuster)  : ${!twoBarPass ? "—" : `พลาด ${failCount}/3 · notch ${notchStr}`}`,
       `- Decision Matrix     : ${row.structureCeiling} × พลาด ${failCount} → ${row.displayGrade ?? derivedDisplay ?? "—"}`,
       `- Action Plan         : ${actionPlanLabel ?? "—"}`,
-      `- Result              : [ ${derivedDisplay ?? (grade ? snowballLongGradeDisplayLabel(grade) : "—")} ] ตอนแจ้ง`,
+      `- Result              : [ ${snowballStatsGradeAtAlertLabel(row) } ] ตอนแจ้ง`,
     );
   } else {
     lines.push(

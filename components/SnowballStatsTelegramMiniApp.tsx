@@ -23,6 +23,7 @@ import {
   snowballStatsGradeChecklistFooter,
   snowballStatsStagedPopupText,
   snowballStatsGradeDisplayLabel,
+  snowballStatsGradeMatchesFilter,
   snowballStatsGreenDaysLabel,
   snowballStatsSideLabel,
   snowballStatsFundingRateLabel,
@@ -458,7 +459,7 @@ export default function SnowballStatsTelegramMiniApp() {
     }
 
     if (gradeFilter !== "all") {
-      result = result.filter((r) => snowballStatsGradeDisplayLabel(r) === gradeFilter);
+      result = result.filter((r) => snowballStatsGradeMatchesFilter(r, gradeFilter));
     }
 
     if (dowFilter !== "all") {
