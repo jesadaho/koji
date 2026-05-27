@@ -396,6 +396,7 @@ export async function correctCandleReversalStatsOutcome(opts?: {
 }): Promise<{ scanned: number; changedOutcome: number }> {
   const symbolFilter = opts?.symbol?.trim().toUpperCase() || undefined;
   const state = await loadCandleReversalStatsState();
+  const nowSec = Math.floor(Date.now() / 1000);
   let scanned = 0;
   let changedOutcome = 0;
 
@@ -404,6 +405,9 @@ export async function correctCandleReversalStatsOutcome(opts?: {
     const tf = signalBarTf(row);
     const pct = tf === "1h" ? row.pct24h : row.pct7d;
     if (pct == null || !Number.isFinite(pct)) continue;
+    const ac = anchorCloseSec(row);
+    const horizonOk = tf === "1h" ? nowSec >= ac + 24 * HOUR_SEC : nowSec >= ac + followup1dDays() * DAY_SEC;
+    if (!horizonOk) continue;
     scanned += 1;
 
     const prev = row.outcome;
