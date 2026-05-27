@@ -74,11 +74,12 @@ function pickHorizonClose(
   horizonEndSec: number,
   entry: number,
 ): { price: number; pct: number } | null {
-  const limitSec = Math.min(horizonEndSec, nowSec);
+  /** ยังไม่ถึง checkpoint — ไม่ใส่ราคา interim (กัน 4h/12h/24h/48h ซ้ำกัน) */
+  if (nowSec < horizonEndSec) return null;
   let best = -1;
   for (let i = iFirst; i <= iLast; i++) {
     const barClose = timeSec[i]! + barDurSec;
-    if (barClose <= limitSec) best = i;
+    if (barClose <= horizonEndSec) best = i;
   }
   if (best < 0) return null;
   const price = close[best]!;
@@ -226,11 +227,15 @@ async function followUpCandleReversal1hRow(
   }
   if (!mfe) return false;
 
-  const h4 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, ac + 4 * HOUR_SEC, entry);
-  const h12 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, ac + 12 * HOUR_SEC, entry);
-  const h24 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, ac + 24 * HOUR_SEC, entry);
-  let h48 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, ac + 48 * HOUR_SEC, entry);
-  if (h48 == null && nowSec >= ac + 48 * HOUR_SEC && i15Last >= i15First) {
+  const h4End = ac + 4 * HOUR_SEC;
+  const h12End = ac + 12 * HOUR_SEC;
+  const h24End = ac + 24 * HOUR_SEC;
+  const h48End = ac + 48 * HOUR_SEC;
+  const h4 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h4End, entry);
+  const h12 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h12End, entry);
+  const h24 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h24End, entry);
+  let h48 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h48End, entry);
+  if (h48 == null && nowSec >= h48End && i15Last >= i15First) {
     const p = c15[i15Last]!;
     h48 = { price: p, pct: pctVsEntryShort(entry, p) };
   }
@@ -241,18 +246,30 @@ async function followUpCandleReversal1hRow(
   if (h4) {
     row.price4h = h4.price;
     row.pct4h = h4.pct;
+  } else if (nowSec < h4End) {
+    row.price4h = null;
+    row.pct4h = null;
   }
   if (h12) {
     row.price12h = h12.price;
     row.pct12h = h12.pct;
+  } else if (nowSec < h12End) {
+    row.price12h = null;
+    row.pct12h = null;
   }
   if (h24) {
     row.price24h = h24.price;
     row.pct24h = h24.pct;
+  } else if (nowSec < h24End) {
+    row.price24h = null;
+    row.pct24h = null;
   }
   if (h48) {
     row.price48h = h48.price;
     row.pct48h = h48.pct;
+  } else if (nowSec < h48End) {
+    row.price48h = null;
+    row.pct48h = null;
   }
 
   // Reversal 1H: ปิดผลเร็วขึ้นที่ 24h (ใช้ pct24h)
@@ -271,15 +288,22 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
   if (row.outcome === "pending") return true;
   const ac = anchorCloseSec(row);
   if (signalBarTf(row) === "1h") {
+    if (nowSec < ac + 4 * HOUR_SEC && row.pct4h != null) return true;
+    if (nowSec < ac + 12 * HOUR_SEC && row.pct12h != null) return true;
+    if (nowSec < ac + 24 * HOUR_SEC && row.pct24h != null) return true;
+    if (nowSec < ac + 48 * HOUR_SEC && row.pct48h != null) return true;
     if (row.pct4h == null && nowSec >= ac + 4 * HOUR_SEC) return true;
     if (row.pct12h == null && nowSec >= ac + 12 * HOUR_SEC) return true;
     if (row.pct24h == null && nowSec >= ac + 24 * HOUR_SEC) return true;
     if (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC) return true;
     return false;
   }
+  if (nowSec < ac + DAY_SEC && row.pct1d != null) return true;
+  if (nowSec < ac + 3 * DAY_SEC && row.pct3d != null) return true;
+  if (nowSec < ac + followup1dDays() * DAY_SEC && row.pct7d != null) return true;
   if (row.pct1d == null && nowSec >= ac + DAY_SEC) return true;
   if (row.pct3d == null && nowSec >= ac + 3 * DAY_SEC) return true;
-  if (row.pct7d == null && nowSec >= ac + 7 * DAY_SEC) return true;
+  if (row.pct7d == null && nowSec >= ac + followup1dDays() * DAY_SEC) return true;
   return false;
 }
 
@@ -326,10 +350,13 @@ async function followUpCandleReversal1dRow(
   const mfe = computeMfeFromPack(dayT, dayPack.high, dayPack.low, DAY_SEC, iDayFirst, iDayLast, ac, entry);
   if (!mfe) return false;
 
-  const h1d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, ac + DAY_SEC, entry);
-  const h3d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, ac + 3 * DAY_SEC, entry);
-  let h7d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, ac + followSec, entry);
-  if (h7d == null && nowSec >= ac + followSec && iDayLast >= iDayFirst) {
+  const h1dEnd = ac + DAY_SEC;
+  const h3dEnd = ac + 3 * DAY_SEC;
+  const h7dEnd = ac + followSec;
+  const h1d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, h1dEnd, entry);
+  const h3d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, h3dEnd, entry);
+  let h7d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, h7dEnd, entry);
+  if (h7d == null && nowSec >= h7dEnd && iDayLast >= iDayFirst) {
     const p = dayC[iDayLast]!;
     h7d = { price: p, pct: pctVsEntryShort(entry, p) };
   }
@@ -340,14 +367,23 @@ async function followUpCandleReversal1dRow(
   if (h1d) {
     row.price1d = h1d.price;
     row.pct1d = h1d.pct;
+  } else if (nowSec < h1dEnd) {
+    row.price1d = null;
+    row.pct1d = null;
   }
   if (h3d) {
     row.price3d = h3d.price;
     row.pct3d = h3d.pct;
+  } else if (nowSec < h3dEnd) {
+    row.price3d = null;
+    row.pct3d = null;
   }
   if (h7d) {
     row.price7d = h7d.price;
     row.pct7d = h7d.pct;
+  } else if (nowSec < h7dEnd) {
+    row.price7d = null;
+    row.pct7d = null;
   }
 
   const finalized = nowSec >= ac + followSec && row.pct7d != null;
