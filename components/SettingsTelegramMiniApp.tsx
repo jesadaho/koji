@@ -135,9 +135,11 @@ type SnowballAutoTradeApiBundle = {
   rulesBear?: Record<string, "long" | "short">;
   marginUsdt?: number | null;
   leverage?: number | null;
-  quickTpEnabled?: boolean;
-  quickTpRoiPct?: number | null;
-  quickTpMaxHours?: number | null;
+  tpSlEnabled?: boolean;
+  tp1PricePct?: number | null;
+  tp1PartialPct?: number | null;
+  tp2PricePct?: number | null;
+  maxHoldHours?: number | null;
 };
 
 type ReversalAutoTradeApiBundle = {
@@ -192,9 +194,11 @@ export default function SettingsTelegramMiniApp() {
   const [snowRulesBear, setSnowRulesBear] = useState(() => emptySnowGradeRules());
   const [snowMarginDefault, setSnowMarginDefault] = useState("");
   const [snowLevDefault, setSnowLevDefault] = useState("");
-  const [snowQuickTpEnabled, setSnowQuickTpEnabled] = useState(false);
-  const [snowQuickTpRoiPct, setSnowQuickTpRoiPct] = useState("");
-  const [snowQuickTpMaxHours, setSnowQuickTpMaxHours] = useState("");
+  const [snowTpSlEnabled, setSnowTpSlEnabled] = useState(true);
+  const [snowTp1PricePct, setSnowTp1PricePct] = useState("");
+  const [snowTp1PartialPct, setSnowTp1PartialPct] = useState("");
+  const [snowTp2PricePct, setSnowTp2PricePct] = useState("");
+  const [snowMaxHoldHours, setSnowMaxHoldHours] = useState("");
   const [snowSaveErr, setSnowSaveErr] = useState("");
   const [snowSaveOk, setSnowSaveOk] = useState("");
   const [snowSaving, setSnowSaving] = useState(false);
@@ -244,10 +248,14 @@ export default function SettingsTelegramMiniApp() {
     setSnowRulesBear(hydrateSnowGradeRules(st.rulesBear));
     setSnowMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
     setSnowLevDefault(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
-    setSnowQuickTpEnabled(Boolean(st.quickTpEnabled));
-    setSnowQuickTpRoiPct(st.quickTpRoiPct != null && Number.isFinite(st.quickTpRoiPct) ? String(st.quickTpRoiPct) : "");
-    setSnowQuickTpMaxHours(
-      st.quickTpMaxHours != null && Number.isFinite(st.quickTpMaxHours) ? String(st.quickTpMaxHours) : ""
+    setSnowTpSlEnabled(st.tpSlEnabled !== false);
+    setSnowTp1PricePct(st.tp1PricePct != null && Number.isFinite(st.tp1PricePct) ? String(st.tp1PricePct) : "");
+    setSnowTp1PartialPct(
+      st.tp1PartialPct != null && Number.isFinite(st.tp1PartialPct) ? String(st.tp1PartialPct) : ""
+    );
+    setSnowTp2PricePct(st.tp2PricePct != null && Number.isFinite(st.tp2PricePct) ? String(st.tp2PricePct) : "");
+    setSnowMaxHoldHours(
+      st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.snowballAutoTrade]);
@@ -543,8 +551,10 @@ export default function SettingsTelegramMiniApp() {
 
     const marginDefaultParsed = snowMarginDefault.trim() ? parseNumRaw(snowMarginDefault) : null;
     const levDefaultParsed = snowLevDefault.trim() ? parseNumRaw(snowLevDefault) : null;
-    const quickRoiParsed = snowQuickTpRoiPct.trim() ? parseNumRaw(snowQuickTpRoiPct) : null;
-    const quickHoursParsed = snowQuickTpMaxHours.trim() ? parseNumRaw(snowQuickTpMaxHours) : null;
+    const tp1Parsed = snowTp1PricePct.trim() ? parseNumRaw(snowTp1PricePct) : null;
+    const tp1PartialParsed = snowTp1PartialPct.trim() ? parseNumRaw(snowTp1PartialPct) : null;
+    const tp2Parsed = snowTp2PricePct.trim() ? parseNumRaw(snowTp2PricePct) : null;
+    const maxHoldParsed = snowMaxHoldHours.trim() ? parseNumRaw(snowMaxHoldHours) : null;
 
     if (snowMarginDefault.trim() && marginDefaultParsed == null) {
       setSnowSaveErr("Margin default ไม่ใช่ตัวเลข");
@@ -554,12 +564,20 @@ export default function SettingsTelegramMiniApp() {
       setSnowSaveErr("Leverage default ไม่ใช่ตัวเลข");
       return;
     }
-    if (snowQuickTpRoiPct.trim() && quickRoiParsed == null) {
-      setSnowSaveErr("Quick TP ROI% ไม่ใช่ตัวเลข");
+    if (snowTp1PricePct.trim() && tp1Parsed == null) {
+      setSnowSaveErr("TP1 % ไม่ใช่ตัวเลข");
       return;
     }
-    if (snowQuickTpMaxHours.trim() && quickHoursParsed == null) {
-      setSnowSaveErr("Quick TP ชั่วโมง ไม่ใช่ตัวเลข");
+    if (snowTp1PartialPct.trim() && tp1PartialParsed == null) {
+      setSnowSaveErr("TP1 ปิด % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowTp2PricePct.trim() && tp2Parsed == null) {
+      setSnowSaveErr("TP2 % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowMaxHoldHours.trim() && maxHoldParsed == null) {
+      setSnowSaveErr("ครบกี่ชม. ไม่ใช่ตัวเลข");
       return;
     }
     if (snowMarginDefault.trim() && marginDefaultParsed != null && marginDefaultParsed <= 0) {
@@ -570,15 +588,21 @@ export default function SettingsTelegramMiniApp() {
       setSnowSaveErr("Leverage default ต้อง ≥ 1");
       return;
     }
-    if (snowQuickTpEnabled) {
-      if (quickRoiParsed != null && quickRoiParsed <= 0) {
-        setSnowSaveErr("Quick TP ROI% ต้องเป็นเลขบวก");
-        return;
-      }
-      if (quickHoursParsed != null && quickHoursParsed <= 0) {
-        setSnowSaveErr("Quick TP ชั่วโมง ต้องเป็นเลขบวก");
-        return;
-      }
+    if (snowTp1PricePct.trim() && (tp1Parsed == null || !(tp1Parsed > 0 && tp1Parsed < 100))) {
+      setSnowSaveErr("TP1 % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (snowTp1PartialPct.trim() && (tp1PartialParsed == null || !(tp1PartialParsed > 0 && tp1PartialParsed < 100))) {
+      setSnowSaveErr("TP1 ปิด % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (snowTp2PricePct.trim() && (tp2Parsed == null || !(tp2Parsed > 0 && tp2Parsed < 100))) {
+      setSnowSaveErr("TP2 % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (tp1Parsed != null && tp2Parsed != null && !(tp2Parsed > tp1Parsed)) {
+      setSnowSaveErr("TP2 % ต้องมากกว่า TP1 %");
+      return;
     }
 
     setSnowSaving(true);
@@ -589,9 +613,11 @@ export default function SettingsTelegramMiniApp() {
         rulesBear: serializeSnowGradeRules(snowRulesBear),
         marginUsdt: snowMarginDefault.trim() ? marginDefaultParsed : null,
         leverage: snowLevDefault.trim() ? levDefaultParsed : null,
-        quickTpEnabled: snowQuickTpEnabled,
-        quickTpRoiPct: snowQuickTpRoiPct.trim() ? quickRoiParsed : null,
-        quickTpMaxHours: snowQuickTpMaxHours.trim() ? quickHoursParsed : null,
+        tpSlEnabled: snowTpSlEnabled,
+        tp1PricePct: snowTp1PricePct.trim() ? tp1Parsed : null,
+        tp1PartialPct: snowTp1PartialPct.trim() ? tp1PartialParsed : null,
+        tp2PricePct: snowTp2PricePct.trim() ? tp2Parsed : null,
+        maxHoldHours: snowMaxHoldHours.trim() ? maxHoldParsed : null,
       };
       const body: Record<string, unknown> = {
         rotateWebhookToken: false,
@@ -1157,48 +1183,93 @@ export default function SettingsTelegramMiniApp() {
           </label>
         </div>
 
-        <label className="sub tmaCheckboxField" style={{ marginTop: "0.85rem" }}>
+        <p className="sub" style={{ marginTop: "1.1rem", fontWeight: 600 }}>
+          กลยุทธ์ TP/SL (รัน cron tick หลังเปิด Market)
+        </p>
+        <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
+          <li>
+            <strong>TP1</strong>: ราคาเคลื่อนในทิศกำไร ≥ <code>TP1 %</code> → ปิด <code>TP1 ปิด %</code> ของ vol และตั้ง MEXC SL บังทุน @ entry (LONG/SHORT)
+          </li>
+          <li>
+            <strong>TP2</strong>: เคลื่อน ≥ <code>TP2 %</code> → ปิดทั้งหมด + ยกเลิก SL plan
+          </li>
+          <li>
+            <strong>ครบ {snowMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force market) + ยกเลิก SL plan
+          </li>
+          <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
+        </ul>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
           <input
             type="checkbox"
-            checked={snowQuickTpEnabled}
-            onChange={(e) => setSnowQuickTpEnabled(e.target.checked)}
+            checked={snowTpSlEnabled}
+            onChange={(e) => setSnowTpSlEnabled(e.target.checked)}
           />
           <span className="tmaCheckboxField__text">
-            <strong>Quick TP</strong>
+            <strong style={{ fontWeight: 600 }}>เปิดใช้กลยุทธ์ TP/SL</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              ถ้า ROI แตะเป้าภายในช่วงเวลาที่ตั้ง ระบบจะพยายามปิด market ทันที (ตามรอบ cron) — ROI คำนวณจากราคาเข้าเฉลี่ยบน MEXC เมื่อดึงได้ ไม่ใช่แค่ close Binance
+              ถ้าปิด ระบบจะเปิดโพซิชันตามเกรดอย่างเดียว ไม่ tick TP1/TP2/max hold ให้
             </span>
           </span>
         </label>
+
         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
           <label className="sub" style={{ display: "block" }}>
-            Quick TP ROI% (ดีฟอลต์ 30)
+            TP1 ราคาเคลื่อน % (default 10)
             <input
               type="text"
               inputMode="decimal"
               style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
               autoComplete="off"
-              placeholder="30"
-              value={snowQuickTpRoiPct}
-              onChange={(e) => setSnowQuickTpRoiPct(e.target.value)}
+              placeholder="เช่น 10"
+              value={snowTp1PricePct}
+              onChange={(e) => setSnowTp1PricePct(e.target.value)}
+              disabled={!snowTpSlEnabled}
             />
           </label>
           <label className="sub" style={{ display: "block" }}>
-            Quick TP max ชั่วโมง (ดีฟอลต์ 4)
+            TP1 ปิด % ของ vol (default 50)
             <input
               type="text"
               inputMode="decimal"
               style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
               autoComplete="off"
-              placeholder="4"
-              value={snowQuickTpMaxHours}
-              onChange={(e) => setSnowQuickTpMaxHours(e.target.value)}
+              placeholder="เช่น 50"
+              value={snowTp1PartialPct}
+              onChange={(e) => setSnowTp1PartialPct(e.target.value)}
+              disabled={!snowTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            TP2 ราคาเคลื่อน % (default 25)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 25"
+              value={snowTp2PricePct}
+              onChange={(e) => setSnowTp2PricePct(e.target.value)}
+              disabled={!snowTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            ครบกี่ ชม. → ปิดทั้งหมด (default 48)
+            <input
+              type="text"
+              inputMode="numeric"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 48"
+              value={snowMaxHoldHours}
+              onChange={(e) => setSnowMaxHoldHours(e.target.value)}
+              disabled={!snowTpSlEnabled}
             />
           </label>
         </div>
 
         <p className="sub" style={{ marginTop: "0.85rem" }}>
-          กติกาเสริม: <strong>ครบ 24 ชั่วโมง</strong> แล้วถ้ายังติดลบและไม่เข้าเกณฑ์ “รันเทรน” ระบบจะพยายามปิด market ทันที
+          กติกาเสริม: <strong>ครบ 24 ชั่วโมง</strong> แล้วถ้ายังติดลบและไม่เข้าเกณฑ์ “รันเทรน” ระบบจะพยายามปิด market ทันที (แยกจาก max hold ด้านบน)
         </p>
 
         <p style={{ marginTop: "0.95rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>

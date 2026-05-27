@@ -89,18 +89,27 @@ export async function runSnowballAutoTradeQuickTpTick(nowMs: number): Promise<nu
     const creds: MexcCredentials = { apiKey: row.mexcApiKey.trim(), secret: row.mexcSecret.trim() };
 
     for (const a of actives as SnowballAutoTradeActive[]) {
-      if (!a.quickTpEnabled) continue;
+      if (!a.quickTpEnabled || a.tpSlEnabled) continue;
+      const qRoi = a.quickTpRoiPct;
+      const qH = a.quickTpMaxHours;
+      if (!(typeof qRoi === "number" && qRoi > 0) || !(typeof qH === "number" && qH > 0)) continue;
       const ageMs = nowMs - a.openedAtMs;
-      const maxMs = Math.max(0, a.quickTpMaxHours) * 3600 * 1000;
+      const maxMs = Math.max(0, qH) * 3600 * 1000;
       if (!(ageMs >= 0) || !(maxMs > 0) || ageMs > maxMs) continue;
 
       const mark = await getContractLastPricePublic(a.contractSymbol);
       if (mark == null || !(mark > 0)) continue;
       const { entry, source: entrySource } = await resolveQuickTpEntry(creds, a);
       const roi = roiPctFromMark({ side: a.side, entry, mark, leverage: a.leverage });
-      if (!Number.isFinite(roi) || roi < a.quickTpRoiPct) continue;
+      if (!Number.isFinite(roi) || roi < qRoi) continue;
 
-      const detail = quickTpDetailLines({ a, mark, roi, entry, entrySource });
+      const detail = quickTpDetailLines({
+        a: { ...a, quickTpRoiPct: qRoi },
+        mark,
+        roi,
+        entry,
+        entrySource,
+      });
 
       const r = await closeAllOpenForSymbol(creds, a.contractSymbol);
       if (!r.success) {

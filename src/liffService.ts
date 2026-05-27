@@ -110,7 +110,7 @@ import {
 
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ตั้งเกรด matrix (A+ … F) และทิศ Long/Short แยกบล็อกสัญญาณ LONG กับ BEAR ด้านล่าง · Grade C ที่เลือก Short บนสัญญาณ LONG ยังใช้ gate fade (Limit retest ไส้ / Market V-Top) · เปิด D/F + Long ได้แต่เสี่ยงสูง — kill switch เซิร์ฟ: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (นับเมื่อ fill สำหรับ Limit)";
+  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ตั้งเกรด matrix (A+ … F) และทิศ Long/Short แยกบล็อกสัญญาณ LONG กับ BEAR · Grade C ที่เลือก Short บนสัญญาณ LONG ยังใช้ gate fade (Limit retest ไส้ / Market V-Top) · กลยุทธ์ TP/SL (TP1 partial + SL บังทุน / TP2 / max hold) เหมือน Reversal รองรับทั้ง LONG และ SHORT · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (นับเมื่อ fill สำหรับ Limit)";
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
@@ -995,9 +995,11 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     rulesBear,
     marginUsdt: row.snowballAutoTradeMarginUsdt ?? null,
     leverage: row.snowballAutoTradeLeverage ?? null,
-    quickTpEnabled: row.snowballAutoTradeQuickTpEnabled ?? false,
-    quickTpRoiPct: row.snowballAutoTradeQuickTpRoiPct ?? null,
-    quickTpMaxHours: row.snowballAutoTradeQuickTpMaxHours ?? null,
+    tpSlEnabled: row.snowballAutoTradeTpSlEnabled ?? true,
+    tp1PricePct: row.snowballAutoTradeTp1PricePct ?? null,
+    tp1PartialPct: row.snowballAutoTradeTp1PartialPct ?? null,
+    tp2PricePct: row.snowballAutoTradeTp2PricePct ?? null,
+    maxHoldHours: row.snowballAutoTradeMaxHoldHours ?? null,
   };
 }
 
@@ -1294,13 +1296,41 @@ function parseSnowballAutoTradeNested(
 
   const mMargin = numOrEmpty("marginUsdt");
   const mLev = numOrEmpty("leverage");
-  const mRoi = numOrEmpty("quickTpRoiPct");
-  const mMaxH = numOrEmpty("quickTpMaxHours");
-  if (mMargin.err || mLev.err || mRoi.err || mMaxH.err) return { ok: false, error: "snowball_numeric_invalid" };
+  const mTp1 = numOrEmpty("tp1PricePct");
+  const mTp1Partial = numOrEmpty("tp1PartialPct");
+  const mTp2 = numOrEmpty("tp2PricePct");
+  const mMaxH = numOrEmpty("maxHoldHours");
+  if (
+    mMargin.err ||
+    mLev.err ||
+    mTp1.err ||
+    mTp1Partial.err ||
+    mTp2.err ||
+    mMaxH.err
+  ) {
+    return { ok: false, error: "snowball_numeric_invalid" };
+  }
 
-  let quickTpEnabled = false;
-  if (typeof o.quickTpEnabled === "boolean") quickTpEnabled = o.quickTpEnabled;
-  else if (o.quickTpEnabled === "1" || o.quickTpEnabled === 1 || o.quickTpEnabled === "true") quickTpEnabled = true;
+  if (typeof mTp1.v === "number" && !(mTp1.v > 0 && mTp1.v < 100)) {
+    return { ok: false, error: "snowball_tp1_price_pct_out_of_range" };
+  }
+  if (typeof mTp1Partial.v === "number" && !(mTp1Partial.v > 0 && mTp1Partial.v < 100)) {
+    return { ok: false, error: "snowball_tp1_partial_pct_out_of_range" };
+  }
+  if (typeof mTp2.v === "number" && !(mTp2.v > 0 && mTp2.v < 100)) {
+    return { ok: false, error: "snowball_tp2_price_pct_out_of_range" };
+  }
+  if (typeof mMaxH.v === "number" && !(mMaxH.v > 0 && mMaxH.v <= 24 * 30)) {
+    return { ok: false, error: "snowball_max_hold_hours_out_of_range" };
+  }
+  if (typeof mTp1.v === "number" && typeof mTp2.v === "number" && !(mTp2.v > mTp1.v)) {
+    return { ok: false, error: "snowball_tp2_must_gt_tp1" };
+  }
+
+  let tpSlEnabled: boolean | undefined;
+  if (typeof o.tpSlEnabled === "boolean") tpSlEnabled = o.tpSlEnabled;
+  else if (o.tpSlEnabled === "1" || o.tpSlEnabled === 1 || o.tpSlEnabled === "true") tpSlEnabled = true;
+  else if (o.tpSlEnabled === "0" || o.tpSlEnabled === 0 || o.tpSlEnabled === "false") tpSlEnabled = false;
 
   const patchPart: Omit<
     SaveTradingViewMexcInput,
@@ -1312,10 +1342,14 @@ function parseSnowballAutoTradeNested(
     ...(hasRulesBearKey ? { snowballAutoTradeRulesBear: rulesBear } : {}),
     snowballAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
     snowballAutoTradeLeverage: mLev.v as number | null | undefined,
-    snowballAutoTradeQuickTpEnabled: quickTpEnabled,
-    snowballAutoTradeQuickTpRoiPct: mRoi.v as number | null | undefined,
-    snowballAutoTradeQuickTpMaxHours: mMaxH.v as number | null | undefined,
+    snowballAutoTradeQuickTpEnabled: false,
+    snowballAutoTradeTp1PricePct: mTp1.v as number | null | undefined,
+    snowballAutoTradeTp1PartialPct: mTp1Partial.v as number | null | undefined,
+    snowballAutoTradeTp2PricePct: mTp2.v as number | null | undefined,
+    snowballAutoTradeMaxHoldHours:
+      mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
   };
+  if (tpSlEnabled !== undefined) patchPart.snowballAutoTradeTpSlEnabled = tpSlEnabled;
   return { ok: true, patch: patchPart };
 }
 

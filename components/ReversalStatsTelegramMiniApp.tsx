@@ -277,7 +277,7 @@ function ReversalStatsSection({
         {horizonWinrateText ? (
           <span
             className="sub"
-            title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +3% · Loss ≤ -3% · WR ไม่นับ flat (decisive = wins + losses), +Nf = จำนวน flat"
+            title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +2% · Loss ≤ -2% · WR ไม่นับ flat (decisive = wins + losses), +Nf = จำนวน flat"
             style={{ display: "block", marginTop: "0.15rem" }}
           >
             WR · {horizonWinrateText}

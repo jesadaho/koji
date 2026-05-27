@@ -279,11 +279,11 @@ export function candleReversalStatsSortDefaultDir(key: CandleReversalStatsSortKe
 /** เกณฑ์ default — ใช้ฝั่ง client คำนวณ per-horizon winrate (sync กับ CANDLE_REVERSAL_STATS_WIN_MIN_PCT / LOSS_MAX_PCT) */
 /**
  * เกณฑ์ default สำหรับ horizon winrate (UI summary) — ต้องตรงกับ server-side outcome rule
- * Win = pct >= +3% · Loss = pct <= -3% · ที่เหลือเป็น flat
+ * Win = pct >= +2% · Loss = pct <= -2% · ที่เหลือเป็น flat
  * Server-side override: `CANDLE_REVERSAL_STATS_WIN_MIN_PCT` / `CANDLE_REVERSAL_STATS_LOSS_MAX_PCT`
  */
-export const CANDLE_REVERSAL_STATS_WIN_MIN_PCT_DEFAULT = 3;
-export const CANDLE_REVERSAL_STATS_LOSS_MAX_PCT_DEFAULT = -3;
+export const CANDLE_REVERSAL_STATS_WIN_MIN_PCT_DEFAULT = 2;
+export const CANDLE_REVERSAL_STATS_LOSS_MAX_PCT_DEFAULT = -2;
 
 export type CandleReversalHorizonWinrate = {
   /** จำนวน row ที่มีค่า pct ครบ — wins + losses + flats */
@@ -294,7 +294,7 @@ export type CandleReversalHorizonWinrate = {
   losses: number;
   /** done - wins - losses */
   flats: number;
-  /** wins + losses — decisive trades (ไม่นับ flat band ±3%) */
+  /** wins + losses — decisive trades (ไม่นับ flat band ±2%) */
   decisive: number;
   /** wins / decisive × 100 — null ถ้า decisive = 0 (ไม่นับ flat) */
   winratePct: number | null;

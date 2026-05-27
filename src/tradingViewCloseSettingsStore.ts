@@ -77,10 +77,19 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap;
   snowballAutoTradeMarginUsdt?: number;
   snowballAutoTradeLeverage?: number;
-  /** ถ้า ROI แตะ threshold ภายใน maxHours → ปิดทันที */
+  /** @deprecated ใช้ TP/SL strategy — เก็บไว้สำหรับ active เก่า */
   snowballAutoTradeQuickTpEnabled?: boolean;
   snowballAutoTradeQuickTpRoiPct?: number;
   snowballAutoTradeQuickTpMaxHours?: number;
+  /**
+   * Snowball TP/SL (cron หลังเปิด Market) — เหมือน Reversal แต่รองรับ LONG และ SHORT
+   * default: TP1 10% · partial 50% · TP2 25% · maxHold 48h
+   */
+  snowballAutoTradeTpSlEnabled?: boolean;
+  snowballAutoTradeTp1PricePct?: number;
+  snowballAutoTradeTp1PartialPct?: number;
+  snowballAutoTradeTp2PricePct?: number;
+  snowballAutoTradeMaxHoldHours?: number;
 
   /** แจ้งเตือน trailing % ของเหรียญใน open positions (cron ~5 นาที) */
   portfolioTrailingAlertEnabled?: boolean;
@@ -235,6 +244,11 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeQuickTpEnabled?: boolean;
   snowballAutoTradeQuickTpRoiPct?: number | null;
   snowballAutoTradeQuickTpMaxHours?: number | null;
+  snowballAutoTradeTpSlEnabled?: boolean;
+  snowballAutoTradeTp1PricePct?: number | null;
+  snowballAutoTradeTp1PartialPct?: number | null;
+  snowballAutoTradeTp2PricePct?: number | null;
+  snowballAutoTradeMaxHoldHours?: number | null;
 
   portfolioTrailingAlertEnabled?: boolean;
   portfolioTrailingStepPct?: number | null;
@@ -293,7 +307,12 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeLeverage !== undefined ||
     input.snowballAutoTradeQuickTpEnabled !== undefined ||
     input.snowballAutoTradeQuickTpRoiPct !== undefined ||
-    input.snowballAutoTradeQuickTpMaxHours !== undefined;
+    input.snowballAutoTradeQuickTpMaxHours !== undefined ||
+    input.snowballAutoTradeTpSlEnabled !== undefined ||
+    input.snowballAutoTradeTp1PricePct !== undefined ||
+    input.snowballAutoTradeTp1PartialPct !== undefined ||
+    input.snowballAutoTradeTp2PricePct !== undefined ||
+    input.snowballAutoTradeMaxHoldHours !== undefined;
 
   const touchedPortfolioTrailingPatch =
     input.portfolioTrailingAlertEnabled !== undefined ||
@@ -436,6 +455,39 @@ export async function saveTradingViewMexcSettings(
         : input.snowballAutoTradeQuickTpMaxHours !== undefined
           ? input.snowballAutoTradeQuickTpMaxHours
           : prev?.snowballAutoTradeQuickTpMaxHours,
+
+    snowballAutoTradeTpSlEnabled:
+      input.snowballAutoTradeTpSlEnabled !== undefined
+        ? input.snowballAutoTradeTpSlEnabled
+        : prev?.snowballAutoTradeTpSlEnabled ?? true,
+
+    snowballAutoTradeTp1PricePct:
+      input.snowballAutoTradeTp1PricePct === null
+        ? undefined
+        : input.snowballAutoTradeTp1PricePct !== undefined
+          ? input.snowballAutoTradeTp1PricePct
+          : prev?.snowballAutoTradeTp1PricePct,
+
+    snowballAutoTradeTp1PartialPct:
+      input.snowballAutoTradeTp1PartialPct === null
+        ? undefined
+        : input.snowballAutoTradeTp1PartialPct !== undefined
+          ? input.snowballAutoTradeTp1PartialPct
+          : prev?.snowballAutoTradeTp1PartialPct,
+
+    snowballAutoTradeTp2PricePct:
+      input.snowballAutoTradeTp2PricePct === null
+        ? undefined
+        : input.snowballAutoTradeTp2PricePct !== undefined
+          ? input.snowballAutoTradeTp2PricePct
+          : prev?.snowballAutoTradeTp2PricePct,
+
+    snowballAutoTradeMaxHoldHours:
+      input.snowballAutoTradeMaxHoldHours === null
+        ? undefined
+        : input.snowballAutoTradeMaxHoldHours !== undefined
+          ? input.snowballAutoTradeMaxHoldHours
+          : prev?.snowballAutoTradeMaxHoldHours,
 
     portfolioTrailingAlertEnabled:
       input.portfolioTrailingAlertEnabled !== undefined

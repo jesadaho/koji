@@ -31,16 +31,25 @@ export type SnowballAutoTradeActive = {
   openedAtMs: number;
   /** จุดเข้าซื้อที่บอทแนะนำ (Binance แท่งสัญญาณ) — กติกา 24h / แสดงผล */
   referenceEntryPrice: number;
-  /** ราคาเข้าเฉลี่ยจาก MEXC หลังเปิด (ถ้ามี) — Quick TP ใช้คำนวณ ROI ให้ใกล้ UI จริง */
+  /** ราคาเข้าเฉลี่ยจาก MEXC หลังเปิด (ถ้ามี) — TP/SL ใช้คำนวณ % เคลื่อน */
   mexcAvgEntryPrice?: number;
   signalBarOpenSec: number;
   signalBarTf: "15m" | "1h" | "4h";
   signalBarLow: number | null;
   svpHoleYn: "Y" | "N";
   leverage: number;
-  quickTpEnabled: boolean;
-  quickTpRoiPct: number;
-  quickTpMaxHours: number;
+  /** @deprecated active เก่า — ใช้ quick TP tick */
+  quickTpEnabled?: boolean;
+  quickTpRoiPct?: number;
+  quickTpMaxHours?: number;
+  /** TP/SL plan snapshot ตอนเปิด (เหมือน Reversal) */
+  tpSlEnabled?: boolean;
+  tp1Done?: boolean;
+  tp1PricePct?: number;
+  tp1PartialPct?: number;
+  tp2PricePct?: number;
+  maxHoldHours?: number;
+  slPlanOrderId?: string;
 };
 
 export type SnowballAutoTradePerUserState = {
@@ -100,6 +109,14 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
     const qEn = Boolean(o.quickTpEnabled);
     const qRoi = typeof o.quickTpRoiPct === "number" && Number.isFinite(o.quickTpRoiPct) ? o.quickTpRoiPct : NaN;
     const qH = typeof o.quickTpMaxHours === "number" && Number.isFinite(o.quickTpMaxHours) ? o.quickTpMaxHours : NaN;
+    const tpSlEn = o.tpSlEnabled === true || o.tpSlEnabled === false ? Boolean(o.tpSlEnabled) : null;
+    const tp1Done = Boolean(o.tp1Done);
+    const tp1Pct = typeof o.tp1PricePct === "number" && Number.isFinite(o.tp1PricePct) ? o.tp1PricePct : NaN;
+    const tp1Part = typeof o.tp1PartialPct === "number" && Number.isFinite(o.tp1PartialPct) ? o.tp1PartialPct : NaN;
+    const tp2Pct = typeof o.tp2PricePct === "number" && Number.isFinite(o.tp2PricePct) ? o.tp2PricePct : NaN;
+    const maxH = typeof o.maxHoldHours === "number" && Number.isFinite(o.maxHoldHours) ? o.maxHoldHours : NaN;
+    const slPlan =
+      typeof o.slPlanOrderId === "string" && o.slPlanOrderId.trim() ? o.slPlanOrderId.trim() : undefined;
     if (
       !sym ||
       !binanceSymbol ||
@@ -113,8 +130,9 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
     ) {
       continue;
     }
-    const quickTpRoiPct = Number.isFinite(qRoi) && qRoi > 0 ? qRoi : 30;
-    const quickTpMaxHours = Number.isFinite(qH) && qH > 0 ? qH : 4;
+    const hasTpSlPlan =
+      tpSlEn === true ||
+      (Number.isFinite(tp1Pct) && tp1Pct > 0 && Number.isFinite(tp2Pct) && tp2Pct > 0 && Number.isFinite(maxH) && maxH > 0);
     const row: SnowballAutoTradeActive = {
       contractSymbol: sym,
       binanceSymbol,
@@ -126,11 +144,21 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
       signalBarLow,
       svpHoleYn,
       leverage: lev,
-      quickTpEnabled: qEn,
-      quickTpRoiPct,
-      quickTpMaxHours,
     };
     if (mexcAvgEntryPrice != null) row.mexcAvgEntryPrice = mexcAvgEntryPrice;
+    if (hasTpSlPlan) {
+      row.tpSlEnabled = tpSlEn !== false;
+      row.tp1Done = tp1Done;
+      row.tp1PricePct = Number.isFinite(tp1Pct) && tp1Pct > 0 ? tp1Pct : 10;
+      row.tp1PartialPct = Number.isFinite(tp1Part) && tp1Part > 0 ? Math.min(100, tp1Part) : 50;
+      row.tp2PricePct = Number.isFinite(tp2Pct) && tp2Pct > 0 ? tp2Pct : 25;
+      row.maxHoldHours = Number.isFinite(maxH) && maxH > 0 ? maxH : 48;
+      if (slPlan) row.slPlanOrderId = slPlan;
+    } else if (qEn) {
+      row.quickTpEnabled = true;
+      row.quickTpRoiPct = Number.isFinite(qRoi) && qRoi > 0 ? qRoi : 30;
+      row.quickTpMaxHours = Number.isFinite(qH) && qH > 0 ? qH : 4;
+    }
     out.push(row);
   }
   const bySym = new Map<string, SnowballAutoTradeActive>();
@@ -247,11 +275,18 @@ export function withRecordedSnowballSuccessfulOpen(
     signalBarLow: number | null;
     svpHoleYn: "Y" | "N";
     leverage: number;
-    quickTpEnabled: boolean;
-    quickTpRoiPct: number;
-    quickTpMaxHours: number;
-    /** ถ้ามี — Quick TP คำนวณ ROI จากราคานี้แทน reference (ใกล้ MEXC) */
     mexcAvgEntryPrice?: number | null;
+    tpSlPlan?: {
+      enabled: boolean;
+      tp1PricePct: number;
+      tp1PartialPct: number;
+      tp2PricePct: number;
+      maxHoldHours: number;
+    } | null;
+    /** legacy Quick TP เมื่อ tpSlPlan ปิด */
+    quickTpEnabled?: boolean;
+    quickTpRoiPct?: number;
+    quickTpMaxHours?: number;
   },
   dayKey: string
 ): SnowballAutoTradeState {
@@ -275,13 +310,23 @@ export function withRecordedSnowballSuccessfulOpen(
     signalBarLow: p.signalBarLow,
     svpHoleYn: p.svpHoleYn,
     leverage: Math.max(1, Math.floor(p.leverage)),
-    quickTpEnabled: Boolean(p.quickTpEnabled),
-    quickTpRoiPct: p.quickTpRoiPct > 0 ? p.quickTpRoiPct : 30,
-    quickTpMaxHours: p.quickTpMaxHours > 0 ? p.quickTpMaxHours : 4,
   };
   const mexcE = p.mexcAvgEntryPrice;
   if (typeof mexcE === "number" && Number.isFinite(mexcE) && mexcE > 0) {
     activeRow.mexcAvgEntryPrice = mexcE;
+  }
+  const plan = p.tpSlPlan;
+  if (plan?.enabled && typeof mexcE === "number" && Number.isFinite(mexcE) && mexcE > 0) {
+    activeRow.tpSlEnabled = true;
+    activeRow.tp1Done = false;
+    activeRow.tp1PricePct = plan.tp1PricePct;
+    activeRow.tp1PartialPct = plan.tp1PartialPct;
+    activeRow.tp2PricePct = plan.tp2PricePct;
+    activeRow.maxHoldHours = plan.maxHoldHours;
+  } else if (p.quickTpEnabled) {
+    activeRow.quickTpEnabled = true;
+    activeRow.quickTpRoiPct = (p.quickTpRoiPct ?? 0) > 0 ? (p.quickTpRoiPct as number) : 30;
+    activeRow.quickTpMaxHours = (p.quickTpMaxHours ?? 0) > 0 ? (p.quickTpMaxHours as number) : 4;
   }
   activeNext.push(activeRow);
   return {
@@ -290,6 +335,34 @@ export function withRecordedSnowballSuccessfulOpen(
       dailyKeyBkk: dayKey,
       openedContractSymbolsToday: opened,
       active: activeNext,
+    },
+  };
+}
+
+export function withSnowballTp1Done(
+  state: SnowballAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: SnowballAutoTradeSide,
+  slPlanOrderId?: string
+): SnowballAutoTradeState {
+  const uid = userId.trim();
+  const prev = state[uid];
+  if (!prev?.active?.length) return state;
+  const sym = contractSymbol.trim().toUpperCase();
+  const nextActive = normalizeActive(prev.active).map((x) => {
+    if (x.contractSymbol === sym && x.side === side) {
+      const updated: SnowballAutoTradeActive = { ...x, tp1Done: true };
+      if (slPlanOrderId?.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
+      return updated;
+    }
+    return x;
+  });
+  return {
+    ...state,
+    [uid]: {
+      ...prev,
+      active: nextActive,
     },
   };
 }

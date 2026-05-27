@@ -49,13 +49,13 @@ function pctVsEntryShort(entry: number, price: number): number {
 function outcomeWinMinPct(): number {
   const v = Number(process.env.CANDLE_REVERSAL_STATS_WIN_MIN_PCT);
   if (Number.isFinite(v) && v > -100 && v < 100) return v;
-  return 3;
+  return 2;
 }
 
 function outcomeLossMaxPct(): number {
   const v = Number(process.env.CANDLE_REVERSAL_STATS_LOSS_MAX_PCT);
   if (Number.isFinite(v) && v > -100 && v < 100) return v;
-  return -3;
+  return -2;
 }
 
 function applyOutcomeFromPct(row: CandleReversalStatsRow, pct: number): void {

@@ -22,6 +22,7 @@ import {
 } from "./snowballAutoTradeGradeRules";
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
 import { fetchBinanceUsdmKlines } from "./binanceIndicatorKline";
+import { resolveSnowballTpSlPlanFromRow } from "./snowballAutoTradeTpSlPlan";
 import {
   bkkSnowballAutoTradeDayKeyNow,
   hasOpenedSnowballContractToday,
@@ -334,15 +335,12 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         continue;
       }
 
-      const quickTpEnabled = Boolean(row.snowballAutoTradeQuickTpEnabled);
-      const quickTpRoiPct =
-        typeof row.snowballAutoTradeQuickTpRoiPct === "number" && Number.isFinite(row.snowballAutoTradeQuickTpRoiPct)
-          ? row.snowballAutoTradeQuickTpRoiPct
-          : 30;
-      const quickTpMaxHours =
-        typeof row.snowballAutoTradeQuickTpMaxHours === "number" && Number.isFinite(row.snowballAutoTradeQuickTpMaxHours)
-          ? row.snowballAutoTradeQuickTpMaxHours
-          : 4;
+      const tpPlan = resolveSnowballTpSlPlanFromRow(row);
+      const trackedTpSl =
+        tpPlan.enabled &&
+        mexcAvgEntry != null &&
+        Number.isFinite(mexcAvgEntry) &&
+        mexcAvgEntry > 0;
 
       state = withRecordedSnowballSuccessfulOpen(
         state,
@@ -359,9 +357,15 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           signalBarLow: input.signalBarLow,
           svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
           leverage: Math.floor(leverage),
-          quickTpEnabled,
-          quickTpRoiPct,
-          quickTpMaxHours,
+          tpSlPlan: trackedTpSl
+            ? {
+                enabled: true,
+                tp1PricePct: tpPlan.tp1PricePct,
+                tp1PartialPct: tpPlan.tp1PartialPct,
+                tp2PricePct: tpPlan.tp2PricePct,
+                maxHoldHours: tpPlan.maxHoldHours,
+              }
+            : null,
         },
         dayKey,
       );
@@ -385,11 +389,16 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           : "",
         `จุดเข้าอ้างอิง (บอท / Binance): ${fmtSnowballPriceUsdt(referenceEntryPrice)} USDT`,
         mexcAvgEntry != null && Number.isFinite(mexcAvgEntry) && mexcAvgEntry > 0
-          ? `ราคาเข้าเฉลี่ย MEXC: ${fmtSnowballPriceUsdt(mexcAvgEntry)} USDT — Quick TP คิด ROI จากราคานี้`
-          : "ราคาเข้าเฉลี่ย MEXC: ยังดึงไม่ได้ — Quick TP จะใช้จุดอ้างอิงบอท (อาจคลาดกับ UI)",
-        quickTpEnabled
-          ? `Quick TP: เปิด (ROI ≥ ${quickTpRoiPct}% ภายใน ${quickTpMaxHours} ชม.)`
-          : "Quick TP: ปิด",
+          ? `ราคาเข้าเฉลี่ย MEXC: ${fmtSnowballPriceUsdt(mexcAvgEntry)} USDT — ใช้คำนวณ TP/SL`
+          : "ราคาเข้าเฉลี่ย MEXC: ยังดึงไม่ได้",
+        ...(tpPlan.enabled
+          ? trackedTpSl
+            ? [
+                `กลยุทธ์ TP/SL: TP1 ${tpPlan.tp1PricePct}% ปิด ${tpPlan.tp1PartialPct}% · TP2 ${tpPlan.tp2PricePct}% ปิดทั้งหมด`,
+                `ครบ ${tpPlan.maxHoldHours} ชม.: ปิดทั้งหมด (force) · SL บังทุนหลัง TP1`,
+              ]
+            : ["⚠️ กลยุทธ์ TP/SL เปิดอยู่แต่ดึงราคาเข้า MEXC ไม่ได้ — จะไม่ track TP/SL รอบนี้"]
+          : ["กลยุทธ์ TP/SL: ปิด (ตั้งใน Mini App)"]),
         "กติกา 24h: ถ้าครบ 24 ชม. แล้วยังติดลบและไม่เข้าเกณฑ์รันเทรน ระบบจะพยายามปิด market",
         "ครั้งถัดไปในวันนี้: จะไม่เปิดจาก Snowball ซ้ำในเหรียญนี้ (1 order/เหรียญ/วัน)",
       ]);
