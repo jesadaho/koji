@@ -39,10 +39,9 @@ export async function loadSparkAutoTradeTickBatch(): Promise<SparkAutoTradeTickB
   return { map, state };
 }
 
-/** default ปิด — ตั้ง SPARK_AUTOTRADE_ENABLED=1 */
+/** Spark auto-open ปิดถาวร — ไม่เปิดจาก env อีก (เคยใช้ SPARK_AUTOTRADE_ENABLED=1) */
 export function isSparkAutotradeCronEnabled(): boolean {
-  const v = process.env.SPARK_AUTOTRADE_ENABLED?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
+  return false;
 }
 
 function shortContractLabel(contractSymbol: string): string {

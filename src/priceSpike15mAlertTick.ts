@@ -247,11 +247,12 @@ function buildSparkMessage(
 export async function runPriceSpike15mAlertTick(
   client: Client
 ): Promise<{ notifiedPushes: number; symbolsHit: number }> {
-  /** time-stop ต้องรันแม้ปิด ticker Spark — ไม่งั้นคิวปิดจาก Spark จะไม่ถูกสแกน */
-  try {
-    await runSparkAutoTradeTimeStopSweep();
-  } catch (e) {
-    console.error("[priceSpike15mAlertTick] spark time-stop sweep (early)", e);
+  if (isSparkAutotradeCronEnabled()) {
+    try {
+      await runSparkAutoTradeTimeStopSweep();
+    } catch (e) {
+      console.error("[priceSpike15mAlertTick] spark time-stop sweep (early)", e);
+    }
   }
 
   if (!isPriceSpike15mSparkCronEnabled()) {

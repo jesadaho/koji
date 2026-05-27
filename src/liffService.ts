@@ -1442,9 +1442,6 @@ export async function liffGetTradingViewMexcSettings(userId: string): Promise<{
       exampleOpenJson: mexcCredsComplete
         ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
         : null,
-      sparkAutoTradeNote:
-        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ) — ถ้าเปิด time-stop ใน Settings ระบบจะคิวปิด market หลังครบชั่วโมงที่ตั้ง (สแกนตามรอบ cron ticker Spark ~5 นาที)",
-      sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
       snowballAutotradeServerEnabled: isSnowballAutotradeEnabled(),
       snowballAutoTradeNote: SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH,
       snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),
@@ -1473,38 +1470,14 @@ export async function liffSetTradingViewMexcSettings(
     return { status: 400, json: { error: "MEXC API key ห้ามมีช่องว่าง" } };
   }
 
-  const sparkBundle = b.sparkAutoTrade;
-  const hasSparkNested = sparkBundle !== undefined && sparkBundle !== null;
-
-  let sparkPatchMerged: Omit<SaveTradingViewMexcInput, "mexcApiKey" | "mexcSecret"> | undefined;
-
-  if (hasSparkNested) {
-    const parsed = parseSparkAutoTradeNested(sparkBundle);
-    if (!parsed.ok) {
-      return { status: 400, json: { error: parsed.error } };
-    }
-    sparkPatchMerged = parsed.patch;
-
-    const prevRow = await ensureTradingViewMexcUserRow(userId);
-    const synth = mergeTradingViewRowForSparkValidation(prevRow, sparkPatchMerged);
-
-    const bandsAll: SparkVolBand[] = ["high", "mid", "low", "unknown"];
-    const anyResolvable = synth.sparkAutoTradeEnabled
-      ? bandsAll.some((b) => sparkAutoTradeParamsForVolBand(synth, b).ok)
-      : true;
-    if (synth.sparkAutoTradeEnabled && !anyResolvable) {
-      const ex = sparkAutoTradeExplainSaveBlocked(synth);
-      return {
-        status: 400,
-        json: {
-          error: "spark_auto_trade_need_effective_margin",
-          hint: ex.summaryTh,
-          summaryTh: ex.summaryTh,
-          mergedDefaultsTh: ex.mergedDefaultsTh,
-          detailsTh: ex.detailsTh,
-        },
-      };
-    }
+  if (b.sparkAutoTrade !== undefined && b.sparkAutoTrade !== null) {
+    return {
+      status: 400,
+      json: {
+        error: "spark_auto_trade_disabled",
+        hint: "Spark auto-open (MEXC) ปิดถาวร — ใช้ Snowball / Reversal auto-open แทน",
+      },
+    };
   }
 
   const snowballBundle = b.snowballAutoTrade;
@@ -1556,8 +1529,7 @@ export async function liffSetTradingViewMexcSettings(
     mexcSecret: sec,
     rotateWebhookToken: rotate,
     clearMexcCreds: clearMexc,
-    preserveSparkAutoTrade: !hasSparkNested,
-    ...(sparkPatchMerged ?? {}),
+    preserveSparkAutoTrade: true,
     ...(snowballPatchMerged ?? {}),
     ...(portfolioPatchMerged ?? {}),
     ...(reversalPatchMerged ?? {}),
@@ -1584,9 +1556,6 @@ export async function liffSetTradingViewMexcSettings(
       exampleOpenJson: mexcCredsComplete
         ? tradingViewMexcExampleOpenPayload(userId, row.webhookToken, "LONG", 100, 10)
         : null,
-      sparkAutoTradeNote:
-        "เซิร์ฟเวอร์ต้องตั้ง SPARK_AUTOTRADE_ENABLED=1 ถึงจะเปิดออโต้จาก cron — และต้องมี REDIS/KV เพื่อเก็บ state ว่าเหรียญไหนถูกเปิดในวันนี้แล้ว — เลือกสัญญาณ Spike (ขึ้น/ลง) แยกจากฝั่งออเดอร์ (ตาม Spike / เข้าสวน / Long / Short ตัดสิทธิ์เสมอ) — ถ้าเปิด time-stop ใน Settings ระบบจะคิวปิด market หลังครบชั่วโมงที่ตั้ง (สแกนตามรอบ cron ticker Spark ~5 นาที)",
-      sparkAutoTrade: tradingViewSparkAutoTradePayloadFromRow(row),
       snowballAutotradeServerEnabled: isSnowballAutotradeEnabled(),
       snowballAutoTradeNote: SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH,
       snowballAutoTrade: tradingViewSnowballAutoTradePayloadFromRow(row),

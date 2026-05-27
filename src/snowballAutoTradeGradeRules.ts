@@ -113,7 +113,8 @@ export function snowballAutoTradeGradeKeyFromAlert(
   if (tier === "a_plus") return "A+";
   if (tier === "b_plus") return "B";
   if (tier === "c_plus") return "C";
-  if (tier === "d_plus") return input.momentumDowngrade ? "D+" : "D";
+  /** matrix rules มีแค่ D (ไม่มี D+) — d_plus ทุกแบบใช้แถว D */
+  if (tier === "d_plus") return "D";
   if (tier === "f_plus") return "F";
   return null;
 }
