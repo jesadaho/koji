@@ -9,6 +9,19 @@ import {
   loadTradingViewMexcSettingsFullMap,
   type TradingViewMexcUserSettings,
 } from "./tradingViewCloseSettingsStore";
+import type { SnowballDisplayGrade } from "./snowballLongGradeMatrix";
+import {
+  evaluateSnowballGradeCShortFade,
+  type SnowballGradeCShortFadeResult,
+} from "./snowballGradeCShortFade";
+import {
+  snowballAutoTradeGradeKeyFromAlert,
+  snowballAutoTradeNeedsGradeCShortFade,
+  resolveSnowballAutoOpenSideForUser,
+  type SnowballAutoTradeAlertGradeInput,
+} from "./snowballAutoTradeGradeRules";
+import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
+import { fetchBinanceUsdmKlines } from "./binanceIndicatorKline";
 import {
   bkkSnowballAutoTradeDayKeyNow,
   hasOpenedSnowballContractToday,
@@ -31,23 +44,18 @@ export function isSnowballAutotradeEnabled(): boolean {
 }
 
 /** Grade LONG จากสัญญาณ Snowball (สอดคล้อง publicIndicatorFeed) */
-export type SnowballLongAlertGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus";
+export type SnowballLongAlertGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus";
 
-/** เกรดต่ำกว่า B = C หรือ D */
+/** @deprecated ใช้ snowballAutoTradeGradeKeyFromAlert + user rules */
 export function isSnowballLongGradeBelowB(grade: SnowballLongAlertGrade | undefined): boolean {
   return grade === "c_plus" || grade === "d_plus";
 }
 
-/**
- * ทิศ auto-open จากสัญญาณ LONG + Grade (ต้องเปิด Double Barrier)
- * A+ → Long · C → Short ผ่าน `evaluateSnowballGradeCShortFade` แยก · B → ไม่ auto-open
- */
+/** @deprecated ใช้ user grade rules แทน */
 export function snowballAutotradeSideForLongGrade(
-  grade: SnowballLongAlertGrade | undefined,
-  doubleBarrierOn: boolean,
+  _grade: SnowballLongAlertGrade | undefined,
+  _doubleBarrierOn: boolean,
 ): SnowballAutoTradeSide | null {
-  if (!doubleBarrierOn || !grade) return null;
-  if (grade === "a_plus") return "long";
   return null;
 }
 
@@ -67,19 +75,9 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
   await notifyTradingViewWebhookTelegram(userId, lines.filter(Boolean).join("\n"));
 }
 
-function directionAllows(
-  cfg: TradingViewMexcUserSettings,
-  side: SnowballAutoTradeSide
-): boolean {
-  const d = cfg.snowballAutoTradeDirection ?? "both";
-  if (d === "both") return true;
-  if (d === "long_only") return side === "long";
-  return side === "short";
-}
-
 function hasActiveUsdtPosition(
   positions: Awaited<ReturnType<typeof getOpenPositions>>,
-  contractSymbol: string
+  contractSymbol: string,
 ): boolean {
   const sym = contractSymbol.trim();
   return positions.some((p) => p.symbol === sym && p.state === 1 && Number(p.holdVol) > 0);
@@ -89,12 +87,12 @@ function hasActiveUsdtPosition(
 function readMexcAvgEntryPrice(
   positions: OpenPositionRow[],
   contractSymbol: string,
-  side: SnowballAutoTradeSide
+  side: SnowballAutoTradeSide,
 ): number | null {
   const sym = contractSymbol.trim();
   const wantType = side === "long" ? 1 : 2;
   const p = positions.find(
-    (x) => x.symbol === sym && x.state === 1 && Number(x.holdVol) > 0 && x.positionType === wantType
+    (x) => x.symbol === sym && x.state === 1 && Number(x.holdVol) > 0 && x.positionType === wantType,
   );
   if (!p) return null;
   const o = Number(p.openAvgPrice);
@@ -104,10 +102,59 @@ function readMexcAvgEntryPrice(
   return null;
 }
 
+function gradeCShortEntryFromFade(
+  fade: SnowballGradeCShortFadeResult,
+): {
+  strategy: "wick_limit_retest" | "vtop_market";
+  limitPrice?: number | null;
+} | null {
+  if (!fade.ok || !fade.entryStrategy) return null;
+  return {
+    strategy: fade.entryStrategy,
+    limitPrice: fade.limitEntryPrice,
+  };
+}
+
+async function resolveGradeCShortEntryForUser(
+  binanceSymbol: string,
+  signalBarOpenSec: number,
+  openSide: SnowballAutoTradeSide,
+  alertSide: SnowballAutoTradeAlertSide,
+  gradeInput: SnowballAutoTradeAlertGradeInput,
+): Promise<{
+  gradeCShortEntry?: {
+    strategy: "wick_limit_retest" | "vtop_market";
+    limitPrice?: number | null;
+  };
+  referenceEntryOverride?: number;
+} | null> {
+  const gradeKey = snowballAutoTradeGradeKeyFromAlert(gradeInput);
+  if (!snowballAutoTradeNeedsGradeCShortFade(alertSide, openSide, gradeKey, gradeInput.qualityTier)) {
+    return {};
+  }
+  let pack = await fetchBinanceUsdmKlines(binanceSymbol, "1h", 120);
+  const fade = evaluateSnowballGradeCShortFade(pack, signalBarOpenSec);
+  if (!fade.ok) {
+    console.info(`[snowballAutoTrade] Grade C short fade skip ${binanceSymbol}: ${fade.detail}`);
+    return null;
+  }
+  const gradeCShortEntry = gradeCShortEntryFromFade(fade);
+  if (!gradeCShortEntry) return null;
+  const referenceEntryOverride =
+    fade.referenceEntryPrice != null && Number.isFinite(fade.referenceEntryPrice)
+      ? fade.referenceEntryPrice
+      : undefined;
+  return { gradeCShortEntry, referenceEntryOverride };
+}
+
 export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   contractSymbol: string;
   binanceSymbol: string;
-  side: SnowballAutoTradeSide;
+  alertSide: SnowballAutoTradeAlertSide;
+  displayGrade?: SnowballDisplayGrade | null;
+  qualityTier?: SnowballAutoTradeAlertGradeInput["qualityTier"];
+  momentumFailGradeF?: boolean | null;
+  momentumDowngrade?: boolean | null;
   /** จุดเข้าซื้อที่บอทแนะนำ (จาก Snowball signal) */
   referenceEntryPrice: number;
   signalBarOpenSec: number;
@@ -115,12 +162,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   signalBarLow: number | null;
   vol: number;
   volSma: number;
-  /** Grade C Short fade — สายไส้ = limit retest · สาย V-Top = market */
-  gradeCShortEntry?: {
-    strategy: "wick_limit_retest" | "vtop_market";
-    limitPrice?: number | null;
-  };
-  /** สัดส่วน margin (เช่น 0.5 สำหรับ Grade B sustained flow) */
+  /** สัดส่วน margin (เช่น 0.5 สำหรับ action plan Light) */
   marginScale?: number;
 }): Promise<{ usersAttempted: number; usersSucceeded: number }> {
   if (!isSnowballAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
@@ -135,6 +177,14 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   if (!(typeof input.signalBarOpenSec === "number" && Number.isFinite(input.signalBarOpenSec))) {
     return { usersAttempted: 0, usersSucceeded: 0 };
   }
+
+  const gradeInput: SnowballAutoTradeAlertGradeInput = {
+    displayGrade: input.displayGrade,
+    qualityTier: input.qualityTier,
+    momentumFailGradeF: input.momentumFailGradeF,
+    momentumDowngrade: input.momentumDowngrade,
+  };
+  const gradeKey = snowballAutoTradeGradeKeyFromAlert(gradeInput);
 
   const [map, state0] = await Promise.all([
     loadTradingViewMexcSettingsFullMap(),
@@ -151,7 +201,9 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
     if (!row.snowballAutoTradeEnabled) continue;
-    if (!directionAllows(row, input.side)) continue;
+
+    const side = resolveSnowballAutoOpenSideForUser(row, input.alertSide, gradeKey);
+    if (!side) continue;
 
     if (hasOpenedSnowballContractToday(state[userId], sym, dayKey)) continue;
 
@@ -171,6 +223,24 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) continue;
     if (!(typeof leverage === "number" && Number.isFinite(leverage) && leverage >= 1)) continue;
 
+    let referenceEntryPrice = input.referenceEntryPrice;
+    let gradeCShortEntry: { strategy: "wick_limit_retest" | "vtop_market"; limitPrice?: number | null } | undefined;
+
+    if (snowballAutoTradeNeedsGradeCShortFade(input.alertSide, side, gradeKey, input.qualityTier)) {
+      const fadeResolved = await resolveGradeCShortEntryForUser(
+        binanceSymbol,
+        input.signalBarOpenSec,
+        side,
+        input.alertSide,
+        gradeInput,
+      );
+      if (fadeResolved === null) continue;
+      if (fadeResolved.gradeCShortEntry) gradeCShortEntry = fadeResolved.gradeCShortEntry;
+      if (fadeResolved.referenceEntryOverride != null) {
+        referenceEntryPrice = fadeResolved.referenceEntryOverride;
+      }
+    }
+
     let positions: Awaited<ReturnType<typeof getOpenPositions>>;
     try {
       positions = await getOpenPositions(creds, sym);
@@ -180,7 +250,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       await notifyLines(userId, [
         "Koji — Snowball auto-open (MEXC)",
         "❌ เช็คโพซิชันจาก MEXC ไม่สำเร็จ — จึงไม่สั่งเปิด (ป้องกันซ้ำ)",
-        `[${shortContractLabel(sym)}]/USDT (${input.side.toUpperCase()})`,
+        `[${shortContractLabel(sym)}]/USDT (${side.toUpperCase()})`,
         `รายละเอียด: ${detail.slice(0, 320)}`,
       ]);
       continue;
@@ -195,7 +265,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         "Koji — Snowball auto-open (MEXC)",
         "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชันคู่สัญญานี้อยู่แล้ว",
         `[${shortContractLabel(sym)}]/USDT`,
-        `สัญญาณ Snowball ล่าสุด: ${input.side.toUpperCase()}`,
+        `สัญญาณ Snowball ล่าสุด: ${side.toUpperCase()}${gradeKey ? ` · Grade ${gradeKey}` : ""}`,
         volLine,
         "ระบบจึงไม่เปิดซ้ำ (กันซ้อน margin / order ซ้ำ)",
       ]);
@@ -204,14 +274,13 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
 
     usersAttempted += 1;
 
-    const long = input.side === "long";
-    const gradeCEntry = input.gradeCShortEntry;
+    const long = side === "long";
     const useWickLimit =
       !long &&
-      gradeCEntry?.strategy === "wick_limit_retest" &&
-      typeof gradeCEntry.limitPrice === "number" &&
-      Number.isFinite(gradeCEntry.limitPrice) &&
-      gradeCEntry.limitPrice > 0;
+      gradeCShortEntry?.strategy === "wick_limit_retest" &&
+      typeof gradeCShortEntry.limitPrice === "number" &&
+      Number.isFinite(gradeCShortEntry.limitPrice) &&
+      gradeCShortEntry.limitPrice > 0;
 
     try {
       const om = useWickLimit
@@ -220,7 +289,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
             long: false,
             marginUsdt,
             leverage: Math.floor(leverage),
-            limitPrice: gradeCEntry!.limitPrice!,
+            limitPrice: gradeCShortEntry!.limitPrice!,
             openType: 1,
           })
         : await createOpenMarketOrder(creds, {
@@ -234,10 +303,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         const msg = om.message ?? `code ${om.code}`;
         await notifyLines(userId, [
           "Koji — Snowball auto-open (MEXC)",
-          `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น ${long ? "LONG" : "SHORT"}${useWickLimit ? " · Limit retest ไส้" : gradeCEntry?.strategy === "vtop_market" ? " · Market V-Top" : ""})`,
+          `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น ${long ? "LONG" : "SHORT"}${useWickLimit ? " · Limit retest ไส้" : gradeCShortEntry?.strategy === "vtop_market" ? " · Market V-Top" : ""})`,
           `[${shortContractLabel(sym)}]/USDT`,
           `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
-          useWickLimit ? `Limit ~${fmtSnowballPriceUsdt(gradeCEntry!.limitPrice!)} USDT` : "",
+          useWickLimit ? `Limit ~${fmtSnowballPriceUsdt(gradeCShortEntry!.limitPrice!)} USDT` : "",
           `MEXC: ${msg}`,
         ]);
         continue;
@@ -248,7 +317,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       try {
         const posAfter = await getOpenPositions(creds, sym);
         positionOpen = hasActiveUsdtPosition(posAfter, sym);
-        mexcAvgEntry = readMexcAvgEntryPrice(posAfter, sym, input.side);
+        mexcAvgEntry = readMexcAvgEntryPrice(posAfter, sym, side);
       } catch (e) {
         console.error("[snowballAutoTrade] getOpenPositions after open", sym, userId, e);
       }
@@ -258,8 +327,8 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           "Koji — Snowball auto-open (MEXC)",
           "⏳ ตั้ง Limit SHORT ดัก retest ไส้บนแล้ว — ยังไม่ fill",
           `[${shortContractLabel(sym)}]/USDT`,
-          `Limit ~${fmtSnowballPriceUsdt(gradeCEntry!.limitPrice!)} USDT · Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
-          `จุดอ้างอิง (บอท): ${fmtSnowballPriceUsdt(input.referenceEntryPrice)} USDT`,
+          `Limit ~${fmtSnowballPriceUsdt(gradeCShortEntry!.limitPrice!)} USDT · Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
+          `จุดอ้างอิง (บอท): ${fmtSnowballPriceUsdt(referenceEntryPrice)} USDT`,
           "ยังไม่นับ 1 order/วัน — จะเปิดซ้ำได้เมื่อยังไม่มีโพซิชันและยังไม่เคยเปิดสำเร็จวันนี้",
         ]);
         continue;
@@ -281,9 +350,9 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         {
           contractSymbol: sym,
           binanceSymbol,
-          side: input.side,
+          side,
           openedAtMs: Date.now(),
-          referenceEntryPrice: input.referenceEntryPrice,
+          referenceEntryPrice,
           mexcAvgEntryPrice: mexcAvgEntry,
           signalBarOpenSec: input.signalBarOpenSec,
           signalBarTf: input.signalBarTf,
@@ -294,13 +363,13 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           quickTpRoiPct,
           quickTpMaxHours,
         },
-        dayKey
+        dayKey,
       );
       usersSucceeded += 1;
 
       const entryModeLine = useWickLimit
         ? "โหมดเข้า: Limit retest ไส้บน (50% ไส้บนแท่ง rejection ล่าสุด)"
-        : gradeCEntry?.strategy === "vtop_market"
+        : gradeCShortEntry?.strategy === "vtop_market"
           ? "โหมดเข้า: Market V-Top (ทุบกลืนเนื้อเขียว)"
           : "";
 
@@ -308,12 +377,13 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         "Koji — Snowball auto-open (MEXC)",
         long ? "✅ เปิด LONG จาก Snowball" : "✅ เปิด SHORT จาก Snowball",
         `[${shortContractLabel(sym)}]/USDT`,
+        gradeKey ? `Grade ${gradeKey}` : "",
         `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
         ...(entryModeLine ? [entryModeLine] : []),
         useWickLimit
-          ? `Limit ที่ตั้ง: ${fmtSnowballPriceUsdt(gradeCEntry!.limitPrice!)} USDT`
+          ? `Limit ที่ตั้ง: ${fmtSnowballPriceUsdt(gradeCShortEntry!.limitPrice!)} USDT`
           : "",
-        `จุดเข้าอ้างอิง (บอท / Binance): ${fmtSnowballPriceUsdt(input.referenceEntryPrice)} USDT`,
+        `จุดเข้าอ้างอิง (บอท / Binance): ${fmtSnowballPriceUsdt(referenceEntryPrice)} USDT`,
         mexcAvgEntry != null && Number.isFinite(mexcAvgEntry) && mexcAvgEntry > 0
           ? `ราคาเข้าเฉลี่ย MEXC: ${fmtSnowballPriceUsdt(mexcAvgEntry)} USDT — Quick TP คิด ROI จากราคานี้`
           : "ราคาเข้าเฉลี่ย MEXC: ยังดึงไม่ได้ — Quick TP จะใช้จุดอ้างอิงบอท (อาจคลาดกับ UI)",
@@ -343,4 +413,3 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
 
   return { usersAttempted, usersSucceeded };
 }
-

@@ -25,6 +25,26 @@ export type SparkAutoTradeByVol = Partial<Record<SparkAutoTradeVolBandKey, Spark
 
 export type SnowballAutoTradeDirection = "both" | "long_only" | "short_only";
 
+export type SnowballAutoTradeAlertSide = "long" | "bear";
+
+export type SnowballAutoTradeGradeKey =
+  | "A+"
+  | "A"
+  | "A-"
+  | "B+"
+  | "B"
+  | "B-"
+  | "C+"
+  | "C"
+  | "C-"
+  | "D"
+  | "F";
+
+/** ค่าใน map = ทิศที่เปิด · ไม่มี key = ปิดเกรดนั้น */
+export type SnowballAutoTradeGradeRulesMap = Partial<
+  Record<SnowballAutoTradeGradeKey, "long" | "short">
+>;
+
 export type TradingViewMexcUserSettings = {
   mexcApiKey: string;
   mexcSecret: string;
@@ -49,7 +69,12 @@ export type TradingViewMexcUserSettings = {
   sparkAutoTradeByVol?: SparkAutoTradeByVol;
 
   snowballAutoTradeEnabled?: boolean;
+  /** @deprecated ใช้ rulesLong/rulesBear — เก็บไว้ migrate */
   snowballAutoTradeDirection?: SnowballAutoTradeDirection;
+  /** สัญญาณ Snowball LONG — เกรด matrix → long | short */
+  snowballAutoTradeRulesLong?: SnowballAutoTradeGradeRulesMap;
+  /** สัญญาณ Snowball BEAR (SUPER ฯลฯ) */
+  snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap;
   snowballAutoTradeMarginUsdt?: number;
   snowballAutoTradeLeverage?: number;
   /** ถ้า ROI แตะ threshold ภายใน maxHours → ปิดทันที */
@@ -203,6 +228,8 @@ export type SaveTradingViewMexcInput = {
 
   snowballAutoTradeEnabled?: boolean;
   snowballAutoTradeDirection?: SnowballAutoTradeDirection;
+  snowballAutoTradeRulesLong?: SnowballAutoTradeGradeRulesMap | null;
+  snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap | null;
   snowballAutoTradeMarginUsdt?: number | null;
   snowballAutoTradeLeverage?: number | null;
   snowballAutoTradeQuickTpEnabled?: boolean;
@@ -260,6 +287,8 @@ export async function saveTradingViewMexcSettings(
   const touchedSnowballPatch =
     input.snowballAutoTradeEnabled !== undefined ||
     input.snowballAutoTradeDirection !== undefined ||
+    input.snowballAutoTradeRulesLong !== undefined ||
+    input.snowballAutoTradeRulesBear !== undefined ||
     input.snowballAutoTradeMarginUsdt !== undefined ||
     input.snowballAutoTradeLeverage !== undefined ||
     input.snowballAutoTradeQuickTpEnabled !== undefined ||
@@ -360,6 +389,20 @@ export async function saveTradingViewMexcSettings(
       input.snowballAutoTradeDirection !== undefined
         ? input.snowballAutoTradeDirection
         : prev?.snowballAutoTradeDirection ?? "both",
+
+    snowballAutoTradeRulesLong:
+      input.snowballAutoTradeRulesLong === null
+        ? undefined
+        : input.snowballAutoTradeRulesLong !== undefined
+          ? input.snowballAutoTradeRulesLong
+          : prev?.snowballAutoTradeRulesLong,
+
+    snowballAutoTradeRulesBear:
+      input.snowballAutoTradeRulesBear === null
+        ? undefined
+        : input.snowballAutoTradeRulesBear !== undefined
+          ? input.snowballAutoTradeRulesBear
+          : prev?.snowballAutoTradeRulesBear,
 
     snowballAutoTradeMarginUsdt:
       input.snowballAutoTradeMarginUsdt === null

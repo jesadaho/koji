@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import type { SnowballBinanceTf } from "./binanceIndicatorKline";
+import type { SnowballDisplayGrade } from "./snowballLongGradeMatrix";
 
 /** ค่าเดียวกับ SnowballConfirmRiskFlagId ใน publicIndicatorFeed — แยกเพื่อกัน import วน */
 export type SnowballConfirmRiskFlagId = "wick_history" | "supply_zone" | "signal_wick";
@@ -49,6 +50,8 @@ export type SnowballPendingConfirm = {
   alertedAtMs: number;
   riskFlags: SnowballPendingConfirmFlag[];
   qualityTier?: "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus";
+  /** เกรด matrix ตอนแจ้ง (4h LONG) — ใช้กรอง auto-open ต่อ user */
+  statsDisplayGrade?: SnowballDisplayGrade;
   /**
    * true = แท่ง 1 ไม่ส่ง TG / ไม่ autotrade — ให้เรียก Snowball auto-open หลัง ✅ Confirmed (เมื่อเป็น Super A+)
    */
@@ -209,6 +212,23 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
       : undefined;
   const statsSwing200Ok =
     o.statsSwing200Ok === true || o.statsSwing200Ok === false ? o.statsSwing200Ok : undefined;
+  const statsDisplayGradeRaw = o.statsDisplayGrade;
+  const statsDisplayGrades = new Set([
+    "A+",
+    "A",
+    "A-",
+    "B+",
+    "B",
+    "B-",
+    "C+",
+    "C",
+    "C-",
+    "D",
+  ]);
+  const statsDisplayGrade =
+    typeof statsDisplayGradeRaw === "string" && statsDisplayGrades.has(statsDisplayGradeRaw)
+      ? (statsDisplayGradeRaw as SnowballDisplayGrade)
+      : undefined;
   return {
     id: typeof o.id === "string" && o.id ? o.id : randomUUID(),
     symbol,
@@ -223,6 +243,7 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     alertedAtMs: Number.isFinite(alertedAtMs) ? alertedAtMs : Date.parse(alertedAtIso),
     riskFlags,
     qualityTier,
+    ...(statsDisplayGrade ? { statsDisplayGrade } : {}),
     ...(deferSnowballAutotradeToConfirm ? { deferSnowballAutotradeToConfirm: true as const } : {}),
     ...(statsTriggerKind ? { statsTriggerKind } : {}),
     ...(statsVolSmaOk ? { statsVolSma } : {}),

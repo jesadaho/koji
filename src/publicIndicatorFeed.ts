@@ -32,7 +32,6 @@ import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecu
 import {
   evaluateSnowballGradeCShortFade,
   formatGradeCShortFadeAutotradeLine,
-  resolveSnowballLongAutotradeSide,
   type SnowballGradeCShortFadeResult,
 } from "./snowballGradeCShortFade";
 import {
@@ -61,7 +60,6 @@ import {
   type SnowballLongStructureTier,
 } from "./snowballLongBreakoutGrade";
 import {
-  snowballActionPlanAutoOpenEnabled,
   snowballActionPlanMarginScale,
 } from "./snowballLongGradeMatrix";
 
@@ -3601,77 +3599,37 @@ export async function runPublicIndicatorFeedInternal(
                 );
               }
             }
-            const longActionPlan =
-              gradeResolution.kind === "grade" ? gradeResolution.actionPlan ?? null : null;
-            const longActionPlanAutoOpen =
-              longActionPlan == null ? true : snowballActionPlanAutoOpenEnabled(longActionPlan);
-            if (
-              !intrabar &&
-              !skipSnowballTgForPending &&
-              !snowballIsGradeF(longBreakoutGrade) &&
-              !snowballIsGradeDPlusLong(longBreakoutGrade) &&
-              longActionPlanAutoOpen
-            ) {
+            if (!intrabar && !skipSnowballTgForPending) {
               try {
-                const longAutoGrade =
-                  longBreakoutGrade === "f_plus" || longBreakoutGrade === "d_plus"
-                    ? undefined
-                    : longBreakoutGrade;
-                const { side: longAutoSide, fade: longFade } = await resolveSnowballLongAutotradeSide(
-                  symbol,
-                  longAutoGrade,
-                  dbOn,
-                  signalBarOpenSec,
-                  pack1hTrend,
-                  { sustainedBuyingPressure },
-                );
-                if (longAutoSide) {
-                  const refEntry =
-                    longAutoSide === "short" &&
-                    longFade?.referenceEntryPrice != null &&
-                    Number.isFinite(longFade.referenceEntryPrice)
-                      ? longFade.referenceEntryPrice
-                      : entryClosePx;
-                  const actionPlanMargin =
-                    longAutoSide === "long" && longActionPlan != null
-                      ? snowballActionPlanMarginScale(longActionPlan)
-                      : null;
-                  const sustainedMargin =
-                    longAutoSide === "long" &&
-                    longBreakoutGrade === "b_plus" &&
-                    sustainedBuyingPressure
-                      ? snowballGradeBSustainedMarginScale()
-                      : null;
-                  const marginScale =
-                    actionPlanMargin != null && actionPlanMargin !== 1.0
-                      ? actionPlanMargin
-                      : sustainedMargin ?? undefined;
-                  await runSnowballAutoTradeAfterSnowballAlert({
-                    contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
-                    binanceSymbol: symbol,
-                    side: longAutoSide,
-                    referenceEntryPrice: refEntry,
-                    signalBarOpenSec,
-                    signalBarTf: snowTf,
-                    signalBarLow:
-                      longAutoSide === "long" &&
-                      typeof longSignalLow === "number" &&
-                      Number.isFinite(longSignalLow)
-                        ? longSignalLow
-                        : null,
-                    vol: vE!,
-                    volSma: vsE!,
-                    ...(marginScale != null ? { marginScale } : {}),
-                    ...(longFade?.ok && longFade.entryStrategy
-                      ? {
-                          gradeCShortEntry: {
-                            strategy: longFade.entryStrategy,
-                            limitPrice: longFade.limitEntryPrice,
-                          },
-                        }
-                      : {}),
-                  });
+                const longActionPlan =
+                  gradeResolution.kind === "grade" ? gradeResolution.actionPlan ?? null : null;
+                let marginScale: number | undefined;
+                if (longActionPlan != null) {
+                  const apm = snowballActionPlanMarginScale(longActionPlan);
+                  if (apm !== 1.0) marginScale = apm;
+                } else if (longBreakoutGrade === "b_plus" && sustainedBuyingPressure) {
+                  marginScale = snowballGradeBSustainedMarginScale();
                 }
+                await runSnowballAutoTradeAfterSnowballAlert({
+                  contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
+                  binanceSymbol: symbol,
+                  alertSide: "long",
+                  displayGrade:
+                    gradeResolution.kind === "grade" ? gradeResolution.displayGrade : undefined,
+                  qualityTier: longBreakoutGrade,
+                  momentumFailGradeF: longBreakoutGrade === "f_plus",
+                  momentumDowngrade: longBreakoutGrade === "d_plus",
+                  referenceEntryPrice: entryClosePx,
+                  signalBarOpenSec,
+                  signalBarTf: snowTf,
+                  signalBarLow:
+                    typeof longSignalLow === "number" && Number.isFinite(longSignalLow)
+                      ? longSignalLow
+                      : null,
+                  vol: vE!,
+                  volSma: vsE!,
+                  ...(marginScale != null ? { marginScale } : {}),
+                });
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open", symbol, e);
               }
@@ -3719,6 +3677,9 @@ export async function runPublicIndicatorFeedInternal(
                   alertedAtMs: now,
                   riskFlags: longRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
                   qualityTier: longBreakoutGrade,
+                  ...(gradeResolution.kind === "grade" && gradeResolution.displayGrade
+                    ? { statsDisplayGrade: gradeResolution.displayGrade }
+                    : {}),
                   statsTriggerKind: String(trig),
                   statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
                   statsAtr100: longVolSnap.atr100,
@@ -4187,21 +4148,19 @@ export async function runPublicIndicatorFeedInternal(
             }
             if (!intrabar && !skipBearTgForPending) {
               try {
-                // Auto-open เฉพาะ SUPER SNOWBALL (A+) เท่านั้น
-                const isSuperSnowball = Boolean(dbOn && shortTier === "a_plus");
-                if (isSuperSnowball) {
-                  await runSnowballAutoTradeAfterSnowballAlert({
-                    contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
-                    binanceSymbol: symbol,
-                    side: "short",
-                    referenceEntryPrice: twoBarInline ? c15[iConf]! : clE!,
-                    signalBarOpenSec,
-                    signalBarTf: snowTf,
-                    signalBarLow: null,
-                    vol: vE!,
-                    volSma: vsE!,
-                  });
-                }
+                await runSnowballAutoTradeAfterSnowballAlert({
+                  contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
+                  binanceSymbol: symbol,
+                  alertSide: "bear",
+                  displayGrade: dbOn && shortTier === "a_plus" ? "A+" : undefined,
+                  qualityTier: shortTier,
+                  referenceEntryPrice: twoBarInline ? c15[iConf]! : clE!,
+                  signalBarOpenSec,
+                  signalBarTf: snowTf,
+                  signalBarLow: null,
+                  vol: vE!,
+                  volSma: vsE!,
+                });
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open SHORT", symbol, e);
               }
@@ -4228,6 +4187,7 @@ export async function runPublicIndicatorFeedInternal(
                   alertedAtMs: now,
                   riskFlags: bearRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
                   qualityTier: dbOn ? shortTier : undefined,
+                  ...(dbOn && shortTier === "a_plus" ? { statsDisplayGrade: "A+" as const } : {}),
                   statsTriggerKind: "swing_ll",
                   statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
                   statsAtr100: bearVolSnap.atr100,

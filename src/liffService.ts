@@ -103,10 +103,14 @@ import type { SparkVolBand } from "./sparkTierContext";
 import { newTvWebhookNonce } from "./tradingViewWebhookNonceStore";
 import { isSnowballAutotradeEnabled } from "./snowballAutoTradeExecutor";
 import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
+import {
+  effectiveSnowballAutoTradeRules,
+  sanitizeSnowballAutoTradeGradeRulesMap,
+} from "./snowballAutoTradeGradeRules";
 
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — Grade A+ → Long · Grade C Short (fade): gate 1h ในกรอบ 4h แล้วเข้าแบบ Limit retest ไส้ (สาย rejection) หรือ Market V-Top (สายทุบกลืน) · Grade B ไม่ auto-open — ต้องเปิด Double Barrier + SNOWBALL_AUTOTRADE_ENABLED — 1 order/เหรียญ/วัน (นับเมื่อ fill สำหรับ Limit)";
+  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ตั้งเกรด matrix (A+ … F) และทิศ Long/Short แยกบล็อกสัญญาณ LONG กับ BEAR ด้านล่าง · Grade C ที่เลือก Short บนสัญญาณ LONG ยังใช้ gate fade (Limit retest ไส้ / Market V-Top) · เปิด D/F + Long ได้แต่เสี่ยงสูง — kill switch เซิร์ฟ: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (นับเมื่อ fill สำหรับ Limit)";
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
@@ -983,9 +987,12 @@ export function tradingViewSparkAutoTradePayloadFromRow(row: TradingViewMexcUser
 export function tradingViewSnowballAutoTradePayloadFromRow(
   row: TradingViewMexcUserSettings
 ): Record<string, unknown> {
+  const { rulesLong, rulesBear } = effectiveSnowballAutoTradeRules(row);
   return {
     enabled: row.snowballAutoTradeEnabled ?? false,
     direction: row.snowballAutoTradeDirection ?? "both",
+    rulesLong,
+    rulesBear,
     marginUsdt: row.snowballAutoTradeMarginUsdt ?? null,
     leverage: row.snowballAutoTradeLeverage ?? null,
     quickTpEnabled: row.snowballAutoTradeQuickTpEnabled ?? false,
@@ -1263,7 +1270,16 @@ function parseSnowballAutoTradeNested(
   else if (o.enabled === "1" || o.enabled === 1 || o.enabled === "true") enabled = true;
 
   const dir = normalizeSnowballDirection(o.direction);
-  if (!dir) return { ok: false, error: "snowball_direction_invalid" };
+  const hasRulesLongKey = "rulesLong" in o;
+  const hasRulesBearKey = "rulesBear" in o;
+  const rulesLong = hasRulesLongKey
+    ? sanitizeSnowballAutoTradeGradeRulesMap(o.rulesLong) ?? null
+    : undefined;
+  const rulesBear = hasRulesBearKey
+    ? sanitizeSnowballAutoTradeGradeRulesMap(o.rulesBear) ?? null
+    : undefined;
+  const hasRules = hasRulesLongKey || hasRulesBearKey;
+  if (!hasRules && !dir) return { ok: false, error: "snowball_direction_invalid" };
 
   const numOrEmpty = (
     key: string
@@ -1291,7 +1307,9 @@ function parseSnowballAutoTradeNested(
     "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
   > = {
     snowballAutoTradeEnabled: enabled,
-    snowballAutoTradeDirection: dir,
+    ...(dir ? { snowballAutoTradeDirection: dir } : {}),
+    ...(hasRulesLongKey ? { snowballAutoTradeRulesLong: rulesLong } : {}),
+    ...(hasRulesBearKey ? { snowballAutoTradeRulesBear: rulesBear } : {}),
     snowballAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
     snowballAutoTradeLeverage: mLev.v as number | null | undefined,
     snowballAutoTradeQuickTpEnabled: quickTpEnabled,

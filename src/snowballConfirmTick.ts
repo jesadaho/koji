@@ -6,11 +6,8 @@ import {
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 import { sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
-import { runSnowballAutoTradeAfterSnowballAlert, type SnowballLongAlertGrade } from "./snowballAutoTradeExecutor";
-import {
-  resolveSnowballLongAutotradeSide,
-  type SnowballGradeCShortFadeResult,
-} from "./snowballGradeCShortFade";
+import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
+import { resolveSnowballLongAutotradeSide } from "./snowballGradeCShortFade";
 import {
   isPublicSnowballTripleCheckEnabled,
   snowballConfirmBarEnabled,
@@ -428,68 +425,35 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
           }
         }
         if (sendOk && item.deferSnowballAutotradeToConfirm === true) {
-          const longGrade = item.qualityTier as SnowballLongAlertGrade | undefined;
-          let autoSide: "long" | "short" | null = null;
-          let gradeCFade: SnowballGradeCShortFadeResult | null = null;
-          if (item.side === "long") {
+          try {
+            const volSma = volumeSmaConfirmAtPackIndex(pack, idx);
+            const volSmaUse = Number.isFinite(volSma) && volSma > 0 ? volSma : vo;
             const trendMomentumConfirm = calculateTrendMomentumMetrics(pack1hTrend, {
               pack15m: pack15mTrend,
             });
             const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentumConfirm);
-            const resolved = await resolveSnowballLongAutotradeSide(
-              item.symbol,
-              longGrade,
-              snowballDoubleBarrierEnabled(),
-              item.signalBarOpenSec,
-              pack1hTrend,
-              { sustainedBuyingPressure },
-            );
-            autoSide = resolved.side;
-            gradeCFade = resolved.fade;
-          } else if (item.side === "bear" && item.qualityTier === "a_plus") {
-            autoSide = "short";
-          }
-          if (autoSide) {
-            try {
-              const volSma = volumeSmaConfirmAtPackIndex(pack, idx);
-              const volSmaUse = Number.isFinite(volSma) && volSma > 0 ? volSma : vo;
-              const refEntry =
-                autoSide === "short" &&
-                gradeCFade?.referenceEntryPrice != null &&
-                Number.isFinite(gradeCFade.referenceEntryPrice)
-                  ? gradeCFade.referenceEntryPrice
-                  : cl;
-              const marginScale =
-                autoSide === "long" &&
-                longGrade === "b_plus" &&
-                isSustainedBuyingPressure(
-                  calculateTrendMomentumMetrics(pack1hTrend, { pack15m: pack15mTrend })
-                )
-                  ? snowballGradeBSustainedMarginScale()
-                  : undefined;
-              await runSnowballAutoTradeAfterSnowballAlert({
-                contractSymbol: mexcContractSymbolFromBinanceSymbol(item.symbol),
-                binanceSymbol: item.symbol,
-                side: autoSide,
-                referenceEntryPrice: refEntry,
-                signalBarOpenSec: bar2OpenSec,
-                signalBarTf: item.snowTf,
-                signalBarLow: autoSide === "long" ? lo : null,
-                vol: vo,
-                volSma: volSmaUse,
-                ...(marginScale != null ? { marginScale } : {}),
-                ...(gradeCFade?.ok && gradeCFade.entryStrategy
-                  ? {
-                      gradeCShortEntry: {
-                        strategy: gradeCFade.entryStrategy,
-                        limitPrice: gradeCFade.limitEntryPrice,
-                      },
-                    }
-                  : {}),
-              });
-            } catch (e) {
-              console.error("[snowballConfirmTick] snowball auto-open after confirm", item.symbol, item.side, e);
+            let marginScale: number | undefined;
+            if (item.side === "long" && item.qualityTier === "b_plus" && sustainedBuyingPressure) {
+              marginScale = snowballGradeBSustainedMarginScale();
             }
+            await runSnowballAutoTradeAfterSnowballAlert({
+              contractSymbol: mexcContractSymbolFromBinanceSymbol(item.symbol),
+              binanceSymbol: item.symbol,
+              alertSide: item.side,
+              displayGrade: item.statsDisplayGrade,
+              qualityTier: item.qualityTier,
+              momentumFailGradeF: item.qualityTier === "f_plus",
+              momentumDowngrade: item.qualityTier === "d_plus",
+              referenceEntryPrice: cl,
+              signalBarOpenSec: bar2OpenSec,
+              signalBarTf: item.snowTf,
+              signalBarLow: item.side === "long" ? lo : null,
+              vol: vo,
+              volSma: volSmaUse,
+              ...(marginScale != null ? { marginScale } : {}),
+            });
+          } catch (e) {
+            console.error("[snowballConfirmTick] snowball auto-open after confirm", item.symbol, item.side, e);
           }
         }
         removeIds.add(item.id);
