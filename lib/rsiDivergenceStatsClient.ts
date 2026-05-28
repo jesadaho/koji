@@ -4,6 +4,7 @@ import {
   snowballStatsMarketCapUsdLabel,
   snowballStatsQuoteVol24hLabel,
 } from "@/lib/snowballStatsClient";
+import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
 
 export type RsiDivergenceTf = "1h" | "4h";
 
@@ -41,6 +42,8 @@ export type RsiDivergenceStatsRow = {
   quoteVol24hUsdt: number | null;
   /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
   marketCapUsd: number | null;
+  /** Snapshot market sentiment (Market Pulse) ณ เวลาแจ้ง */
+  marketSentiment?: MarketSentimentSnapshot | null;
   /** Follow-up close บนแท่ง 1d — ผลสุดท้ายอ่านที่ 7d */
   price1d: number | null;
   pct1d: number | null;

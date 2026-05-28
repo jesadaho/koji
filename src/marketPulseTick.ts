@@ -11,6 +11,8 @@ import {
   computeVolumeChangeVs24hApprox,
   loadMarketPulseVolumeBlob,
 } from "./marketPulseVolumeStore";
+import { marketSentimentFromFng } from "@/lib/marketSentiment";
+import { saveMarketSentimentSnapshot } from "./marketSentimentSnapshotStore";
 import { loadSystemChangeSubscribers } from "./systemChangeSubscribersStore";
 import {
   loadMarketPulseAlertState,
@@ -156,6 +158,21 @@ export async function getMarketPulseStatusMessage(): Promise<string> {
     nowIso,
     data.global.totalVolumeUsd,
   );
+
+  // Save latest snapshot for stats rows (avoid network at alert time).
+  try {
+    await saveMarketSentimentSnapshot({
+      asOfIso: nowIso,
+      fngValue: data.fng.value,
+      fngClassification: data.fng.valueClassification,
+      sentiment: marketSentimentFromFng(data.fng.value),
+      btcDominancePct: data.global.btcDominancePct,
+      volumeChangePct24hApprox: volChange,
+      source: marketPulseUsesCoinMarketCap() ? "cmc" : "alt_coingecko",
+    });
+  } catch (e) {
+    console.error("[marketPulseTick] save market sentiment snapshot", e);
+  }
   return buildMarketPulseMessage({
     fngValue: data.fng.value,
     fngClassification: data.fng.valueClassification,

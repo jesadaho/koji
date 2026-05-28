@@ -52,6 +52,10 @@ const HEADERS = [
   "SVP Hole",
   "RR",
   "ผล",
+  "F&G",
+  "Sentiment",
+  "BTC.D",
+  "VolΔ24h",
 ];
 
 function snowballOutcomeLabel(o: SnowballStatsRow["outcome"]): string {
@@ -63,6 +67,7 @@ function snowballOutcomeLabel(o: SnowballStatsRow["outcome"]): string {
 }
 
 function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
+  const ms = r.marketSentiment ?? null;
   return [
     r.symbol,
     statsCoinLabel(r.symbol),
@@ -99,6 +104,12 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     r.svpHoleYn ?? "",
     r.resultRr ?? "",
     snowballOutcomeLabel(r.outcome),
+    ms ? String(ms.fngValue) : "",
+    ms ? ms.sentiment : "",
+    ms && Number.isFinite(ms.btcDominancePct) ? `${ms.btcDominancePct.toFixed(1)}%` : "",
+    ms && ms.volumeChangePct24hApprox != null && Number.isFinite(ms.volumeChangePct24hApprox)
+      ? `${ms.volumeChangePct24hApprox >= 0 ? "+" : ""}${ms.volumeChangePct24hApprox.toFixed(1)}%`
+      : "",
   ];
 }
 

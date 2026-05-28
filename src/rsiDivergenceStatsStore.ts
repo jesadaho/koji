@@ -11,6 +11,7 @@ import {
   type RsiDivergenceTrigger,
 } from "@/lib/rsiDivergenceStatsClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
+import { loadMarketSentimentSnapshot } from "./marketSentimentSnapshotStore";
 
 export type { RsiDivergenceStatsApiPayload, RsiDivergenceStatsRow } from "@/lib/rsiDivergenceStatsClient";
 
@@ -167,6 +168,13 @@ export async function appendRsiDivergenceStatsRow(
 ): Promise<RsiDivergenceStatsRow | null> {
   if (!isRsiDivergenceStatsEnabled()) return null;
 
+  let marketSentiment: RsiDivergenceStatsRow["marketSentiment"] = null;
+  try {
+    marketSentiment = await loadMarketSentimentSnapshot();
+  } catch {
+    /* ignore */
+  }
+
   const symbol = input.symbol.trim().toUpperCase();
   const tf: RsiDivergenceTf = input.tf === "1h" ? "1h" : "4h";
   const kind: RsiDivergenceKind = input.kind === "bullish" ? "bullish" : "bearish";
@@ -215,6 +223,7 @@ export async function appendRsiDivergenceStatsRow(
       input.marketCapUsd != null && Number.isFinite(input.marketCapUsd) && input.marketCapUsd > 0
         ? input.marketCapUsd
         : null,
+    marketSentiment,
     price1d: null,
     pct1d: null,
     price3d: null,

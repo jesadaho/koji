@@ -18,6 +18,7 @@ import {
   type SnowballLongStructureTier,
 } from "@/src/snowballLongBreakoutGrade";
 import { displayGradeToQualityTier } from "@/src/snowballLongGradeMatrix";
+import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
 
 export type { SnowballLongStructureTier };
 
@@ -56,6 +57,8 @@ export type SnowballStatsRow = {
   structureTier?: SnowballLongStructureTier;
   /** Stage 1 — Swing HH200 (โครงสร้างใหญ่) ผ่านหรือไม่ ตอนแจ้ง */
   swing200Ok?: boolean | null;
+  /** Snapshot market sentiment (Market Pulse) ณ เวลาแจ้ง */
+  marketSentiment?: MarketSentimentSnapshot | null;
   /** snapshot เกรดตอนแจ้งครั้งแรก (ก่อน follow-up 4h) */
   alertQualityTier?: SnowballStatsQualityTier;
   /** ปรับ qualityTier แล้วหลังครบ 4 ชม. */

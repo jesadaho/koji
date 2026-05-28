@@ -38,6 +38,10 @@ const HEADERS = [
   "Max ROI",
   "Max DD",
   "ผล",
+  "F&G",
+  "Sentiment",
+  "BTC.D",
+  "VolΔ24h",
 ];
 
 function fmtRsi(v: number | null | undefined): string {
@@ -51,6 +55,7 @@ function fmtRsiDelta(v: number | null | undefined): string {
 }
 
 function rsiDivergenceStatsRowToCsvCells(r: RsiDivergenceStatsRow): string[] {
+  const ms = r.marketSentiment ?? null;
   return [
     r.symbol,
     statsCoinLabel(r.symbol),
@@ -75,6 +80,12 @@ function rsiDivergenceStatsRowToCsvCells(r: RsiDivergenceStatsRow): string[] {
       ? `${r.maxDrawdownPct.toFixed(2)}%`
       : "",
     rsiDivergenceOutcomeLabel(r.outcome),
+    ms ? String(ms.fngValue) : "",
+    ms ? ms.sentiment : "",
+    ms && Number.isFinite(ms.btcDominancePct) ? `${ms.btcDominancePct.toFixed(1)}%` : "",
+    ms && ms.volumeChangePct24hApprox != null && Number.isFinite(ms.volumeChangePct24hApprox)
+      ? `${ms.volumeChangePct24hApprox >= 0 ? "+" : ""}${ms.volumeChangePct24hApprox.toFixed(1)}%`
+      : "",
   ];
 }
 

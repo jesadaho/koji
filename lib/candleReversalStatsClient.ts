@@ -1,5 +1,7 @@
 /** Client-safe candle reversal stats types (no Node.js / Redis). */
 
+import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
+
 export type CandleReversalSignalBarTf = "1d" | "1h";
 
 export type CandleReversalModel = "inverted_doji" | "marubozu" | "longest_red_body";
@@ -29,6 +31,8 @@ export type CandleReversalStatsRow = {
   rangeScore: number | null;
   wickScore: number | null;
   afterInvertedDoji: boolean;
+  /** Snapshot market sentiment (Market Pulse) ณ เวลาแจ้ง */
+  marketSentiment?: MarketSentimentSnapshot | null;
   /** แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ — ไม่นับแท่งสัญญาณ */
   greenDaysBeforeSignal?: number | null;
   /** 1H signal — checkpoint จากปิดแท่ง 15m (แบบ Snowball) */

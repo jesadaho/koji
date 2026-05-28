@@ -8,6 +8,7 @@ import {
   type CandleReversalStatsRow,
 } from "@/lib/candleReversalStatsClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
+import { loadMarketSentimentSnapshot } from "./marketSentimentSnapshotStore";
 
 export type { CandleReversalStatsApiPayload, CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 
@@ -161,6 +162,13 @@ export async function appendCandleReversalStatsRow(
 ): Promise<CandleReversalStatsRow | null> {
   if (!isCandleReversalStatsEnabled()) return null;
 
+  let marketSentiment: CandleReversalStatsRow["marketSentiment"] = null;
+  try {
+    marketSentiment = await loadMarketSentimentSnapshot();
+  } catch {
+    /* ignore */
+  }
+
   const rangeScore =
     input.rangeScore != null && Number.isFinite(input.rangeScore) && input.rangeScore >= 0
       ? input.rangeScore
@@ -190,6 +198,7 @@ export async function appendCandleReversalStatsRow(
     lookbackBars: finiteRank(input.lookbackBars),
     rangeScore,
     wickScore,
+    marketSentiment,
     afterInvertedDoji: Boolean(input.afterInvertedDoji),
     greenDaysBeforeSignal:
       input.greenDaysBeforeSignal != null &&

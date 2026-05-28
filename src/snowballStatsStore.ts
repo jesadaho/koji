@@ -13,6 +13,7 @@ import {
 import type { SnowballLongStructureTier } from "@/src/snowballLongBreakoutGrade";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
+import { loadMarketSentimentSnapshot } from "./marketSentimentSnapshotStore";
 import {
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
@@ -343,6 +344,13 @@ export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): numb
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
   if (!isSnowballStatsEnabled()) return null;
 
+  let marketSentiment: SnowballStatsRow["marketSentiment"] = null;
+  try {
+    marketSentiment = await loadMarketSentimentSnapshot();
+  } catch {
+    /* ignore */
+  }
+
   const atr100 =
     input.atr100 != null && Number.isFinite(input.atr100) && input.atr100 > 0 ? input.atr100 : null;
   const maxUpperWick100 =
@@ -395,6 +403,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       ? { structureTier: input.structureTier }
       : {}),
     ...(typeof input.swing200Ok === "boolean" ? { swing200Ok: input.swing200Ok } : {}),
+    marketSentiment,
     alertQualityTier: input.alertQualityTier ?? input.qualityTier,
     ...(input.breakout1hConfirmFail === true ? { breakout1hConfirmFail: true } : {}),
     momentumDowngrade: input.momentumDowngrade === true,
