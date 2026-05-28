@@ -1,3 +1,4 @@
+import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
 import {
   fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesRange,
@@ -307,7 +308,8 @@ export async function runSnowballStatsFollowUpTick(
       (row.pct12h == null && nowSec >= ac + 12 * 3600) ||
       (row.pct24h == null && nowSec >= ac + SEC_24H) ||
       (row.pct48h == null && nowSec >= ac + SEC_48H);
-    if (!pending && !needs48h && !needsHorizonBackfill) continue;
+    const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < ac + SEC_48H;
+    if (!pending && !needs48h && !needsHorizonBackfill && !needsFollowUpAdverse) continue;
 
     const windowEndHorizonSec = Math.min(nowSec, ac + SEC_48H);
     const windowEndMfeSec = Math.min(nowSec, ac + SEC_24H);
@@ -340,6 +342,19 @@ export async function runSnowballStatsFollowUpTick(
     if (iLastHorizon < iFirst) continue;
 
     let rowTouched = false;
+
+    const adverse = computeFollowUpMaxAdversePct(
+      high,
+      low,
+      iFirst,
+      iLastHorizon,
+      entry,
+      row.side,
+    );
+    if (adverse != null && row.followUpMaxAdversePct !== adverse) {
+      row.followUpMaxAdversePct = adverse;
+      rowTouched = true;
+    }
 
     const h4 = pickHorizonClose(
       timeSec,

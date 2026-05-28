@@ -54,6 +54,8 @@ export type CandleReversalStatsRow = {
   maxRoiPct: number | null;
   durationToMfeHours: number | null;
   maxDrawdownPct: number | null;
+  /** Max adverse จาก entry ตลอดช่วง follow-up (ไม่ตัดที่ MFE) */
+  followUpMaxAdversePct: number | null;
   outcome: CandleReversalOutcome;
 };
 
@@ -140,6 +142,7 @@ export type CandleReversalStatsSortKey =
   | "h4"
   | "roi"
   | "dd"
+  | "followUpAdverse"
   | "outcome";
 
 export type CandleReversalStatsSortDir = "asc" | "desc";
@@ -247,6 +250,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.maxRoiPct, b.maxRoiPct);
     case "dd":
       return cmpNumNullLast(a.maxDrawdownPct, b.maxDrawdownPct);
+    case "followUpAdverse":
+      return cmpNumNullLast(a.followUpMaxAdversePct, b.followUpMaxAdversePct);
     case "outcome": {
       const oa = OUTCOME_SORT_ORDER[a.outcome] ?? 99;
       const ob = OUTCOME_SORT_ORDER[b.outcome] ?? 99;

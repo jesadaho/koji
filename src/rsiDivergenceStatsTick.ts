@@ -1,3 +1,5 @@
+import type { RsiDivergenceKind } from "@/lib/rsiDivergenceStatsClient";
+import { computeFollowUpMaxAdversePct, type StatsFollowUpSide } from "@/lib/statsFollowUpAdverse";
 import {
   fetchBinanceUsdmKlinesRange,
   isBinanceIndicatorFapiEnabled,
@@ -21,6 +23,10 @@ function tfBarSec(tf: RsiDivergenceStatsRow["tf"]): number {
 
 function anchorCloseSec(row: RsiDivergenceStatsRow): number {
   return row.signalBarOpenSec + tfBarSec(row.tf);
+}
+
+function rsiDivergenceFollowUpSide(kind: RsiDivergenceKind): StatsFollowUpSide {
+  return kind === "bullish" ? "long" : "short";
 }
 
 function followupDays(): number {
@@ -156,6 +162,15 @@ async function followUpRow(
   row.maxRoiPct = mfe.maxRoi;
   row.durationToMfeHours = mfe.durationHours;
   row.maxDrawdownPct = mfe.maxDd;
+  const adverse = computeFollowUpMaxAdversePct(
+    dayH,
+    dayL,
+    iDayFirst,
+    iDayLast,
+    entry,
+    rsiDivergenceFollowUpSide(row.kind),
+  );
+  if (adverse != null) row.followUpMaxAdversePct = adverse;
   if (h1d) {
     row.price1d = h1d.price;
     row.pct1d = h1d.pct;
@@ -211,11 +226,13 @@ export async function runRsiDivergenceStatsFollowUpTick(nowMs: number): Promise<
   let dirty = 0;
 
   for (const row of state.rows) {
-    if (row.outcome !== "pending") continue;
     const entry = row.entryPrice;
     if (!Number.isFinite(entry) || entry <= 0) continue;
     const ac = anchorCloseSec(row);
     if (nowSec < ac) continue;
+    const followSec = followupDays() * DAY_SEC;
+    const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < ac + followSec;
+    if (row.outcome !== "pending" && !needsFollowUpAdverse) continue;
     try {
       const ok = await followUpRow(row, nowMs, nowSec);
       if (ok) dirty += 1;

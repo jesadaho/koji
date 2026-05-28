@@ -264,7 +264,7 @@ function ReversalStatsSection({
     [tf],
   );
   const has48h = tf === "1h";
-  const emptyColSpan = has48h ? 22 : 21;
+  const emptyColSpan = has48h ? 23 : 22;
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -415,6 +415,13 @@ function ReversalStatsSection({
               <SortTh label="ROI" sortKey="roi" title="Max ROI ถึง MFE" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSort={onSortColumn} />
               <SortTh
+                label="สวน max"
+                sortKey="followUpAdverse"
+                title="Max adverse ตลอดช่วง follow-up (short: high สูงสุดจาก entry)"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh
                 label="ผล"
                 sortKey="outcome"
                 title={tf === "1h" ? "ผลที่ 24h (ปิดเร็ว) · winrate ราย horizon ดูด้านบน" : "ผลหลังครบ horizon"}
@@ -464,6 +471,9 @@ function ReversalStatsSection({
                     {has48h ? <td>{horizons[3]}</td> : null}
                     <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
                     <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
+                    <td>
+                      {r.followUpMaxAdversePct != null ? `${r.followUpMaxAdversePct.toFixed(2)}%` : "—"}
+                    </td>
                     <td>{candleReversalOutcomeLabel(r.outcome)}</td>
                   </tr>
                 );

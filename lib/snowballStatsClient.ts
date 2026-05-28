@@ -133,6 +133,8 @@ export type SnowballStatsRow = {
   maxRoiPct: number | null;
   durationToMfeHours: number | null;
   maxDrawdownPct: number | null;
+  /** Max adverse จาก entry ตลอดช่วง follow-up 48h (ไม่ตัดที่ MFE) */
+  followUpMaxAdversePct: number | null;
   resultRr: string | null;
   outcome: SnowballStatsOutcome;
   /** migration: รีเซ็ต horizon หลังแก้ anchor 4h two-bar (ปิดแท่ง confirm) */

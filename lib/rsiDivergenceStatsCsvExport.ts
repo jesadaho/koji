@@ -37,6 +37,7 @@ const HEADERS = [
   "7d",
   "Max ROI",
   "Max DD",
+  "Adv max",
   "ผล",
   "F&G",
   "Sentiment",
@@ -78,6 +79,9 @@ function rsiDivergenceStatsRowToCsvCells(r: RsiDivergenceStatsRow): string[] {
     r.maxRoiPct != null && Number.isFinite(r.maxRoiPct) ? `${r.maxRoiPct.toFixed(2)}%` : "",
     r.maxDrawdownPct != null && Number.isFinite(r.maxDrawdownPct)
       ? `${r.maxDrawdownPct.toFixed(2)}%`
+      : "",
+    r.followUpMaxAdversePct != null && Number.isFinite(r.followUpMaxAdversePct)
+      ? `${r.followUpMaxAdversePct.toFixed(2)}%`
       : "",
     rsiDivergenceOutcomeLabel(r.outcome),
     ms ? String(ms.fngValue) : "",

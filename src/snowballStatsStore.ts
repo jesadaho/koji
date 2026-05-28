@@ -179,6 +179,7 @@ function resetSnowballStatsFollowUpFields(row: SnowballStatsRow): void {
   row.maxRoiPct = null;
   row.durationToMfeHours = null;
   row.maxDrawdownPct = null;
+  row.followUpMaxAdversePct = null;
   row.resultRr = null;
   row.outcome = "pending";
 }
@@ -522,6 +523,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     maxRoiPct: null,
     durationToMfeHours: null,
     maxDrawdownPct: null,
+    followUpMaxAdversePct: null,
     resultRr: null,
     outcome: "pending",
   };

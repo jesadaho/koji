@@ -104,6 +104,7 @@ function normalizeRow(r: Partial<RsiDivergenceStatsRow>): RsiDivergenceStatsRow 
     maxRoiPct: nullNum(r.maxRoiPct),
     durationToMfeHours: nullNum(r.durationToMfeHours),
     maxDrawdownPct: nullNum(r.maxDrawdownPct),
+    followUpMaxAdversePct: nullNum(r.followUpMaxAdversePct),
     outcome: normalizeOutcome(r.outcome),
   };
 }
@@ -233,6 +234,7 @@ export async function appendRsiDivergenceStatsRow(
     maxRoiPct: null,
     durationToMfeHours: null,
     maxDrawdownPct: null,
+    followUpMaxAdversePct: null,
     outcome: "pending",
   };
 

@@ -690,9 +690,15 @@ export default function SnowballStatsTelegramMiniApp() {
                 </th>
                 <th
                   scope="col"
-                  title="Max DD หลังแจ้ง — drawdown สูงสุดจาก entry (ติดตามผล)"
+                  title="Max DD หลังแจ้ง — adverse สูงสุดถึง MFE (24h) จาก entry"
                 >
                   Max DD หลัง
+                </th>
+                <th
+                  scope="col"
+                  title="Max adverse ตลอดช่วง follow-up 48h จาก entry (ไม่ตัดที่ MFE)"
+                >
+                  Adv max
                 </th>
                 <th scope="col">SVP Hole</th>
                 <th scope="col">RR</th>
@@ -703,7 +709,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 32 : 31} className="sub">
+                  <td colSpan={isAdmin ? 33 : 32} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
                       : "ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / ทุกวัน"}
@@ -770,6 +776,9 @@ export default function SnowballStatsTelegramMiniApp() {
                         : "—"}
                     </td>
                     <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
+                    <td>
+                      {r.followUpMaxAdversePct != null ? `${r.followUpMaxAdversePct.toFixed(2)}%` : "—"}
+                    </td>
                     <td>{r.svpHoleYn}</td>
                     <td>{r.resultRr ?? "—"}</td>
                     <td>{outcomeLabel(r.outcome)}</td>

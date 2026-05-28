@@ -49,6 +49,7 @@ const HEADERS = [
   "Duration→MFE",
   "Max DD ก่อน",
   "Max DD หลัง",
+  "Adv max",
   "SVP Hole",
   "RR",
   "ผล",
@@ -101,6 +102,9 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
       : "",
     r.signalMaxDdPct != null && Number.isFinite(r.signalMaxDdPct) ? `${r.signalMaxDdPct.toFixed(2)}%` : "",
     r.maxDrawdownPct != null && Number.isFinite(r.maxDrawdownPct) ? `${r.maxDrawdownPct.toFixed(2)}%` : "",
+    r.followUpMaxAdversePct != null && Number.isFinite(r.followUpMaxAdversePct)
+      ? `${r.followUpMaxAdversePct.toFixed(2)}%`
+      : "",
     r.svpHoleYn ?? "",
     r.resultRr ?? "",
     snowballOutcomeLabel(r.outcome),

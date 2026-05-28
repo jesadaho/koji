@@ -36,6 +36,7 @@ const HEADERS = [
   "H4",
   "Max ROI",
   "Max DD",
+  "สวน max",
   "ผล",
   "F&G",
   "Sentiment",
@@ -89,6 +90,9 @@ function candleReversalStatsRowToCsvCells(r: CandleReversalStatsRow): string[] {
     h4,
     r.maxRoiPct != null && Number.isFinite(r.maxRoiPct) ? `${r.maxRoiPct.toFixed(2)}%` : "",
     r.maxDrawdownPct != null && Number.isFinite(r.maxDrawdownPct) ? `${r.maxDrawdownPct.toFixed(2)}%` : "",
+    r.followUpMaxAdversePct != null && Number.isFinite(r.followUpMaxAdversePct)
+      ? `${r.followUpMaxAdversePct.toFixed(2)}%`
+      : "",
     candleReversalOutcomeLabel(r.outcome),
     ms ? String(ms.fngValue) : "",
     ms ? ms.sentiment : "",

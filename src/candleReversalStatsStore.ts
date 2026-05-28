@@ -100,6 +100,7 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     pct3d: nullNum(r.pct3d),
     price7d: nullNum(r.price7d),
     pct7d: nullNum(r.pct7d),
+    followUpMaxAdversePct: nullNum(r.followUpMaxAdversePct),
   };
 }
 
@@ -223,6 +224,7 @@ export async function appendCandleReversalStatsRow(
     maxRoiPct: null,
     durationToMfeHours: null,
     maxDrawdownPct: null,
+    followUpMaxAdversePct: null,
     outcome: "pending",
   };
 

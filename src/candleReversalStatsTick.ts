@@ -1,4 +1,5 @@
 import type { CandleReversalSignalBarTf } from "@/lib/candleReversalStatsClient";
+import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
 import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import {
   fetchBinanceUsdmKlines,
@@ -227,6 +228,21 @@ async function followUpCandleReversal1hRow(
   }
   if (!mfe) return false;
 
+  if (hPack && hPack.timeSec.length > 0) {
+    const { timeSec: hT, high: hH, low: hL } = hPack;
+    const iHFirst = hT.findIndex((t) => t + HOUR_SEC >= ac);
+    if (iHFirst >= 0) {
+      const iHLast = indexRangeThrough(hT, HOUR_SEC, iHFirst, windowEndSec);
+      if (iHLast >= iHFirst) {
+        const adverse = computeFollowUpMaxAdversePct(hH, hL, iHFirst, iHLast, entry, "short");
+        if (adverse != null) row.followUpMaxAdversePct = adverse;
+      }
+    }
+  } else {
+    const adverse = computeFollowUpMaxAdversePct(h15, l15, i15First, i15Last, entry, "short");
+    if (adverse != null) row.followUpMaxAdversePct = adverse;
+  }
+
   const h4End = ac + 4 * HOUR_SEC;
   const h12End = ac + 12 * HOUR_SEC;
   const h24End = ac + 24 * HOUR_SEC;
@@ -350,6 +366,16 @@ async function followUpCandleReversal1dRow(
   const mfe = computeMfeFromPack(dayT, dayPack.high, dayPack.low, DAY_SEC, iDayFirst, iDayLast, ac, entry);
   if (!mfe) return false;
 
+  const adverse = computeFollowUpMaxAdversePct(
+    dayPack.high,
+    dayPack.low,
+    iDayFirst,
+    iDayLast,
+    entry,
+    "short",
+  );
+  if (adverse != null) row.followUpMaxAdversePct = adverse;
+
   const h1dEnd = ac + DAY_SEC;
   const h3dEnd = ac + 3 * DAY_SEC;
   const h7dEnd = ac + followSec;
@@ -468,13 +494,16 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
   dirty += backfill1hOutcomeTo24h(state.rows);
 
   for (const row of state.rows) {
-    if (!shouldFollowUpReversalRow(row, nowSec)) continue;
-
     const entry = row.entryPrice;
     if (!Number.isFinite(entry) || entry <= 0) continue;
 
     const ac = anchorCloseSec(row);
     if (nowSec < ac) continue;
+
+    const followWindowEnd =
+      signalBarTf(row) === "1h" ? ac + followup1hHours() * HOUR_SEC : ac + followup1dDays() * DAY_SEC;
+    const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < followWindowEnd;
+    if (!shouldFollowUpReversalRow(row, nowSec) && !needsFollowUpAdverse) continue;
 
     const ok =
       signalBarTf(row) === "1h"

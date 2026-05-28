@@ -231,13 +231,20 @@ function DivergenceStatsSection({
               <SortTh label="7d" sortKey="h3" title="follow-up 7d (%)" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="ROI" sortKey="roi" title="Max ROI ถึง MFE" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSort={onSortColumn} />
+              <SortTh
+                label="Adv max"
+                sortKey="followUpAdverse"
+                title="Max adverse ตลอดช่วง follow-up จาก entry (ไม่ตัดที่ MFE)"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
               <SortTh label="ผล" sortKey="outcome" title="ผลที่ครบ 7d" activeSort={sort} onSort={onSortColumn} />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={18} className="sub">
+                <td colSpan={19} className="sub">
                   {emptyHint}
                 </td>
               </tr>
@@ -268,6 +275,9 @@ function DivergenceStatsSection({
                   <td>{fmtPctCell(r.price7d, r.pct7d)}</td>
                   <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
                   <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
+                  <td>
+                    {r.followUpMaxAdversePct != null ? `${r.followUpMaxAdversePct.toFixed(2)}%` : "—"}
+                  </td>
                   <td>{rsiDivergenceOutcomeLabel(r.outcome)}</td>
                 </tr>
               ))
