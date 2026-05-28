@@ -136,6 +136,12 @@ function SortTh({
 
 type ReversalShapeFilter = "all" | "wick80" | "body80" | "wickOrBody80";
 type ReversalDayFilter = "all" | "3" | "7" | "30" | "90";
+type ReversalLenRankFilter = "all" | "rank3to15";
+
+const REVERSAL_LEN_RANK_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalLenRankFilter; label: string }> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "rank3to15", label: "อันดับ 3–15" },
+];
 
 const REVERSAL_DAY_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalDayFilter; label: string }> = [
   { value: "all", label: "ทั้งหมด" },
@@ -177,6 +183,18 @@ function reversalRowMatchesDayFilter(row: CandleReversalStatsRow, filter: Revers
 
 function reversalDayFilterLabel(filter: ReversalDayFilter): string {
   return REVERSAL_DAY_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+function reversalLenRankFilterLabel(filter: ReversalLenRankFilter): string {
+  return REVERSAL_LEN_RANK_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+function reversalRowMatchesLenRankFilter(row: CandleReversalStatsRow, filter: ReversalLenRankFilter): boolean {
+  if (filter === "all") return true;
+  const rank = row.rangeRankInLookback;
+  if (rank == null || !Number.isFinite(rank)) return false;
+  const r = Math.floor(rank);
+  return r >= 3 && r <= 15;
 }
 
 function reversalWinrateSummary(rows: CandleReversalStatsRow[]): string {
@@ -222,6 +240,7 @@ function ReversalStatsSection({
   const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
   const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
   const [dayFilter, setDayFilter] = useState<ReversalDayFilter>("all");
+  const [lenRankFilter, setLenRankFilter] = useState<ReversalLenRankFilter>("all");
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -234,9 +253,12 @@ function ReversalStatsSection({
   const filteredRows = useMemo(
     () =>
       rawRows.filter(
-        (r) => reversalRowMatchesShapeFilter(r, shapeFilter) && reversalRowMatchesDayFilter(r, dayFilter),
+        (r) =>
+          reversalRowMatchesShapeFilter(r, shapeFilter) &&
+          reversalRowMatchesDayFilter(r, dayFilter) &&
+          reversalRowMatchesLenRankFilter(r, lenRankFilter),
       ),
-    [rawRows, shapeFilter, dayFilter],
+    [rawRows, shapeFilter, dayFilter, lenRankFilter],
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
   const winrateText = useMemo(() => reversalWinrateSummary(filteredRows), [filteredRows]);
@@ -318,6 +340,22 @@ function ReversalStatsSection({
             <option value="wick80">{reversalShapeFilterLabel("wick80")}</option>
             <option value="body80">{reversalShapeFilterLabel("body80")}</option>
             <option value="wickOrBody80">{reversalShapeFilterLabel("wickOrBody80")}</option>
+          </select>
+        </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          Len#
+          <select
+            value={lenRankFilter}
+            onChange={(e) => setLenRankFilter(e.currentTarget.value as ReversalLenRankFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "7.5rem" }}
+            title="อันดับความยาวแท่ง (high-low) ในรอบ lookback — 1 = ยาวสุด"
+          >
+            {REVERSAL_LEN_RANK_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           </select>
         </label>
         <span className="sub">
@@ -435,7 +473,7 @@ function ReversalStatsSection({
               <tr>
                 <td colSpan={emptyColSpan} className="sub">
                   {rawRows.length > 0
-                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)}`
+                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)}`
                     : emptyHint}
                 </td>
               </tr>
