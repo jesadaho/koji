@@ -7,7 +7,6 @@ import {
 } from "./binanceIndicatorKline";
 import { sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
-import { resolveSnowballLongAutotradeSide } from "./snowballGradeCShortFade";
 import {
   isPublicSnowballTripleCheckEnabled,
   snowballConfirmBarEnabled,
@@ -341,18 +340,6 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               pack15m: pack15mTrend,
             });
             const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
-            let gradeCFadeOk = false;
-            if (item.side === "long" && item.qualityTier === "c_plus") {
-              const resolved = await resolveSnowballLongAutotradeSide(
-                item.symbol,
-                item.qualityTier,
-                snowballDoubleBarrierEnabled(),
-                item.signalBarOpenSec,
-                pack1hTrend,
-                { sustainedBuyingPressure },
-              );
-              gradeCFadeOk = Boolean(resolved.fade?.ok);
-            }
             const statsTradeSide = resolveSnowballStatsTradeSide({
               alertSide: item.side === "long" ? "long" : "bear",
               qualityTier: item.qualityTier,
@@ -364,7 +351,6 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               confirmOpen: barOpen[idx],
               confirmClose: cl,
               confirmVolume: vo,
-              gradeCFadeOk,
             });
             const greenDaysBeforeSignal = await fetchGreenDaysBeforeSignalBar(
               item.symbol,

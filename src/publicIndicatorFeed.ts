@@ -30,11 +30,6 @@ import {
 } from "./remoteJsonStore";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import {
-  evaluateSnowballGradeCShortFade,
-  formatGradeCShortFadeAutotradeLine,
-  type SnowballGradeCShortFadeResult,
-} from "./snowballGradeCShortFade";
-import {
   buildSnowballLongBreakout1hConfirmGateSteps,
   evaluateSnowballLongBreakout1hConfirm,
   formatSnowballLongBreakout1hCriteriaSummary,
@@ -1687,8 +1682,6 @@ function buildSnowballTripleCheckMessage(
     snowballLongBreakoutGrade?: SnowballLongBreakoutGrade;
     /** ผ่าน Swing HH โครงสร้าง (ดีฟอลต์ 200 แท่ง) — ใช้ข้อความ Grade C */
     longSwing200Ok?: boolean;
-    /** Grade C — ผล gate rejection 1h ในกรอบ 4h (auto-open Short) */
-    gradeCShortFade?: SnowballGradeCShortFadeResult | null;
     doubleBarrierEnabled?: boolean;
     /** Double Barrier (แนวใกล้ในโซน %) — บรรทัด checklist */
     doubleBarrierChecklistLine?: string;
@@ -1874,7 +1867,7 @@ function buildSnowballTripleCheckMessage(
         : gradeDPlus
           ? "📎 Auto-open: Grade D+ (Long) — ไม่สั่งเปิดอัตโนมัติ (momentum อ่อน · 1H confirm ผ่าน)"
           : g === "c_plus"
-          ? formatGradeCShortFadeAutotradeLine(args.gradeCShortFade)
+          ? "📎 Auto-open: ตามเกรดที่ตั้งใน Mini App (Long/Short)"
           : g === "b_plus"
             ? args.sustainedBuyingPressure
               ? `📎 Auto-open: Grade B + sustained flow — Long ครึ่งไม้ (~${(snowballGradeBSustainedMarginScale() * 100).toFixed(0)}% margin) เมื่อเปิด Double Barrier`
@@ -3411,12 +3404,6 @@ export async function runPublicIndicatorFeedInternal(
           }
         }
 
-        let gradeCShortFade: SnowballGradeCShortFadeResult | null = null;
-        if (longBreakoutGrade === "c_plus") {
-          const pack1hGradeC = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
-          gradeCShortFade = evaluateSnowballGradeCShortFade(pack1hGradeC ?? null, signalBarOpenSec);
-        }
-
         let longDoubleBarrierLine = "";
         if (dbOn) {
           const cls = classifyLongDoubleBarrierTier(h15, iSig, clE!);
@@ -3537,7 +3524,6 @@ export async function runPublicIndicatorFeedInternal(
           doubleBarrierEnabled: dbOn,
           snowballLongBreakoutGrade: longBreakoutGrade,
           longSwing200Ok: swing200,
-          gradeCShortFade,
           doubleBarrierChecklistLine: dbOn ? longDoubleBarrierLine : undefined,
           confirmRiskFlags:
             twoBarInline || longBreakout1h ? undefined : longRiskFlags.length > 0 ? longRiskFlags : undefined,
@@ -3745,7 +3731,6 @@ export async function runPublicIndicatorFeedInternal(
                       : longBreakout1h && breakout1hEval
                         ? pack1hForTwoBar?.volume?.[breakout1hEval!.i1h] ?? null
                         : null,
-                  gradeCFadeOk: gradeCShortFade?.ok,
                 });
                 const longStatsBarOpenSec = signalBarOpenSec;
                 const longStatsBarTf = snowTf;

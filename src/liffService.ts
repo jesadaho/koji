@@ -114,7 +114,7 @@ import {
 
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ตั้งเกรด matrix (A+ … F) และทิศ Long/Short แยกบล็อกสัญญาณ LONG กับ BEAR · Grade C ที่เลือก Short บนสัญญาณ LONG ยังใช้ gate fade (Limit retest ไส้ / Market V-Top) · กลยุทธ์ TP/SL (TP1 partial + SL บังทุน / TP2 / max hold) เหมือน Reversal รองรับทั้ง LONG และ SHORT · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (นับเมื่อ fill สำหรับ Limit)";
+  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ตั้งเกรด matrix (A+ … F) และทิศ Long/Short แยกบล็อกสัญญาณ LONG กับ BEAR · เมื่อสัญญาณตรงเกรดที่ตั้งไว้ สั่ง Market ทันที · กลยุทธ์ TP/SL (TP1 partial + SL บังทุน / TP2 / max hold) เหมือน Reversal รองรับทั้ง LONG และ SHORT · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =

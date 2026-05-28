@@ -131,15 +131,3 @@ export function resolveSnowballAutoOpenSideForUser(
   return side === "long" || side === "short" ? side : null;
 }
 
-/** LONG alert + เปิด Short + เกรดกลุ่ม C → ใช้ fade gate / limit retest */
-export function snowballAutoTradeNeedsGradeCShortFade(
-  alertSide: SnowballAutoTradeAlertSide,
-  openSide: SnowballAutoTradeSide,
-  gradeKey: SnowballAutoTradeGradeKey | null,
-  qualityTier?: SnowballAutoTradeAlertGradeInput["qualityTier"],
-): boolean {
-  if (alertSide !== "long" || openSide !== "short") return false;
-  if (qualityTier === "c_plus") return true;
-  if (!gradeKey) return false;
-  return gradeKey === "C" || gradeKey === "C+" || gradeKey === "C-" || gradeKey === "B-";
-}
