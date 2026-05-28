@@ -40,6 +40,30 @@ export function isReversalAutotradeEnabled(): boolean {
 /** เกณฑ์ body/wick ขั้นต่ำสำหรับ Reversal auto-open (ทศนิยม 0–1) */
 const REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO = 0.8;
 
+/** Len# (rangeRankInLookback) ที่เปิด auto ได้เมื่อไม่ถึงเกณฑ์ body/wick — 1 = แท่งยาวสุดใน lookback */
+const REVERSAL_AUTOTRADE_LEN_RANK_MIN = 3;
+const REVERSAL_AUTOTRADE_LEN_RANK_MAX = 15;
+
+/** gate เปิดออเดอร์: body หรือไส้ > 80% หรือ Len# อยู่ 3–15 */
+export function reversalAutotradePassesEntryGate(input: {
+  bodyRatio: number;
+  wickRatio: number;
+  rangeRankInLookback?: number | null;
+}): boolean {
+  const body = Number.isFinite(input.bodyRatio) ? input.bodyRatio : 0;
+  const wick = Number.isFinite(input.wickRatio) ? input.wickRatio : 0;
+  if (
+    body > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO ||
+    wick > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO
+  ) {
+    return true;
+  }
+  const rank = input.rangeRankInLookback;
+  if (rank == null || !Number.isFinite(rank)) return false;
+  const r = Math.floor(rank);
+  return r >= REVERSAL_AUTOTRADE_LEN_RANK_MIN && r <= REVERSAL_AUTOTRADE_LEN_RANK_MAX;
+}
+
 /** จำนวนแท่ง 15m ที่ดึงเพื่อคำนวณ EMA50 (ต้องพอครอบ warmup) */
 const REVERSAL_AUTOTRADE_15M_FETCH_BARS = 200;
 
@@ -131,6 +155,8 @@ export type ReversalAutoTradeInput = {
   bodyRatio: number;
   /** upper wick / range (0–1) จากสัญญาณ */
   wickRatio: number;
+  /** อันดับความยาวแท่ง (high-low) ในรอบ lookback — 1 = ยาวสุด */
+  rangeRankInLookback?: number | null;
 };
 
 export type ReversalAutoTradeRunResult = {
@@ -141,7 +167,7 @@ export type ReversalAutoTradeRunResult = {
 /**
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
  * - เปิดเฉพาะ user ที่ตั้ง `reversalAutoTradeEnabled` + มี MEXC creds
- * - gate: body หรือ upper wick > 80% (>= REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO)
+ * - gate: body หรือ upper wick > 80% **หรือ** Len# (rangeRankInLookback) อยู่ 3–15
  * - entry แบบ hybrid ตาม EMA50 บน TF 15m:
  *   - ราคาตลาด > EMA50 → Market SHORT ทันที
  *   - ราคาตลาด <= EMA50 → Limit SHORT ที่ราคา EMA50 (ดักรีเทสต์)
@@ -158,8 +184,11 @@ export async function runReversalAutoTradeAfterReversalAlert(
   const bodyRatio = Number.isFinite(input.bodyRatio) ? input.bodyRatio : 0;
   const wickRatio = Number.isFinite(input.wickRatio) ? input.wickRatio : 0;
   if (
-    !(bodyRatio > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO) &&
-    !(wickRatio > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO)
+    !reversalAutotradePassesEntryGate({
+      bodyRatio,
+      wickRatio,
+      rangeRankInLookback: input.rangeRankInLookback,
+    })
   ) {
     return { usersAttempted: 0, usersSucceeded: 0 };
   }
@@ -327,6 +356,14 @@ export async function runReversalAutoTradeAfterReversalAlert(
 
       const bodyPct = bodyRatio * 100;
       const wickPct = wickRatio * 100;
+      const lenRank =
+        input.rangeRankInLookback != null && Number.isFinite(input.rangeRankInLookback)
+          ? Math.floor(input.rangeRankInLookback)
+          : null;
+      const lenRankGate =
+        lenRank != null &&
+        lenRank >= REVERSAL_AUTOTRADE_LEN_RANK_MIN &&
+        lenRank <= REVERSAL_AUTOTRADE_LEN_RANK_MAX;
 
       const plan = resolveReversalTpSlPlanFromRow(row);
 
@@ -391,7 +428,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         `[${shortContractLabel(contractSymbol)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${lev}x`,
         `สัญญาณ Reversal: ${input.model} · TF ${input.signalBarTf.toUpperCase()}`,
-        `Body ${bodyPct.toFixed(1)}% · Upper wick ${wickPct.toFixed(1)}%`,
+        `Body ${bodyPct.toFixed(1)}% · Upper wick ${wickPct.toFixed(1)}%${lenRank != null ? ` · Len# ${lenRank}` : ""}${lenRankGate ? " (เกณฑ์ Len 3–15)" : ""}`,
         aboveEma
           ? `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} > EMA50 15m ~${fmtReversalAutoTradePrice(ema50)}`
           : `Limit ~${fmtReversalAutoTradePrice(ema50)} (EMA50 15m) · ราคาปัจจุบัน ~${fmtReversalAutoTradePrice(markPrice)}`,
