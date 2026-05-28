@@ -135,6 +135,15 @@ function SortTh({
 }
 
 type ReversalShapeFilter = "all" | "wick80" | "body80" | "wickOrBody80";
+type ReversalDayFilter = "all" | "3" | "7" | "30" | "90";
+
+const REVERSAL_DAY_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalDayFilter; label: string }> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "3", label: "3 วัน" },
+  { value: "7", label: "7 วัน" },
+  { value: "30", label: "30 วัน" },
+  { value: "90", label: "90 วัน" },
+];
 
 function reversalShapeFilterLabel(filter: ReversalShapeFilter): string {
   if (filter === "wick80") return "ไส้ >= 80%";
@@ -150,6 +159,24 @@ function reversalRowMatchesShapeFilter(row: CandleReversalStatsRow, filter: Reve
   if (filter === "wick80") return wickOk;
   if (filter === "body80") return bodyOk;
   return wickOk || bodyOk;
+}
+
+function reversalAlertedAtMs(row: CandleReversalStatsRow): number {
+  return row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)
+    ? row.alertedAtMs
+    : Date.parse(row.alertedAtIso);
+}
+
+function reversalRowMatchesDayFilter(row: CandleReversalStatsRow, filter: ReversalDayFilter): boolean {
+  if (filter === "all") return true;
+  const days = Number(filter);
+  const cutoffMs = Date.now() - days * 24 * 3600 * 1000;
+  const ms = reversalAlertedAtMs(row);
+  return Number.isFinite(ms) && ms >= cutoffMs;
+}
+
+function reversalDayFilterLabel(filter: ReversalDayFilter): string {
+  return REVERSAL_DAY_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
 }
 
 function reversalWinrateSummary(rows: CandleReversalStatsRow[]): string {
@@ -194,6 +221,7 @@ function ReversalStatsSection({
 }: ReversalStatsSectionProps) {
   const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
   const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
+  const [dayFilter, setDayFilter] = useState<ReversalDayFilter>("all");
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -204,8 +232,11 @@ function ReversalStatsSection({
   }, []);
 
   const filteredRows = useMemo(
-    () => rawRows.filter((r) => reversalRowMatchesShapeFilter(r, shapeFilter)),
-    [rawRows, shapeFilter],
+    () =>
+      rawRows.filter(
+        (r) => reversalRowMatchesShapeFilter(r, shapeFilter) && reversalRowMatchesDayFilter(r, dayFilter),
+      ),
+    [rawRows, shapeFilter, dayFilter],
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
   const winrateText = useMemo(() => reversalWinrateSummary(filteredRows), [filteredRows]);
@@ -256,7 +287,25 @@ function ReversalStatsSection({
           {subtitle}
         </span>
       </h2>
-      <div className="sparkStatsActionRow" style={{ marginTop: "0.75rem", alignItems: "center" }}>
+      <div
+        className="sparkStatsActionRow"
+        style={{ marginTop: "0.75rem", alignItems: "center", flexWrap: "wrap", rowGap: "0.4rem" }}
+      >
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          ย้อนหลัง
+          <select
+            value={dayFilter}
+            onChange={(e) => setDayFilter(e.currentTarget.value as ReversalDayFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "7rem" }}
+          >
+            {REVERSAL_DAY_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
           กรองแท่ง
           <select
@@ -378,7 +427,9 @@ function ReversalStatsSection({
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={emptyColSpan} className="sub">
-                  {rawRows.length > 0 ? `ไม่มีแถวที่ตรงตัวกรอง: ${reversalShapeFilterLabel(shapeFilter)}` : emptyHint}
+                  {rawRows.length > 0
+                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)}`
+                    : emptyHint}
                 </td>
               </tr>
             ) : (
