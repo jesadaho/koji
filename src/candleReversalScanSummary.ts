@@ -176,7 +176,7 @@ export function formatCandleReversalScanSummaryMessage(opts: {
 
   lines.push("");
   lines.push("— ส่งแจ้งเตือน —");
-  lines.push(`ติด dedupe (เคยส่งแท่งนี้แล้ว): ${stats.deduped}`);
+  lines.push(`ติด dedupe (แท่งเดิม / มี pending อยู่แล้ว): ${stats.deduped}`);
   lines.push(...formatSymbolListLines("  ", stats.dedupedSymbols));
   lines.push(`เกิน cap ต่อรอบ (${alertCapPerRun}/run): ${stats.cappedByRunLimit}`);
   lines.push(...formatSymbolListLines("  ", stats.cappedByRunLimitSymbols));

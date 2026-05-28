@@ -66,7 +66,11 @@ import {
   runSnowballStatsFollowUpTick,
 } from "./snowballStatsTick";
 import { isAdminTelegramUserId } from "./adminIds";
-import { loadCandleReversalStatsState, resetCandleReversalStatsState } from "./candleReversalStatsStore";
+import {
+  loadCandleReversalStatsState,
+  removeCandleReversalStatsDuplicatePendingRows,
+  resetCandleReversalStatsState,
+} from "./candleReversalStatsStore";
 import {
   correctCandleReversalStatsOutcome,
   runCandleReversalStatsFollowUpTick,
@@ -843,16 +847,17 @@ export async function liffResetCandleReversalStats(
 export async function liffBackfillCandleReversalStats(
   telegramUserId: number,
 ): Promise<
-  | { ok: true; updated: number; scanned: number; changedOutcome: number }
+  | { ok: true; updated: number; scanned: number; changedOutcome: number; removedDupes: number }
   | { ok: false; status: number; error: string }
 > {
   if (!isAdminTelegramUserId(telegramUserId)) {
     return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
   }
   try {
+    const { removed: removedDupes } = await removeCandleReversalStatsDuplicatePendingRows();
     const updated = await runCandleReversalStatsFollowUpTick(Date.now());
     const { scanned, changedOutcome } = await correctCandleReversalStatsOutcome();
-    return { ok: true, updated, scanned, changedOutcome };
+    return { ok: true, updated, scanned, changedOutcome, removedDupes };
   } catch (e) {
     return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
   }

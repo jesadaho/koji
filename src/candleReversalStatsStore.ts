@@ -158,10 +158,86 @@ export type AppendCandleReversalStatsInput = {
   greenDaysBeforeSignal?: number | null;
 };
 
+function normalizeStatsSymbol(symbol: string): string {
+  return symbol.trim().toUpperCase();
+}
+
+function pendingReversalStatsKey(symbol: string, signalBarTf: CandleReversalStatsRow["signalBarTf"]): string {
+  return `${normalizeStatsSymbol(symbol)}:${signalBarTf === "1h" ? "1h" : "1d"}`;
+}
+
+/** มีแถว pending อยู่แล้วสำหรับเหรียญ+TF นี้ */
+export function hasPendingCandleReversalStatsRow(
+  rows: CandleReversalStatsRow[],
+  symbol: string,
+  signalBarTf: CandleReversalStatsRow["signalBarTf"],
+): boolean {
+  const key = pendingReversalStatsKey(symbol, signalBarTf);
+  return rows.some(
+    (r) => r.outcome === "pending" && pendingReversalStatsKey(r.symbol, r.signalBarTf ?? "1d") === key,
+  );
+}
+
+/** คีย์ symbol:tf ของทุกแถว pending — ใช้กันยิงซ้ำระหว่างสแกน */
+export function candleReversalPendingStatsKeys(rows: CandleReversalStatsRow[]): Set<string> {
+  const keys = new Set<string>();
+  for (const r of rows) {
+    if (r.outcome !== "pending") continue;
+    keys.add(pendingReversalStatsKey(r.symbol, r.signalBarTf ?? "1d"));
+  }
+  return keys;
+}
+
+/**
+ * ลบแถว pending ซ้ำ — ต่อเหรียญ+TF คงแถวที่แจ้งเร็วสุด (alertedAtMs น้อยสุด)
+ */
+export async function removeCandleReversalStatsDuplicatePendingRows(opts?: {
+  symbol?: string;
+}): Promise<{ removed: number; kept: number; scanned: number }> {
+  const symbolFilter = opts?.symbol?.trim().toUpperCase() || null;
+  const state = await loadCandleReversalStatsState();
+  const rows = state.rows ?? [];
+  const scanned = rows.length;
+
+  const byKey = new Map<string, CandleReversalStatsRow[]>();
+  for (const r of rows) {
+    if (r.outcome !== "pending") continue;
+    const sym = normalizeStatsSymbol(r.symbol);
+    if (symbolFilter && sym !== symbolFilter) continue;
+    const key = pendingReversalStatsKey(sym, r.signalBarTf ?? "1d");
+    const arr = byKey.get(key) ?? [];
+    arr.push(r);
+    byKey.set(key, arr);
+  }
+
+  const toDrop = new Set<string>();
+  for (const arr of Array.from(byKey.values())) {
+    if (arr.length <= 1) continue;
+    arr.sort((a, b) => (a.alertedAtMs ?? 0) - (b.alertedAtMs ?? 0));
+    for (let i = 1; i < arr.length; i++) {
+      toDrop.add(arr[i]!.id);
+    }
+  }
+
+  if (toDrop.size === 0) {
+    return { removed: 0, kept: rows.length, scanned };
+  }
+
+  const next = rows.filter((r) => !toDrop.has(r.id));
+  await saveCandleReversalStatsState({ rows: next });
+  return { removed: toDrop.size, kept: next.length, scanned };
+}
+
 export async function appendCandleReversalStatsRow(
   input: AppendCandleReversalStatsInput,
 ): Promise<CandleReversalStatsRow | null> {
   if (!isCandleReversalStatsEnabled()) return null;
+
+  const signalBarTf = input.signalBarTf === "1h" ? "1h" : "1d";
+  const state = await loadCandleReversalStatsState();
+  if (hasPendingCandleReversalStatsRow(state.rows, input.symbol, signalBarTf)) {
+    return null;
+  }
 
   let marketSentiment: CandleReversalStatsRow["marketSentiment"] = null;
   try {
@@ -181,8 +257,8 @@ export async function appendCandleReversalStatsRow(
 
   const row: CandleReversalStatsRow = {
     id: randomUUID(),
-    symbol: input.symbol.trim().toUpperCase(),
-    signalBarTf: input.signalBarTf === "1h" ? "1h" : "1d",
+    symbol: normalizeStatsSymbol(input.symbol),
+    signalBarTf,
     model: input.model,
     alertedAtIso: input.alertedAtIso,
     alertedAtMs: input.alertedAtMs,
@@ -228,7 +304,6 @@ export async function appendCandleReversalStatsRow(
     outcome: "pending",
   };
 
-  const state = await loadCandleReversalStatsState();
   state.rows.push(row);
   const max = maxRows();
   if (state.rows.length > max) {

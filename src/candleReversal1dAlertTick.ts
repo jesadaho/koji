@@ -27,7 +27,9 @@ import {
 } from "./candleReversalScanSummary";
 import {
   appendCandleReversalStatsRow,
+  candleReversalPendingStatsKeys,
   isCandleReversalStatsEnabled,
+  loadCandleReversalStatsState,
 } from "./candleReversalStatsStore";
 import {
   buildCandleReversalAlertMessage,
@@ -434,6 +436,10 @@ async function notifyResults(
   scanStats: CandleReversalTfScanSummaryStats,
 ): Promise<number> {
   let notified = 0;
+  const pendingStatsKeys = isCandleReversalStatsEnabled()
+    ? candleReversalPendingStatsKeys((await loadCandleReversalStatsState()).rows)
+    : new Set<string>();
+
   for (const row of results) {
     if (!row.evals?.msg || !row.evals.signal) continue;
     if (notified >= alertCap) {
@@ -441,16 +447,24 @@ async function notifyResults(
       pushReversalScanSymList(scanStats.cappedByRunLimitSymbols, row.symbol);
       continue;
     }
+
+    const sig = row.evals.signal;
+    const pendingKey = `${row.symbol.trim().toUpperCase()}:${sig.tf === "1h" ? "1h" : "1d"}`;
+    if (pendingStatsKeys.has(pendingKey)) {
+      scanStats.deduped += 1;
+      pushReversalScanSymList(scanStats.dedupedSymbols, row.symbol);
+      continue;
+    }
+
     try {
       const ok = await sendPublicReversalFeedToSparkGroup(row.evals.msg);
       if (ok && isCandleReversalStatsEnabled()) {
-        const sig = row.evals.signal;
         const greenDaysBeforeSignal = await fetchGreenDaysBeforeReversalSignal(
           row.symbol,
           sig.barOpenSec,
           sig.tf,
         );
-        await appendCandleReversalStatsRow({
+        const appended = await appendCandleReversalStatsRow({
           symbol: row.symbol,
           model: sig.model,
           signalBarTf: sig.tf,
@@ -471,10 +485,12 @@ async function notifyResults(
           afterInvertedDoji: sig.afterInvertedDoji,
           greenDaysBeforeSignal,
         });
+        if (appended) {
+          pendingStatsKeys.add(pendingKey);
+        }
       }
       if (ok) {
         notified++;
-        const sig = row.evals.signal;
         scanStats.sent += 1;
         scanStats.sentByModel[sig.model] += 1;
         pushReversalScanSymList(scanStats.sentSymbols, row.symbol);

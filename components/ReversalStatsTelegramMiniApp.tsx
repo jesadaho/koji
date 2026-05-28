@@ -557,8 +557,9 @@ export default function ReversalStatsTelegramMiniApp() {
     if (
       !window.confirm(
         "ปรับ result และ backfill Reversal stats?\n\n" +
-          "1) Refetch pct horizons จาก Binance + auto-finalize แถวที่ครบเวลา\n" +
-          "2) Recompute outcome ทุกแถวจาก pct (1H→pct24h · 1D→pct7d) — ทับของเดิม โดยไม่สนใจ pending guard\n\n" +
+          "1) ลบแถว pending ซ้ำ (คงสัญญาณแรกต่อเหรียญ+TF)\n" +
+          "2) Refetch pct horizons จาก Binance + auto-finalize แถวที่ครบเวลา\n" +
+          "3) Recompute outcome ทุกแถวจาก pct (1H→pct24h · 1D→pct7d) — ทับของเดิม โดยไม่สนใจ pending guard\n\n" +
           "อาจใช้เวลาหลายวินาทีขึ้นกับจำนวนแถว",
       )
     ) {
@@ -572,13 +573,15 @@ export default function ReversalStatsTelegramMiniApp() {
         updated?: number;
         scanned?: number;
         changedOutcome?: number;
+        removedDupes?: number;
       };
       const updated = typeof res?.updated === "number" ? res.updated : 0;
       const scanned = typeof res?.scanned === "number" ? res.scanned : 0;
       const changedOutcome = typeof res?.changedOutcome === "number" ? res.changedOutcome : 0;
+      const removedDupes = typeof res?.removedDupes === "number" ? res.removedDupes : 0;
       setBackfillMsg({
         kind: "ok",
-        text: `ปรับเสร็จ — backfill ${updated} แถว · สแกน ${scanned} · เปลี่ยน outcome ${changedOutcome}`,
+        text: `ปรับเสร็จ — ลบซ้ำ ${removedDupes} · backfill ${updated} แถว · สแกน ${scanned} · เปลี่ยน outcome ${changedOutcome}`,
       });
       await loadStats();
     } catch (e) {
