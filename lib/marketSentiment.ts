@@ -26,3 +26,25 @@ export function marketSentimentFromFng(value: number): MarketSentimentLabel {
   return "Neutral";
 }
 
+const MS_DASH = "—";
+
+export function marketSentimentFngLabel(ms: MarketSentimentSnapshot | null | undefined): string {
+  if (!ms || !Number.isFinite(ms.fngValue)) return MS_DASH;
+  return String(Math.round(ms.fngValue));
+}
+
+export function marketSentimentSentimentLabel(ms: MarketSentimentSnapshot | null | undefined): string {
+  return ms?.sentiment ?? MS_DASH;
+}
+
+export function marketSentimentBtcDominanceLabel(ms: MarketSentimentSnapshot | null | undefined): string {
+  if (!ms || !Number.isFinite(ms.btcDominancePct)) return MS_DASH;
+  return `${ms.btcDominancePct.toFixed(1)}%`;
+}
+
+export function marketSentimentVolChange24hLabel(ms: MarketSentimentSnapshot | null | undefined): string {
+  const v = ms?.volumeChangePct24hApprox;
+  if (v == null || !Number.isFinite(v)) return MS_DASH;
+  return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+

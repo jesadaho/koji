@@ -109,7 +109,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     r.resultRr ?? "",
     snowballOutcomeLabel(r.outcome),
     ms ? String(ms.fngValue) : "",
-    ms ? ms.sentiment : "",
+    ms && Number.isFinite(ms.fngValue) ? String(Math.round(ms.fngValue)) : "",
     ms && Number.isFinite(ms.btcDominancePct) ? `${ms.btcDominancePct.toFixed(1)}%` : "",
     ms && ms.volumeChangePct24hApprox != null && Number.isFinite(ms.volumeChangePct24hApprox)
       ? `${ms.volumeChangePct24hApprox >= 0 ? "+" : ""}${ms.volumeChangePct24hApprox.toFixed(1)}%`

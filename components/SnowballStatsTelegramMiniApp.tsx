@@ -35,6 +35,12 @@ import {
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
+import {
+  marketSentimentBtcDominanceLabel,
+  marketSentimentFngLabel,
+  marketSentimentSentimentLabel,
+  marketSentimentVolChange24hLabel,
+} from "@/lib/marketSentiment";
 import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 import { fundingRateVisualClass } from "@/src/marketsFormat";
 
@@ -702,6 +708,24 @@ export default function SnowballStatsTelegramMiniApp() {
                 </th>
                 <th scope="col">SVP Hole</th>
                 <th scope="col">RR</th>
+                <th
+                  scope="col"
+                  title="Fear & Greed (Market Pulse snapshot ณ เวลาแจ้ง)"
+                >
+                  F&G
+                </th>
+                <th
+                  scope="col"
+                  title="Sentiment จาก F&G — Bullish / Neutral / Bearish"
+                >
+                  Sentiment
+                </th>
+                <th scope="col" title="BTC dominance % ณ เวลาแจ้ง">
+                  BTC.D
+                </th>
+                <th scope="col" title="การเปลี่ยนแปลง vol โดยประมาณ 24h">
+                  VolΔ24h
+                </th>
                 <th scope="col">ผล</th>
                 {isAdmin ? <th scope="col" className="snowStatsDelCol" aria-label="ลบ" /> : null}
               </tr>
@@ -709,7 +733,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 33 : 32} className="sub">
+                  <td colSpan={isAdmin ? 37 : 36} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
                       : "ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / ทุกวัน"}
@@ -781,6 +805,10 @@ export default function SnowballStatsTelegramMiniApp() {
                     </td>
                     <td>{r.svpHoleYn}</td>
                     <td>{r.resultRr ?? "—"}</td>
+                    <td>{marketSentimentFngLabel(r.marketSentiment)}</td>
+                    <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>
+                    <td>{marketSentimentBtcDominanceLabel(r.marketSentiment)}</td>
+                    <td>{marketSentimentVolChange24hLabel(r.marketSentiment)}</td>
                     <td>{outcomeLabel(r.outcome)}</td>
                     {isAdmin ? (
                       <td className="snowStatsDelCol">
