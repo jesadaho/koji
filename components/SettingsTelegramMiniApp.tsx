@@ -1042,6 +1042,11 @@ export default function SettingsTelegramMiniApp() {
           เมื่อ <strong>Snowball ส่งสัญญาณสำเร็จ (closed bar)</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน{" "}
           <strong>LONG</strong>/<strong>SHORT</strong> (market) ตามสัญญาณ Snowball โดยใช้ราคาแนะนำของบอทเป็นจุดอ้างอิงสำหรับการคำนวณ Quick TP/กติกา 24h.
         </p>
+        <p className="sub" style={{ marginTop: "0.5rem" }}>
+          <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
+          {" "}
+          (สำเร็จ / ข้าม / ล้มเหลว + เหตุผล)
+        </p>
         {tvSettings?.snowballAutotradeServerEnabled === false ? (
           <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
             เซิร์ฟเวอร์ปิด Snowball auto-open ฉุกเฉินอยู่ (<code style={{ fontSize: "0.92em" }}>SNOWBALL_AUTOTRADE_ENABLED=0</code> หรือเทียบเท่า) — ลบตัวแปรนี้หรือตั้งเป็น{" "}
@@ -1306,6 +1311,9 @@ export default function SettingsTelegramMiniApp() {
           <li>ราคาตลาดอยู่<strong>เหนือ</strong> EMA50 15m → เปิด <strong>Market SHORT</strong> ทันที</li>
           <li>ราคาตลาดอยู่<strong>ใต้/เท่ากับ</strong> EMA50 15m → ตั้ง <strong>Limit SHORT</strong> ที่ราคา EMA50 (ดักรีเทสต์)</li>
         </ul>
+        <p className="sub" style={{ marginTop: "0.5rem" }}>
+          <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
+        </p>
         {tvSettings?.reversalAutotradeServerEnabled === false ? (
           <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>
             เซิร์ฟเวอร์ปิด Reversal auto-open ฉุกเฉินอยู่ (<code style={{ fontSize: "0.92em" }}>REVERSAL_AUTOTRADE_ENABLED=0</code>) — ลบตัวแปรนี้หรือตั้งเป็น{" "}

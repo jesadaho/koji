@@ -20,7 +20,7 @@ export default function StatsPage() {
       <div className="card" style={{ marginTop: "0.75rem" }}>
         <h2 style={{ marginTop: 0, fontSize: "1.05rem" }}>เลือกตารางสถิติ</h2>
         <p className="sub" style={{ marginTop: "0.25rem", marginBottom: "0.65rem" }}>
-          Snowball, Reversal และ Divergence แยกเป็นหน้าของตัวเอง
+          Snowball, Reversal, Divergence และประวัติ Auto-open แยกเป็นหน้าของตัวเอง
         </p>
         <MiniAppStatsNav className="tmaQuickNav" style={{ margin: 0 }} />
       </div>

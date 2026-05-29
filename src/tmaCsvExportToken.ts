@@ -5,6 +5,7 @@ export const TMA_CSV_EXPORT_PATHS = new Set([
   "snowball-stats.csv",
   "reversal-stats.csv",
   "divergence-stats.csv",
+  "auto-open-history.csv",
 ]);
 
 const TTL_SEC = 120;

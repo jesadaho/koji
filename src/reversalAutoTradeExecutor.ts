@@ -23,6 +23,8 @@ import {
 } from "./reversalAutoTradeStateStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 import type { CandleReversalModel, CandleReversalTf } from "./candleReversalDetect";
+import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
+import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 
 /** ค่าเริ่มต้นกลยุทธ์ TP/SL เมื่อ user ยังไม่ตั้งค่า (อ่านจาก settings ของ user) */
 const REVERSAL_TPSL_DEFAULT_TP1_PCT = 10;
@@ -164,6 +166,61 @@ export type ReversalAutoTradeRunResult = {
   usersSucceeded: number;
 };
 
+type ReversalAutoOpenLogSignal = {
+  contractSymbol: string;
+  binanceSymbol: string;
+  signalBarTf: CandleReversalTf;
+  model: CandleReversalModel;
+  signalBarOpenSec: number;
+  bodyRatio: number;
+  wickRatio: number;
+  rangeRankInLookback?: number | null;
+};
+
+function logReversalAutoOpen(
+  userId: string,
+  signal: ReversalAutoOpenLogSignal,
+  outcome: AutoOpenOutcome,
+  reasonCode: string,
+  extra?: {
+    reasonDetail?: string;
+    marginUsdt?: number;
+    leverage?: number;
+    orderKind?: "market" | "limit";
+    ema50_15m?: number;
+    markPrice?: number;
+  },
+): void {
+  appendAutoOpenOrderLogSafe({
+    userId,
+    source: "reversal",
+    outcome,
+    reasonCode,
+    contractSymbol: signal.contractSymbol,
+    binanceSymbol: signal.binanceSymbol,
+    side: "short",
+    signalBarTf: signal.signalBarTf,
+    model: signal.model,
+    signalBarOpenSec: signal.signalBarOpenSec,
+    bodyRatio: signal.bodyRatio,
+    wickRatio: signal.wickRatio,
+    rangeRankInLookback: signal.rangeRankInLookback,
+    ...extra,
+  });
+}
+
+function logReversalEntryGateForEnabledUsers(
+  map: Record<string, TradingViewMexcUserSettings>,
+  signal: ReversalAutoOpenLogSignal,
+): void {
+  for (const [userId, rowRaw] of Object.entries(map)) {
+    if (!/^tg:\d+$/.test(userId.trim())) continue;
+    const row = rowRaw as TradingViewMexcUserSettings;
+    if (!row.reversalAutoTradeEnabled) continue;
+    logReversalAutoOpen(userId, signal, "skipped", "entry_gate");
+  }
+}
+
 /**
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
  * - เปิดเฉพาะ user ที่ตั้ง `reversalAutoTradeEnabled` + มี MEXC creds
@@ -183,6 +240,21 @@ export async function runReversalAutoTradeAfterReversalAlert(
 
   const bodyRatio = Number.isFinite(input.bodyRatio) ? input.bodyRatio : 0;
   const wickRatio = Number.isFinite(input.wickRatio) ? input.wickRatio : 0;
+
+  const contractSymbolEarly = binanceUsdtPerpToMexcContract(binanceSymbol);
+  const gateSignalBase: ReversalAutoOpenLogSignal | null = contractSymbolEarly
+    ? {
+        contractSymbol: contractSymbolEarly,
+        binanceSymbol,
+        signalBarTf: input.signalBarTf,
+        model: input.model,
+        signalBarOpenSec: input.signalBarOpenSec,
+        bodyRatio,
+        wickRatio,
+        rangeRankInLookback: input.rangeRankInLookback,
+      }
+    : null;
+
   if (
     !reversalAutotradePassesEntryGate({
       bodyRatio,
@@ -190,11 +262,26 @@ export async function runReversalAutoTradeAfterReversalAlert(
       rangeRankInLookback: input.rangeRankInLookback,
     })
   ) {
+    if (gateSignalBase) {
+      const mapForGate = await loadTradingViewMexcSettingsFullMap();
+      logReversalEntryGateForEnabledUsers(mapForGate, gateSignalBase);
+    }
     return { usersAttempted: 0, usersSucceeded: 0 };
   }
 
-  const contractSymbol = binanceUsdtPerpToMexcContract(binanceSymbol);
+  const contractSymbol = contractSymbolEarly;
   if (!contractSymbol) return { usersAttempted: 0, usersSucceeded: 0 };
+
+  const logSignal: ReversalAutoOpenLogSignal = gateSignalBase ?? {
+    contractSymbol,
+    binanceSymbol,
+    signalBarTf: input.signalBarTf,
+    model: input.model,
+    signalBarOpenSec: input.signalBarOpenSec,
+    bodyRatio,
+    wickRatio,
+    rangeRankInLookback: input.rangeRankInLookback,
+  };
 
   const [map, state0] = await Promise.all([
     loadTradingViewMexcSettingsFullMap(),
@@ -262,20 +349,37 @@ export async function runReversalAutoTradeAfterReversalAlert(
   for (const [userId, rowRaw] of Object.entries(map)) {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
-    if (!row.reversalAutoTradeEnabled) continue;
+    if (!row.reversalAutoTradeEnabled) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "user_disabled");
+      continue;
+    }
 
-    if (hasPlacedReversalContractToday(state[userId], contractSymbol, dayKey)) continue;
+    if (hasPlacedReversalContractToday(state[userId], contractSymbol, dayKey)) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "already_opened_today");
+      continue;
+    }
 
     const creds: MexcCredentials | null =
       row.mexcApiKey?.trim() && row.mexcSecret?.trim()
         ? { apiKey: row.mexcApiKey.trim(), secret: row.mexcSecret.trim() }
         : null;
-    if (!creds) continue;
+    if (!creds) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "no_mexc_creds");
+      continue;
+    }
 
     const marginUsdt = row.reversalAutoTradeMarginUsdt ?? NaN;
     const leverage = row.reversalAutoTradeLeverage ?? NaN;
-    if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) continue;
-    if (!(typeof leverage === "number" && Number.isFinite(leverage) && leverage >= 1)) continue;
+    if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage");
+      continue;
+    }
+    if (!(typeof leverage === "number" && Number.isFinite(leverage) && leverage >= 1)) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", {
+        marginUsdt,
+      });
+      continue;
+    }
 
     let positions: Awaited<ReturnType<typeof getOpenPositions>>;
     try {
@@ -283,6 +387,11 @@ export async function runReversalAutoTradeAfterReversalAlert(
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       console.error("[reversalAutoTrade] open_positions fail", contractSymbol, userId, e);
+      logReversalAutoOpen(userId, logSignal, "failed", "position_check_failed", {
+        reasonDetail: detail.slice(0, 400),
+        marginUsdt,
+        leverage: Math.floor(leverage),
+      });
       await notifyLines(userId, [
         "Koji — Reversal auto-open (MEXC)",
         "❌ เช็คโพซิชันจาก MEXC ไม่สำเร็จ — จึงไม่สั่งเปิด (ป้องกันซ้ำ)",
@@ -292,6 +401,10 @@ export async function runReversalAutoTradeAfterReversalAlert(
       continue;
     }
     if (hasActiveUsdtPosition(positions, contractSymbol)) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "existing_position", {
+        marginUsdt,
+        leverage: Math.floor(leverage),
+      });
       await notifyLines(userId, [
         "Koji — Reversal auto-open (MEXC)",
         "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชันคู่สัญญานี้อยู่แล้ว",
@@ -303,6 +416,11 @@ export async function runReversalAutoTradeAfterReversalAlert(
 
     const emaRes = await ensureEma15m();
     if ("error" in emaRes) {
+      logReversalAutoOpen(userId, logSignal, "failed", "ema_or_price_unavailable", {
+        reasonDetail: emaRes.error.slice(0, 400),
+        marginUsdt,
+        leverage: Math.floor(leverage),
+      });
       await notifyLines(userId, [
         "Koji — Reversal auto-open (MEXC)",
         "❌ สั่งเปิดไม่สำเร็จ",
@@ -338,6 +456,14 @@ export async function runReversalAutoTradeAfterReversalAlert(
 
       if (!om.success) {
         const msg = om.message ?? `code ${om.code}`;
+        logReversalAutoOpen(userId, logSignal, "failed", "mexc_order_rejected", {
+          reasonDetail: msg.slice(0, 400),
+          marginUsdt,
+          leverage: lev,
+          orderKind: aboveEma ? "market" : "limit",
+          ema50_15m: ema50,
+          markPrice,
+        });
         await notifyLines(userId, [
           "Koji — Reversal auto-open (MEXC)",
           `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น SHORT${aboveEma ? " · Market (เหนือ EMA50 15m)" : " · Limit retest EMA50 15m"})`,
@@ -353,6 +479,20 @@ export async function runReversalAutoTradeAfterReversalAlert(
 
       state = withRecordedReversalPlaced(state, userId, contractSymbol, dayKey);
       usersSucceeded += 1;
+
+      logReversalAutoOpen(
+        userId,
+        logSignal,
+        "success",
+        aboveEma ? "open_success_market" : "open_success_limit",
+        {
+          marginUsdt,
+          leverage: lev,
+          orderKind: aboveEma ? "market" : "limit",
+          ema50_15m: ema50,
+          markPrice,
+        },
+      );
 
       const bodyPct = bodyRatio * 100;
       const wickPct = wickRatio * 100;
@@ -437,6 +577,14 @@ export async function runReversalAutoTradeAfterReversalAlert(
       ]);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
+      logReversalAutoOpen(userId, logSignal, "failed", "network_error", {
+        reasonDetail: detail.slice(0, 400),
+        marginUsdt,
+        leverage: lev,
+        orderKind: aboveEma ? "market" : "limit",
+        ema50_15m: ema50,
+        markPrice,
+      });
       await notifyLines(userId, [
         "Koji — Reversal auto-open (MEXC)",
         `❌ สั่งเปิดล้มเหลวจากข้อผิดพลาดระหว่างเรียก MEXC / เครือข่าย (ตั้งใจให้เป็น SHORT)`,

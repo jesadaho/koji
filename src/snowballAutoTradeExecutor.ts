@@ -26,6 +26,8 @@ import {
 } from "./snowballAutoTradeStateStore";
 import { computeSvpHoleYn } from "./snowballStatsStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
+import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
+import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 
 /**
  * ค่าเริ่มต้นเปิด — ผู้ใช้เปิด/ปิดหลักใน Mini App (`snowballAutoTradeEnabled`)
@@ -96,6 +98,45 @@ function readMexcAvgEntryPrice(
   return null;
 }
 
+type SnowballAutoOpenLogSignal = {
+  contractSymbol: string;
+  binanceSymbol: string;
+  alertSide: SnowballAutoTradeAlertSide;
+  gradeKey: ReturnType<typeof snowballAutoTradeGradeKeyFromAlert>;
+  signalBarOpenSec: number;
+  signalBarTf: "15m" | "1h" | "4h";
+  marginScale: number;
+};
+
+function logSnowballAutoOpen(
+  userId: string,
+  signal: SnowballAutoOpenLogSignal,
+  outcome: AutoOpenOutcome,
+  reasonCode: string,
+  extra?: {
+    reasonDetail?: string;
+    side?: SnowballAutoTradeSide;
+    marginUsdt?: number;
+    leverage?: number;
+  },
+): void {
+  appendAutoOpenOrderLogSafe({
+    userId,
+    source: "snowball",
+    outcome,
+    reasonCode,
+    contractSymbol: signal.contractSymbol,
+    binanceSymbol: signal.binanceSymbol,
+    alertSide: signal.alertSide,
+    gradeKey: signal.gradeKey,
+    signalBarOpenSec: signal.signalBarOpenSec,
+    signalBarTf: signal.signalBarTf,
+    marginScale: signal.marginScale,
+    ...extra,
+    side: extra?.side,
+  });
+}
+
 export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   contractSymbol: string;
   binanceSymbol: string;
@@ -146,31 +187,67 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   let usersAttempted = 0;
   let usersSucceeded = 0;
 
+  const marginScale =
+    typeof input.marginScale === "number" && Number.isFinite(input.marginScale) && input.marginScale > 0
+      ? Math.min(1, input.marginScale)
+      : 1;
+  const logSignal: SnowballAutoOpenLogSignal = {
+    contractSymbol: sym,
+    binanceSymbol,
+    alertSide: input.alertSide,
+    gradeKey,
+    signalBarOpenSec: input.signalBarOpenSec,
+    signalBarTf: input.signalBarTf,
+    marginScale,
+  };
+
   for (const [userId, rowRaw] of Object.entries(map)) {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
-    if (!row.snowballAutoTradeEnabled) continue;
+    if (!row.snowballAutoTradeEnabled) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "user_disabled");
+      continue;
+    }
 
     const side = resolveSnowballAutoOpenSideForUser(row, input.alertSide, gradeKey);
-    if (!side) continue;
+    if (!side) {
+      logSnowballAutoOpen(
+        userId,
+        logSignal,
+        "skipped",
+        gradeKey ? "grade_off" : "unknown_grade",
+      );
+      continue;
+    }
 
-    if (hasOpenedSnowballContractToday(state[userId], sym, dayKey)) continue;
+    if (hasOpenedSnowballContractToday(state[userId], sym, dayKey)) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "already_opened_today", { side });
+      continue;
+    }
 
     const creds: MexcCredentials | null =
       row.mexcApiKey?.trim() && row.mexcSecret?.trim()
         ? { apiKey: row.mexcApiKey.trim(), secret: row.mexcSecret.trim() }
         : null;
-    if (!creds) continue;
+    if (!creds) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "no_mexc_creds", { side });
+      continue;
+    }
 
     const marginBase = row.snowballAutoTradeMarginUsdt ?? NaN;
-    const marginScale =
-      typeof input.marginScale === "number" && Number.isFinite(input.marginScale) && input.marginScale > 0
-        ? Math.min(1, input.marginScale)
-        : 1;
     const marginUsdt = marginBase * marginScale;
     const leverage = row.snowballAutoTradeLeverage ?? NaN;
-    if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) continue;
-    if (!(typeof leverage === "number" && Number.isFinite(leverage) && leverage >= 1)) continue;
+    if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", { side });
+      continue;
+    }
+    if (!(typeof leverage === "number" && Number.isFinite(leverage) && leverage >= 1)) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", {
+        side,
+        marginUsdt,
+      });
+      continue;
+    }
 
     const referenceEntryPrice = input.referenceEntryPrice;
 
@@ -180,6 +257,12 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       console.error("[snowballAutoTrade] open_positions fail", sym, userId, e);
+      logSnowballAutoOpen(userId, logSignal, "failed", "position_check_failed", {
+        side,
+        reasonDetail: detail.slice(0, 400),
+        marginUsdt,
+        leverage: Math.floor(leverage),
+      });
       await notifyLines(userId, [
         "Koji — Snowball auto-open (MEXC)",
         "❌ เช็คโพซิชันจาก MEXC ไม่สำเร็จ — จึงไม่สั่งเปิด (ป้องกันซ้ำ)",
@@ -194,6 +277,11 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       const hv = active != null ? Number(active.holdVol) : NaN;
       const volLine =
         Number.isFinite(hv) && hv > 0 ? `โพซิชันที่เปิดอยู่: ${sideOpen} · holdVol ~${hv}` : "โพซิชันที่เปิดอยู่: มี (รายละเอียดจาก MEXC ไม่ครบ)";
+      logSnowballAutoOpen(userId, logSignal, "skipped", "existing_position", {
+        side,
+        marginUsdt,
+        leverage: Math.floor(leverage),
+      });
       await notifyLines(userId, [
         "Koji — Snowball auto-open (MEXC)",
         "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชันคู่สัญญานี้อยู่แล้ว",
@@ -219,6 +307,12 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       });
       if (!om.success) {
         const msg = om.message ?? `code ${om.code}`;
+        logSnowballAutoOpen(userId, logSignal, "failed", "mexc_order_rejected", {
+          side,
+          reasonDetail: msg.slice(0, 400),
+          marginUsdt,
+          leverage: Math.floor(leverage),
+        });
         await notifyLines(userId, [
           "Koji — Snowball auto-open (MEXC)",
           `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น ${long ? "LONG" : "SHORT"})`,
@@ -273,6 +367,12 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       );
       usersSucceeded += 1;
 
+      logSnowballAutoOpen(userId, logSignal, "success", "open_success_market", {
+        side,
+        marginUsdt,
+        leverage: Math.floor(leverage),
+      });
+
       await notifyLines(userId, [
         "Koji — Snowball auto-open (MEXC)",
         long ? "✅ เปิด LONG จาก Snowball" : "✅ เปิด SHORT จาก Snowball",
@@ -296,6 +396,12 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       ]);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
+      logSnowballAutoOpen(userId, logSignal, "failed", "network_error", {
+        side,
+        reasonDetail: detail.slice(0, 400),
+        marginUsdt,
+        leverage: Math.floor(leverage),
+      });
       await notifyLines(userId, [
         "Koji — Snowball auto-open (MEXC)",
         `❌ สั่งเปิดล้มเหลวจากข้อผิดพลาดระหว่างเรียก MEXC / เครือข่าย (ตั้งใจเป็น ${long ? "LONG" : "SHORT"})`,

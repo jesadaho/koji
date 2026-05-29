@@ -51,7 +51,10 @@ import {
   liffResetRsiDivergenceStats,
   liffGetTradingViewMexcSettings,
   liffSetTradingViewMexcSettings,
+  liffGetAutoOpenOrderHistory,
 } from "@/src/liffService";
+import { autoOpenOrderLogToCsv } from "@/lib/autoOpenOrderLogCsvExport";
+import type { AutoOpenSource } from "@/lib/autoOpenOrderLogClient";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -191,6 +194,38 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const csv = candleReversalStatsToCsv(rows);
       const filenamePrefix = tfFilter ? `reversal-stats-${tfFilter}` : "reversal-stats";
       return statsCsvAttachmentResponse(csv, statsCsvFilename(filenamePrefix));
+    }
+    if (segs.length === 1 && a === "auto-open-history") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const daysRaw = req.nextUrl.searchParams.get("days");
+      const days = daysRaw != null ? Number(daysRaw) : undefined;
+      const srcRaw = req.nextUrl.searchParams.get("source")?.toLowerCase();
+      const source: AutoOpenSource | undefined =
+        srcRaw === "snowball" || srcRaw === "reversal" ? srcRaw : undefined;
+      const data = await liffGetAutoOpenOrderHistory(auth.userId, {
+        days: Number.isFinite(days) && days! > 0 ? days : undefined,
+        source,
+      });
+      return NextResponse.json(data, {
+        status: 200,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    if (segs.length === 1 && a === "auto-open-history.csv") {
+      const auth = await authenticateTmaCsvDownload(req, "auto-open-history.csv");
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const daysRaw = req.nextUrl.searchParams.get("days");
+      const days = daysRaw != null ? Number(daysRaw) : undefined;
+      const srcRaw = req.nextUrl.searchParams.get("source")?.toLowerCase();
+      const source: AutoOpenSource | undefined =
+        srcRaw === "snowball" || srcRaw === "reversal" ? srcRaw : undefined;
+      const data = await liffGetAutoOpenOrderHistory(auth.userId, {
+        days: Number.isFinite(days) && days! > 0 ? days : undefined,
+        source,
+      });
+      const csv = autoOpenOrderLogToCsv(data.rows);
+      return statsCsvAttachmentResponse(csv, statsCsvFilename("auto-open-history"));
     }
     if (segs.length === 1 && a === "divergence-stats") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));

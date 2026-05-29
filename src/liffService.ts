@@ -86,6 +86,12 @@ import {
   resetRsiDivergenceStatsState,
 } from "./rsiDivergenceStatsStore";
 import type { RsiDivergenceStatsApiPayload } from "@/lib/rsiDivergenceStatsClient";
+import {
+  summarizeAutoOpenOrderLogs,
+  type AutoOpenOrderLogApiPayload,
+  type AutoOpenSource,
+} from "@/lib/autoOpenOrderLogClient";
+import { listAutoOpenOrderLogsForUser } from "./autoOpenOrderLogStore";
 import { isPctStepPresetValue, PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import { clearPortfolioTrailingStateForUser } from "./portfolioTrailingAlertStateStore";
 import {
@@ -771,6 +777,14 @@ export async function liffGetSnowballStats(telegramUserId?: number): Promise<Sno
     rows,
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
   };
+}
+
+export async function liffGetAutoOpenOrderHistory(
+  userId: string,
+  opts?: { days?: number; source?: AutoOpenSource },
+): Promise<AutoOpenOrderLogApiPayload> {
+  const rows = await listAutoOpenOrderLogsForUser(userId, opts);
+  return { rows, summary: summarizeAutoOpenOrderLogs(rows) };
 }
 
 export async function liffDeleteSnowballStatsRow(
