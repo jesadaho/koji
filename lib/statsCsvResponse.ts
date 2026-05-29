@@ -11,7 +11,7 @@ export function statsCsvAttachmentResponse(csv: string, filename: string): NextR
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${safeName}"`,
-      "Access-Control-Allow-Origin": "https://web.telegram.org",
+      "Access-Control-Allow-Origin": "*",
       "Cache-Control": "no-store",
     },
   });

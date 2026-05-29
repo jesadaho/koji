@@ -931,7 +931,7 @@ export default function SnowballStatsTelegramMiniApp() {
             type="button"
             className="sparkStatsRefreshBtn"
             disabled={rows.length === 0}
-            onClick={exportCsv}
+            onClick={() => void exportCsv()}
           >
             Export CSV
           </button>

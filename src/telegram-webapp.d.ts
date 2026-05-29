@@ -24,6 +24,8 @@ declare global {
           params: { url: string; file_name: string },
           callback?: (accepted: boolean) => void,
         ) => void;
+        /** เปิดลิงก์ HTTPS ในเบราว์เซอร์ภายนอก — fallback เมื่อ downloadFile ไม่ทำงาน */
+        openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
       };
     };
   }

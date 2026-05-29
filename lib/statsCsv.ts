@@ -122,26 +122,61 @@ async function fetchCsvExportToken(csvPath: string): Promise<string | null> {
   }
 }
 
+function buildTelegramCsvDownloadUrl(exportPath: string, token: string): string {
+  const sep = exportPath.includes("?") ? "&" : "?";
+  return `${apiOrigin()}${exportPath}${sep}csv_token=${encodeURIComponent(token)}`;
+}
+
+async function telegramCsvDownloadUrl(exportPath: string): Promise<string | null> {
+  const csvPath = csvPathFromExportPath(exportPath);
+  if (!csvPath) return null;
+  const token = await fetchCsvExportToken(csvPath);
+  if (!token) return null;
+  return buildTelegramCsvDownloadUrl(exportPath, token);
+}
+
 /** Telegram.WebApp.downloadFile — HTTPS จริง + token สั้น (ไม่ใช้ blob:) */
 async function tryTelegramDownloadFile(filename: string, exportPath: string): Promise<boolean> {
-  const csvPath = csvPathFromExportPath(exportPath);
   const w = window.Telegram?.WebApp;
-  if (!csvPath || !w?.downloadFile) return false;
+  if (!w?.downloadFile) return false;
 
-  const token = await fetchCsvExportToken(csvPath);
-  if (!token) return false;
+  const url = await telegramCsvDownloadUrl(exportPath);
+  if (!url) return false;
 
-  const sep = exportPath.includes("?") ? "&" : "?";
-  const url = `${apiOrigin()}${exportPath}${sep}csv_token=${encodeURIComponent(token)}`;
   const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
 
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
+    const timer = window.setTimeout(() => finish(false), 12_000);
     try {
-      w.downloadFile!({ url, file_name: name }, (accepted) => resolve(Boolean(accepted)));
+      w.downloadFile!({ url, file_name: name }, (accepted) => {
+        window.clearTimeout(timer);
+        finish(Boolean(accepted));
+      });
     } catch {
-      resolve(false);
+      window.clearTimeout(timer);
+      finish(false);
     }
   });
+}
+
+/** เปิด URL ดาวน์โหลดในเบราว์เซอร์ภายนอก (มือถือ/เดสก์ท็อปที่ downloadFile ไม่ขึ้น) */
+async function tryTelegramOpenLinkDownload(exportPath: string): Promise<boolean> {
+  const w = window.Telegram?.WebApp;
+  if (!w?.openLink) return false;
+  const url = await telegramCsvDownloadUrl(exportPath);
+  if (!url) return false;
+  try {
+    w.openLink(url);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function tryShareCsvFile(filename: string, blob: Blob): Promise<boolean> {
@@ -153,7 +188,7 @@ async function tryShareCsvFile(filename: string, blob: Blob): Promise<boolean> {
     await navigator.share({ files: [file], title: name });
     return true;
   } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") return true;
+    if (e instanceof DOMException && e.name === "AbortError") return false;
     return false;
   }
 }
@@ -200,7 +235,7 @@ async function trySaveFilePicker(filename: string, blob: Blob): Promise<boolean>
     await writable.close();
     return true;
   } catch (e) {
-    if (e instanceof DOMException && e.name === "AbortError") return true;
+    if (e instanceof DOMException && e.name === "AbortError") return false;
     return false;
   }
 }
@@ -224,18 +259,40 @@ async function deliverCsvBlob(
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
   const inTma = isTelegramMiniApp();
-  const clientCsvFirst = Boolean(preferClientCsvInTma && csv.trim());
+  const hasClientCsv = Boolean(csv.trim());
 
   if (inTma) {
-    if (clientCsvFirst) {
+    const tryClientBlobDelivery = async (): Promise<boolean> => {
+      if (!hasClientCsv) return false;
       if (!isMobilePlatform() && (await trySaveFilePicker(name, blob))) return true;
       if (await tryShareCsvFile(name, blob)) return true;
+      return false;
+    };
+
+    const tryServerCsvDelivery = async (): Promise<boolean> => {
+      if (!exportPath) return false;
+      if (await tryTelegramDownloadFile(name, exportPath)) return true;
+      if (await tryTelegramOpenLinkDownload(exportPath)) {
+        window.alert("เปิดลิงก์ดาวน์โหลดในเบราว์เซอร์แล้ว — กดบันทึก/แชร์ไฟล์ CSV จากหน้านั้น");
+        return true;
+      }
+      return false;
+    };
+
+    // Snowball ฯลฯ — desktop: CSV ตามตัวกรอง (Share/Save) ก่อน · mobile: downloadFile ก่อน (Share ใน WebView มักไม่ขึ้น)
+    if (preferClientCsvInTma && hasClientCsv) {
+      if (isMobilePlatform()) {
+        if (await tryServerCsvDelivery()) return true;
+        if (await tryClientBlobDelivery()) return true;
+      } else {
+        if (await tryClientBlobDelivery()) return true;
+        if (await tryServerCsvDelivery()) return true;
+      }
+    } else {
+      if (await tryServerCsvDelivery()) return true;
+      if (await tryClientBlobDelivery()) return true;
     }
-    if (exportPath && (await tryTelegramDownloadFile(name, exportPath))) return true;
-    if (!clientCsvFirst) {
-      if (!isMobilePlatform() && (await trySaveFilePicker(name, blob))) return true;
-      if (await tryShareCsvFile(name, blob)) return true;
-    }
+
     if (await tryClipboardCsv(csv)) {
       window.alert("คัดลอก CSV ไปคลิปบอร์ดแล้ว — วางใน Numbers / Excel แล้วบันทึกเป็นไฟล์");
       return true;
