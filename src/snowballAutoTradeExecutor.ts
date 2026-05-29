@@ -106,6 +106,7 @@ type SnowballAutoOpenLogSignal = {
   signalBarOpenSec: number;
   signalBarTf: "15m" | "1h" | "4h";
   marginScale: number;
+  referenceEntryPrice: number;
 };
 
 function logSnowballAutoOpen(
@@ -134,6 +135,9 @@ function logSnowballAutoOpen(
     marginScale: signal.marginScale,
     ...extra,
     side: extra?.side,
+    ...(extra?.side && signal.referenceEntryPrice > 0
+      ? { entryPrice: signal.referenceEntryPrice }
+      : {}),
   });
 }
 
@@ -191,6 +195,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     typeof input.marginScale === "number" && Number.isFinite(input.marginScale) && input.marginScale > 0
       ? Math.min(1, input.marginScale)
       : 1;
+  const referenceEntryPrice = input.referenceEntryPrice;
   const logSignal: SnowballAutoOpenLogSignal = {
     contractSymbol: sym,
     binanceSymbol,
@@ -199,6 +204,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     signalBarOpenSec: input.signalBarOpenSec,
     signalBarTf: input.signalBarTf,
     marginScale,
+    referenceEntryPrice,
   };
 
   for (const [userId, rowRaw] of Object.entries(map)) {
@@ -248,8 +254,6 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       });
       continue;
     }
-
-    const referenceEntryPrice = input.referenceEntryPrice;
 
     let positions: Awaited<ReturnType<typeof getOpenPositions>>;
     try {

@@ -189,6 +189,7 @@ function logReversalAutoOpen(
     orderKind?: "market" | "limit";
     ema50_15m?: number;
     markPrice?: number;
+    entryPrice?: number;
   },
 ): void {
   appendAutoOpenOrderLogSafe({
@@ -346,6 +347,10 @@ export async function runReversalAutoTradeAfterReversalAlert(
     return { ema: ema50_15m as number, mark: lastMarketPrice as number };
   }
 
+  function reversalEntryPrice(aboveEma: boolean, mark: number, ema: number): number {
+    return aboveEma ? mark : ema;
+  }
+
   for (const [userId, rowRaw] of Object.entries(map)) {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
@@ -434,6 +439,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
     usersAttempted += 1;
 
     const aboveEma = markPrice > ema50;
+    const intendedEntry = reversalEntryPrice(aboveEma, markPrice, ema50);
     const lev = Math.floor(leverage);
 
     try {
@@ -463,6 +469,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           orderKind: aboveEma ? "market" : "limit",
           ema50_15m: ema50,
           markPrice,
+          entryPrice: intendedEntry,
         });
         await notifyLines(userId, [
           "Koji — Reversal auto-open (MEXC)",
@@ -491,6 +498,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           orderKind: aboveEma ? "market" : "limit",
           ema50_15m: ema50,
           markPrice,
+          entryPrice: intendedEntry,
         },
       );
 
@@ -584,6 +592,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         orderKind: aboveEma ? "market" : "limit",
         ema50_15m: ema50,
         markPrice,
+        entryPrice: intendedEntry,
       });
       await notifyLines(userId, [
         "Koji — Reversal auto-open (MEXC)",

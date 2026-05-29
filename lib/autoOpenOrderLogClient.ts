@@ -26,6 +26,16 @@ export type AutoOpenOrderLogRow = {
   orderKind?: "market" | "limit";
   ema50_15m?: number;
   markPrice?: number;
+  /** ราคาเข้าอ้างอิง (สัญญาณ / ตั้งใจเปิด) — ใช้ follow-up แม้เปิดล้มเหลว */
+  entryPrice?: number;
+  price4h?: number | null;
+  pct4h?: number | null;
+  price12h?: number | null;
+  pct12h?: number | null;
+  price24h?: number | null;
+  pct24h?: number | null;
+  price48h?: number | null;
+  pct48h?: number | null;
 };
 
 export type AutoOpenOrderLogApiPayload = {

@@ -15,13 +15,24 @@ const HEADERS = [
   "รายละเอียด",
   "เหรียญ",
   "ทิศ",
+  "entryPrice",
   "เกรด",
   "TF",
   "model",
   "margin",
   "leverage",
   "orderKind",
+  "pct4h",
+  "pct12h",
+  "pct24h",
+  "pct48h",
 ];
+
+function fmtPctCsv(p: number | null | undefined): string {
+  if (p == null || !Number.isFinite(p)) return "";
+  const s = p >= 0 ? "+" : "";
+  return `${s}${p.toFixed(2)}%`;
+}
 
 export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
   const body = rows.map((r) => [
@@ -33,12 +44,17 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
     r.reasonDetail ?? "",
     statsCoinLabel(r.binanceSymbol || r.contractSymbol),
     r.side?.toUpperCase() ?? "",
+    r.entryPrice != null ? String(r.entryPrice) : "",
     r.gradeKey ?? "",
     r.signalBarTf ?? "",
     r.model ?? "",
     r.marginUsdt != null ? String(r.marginUsdt) : "",
     r.leverage != null ? String(r.leverage) : "",
     r.orderKind ?? "",
+    fmtPctCsv(r.pct4h),
+    fmtPctCsv(r.pct12h),
+    fmtPctCsv(r.pct24h),
+    fmtPctCsv(r.pct48h),
   ]);
   return buildCsv(HEADERS, body);
 }

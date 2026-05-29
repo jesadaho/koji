@@ -99,6 +99,30 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   if (o.orderKind === "market" || o.orderKind === "limit") row.orderKind = o.orderKind;
   if (typeof o.ema50_15m === "number" && Number.isFinite(o.ema50_15m)) row.ema50_15m = o.ema50_15m;
   if (typeof o.markPrice === "number" && Number.isFinite(o.markPrice)) row.markPrice = o.markPrice;
+  if (typeof o.entryPrice === "number" && Number.isFinite(o.entryPrice) && o.entryPrice > 0) {
+    row.entryPrice = o.entryPrice;
+  }
+  const nullNum = (v: unknown): number | null | undefined => {
+    if (v === null) return null;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    return undefined;
+  };
+  const p4 = nullNum(o.price4h);
+  if (p4 !== undefined) row.price4h = p4;
+  const pc4 = nullNum(o.pct4h);
+  if (pc4 !== undefined) row.pct4h = pc4;
+  const p12 = nullNum(o.price12h);
+  if (p12 !== undefined) row.price12h = p12;
+  const pc12 = nullNum(o.pct12h);
+  if (pc12 !== undefined) row.pct12h = pc12;
+  const p24 = nullNum(o.price24h);
+  if (p24 !== undefined) row.price24h = p24;
+  const pc24 = nullNum(o.pct24h);
+  if (pc24 !== undefined) row.pct24h = pc24;
+  const p48 = nullNum(o.price48h);
+  if (p48 !== undefined) row.price48h = p48;
+  const pc48 = nullNum(o.pct48h);
+  if (pc48 !== undefined) row.pct48h = pc48;
 
   return row;
 }

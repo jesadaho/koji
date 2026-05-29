@@ -12,6 +12,7 @@ import {
   type AutoOpenOrderLogRow,
   type AutoOpenSource,
 } from "@/lib/autoOpenOrderLogClient";
+import { autoOpenHorizonDue } from "@/lib/autoOpenFollowUp";
 import { autoOpenOrderLogToCsv } from "@/lib/autoOpenOrderLogCsvExport";
 import {
   getTelegramInitData,
@@ -46,6 +47,34 @@ function outcomeStyle(outcome: AutoOpenOrderLogRow["outcome"]): { color: string 
   if (outcome === "success") return { color: "var(--ok, #3a8)" };
   if (outcome === "failed") return { color: "var(--danger, #c44)" };
   return { color: "inherit" };
+}
+
+function fmtPrice(p: number | null | undefined): string {
+  if (p == null || !Number.isFinite(p)) return "—";
+  if (p >= 1000) return p.toFixed(2);
+  if (p >= 1) return p.toFixed(4);
+  return p.toFixed(6);
+}
+
+function fmtPct(p: number | null | undefined): string {
+  if (p == null || !Number.isFinite(p)) return "—";
+  const s = p >= 0 ? "+" : "";
+  return `${s}${p.toFixed(2)}%`;
+}
+
+function fmtHorizonCell(
+  row: AutoOpenOrderLogRow,
+  hours: number,
+  price: number | null | undefined,
+  pct: number | null | undefined,
+): ReactNode {
+  if (!autoOpenHorizonDue(row, hours)) return "-";
+  if (price == null || !Number.isFinite(price)) return "—";
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      {fmtPrice(price)} ({fmtPct(pct)})
+    </span>
+  );
 }
 
 export default function AutoOpenHistoryTelegramMiniApp() {
@@ -287,15 +316,20 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                 <th>แหล่ง</th>
                 <th>เหรียญ</th>
                 <th>ทิศ</th>
+                <th>Entry</th>
                 <th>เกรด/โมเดล</th>
                 <th>ผล</th>
                 <th>เหตุผล</th>
+                <th>4h</th>
+                <th>12h</th>
+                <th>24h</th>
+                <th>48h</th>
               </tr>
             </thead>
             <tbody>
               {displayRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="sub">
+                  <td colSpan={12} className="sub">
                     ยังไม่มีบันทึก — จะมีเมื่อมีสัญญาณและระบบประเมิน auto-open ของบัญชีคุณ
                   </td>
                 </tr>
@@ -308,6 +342,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                     <td>{autoOpenSourceLabel(r.source)}</td>
                     <td>{coinLabel(r.binanceSymbol || r.contractSymbol)}</td>
                     <td>{r.side ? r.side.toUpperCase() : "—"}</td>
+                    <td>{fmtPrice(r.entryPrice)}</td>
                     <td>{r.gradeKey ?? r.model ?? "—"}</td>
                     <td>
                       <span style={outcomeStyle(r.outcome)}>{autoOpenOutcomeLabel(r.outcome)}</span>
@@ -320,6 +355,10 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                         </span>
                       ) : null}
                     </td>
+                    <td>{fmtHorizonCell(r, 4, r.price4h, r.pct4h)}</td>
+                    <td>{fmtHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
+                    <td>{fmtHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
+                    <td>{fmtHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
                   </tr>
                 ))
               )}
