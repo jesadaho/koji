@@ -105,7 +105,7 @@ export function summarizeAutoOpenOrderLogs(rows: AutoOpenOrderLogRow[]): AutoOpe
     }
   }
 
-  const topReasonCodes = [...reasonCounts.entries()]
+  const topReasonCodes = Array.from(reasonCounts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([code, count]) => ({ code, label: autoOpenReasonLabel(code), count }));
