@@ -13,9 +13,13 @@ import {
   snowballStatsBarRangePctLabel,
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
+  snowballStatsRowMatchesVolRankFilter,
   snowballStatsRowMatchesVolVsSmaFilter,
+  SNOWBALL_VOL_RANK_FILTER_OPTIONS,
   SNOWBALL_VOL_VS_SMA_FILTER_OPTIONS,
+  snowballStatsVolRankFilterLabel,
   snowballStatsVolVsSmaFilterLabel,
+  type SnowballVolRankFilter,
   snowballStatsVolVsSmaDisplay,
   type SnowballVolVsSmaFilter,
   snowballStatsDayOfWeekBkk,
@@ -257,6 +261,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [gradeFilter, setGradeFilter] = useState<SnowballGradeFilter>("all");
   const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
+  const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
 
   const isAdmin = payload?.isAdmin === true;
 
@@ -488,8 +493,12 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => snowballStatsRowMatchesVolVsSmaFilter(r, volVsSmaFilter));
     }
 
+    if (volRankFilter !== "all") {
+      result = result.filter((r) => snowballStatsRowMatchesVolRankFilter(r, volRankFilter));
+    }
+
     return result;
-  }, [allRows, dayFilter, gradeFilter, dowFilter, volVsSmaFilter]);
+  }, [allRows, dayFilter, gradeFilter, dowFilter, volVsSmaFilter, volRankFilter]);
 
   const horizonWinrateText = useMemo(
     () =>
@@ -636,6 +645,25 @@ export default function SnowballStatsTelegramMiniApp() {
               ))}
             </select>
           </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            Vol rank
+            <select
+              value={volRankFilter}
+              onChange={(e) => setVolRankFilter(e.currentTarget.value as SnowballVolRankFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7.5rem" }}
+              title="อันดับ vol 1H จาก breakout confirm eval — 1 = สูงสุดในรอบ lookback"
+            >
+              {SNOWBALL_VOL_RANK_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <span className="sub">
             แสดง {rows.length}/{allRows.length}
           </span>
@@ -764,7 +792,7 @@ export default function SnowballStatsTelegramMiniApp() {
                   <td colSpan={isAdmin ? 37 : 36} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / ทุกวัน / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)}`}
+                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / ทุกวัน / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
                   </td>
                 </tr>
               ) : (

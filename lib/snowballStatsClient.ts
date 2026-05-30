@@ -445,6 +445,46 @@ export function snowballStatsRowMatchesVolVsSmaFilter(
   return statsRowMatchesVolVsSmaFilter(snowballStatsVolVsSmaDisplay(row), filter);
 }
 
+/** ตัวกรองอันดับ vol 1H confirm (confirmVolRank) — 1 = สูงสุดในรอบ lookback */
+export type SnowballVolRankFilter = "all" | "rank1" | "le2" | "le3" | "le5" | "le8" | "has" | "none";
+
+export const SNOWBALL_VOL_RANK_FILTER_OPTIONS: ReadonlyArray<{
+  value: SnowballVolRankFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "rank1", label: "#1" },
+  { value: "le2", label: "≤ 2" },
+  { value: "le3", label: "≤ 3" },
+  { value: "le5", label: "≤ 5" },
+  { value: "le8", label: "≤ 8" },
+  { value: "has", label: "มีข้อมูล" },
+  { value: "none", label: "ไม่มีข้อมูล" },
+];
+
+export function snowballStatsVolRankFilterLabel(filter: SnowballVolRankFilter): string {
+  return SNOWBALL_VOL_RANK_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function snowballStatsRowMatchesVolRankFilter(
+  row: Pick<SnowballStatsRow, "confirmVolRank">,
+  filter: SnowballVolRankFilter,
+): boolean {
+  if (filter === "all") return true;
+  const rank = row.confirmVolRank;
+  const has =
+    rank != null && Number.isFinite(rank) && rank >= 1;
+  if (filter === "none") return !has;
+  if (filter === "has") return has;
+  if (!has) return false;
+  const r = Math.round(rank);
+  if (filter === "rank1") return r === 1;
+  if (filter === "le2") return r <= 2;
+  if (filter === "le3") return r <= 3;
+  if (filter === "le5") return r <= 5;
+  return r <= 8;
+}
+
 /** Vol×SMA ในตาราง — 4h ใช้ signal (ตรง debug Signal Vol Spurt) · อื่นๆ ใช้ 1H confirm ก่อน */
 export function snowballStatsVolVsSmaDisplay(
   row: Pick<SnowballStatsRow, "confirmVolVsSma" | "signalVolVsSma" | "signalBarTf">,
