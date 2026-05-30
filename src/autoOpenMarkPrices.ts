@@ -17,7 +17,8 @@ export async function fetchAutoOpenMarkPrices(contractSymbols: string[]): Promis
 
   try {
     const tickers = await fetchAllContractTickers();
-    for (const t of tickers) {
+    for (let i = 0; i < tickers.length; i++) {
+      const t = tickers[i]!;
       const sym = t.symbol ? normContractSymbol(t.symbol) : "";
       if (!sym || !wanted.has(sym)) continue;
       const lp = t.lastPrice;
@@ -44,13 +45,11 @@ export async function fetchAutoOpenMarkPrices(contractSymbols: string[]): Promis
   return out;
 }
 
-export function collectAutoOpenContractSymbols(
-  contractSymbols: Iterable<string>,
-): string[] {
+export function collectAutoOpenContractSymbols(contractSymbols: readonly string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const raw of contractSymbols) {
-    const sym = normContractSymbol(raw);
+  for (let i = 0; i < contractSymbols.length; i++) {
+    const sym = normContractSymbol(contractSymbols[i]!);
     if (!sym || seen.has(sym)) continue;
     seen.add(sym);
     out.push(sym);
