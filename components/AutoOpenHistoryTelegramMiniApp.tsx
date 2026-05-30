@@ -12,7 +12,7 @@ import {
   type AutoOpenOrderLogRow,
   type AutoOpenSource,
 } from "@/lib/autoOpenOrderLogClient";
-import { autoOpenHorizonDue } from "@/lib/autoOpenFollowUp";
+import { autoOpenHorizonDue, resolveAutoOpenEntryPrice } from "@/lib/autoOpenFollowUp";
 import { autoOpenOrderLogToCsv } from "@/lib/autoOpenOrderLogCsvExport";
 import {
   getTelegramInitData,
@@ -342,7 +342,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                     <td>{autoOpenSourceLabel(r.source)}</td>
                     <td>{coinLabel(r.binanceSymbol || r.contractSymbol)}</td>
                     <td>{r.side ? r.side.toUpperCase() : "—"}</td>
-                    <td>{fmtPrice(r.entryPrice)}</td>
+                    <td>{fmtPrice(resolveAutoOpenEntryPrice(r))}</td>
                     <td>{r.gradeKey ?? r.model ?? "—"}</td>
                     <td>
                       <span style={outcomeStyle(r.outcome)}>{autoOpenOutcomeLabel(r.outcome)}</span>

@@ -159,6 +159,8 @@ export type ReversalAutoTradeInput = {
   wickRatio: number;
   /** อันดับความยาวแท่ง (high-low) ในรอบ lookback — 1 = ยาวสุด */
   rangeRankInLookback?: number | null;
+  /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
+  signalClosePrice?: number;
 };
 
 export type ReversalAutoTradeRunResult = {
@@ -177,6 +179,35 @@ type ReversalAutoOpenLogSignal = {
   rangeRankInLookback?: number | null;
 };
 
+function reversalIntendedEntry(
+  aboveEma: boolean,
+  mark: number,
+  ema: number,
+): number {
+  return aboveEma ? mark : ema;
+}
+
+function resolveReversalLogEntryPrice(
+  outcome: AutoOpenOutcome,
+  extra: {
+    entryPrice?: number;
+    orderKind?: "market" | "limit";
+    ema50_15m?: number;
+    markPrice?: number;
+  } | undefined,
+  signalClosePrice: number | undefined,
+): number | undefined {
+  if (outcome !== "success" && outcome !== "failed") return undefined;
+  if (typeof extra?.entryPrice === "number" && extra.entryPrice > 0) return extra.entryPrice;
+  if (extra?.orderKind === "limit" && typeof extra.ema50_15m === "number" && extra.ema50_15m > 0) {
+    return extra.ema50_15m;
+  }
+  if (typeof extra?.markPrice === "number" && extra.markPrice > 0) return extra.markPrice;
+  if (typeof extra?.ema50_15m === "number" && extra.ema50_15m > 0) return extra.ema50_15m;
+  if (typeof signalClosePrice === "number" && signalClosePrice > 0) return signalClosePrice;
+  return undefined;
+}
+
 function logReversalAutoOpen(
   userId: string,
   signal: ReversalAutoOpenLogSignal,
@@ -191,7 +222,9 @@ function logReversalAutoOpen(
     markPrice?: number;
     entryPrice?: number;
   },
+  signalClosePrice?: number,
 ): void {
+  const entryPrice = resolveReversalLogEntryPrice(outcome, extra, signalClosePrice);
   appendAutoOpenOrderLogSafe({
     userId,
     source: "reversal",
@@ -207,6 +240,7 @@ function logReversalAutoOpen(
     wickRatio: signal.wickRatio,
     rangeRankInLookback: signal.rangeRankInLookback,
     ...extra,
+    ...(entryPrice != null ? { entryPrice } : {}),
   });
 }
 
@@ -241,6 +275,12 @@ export async function runReversalAutoTradeAfterReversalAlert(
 
   const bodyRatio = Number.isFinite(input.bodyRatio) ? input.bodyRatio : 0;
   const wickRatio = Number.isFinite(input.wickRatio) ? input.wickRatio : 0;
+  const signalClosePrice =
+    typeof input.signalClosePrice === "number" &&
+    Number.isFinite(input.signalClosePrice) &&
+    input.signalClosePrice > 0
+      ? input.signalClosePrice
+      : undefined;
 
   const contractSymbolEarly = binanceUsdtPerpToMexcContract(binanceSymbol);
   const gateSignalBase: ReversalAutoOpenLogSignal | null = contractSymbolEarly
@@ -347,10 +387,6 @@ export async function runReversalAutoTradeAfterReversalAlert(
     return { ema: ema50_15m as number, mark: lastMarketPrice as number };
   }
 
-  function reversalEntryPrice(aboveEma: boolean, mark: number, ema: number): number {
-    return aboveEma ? mark : ema;
-  }
-
   for (const [userId, rowRaw] of Object.entries(map)) {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
@@ -386,17 +422,35 @@ export async function runReversalAutoTradeAfterReversalAlert(
       continue;
     }
 
+    const emaRes = await ensureEma15m();
+    const emaLogExtra =
+      "error" in emaRes
+        ? {}
+        : {
+            ema50_15m: emaRes.ema,
+            markPrice: emaRes.mark,
+            orderKind: (emaRes.mark > emaRes.ema ? "market" : "limit") as "market" | "limit",
+          };
+
     let positions: Awaited<ReturnType<typeof getOpenPositions>>;
     try {
       positions = await getOpenPositions(creds, contractSymbol);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
       console.error("[reversalAutoTrade] open_positions fail", contractSymbol, userId, e);
-      logReversalAutoOpen(userId, logSignal, "failed", "position_check_failed", {
-        reasonDetail: detail.slice(0, 400),
-        marginUsdt,
-        leverage: Math.floor(leverage),
-      });
+      logReversalAutoOpen(
+        userId,
+        logSignal,
+        "failed",
+        "position_check_failed",
+        {
+          reasonDetail: detail.slice(0, 400),
+          marginUsdt,
+          leverage: Math.floor(leverage),
+          ...emaLogExtra,
+        },
+        signalClosePrice,
+      );
       await notifyLines(userId, [
         "Koji — Reversal auto-open (MEXC)",
         "❌ เช็คโพซิชันจาก MEXC ไม่สำเร็จ — จึงไม่สั่งเปิด (ป้องกันซ้ำ)",
@@ -419,13 +473,19 @@ export async function runReversalAutoTradeAfterReversalAlert(
       continue;
     }
 
-    const emaRes = await ensureEma15m();
     if ("error" in emaRes) {
-      logReversalAutoOpen(userId, logSignal, "failed", "ema_or_price_unavailable", {
-        reasonDetail: emaRes.error.slice(0, 400),
-        marginUsdt,
-        leverage: Math.floor(leverage),
-      });
+      logReversalAutoOpen(
+        userId,
+        logSignal,
+        "failed",
+        "ema_or_price_unavailable",
+        {
+          reasonDetail: emaRes.error.slice(0, 400),
+          marginUsdt,
+          leverage: Math.floor(leverage),
+        },
+        signalClosePrice,
+      );
       await notifyLines(userId, [
         "Koji — Reversal auto-open (MEXC)",
         "❌ สั่งเปิดไม่สำเร็จ",
@@ -439,7 +499,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
     usersAttempted += 1;
 
     const aboveEma = markPrice > ema50;
-    const intendedEntry = reversalEntryPrice(aboveEma, markPrice, ema50);
+    const intendedEntry = reversalIntendedEntry(aboveEma, markPrice, ema50);
     const lev = Math.floor(leverage);
 
     try {
@@ -462,15 +522,22 @@ export async function runReversalAutoTradeAfterReversalAlert(
 
       if (!om.success) {
         const msg = om.message ?? `code ${om.code}`;
-        logReversalAutoOpen(userId, logSignal, "failed", "mexc_order_rejected", {
-          reasonDetail: msg.slice(0, 400),
-          marginUsdt,
-          leverage: lev,
-          orderKind: aboveEma ? "market" : "limit",
-          ema50_15m: ema50,
-          markPrice,
-          entryPrice: intendedEntry,
-        });
+        logReversalAutoOpen(
+          userId,
+          logSignal,
+          "failed",
+          "mexc_order_rejected",
+          {
+            reasonDetail: msg.slice(0, 400),
+            marginUsdt,
+            leverage: lev,
+            orderKind: aboveEma ? "market" : "limit",
+            ema50_15m: ema50,
+            markPrice,
+            entryPrice: intendedEntry,
+          },
+          signalClosePrice,
+        );
         await notifyLines(userId, [
           "Koji — Reversal auto-open (MEXC)",
           `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น SHORT${aboveEma ? " · Market (เหนือ EMA50 15m)" : " · Limit retest EMA50 15m"})`,
@@ -500,6 +567,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           markPrice,
           entryPrice: intendedEntry,
         },
+        signalClosePrice,
       );
 
       const bodyPct = bodyRatio * 100;
@@ -585,15 +653,22 @@ export async function runReversalAutoTradeAfterReversalAlert(
       ]);
     } catch (e) {
       const detail = e instanceof Error ? e.message : String(e);
-      logReversalAutoOpen(userId, logSignal, "failed", "network_error", {
-        reasonDetail: detail.slice(0, 400),
-        marginUsdt,
-        leverage: lev,
-        orderKind: aboveEma ? "market" : "limit",
-        ema50_15m: ema50,
-        markPrice,
-        entryPrice: intendedEntry,
-      });
+      logReversalAutoOpen(
+        userId,
+        logSignal,
+        "failed",
+        "network_error",
+        {
+          reasonDetail: detail.slice(0, 400),
+          marginUsdt,
+          leverage: lev,
+          orderKind: aboveEma ? "market" : "limit",
+          ema50_15m: ema50,
+          markPrice,
+          entryPrice: intendedEntry,
+        },
+        signalClosePrice,
+      );
       await notifyLines(userId, [
         "Koji — Reversal auto-open (MEXC)",
         `❌ สั่งเปิดล้มเหลวจากข้อผิดพลาดระหว่างเรียก MEXC / เครือข่าย (ตั้งใจให้เป็น SHORT)`,

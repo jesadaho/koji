@@ -504,6 +504,7 @@ async function notifyResults(
             bodyRatio: sig.bodyRatio,
             wickRatio: sig.wickRatio,
             rangeRankInLookback: sig.rangeRankInLookback ?? null,
+            signalClosePrice: sig.c,
           });
         } catch (e) {
           console.error("[candleReversalAlertTick] reversal autotrade", row.symbol, sig.tf, e);

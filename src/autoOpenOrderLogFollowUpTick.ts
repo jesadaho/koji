@@ -2,7 +2,9 @@ import {
   autoOpenFollowUpAnchorSec,
   autoOpenFollowUpEligible,
   autoOpenNeedsFollowUp,
+  backfillAutoOpenEntryPrice,
   pickAutoOpenHorizonClose,
+  resolveAutoOpenEntryPrice,
 } from "@/lib/autoOpenFollowUp";
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
 import {
@@ -76,7 +78,7 @@ async function followUpRow(
   nowMs: number,
   nowSec: number,
 ): Promise<boolean> {
-  const entry = row.entryPrice!;
+  const entry = resolveAutoOpenEntryPrice(row)!;
   const side = row.side!;
   const ac = autoOpenFollowUpAnchorSec(row);
   const symbol = toBinanceUsdtPerpSymbol(row.binanceSymbol || row.contractSymbol);
@@ -187,6 +189,10 @@ export async function runAutoOpenOrderLogFollowUpTick(
   const nowSec = Math.floor(nowMs / 1000);
   let dirty = 0;
   let rowsChecked = 0;
+
+  for (const row of state.rows) {
+    if (backfillAutoOpenEntryPrice(row)) dirty += 1;
+  }
 
   const pending = state.rows.filter((row) => autoOpenNeedsFollowUp(row, nowSec));
   for (const row of pending) {

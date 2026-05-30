@@ -1,3 +1,4 @@
+import { resolveAutoOpenEntryPrice } from "@/lib/autoOpenFollowUp";
 import {
   autoOpenOutcomeLabel,
   autoOpenReasonLabel,
@@ -44,7 +45,10 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
     r.reasonDetail ?? "",
     statsCoinLabel(r.binanceSymbol || r.contractSymbol),
     r.side?.toUpperCase() ?? "",
-    r.entryPrice != null ? String(r.entryPrice) : "",
+    (() => {
+      const e = resolveAutoOpenEntryPrice(r);
+      return e != null ? String(e) : "";
+    })(),
     r.gradeKey ?? "",
     r.signalBarTf ?? "",
     r.model ?? "",

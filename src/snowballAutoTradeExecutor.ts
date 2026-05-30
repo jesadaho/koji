@@ -121,6 +121,11 @@ function logSnowballAutoOpen(
     leverage?: number;
   },
 ): void {
+  const shouldLogEntry =
+    (outcome === "success" || outcome === "failed") &&
+    extra?.side != null &&
+    signal.referenceEntryPrice > 0;
+
   appendAutoOpenOrderLogSafe({
     userId,
     source: "snowball",
@@ -135,9 +140,7 @@ function logSnowballAutoOpen(
     marginScale: signal.marginScale,
     ...extra,
     side: extra?.side,
-    ...(extra?.side && signal.referenceEntryPrice > 0
-      ? { entryPrice: signal.referenceEntryPrice }
-      : {}),
+    ...(shouldLogEntry ? { entryPrice: signal.referenceEntryPrice } : {}),
   });
 }
 

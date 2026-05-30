@@ -2,10 +2,35 @@ import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
 
 const HOUR_SEC = 3600;
 
+/** คืน entry ที่ใช้แสดง/follow-up — รองรับแถวเก่าที่มีแค่ mark/ema */
+export function resolveAutoOpenEntryPrice(row: AutoOpenOrderLogRow): number | undefined {
+  if (typeof row.entryPrice === "number" && Number.isFinite(row.entryPrice) && row.entryPrice > 0) {
+    return row.entryPrice;
+  }
+  if (row.outcome !== "success" && row.outcome !== "failed") return undefined;
+  if (row.source === "reversal") {
+    if (row.orderKind === "limit" && typeof row.ema50_15m === "number" && row.ema50_15m > 0) {
+      return row.ema50_15m;
+    }
+    if (typeof row.markPrice === "number" && row.markPrice > 0) return row.markPrice;
+  }
+  if (typeof row.markPrice === "number" && row.markPrice > 0) return row.markPrice;
+  return undefined;
+}
+
+/** เติม entryPrice จาก mark/ema สำหรับแถวเก่าหรือ failed ที่ยังไม่ได้บันทึก */
+export function backfillAutoOpenEntryPrice(row: AutoOpenOrderLogRow): boolean {
+  if (typeof row.entryPrice === "number" && row.entryPrice > 0) return false;
+  const resolved = resolveAutoOpenEntryPrice(row);
+  if (resolved == null) return false;
+  row.entryPrice = resolved;
+  return true;
+}
+
 export function autoOpenFollowUpEligible(row: AutoOpenOrderLogRow): boolean {
   if (row.outcome !== "success" && row.outcome !== "failed") return false;
   if (row.side !== "long" && row.side !== "short") return false;
-  const entry = row.entryPrice;
+  const entry = resolveAutoOpenEntryPrice(row);
   return typeof entry === "number" && Number.isFinite(entry) && entry > 0;
 }
 
@@ -58,6 +83,7 @@ export function autoOpenNeedsFollowUp(
   row: AutoOpenOrderLogRow,
   nowSec: number,
 ): boolean {
+  backfillAutoOpenEntryPrice(row);
   if (!autoOpenFollowUpEligible(row)) return false;
   const ac = autoOpenFollowUpAnchorSec(row);
   if (nowSec < ac) return false;
