@@ -13,7 +13,11 @@ import {
   snowballStatsBarRangePctLabel,
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
+  snowballStatsRowMatchesVolVsSmaFilter,
+  SNOWBALL_VOL_VS_SMA_FILTER_OPTIONS,
+  snowballStatsVolVsSmaFilterLabel,
   snowballStatsVolVsSmaDisplay,
+  type SnowballVolVsSmaFilter,
   snowballStatsDayOfWeekBkk,
   snowballStatsHorizonDue,
   snowballStatsBtcPsarCombinedLabel,
@@ -252,6 +256,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [dayFilter, setDayFilter] = useState<SnowballDayFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<SnowballGradeFilter>("all");
   const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
+  const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
 
   const isAdmin = payload?.isAdmin === true;
 
@@ -479,8 +484,12 @@ export default function SnowballStatsTelegramMiniApp() {
       });
     }
 
+    if (volVsSmaFilter !== "all") {
+      result = result.filter((r) => snowballStatsRowMatchesVolVsSmaFilter(r, volVsSmaFilter));
+    }
+
     return result;
-  }, [allRows, dayFilter, gradeFilter, dowFilter]);
+  }, [allRows, dayFilter, gradeFilter, dowFilter, volVsSmaFilter]);
 
   const horizonWinrateText = useMemo(
     () =>
@@ -602,6 +611,25 @@ export default function SnowballStatsTelegramMiniApp() {
               title="วันในสัปดาห์ที่ส่งสัญญาณ (อิง BKK timezone)"
             >
               {SNOWBALL_DOW_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            Vol×SMA
+            <select
+              value={volVsSmaFilter}
+              onChange={(e) => setVolVsSmaFilter(e.currentTarget.value as SnowballVolVsSmaFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7.5rem" }}
+              title="4h = Vol แท่งสัญญาณ ÷ SMA(4H) · อื่นๆ = 1H confirm หรือ signal"
+            >
+              {SNOWBALL_VOL_VS_SMA_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -736,7 +764,7 @@ export default function SnowballStatsTelegramMiniApp() {
                   <td colSpan={isAdmin ? 37 : 36} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                      : "ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / ทุกวัน"}
+                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / ทุกวัน / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)}`}
                   </td>
                 </tr>
               ) : (

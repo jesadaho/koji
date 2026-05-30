@@ -429,6 +429,36 @@ export function snowballStatsConfirmVolVsSmaLabel(v: number | null | undefined):
 }
 
 /** Vol×SMA ในตาราง — 4h ใช้ signal (ตรง debug Signal Vol Spurt) · อื่นๆ ใช้ 1H confirm ก่อน */
+export type SnowballVolVsSmaFilter = "all" | "ge1" | "ge15" | "ge2" | "ge25";
+
+export const SNOWBALL_VOL_VS_SMA_FILTER_OPTIONS: ReadonlyArray<{
+  value: SnowballVolVsSmaFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "ge1", label: "≥ 1.0×" },
+  { value: "ge15", label: "≥ 1.5×" },
+  { value: "ge2", label: "≥ 2.0×" },
+  { value: "ge25", label: "≥ 2.5×" },
+];
+
+export function snowballStatsVolVsSmaFilterLabel(filter: SnowballVolVsSmaFilter): string {
+  return SNOWBALL_VOL_VS_SMA_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function snowballStatsRowMatchesVolVsSmaFilter(
+  row: Pick<SnowballStatsRow, "confirmVolVsSma" | "signalVolVsSma" | "signalBarTf">,
+  filter: SnowballVolVsSmaFilter,
+): boolean {
+  if (filter === "all") return true;
+  const v = snowballStatsVolVsSmaDisplay(row);
+  if (v == null || !Number.isFinite(v)) return false;
+  if (filter === "ge1") return v >= 1;
+  if (filter === "ge15") return v >= 1.5;
+  if (filter === "ge2") return v >= 2;
+  return v >= 2.5;
+}
+
 export function snowballStatsVolVsSmaDisplay(
   row: Pick<SnowballStatsRow, "confirmVolVsSma" | "signalVolVsSma" | "signalBarTf">,
 ): number | null {
