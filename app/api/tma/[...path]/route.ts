@@ -52,6 +52,8 @@ import {
   liffGetTradingViewMexcSettings,
   liffSetTradingViewMexcSettings,
   liffGetAutoOpenOrderHistory,
+  liffGetAutoOpenMarkPrices,
+  liffClearSkippedAutoOpenOrderLogs,
 } from "@/src/liffService";
 import { autoOpenOrderLogToCsv } from "@/lib/autoOpenOrderLogCsvExport";
 import type { AutoOpenSource } from "@/lib/autoOpenOrderLogClient";
@@ -207,6 +209,22 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         days: Number.isFinite(days) && days! > 0 ? days : undefined,
         source,
       });
+      return NextResponse.json(data, {
+        status: 200,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+    if (segs.length === 2 && a === "auto-open-history" && segs[1] === "mark-prices") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const raw = req.nextUrl.searchParams.get("symbols")?.trim() ?? "";
+      const symbols = raw
+        ? raw
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
+      const data = await liffGetAutoOpenMarkPrices(symbols);
       return NextResponse.json(data, {
         status: 200,
         headers: { "Cache-Control": "no-store" },
@@ -406,6 +424,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         scanned: r.scanned,
         changedOutcome: r.changedOutcome,
       });
+    }
+    if (segs.length === 2 && a === "auto-open-history" && segs[1] === "clear-skipped") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      let source: AutoOpenSource | undefined;
+      try {
+        const body = (await req.json()) as { source?: unknown } | null;
+        const srcRaw =
+          body && typeof body === "object" && typeof body.source === "string"
+            ? body.source.trim().toLowerCase()
+            : "";
+        if (srcRaw === "snowball" || srcRaw === "reversal") source = srcRaw;
+      } catch {
+        /* no body = ลบ skipped ทุกแหล่งของ user */
+      }
+      const r = await liffClearSkippedAutoOpenOrderLogs(auth.userId, { source });
+      return json(r);
     }
     if (segs.length === 1 && a === "snowball-stats") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));

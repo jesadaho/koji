@@ -12,7 +12,7 @@ import {
   type AutoOpenOrderLogRow,
   type AutoOpenSource,
 } from "@/lib/autoOpenOrderLogClient";
-import { autoOpenHorizonDue, resolveAutoOpenEntryPrice } from "@/lib/autoOpenFollowUp";
+import { autoOpenHorizonDue, resolveAutoOpenEntryPrice, pctVsEntrySide } from "@/lib/autoOpenFollowUp";
 import { autoOpenOrderLogToCsv } from "@/lib/autoOpenOrderLogCsvExport";
 import {
   getTelegramInitData,
@@ -62,6 +62,55 @@ function fmtPct(p: number | null | undefined): string {
   return `${s}${p.toFixed(2)}%`;
 }
 
+function pnlStyle(pct: number): { color: string } {
+  if (pct > 0) return { color: "var(--ok, #3a8)" };
+  if (pct < 0) return { color: "var(--danger, #c44)" };
+  return { color: "inherit" };
+}
+
+function fmtPnlUsdt(marginUsdt: number, leverage: number, pct: number): string {
+  const usdt = marginUsdt * leverage * (pct / 100);
+  const s = usdt >= 0 ? "+" : "";
+  return `${s}${usdt.toFixed(2)} USDT`;
+}
+
+function contractKey(symbol: string): string {
+  return symbol.trim().toUpperCase();
+}
+
+function fmtPnlCell(
+  row: AutoOpenOrderLogRow,
+  markPrice: number | undefined,
+): ReactNode {
+  const entry = resolveAutoOpenEntryPrice(row);
+  if (
+    entry == null ||
+    (row.side !== "long" && row.side !== "short") ||
+    markPrice == null ||
+    !Number.isFinite(markPrice)
+  ) {
+    return "—";
+  }
+  const pct = pctVsEntrySide(row.side, entry, markPrice);
+  const usdtLine =
+    row.marginUsdt != null &&
+    row.leverage != null &&
+    row.marginUsdt > 0 &&
+    row.leverage > 0
+      ? fmtPnlUsdt(row.marginUsdt, row.leverage, pct)
+      : null;
+  return (
+    <span style={{ whiteSpace: "nowrap", ...pnlStyle(pct) }}>
+      {fmtPct(pct)}
+      {usdtLine ? (
+        <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
+          {usdtLine}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function fmtHorizonCell(
   row: AutoOpenOrderLogRow,
   hours: number,
@@ -81,10 +130,12 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [payload, setPayload] = useState<AutoOpenOrderLogApiPayload | null>(null);
+  const [markPrices, setMarkPrices] = useState<Record<string, number>>({});
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [dayFilter, setDayFilter] = useState<DayFilter>("30");
+  const [clearingSkipped, setClearingSkipped] = useState(false);
 
-  const api = useCallback(async (path: string) => {
+  const apiGet = useCallback(async (path: string) => {
     const initData = getTelegramInitData();
     const url = `${apiBase}/api/tma${path}`;
     const res = await fetch(url, {
@@ -107,17 +158,79 @@ export default function AutoOpenHistoryTelegramMiniApp() {
           : res.statusText;
       throw new Error(msg);
     }
-    return parsed as AutoOpenOrderLogApiPayload;
+    return parsed;
   }, []);
+
+  const apiPost = useCallback(
+    async (path: string, body?: unknown) => {
+      const initData = getTelegramInitData();
+      const url = `${apiBase}/api/tma${path}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...(initData ? { Authorization: `tma ${initData}` } : {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      const text = await res.text();
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        /* ignore */
+      }
+      if (!res.ok) {
+        const msg =
+          parsed && typeof parsed === "object" && parsed !== null && "error" in parsed
+            ? String((parsed as { error: unknown }).error)
+            : res.statusText;
+        throw new Error(msg);
+      }
+      return parsed;
+    },
+    [],
+  );
 
   const loadHistory = useCallback(async () => {
     const q = new URLSearchParams();
     if (dayFilter !== "all") q.set("days", dayFilter);
     if (sourceFilter !== "all") q.set("source", sourceFilter);
     const qs = q.toString();
-    const data = await api(`/auto-open-history${qs ? `?${qs}` : ""}`);
+    const data = (await apiGet(`/auto-open-history${qs ? `?${qs}` : ""}`)) as AutoOpenOrderLogApiPayload;
     setPayload(data);
-  }, [api, dayFilter, sourceFilter]);
+    setMarkPrices(data.markPrices ?? {});
+  }, [apiGet, dayFilter, sourceFilter]);
+
+  const clearSkipped = useCallback(async () => {
+    const total = payload?.skippedTotal ?? 0;
+    if (total <= 0) {
+      window.alert("ไม่มีรายการข้ามให้ลบ");
+      return;
+    }
+    const scope =
+      sourceFilter === "all"
+        ? "Snowball + Reversal"
+        : sourceFilter === "snowball"
+          ? "Snowball"
+          : "Reversal";
+    const ok = window.confirm(
+      `ลบรายการข้ามทั้งหมด ${total} รายการ (${scope}) ออกจากประวัติ?\n\nการลบไม่สามารถย้อนกลับได้`,
+    );
+    if (!ok) return;
+    setClearingSkipped(true);
+    try {
+      const body = sourceFilter !== "all" ? { source: sourceFilter } : undefined;
+      const r = (await apiPost("/auto-open-history/clear-skipped", body)) as { removed?: number };
+      await loadHistory();
+      window.alert(`ลบแล้ว ${r.removed ?? 0} รายการ`);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : String(e));
+    } finally {
+      setClearingSkipped(false);
+    }
+  }, [apiPost, loadHistory, payload?.skippedTotal, sourceFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,6 +299,39 @@ export default function AutoOpenHistoryTelegramMiniApp() {
 
   const rows = payload?.rows ?? [];
   const summary = payload?.summary;
+
+  const contractSymbols = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of rows) {
+      const sym = contractKey(r.contractSymbol);
+      if (!sym || seen.has(sym)) continue;
+      seen.add(sym);
+      out.push(sym);
+    }
+    return out;
+  }, [rows]);
+
+  useEffect(() => {
+    if (phase !== "ready" || contractSymbols.length === 0) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const q = `?symbols=${encodeURIComponent(contractSymbols.join(","))}`;
+        const data = (await apiGet(`/auto-open-history/mark-prices${q}`)) as {
+          markPrices?: Record<string, number>;
+        };
+        if (!cancelled) setMarkPrices(data.markPrices ?? {});
+      } catch {
+        /* ignore poll errors */
+      }
+    };
+    const id = setInterval(() => void poll(), 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [phase, contractSymbols, apiGet]);
 
   const displayRows = useMemo(() => {
     if (dayFilter === "all") return rows;
@@ -305,6 +451,16 @@ export default function AutoOpenHistoryTelegramMiniApp() {
         <button type="button" className="btn" onClick={() => void exportCsv()}>
           Export CSV
         </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={clearingSkipped || (payload?.skippedTotal ?? 0) <= 0}
+          onClick={() => void clearSkipped()}
+        >
+          {clearingSkipped
+            ? "กำลังลบ…"
+            : `ลบรายการข้าม${(payload?.skippedTotal ?? 0) > 0 ? ` (${payload!.skippedTotal})` : ""}`}
+        </button>
       </div>
 
       <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
@@ -317,6 +473,8 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                 <th>เหรียญ</th>
                 <th>ทิศ</th>
                 <th>Entry</th>
+                <th>ปัจจุบัน</th>
+                <th>P/L</th>
                 <th>เกรด/โมเดล</th>
                 <th>ผล</th>
                 <th>เหตุผล</th>
@@ -329,12 +487,14 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             <tbody>
               {displayRows.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="sub">
+                  <td colSpan={14} className="sub">
                     ยังไม่มีบันทึก — จะมีเมื่อมีสัญญาณและระบบประเมิน auto-open ของบัญชีคุณ
                   </td>
                 </tr>
               ) : (
-                displayRows.map((r) => (
+                displayRows.map((r) => {
+                  const nowPx = markPrices[contractKey(r.contractSymbol)];
+                  return (
                   <tr key={r.id}>
                     <td>
                       <code className="marketsFundingHistTime">{formatBkk(r.atMs)}</code>
@@ -343,6 +503,8 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                     <td>{coinLabel(r.binanceSymbol || r.contractSymbol)}</td>
                     <td>{r.side ? r.side.toUpperCase() : "—"}</td>
                     <td>{fmtPrice(resolveAutoOpenEntryPrice(r))}</td>
+                    <td>{fmtPrice(nowPx)}</td>
+                    <td>{fmtPnlCell(r, nowPx)}</td>
                     <td>{r.gradeKey ?? r.model ?? "—"}</td>
                     <td>
                       <span style={outcomeStyle(r.outcome)}>{autoOpenOutcomeLabel(r.outcome)}</span>
@@ -360,12 +522,17 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                     <td>{fmtHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
                     <td>{fmtHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      <p className="sub" style={{ marginTop: "0.5rem" }}>
+        ราคาปัจจุบัน = MEXC perp last · P/L เทียบ entry ตามทิศ long/short · อัปเดตราคาทุก ~60 วิ
+      </p>
 
       <p className="sub" style={{ marginTop: "1rem" }}>
         <Link href="/settings">ตั้งค่า Snowball / Reversal auto-open</Link>

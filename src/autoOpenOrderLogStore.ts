@@ -209,3 +209,40 @@ export async function listAutoOpenOrderLogsForUser(
   rows.sort((a, b) => b.atMs - a.atMs);
   return rows;
 }
+
+/** ลบแถว outcome=skipped ของ user (เฉพาะของตัวเอง) */
+export async function deleteSkippedAutoOpenOrderLogsForUser(
+  userId: string,
+  opts?: { source?: AutoOpenSource },
+): Promise<{ removed: number }> {
+  const uid = userId.trim();
+  if (!uid) return { removed: 0 };
+
+  const state = await loadAutoOpenOrderLogState();
+  const before = state.rows.length;
+  state.rows = state.rows.filter((r) => {
+    if (r.userId !== uid) return true;
+    if (r.outcome !== "skipped") return true;
+    if (opts?.source && r.source !== opts.source) return true;
+    return false;
+  });
+  const removed = before - state.rows.length;
+  if (removed > 0) await saveAutoOpenOrderLogState(state);
+  return { removed };
+}
+
+export async function countSkippedAutoOpenOrderLogsForUser(
+  userId: string,
+  opts?: { source?: AutoOpenSource },
+): Promise<number> {
+  const uid = userId.trim();
+  if (!uid) return 0;
+
+  const state = await loadAutoOpenOrderLogState();
+  return state.rows.filter((r) => {
+    if (r.userId !== uid) return false;
+    if (r.outcome !== "skipped") return false;
+    if (opts?.source && r.source !== opts.source) return false;
+    return true;
+  }).length;
+}

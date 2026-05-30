@@ -121,6 +121,9 @@ function logSnowballAutoOpen(
     leverage?: number;
   },
 ): void {
+  // ข้าม (ปิด auto-open / เกรด off / มีโพซิชันแล้ว ฯลฯ) — ไม่ลงประวัติ auto-open
+  if (outcome === "skipped") return;
+
   const shouldLogEntry =
     (outcome === "success" || outcome === "failed") &&
     extra?.side != null &&

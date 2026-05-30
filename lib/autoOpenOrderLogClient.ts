@@ -41,6 +41,10 @@ export type AutoOpenOrderLogRow = {
 export type AutoOpenOrderLogApiPayload = {
   rows: AutoOpenOrderLogRow[];
   summary: AutoOpenOrderLogSummary;
+  /** จำนวน skipped ทั้งหมดของ user (ไม่จำกัดช่วง days ที่โหลด) */
+  skippedTotal: number;
+  /** ราคา last MEXC perp — key = contract symbol เช่น BTC_USDT */
+  markPrices: Record<string, number>;
 };
 
 export type AutoOpenOrderLogSummary = {

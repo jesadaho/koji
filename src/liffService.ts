@@ -91,7 +91,8 @@ import {
   type AutoOpenOrderLogApiPayload,
   type AutoOpenSource,
 } from "@/lib/autoOpenOrderLogClient";
-import { listAutoOpenOrderLogsForUser } from "./autoOpenOrderLogStore";
+import { listAutoOpenOrderLogsForUser, deleteSkippedAutoOpenOrderLogsForUser, countSkippedAutoOpenOrderLogsForUser } from "./autoOpenOrderLogStore";
+import { collectAutoOpenContractSymbols, fetchAutoOpenMarkPrices } from "./autoOpenMarkPrices";
 import { isPctStepPresetValue, PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import { clearPortfolioTrailingStateForUser } from "./portfolioTrailingAlertStateStore";
 import {
@@ -784,7 +785,27 @@ export async function liffGetAutoOpenOrderHistory(
   opts?: { days?: number; source?: AutoOpenSource },
 ): Promise<AutoOpenOrderLogApiPayload> {
   const rows = await listAutoOpenOrderLogsForUser(userId, opts);
-  return { rows, summary: summarizeAutoOpenOrderLogs(rows) };
+  const skippedTotal = await countSkippedAutoOpenOrderLogsForUser(userId, {
+    source: opts?.source,
+  });
+  const symbols = collectAutoOpenContractSymbols(rows.map((r) => r.contractSymbol));
+  const markPrices = await fetchAutoOpenMarkPrices(symbols);
+  return { rows, summary: summarizeAutoOpenOrderLogs(rows), skippedTotal, markPrices };
+}
+
+export async function liffGetAutoOpenMarkPrices(
+  contractSymbols: string[],
+): Promise<{ markPrices: Record<string, number> }> {
+  const markPrices = await fetchAutoOpenMarkPrices(collectAutoOpenContractSymbols(contractSymbols));
+  return { markPrices };
+}
+
+export async function liffClearSkippedAutoOpenOrderLogs(
+  userId: string,
+  opts?: { source?: AutoOpenSource },
+): Promise<{ ok: true; removed: number }> {
+  const { removed } = await deleteSkippedAutoOpenOrderLogsForUser(userId, opts);
+  return { ok: true, removed };
 }
 
 export async function liffDeleteSnowballStatsRow(

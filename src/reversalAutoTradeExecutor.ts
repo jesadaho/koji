@@ -224,6 +224,8 @@ function logReversalAutoOpen(
   },
   signalClosePrice?: number,
 ): void {
+  if (outcome === "skipped") return;
+
   const entryPrice = resolveReversalLogEntryPrice(outcome, extra, signalClosePrice);
   appendAutoOpenOrderLogSafe({
     userId,
