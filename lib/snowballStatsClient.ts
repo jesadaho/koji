@@ -493,6 +493,53 @@ export function snowballStatsRowMatchesFundingFilter(
   return fr < SNOWBALL_FUNDING_LT_NEG_010_DECIMAL;
 }
 
+/** แท่ง Day1 เขียวติดกันก่อนแท่งสัญญาณ (ไม่นับแท่งสัญญาณ) */
+export type SnowballGreenDaysFilter =
+  | "all"
+  | "d0"
+  | "d1"
+  | "d2"
+  | "d3"
+  | "ge2"
+  | "has"
+  | "none";
+
+export const SNOWBALL_GREEN_DAYS_FILTER_OPTIONS: ReadonlyArray<{
+  value: SnowballGreenDaysFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "d0", label: "0 วัน" },
+  { value: "d1", label: "1 วัน" },
+  { value: "d2", label: "2 วัน" },
+  { value: "d3", label: "3 วัน" },
+  { value: "ge2", label: "≥ 2 วัน" },
+  { value: "has", label: "มีข้อมูล" },
+  { value: "none", label: "ไม่มีข้อมูล" },
+];
+
+export function snowballStatsGreenDaysFilterLabel(filter: SnowballGreenDaysFilter): string {
+  return SNOWBALL_GREEN_DAYS_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function snowballStatsRowMatchesGreenDaysFilter(
+  row: Pick<SnowballStatsRow, "greenDaysBeforeSignal">,
+  filter: SnowballGreenDaysFilter,
+): boolean {
+  if (filter === "all") return true;
+  const raw = row.greenDaysBeforeSignal;
+  const has = raw != null && Number.isFinite(raw) && raw >= 0;
+  if (filter === "none") return !has;
+  if (filter === "has") return has;
+  if (!has) return false;
+  const n = Math.floor(raw);
+  if (filter === "d0") return n === 0;
+  if (filter === "d1") return n === 1;
+  if (filter === "d2") return n === 2;
+  if (filter === "d3") return n === 3;
+  return n >= 2;
+}
+
 export function snowballStatsRowMatchesVolRankFilter(
   row: Pick<SnowballStatsRow, "confirmVolRank">,
   filter: SnowballVolRankFilter,

@@ -21,7 +21,11 @@ import {
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
   snowballStatsRowMatchesFundingFilter,
+  snowballStatsRowMatchesGreenDaysFilter,
   snowballStatsRowMatchesVolRankFilter,
+  SNOWBALL_GREEN_DAYS_FILTER_OPTIONS,
+  snowballStatsGreenDaysFilterLabel,
+  type SnowballGreenDaysFilter,
   snowballStatsRowMatchesVolVsSmaFilter,
   SNOWBALL_FUNDING_FILTER_OPTIONS,
   snowballStatsFundingFilterLabel,
@@ -275,6 +279,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<SnowballMatrixFilter>("all");
   const [fundingFilter, setFundingFilter] = useState<SnowballFundingFilter>("all");
+  const [greenDaysFilter, setGreenDaysFilter] = useState<SnowballGreenDaysFilter>("all");
 
   const isAdmin = payload?.isAdmin === true;
 
@@ -518,8 +523,22 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => snowballStatsRowMatchesFundingFilter(r, fundingFilter));
     }
 
+    if (greenDaysFilter !== "all") {
+      result = result.filter((r) => snowballStatsRowMatchesGreenDaysFilter(r, greenDaysFilter));
+    }
+
     return result;
-  }, [allRows, dayFilter, gradeFilter, dowFilter, volVsSmaFilter, volRankFilter, matrixFilter, fundingFilter]);
+  }, [
+    allRows,
+    dayFilter,
+    gradeFilter,
+    dowFilter,
+    volVsSmaFilter,
+    volRankFilter,
+    matrixFilter,
+    fundingFilter,
+    greenDaysFilter,
+  ]);
 
   const horizonWinrateText = useMemo(
     () =>
@@ -708,6 +727,25 @@ export default function SnowballStatsTelegramMiniApp() {
             className="sub"
             style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
           >
+            เขียว
+            <select
+              value={greenDaysFilter}
+              onChange={(e) => setGreenDaysFilter(e.currentTarget.value as SnowballGreenDaysFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7rem" }}
+              title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ — ไม่นับแท่งสัญญาณ"
+            >
+              {SNOWBALL_GREEN_DAYS_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
             Matrix
             <select
               value={matrixFilter}
@@ -856,7 +894,7 @@ export default function SnowballStatsTelegramMiniApp() {
                   <td colSpan={isAdmin ? 37 : 36} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
+                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
                   </td>
                 </tr>
               ) : (
