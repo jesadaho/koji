@@ -20,8 +20,12 @@ import {
   snowballStatsBarRangePctLabel,
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
+  snowballStatsRowMatchesFundingFilter,
   snowballStatsRowMatchesVolRankFilter,
   snowballStatsRowMatchesVolVsSmaFilter,
+  SNOWBALL_FUNDING_FILTER_OPTIONS,
+  snowballStatsFundingFilterLabel,
+  type SnowballFundingFilter,
   SNOWBALL_VOL_RANK_FILTER_OPTIONS,
   SNOWBALL_VOL_VS_SMA_FILTER_OPTIONS,
   snowballStatsVolRankFilterLabel,
@@ -270,6 +274,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
   const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<SnowballMatrixFilter>("all");
+  const [fundingFilter, setFundingFilter] = useState<SnowballFundingFilter>("all");
 
   const isAdmin = payload?.isAdmin === true;
 
@@ -509,8 +514,12 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => snowballStatsRowMatchesMatrixFilter(r, matrixFilter));
     }
 
+    if (fundingFilter !== "all") {
+      result = result.filter((r) => snowballStatsRowMatchesFundingFilter(r, fundingFilter));
+    }
+
     return result;
-  }, [allRows, dayFilter, gradeFilter, dowFilter, volVsSmaFilter, volRankFilter, matrixFilter]);
+  }, [allRows, dayFilter, gradeFilter, dowFilter, volVsSmaFilter, volRankFilter, matrixFilter, fundingFilter]);
 
   const horizonWinrateText = useMemo(
     () =>
@@ -680,6 +689,25 @@ export default function SnowballStatsTelegramMiniApp() {
             className="sub"
             style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
           >
+            Funding
+            <select
+              value={fundingFilter}
+              onChange={(e) => setFundingFilter(e.currentTarget.value as SnowballFundingFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7.5rem" }}
+              title="Funding rate MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)"
+            >
+              {SNOWBALL_FUNDING_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
             Matrix
             <select
               value={matrixFilter}
@@ -828,7 +856,7 @@ export default function SnowballStatsTelegramMiniApp() {
                   <td colSpan={isAdmin ? 37 : 36} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
+                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
                   </td>
                 </tr>
               ) : (

@@ -466,6 +466,33 @@ export function snowballStatsVolRankFilterLabel(filter: SnowballVolRankFilter): 
   return SNOWBALL_VOL_RANK_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
 }
 
+/** Funding rate ทศนิยม (×100 = %) — −0.001 = −0.10% */
+export const SNOWBALL_FUNDING_LT_NEG_010_DECIMAL = -0.001;
+
+export type SnowballFundingFilter = "all" | "ltNeg010";
+
+export const SNOWBALL_FUNDING_FILTER_OPTIONS: ReadonlyArray<{
+  value: SnowballFundingFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "ltNeg010", label: "< −0.10%" },
+];
+
+export function snowballStatsFundingFilterLabel(filter: SnowballFundingFilter): string {
+  return SNOWBALL_FUNDING_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function snowballStatsRowMatchesFundingFilter(
+  row: Pick<SnowballStatsRow, "fundingRate">,
+  filter: SnowballFundingFilter,
+): boolean {
+  if (filter === "all") return true;
+  const fr = row.fundingRate;
+  if (fr == null || !Number.isFinite(fr)) return false;
+  return fr < SNOWBALL_FUNDING_LT_NEG_010_DECIMAL;
+}
+
 export function snowballStatsRowMatchesVolRankFilter(
   row: Pick<SnowballStatsRow, "confirmVolRank">,
   filter: SnowballVolRankFilter,
