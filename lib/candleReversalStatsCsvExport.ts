@@ -1,4 +1,8 @@
 import {
+  marketSentimentFngLabel,
+  marketSentimentSentimentLabel,
+} from "@/lib/marketSentiment";
+import {
   candleReversalDayOfWeekBkk,
   candleReversalGreenDaysLabel,
   candleReversalLookbackRankCell,
@@ -43,11 +47,9 @@ const HEADERS = [
   "Max ROI",
   "Max DD",
   "สวน max",
-  "ผล",
   "F&G",
   "Sentiment",
-  "BTC.D",
-  "VolΔ24h",
+  "ผล",
 ];
 
 function reversalHorizonCsvCells(r: CandleReversalStatsRow): [string, string, string, string] {
@@ -70,7 +72,6 @@ function reversalHorizonCsvCells(r: CandleReversalStatsRow): [string, string, st
 
 function candleReversalStatsRowToCsvCells(r: CandleReversalStatsRow): string[] {
   const [h1, h2, h3, h4] = reversalHorizonCsvCells(r);
-  const ms = r.marketSentiment ?? null;
   return [
     r.symbol,
     statsCoinLabel(r.symbol),
@@ -102,13 +103,9 @@ function candleReversalStatsRowToCsvCells(r: CandleReversalStatsRow): string[] {
     r.followUpMaxAdversePct != null && Number.isFinite(r.followUpMaxAdversePct)
       ? `${r.followUpMaxAdversePct.toFixed(2)}%`
       : "",
+    marketSentimentFngLabel(r.marketSentiment),
+    marketSentimentSentimentLabel(r.marketSentiment),
     candleReversalOutcomeLabel(r.outcome),
-    ms ? String(ms.fngValue) : "",
-    ms ? ms.sentiment : "",
-    ms && Number.isFinite(ms.btcDominancePct) ? `${ms.btcDominancePct.toFixed(1)}%` : "",
-    ms && ms.volumeChangePct24hApprox != null && Number.isFinite(ms.volumeChangePct24hApprox)
-      ? `${ms.volumeChangePct24hApprox >= 0 ? "+" : ""}${ms.volumeChangePct24hApprox.toFixed(1)}%`
-      : "",
   ];
 }
 

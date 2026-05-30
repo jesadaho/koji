@@ -1,4 +1,10 @@
 import {
+  marketSentimentBtcDominanceLabel,
+  marketSentimentFngLabel,
+  marketSentimentSentimentLabel,
+  marketSentimentVolChange24hLabel,
+} from "@/lib/marketSentiment";
+import {
   rsiDivergenceDayOfWeekBkk,
   rsiDivergenceKindLabel,
   rsiDivergenceOutcomeLabel,
@@ -38,11 +44,11 @@ const HEADERS = [
   "Max ROI",
   "Max DD",
   "Adv max",
-  "ผล",
   "F&G",
   "Sentiment",
   "BTC.D",
   "VolΔ24h",
+  "ผล",
 ];
 
 function fmtRsi(v: number | null | undefined): string {
@@ -56,7 +62,6 @@ function fmtRsiDelta(v: number | null | undefined): string {
 }
 
 function rsiDivergenceStatsRowToCsvCells(r: RsiDivergenceStatsRow): string[] {
-  const ms = r.marketSentiment ?? null;
   return [
     r.symbol,
     statsCoinLabel(r.symbol),
@@ -83,13 +88,11 @@ function rsiDivergenceStatsRowToCsvCells(r: RsiDivergenceStatsRow): string[] {
     r.followUpMaxAdversePct != null && Number.isFinite(r.followUpMaxAdversePct)
       ? `${r.followUpMaxAdversePct.toFixed(2)}%`
       : "",
+    marketSentimentFngLabel(r.marketSentiment),
+    marketSentimentSentimentLabel(r.marketSentiment),
+    marketSentimentBtcDominanceLabel(r.marketSentiment),
+    marketSentimentVolChange24hLabel(r.marketSentiment),
     rsiDivergenceOutcomeLabel(r.outcome),
-    ms ? String(ms.fngValue) : "",
-    ms ? ms.sentiment : "",
-    ms && Number.isFinite(ms.btcDominancePct) ? `${ms.btcDominancePct.toFixed(1)}%` : "",
-    ms && ms.volumeChangePct24hApprox != null && Number.isFinite(ms.volumeChangePct24hApprox)
-      ? `${ms.volumeChangePct24hApprox >= 0 ? "+" : ""}${ms.volumeChangePct24hApprox.toFixed(1)}%`
-      : "",
   ];
 }
 

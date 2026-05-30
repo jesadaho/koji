@@ -1,7 +1,12 @@
 import {
+  marketSentimentBtcDominanceLabel,
+  marketSentimentFngLabel,
+  marketSentimentSentimentLabel,
+  marketSentimentVolChange24hLabel,
+} from "@/lib/marketSentiment";
+import {
   snowballStatsBarRangePctLabel,
-  snowballStatsBtcPsar1hLabel,
-  snowballStatsBtcPsar4hLabel,
+  snowballStatsBtcPsarCombinedLabel,
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
   snowballStatsVolVsSmaDisplay,
@@ -34,8 +39,9 @@ const HEADERS = [
   "R% ก่อน",
   "R% สัญญาณ",
   "R% 2แท่ง",
-  "BTC 4h",
+  "BTC SAR",
   "Vol 24h",
+  "Mcap",
   "Funding",
   "Vol↗",
   "เขียว",
@@ -52,11 +58,11 @@ const HEADERS = [
   "Adv max",
   "SVP Hole",
   "RR",
-  "ผล",
   "F&G",
   "Sentiment",
   "BTC.D",
   "VolΔ24h",
+  "ผล",
 ];
 
 function snowballOutcomeLabel(o: SnowballStatsRow["outcome"]): string {
@@ -68,7 +74,6 @@ function snowballOutcomeLabel(o: SnowballStatsRow["outcome"]): string {
 }
 
 function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
-  const ms = r.marketSentiment ?? null;
   return [
     r.symbol,
     statsCoinLabel(r.symbol),
@@ -83,8 +88,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     snowballStatsBarRangePctLabel(r.barRangePctPrev),
     snowballStatsBarRangePctLabel(r.barRangePctSignal),
     snowballStatsBarRangePctLabel(r.barRangePct2Sum),
-    snowballStatsBtcPsar4hLabel(r.btcPsar4hTrend),
-    snowballStatsBtcPsar1hLabel(r.btcPsar1hTrend),
+    snowballStatsBtcPsarCombinedLabel(r.btcPsar4hTrend, r.btcPsar1hTrend),
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
     snowballStatsFundingRateLabel(r.fundingRate),
@@ -107,13 +111,11 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
       : "",
     r.svpHoleYn ?? "",
     r.resultRr ?? "",
+    marketSentimentFngLabel(r.marketSentiment),
+    marketSentimentSentimentLabel(r.marketSentiment),
+    marketSentimentBtcDominanceLabel(r.marketSentiment),
+    marketSentimentVolChange24hLabel(r.marketSentiment),
     snowballOutcomeLabel(r.outcome),
-    ms ? String(ms.fngValue) : "",
-    ms && Number.isFinite(ms.fngValue) ? String(Math.round(ms.fngValue)) : "",
-    ms && Number.isFinite(ms.btcDominancePct) ? `${ms.btcDominancePct.toFixed(1)}%` : "",
-    ms && ms.volumeChangePct24hApprox != null && Number.isFinite(ms.volumeChangePct24hApprox)
-      ? `${ms.volumeChangePct24hApprox >= 0 ? "+" : ""}${ms.volumeChangePct24hApprox.toFixed(1)}%`
-      : "",
   ];
 }
 
