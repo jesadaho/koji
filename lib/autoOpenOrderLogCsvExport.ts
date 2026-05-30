@@ -1,5 +1,9 @@
 import { resolveAutoOpenEntryPrice } from "@/lib/autoOpenFollowUp";
 import {
+  autoOpenStrategyOutcomeLabel,
+  type AutoOpenStrategyOutcome,
+} from "@/lib/autoOpenStrategyOutcome";
+import {
   autoOpenOutcomeLabel,
   autoOpenReasonLabel,
   autoOpenSourceLabel,
@@ -27,6 +31,10 @@ const HEADERS = [
   "pct12h",
   "pct24h",
   "pct48h",
+  "maxRoiPct",
+  "maxDrawdownPct",
+  "strategyOutcome",
+  "strategyPct",
 ];
 
 function fmtPctCsv(p: number | null | undefined): string {
@@ -59,6 +67,14 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
     fmtPctCsv(r.pct12h),
     fmtPctCsv(r.pct24h),
     fmtPctCsv(r.pct48h),
+    r.maxRoiPct != null && Number.isFinite(r.maxRoiPct) ? `${r.maxRoiPct.toFixed(2)}%` : "",
+    r.maxDrawdownPct != null && Number.isFinite(r.maxDrawdownPct)
+      ? `${r.maxDrawdownPct.toFixed(2)}%`
+      : "",
+    r.strategyOutcome
+      ? autoOpenStrategyOutcomeLabel(r.strategyOutcome as AutoOpenStrategyOutcome)
+      : "",
+    fmtPctCsv(r.strategyPct),
   ]);
   return buildCsv(HEADERS, body);
 }

@@ -36,6 +36,14 @@ export type AutoOpenOrderLogRow = {
   pct24h?: number | null;
   price48h?: number | null;
   pct48h?: number | null;
+  /** Max ROI% ถึง MFE ในกรอบ 48h */
+  maxRoiPct?: number | null;
+  maxDrawdownPct?: number | null;
+  durationToMfeHours?: number | null;
+  /** ผล strategy หลังครบ 48h — ดู AutoOpenStrategyOutcome */
+  strategyOutcome?: string | null;
+  /** P/L % ราคาตามกติกา strategy (ใช้แสดงผลจริง @48h) */
+  strategyPct?: number | null;
 };
 
 export type AutoOpenOrderLogApiPayload = {

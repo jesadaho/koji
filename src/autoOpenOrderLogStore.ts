@@ -123,6 +123,19 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   if (p48 !== undefined) row.price48h = p48;
   const pc48 = nullNum(o.pct48h);
   if (pc48 !== undefined) row.pct48h = pc48;
+  const maxRoi = nullNum(o.maxRoiPct);
+  if (maxRoi !== undefined) row.maxRoiPct = maxRoi;
+  const maxDd = nullNum(o.maxDrawdownPct);
+  if (maxDd !== undefined) row.maxDrawdownPct = maxDd;
+  const durMfe = nullNum(o.durationToMfeHours);
+  if (durMfe !== undefined) row.durationToMfeHours = durMfe;
+  const stratPct = nullNum(o.strategyPct);
+  if (stratPct !== undefined) row.strategyPct = stratPct;
+  if (typeof o.strategyOutcome === "string" && o.strategyOutcome.trim()) {
+    row.strategyOutcome = o.strategyOutcome.trim();
+  } else if (o.strategyOutcome === null) {
+    row.strategyOutcome = null;
+  }
 
   return row;
 }

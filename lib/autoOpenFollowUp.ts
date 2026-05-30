@@ -87,10 +87,13 @@ export function autoOpenNeedsFollowUp(
   if (!autoOpenFollowUpEligible(row)) return false;
   const ac = autoOpenFollowUpAnchorSec(row);
   if (nowSec < ac) return false;
-  return (
+  const needsHorizon =
     (row.pct4h == null && nowSec >= ac + 4 * HOUR_SEC) ||
     (row.pct12h == null && nowSec >= ac + 12 * HOUR_SEC) ||
     (row.pct24h == null && nowSec >= ac + 24 * HOUR_SEC) ||
-    (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC)
-  );
+    (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC);
+  const needsStrategy =
+    nowSec >= ac + 48 * HOUR_SEC &&
+    (row.pct48h == null || row.strategyOutcome == null || row.strategyPct == null);
+  return needsHorizon || needsStrategy;
 }

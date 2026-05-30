@@ -13,6 +13,11 @@ import {
   type AutoOpenSource,
 } from "@/lib/autoOpenOrderLogClient";
 import { autoOpenHorizonDue, resolveAutoOpenEntryPrice, pctVsEntrySide } from "@/lib/autoOpenFollowUp";
+import {
+  autoOpenStrategyFinalized,
+  autoOpenStrategyOutcomeLabel,
+  type AutoOpenStrategyOutcome,
+} from "@/lib/autoOpenStrategyOutcome";
 import { autoOpenOrderLogToCsv } from "@/lib/autoOpenOrderLogCsvExport";
 import {
   getTelegramInitData,
@@ -107,6 +112,31 @@ function fmtMarginCell(row: AutoOpenOrderLogRow): ReactNode {
       <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
         {scale}
       </span>
+    </span>
+  );
+}
+
+function fmtStrategyPnlCell(row: AutoOpenOrderLogRow): ReactNode {
+  if (!autoOpenHorizonDue(row, 48) || !autoOpenStrategyFinalized(row)) return "—";
+  const pct = row.strategyPct!;
+  const usdtLine =
+    row.marginUsdt != null &&
+    row.leverage != null &&
+    row.marginUsdt > 0 &&
+    row.leverage > 0
+      ? fmtPnlUsdt(row.marginUsdt, row.leverage, pct)
+      : null;
+  return (
+    <span style={{ whiteSpace: "nowrap", ...pnlStyle(pct) }} title="ผล @48h ตามกติกา Snowball/Reversal stats">
+      <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
+        {autoOpenStrategyOutcomeLabel(row.strategyOutcome as AutoOpenStrategyOutcome)}
+      </span>
+      {fmtPct(pct)}
+      {usdtLine ? (
+        <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
+          {usdtLine}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -510,6 +540,9 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                 <th>Entry</th>
                 <th>ปัจจุบัน</th>
                 <th>P/L</th>
+                <th title="หลังครบ 48h — Quick TP30 / Trend หรือ Win-Loss ตามแหล่งสัญญาณ">
+                  ผล@48h
+                </th>
                 <th>เกรด/โมเดล</th>
                 <th>ผล</th>
                 <th>เหตุผล</th>
@@ -522,7 +555,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             <tbody>
               {displayRows.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="sub">
+                  <td colSpan={17} className="sub">
                     ยังไม่มีบันทึก — จะมีเมื่อมีสัญญาณและระบบประเมิน auto-open ของบัญชีคุณ
                   </td>
                 </tr>
@@ -542,6 +575,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                     <td>{fmtPrice(resolveAutoOpenEntryPrice(r))}</td>
                     <td>{fmtPrice(nowPx)}</td>
                     <td>{fmtPnlCell(r, nowPx)}</td>
+                    <td>{fmtStrategyPnlCell(r)}</td>
                     <td>{r.gradeKey ?? r.model ?? "—"}</td>
                     <td>
                       <span style={outcomeStyle(r.outcome)}>{autoOpenOutcomeLabel(r.outcome)}</span>
@@ -568,7 +602,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </section>
 
       <p className="sub" style={{ marginTop: "0.5rem" }}>
-        ราคาปัจจุบัน = MEXC perp last · P/L เทียบ entry ตามทิศ long/short · อัปเดตราคาทุก ~60 วิ
+        ราคาปัจจุบัน = MEXC perp last · P/L = mark สด · ผล@48h = กติกาเดียวกับสถิติ (Snowball: Quick TP30/MFE+ปิด 48h · Reversal: ±2% ที่ 48h) · cron อัปเดต follow-up
       </p>
 
       <p className="sub" style={{ marginTop: "1rem" }}>

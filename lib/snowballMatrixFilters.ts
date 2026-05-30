@@ -25,7 +25,7 @@ export function snowballMatrixFilterTitle(filter: SnowballMatrixFilter): string 
     return "The Snipers (LONG): BTC 4h↑·1h↑ · R% สัญญาณ 1–5% · Wick<0.20 · Vol×SMA≥2×";
   }
   if (filter === "whaleRiders") {
-    return "The Whale Riders (LONG): Vol rank #1–3 · Vol×SMA≥6× · R% สัญญาณ 3–10% (≤15%) · Wick<0.25 · ไม่กรอง Grade/BTC";
+    return "The Whale Riders (LONG): Vol rank #1–10 · Vol×SMA≥4× · R% สัญญาณ 3–10% (≤15%) · Wick<0.40 · ไม่กรอง Grade/BTC";
   }
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
@@ -58,11 +58,11 @@ function volXsmaAtLeast(
   return v != null && Number.isFinite(v) && v >= minRatio;
 }
 
-function confirmVolRankTop3(row: Pick<SnowballStatsRow, "confirmVolRank">): boolean {
+function confirmVolRankTop10(row: Pick<SnowballStatsRow, "confirmVolRank">): boolean {
   const r = row.confirmVolRank;
   if (r == null || !Number.isFinite(r)) return false;
   const n = Math.round(r);
-  return n >= 1 && n <= 3;
+  return n >= 1 && n <= 10;
 }
 
 /** 🥇 The Snipers — LONG ปลอดภัย */
@@ -78,13 +78,13 @@ export function snowballRowMatchesSnipersMatrix(row: SnowballStatsRow): boolean 
 /** 🚀 The Whale Riders — ไม่กรอง Grade / BTC 4h */
 export function snowballRowMatchesWhaleRidersMatrix(row: SnowballStatsRow): boolean {
   if (!snowballRowIsLong(row)) return false;
-  if (!confirmVolRankTop3(row)) return false;
-  if (!volXsmaAtLeast(row, 6)) return false;
+  if (!confirmVolRankTop10(row)) return false;
+  if (!volXsmaAtLeast(row, 4)) return false;
   if (!barRangePctInRange(row.barRangePctSignal, 3, 10)) return false;
   if (row.barRangePctSignal != null && Number.isFinite(row.barRangePctSignal) && row.barRangePctSignal > 15) {
     return false;
   }
-  if (!wickBelow(row, 0.25)) return false;
+  if (!wickBelow(row, 0.4)) return false;
   return true;
 }
 

@@ -6,6 +6,7 @@ import {
   pickAutoOpenHorizonClose,
   resolveAutoOpenEntryPrice,
 } from "@/lib/autoOpenFollowUp";
+import { computeAutoOpenMfe48h, resolveAutoOpenStrategyAt48h } from "@/lib/autoOpenStrategyOutcome";
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
 import {
   fetchBinanceUsdmKlinesRange,
@@ -92,7 +93,7 @@ async function followUpRow(
   });
   if (!pack || pack.timeSec.length === 0) return false;
 
-  const { timeSec, close } = pack;
+  const { timeSec, close, high, low } = pack;
   const iFirst = timeSec.findIndex((t) => t + KLINE_15M_SEC >= ac);
   if (iFirst < 0) return false;
 
@@ -175,6 +176,43 @@ async function followUpRow(
         48,
       ) || touched;
   }
+
+  if (nowSec >= ac + SEC_48H && row.pct48h != null && Number.isFinite(row.pct48h)) {
+    const mfe = computeAutoOpenMfe48h(
+      side,
+      entry,
+      timeSec,
+      high,
+      low,
+      KLINE_15M_SEC,
+      iFirst,
+      iLastHorizon,
+    );
+    if (mfe) {
+      if (row.maxRoiPct !== mfe.maxRoiPct) {
+        row.maxRoiPct = mfe.maxRoiPct;
+        touched = true;
+      }
+      if (row.maxDrawdownPct !== mfe.maxDrawdownPct) {
+        row.maxDrawdownPct = mfe.maxDrawdownPct;
+        touched = true;
+      }
+      if (row.durationToMfeHours !== mfe.durationToMfeHours) {
+        row.durationToMfeHours = mfe.durationToMfeHours;
+        touched = true;
+      }
+      const resolved = resolveAutoOpenStrategyAt48h(row.source, mfe.maxRoiPct, row.pct48h);
+      if (row.strategyOutcome !== resolved.strategyOutcome) {
+        row.strategyOutcome = resolved.strategyOutcome;
+        touched = true;
+      }
+      if (row.strategyPct !== resolved.strategyPct) {
+        row.strategyPct = resolved.strategyPct;
+        touched = true;
+      }
+    }
+  }
+
   return touched;
 }
 
