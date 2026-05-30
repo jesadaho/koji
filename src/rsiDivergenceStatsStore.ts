@@ -11,7 +11,7 @@ import {
   type RsiDivergenceTrigger,
 } from "@/lib/rsiDivergenceStatsClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
-import { loadMarketSentimentSnapshot } from "./marketSentimentSnapshotStore";
+import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
 
 export type { RsiDivergenceStatsApiPayload, RsiDivergenceStatsRow } from "@/lib/rsiDivergenceStatsClient";
 
@@ -171,7 +171,7 @@ export async function appendRsiDivergenceStatsRow(
 
   let marketSentiment: RsiDivergenceStatsRow["marketSentiment"] = null;
   try {
-    marketSentiment = await loadMarketSentimentSnapshot();
+    marketSentiment = await resolveMarketSentimentForStats();
   } catch {
     /* ignore */
   }

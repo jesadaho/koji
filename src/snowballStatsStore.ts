@@ -13,7 +13,7 @@ import {
 import type { SnowballLongStructureTier } from "@/src/snowballLongBreakoutGrade";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
-import { loadMarketSentimentSnapshot } from "./marketSentimentSnapshotStore";
+import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
 import {
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
@@ -347,7 +347,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
 
   let marketSentiment: SnowballStatsRow["marketSentiment"] = null;
   try {
-    marketSentiment = await loadMarketSentimentSnapshot();
+    marketSentiment = await resolveMarketSentimentForStats();
   } catch {
     /* ignore */
   }

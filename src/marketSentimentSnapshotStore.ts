@@ -1,7 +1,16 @@
+import "server-only";
+
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
+import { marketSentimentFromFng } from "@/lib/marketSentiment";
 import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
+import { fetchMarketPulseData, marketPulseUsesCoinMarketCap } from "./marketPulseFetch";
+import {
+  appendVolumeSnapshot,
+  computeVolumeChangeVs24hApprox,
+  loadMarketPulseVolumeBlob,
+} from "./marketPulseVolumeStore";
+import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 
 const KV_KEY = "koji:market_sentiment_snapshot";
 const filePath = join(process.cwd(), "data", "market_sentiment_snapshot.json");
@@ -86,5 +95,48 @@ export async function saveMarketSentimentSnapshot(snapshot: MarketSentimentSnaps
   assertWritableStorage();
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify({ snapshot: s }, null, 2), "utf-8");
+}
+
+/**
+ * สำหรับบันทึกแถวสถิติ (Snowball / Reversal / RSI) — ใช้ snapshot ล่าสุด
+ * ถ้ายังไม่มี (cron ยังไม่รัน / cache ว่าง) ดึง F&G + ตลาดทันทีแล้ว cache ไว้
+ */
+export async function resolveMarketSentimentForStats(): Promise<MarketSentimentSnapshot | null> {
+  const cached = await loadMarketSentimentSnapshot();
+  if (cached) return cached;
+
+  try {
+    const data = await fetchMarketPulseData();
+    const nowIso = new Date().toISOString();
+    const volBlob = await loadMarketPulseVolumeBlob();
+    const volChange = computeVolumeChangeVs24hApprox(
+      volBlob.snapshots,
+      nowIso,
+      data.global.totalVolumeUsd,
+    );
+    const snapshot: MarketSentimentSnapshot = {
+      asOfIso: nowIso,
+      fngValue: data.fng.value,
+      fngClassification: data.fng.valueClassification,
+      sentiment: marketSentimentFromFng(data.fng.value),
+      btcDominancePct: data.global.btcDominancePct,
+      volumeChangePct24hApprox: volChange,
+      source: marketPulseUsesCoinMarketCap() ? "cmc" : "alt_coingecko",
+    };
+    try {
+      await appendVolumeSnapshot(nowIso, data.global.totalVolumeUsd);
+    } catch {
+      /* ignore */
+    }
+    try {
+      await saveMarketSentimentSnapshot(snapshot);
+    } catch {
+      /* ignore */
+    }
+    return normalizeSnapshot(snapshot);
+  } catch (e) {
+    console.error("[marketSentimentSnapshot] resolve for stats failed", e);
+    return null;
+  }
 }
 

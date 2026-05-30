@@ -28,6 +28,10 @@ import {
   type CandleReversalStatsSort,
   type CandleReversalStatsSortKey,
 } from "@/lib/candleReversalStatsClient";
+import {
+  marketSentimentFngLabel,
+  marketSentimentSentimentLabel,
+} from "@/lib/marketSentiment";
 import { candleReversalStatsToCsv } from "@/lib/candleReversalStatsCsvExport";
 import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 
@@ -299,7 +303,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 23 : 22) + extraRankCols - 1;
+  const emptyColSpan = (has48h ? 23 : 22) + extraRankCols + 1;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -488,6 +492,12 @@ function ReversalStatsSection({
                 activeSort={sort}
                 onSort={onSortColumn}
               />
+              <th scope="col" title="Fear & Greed (Market Pulse snapshot ณ เวลาแจ้ง)">
+                F&G
+              </th>
+              <th scope="col" title="Sentiment จาก F&G — Bullish / Neutral / Bearish">
+                Sentiment
+              </th>
               <SortTh
                 label="ผล"
                 sortKey="outcome"
@@ -546,6 +556,8 @@ function ReversalStatsSection({
                     <td>
                       {r.followUpMaxAdversePct != null ? `${r.followUpMaxAdversePct.toFixed(2)}%` : "—"}
                     </td>
+                    <td>{marketSentimentFngLabel(r.marketSentiment)}</td>
+                    <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>
                     <td>{candleReversalOutcomeLabel(r.outcome)}</td>
                   </tr>
                 );

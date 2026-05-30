@@ -8,7 +8,7 @@ import {
   type CandleReversalStatsRow,
 } from "@/lib/candleReversalStatsClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
-import { loadMarketSentimentSnapshot } from "./marketSentimentSnapshotStore";
+import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
 
 export type { CandleReversalStatsApiPayload, CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 
@@ -260,7 +260,7 @@ export async function appendCandleReversalStatsRow(
 
   let marketSentiment: CandleReversalStatsRow["marketSentiment"] = null;
   try {
-    marketSentiment = await loadMarketSentimentSnapshot();
+    marketSentiment = await resolveMarketSentimentForStats();
   } catch {
     /* ignore */
   }
