@@ -12,6 +12,7 @@ export type CandleReversalSymbolState = {
   lastMarubozu1dOpenSec: number | null;
   lastInvertedDoji1hOpenSec: number | null;
   lastLongestRedBody1hOpenSec: number | null;
+  lastLongestGreenBody1hOpenSec: number | null;
   lastInvertedDoji1dAlertedAtMs: number | null;
   lastInvertedDoji1hAlertedAtMs: number | null;
 };
@@ -70,6 +71,7 @@ function emptySymbolState(): CandleReversalSymbolState {
     lastMarubozu1dOpenSec: null,
     lastInvertedDoji1hOpenSec: null,
     lastLongestRedBody1hOpenSec: null,
+    lastLongestGreenBody1hOpenSec: null,
     lastInvertedDoji1dAlertedAtMs: null,
     lastInvertedDoji1hAlertedAtMs: null,
   };

@@ -43,8 +43,17 @@ function followup1dDays(): number {
   return 7;
 }
 
-function pctVsEntryShort(entry: number, price: number): number {
+function reversalTradeSide(row: CandleReversalStatsRow): "short" | "long" {
+  return row.tradeSide === "long" ? "long" : "short";
+}
+
+function pctVsEntry(entry: number, price: number, side: "short" | "long"): number {
+  if (side === "long") return ((price - entry) / entry) * 100;
   return ((entry - price) / entry) * 100;
+}
+
+function pctVsEntryShort(entry: number, price: number): number {
+  return pctVsEntry(entry, price, "short");
 }
 
 function outcomeWinMinPct(): number {
@@ -74,6 +83,7 @@ function pickHorizonClose(
   nowSec: number,
   horizonEndSec: number,
   entry: number,
+  side: "short" | "long" = "short",
 ): { price: number; pct: number } | null {
   /** ยังไม่ถึง checkpoint — ไม่ใส่ราคา interim (กัน 4h/12h/24h/48h ซ้ำกัน) */
   if (nowSec < horizonEndSec) return null;
@@ -84,7 +94,7 @@ function pickHorizonClose(
   }
   if (best < 0) return null;
   const price = close[best]!;
-  return { price, pct: pctVsEntryShort(entry, price) };
+  return { price, pct: pctVsEntry(entry, price, side) };
 }
 
 function computeMfeFromPack(
@@ -113,6 +123,38 @@ function computeMfeFromPack(
     maxHigh = Math.max(maxHigh, high[i]!);
   }
   let maxDd = ((maxHigh - entry) / entry) * 100;
+  if (!Number.isFinite(maxDd) || maxDd < 0) maxDd = 0;
+
+  const durationHours = (timeSec[mfeIdx]! + barDurSec - ac) / 3600;
+  return { maxRoi, mfeIdx, maxDd, durationHours };
+}
+
+function computeMfeFromPackLong(
+  timeSec: number[],
+  high: number[],
+  low: number[],
+  barDurSec: number,
+  iFirst: number,
+  iLast: number,
+  ac: number,
+  entry: number,
+): { maxRoi: number; mfeIdx: number; maxDd: number; durationHours: number } | null {
+  let maxRoi = -Infinity;
+  let mfeIdx = iFirst;
+  for (let i = iFirst; i <= iLast; i++) {
+    const roi = ((high[i]! - entry) / entry) * 100;
+    if (roi > maxRoi) {
+      maxRoi = roi;
+      mfeIdx = i;
+    }
+  }
+  if (!Number.isFinite(maxRoi)) return null;
+
+  let minLow = Infinity;
+  for (let i = iFirst; i <= mfeIdx; i++) {
+    minLow = Math.min(minLow, low[i]!);
+  }
+  let maxDd = ((entry - minLow) / entry) * 100;
   if (!Number.isFinite(maxDd) || maxDd < 0) maxDd = 0;
 
   const durationHours = (timeSec[mfeIdx]! + barDurSec - ac) / 3600;
@@ -191,6 +233,7 @@ async function followUpCandleReversal1hRow(
 ): Promise<boolean> {
   const entry = row.entryPrice;
   const ac = anchorCloseSec(row);
+  const side = reversalTradeSide(row);
   const followSec = followup1hHours() * HOUR_SEC;
   const windowEndSec = Math.min(nowSec, ac + followSec);
 
@@ -219,12 +262,18 @@ async function followUpCandleReversal1hRow(
     if (iHFirst >= 0) {
       const iHLast = indexRangeThrough(hT, HOUR_SEC, iHFirst, windowEndSec);
       if (iHLast >= iHFirst) {
-        mfe = computeMfeFromPack(hT, hH, hL, HOUR_SEC, iHFirst, iHLast, ac, entry);
+        mfe =
+          side === "long"
+            ? computeMfeFromPackLong(hT, hH, hL, HOUR_SEC, iHFirst, iHLast, ac, entry)
+            : computeMfeFromPack(hT, hH, hL, HOUR_SEC, iHFirst, iHLast, ac, entry);
       }
     }
   }
   if (!mfe) {
-    mfe = computeMfeFromPack(t15, h15, l15, KLINE_15M_SEC, i15First, i15Last, ac, entry);
+    mfe =
+      side === "long"
+        ? computeMfeFromPackLong(t15, h15, l15, KLINE_15M_SEC, i15First, i15Last, ac, entry)
+        : computeMfeFromPack(t15, h15, l15, KLINE_15M_SEC, i15First, i15Last, ac, entry);
   }
   if (!mfe) return false;
 
@@ -234,12 +283,12 @@ async function followUpCandleReversal1hRow(
     if (iHFirst >= 0) {
       const iHLast = indexRangeThrough(hT, HOUR_SEC, iHFirst, windowEndSec);
       if (iHLast >= iHFirst) {
-        const adverse = computeFollowUpMaxAdversePct(hH, hL, iHFirst, iHLast, entry, "short");
+        const adverse = computeFollowUpMaxAdversePct(hH, hL, iHFirst, iHLast, entry, side);
         if (adverse != null) row.followUpMaxAdversePct = adverse;
       }
     }
   } else {
-    const adverse = computeFollowUpMaxAdversePct(h15, l15, i15First, i15Last, entry, "short");
+    const adverse = computeFollowUpMaxAdversePct(h15, l15, i15First, i15Last, entry, side);
     if (adverse != null) row.followUpMaxAdversePct = adverse;
   }
 
@@ -247,13 +296,13 @@ async function followUpCandleReversal1hRow(
   const h12End = ac + 12 * HOUR_SEC;
   const h24End = ac + 24 * HOUR_SEC;
   const h48End = ac + 48 * HOUR_SEC;
-  const h4 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h4End, entry);
-  const h12 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h12End, entry);
-  const h24 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h24End, entry);
-  let h48 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h48End, entry);
+  const h4 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h4End, entry, side);
+  const h12 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h12End, entry, side);
+  const h24 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h24End, entry, side);
+  let h48 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h48End, entry, side);
   if (h48 == null && nowSec >= h48End && i15Last >= i15First) {
     const p = c15[i15Last]!;
-    h48 = { price: p, pct: pctVsEntryShort(entry, p) };
+    h48 = { price: p, pct: pctVsEntry(entry, p, side) };
   }
 
   row.maxRoiPct = mfe.maxRoi;

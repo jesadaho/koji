@@ -190,11 +190,16 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const data = await liffGetCandleReversalStats(auth.telegramUserId);
       const tfRaw = req.nextUrl.searchParams.get("tf")?.toLowerCase();
       const tfFilter = tfRaw === "1d" || tfRaw === "1h" ? tfRaw : null;
-      const rows = tfFilter
-        ? data.rows.filter((r) => (r.signalBarTf ?? "1d") === tfFilter)
-        : data.rows;
+      const sideRaw = req.nextUrl.searchParams.get("side")?.toLowerCase();
+      const sideFilter = sideRaw === "long" || sideRaw === "short" ? sideRaw : null;
+      let rows = data.rows;
+      if (tfFilter) rows = rows.filter((r) => (r.signalBarTf ?? "1d") === tfFilter);
+      if (sideFilter) rows = rows.filter((r) => (r.tradeSide ?? "short") === sideFilter);
       const csv = candleReversalStatsToCsv(rows);
-      const filenamePrefix = tfFilter ? `reversal-stats-${tfFilter}` : "reversal-stats";
+      const filenameParts = ["reversal-stats"];
+      if (tfFilter) filenameParts.push(tfFilter);
+      if (sideFilter) filenameParts.push(sideFilter);
+      const filenamePrefix = filenameParts.join("-");
       return statsCsvAttachmentResponse(csv, statsCsvFilename(filenamePrefix));
     }
     if (segs.length === 1 && a === "auto-open-history") {

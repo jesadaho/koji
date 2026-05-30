@@ -42,14 +42,18 @@ import {
   evalInvertedDoji1d,
   evalInvertedDoji1h,
   evalLongestRedBody1h,
+  evalLongestGreenBody1h,
   evalMarubozu1d,
   candleReversal1dInvertedDojiCheckLines,
   candleReversal1dMarubozuCheckLines,
   candleReversal1hInvertedDojiCheckLines,
   candleReversal1hLongestRedBodyCheckLines,
+  candleReversal1hLongestGreenBodyCheckLines,
+  DEFAULT_CANDLE_REVERSAL_1H_LONG_ENV,
   fmtReversalPrice,
   type CandleReversal1dDetectEnv,
   type CandleReversal1hDetectEnv,
+  type CandleReversal1hLongDetectEnv,
   type CandleReversalModel,
   type CandleReversalSignal,
   type CandleReversalTf,
@@ -74,6 +78,13 @@ export function isCandleReversal1hAlertsEnabled(): boolean {
     return envFlagOn("CANDLE_REVERSAL_1H_ALERTS_ENABLED", true);
   }
   return isCandleReversal1dAlertsEnabled();
+}
+
+export function isCandleReversal1hLongAlertsEnabled(): boolean {
+  if (process.env.CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED?.trim()) {
+    return envFlagOn("CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED", true);
+  }
+  return isCandleReversal1hAlertsEnabled();
 }
 
 function scanConcurrency(): number {
@@ -103,7 +114,14 @@ function maxAlertsPerRun(): number {
 function klineFetchLimit(tf: CandleReversalTf): number {
   if (tf === "1h") {
     const env1h = detectEnv1h();
-    const lb = Math.max(env1h.highestHighLookback, env1h.longestRedBodyLookback, env1h.emaPeriod);
+    const envLong = detectEnv1hLong();
+    const lb = Math.max(
+      env1h.highestHighLookback,
+      env1h.longestRedBodyLookback,
+      env1h.emaPeriod,
+      envLong.longestGreenBodyLookback,
+      envLong.emaPeriod,
+    );
     return Math.min(500, Math.max(220, lb + 30));
   }
   const need = DEFAULT_CANDLE_REVERSAL_1D_ENV.hh200Lookback + DEFAULT_CANDLE_REVERSAL_1D_ENV.hh200ExcludeRecent + 30;
@@ -167,12 +185,43 @@ function detectEnv1h(): CandleReversal1hDetectEnv {
   return env;
 }
 
+function detectEnv1hLong(): CandleReversal1hLongDetectEnv {
+  const env = { ...DEFAULT_CANDLE_REVERSAL_1H_LONG_ENV };
+  const greenLb = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_GREEN_LOOKBACK?.trim());
+  if (Number.isFinite(greenLb) && greenLb >= 8 && greenLb <= 120) {
+    env.longestGreenBodyLookback = Math.floor(greenLb);
+  }
+  const greenRatio = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_GREEN_MIN_RATIO?.trim());
+  if (Number.isFinite(greenRatio) && greenRatio > 0.5 && greenRatio < 1) {
+    env.longestGreenBodyMinRatio = greenRatio;
+  }
+  const lowRankMax = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_GREEN_LOW_RANK_MAX?.trim());
+  if (Number.isFinite(lowRankMax) && lowRankMax >= 1 && lowRankMax <= 5) {
+    env.longestGreenBodyLowRankMax = Math.floor(lowRankMax);
+  }
+  const emaAbove = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_GREEN_EMA_ABOVE_MAX_PCT?.trim());
+  if (Number.isFinite(emaAbove) && emaAbove >= 0 && emaAbove <= 30) {
+    env.longestGreenBodyEmaDistAboveMaxPct = emaAbove;
+  }
+  const emaBelow = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_GREEN_EMA_BELOW_MAX_PCT?.trim());
+  if (Number.isFinite(emaBelow) && emaBelow >= 0 && emaBelow <= 30) {
+    env.longestGreenBodyEmaDistBelowMaxPct = emaBelow;
+  }
+  return env;
+}
+
+function reversalPendingStatsKey(symbol: string, tf: CandleReversalTf, tradeSide: "short" | "long"): string {
+  const side = tradeSide === "long" ? "long" : "short";
+  return `${symbol.trim().toUpperCase()}:${tf === "1h" ? "1h" : "1d"}:${side}`;
+}
+
 function emptySymState(): CandleReversalSymbolState {
   return {
     lastInvertedDoji1dOpenSec: null,
     lastMarubozu1dOpenSec: null,
     lastInvertedDoji1hOpenSec: null,
     lastLongestRedBody1hOpenSec: null,
+    lastLongestGreenBody1hOpenSec: null,
     lastInvertedDoji1dAlertedAtMs: null,
     lastInvertedDoji1hAlertedAtMs: null,
   };
@@ -206,6 +255,7 @@ type EvalRow = {
     invertedDojiPass: boolean;
     marubozuPass: boolean;
     longestRedPass: boolean;
+    longestGreenPass: boolean;
     deduped: boolean;
     dedupedModel: CandleReversalModel | null;
   };
@@ -230,6 +280,7 @@ function evalSymbolTf(
     invertedDojiPass: false,
     marubozuPass: false,
     longestRedPass: false,
+    longestGreenPass: false,
     deduped: false,
     dedupedModel: null as CandleReversalModel | null,
   };
@@ -350,6 +401,82 @@ function evalSymbolTf(
   };
 }
 
+function evalSymbolTfLong1h(
+  symbol: string,
+  st: CandleReversalSymbolState,
+  pack: NonNullable<Awaited<ReturnType<typeof fetchBinanceUsdmKlines>>>,
+  envLong: CandleReversal1hLongDetectEnv,
+): EvalRow {
+  const next: CandleReversalSymbolState = { ...st };
+  const n = pack.close.length;
+  const i = n - 2;
+  const emptyVol = { rangeScore: null as number | null, wickScore: null as number | null };
+  const emptyDiag = {
+    closedBarOpenSec: null as number | null,
+    skippedBars: false,
+    invertedDojiPass: false,
+    marubozuPass: false,
+    longestRedPass: false,
+    longestGreenPass: false,
+    deduped: false,
+    dedupedModel: null as CandleReversalModel | null,
+  };
+
+  const minBars = Math.max(envLong.longestGreenBodyLookback, envLong.emaPeriod) + 2;
+  if (i < minBars) {
+    return {
+      symbol,
+      signal: null,
+      msg: null,
+      next,
+      ...emptyVol,
+      diag: { ...emptyDiag, skippedBars: true },
+    };
+  }
+
+  const vol = snowballVolatilitySnapshotAt(pack.high, pack.low, pack.close, pack.open, i);
+  const barOpen = pack.timeSec[i]!;
+  const diag = { ...emptyDiag, closedBarOpenSec: barOpen };
+
+  const green = evalLongestGreenBody1h(pack, i, envLong);
+  if (green) {
+    diag.longestGreenPass = true;
+    if (next.lastLongestGreenBody1hOpenSec === barOpen) {
+      diag.deduped = true;
+      diag.dedupedModel = "longest_green_body";
+      return {
+        symbol,
+        signal: null,
+        msg: null,
+        next,
+        rangeScore: vol.rangeScore,
+        wickScore: vol.wickScore,
+        diag,
+      };
+    }
+    next.lastLongestGreenBody1hOpenSec = barOpen;
+    return {
+      symbol,
+      signal: green,
+      msg: buildCandleReversalAlertMessage(symbol, green),
+      next,
+      rangeScore: vol.rangeScore,
+      wickScore: vol.wickScore,
+      diag,
+    };
+  }
+
+  return {
+    symbol,
+    signal: null,
+    msg: null,
+    next,
+    rangeScore: vol.rangeScore,
+    wickScore: vol.wickScore,
+    diag,
+  };
+}
+
 function mergeDiagIntoTfStats(stats: CandleReversalTfScanSummaryStats, symbol: string, diag: EvalRow["diag"]): void {
   if (diag.closedBarOpenSec != null && stats.closedBarOpenSec == null) {
     stats.closedBarOpenSec = diag.closedBarOpenSec;
@@ -370,6 +497,10 @@ function mergeDiagIntoTfStats(stats: CandleReversalTfScanSummaryStats, symbol: s
     stats.longestRedPass += 1;
     pushReversalScanSymList(stats.longestRedPassSymbols, symbol);
   }
+  if (diag.longestGreenPass) {
+    stats.longestGreenPass += 1;
+    pushReversalScanSymList(stats.longestGreenPassSymbols, symbol);
+  }
   if (diag.deduped) {
     stats.deduped += 1;
     pushReversalScanSymList(stats.dedupedSymbols, symbol);
@@ -382,6 +513,7 @@ async function scanTimeframe(
   state: CandleReversalAlertState,
   env1d: CandleReversal1dDetectEnv,
   env1h: CandleReversal1hDetectEnv,
+  env1hLong: CandleReversal1hLongDetectEnv,
   nowMs: number,
   concurrency: number,
 ): Promise<{
@@ -392,38 +524,50 @@ async function scanTimeframe(
   const interval: BinanceIndicatorTf = tf;
   const limit = klineFetchLimit(tf);
   const scanStats = emptyCandleReversalTfScanSummaryStats(tf);
+  const scanLong1h = tf === "1h" && isCandleReversal1hLongAlertsEnabled();
 
-  const results = await mapPoolConcurrent(symbols, concurrency, async (symbol) => {
+  const poolRows = await mapPoolConcurrent(symbols, concurrency, async (symbol) => {
     const st = state[symbol] ?? emptySymState();
     try {
       const pack = await fetchBinanceUsdmKlines(symbol, interval, limit);
-      if (!pack) return { symbol, evals: null as EvalRow | null };
-      const evals = evalSymbolTf(symbol, st, pack, tf, env1d, env1h, nowMs);
-      return { symbol, evals };
+      if (!pack) return { symbol, shortEvals: null as EvalRow | null, longEvals: null as EvalRow | null };
+      const shortEvals = evalSymbolTf(symbol, st, pack, tf, env1d, env1h, nowMs);
+      const longEvals = scanLong1h ? evalSymbolTfLong1h(symbol, shortEvals.next, pack, env1hLong) : null;
+      const mergedNext = {
+        ...shortEvals.next,
+        ...(longEvals?.next ?? {}),
+      };
+      return { symbol, shortEvals, longEvals, mergedNext };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      return { symbol, evals: null, err: `${symbol}: ${msg}` };
+      return { symbol, shortEvals: null, longEvals: null, err: `${symbol}: ${msg}` };
     }
   });
 
-  for (const row of results) {
+  const results: { symbol: string; evals: EvalRow | null }[] = [];
+  for (const row of poolRows) {
     if (row.err) {
       pushReversalScanErr(scanStats, row.err);
       scanStats.noPack += 1;
       continue;
     }
-    if (!row.evals) {
+    if (!row.shortEvals) {
       scanStats.noPack += 1;
       continue;
     }
     scanStats.withPack += 1;
-    mergeDiagIntoTfStats(scanStats, row.symbol, row.evals.diag);
+    mergeDiagIntoTfStats(scanStats, row.symbol, row.shortEvals.diag);
+    results.push({ symbol: row.symbol, evals: row.shortEvals });
+    if (row.longEvals) {
+      mergeDiagIntoTfStats(scanStats, row.symbol, row.longEvals.diag);
+      results.push({ symbol: row.symbol, evals: row.longEvals });
+    }
   }
 
   let nextState = { ...state };
-  for (const row of results) {
-    if (!row.evals) continue;
-    nextState = { ...nextState, [row.symbol]: row.evals.next };
+  for (const row of poolRows) {
+    if (!row.shortEvals || !row.mergedNext) continue;
+    nextState = { ...nextState, [row.symbol]: row.mergedNext };
   }
 
   return { state: nextState, results, scanStats };
@@ -449,7 +593,8 @@ async function notifyResults(
     }
 
     const sig = row.evals.signal;
-    const pendingKey = `${row.symbol.trim().toUpperCase()}:${sig.tf === "1h" ? "1h" : "1d"}`;
+    const tradeSide = sig.tradeSide ?? "short";
+    const pendingKey = reversalPendingStatsKey(row.symbol, sig.tf, tradeSide);
     if (pendingStatsKeys.has(pendingKey)) {
       scanStats.deduped += 1;
       pushReversalScanSymList(scanStats.dedupedSymbols, row.symbol);
@@ -467,6 +612,7 @@ async function notifyResults(
         const appended = await appendCandleReversalStatsRow({
           symbol: row.symbol,
           model: sig.model,
+          tradeSide,
           signalBarTf: sig.tf,
           alertedAtIso: new Date(nowMs).toISOString(),
           alertedAtMs: nowMs,
@@ -477,6 +623,7 @@ async function notifyResults(
           wickRatioPct: Number.isFinite(sig.wickRatio) ? sig.wickRatio * 100 : null,
           bodyPct: sig.bodyRatio * 100,
           highRankInLookback: sig.highRankInLookback ?? null,
+          lowRankInLookback: sig.lowRankInLookback ?? null,
           rangeRankInLookback: sig.rangeRankInLookback ?? null,
           volRankInLookback: sig.volRankInLookback ?? null,
           lookbackBars: sig.lookbackBars ?? null,
@@ -492,22 +639,24 @@ async function notifyResults(
       if (ok) {
         notified++;
         scanStats.sent += 1;
-        scanStats.sentByModel[sig.model] += 1;
+        scanStats.sentByModel[sig.model] = (scanStats.sentByModel[sig.model] ?? 0) + 1;
         pushReversalScanSymList(scanStats.sentSymbols, row.symbol);
 
-        try {
-          await runReversalAutoTradeAfterReversalAlert({
-            binanceSymbol: row.symbol,
-            signalBarTf: sig.tf,
-            model: sig.model,
-            signalBarOpenSec: sig.barOpenSec,
-            bodyRatio: sig.bodyRatio,
-            wickRatio: sig.wickRatio,
-            rangeRankInLookback: sig.rangeRankInLookback ?? null,
-            signalClosePrice: sig.c,
-          });
-        } catch (e) {
-          console.error("[candleReversalAlertTick] reversal autotrade", row.symbol, sig.tf, e);
+        if (tradeSide === "short") {
+          try {
+            await runReversalAutoTradeAfterReversalAlert({
+              binanceSymbol: row.symbol,
+              signalBarTf: sig.tf,
+              model: sig.model,
+              signalBarOpenSec: sig.barOpenSec,
+              bodyRatio: sig.bodyRatio,
+              wickRatio: sig.wickRatio,
+              rangeRankInLookback: sig.rangeRankInLookback ?? null,
+              signalClosePrice: sig.c,
+            });
+          } catch (e) {
+            console.error("[candleReversalAlertTick] reversal autotrade", row.symbol, sig.tf, e);
+          }
         }
       }
     } catch (e) {
@@ -585,7 +734,11 @@ export async function runCandleReversalAlertTick(
   nowMs = Date.now(),
   opts?: { forceScanSummary?: boolean },
 ): Promise<CandleReversalAlertTickResult> {
-  if (!isCandleReversal1dAlertsEnabled() && !isCandleReversal1hAlertsEnabled()) {
+  if (
+    !isCandleReversal1dAlertsEnabled() &&
+    !isCandleReversal1hAlertsEnabled() &&
+    !isCandleReversal1hLongAlertsEnabled()
+  ) {
     return { notified: 0 };
   }
   if (!isBinanceIndicatorFapiEnabled()) return { notified: 0 };
@@ -600,6 +753,7 @@ export async function runCandleReversalAlertTick(
   let state = loaded.symbols;
   const env1d = detectEnv1d();
   const env1h = detectEnv1h();
+  const env1hLong = detectEnv1hLong();
   const concurrency = scanConcurrency();
   const alertCap = maxAlertsPerRun();
   const topAltsCap = maxSymbolsScan() || topAltsUniverse();
@@ -608,7 +762,7 @@ export async function runCandleReversalAlertTick(
   let notified = 0;
 
   if (isCandleReversal1dAlertsEnabled()) {
-    const r1d = await scanTimeframe("1d", symbols, state, env1d, env1h, nowMs, concurrency);
+    const r1d = await scanTimeframe("1d", symbols, state, env1d, env1h, env1hLong, nowMs, concurrency);
     state = r1d.state;
     const n1d = await notifyResults(r1d.results, nowMs, alertCap, r1d.scanStats);
     notified += n1d;
@@ -626,8 +780,8 @@ export async function runCandleReversalAlertTick(
     if (sum1d) summaryParts.push(sum1d);
   }
 
-  if (isCandleReversal1hAlertsEnabled()) {
-    const r1h = await scanTimeframe("1h", symbols, state, env1d, env1h, nowMs, concurrency);
+  if (isCandleReversal1hAlertsEnabled() || isCandleReversal1hLongAlertsEnabled()) {
+    const r1h = await scanTimeframe("1h", symbols, state, env1d, env1h, env1hLong, nowMs, concurrency);
     state = r1h.state;
     const n1h = await notifyResults(r1h.results, nowMs, Math.max(0, alertCap - notified), r1h.scanStats);
     notified += n1h;
@@ -757,10 +911,13 @@ async function formatDebugForTf(sym: string, tf: CandleReversalTf, barsAgo = 0):
   const inverted = tf === "1h" ? evalInvertedDoji1h(pack, i, env1h) : evalInvertedDoji1d(pack, i, env1d);
   const marubozu = tf === "1d" ? evalMarubozu1d(pack, i, env1d, hadDoji) : null;
   const longest = tf === "1h" ? evalLongestRedBody1h(pack, i, env1h, hadDoji) : null;
+  const longestGreen =
+    tf === "1h" ? evalLongestGreenBody1h(pack, i, detectEnv1hLong()) : null;
   lines.push(`โมเดล (ผ่านทั้งชุด = ✓):`);
   lines.push(`  inverted_doji: ${inverted ? "✓" : "—"}`);
   if (tf === "1d") lines.push(`  marubozu: ${marubozu ? "✓" : "—"}`);
   if (tf === "1h") lines.push(`  longest_red_body: ${longest ? "✓" : "—"}`);
+  if (tf === "1h") lines.push(`  longest_green_body: ${longestGreen ? "✓" : "—"}`);
   if (tf === "1d") {
     lines.push("");
     lines.push(...candleReversal1dInvertedDojiCheckLines(pack, i, env1d));
@@ -770,6 +927,8 @@ async function formatDebugForTf(sym: string, tf: CandleReversalTf, barsAgo = 0):
   if (tf === "1h") {
     lines.push("");
     lines.push(...candleReversal1hLongestRedBodyCheckLines(pack, i, env1h));
+    lines.push("");
+    lines.push(...candleReversal1hLongestGreenBodyCheckLines(pack, i, detectEnv1hLong()));
     lines.push("");
     lines.push(...candleReversal1hInvertedDojiCheckLines(pack, i, env1h));
   }
@@ -806,7 +965,9 @@ export async function formatCandleReversalDebugMessage(
   const barsAgo = Math.max(0, Math.floor(opts?.barsAgo ?? 0));
   lines.push("🎯 Candle Reversal — debug (Binance USDM)");
   lines.push(`UTC: ${new Date().toISOString()}`);
-  lines.push(`1D: ${isCandleReversal1dAlertsEnabled() ? "on" : "off"} · 1H: ${isCandleReversal1hAlertsEnabled() ? "on" : "off"}`);
+  lines.push(
+    `1D: ${isCandleReversal1dAlertsEnabled() ? "on" : "off"} · 1H Short: ${isCandleReversal1hAlertsEnabled() ? "on" : "off"} · 1H Long: ${isCandleReversal1hLongAlertsEnabled() ? "on" : "off"}`,
+  );
   if (barsAgo > 0) lines.push(`barsAgo: ${barsAgo} (ย้อนจากแท่งปิดล่าสุด)`);
   lines.push("");
 
@@ -847,7 +1008,13 @@ function parseCandleReversalBarsAgo(raw: string | undefined): number | undefined
 
 export function parseCandleReversalDebugCommand(text: string): CandleReversalDebugCommand | null {
   const t = text.trim();
-  let m = t.match(/^(?:debug\s+)?(?:candle\s+)?reversal\s+1h(?:@\S+)?\s+(\S+?)(?:\s+(@?\d+))?\s*$/i);
+  let m = t.match(
+    /^(?:debug\s+)?(?:candle\s+)?reversal\s+1h\s+long(?:@\S+)?\s+(\S+?)(?:\s+(@?\d+))?\s*$/i,
+  );
+  if (m?.[1]) {
+    return { symbol: m[1].trim(), tf: "1h", barsAgo: parseCandleReversalBarsAgo(m[2]) };
+  }
+  m = t.match(/^(?:debug\s+)?(?:candle\s+)?reversal\s+1h(?:@\S+)?\s+(\S+?)(?:\s+(@?\d+))?\s*$/i);
   if (m?.[1]) {
     return { symbol: m[1].trim(), tf: "1h", barsAgo: parseCandleReversalBarsAgo(m[2]) };
   }

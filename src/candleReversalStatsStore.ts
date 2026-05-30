@@ -63,9 +63,11 @@ type LegacyCandleReversalRow = CandleReversalStatsRow & {
 
 type LegacyCandleReversalRowV1 = LegacyCandleReversalRow & {
   signalBarTf?: CandleReversalStatsRow["signalBarTf"];
+  tradeSide?: CandleReversalStatsRow["tradeSide"];
   rangeScore?: number | null;
   wickScore?: number | null;
   rangeRankInLookback?: number | null;
+  lowRankInLookback?: number | null;
 };
 
 function finiteRank(v: number | null | undefined): number | null {
@@ -76,11 +78,17 @@ function nullNum(v: number | null | undefined): number | null {
   return v != null && Number.isFinite(v) ? v : null;
 }
 
+function normalizeTradeSide(raw: string | undefined): CandleReversalStatsRow["tradeSide"] {
+  return raw === "long" ? "long" : "short";
+}
+
 function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleReversalStatsRow {
   return {
     ...r,
     signalBarTf: r.signalBarTf === "1h" ? "1h" : "1d",
+    tradeSide: normalizeTradeSide(r.tradeSide),
     highRankInLookback: finiteRank(r.highRankInLookback),
+    lowRankInLookback: finiteRank(r.lowRankInLookback),
     rangeRankInLookback: finiteRank(r.rangeRankInLookback),
     volRankInLookback: finiteRank(r.volRankInLookback),
     lookbackBars: finiteRank(r.lookbackBars),
@@ -139,6 +147,7 @@ export async function saveCandleReversalStatsState(state: CandleReversalStatsSta
 export type AppendCandleReversalStatsInput = {
   symbol: string;
   signalBarTf: CandleReversalStatsRow["signalBarTf"];
+  tradeSide?: CandleReversalStatsRow["tradeSide"];
   model: CandleReversalStatsRow["model"];
   alertedAtIso: string;
   alertedAtMs: number;
@@ -149,6 +158,7 @@ export type AppendCandleReversalStatsInput = {
   wickRatioPct?: number | null;
   bodyPct?: number | null;
   highRankInLookback?: number | null;
+  lowRankInLookback?: number | null;
   rangeRankInLookback?: number | null;
   volRankInLookback?: number | null;
   lookbackBars?: number | null;
@@ -162,28 +172,36 @@ function normalizeStatsSymbol(symbol: string): string {
   return symbol.trim().toUpperCase();
 }
 
-function pendingReversalStatsKey(symbol: string, signalBarTf: CandleReversalStatsRow["signalBarTf"]): string {
-  return `${normalizeStatsSymbol(symbol)}:${signalBarTf === "1h" ? "1h" : "1d"}`;
+function pendingReversalStatsKey(
+  symbol: string,
+  signalBarTf: CandleReversalStatsRow["signalBarTf"],
+  tradeSide: CandleReversalStatsRow["tradeSide"] = "short",
+): string {
+  const side = tradeSide === "long" ? "long" : "short";
+  return `${normalizeStatsSymbol(symbol)}:${signalBarTf === "1h" ? "1h" : "1d"}:${side}`;
 }
 
-/** มีแถว pending อยู่แล้วสำหรับเหรียญ+TF นี้ */
+/** มีแถว pending อยู่แล้วสำหรับเหรียญ+TF+ทิศ นี้ */
 export function hasPendingCandleReversalStatsRow(
   rows: CandleReversalStatsRow[],
   symbol: string,
   signalBarTf: CandleReversalStatsRow["signalBarTf"],
+  tradeSide: CandleReversalStatsRow["tradeSide"] = "short",
 ): boolean {
-  const key = pendingReversalStatsKey(symbol, signalBarTf);
+  const key = pendingReversalStatsKey(symbol, signalBarTf, tradeSide);
   return rows.some(
-    (r) => r.outcome === "pending" && pendingReversalStatsKey(r.symbol, r.signalBarTf ?? "1d") === key,
+    (r) =>
+      r.outcome === "pending" &&
+      pendingReversalStatsKey(r.symbol, r.signalBarTf ?? "1d", r.tradeSide ?? "short") === key,
   );
 }
 
-/** คีย์ symbol:tf ของทุกแถว pending — ใช้กันยิงซ้ำระหว่างสแกน */
+/** คีย์ symbol:tf:side ของทุกแถว pending — ใช้กันยิงซ้ำระหว่างสแกน */
 export function candleReversalPendingStatsKeys(rows: CandleReversalStatsRow[]): Set<string> {
   const keys = new Set<string>();
   for (const r of rows) {
     if (r.outcome !== "pending") continue;
-    keys.add(pendingReversalStatsKey(r.symbol, r.signalBarTf ?? "1d"));
+    keys.add(pendingReversalStatsKey(r.symbol, r.signalBarTf ?? "1d", r.tradeSide ?? "short"));
   }
   return keys;
 }
@@ -204,7 +222,7 @@ export async function removeCandleReversalStatsDuplicatePendingRows(opts?: {
     if (r.outcome !== "pending") continue;
     const sym = normalizeStatsSymbol(r.symbol);
     if (symbolFilter && sym !== symbolFilter) continue;
-    const key = pendingReversalStatsKey(sym, r.signalBarTf ?? "1d");
+    const key = pendingReversalStatsKey(sym, r.signalBarTf ?? "1d", r.tradeSide ?? "short");
     const arr = byKey.get(key) ?? [];
     arr.push(r);
     byKey.set(key, arr);
@@ -234,8 +252,9 @@ export async function appendCandleReversalStatsRow(
   if (!isCandleReversalStatsEnabled()) return null;
 
   const signalBarTf = input.signalBarTf === "1h" ? "1h" : "1d";
+  const tradeSide = input.tradeSide === "long" ? "long" : "short";
   const state = await loadCandleReversalStatsState();
-  if (hasPendingCandleReversalStatsRow(state.rows, input.symbol, signalBarTf)) {
+  if (hasPendingCandleReversalStatsRow(state.rows, input.symbol, signalBarTf, tradeSide)) {
     return null;
   }
 
@@ -259,6 +278,7 @@ export async function appendCandleReversalStatsRow(
     id: randomUUID(),
     symbol: normalizeStatsSymbol(input.symbol),
     signalBarTf,
+    tradeSide,
     model: input.model,
     alertedAtIso: input.alertedAtIso,
     alertedAtMs: input.alertedAtMs,
@@ -270,6 +290,7 @@ export async function appendCandleReversalStatsRow(
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,
     bodyPct: input.bodyPct != null && Number.isFinite(input.bodyPct) ? input.bodyPct : null,
     highRankInLookback: finiteRank(input.highRankInLookback),
+    lowRankInLookback: finiteRank(input.lowRankInLookback),
     rangeRankInLookback: finiteRank(input.rangeRankInLookback),
     volRankInLookback: finiteRank(input.volRankInLookback),
     lookbackBars: finiteRank(input.lookbackBars),

@@ -18,6 +18,7 @@ import {
   candleReversalModelShortLabel,
   candleReversalOutcomeLabel,
   candleReversalLookbackRankCell,
+  candleReversalLowLookbackRankCell,
   candleReversalStatsSortDefaultDir,
   sortCandleReversalStatsRows,
   candleReversalVolScoreLabel,
@@ -34,8 +35,11 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const FOOTNOTE_1D =
   "Binance USDT-M · Short bias · 1D: follow-up 1d/3d/7d (ปิด Day) · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
-const FOOTNOTE_1H =
-  "Binance USDT-M · Short bias · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · winrate แยก 12h/24h/48h · ไม่ส่ง Telegram follow-up";
+const FOOTNOTE_1H_SHORT =
+  "Binance USDT-M · Short · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · winrate แยก 12h/24h/48h · ไม่ส่ง Telegram follow-up";
+
+const FOOTNOTE_1H_LONG =
+  "Binance USDT-M · Long · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · winrate แยก 12h/24h/48h · ไม่ส่ง Telegram follow-up";
 
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
@@ -225,7 +229,11 @@ type ReversalStatsSectionProps = {
   emptyHint: string;
   footnote: string;
   csvPrefix: string;
+  csvQuery?: string;
   rows: CandleReversalStatsRow[];
+  showHighRank?: boolean;
+  showLowRank?: boolean;
+  adverseTitle?: string;
 };
 
 function ReversalStatsSection({
@@ -235,7 +243,11 @@ function ReversalStatsSection({
   emptyHint,
   footnote,
   csvPrefix,
+  csvQuery = "",
   rows: rawRows,
+  showHighRank = true,
+  showLowRank = false,
+  adverseTitle,
 }: ReversalStatsSectionProps) {
   const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
   const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
@@ -286,7 +298,13 @@ function ReversalStatsSection({
     [tf],
   );
   const has48h = tf === "1h";
-  const emptyColSpan = has48h ? 23 : 22;
+  const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
+  const emptyColSpan = (has48h ? 23 : 22) + extraRankCols - 1;
+  const followUpAdverseTitle =
+    adverseTitle ??
+    (showLowRank
+      ? "Max adverse ตลอดช่วง follow-up (long: low ต่ำสุดจาก entry)"
+      : "Max adverse ตลอดช่วง follow-up (short: high สูงสุดจาก entry)");
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -294,9 +312,9 @@ function ReversalStatsSection({
       return;
     }
     await downloadCsv(statsCsvFilename(csvPrefix), candleReversalStatsToCsv(rows), {
-      telegramExportPath: `/api/tma/reversal-stats.csv?tf=${tf}`,
+      telegramExportPath: `/api/tma/reversal-stats.csv?tf=${tf}${csvQuery}`,
     });
-  }, [csvPrefix, rows, tf]);
+  }, [csvPrefix, csvQuery, rows, tf]);
 
   return (
     <section className="sparkStatsMatrixSection" style={{ marginTop: "1.5rem" }}>
@@ -411,13 +429,24 @@ function ReversalStatsSection({
                 activeSort={sort}
                 onSort={onSortColumn}
               />
-              <SortTh
-                label="High#"
-                sortKey="highRank"
-                title="อันดับ high ในรอบ lookback"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
+              {showHighRank ? (
+                <SortTh
+                  label="High#"
+                  sortKey="highRank"
+                  title="อันดับ high ในรอบ lookback"
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+              ) : null}
+              {showLowRank ? (
+                <SortTh
+                  label="Low#"
+                  sortKey="lowRank"
+                  title="อันดับ low ในรอบ lookback (1 = ต่ำสุด)"
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+              ) : null}
               <SortTh label="Range" sortKey="range" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="Wick" sortKey="wick" activeSort={sort} onSort={onSortColumn} />
               <SortTh
@@ -455,7 +484,7 @@ function ReversalStatsSection({
               <SortTh
                 label="สวน max"
                 sortKey="followUpAdverse"
-                title="Max adverse ตลอดช่วง follow-up (short: high สูงสุดจาก entry)"
+                title={followUpAdverseTitle}
                 activeSort={sort}
                 onSort={onSortColumn}
               />
@@ -500,7 +529,12 @@ function ReversalStatsSection({
                     <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
                     <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
                     <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
-                    <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
+                    {showHighRank ? (
+                      <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
+                    ) : null}
+                    {showLowRank ? (
+                      <td>{candleReversalLowLookbackRankCell(r.lowRankInLookback, r.lookbackBars)}</td>
+                    ) : null}
                     <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
                     <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
                     <td>{horizons[0]}</td>
@@ -552,8 +586,16 @@ export default function ReversalStatsTelegramMiniApp() {
     () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1d"),
     [allRows],
   );
-  const hourRows = useMemo(
-    () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1h"),
+  const hourShortRows = useMemo(
+    () =>
+      allRows.filter(
+        (r) => (r.signalBarTf ?? "1d") === "1h" && (r.tradeSide ?? "short") === "short",
+      ),
+    [allRows],
+  );
+  const hourLongRows = useMemo(
+    () =>
+      allRows.filter((r) => (r.signalBarTf ?? "1d") === "1h" && r.tradeSide === "long"),
     [allRows],
   );
 
@@ -720,7 +762,7 @@ export default function ReversalStatsTelegramMiniApp() {
       <h1 className="sparkStatsMatrixSectionTitle">
         สถิติ Reversal
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-          1D + 1H · โดจิ · ทุบ · แดงยาว
+          1D + 1H Short/Long · โดจิ · ทุบ · แดงยาว · เขียวยาว
         </span>
       </h1>
 
@@ -781,12 +823,26 @@ export default function ReversalStatsTelegramMiniApp() {
 
       <ReversalStatsSection
         tf="1h"
-        title="สถิติ Reversal · 1H"
-        subtitle="Intraday candle · follow-up 4h / 12h / 24h / 48h (ผลที่ 48h)"
-        emptyHint="ยังไม่มีแถว 1H — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
-        footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H}`}
-        csvPrefix="reversal-stats-1h"
-        rows={hourRows}
+        title="สถิติ Reversal · 1H Short"
+        subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
+        emptyHint="ยังไม่มีแถว 1H Short — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
+        footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_SHORT}`}
+        csvPrefix="reversal-stats-1h-short"
+        csvQuery="&side=short"
+        rows={hourShortRows}
+      />
+
+      <ReversalStatsSection
+        tf="1h"
+        title="สถิติ Reversal · Long 1H"
+        subtitle="Long · แท่งเขียวยาว + low ต่ำสุด 24 แท่ง · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
+        emptyHint="ยังไม่มีแถว Long 1H — รอสัญญาณ Reversal Long ส่งสำเร็จ (CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED)"
+        footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_LONG}`}
+        csvPrefix="reversal-stats-1h-long"
+        csvQuery="&side=long"
+        rows={hourLongRows}
+        showHighRank={false}
+        showLowRank
       />
     </div>
   );

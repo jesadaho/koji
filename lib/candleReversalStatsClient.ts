@@ -4,7 +4,13 @@ import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
 
 export type CandleReversalSignalBarTf = "1d" | "1h";
 
-export type CandleReversalModel = "inverted_doji" | "marubozu" | "longest_red_body";
+export type CandleReversalTradeSide = "short" | "long";
+
+export type CandleReversalModel =
+  | "inverted_doji"
+  | "marubozu"
+  | "longest_red_body"
+  | "longest_green_body";
 
 export type CandleReversalOutcome = "pending" | "win" | "loss" | "flat";
 
@@ -12,6 +18,7 @@ export type CandleReversalStatsRow = {
   id: string;
   symbol: string;
   signalBarTf: CandleReversalSignalBarTf;
+  tradeSide: CandleReversalTradeSide;
   model: CandleReversalModel;
   alertedAtIso: string;
   alertedAtMs: number;
@@ -23,6 +30,8 @@ export type CandleReversalStatsRow = {
   bodyPct: number | null;
   /** อันดับ high ในรอบ lookbackBars (1 = สูงสุด) */
   highRankInLookback: number | null;
+  /** อันดับ low ในรอบ lookbackBars (1 = ต่ำสุด) */
+  lowRankInLookback: number | null;
   /** อันดับ “ความยาวแท่ง” (high-low) ในรอบ lookbackBars (1 = ยาวสุด) */
   rangeRankInLookback: number | null;
   /** อันดับ volume ในรอบ lookbackBars (1 = สูงสุด) */
@@ -73,6 +82,7 @@ export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): s
 export function candleReversalModelLabel(model: CandleReversalModel): string {
   if (model === "inverted_doji") return "โดจิกลับหัว";
   if (model === "longest_red_body") return "แท่งแดงทุบยาว";
+  if (model === "longest_green_body") return "แท่งเขียวทุบยาว";
   return "แท่งแดงทุบ";
 }
 
@@ -80,12 +90,17 @@ export function candleReversalModelLabel(model: CandleReversalModel): string {
 export function candleReversalModelShortLabel(model: CandleReversalModel): string {
   if (model === "inverted_doji") return "โดจิ";
   if (model === "longest_red_body") return "แดงยาว";
+  if (model === "longest_green_body") return "เขียวยาว";
   return "ทุบ";
+}
+
+export function candleReversalTradeSideLabel(side: CandleReversalTradeSide): string {
+  return side === "long" ? "Long" : "Short";
 }
 
 /** คำอธิบายตัวย่อโมเดล (header / footnote) */
 export const CANDLE_REVERSAL_MODEL_SHORT_LEGEND =
-  "โดจิ=โดจิกลับหัว · ทุบ=แท่งแดงทุบ · แดงยาว=แท่งแดงทุบยาว";
+  "โดจิ=โดจิกลับหัว · ทุบ=แท่งแดงทุบ · แดงยาว=แท่งแดงทุบยาว · เขียวยาว=แท่งเขียวทุบยาว";
 
 export function candleReversalOutcomeLabel(o: CandleReversalOutcome): string {
   if (o === "pending") return "Pending";
@@ -110,6 +125,14 @@ export function candleReversalLookbackRankCell(
   return `${Math.floor(rank)}/${Math.floor(lookbackBars)}`;
 }
 
+/** อันดับ low ในรอบ lookback — เช่น 1/24 */
+export function candleReversalLowLookbackRankCell(
+  rank: number | null | undefined,
+  lookbackBars: number | null | undefined,
+): string {
+  return candleReversalLookbackRankCell(rank, lookbackBars);
+}
+
 export function candleReversalDayOfWeekBkk(alertedAtIso: string, alertedAtMs?: number | null): string {
   const ms =
     alertedAtMs != null && Number.isFinite(alertedAtMs)
@@ -122,6 +145,7 @@ export function candleReversalDayOfWeekBkk(alertedAtIso: string, alertedAtMs?: n
 export type CandleReversalStatsSortKey =
   | "symbol"
   | "tf"
+  | "side"
   | "model"
   | "greenDays"
   | "day"
@@ -134,6 +158,7 @@ export type CandleReversalStatsSortKey =
   | "rangeRank"
   | "volRank"
   | "highRank"
+  | "lowRank"
   | "range"
   | "wick"
   | "h1"
@@ -161,6 +186,7 @@ const MODEL_SORT_ORDER: Record<CandleReversalModel, number> = {
   inverted_doji: 0,
   marubozu: 1,
   longest_red_body: 2,
+  longest_green_body: 3,
 };
 
 const OUTCOME_SORT_ORDER: Record<CandleReversalOutcome, number> = {
@@ -204,6 +230,8 @@ function compareCandleReversalStatsRows(
       return cmpStr(a.symbol, b.symbol);
     case "tf":
       return cmpStr(a.signalBarTf ?? "1d", b.signalBarTf ?? "1d");
+    case "side":
+      return cmpStr(a.tradeSide ?? "short", b.tradeSide ?? "short");
     case "model":
       return (
         (MODEL_SORT_ORDER[a.model] ?? 99) - (MODEL_SORT_ORDER[b.model] ?? 99) ||
@@ -234,6 +262,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.volRankInLookback, b.volRankInLookback);
     case "highRank":
       return cmpNumNullLast(a.highRankInLookback, b.highRankInLookback);
+    case "lowRank":
+      return cmpNumNullLast(a.lowRankInLookback, b.lowRankInLookback);
     case "range":
       return cmpNumNullLast(a.rangeScore, b.rangeScore);
     case "wick":
@@ -279,7 +309,7 @@ export function candleReversalGreenDaysLabel(v: number | null | undefined): stri
 }
 
 export function candleReversalStatsSortDefaultDir(key: CandleReversalStatsSortKey): CandleReversalStatsSortDir {
-  if (key === "symbol" || key === "tf" || key === "model" || key === "day" || key === "outcome") {
+  if (key === "symbol" || key === "tf" || key === "side" || key === "model" || key === "day" || key === "outcome") {
     return "asc";
   }
   return "desc";

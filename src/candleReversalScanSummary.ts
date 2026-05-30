@@ -85,6 +85,8 @@ export type CandleReversalTfScanSummaryStats = {
   marubozuPassSymbols: string[];
   longestRedPass: number;
   longestRedPassSymbols: string[];
+  longestGreenPass: number;
+  longestGreenPassSymbols: string[];
   deduped: number;
   dedupedSymbols: string[];
   cappedByRunLimit: number;
@@ -108,13 +110,15 @@ export function emptyCandleReversalTfScanSummaryStats(tf: CandleReversalTf): Can
     marubozuPassSymbols: [],
     longestRedPass: 0,
     longestRedPassSymbols: [],
+    longestGreenPass: 0,
+    longestGreenPassSymbols: [],
     deduped: 0,
     dedupedSymbols: [],
     cappedByRunLimit: 0,
     cappedByRunLimitSymbols: [],
     sent: 0,
     sentSymbols: [],
-    sentByModel: { inverted_doji: 0, marubozu: 0, longest_red_body: 0 },
+    sentByModel: { inverted_doji: 0, marubozu: 0, longest_red_body: 0, longest_green_body: 0 },
     errors: [],
   };
 }
@@ -165,9 +169,13 @@ export function formatCandleReversalScanSummaryMessage(opts: {
     lines.push(...formatSymbolListLines("  ", stats.marubozuPassSymbols));
   } else {
     lines.push("");
-    lines.push("— 1H แท่งแดงทุบยาว —");
+    lines.push("— 1H แท่งแดงทุบยาว (Short) —");
     lines.push(`ครบเกณฑ์ (ก่อน dedupe): ${stats.longestRedPass}`);
     lines.push(...formatSymbolListLines("  ", stats.longestRedPassSymbols));
+    lines.push("");
+    lines.push("— 1H แท่งเขียวทุบยาว (Long) —");
+    lines.push(`ครบเกณฑ์ (ก่อน dedupe): ${stats.longestGreenPass}`);
+    lines.push(...formatSymbolListLines("  ", stats.longestGreenPassSymbols));
     lines.push("");
     lines.push("— 1H โดจิกลับหัว —");
     lines.push(`ครบเกณฑ์ (ก่อน dedupe): ${stats.invertedDojiPass}`);
@@ -183,7 +191,7 @@ export function formatCandleReversalScanSummaryMessage(opts: {
   lines.push(`ส่ง Telegram สำเร็จ: ${stats.sent} (รอบนี้รวม TF นี้ ${alertsSentThisTf})`);
   lines.push(...formatSymbolListLines("  ", stats.sentSymbols));
   lines.push(
-    `  โดจิ ${stats.sentByModel.inverted_doji} · ทุบ ${stats.sentByModel.marubozu} · แดงยาว ${stats.sentByModel.longest_red_body}`,
+    `  โดจิ ${stats.sentByModel.inverted_doji} · ทุบ ${stats.sentByModel.marubozu} · แดงยาว ${stats.sentByModel.longest_red_body} · เขียวยาว ${stats.sentByModel.longest_green_body}`,
   );
 
   if (stats.errors.length > 0) {
