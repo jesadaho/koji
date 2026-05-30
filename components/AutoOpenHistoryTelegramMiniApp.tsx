@@ -359,7 +359,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
 
   if (phase === "loading") {
     return (
-      <main className="sparkStatsPage">
+      <main className="sparkStatsPage sparkStatsPage--wide">
         <p className="sub">กำลังโหลด…</p>
       </main>
     );
@@ -367,7 +367,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
 
   if (phase === "setup") {
     return (
-      <main className="sparkStatsPage">
+      <main className="sparkStatsPage sparkStatsPage--wide">
         <h1 className="sparkStatsMatrixSectionTitle" style={{ marginTop: 0 }}>
           ประวัติ Auto-open
         </h1>
@@ -382,7 +382,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   }
 
   return (
-    <main className="sparkStatsPage">
+    <main className="sparkStatsPage sparkStatsPage--wide">
       <h1 className="sparkStatsMatrixSectionTitle" style={{ marginTop: 0 }}>
         ประวัติ Auto-open
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
