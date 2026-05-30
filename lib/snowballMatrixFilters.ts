@@ -1,11 +1,11 @@
 /**
  * Matrix presets สำหรับกรองสถิติ Snowball (LONG)
- * — The Snipers / The Whale Riders
+ * — The Snipers / The Whale Riders / High Winrate
  */
 
 import { snowballStatsVolVsSmaDisplay, type SnowballStatsRow } from "@/lib/snowballStatsClient";
 
-export type SnowballMatrixFilter = "all" | "snipers" | "whaleRiders";
+export type SnowballMatrixFilter = "all" | "snipers" | "whaleRiders" | "highWinrate";
 
 export const SNOWBALL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: SnowballMatrixFilter;
@@ -14,6 +14,7 @@ export const SNOWBALL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   { value: "all", label: "ทั้งหมด" },
   { value: "snipers", label: "🥇 Snipers" },
   { value: "whaleRiders", label: "🚀 Whale Riders" },
+  { value: "highWinrate", label: "📈 High Winrate" },
 ];
 
 export function snowballMatrixFilterLabel(filter: SnowballMatrixFilter): string {
@@ -26,6 +27,9 @@ export function snowballMatrixFilterTitle(filter: SnowballMatrixFilter): string 
   }
   if (filter === "whaleRiders") {
     return "The Whale Riders (LONG): Vol rank #1–10 · Vol×SMA≥4× · R% สัญญาณ 3–10% (≤15%) · Wick<0.40 · ไม่กรอง Grade/BTC";
+  }
+  if (filter === "highWinrate") {
+    return "High Winrate: BTC SAR 4h↓ · เขียว 2 วันก่อนสัญญาณ";
   }
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
@@ -75,6 +79,25 @@ export function snowballRowMatchesSnipersMatrix(row: SnowballStatsRow): boolean 
   return true;
 }
 
+function btcSar4hDown(row: Pick<SnowballStatsRow, "btcPsar4hTrend">): boolean {
+  return row.btcPsar4hTrend === "down";
+}
+
+function greenDaysBeforeSignalIs(
+  row: Pick<SnowballStatsRow, "greenDaysBeforeSignal">,
+  days: number,
+): boolean {
+  const n = row.greenDaysBeforeSignal;
+  return n != null && Number.isFinite(n) && Math.floor(n) === days;
+}
+
+/** 📈 High Winrate — BTC 4h↓ + Day1 เขียว 2 วันติดก่อนสัญญาณ */
+export function snowballRowMatchesHighWinrateMatrix(row: SnowballStatsRow): boolean {
+  if (!btcSar4hDown(row)) return false;
+  if (!greenDaysBeforeSignalIs(row, 2)) return false;
+  return true;
+}
+
 /** 🚀 The Whale Riders — ไม่กรอง Grade / BTC 4h */
 export function snowballRowMatchesWhaleRidersMatrix(row: SnowballStatsRow): boolean {
   if (!snowballRowIsLong(row)) return false;
@@ -94,5 +117,6 @@ export function snowballStatsRowMatchesMatrixFilter(
 ): boolean {
   if (filter === "all") return true;
   if (filter === "snipers") return snowballRowMatchesSnipersMatrix(row);
-  return snowballRowMatchesWhaleRidersMatrix(row);
+  if (filter === "whaleRiders") return snowballRowMatchesWhaleRidersMatrix(row);
+  return snowballRowMatchesHighWinrateMatrix(row);
 }
