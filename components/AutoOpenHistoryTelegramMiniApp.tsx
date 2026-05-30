@@ -78,6 +78,39 @@ function contractKey(symbol: string): string {
   return symbol.trim().toUpperCase();
 }
 
+function fmtMarginUsdt(marginUsdt: number | null | undefined): string {
+  if (marginUsdt == null || !Number.isFinite(marginUsdt) || marginUsdt <= 0) return "—";
+  const n = Number.isInteger(marginUsdt) ? String(marginUsdt) : marginUsdt.toFixed(2).replace(/\.?0+$/, "");
+  return `${n} USDT`;
+}
+
+function fmtLeverage(leverage: number | null | undefined): string {
+  if (leverage == null || !Number.isFinite(leverage) || leverage < 1) return "—";
+  return `${Math.floor(leverage)}x`;
+}
+
+function fmtMarginCell(row: AutoOpenOrderLogRow): ReactNode {
+  const main = fmtMarginUsdt(row.marginUsdt);
+  if (main === "—") return main;
+  const scale =
+    row.source === "snowball" &&
+    row.marginScale != null &&
+    Number.isFinite(row.marginScale) &&
+    row.marginScale > 0 &&
+    row.marginScale !== 1
+      ? `scale ${row.marginScale}×`
+      : null;
+  if (!scale) return main;
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      {main}
+      <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
+        {scale}
+      </span>
+    </span>
+  );
+}
+
 function fmtPnlCell(
   row: AutoOpenOrderLogRow,
   markPrice: number | undefined,
@@ -472,6 +505,8 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                 <th>แหล่ง</th>
                 <th>เหรียญ</th>
                 <th>ทิศ</th>
+                <th>Margin</th>
+                <th>Lev</th>
                 <th>Entry</th>
                 <th>ปัจจุบัน</th>
                 <th>P/L</th>
@@ -487,7 +522,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             <tbody>
               {displayRows.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="sub">
+                  <td colSpan={16} className="sub">
                     ยังไม่มีบันทึก — จะมีเมื่อมีสัญญาณและระบบประเมิน auto-open ของบัญชีคุณ
                   </td>
                 </tr>
@@ -502,6 +537,8 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                     <td>{autoOpenSourceLabel(r.source)}</td>
                     <td>{coinLabel(r.binanceSymbol || r.contractSymbol)}</td>
                     <td>{r.side ? r.side.toUpperCase() : "—"}</td>
+                    <td>{fmtMarginCell(r)}</td>
+                    <td>{fmtLeverage(r.leverage)}</td>
                     <td>{fmtPrice(resolveAutoOpenEntryPrice(r))}</td>
                     <td>{fmtPrice(nowPx)}</td>
                     <td>{fmtPnlCell(r, nowPx)}</td>
