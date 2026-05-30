@@ -34,6 +34,12 @@ import {
   marketSentimentSentimentLabel,
 } from "@/lib/marketSentiment";
 import { candleReversalStatsToCsv } from "@/lib/candleReversalStatsCsvExport";
+import {
+  STATS_VOL_VS_SMA_FILTER_OPTIONS,
+  statsRowMatchesVolVsSmaFilter,
+  statsVolVsSmaFilterLabel,
+  type StatsVolVsSmaFilter,
+} from "@/lib/statsVolVsSmaFilter";
 import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -146,15 +152,7 @@ function SortTh({
 type ReversalShapeFilter = "all" | "wick80" | "body80" | "wickOrBody80";
 type ReversalDayFilter = "all" | "3" | "7" | "30" | "90";
 type ReversalLenRankFilter = "all" | "rank3to15";
-type ReversalVolVsSmaFilter = "all" | "ge1" | "ge15" | "ge2" | "ge25";
-
-const REVERSAL_VOL_VS_SMA_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalVolVsSmaFilter; label: string }> = [
-  { value: "all", label: "ทั้งหมด" },
-  { value: "ge1", label: "≥ 1.0×" },
-  { value: "ge15", label: "≥ 1.5×" },
-  { value: "ge2", label: "≥ 2.0×" },
-  { value: "ge25", label: "≥ 2.5×" },
-];
+type ReversalVolVsSmaFilter = StatsVolVsSmaFilter;
 
 const REVERSAL_LEN_RANK_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalLenRankFilter; label: string }> = [
   { value: "all", label: "ทั้งหมด" },
@@ -215,18 +213,8 @@ function reversalRowMatchesLenRankFilter(row: CandleReversalStatsRow, filter: Re
   return r >= 3 && r <= 15;
 }
 
-function reversalVolVsSmaFilterLabel(filter: ReversalVolVsSmaFilter): string {
-  return REVERSAL_VOL_VS_SMA_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
-}
-
 function reversalRowMatchesVolVsSmaFilter(row: CandleReversalStatsRow, filter: ReversalVolVsSmaFilter): boolean {
-  if (filter === "all") return true;
-  const v = row.signalVolVsSma;
-  if (v == null || !Number.isFinite(v)) return false;
-  if (filter === "ge1") return v >= 1;
-  if (filter === "ge15") return v >= 1.5;
-  if (filter === "ge2") return v >= 2;
-  return v >= 2.5;
+  return statsRowMatchesVolVsSmaFilter(row.signalVolVsSma, filter);
 }
 
 function reversalWinrateSummary(rows: CandleReversalStatsRow[]): string {
@@ -415,7 +403,7 @@ function ReversalStatsSection({
             style={{ width: "auto", minWidth: "7.5rem" }}
             title="Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด"
           >
-            {REVERSAL_VOL_VS_SMA_FILTER_OPTIONS.map((opt) => (
+            {STATS_VOL_VS_SMA_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
@@ -561,7 +549,7 @@ function ReversalStatsSection({
               <tr>
                 <td colSpan={emptyColSpan} className="sub">
                   {rawRows.length > 0
-                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${reversalVolVsSmaFilterLabel(volVsSmaFilter)}`
+                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)}`
                     : emptyHint}
                 </td>
               </tr>
