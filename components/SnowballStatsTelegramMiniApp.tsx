@@ -9,6 +9,13 @@ import {
   prepareTelegramMiniAppShell,
 } from "@/lib/kojiTelegramWebApp";
 import {
+  SNOWBALL_MATRIX_FILTER_OPTIONS,
+  snowballMatrixFilterLabel,
+  snowballMatrixFilterTitle,
+  snowballStatsRowMatchesMatrixFilter,
+  type SnowballMatrixFilter,
+} from "@/lib/snowballMatrixFilters";
+import {
   snowballHorizonWinrateSummary,
   snowballStatsBarRangePctLabel,
   snowballStatsConfirmVolRankLabel,
@@ -262,6 +269,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
   const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
+  const [matrixFilter, setMatrixFilter] = useState<SnowballMatrixFilter>("all");
 
   const isAdmin = payload?.isAdmin === true;
 
@@ -497,8 +505,12 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => snowballStatsRowMatchesVolRankFilter(r, volRankFilter));
     }
 
+    if (matrixFilter !== "all") {
+      result = result.filter((r) => snowballStatsRowMatchesMatrixFilter(r, matrixFilter));
+    }
+
     return result;
-  }, [allRows, dayFilter, gradeFilter, dowFilter, volVsSmaFilter, volRankFilter]);
+  }, [allRows, dayFilter, gradeFilter, dowFilter, volVsSmaFilter, volRankFilter, matrixFilter]);
 
   const horizonWinrateText = useMemo(
     () =>
@@ -664,10 +676,34 @@ export default function SnowballStatsTelegramMiniApp() {
               ))}
             </select>
           </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            Matrix
+            <select
+              value={matrixFilter}
+              onChange={(e) => setMatrixFilter(e.currentTarget.value as SnowballMatrixFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "9rem" }}
+              title={snowballMatrixFilterTitle(matrixFilter)}
+            >
+              {SNOWBALL_MATRIX_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <span className="sub">
             แสดง {rows.length}/{allRows.length}
           </span>
         </div>
+        {matrixFilter !== "all" ? (
+          <p className="sub" style={{ marginBottom: "0.5rem" }} title={snowballMatrixFilterTitle(matrixFilter)}>
+            {snowballMatrixFilterTitle(matrixFilter)}
+          </p>
+        ) : null}
         <p
           className="sub"
           title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +3% · Loss ≤ -3% · ทิศของสัญญาณถูกปรับให้บวก = ฝั่งกำไรแล้ว · WR ไม่นับ flat (decisive = wins + losses), +Nf = จำนวน flat"
@@ -792,7 +828,7 @@ export default function SnowballStatsTelegramMiniApp() {
                   <td colSpan={isAdmin ? 37 : 36} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / ทุกวัน / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
+                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
                   </td>
                 </tr>
               ) : (
