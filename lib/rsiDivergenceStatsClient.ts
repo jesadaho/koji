@@ -44,7 +44,7 @@ export type RsiDivergenceStatsRow = {
   marketCapUsd: number | null;
   /** Snapshot market sentiment (Market Pulse) ณ เวลาแจ้ง */
   marketSentiment?: MarketSentimentSnapshot | null;
-  /** Follow-up close บนแท่ง 1d — ผลสุดท้ายอ่านที่ 7d */
+  /** Follow-up close บนแท่ง 1d — ผลสุดท้ายอ่านที่ horizon ตัดผล (ดีฟอลต์ 3d) */
   price1d: number | null;
   pct1d: number | null;
   price3d: number | null;

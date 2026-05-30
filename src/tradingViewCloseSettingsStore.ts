@@ -112,6 +112,10 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeTp1PartialPct?: number;
   reversalAutoTradeTp2PricePct?: number;
   reversalAutoTradeMaxHoldHours?: number;
+  /** เปิด auto เมื่อเนื้อหรือไส้บน > 80% ของช่วงแท่ง (ดีฟอลต์เปิด) */
+  reversalAutoTradeGateBodyWick80?: boolean;
+  /** เปิด auto เมื่อ Len# (rangeRankInLookback) อยู่ 3–15 (ดีฟอลต์เปิด) */
+  reversalAutoTradeGateLenRank315?: boolean;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -261,6 +265,8 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeTp1PartialPct?: number | null;
   reversalAutoTradeTp2PricePct?: number | null;
   reversalAutoTradeMaxHoldHours?: number | null;
+  reversalAutoTradeGateBodyWick80?: boolean;
+  reversalAutoTradeGateLenRank315?: boolean;
 };
 
 /**
@@ -326,7 +332,9 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeTp1PricePct !== undefined ||
     input.reversalAutoTradeTp1PartialPct !== undefined ||
     input.reversalAutoTradeTp2PricePct !== undefined ||
-    input.reversalAutoTradeMaxHoldHours !== undefined;
+    input.reversalAutoTradeMaxHoldHours !== undefined ||
+    input.reversalAutoTradeGateBodyWick80 !== undefined ||
+    input.reversalAutoTradeGateLenRank315 !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -552,6 +560,16 @@ export async function saveTradingViewMexcSettings(
         : input.reversalAutoTradeMaxHoldHours !== undefined
           ? input.reversalAutoTradeMaxHoldHours
           : prev?.reversalAutoTradeMaxHoldHours,
+
+    reversalAutoTradeGateBodyWick80:
+      input.reversalAutoTradeGateBodyWick80 !== undefined
+        ? input.reversalAutoTradeGateBodyWick80
+        : prev?.reversalAutoTradeGateBodyWick80 ?? true,
+
+    reversalAutoTradeGateLenRank315:
+      input.reversalAutoTradeGateLenRank315 !== undefined
+        ? input.reversalAutoTradeGateLenRank315
+        : prev?.reversalAutoTradeGateLenRank315 ?? true,
   };
 
   void touchedSnowballPatch;

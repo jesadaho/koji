@@ -125,7 +125,7 @@ const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จในกลุ่ม — เฉพาะแท่งสัญญาณที่เนื้อเทียนหรือไส้บน > 80% ของช่วงแท่ง — entry ใช้ EMA50 ของ TF 15m: ถ้าราคาปัจจุบันอยู่เหนือ EMA50 จะเปิด Market SHORT ทันที, ถ้ายังต่ำกว่า EMA จะวาง Limit SHORT รอ retest ที่ EMA50 — 1 order/เหรียญ/วัน (BKK) · ปิดเซิร์ฟทั้งหมดด้วย REVERSAL_AUTOTRADE_ENABLED=0";
+  "Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จในกลุ่ม — เลือก gate ได้: เนื้อ/ไส้บน > 80% ของช่วงแท่ง และ/หรือ Len# 3–15 (เปิดอย่างน้อยหนึ่งแบบ) — entry ใช้ EMA50 ของ TF 15m: ราคาเหนือ EMA50 → Market SHORT, ต่ำกว่า → Limit ที่ EMA50 — 1 order/เหรียญ/วัน (BKK) · ปิดเซิร์ฟด้วย REVERSAL_AUTOTRADE_ENABLED=0";
 
 export function getLiffConfig() {
   return {
@@ -921,7 +921,7 @@ export async function liffResetRsiDivergenceStats(
 
 /**
  * Backfill RSI Divergence stats: รัน follow-up tick (refetch horizon ที่ Binance + auto-finalize)
- * + force-recompute outcome ทุกแถวจาก pct7d โดยข้าม pending guard
+ * + force-recompute outcome ทุกแถวจาก horizon ตัดผล (ดีฟอลต์ pct3d) โดยข้าม pending guard
  */
 export async function liffBackfillRsiDivergenceStats(
   telegramUserId: number,
@@ -1064,6 +1064,8 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     tp1PartialPct: row.reversalAutoTradeTp1PartialPct ?? null,
     tp2PricePct: row.reversalAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.reversalAutoTradeMaxHoldHours ?? null,
+    gateBodyWick80: row.reversalAutoTradeGateBodyWick80 !== false,
+    gateLenRank315: row.reversalAutoTradeGateLenRank315 !== false,
   };
 }
 
@@ -1470,6 +1472,20 @@ function parseReversalAutoTradeNested(
   else if (o.tpSlEnabled === "1" || o.tpSlEnabled === 1 || o.tpSlEnabled === "true") tpSlEnabled = true;
   else if (o.tpSlEnabled === "0" || o.tpSlEnabled === 0 || o.tpSlEnabled === "false") tpSlEnabled = false;
 
+  const parseGateBool = (key: string, defaultOn: boolean): boolean => {
+    if (!(key in o)) return defaultOn;
+    const x = o[key];
+    if (typeof x === "boolean") return x;
+    if (x === "1" || x === 1 || x === "true") return true;
+    if (x === "0" || x === 0 || x === "false") return false;
+    return defaultOn;
+  };
+  const gateBodyWick80 = parseGateBool("gateBodyWick80", true);
+  const gateLenRank315 = parseGateBool("gateLenRank315", true);
+  if (enabled && !gateBodyWick80 && !gateLenRank315) {
+    return { ok: false, error: "reversal_gate_required" };
+  }
+
   const patchPart: Omit<
     SaveTradingViewMexcInput,
     "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
@@ -1485,6 +1501,8 @@ function parseReversalAutoTradeNested(
     reversalAutoTradeTp2PricePct: mTp2.v as number | null | undefined,
     reversalAutoTradeMaxHoldHours:
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
+    reversalAutoTradeGateBodyWick80: gateBodyWick80,
+    reversalAutoTradeGateLenRank315: gateLenRank315,
   };
   if (tpSlEnabled !== undefined) patchPart.reversalAutoTradeTpSlEnabled = tpSlEnabled;
   return { ok: true, patch: patchPart };

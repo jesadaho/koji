@@ -29,10 +29,25 @@ function rsiDivergenceFollowUpSide(kind: RsiDivergenceKind): StatsFollowUpSide {
   return kind === "bullish" ? "long" : "short";
 }
 
-function followupDays(): number {
+/** วันที่ใช้ตัดผล Win/Loss/Flat (ดีฟอลต์ 3) */
+export function rsiDivergenceStatsFollowupDays(): number {
   const v = Number(process.env.RSI_DIVERGENCE_STATS_FOLLOWUP_DAYS?.trim());
   if (Number.isFinite(v) && v >= 1 && v <= 30) return Math.floor(v);
-  return 7;
+  return 3;
+}
+
+/** เก็บคอลัมน์ 7d ในตารางเสมอ (แยกจากวันตัดผล) */
+const DIVERGENCE_STATS_DISPLAY_DAYS = 7;
+
+function followupDays(): number {
+  return rsiDivergenceStatsFollowupDays();
+}
+
+function outcomePct(row: RsiDivergenceStatsRow): number | null {
+  const d = followupDays();
+  if (d <= 1) return row.pct1d;
+  if (d <= 3) return row.pct3d;
+  return row.pct7d;
 }
 
 /** bullish = long bias; bearish = short bias */
@@ -132,8 +147,9 @@ async function followUpRow(
 ): Promise<boolean> {
   const entry = row.entryPrice;
   const ac = anchorCloseSec(row);
-  const followSec = followupDays() * DAY_SEC;
-  const windowEndSec = Math.min(nowSec, ac + followSec);
+  const outcomeSec = followupDays() * DAY_SEC;
+  const displaySec = Math.max(outcomeSec, DIVERGENCE_STATS_DISPLAY_DAYS * DAY_SEC);
+  const windowEndSec = Math.min(nowSec, ac + displaySec);
 
   const dayPack = await fetchBinanceUsdmKlinesRange(row.symbol, "1d", {
     startTimeMs: row.signalBarOpenSec * 1000,
@@ -153,8 +169,22 @@ async function followUpRow(
 
   const h1d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, ac + DAY_SEC, entry, row.kind);
   const h3d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, ac + 3 * DAY_SEC, entry, row.kind);
-  let h7d = pickHorizonClose(dayT, dayC, DAY_SEC, iDayFirst, iDayLast, nowSec, ac + followSec, entry, row.kind);
-  if (h7d == null && nowSec >= ac + followSec && iDayLast >= iDayFirst) {
+  let h7d = pickHorizonClose(
+    dayT,
+    dayC,
+    DAY_SEC,
+    iDayFirst,
+    iDayLast,
+    nowSec,
+    ac + DIVERGENCE_STATS_DISPLAY_DAYS * DAY_SEC,
+    entry,
+    row.kind,
+  );
+  if (
+    h7d == null &&
+    nowSec >= ac + DIVERGENCE_STATS_DISPLAY_DAYS * DAY_SEC &&
+    iDayLast >= iDayFirst
+  ) {
     const p = dayC[iDayLast]!;
     h7d = { price: p, pct: pctVsEntry(row.kind, entry, p) };
   }
@@ -184,16 +214,17 @@ async function followUpRow(
     row.pct7d = h7d.pct;
   }
 
-  const finalized = nowSec >= ac + followSec && row.pct7d != null;
+  const pctOutcome = outcomePct(row);
+  const finalized = nowSec >= ac + outcomeSec && pctOutcome != null;
   if (finalized) {
-    applyOutcomeFromPct(row, row.pct7d ?? 0);
+    applyOutcomeFromPct(row, pctOutcome);
   }
   return true;
 }
 
 /**
- * Admin — force-recompute outcome ทุกแถวจาก pct7d ที่บันทึกอยู่
- * ข้าม pending guard (ถ้า pct7d มีค่าแล้ว → re-evaluate ทันที)
+ * Admin — force-recompute outcome ทุกแถวจาก horizon ตัดผล (ดีฟอลต์ pct3d)
+ * ข้าม pending guard (ถ้ามี pct แล้ว → re-evaluate ทันที)
  */
 export async function correctRsiDivergenceStatsOutcome(opts?: {
   symbol?: string;
@@ -205,11 +236,12 @@ export async function correctRsiDivergenceStatsOutcome(opts?: {
 
   for (const row of state.rows) {
     if (symbolFilter && row.symbol.trim().toUpperCase() !== symbolFilter) continue;
-    if (row.pct7d == null || !Number.isFinite(row.pct7d)) continue;
+    const pct = outcomePct(row);
+    if (pct == null || !Number.isFinite(pct)) continue;
     scanned += 1;
 
     const prev = row.outcome;
-    applyOutcomeFromPct(row, row.pct7d);
+    applyOutcomeFromPct(row, pct);
     if (row.outcome !== prev) changedOutcome += 1;
   }
 
@@ -230,8 +262,12 @@ export async function runRsiDivergenceStatsFollowUpTick(nowMs: number): Promise<
     if (!Number.isFinite(entry) || entry <= 0) continue;
     const ac = anchorCloseSec(row);
     if (nowSec < ac) continue;
-    const followSec = followupDays() * DAY_SEC;
-    const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < ac + followSec;
+    const displaySec = Math.max(
+      followupDays() * DAY_SEC,
+      DIVERGENCE_STATS_DISPLAY_DAYS * DAY_SEC,
+    );
+    const needsFollowUpAdverse =
+      row.followUpMaxAdversePct == null || nowSec < ac + displaySec;
     if (row.outcome !== "pending" && !needsFollowUpAdverse) continue;
     try {
       const ok = await followUpRow(row, nowMs, nowSec);

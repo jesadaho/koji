@@ -21,6 +21,7 @@ import {
   candleReversalLowLookbackRankCell,
   candleReversalStatsSortDefaultDir,
   sortCandleReversalStatsRows,
+  candleReversalSignalVolVsSmaLabel,
   candleReversalVolScoreLabel,
   type CandleReversalSignalBarTf,
   type CandleReversalStatsApiPayload,
@@ -145,6 +146,15 @@ function SortTh({
 type ReversalShapeFilter = "all" | "wick80" | "body80" | "wickOrBody80";
 type ReversalDayFilter = "all" | "3" | "7" | "30" | "90";
 type ReversalLenRankFilter = "all" | "rank3to15";
+type ReversalVolVsSmaFilter = "all" | "ge1" | "ge15" | "ge2" | "ge25";
+
+const REVERSAL_VOL_VS_SMA_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalVolVsSmaFilter; label: string }> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "ge1", label: "≥ 1.0×" },
+  { value: "ge15", label: "≥ 1.5×" },
+  { value: "ge2", label: "≥ 2.0×" },
+  { value: "ge25", label: "≥ 2.5×" },
+];
 
 const REVERSAL_LEN_RANK_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalLenRankFilter; label: string }> = [
   { value: "all", label: "ทั้งหมด" },
@@ -205,6 +215,20 @@ function reversalRowMatchesLenRankFilter(row: CandleReversalStatsRow, filter: Re
   return r >= 3 && r <= 15;
 }
 
+function reversalVolVsSmaFilterLabel(filter: ReversalVolVsSmaFilter): string {
+  return REVERSAL_VOL_VS_SMA_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+function reversalRowMatchesVolVsSmaFilter(row: CandleReversalStatsRow, filter: ReversalVolVsSmaFilter): boolean {
+  if (filter === "all") return true;
+  const v = row.signalVolVsSma;
+  if (v == null || !Number.isFinite(v)) return false;
+  if (filter === "ge1") return v >= 1;
+  if (filter === "ge15") return v >= 1.5;
+  if (filter === "ge2") return v >= 2;
+  return v >= 2.5;
+}
+
 function reversalWinrateSummary(rows: CandleReversalStatsRow[]): string {
   const done = rows.filter((r) => r.outcome !== "pending");
   const wins = done.filter((r) => r.outcome === "win").length;
@@ -257,6 +281,7 @@ function ReversalStatsSection({
   const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
   const [dayFilter, setDayFilter] = useState<ReversalDayFilter>("all");
   const [lenRankFilter, setLenRankFilter] = useState<ReversalLenRankFilter>("all");
+  const [volVsSmaFilter, setVolVsSmaFilter] = useState<ReversalVolVsSmaFilter>("all");
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -272,9 +297,10 @@ function ReversalStatsSection({
         (r) =>
           reversalRowMatchesShapeFilter(r, shapeFilter) &&
           reversalRowMatchesDayFilter(r, dayFilter) &&
-          reversalRowMatchesLenRankFilter(r, lenRankFilter),
+          reversalRowMatchesLenRankFilter(r, lenRankFilter) &&
+          reversalRowMatchesVolVsSmaFilter(r, volVsSmaFilter),
       ),
-    [rawRows, shapeFilter, dayFilter, lenRankFilter],
+    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter],
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
   const winrateText = useMemo(() => reversalWinrateSummary(filteredRows), [filteredRows]);
@@ -303,7 +329,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 23 : 22) + extraRankCols + 1;
+  const emptyColSpan = (has48h ? 23 : 22) + extraRankCols + 2;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -380,6 +406,22 @@ function ReversalStatsSection({
             ))}
           </select>
         </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          Vol×SMA
+          <select
+            value={volVsSmaFilter}
+            onChange={(e) => setVolVsSmaFilter(e.currentTarget.value as ReversalVolVsSmaFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "7.5rem" }}
+            title="Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด"
+          >
+            {REVERSAL_VOL_VS_SMA_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <span className="sub">
           แสดง {filteredRows.length}/{rawRows.length} · {winrateText}
         </span>
@@ -430,6 +472,13 @@ function ReversalStatsSection({
                 label="Vol#"
                 sortKey="volRank"
                 title="อันดับ volume ในรอบ lookback"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label="Vol×SMA"
+                sortKey="volVsSma"
+                title="Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด"
                 activeSort={sort}
                 onSort={onSortColumn}
               />
@@ -512,7 +561,7 @@ function ReversalStatsSection({
               <tr>
                 <td colSpan={emptyColSpan} className="sub">
                   {rawRows.length > 0
-                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)}`
+                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${reversalVolVsSmaFilterLabel(volVsSmaFilter)}`
                     : emptyHint}
                 </td>
               </tr>
@@ -539,6 +588,7 @@ function ReversalStatsSection({
                     <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
                     <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
                     <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
+                    <td>{candleReversalSignalVolVsSmaLabel(r.signalVolVsSma)}</td>
                     {showHighRank ? (
                       <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
                     ) : null}

@@ -9,6 +9,10 @@ import {
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 import {
+  candleReversalSignalVolVsSmaAt,
+  candleReversalVolSmaPeriod,
+} from "./candleReversalSignalVolVsSma";
+import {
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
   saveCandleReversalStatsState,
@@ -221,6 +225,37 @@ async function backfillRangeRankInLookback(rows: CandleReversalStatsRow[]): Prom
       updated += 1;
     } catch (e) {
       console.error("[candleReversalStatsTick] backfill range rank", row.symbol, tf, e);
+    }
+  }
+  return updated;
+}
+
+async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<number> {
+  const period = candleReversalVolSmaPeriod();
+  let updated = 0;
+  for (const row of rows) {
+    if (row.signalVolVsSma != null && Number.isFinite(row.signalVolVsSma) && row.signalVolVsSma > 0) {
+      continue;
+    }
+    const tf = signalBarTf(row);
+    const barDur = signalBarDurationSecByTf(tf);
+    const windowStartSec = row.signalBarOpenSec - (period + 4) * barDur;
+    const windowEndSec = row.signalBarOpenSec + barDur;
+    try {
+      const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
+        startTimeMs: windowStartSec * 1000,
+        endTimeMs: windowEndSec * 1000,
+        limit: 800,
+      });
+      if (!pack || pack.timeSec.length === 0) continue;
+      const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
+      if (iSig < 0) continue;
+      const ratio = candleReversalSignalVolVsSmaAt(pack, iSig, period);
+      if (ratio == null || !Number.isFinite(ratio) || ratio <= 0) continue;
+      row.signalVolVsSma = ratio;
+      updated += 1;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] backfill signalVolVsSma", row.symbol, tf, e);
     }
   }
   return updated;
@@ -539,6 +574,7 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
   const nowSec = Math.floor(nowMs / 1000);
 
   dirty += await backfillRangeRankInLookback(state.rows);
+  dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += backfill1hOutcomeTo24h(state.rows);
 

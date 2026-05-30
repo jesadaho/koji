@@ -36,6 +36,8 @@ export type CandleReversalStatsRow = {
   rangeRankInLookback: number | null;
   /** อันดับ volume ในรอบ lookbackBars (1 = สูงสุด) */
   volRankInLookback: number | null;
+  /** Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด */
+  signalVolVsSma?: number | null;
   lookbackBars: number | null;
   rangeScore: number | null;
   wickScore: number | null;
@@ -114,6 +116,11 @@ export function candleReversalVolScoreLabel(value: number | null | undefined): s
   return value.toFixed(2);
 }
 
+export function candleReversalSignalVolVsSmaLabel(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v) || v <= 0) return "—";
+  return `${v.toFixed(2)}×`;
+}
+
 /** อันดับในรอบ lookback — เช่น 2/24 */
 export function candleReversalLookbackRankCell(
   rank: number | null | undefined,
@@ -157,6 +164,7 @@ export type CandleReversalStatsSortKey =
   | "bodyPct"
   | "rangeRank"
   | "volRank"
+  | "volVsSma"
   | "highRank"
   | "lowRank"
   | "range"
@@ -260,6 +268,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.rangeRankInLookback, b.rangeRankInLookback);
     case "volRank":
       return cmpNumNullLast(a.volRankInLookback, b.volRankInLookback);
+    case "volVsSma":
+      return cmpNumNullLast(a.signalVolVsSma, b.signalVolVsSma);
     case "highRank":
       return cmpNumNullLast(a.highRankInLookback, b.highRankInLookback);
     case "lowRank":

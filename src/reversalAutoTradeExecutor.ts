@@ -46,20 +46,28 @@ const REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO = 0.8;
 const REVERSAL_AUTOTRADE_LEN_RANK_MIN = 3;
 const REVERSAL_AUTOTRADE_LEN_RANK_MAX = 15;
 
-/** gate เปิดออเดอร์: body หรือไส้ > 80% หรือ Len# อยู่ 3–15 */
+/** gate เปิดออเดอร์ — เปิดใช้แต่ละเงื่อนไขได้แยก (ดีฟอลต์เปิดทั้งคู่) */
 export function reversalAutotradePassesEntryGate(input: {
   bodyRatio: number;
   wickRatio: number;
   rangeRankInLookback?: number | null;
+  allowBodyWick80?: boolean;
+  allowLenRank315?: boolean;
 }): boolean {
+  const allowBody = input.allowBodyWick80 !== false;
+  const allowLen = input.allowLenRank315 !== false;
+  if (!allowBody && !allowLen) return false;
+
   const body = Number.isFinite(input.bodyRatio) ? input.bodyRatio : 0;
   const wick = Number.isFinite(input.wickRatio) ? input.wickRatio : 0;
   if (
-    body > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO ||
-    wick > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO
+    allowBody &&
+    (body > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO ||
+      wick > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO)
   ) {
     return true;
   }
+  if (!allowLen) return false;
   const rank = input.rangeRankInLookback;
   if (rank == null || !Number.isFinite(rank)) return false;
   const r = Math.floor(rank);
@@ -246,22 +254,10 @@ function logReversalAutoOpen(
   });
 }
 
-function logReversalEntryGateForEnabledUsers(
-  map: Record<string, TradingViewMexcUserSettings>,
-  signal: ReversalAutoOpenLogSignal,
-): void {
-  for (const [userId, rowRaw] of Object.entries(map)) {
-    if (!/^tg:\d+$/.test(userId.trim())) continue;
-    const row = rowRaw as TradingViewMexcUserSettings;
-    if (!row.reversalAutoTradeEnabled) continue;
-    logReversalAutoOpen(userId, signal, "skipped", "entry_gate");
-  }
-}
-
 /**
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
  * - เปิดเฉพาะ user ที่ตั้ง `reversalAutoTradeEnabled` + มี MEXC creds
- * - gate: body หรือ upper wick > 80% **หรือ** Len# (rangeRankInLookback) อยู่ 3–15
+ * - gate (ตั้งแยกได้): body/ไส้บน > 80% **หรือ** Len# (rangeRankInLookback) 3–15
  * - entry แบบ hybrid ตาม EMA50 บน TF 15m:
  *   - ราคาตลาด > EMA50 → Market SHORT ทันที
  *   - ราคาตลาด <= EMA50 → Limit SHORT ที่ราคา EMA50 (ดักรีเทสต์)
@@ -297,20 +293,6 @@ export async function runReversalAutoTradeAfterReversalAlert(
         rangeRankInLookback: input.rangeRankInLookback,
       }
     : null;
-
-  if (
-    !reversalAutotradePassesEntryGate({
-      bodyRatio,
-      wickRatio,
-      rangeRankInLookback: input.rangeRankInLookback,
-    })
-  ) {
-    if (gateSignalBase) {
-      const mapForGate = await loadTradingViewMexcSettingsFullMap();
-      logReversalEntryGateForEnabledUsers(mapForGate, gateSignalBase);
-    }
-    return { usersAttempted: 0, usersSucceeded: 0 };
-  }
 
   const contractSymbol = contractSymbolEarly;
   if (!contractSymbol) return { usersAttempted: 0, usersSucceeded: 0 };
@@ -394,6 +376,19 @@ export async function runReversalAutoTradeAfterReversalAlert(
     const row = rowRaw as TradingViewMexcUserSettings;
     if (!row.reversalAutoTradeEnabled) {
       logReversalAutoOpen(userId, logSignal, "skipped", "user_disabled");
+      continue;
+    }
+
+    if (
+      !reversalAutotradePassesEntryGate({
+        bodyRatio,
+        wickRatio,
+        rangeRankInLookback: input.rangeRankInLookback,
+        allowBodyWick80: row.reversalAutoTradeGateBodyWick80,
+        allowLenRank315: row.reversalAutoTradeGateLenRank315,
+      })
+    ) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "entry_gate");
       continue;
     }
 

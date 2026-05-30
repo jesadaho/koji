@@ -32,7 +32,7 @@ import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const FOOTNOTE =
-  "Binance USDT-M · 2 Waves + Confirm (RSI cross / Price break) · follow-up 1d/3d/7d · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
+  "Binance USDT-M · 2 Waves + Confirm (RSI cross / Price break) · follow-up 1d/3d/7d · ผลที่ 3d · ไม่ส่ง Telegram follow-up";
 
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
@@ -238,7 +238,7 @@ function DivergenceStatsSection({
                 activeSort={sort}
                 onSort={onSortColumn}
               />
-              <SortTh label="ผล" sortKey="outcome" title="ผลที่ครบ 7d" activeSort={sort} onSort={onSortColumn} />
+              <SortTh label="ผล" sortKey="outcome" title="ผลที่ครบ 3d (RSI_DIVERGENCE_STATS_FOLLOWUP_DAYS)" activeSort={sort} onSort={onSortColumn} />
             </tr>
           </thead>
           <tbody>
@@ -357,7 +357,7 @@ export default function DivergenceStatsTelegramMiniApp() {
       !window.confirm(
         "ปรับ result และ backfill RSI Divergence stats?\n\n" +
           "1) Refetch horizon (1d/3d/7d) จาก Binance + auto-finalize แถวที่ครบเวลา\n" +
-          "2) Recompute outcome ทุกแถวจาก pct7d — ทับของเดิม โดยไม่สนใจ pending guard\n\n" +
+          "2) Recompute outcome ทุกแถวจาก horizon ตัดผล (ดีฟอลต์ pct3d) — ทับของเดิม โดยไม่สนใจ pending guard\n\n" +
           "อาจใช้เวลาหลายวินาทีขึ้นกับจำนวนแถว",
       )
     ) {
@@ -495,7 +495,7 @@ export default function DivergenceStatsTelegramMiniApp() {
             type="button"
             className="sparkStatsRefreshBtn"
             disabled={backfillBusy}
-            title="Refetch horizon (1d/3d/7d) จาก Binance + recompute outcome ทุกแถวจาก pct7d — ข้าม pending guard"
+            title="Refetch horizon (1d/3d/7d) จาก Binance + recompute outcome จาก horizon ตัดผล (ดีฟอลต์ 3d) — ข้าม pending guard"
             onClick={() => void backfillStats()}
           >
             {backfillBusy ? "กำลังปรับ…" : "ปรับ result และ backfill"}
@@ -532,7 +532,7 @@ export default function DivergenceStatsTelegramMiniApp() {
       <DivergenceStatsSection
         kind="bullish"
         title={`${rsiDivergenceKindBadge("bullish")} Divergence`}
-        subtitle="Price LL vs RSI HL — long bias · follow-up 1d / 3d / 7d (ผลที่ 7d)"
+        subtitle="Price LL vs RSI HL — long bias · follow-up 1d / 3d / 7d (ผลที่ 3d)"
         emptyHint="ยังไม่มีแถว Bullish — รอสัญญาณยิงสำเร็จ (INDICATOR_PUBLIC_RSI_DIVERGENCE_ENABLED)"
         footnote={FOOTNOTE}
         csvPrefix="divergence-stats-bullish"
@@ -542,7 +542,7 @@ export default function DivergenceStatsTelegramMiniApp() {
       <DivergenceStatsSection
         kind="bearish"
         title={`${rsiDivergenceKindBadge("bearish")} Divergence`}
-        subtitle="Price HH vs RSI LH — short bias · follow-up 1d / 3d / 7d (ผลที่ 7d)"
+        subtitle="Price HH vs RSI LH — short bias · follow-up 1d / 3d / 7d (ผลที่ 3d)"
         emptyHint="ยังไม่มีแถว Bearish — รอสัญญาณยิงสำเร็จ (INDICATOR_PUBLIC_RSI_DIVERGENCE_ENABLED)"
         footnote={FOOTNOTE}
         csvPrefix="divergence-stats-bearish"

@@ -68,6 +68,7 @@ type LegacyCandleReversalRowV1 = LegacyCandleReversalRow & {
   wickScore?: number | null;
   rangeRankInLookback?: number | null;
   lowRankInLookback?: number | null;
+  signalVolVsSma?: number | null;
 };
 
 function finiteRank(v: number | null | undefined): number | null {
@@ -91,6 +92,7 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     lowRankInLookback: finiteRank(r.lowRankInLookback),
     rangeRankInLookback: finiteRank(r.rangeRankInLookback),
     volRankInLookback: finiteRank(r.volRankInLookback),
+    signalVolVsSma: nullNum(r.signalVolVsSma),
     lookbackBars: finiteRank(r.lookbackBars),
     rangeScore: r.rangeScore != null && Number.isFinite(r.rangeScore) ? r.rangeScore : null,
     wickScore: r.wickScore != null && Number.isFinite(r.wickScore) ? r.wickScore : null,
@@ -161,6 +163,7 @@ export type AppendCandleReversalStatsInput = {
   lowRankInLookback?: number | null;
   rangeRankInLookback?: number | null;
   volRankInLookback?: number | null;
+  signalVolVsSma?: number | null;
   lookbackBars?: number | null;
   rangeScore?: number | null;
   wickScore?: number | null;
@@ -293,6 +296,10 @@ export async function appendCandleReversalStatsRow(
     lowRankInLookback: finiteRank(input.lowRankInLookback),
     rangeRankInLookback: finiteRank(input.rangeRankInLookback),
     volRankInLookback: finiteRank(input.volRankInLookback),
+    signalVolVsSma:
+      input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0
+        ? input.signalVolVsSma
+        : null,
     lookbackBars: finiteRank(input.lookbackBars),
     rangeScore,
     wickScore,
