@@ -34,7 +34,7 @@ export async function fetchAutoOpenMarkPrices(contractSymbols: string[]): Promis
   if (wanted.size === 0) return out;
 
   await Promise.all(
-    [...wanted].map(async (sym) => {
+    Array.from(wanted).map(async (sym) => {
       const t = await fetchContractTickerSingle(sym);
       const lp = t?.lastPrice;
       if (typeof lp === "number" && Number.isFinite(lp) && lp > 0) out[sym] = lp;
