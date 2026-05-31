@@ -135,13 +135,10 @@ async function telegramCsvDownloadUrl(exportPath: string): Promise<string | null
   return buildTelegramCsvDownloadUrl(exportPath, token);
 }
 
-/** Telegram.WebApp.downloadFile — HTTPS จริง + token สั้น (ไม่ใช้ blob:) */
-async function tryTelegramDownloadFile(filename: string, exportPath: string): Promise<boolean> {
+/** Telegram.WebApp.downloadFile — URL ต้องเป็น HTTPS พร้อม csv_token แล้ว */
+async function tryTelegramDownloadFileUrl(filename: string, url: string): Promise<boolean> {
   const w = window.Telegram?.WebApp;
   if (!w?.downloadFile) return false;
-
-  const url = await telegramCsvDownloadUrl(exportPath);
-  if (!url) return false;
 
   const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
 
@@ -163,6 +160,58 @@ async function tryTelegramDownloadFile(filename: string, exportPath: string): Pr
       finish(false);
     }
   });
+}
+
+/** Telegram.WebApp.downloadFile — HTTPS จริง + token สั้น (ไม่ใช้ blob:) */
+async function tryTelegramDownloadFile(filename: string, exportPath: string): Promise<boolean> {
+  const url = await telegramCsvDownloadUrl(exportPath);
+  if (!url) return false;
+  return tryTelegramDownloadFileUrl(filename, url);
+}
+
+/** อัปโหลด CSV หลัง filter ชั่วคราว แล้ว downloadFile (มือถือใน Telegram) */
+async function tryTelegramStagedCsvDelivery(filename: string, csv: string): Promise<boolean> {
+  const initData = getTelegramInitData();
+  if (!initData) return false;
+  const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+  let res: Response;
+  try {
+    res = await fetch(`${apiOrigin()}/api/tma/csv-export-staging`, {
+      method: "POST",
+      headers: {
+        Authorization: `tma ${initData}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ csv, filename: name }),
+    });
+  } catch {
+    return false;
+  }
+  const text = await res.text();
+  if (!res.ok) return false;
+  let parsed: { token?: string; path?: string };
+  try {
+    parsed = JSON.parse(text) as { token?: string; path?: string };
+  } catch {
+    return false;
+  }
+  const token = typeof parsed.token === "string" ? parsed.token.trim() : "";
+  const path = typeof parsed.path === "string" && parsed.path.trim() ? parsed.path.trim() : "stats-export.csv";
+  if (!token) return false;
+  const exportPath = `/api/tma/${path}?csv_token=${encodeURIComponent(token)}`;
+  const url = `${apiOrigin()}${exportPath}`;
+  if (await tryTelegramDownloadFileUrl(name, url)) return true;
+  try {
+    const w = window.Telegram?.WebApp;
+    if (w?.openLink) {
+      w.openLink(url);
+      window.alert("เปิดลิงก์ดาวน์โหลดในเบราว์เซอร์แล้ว — กดบันทึก/แชร์ไฟล์ CSV");
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
 }
 
 /** เปิด URL ดาวน์โหลดในเบราว์เซอร์ภายนอก (มือถือ/เดสก์ท็อปที่ downloadFile ไม่ขึ้น) */
@@ -279,9 +328,10 @@ async function deliverCsvBlob(
       return false;
     };
 
-    // preferClientCsvInTma — CSV จากตารางหลัง filter (ไม่ fallback API เพราะ API ไม่รู้ตัวกรองบนหน้า)
+    // preferClientCsvInTma — CSV จากตารางหลัง filter (staging + downloadFile บนมือถือ)
     if (preferClientCsvInTma && hasClientCsv) {
       if (await tryClientBlobDelivery()) return true;
+      if (await tryTelegramStagedCsvDelivery(name, csv)) return true;
     } else {
       if (await tryServerCsvDelivery()) return true;
       if (await tryClientBlobDelivery()) return true;
@@ -327,10 +377,14 @@ export async function downloadCsv(
     return;
   }
 
-  // มี CSV จากตารางแล้วแต่ส่งไฟล์ไม่ได้ — ไม่ดึง API (ข้อมูลไม่ตรงตัวกรองบนหน้า)
+  // มี CSV จากตารางแล้วแต่ส่งไฟล์ไม่ได้ — ไม่ดึง API ทั้งก้อน (ไม่ตรงตัวกรอง)
   if (preferClient && content.trim()) {
+    if (await tryClipboardCsv(content)) {
+      window.alert("คัดลอก CSV ไปคลิปบอร์ดแล้ว — วางใน Numbers / Excel แล้วบันทึกเป็นไฟล์");
+      return;
+    }
     window.alert(
-      "ดาวน์โหลดไม่สำเร็จ — ลอง Share / คัดลอก หรือเปิด Mini App บนเดสก์ท็อป",
+      "ดาวน์โหลดไม่สำเร็จ — ลองอีกครั้งหรืออัปเดต Telegram (รองรับ downloadFile)",
     );
     return;
   }

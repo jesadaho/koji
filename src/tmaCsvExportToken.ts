@@ -6,6 +6,8 @@ export const TMA_CSV_EXPORT_PATHS = new Set([
   "reversal-stats.csv",
   "divergence-stats.csv",
   "auto-open-history.csv",
+  /** CSV ชั่วคราวจาก Mini App หลัง filter (one-time download) */
+  "stats-export.csv",
 ]);
 
 const TTL_SEC = 120;
@@ -27,20 +29,42 @@ function b64urlDecode(s: string): string | null {
   }
 }
 
+export type TmaCsvExportTokenClaims = {
+  telegramUserId: number;
+  stagingId?: string;
+};
+
 /** สร้าง token สำหรับ Telegram.WebApp.downloadFile (HTTPS URL สั้น ไม่ใส่ initData ทั้งก้อน) */
-export function createTmaCsvExportToken(telegramUserId: number, csvPath: string): string | null {
+export function createTmaCsvExportToken(
+  telegramUserId: number,
+  csvPath: string,
+  stagingId?: string,
+): string | null {
   if (!TMA_CSV_EXPORT_PATHS.has(csvPath)) return null;
+  if (csvPath === "stats-export.csv") {
+    const sid = typeof stagingId === "string" ? stagingId.trim() : "";
+    if (!sid) return null;
+  } else if (stagingId) {
+    return null;
+  }
   const secret = signingSecret();
   if (!secret || !Number.isFinite(telegramUserId) || telegramUserId <= 0) return null;
 
   const exp = Math.floor(Date.now() / 1000) + TTL_SEC;
-  const payload = `${Math.floor(telegramUserId)}:${csvPath}:${exp}`;
+  const uid = Math.floor(telegramUserId);
+  const payload =
+    csvPath === "stats-export.csv"
+      ? `${uid}:${csvPath}:${exp}:${stagingId!.trim()}`
+      : `${uid}:${csvPath}:${exp}`;
   const sig = createHmac("sha256", secret).update(payload).digest("base64url");
   return b64urlEncode(`${payload}|${sig}`);
 }
 
-/** คืน telegramUserId ถ้า token ถูกต้องและ path ตรง */
-export function verifyTmaCsvExportToken(token: string, csvPath: string): number | null {
+/** คืน claims ถ้า token ถูกต้องและ path ตรง */
+export function verifyTmaCsvExportToken(
+  token: string,
+  csvPath: string,
+): TmaCsvExportTokenClaims | null {
   if (!TMA_CSV_EXPORT_PATHS.has(csvPath)) return null;
   const secret = signingSecret();
   if (!secret) return null;
@@ -63,6 +87,19 @@ export function verifyTmaCsvExportToken(token: string, csvPath: string): number 
   }
 
   const parts = payload.split(":");
+  if (csvPath === "stats-export.csv") {
+    if (parts.length !== 4) return null;
+    const [uidStr, path, expStr, stagingId] = parts;
+    if (path !== csvPath) return null;
+    const uid = Number(uidStr);
+    const exp = Number(expStr);
+    if (!Number.isFinite(uid) || uid <= 0 || !Number.isFinite(exp)) return null;
+    if (Math.floor(Date.now() / 1000) > exp) return null;
+    const sid = stagingId?.trim();
+    if (!sid) return null;
+    return { telegramUserId: uid, stagingId: sid };
+  }
+
   if (parts.length !== 3) return null;
   const [uidStr, path, expStr] = parts;
   if (path !== csvPath) return null;
@@ -72,7 +109,7 @@ export function verifyTmaCsvExportToken(token: string, csvPath: string): number 
   if (!Number.isFinite(uid) || uid <= 0 || !Number.isFinite(exp)) return null;
   if (Math.floor(Date.now() / 1000) > exp) return null;
 
-  return uid;
+  return { telegramUserId: uid };
 }
 
 export function csvPathFromTmaExportUrl(exportPath: string): string | null {

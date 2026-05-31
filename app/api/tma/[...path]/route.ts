@@ -11,6 +11,7 @@ import {
   verifyTmaCsvExportToken,
   TMA_CSV_EXPORT_PATHS,
 } from "@/src/tmaCsvExportToken";
+import { consumeTmaStagedCsv, putTmaStagedCsv } from "@/src/tmaCsvStagingStore";
 import { candleReversalStatsToCsv } from "@/lib/candleReversalStatsCsvExport";
 import { rsiDivergenceStatsToCsv } from "@/lib/rsiDivergenceStatsCsvExport";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
@@ -73,27 +74,38 @@ function jsonError(e: unknown, status = 500) {
   return json({ error: msg }, status);
 }
 
+type TmaCsvDownloadAuth =
+  | { ok: false; status: number; error: string }
+  | { ok: true; userId: string; telegramUserId: number; stagingId?: string };
+
 /** Authorization header หรือ ?csv_token= (สำหรับ Telegram.WebApp.downloadFile) */
 async function authenticateTmaCsvDownload(
   req: NextRequest,
   csvPath: string,
-): Promise<TmaAuthResult> {
+): Promise<TmaCsvDownloadAuth> {
   const token = req.nextUrl.searchParams.get("csv_token");
   if (token) {
-    const telegramUserId = verifyTmaCsvExportToken(token, csvPath);
-    if (telegramUserId == null) {
+    const claims = verifyTmaCsvExportToken(token, csvPath);
+    if (claims == null) {
       return { ok: false, status: 401, error: "ลิงก์ดาวน์โหลดหมดอายุหรือไม่ถูกต้อง" };
     }
     return {
       ok: true,
-      userId: tgUserIdToStoreKey(telegramUserId),
-      telegramUserId,
+      userId: tgUserIdToStoreKey(claims.telegramUserId),
+      telegramUserId: claims.telegramUserId,
+      stagingId: claims.stagingId,
     };
   }
-  return authenticateTmaFromRequest(
+  const base = await authenticateTmaFromRequest(
     req.headers.get("authorization"),
     req.nextUrl.searchParams.get("tma"),
   );
+  if (!base.ok) return base;
+  return {
+    ok: true,
+    userId: base.userId,
+    telegramUserId: base.telegramUserId,
+  };
 }
 
 export async function GET(req: NextRequest, ctx: Ctx) {
@@ -167,6 +179,17 @@ export async function GET(req: NextRequest, ctx: Ctx) {
         status: 200,
         headers: { "Cache-Control": "no-store" },
       });
+    }
+    if (segs.length === 1 && a === "stats-export.csv") {
+      const auth = await authenticateTmaCsvDownload(req, "stats-export.csv");
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const stagingId = auth.stagingId?.trim();
+      if (!stagingId) return json({ error: "missing_staging" }, 400);
+      const staged = consumeTmaStagedCsv(auth.telegramUserId, stagingId);
+      if (!staged) {
+        return json({ error: "ไฟล์หมดอายุหรือดาวน์โหลดไปแล้ว — กด Export อีกครั้ง" }, 404);
+      }
+      return statsCsvAttachmentResponse(staged.csv, staged.filename);
     }
     if (segs.length === 1 && a === "snowball-stats.csv") {
       const auth = await authenticateTmaCsvDownload(req, "snowball-stats.csv");
@@ -298,7 +321,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         return json({ error: "JSON ไม่ถูกต้อง" }, 400);
       }
       const path = typeof body.path === "string" ? body.path.trim() : "";
-      if (!path || !TMA_CSV_EXPORT_PATHS.has(path)) {
+      if (!path || !TMA_CSV_EXPORT_PATHS.has(path) || path === "stats-export.csv") {
         return json({ error: "path ไม่รองรับ" }, 400);
       }
       const token = createTmaCsvExportToken(auth.telegramUserId, path);
@@ -306,6 +329,40 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         return json({ error: "สร้างลิงก์ดาวน์โหลดไม่ได้" }, 500);
       }
       return json({ token, path, expiresSec: 120 });
+    }
+
+    if (segs.length === 1 && a === "csv-export-staging") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      let body: { csv?: string; filename?: string };
+      try {
+        body = (await req.json()) as { csv?: string; filename?: string };
+      } catch {
+        return json({ error: "JSON ไม่ถูกต้อง" }, 400);
+      }
+      const put = putTmaStagedCsv(
+        auth.telegramUserId,
+        typeof body.csv === "string" ? body.csv : "",
+        typeof body.filename === "string" ? body.filename : "export.csv",
+      );
+      if ("error" in put) {
+        const msg =
+          put.error === "csv_too_large"
+            ? "ไฟล์ใหญ่เกินไป — ลดตัวกรองหรือย่อช่วงเวลา"
+            : put.error === "empty_csv"
+              ? "ไม่มีข้อมูลให้ export"
+              : "บันทึกชั่วคราวไม่สำเร็จ";
+        return json({ error: msg }, put.error === "csv_too_large" ? 413 : 400);
+      }
+      const token = createTmaCsvExportToken(
+        auth.telegramUserId,
+        "stats-export.csv",
+        put.stagingId,
+      );
+      if (!token) {
+        return json({ error: "สร้างลิงก์ดาวน์โหลดไม่ได้" }, 500);
+      }
+      return json({ token, path: "stats-export.csv", expiresSec: 120 });
     }
 
     if (segs.length === 1 && a === "alerts") {
