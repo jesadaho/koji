@@ -153,8 +153,7 @@ type ReversalAutoTradeApiBundle = {
   tp1PartialPct?: number | null;
   tp2PricePct?: number | null;
   maxHoldHours?: number | null;
-  gateBodyWick80?: boolean;
-  gateLenRank315?: boolean;
+  gateQualitySignal?: boolean;
 };
 
 type TradingViewMexcResponse = {
@@ -222,8 +221,7 @@ export default function SettingsTelegramMiniApp() {
   const [revTp1PartialPct, setRevTp1PartialPct] = useState("");
   const [revTp2PricePct, setRevTp2PricePct] = useState("");
   const [revMaxHoldHours, setRevMaxHoldHours] = useState("");
-  const [revGateBodyWick80, setRevGateBodyWick80] = useState(true);
-  const [revGateLenRank315, setRevGateLenRank315] = useState(true);
+  const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaveErr, setRevSaveErr] = useState("");
   const [revSaveOk, setRevSaveOk] = useState("");
   const [revSaving, setRevSaving] = useState(false);
@@ -300,8 +298,11 @@ export default function SettingsTelegramMiniApp() {
     setRevMaxHoldHours(
       st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
     );
-    setRevGateBodyWick80(st.gateBodyWick80 !== false);
-    setRevGateLenRank315(st.gateLenRank315 !== false);
+    setRevGateQualitySignal(
+      st.gateQualitySignal !== undefined
+        ? st.gateQualitySignal !== false
+        : st.gateBodyWick80 !== false || st.gateLenRank315 !== false,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.reversalAutoTrade]);
 
@@ -692,8 +693,8 @@ export default function SettingsTelegramMiniApp() {
       return;
     }
     if (revEnabled) {
-      if (!revGateBodyWick80 && !revGateLenRank315) {
-        setRevSaveErr("เลือกอย่างน้อยหนึ่งเกณฑ์ gate — เนื้อ/ไส้ > 80% หรือ Len# 3–15");
+      if (!revGateQualitySignal) {
+        setRevSaveErr("เปิดใช้ Quality Signal gate ก่อนบันทึก");
         return;
       }
       if (marginParsed == null || marginParsed <= 0) {
@@ -730,8 +731,7 @@ export default function SettingsTelegramMiniApp() {
     try {
       const reversalAutoTrade: Record<string, unknown> = {
         enabled: revEnabled,
-        gateBodyWick80: revGateBodyWick80,
-        gateLenRank315: revGateLenRank315,
+        gateQualitySignal: revGateQualitySignal,
         marginUsdt: revMargin.trim() ? marginParsed : null,
         leverage: revLeverage.trim() ? levParsed : null,
         tpSlEnabled: revTpSlEnabled,
@@ -1335,7 +1335,7 @@ export default function SettingsTelegramMiniApp() {
         <h2>Reversal auto-open (MEXC) — SHORT</h2>
         <p className="sub" style={{ marginTop: 0 }}>
           เมื่อ <strong>Reversal alert ส่งสำเร็จในกลุ่ม</strong> ระบบจะสั่ง MEXC เปิด <strong>SHORT</strong> เมื่อสัญญาณผ่าน{" "}
-          <strong>เกณฑ์ gate</strong> ที่เลือกด้านล่าง (อย่างน้อยหนึ่งแบบ) · entry แบบ hybrid ตาม <strong>EMA50 บน TF 15m</strong>:
+          <strong>Quality Signal</strong> (ถ้าเปิด gate ด้านล่าง) · entry แบบ hybrid ตาม <strong>EMA50 บน TF 15m</strong>:
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
           <li>ราคาตลาดอยู่<strong>เหนือ</strong> EMA50 15m → เปิด <strong>Market SHORT</strong> ทันที</li>
@@ -1371,30 +1371,17 @@ export default function SettingsTelegramMiniApp() {
           </span>
         </label>
 
-        <p className="sub" style={{ marginTop: "0.85rem", fontWeight: 600 }}>
-          เกณฑ์เปิดออเดอร์ (gate)
-        </p>
-        <p className="sub" style={{ marginTop: 0 }}>
-          สัญญาณต้องผ่าน <strong>อย่างน้อยหนึ่ง</strong> เงื่อนไขที่เปิดใช้ — Len# = อันดับความยาวแท่ง (high−low) ในรอบ lookback ของสัญญาณ
-        </p>
-        <label className="sub tmaCheckboxField" style={{ marginTop: "0.5rem" }}>
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.85rem" }}>
           <input
             type="checkbox"
-            checked={revGateBodyWick80}
-            onChange={(e) => setRevGateBodyWick80(e.target.checked)}
+            checked={revGateQualitySignal}
+            onChange={(e) => setRevGateQualitySignal(e.target.checked)}
           />
           <span className="tmaCheckboxField__text">
-            <strong style={{ fontWeight: 600 }}>เนื้อเทียน (body) หรือไส้บน &gt; 80%</strong> ของช่วงแท่ง
-          </span>
-        </label>
-        <label className="sub tmaCheckboxField" style={{ marginTop: "0.35rem" }}>
-          <input
-            type="checkbox"
-            checked={revGateLenRank315}
-            onChange={(e) => setRevGateLenRank315(e.target.checked)}
-          />
-          <span className="tmaCheckboxField__text">
-            <strong style={{ fontWeight: 600 }}>Len# อยู่ระหว่าง 3–15</strong> (ไม่ใช่แท่งยาวสุดในรอบ แต่ยังอยู่กลุ่มยาว)
+            <strong style={{ fontWeight: 600 }}>Quality Signal</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range &lt; 4.5 (ตรง preset ในสถิติ Reversal)
+            </span>
           </span>
         </label>
 

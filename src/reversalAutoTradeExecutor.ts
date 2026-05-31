@@ -25,6 +25,7 @@ import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNo
 import type { CandleReversalModel, CandleReversalTf } from "./candleReversalDetect";
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
+import { reversalMatchesQualitySignal } from "@/lib/reversalMatrixFilters";
 
 /** ค่าเริ่มต้นกลยุทธ์ TP/SL เมื่อ user ยังไม่ตั้งค่า (อ่านจาก settings ของ user) */
 const REVERSAL_TPSL_DEFAULT_TP1_PCT = 10;
@@ -39,39 +40,19 @@ export function isReversalAutotradeEnabled(): boolean {
   return true;
 }
 
-/** เกณฑ์ body/wick ขั้นต่ำสำหรับ Reversal auto-open (ทศนิยม 0–1) */
-const REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO = 0.8;
-
-/** Len# (rangeRankInLookback) ที่เปิด auto ได้เมื่อไม่ถึงเกณฑ์ body/wick — 1 = แท่งยาวสุดใน lookback */
-const REVERSAL_AUTOTRADE_LEN_RANK_MIN = 3;
-const REVERSAL_AUTOTRADE_LEN_RANK_MAX = 15;
-
-/** gate เปิดออเดอร์ — เปิดใช้แต่ละเงื่อนไขได้แยก (ดีฟอลต์เปิดทั้งคู่) */
+/** gate เปิดออเดอร์ — Quality Signal (เขียว ≥1 · Wick ≤0.20 · Range <4.5) */
 export function reversalAutotradePassesEntryGate(input: {
-  bodyRatio: number;
   wickRatio: number;
-  rangeRankInLookback?: number | null;
-  allowBodyWick80?: boolean;
-  allowLenRank315?: boolean;
+  greenDaysBeforeSignal?: number | null;
+  rangeScore?: number | null;
+  allowQualitySignal?: boolean;
 }): boolean {
-  const allowBody = input.allowBodyWick80 !== false;
-  const allowLen = input.allowLenRank315 !== false;
-  if (!allowBody && !allowLen) return false;
-
-  const body = Number.isFinite(input.bodyRatio) ? input.bodyRatio : 0;
-  const wick = Number.isFinite(input.wickRatio) ? input.wickRatio : 0;
-  if (
-    allowBody &&
-    (body > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO ||
-      wick > REVERSAL_AUTOTRADE_BODY_OR_WICK_MIN_RATIO)
-  ) {
-    return true;
-  }
-  if (!allowLen) return false;
-  const rank = input.rangeRankInLookback;
-  if (rank == null || !Number.isFinite(rank)) return false;
-  const r = Math.floor(rank);
-  return r >= REVERSAL_AUTOTRADE_LEN_RANK_MIN && r <= REVERSAL_AUTOTRADE_LEN_RANK_MAX;
+  if (input.allowQualitySignal === false) return false;
+  return reversalMatchesQualitySignal({
+    wickRatio: input.wickRatio,
+    greenDaysBeforeSignal: input.greenDaysBeforeSignal,
+    rangeScore: input.rangeScore,
+  });
 }
 
 /** จำนวนแท่ง 15m ที่ดึงเพื่อคำนวณ EMA50 (ต้องพอครอบ warmup) */
@@ -165,8 +146,10 @@ export type ReversalAutoTradeInput = {
   bodyRatio: number;
   /** upper wick / range (0–1) จากสัญญาณ */
   wickRatio: number;
-  /** อันดับความยาวแท่ง (high-low) ในรอบ lookback — 1 = ยาวสุด */
-  rangeRankInLookback?: number | null;
+  /** ช่วงแท่ง ÷ ATR100 — คอลัมน์ Range ในสถิติ */
+  rangeScore?: number | null;
+  /** แท่ง Day1 เขียวติดก่อนแท่งสัญญาณ */
+  greenDaysBeforeSignal?: number | null;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
   signalClosePrice?: number;
 };
@@ -257,7 +240,7 @@ function logReversalAutoOpen(
 /**
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
  * - เปิดเฉพาะ user ที่ตั้ง `reversalAutoTradeEnabled` + มี MEXC creds
- * - gate (ตั้งแยกได้): body/ไส้บน > 80% **หรือ** Len# (rangeRankInLookback) 3–15
+ * - gate Quality Signal: เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5
  * - entry แบบ hybrid ตาม EMA50 บน TF 15m:
  *   - ราคาตลาด > EMA50 → Market SHORT ทันที
  *   - ราคาตลาด <= EMA50 → Limit SHORT ที่ราคา EMA50 (ดักรีเทสต์)
@@ -379,16 +362,19 @@ export async function runReversalAutoTradeAfterReversalAlert(
       continue;
     }
 
+    const allowQuality =
+      row.reversalAutoTradeGateQualitySignal !== undefined
+        ? row.reversalAutoTradeGateQualitySignal !== false
+        : row.reversalAutoTradeGateBodyWick80 !== false || row.reversalAutoTradeGateLenRank315 !== false;
     if (
       !reversalAutotradePassesEntryGate({
-        bodyRatio,
         wickRatio,
-        rangeRankInLookback: input.rangeRankInLookback,
-        allowBodyWick80: row.reversalAutoTradeGateBodyWick80,
-        allowLenRank315: row.reversalAutoTradeGateLenRank315,
+        greenDaysBeforeSignal: input.greenDaysBeforeSignal,
+        rangeScore: input.rangeScore,
+        allowQualitySignal: allowQuality,
       })
     ) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "entry_gate");
+      logReversalAutoOpen(userId, logSignal, "skipped", "quality_signal_gate");
       continue;
     }
 

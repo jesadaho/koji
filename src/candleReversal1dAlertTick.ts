@@ -662,6 +662,21 @@ async function notifyResults(
 
         if (tradeSide === "short") {
           try {
+            let greenDaysForAutoOpen: number | null = null;
+            try {
+              greenDaysForAutoOpen = await fetchGreenDaysBeforeReversalSignal(
+                row.symbol,
+                sig.barOpenSec,
+                sig.tf,
+              );
+            } catch (greenErr) {
+              console.error(
+                "[candleReversalAlertTick] green days for autotrade",
+                row.symbol,
+                sig.tf,
+                greenErr,
+              );
+            }
             await runReversalAutoTradeAfterReversalAlert({
               binanceSymbol: row.symbol,
               signalBarTf: sig.tf,
@@ -669,7 +684,9 @@ async function notifyResults(
               signalBarOpenSec: sig.barOpenSec,
               bodyRatio: sig.bodyRatio,
               wickRatio: sig.wickRatio,
+              rangeScore: row.evals.rangeScore,
               rangeRankInLookback: sig.rangeRankInLookback ?? null,
+              greenDaysBeforeSignal: greenDaysForAutoOpen,
               signalClosePrice: sig.c,
             });
           } catch (e) {

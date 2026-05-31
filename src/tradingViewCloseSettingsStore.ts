@@ -114,10 +114,12 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeTp1PartialPct?: number;
   reversalAutoTradeTp2PricePct?: number;
   reversalAutoTradeMaxHoldHours?: number;
-  /** เปิด auto เมื่อเนื้อหรือไส้บน > 80% ของช่วงแท่ง (ดีฟอลต์เปิด) */
+  /** @deprecated ใช้ gateQualitySignal */
   reversalAutoTradeGateBodyWick80?: boolean;
-  /** เปิด auto เมื่อ Len# (rangeRankInLookback) อยู่ 3–15 (ดีฟอลต์เปิด) */
+  /** @deprecated ใช้ gateQualitySignal */
   reversalAutoTradeGateLenRank315?: boolean;
+  /** Quality Signal: เขียว ≥1 วัน · Wick ≤0.20 · Range <4.5 */
+  reversalAutoTradeGateQualitySignal?: boolean;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -270,6 +272,7 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeMaxHoldHours?: number | null;
   reversalAutoTradeGateBodyWick80?: boolean;
   reversalAutoTradeGateLenRank315?: boolean;
+  reversalAutoTradeGateQualitySignal?: boolean;
 };
 
 /**
@@ -338,7 +341,8 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeTp2PricePct !== undefined ||
     input.reversalAutoTradeMaxHoldHours !== undefined ||
     input.reversalAutoTradeGateBodyWick80 !== undefined ||
-    input.reversalAutoTradeGateLenRank315 !== undefined;
+    input.reversalAutoTradeGateLenRank315 !== undefined ||
+    input.reversalAutoTradeGateQualitySignal !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -579,6 +583,13 @@ export async function saveTradingViewMexcSettings(
       input.reversalAutoTradeGateLenRank315 !== undefined
         ? input.reversalAutoTradeGateLenRank315
         : prev?.reversalAutoTradeGateLenRank315 ?? true,
+
+    reversalAutoTradeGateQualitySignal:
+      input.reversalAutoTradeGateQualitySignal !== undefined
+        ? input.reversalAutoTradeGateQualitySignal
+        : prev?.reversalAutoTradeGateQualitySignal ??
+          (prev?.reversalAutoTradeGateBodyWick80 !== false ||
+            prev?.reversalAutoTradeGateLenRank315 !== false),
   };
 
   void touchedSnowballPatch;

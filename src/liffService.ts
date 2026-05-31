@@ -125,7 +125,7 @@ const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จในกลุ่ม — เลือก gate ได้: เนื้อ/ไส้บน > 80% ของช่วงแท่ง และ/หรือ Len# 3–15 (เปิดอย่างน้อยหนึ่งแบบ) — entry ใช้ EMA50 ของ TF 15m: ราคาเหนือ EMA50 → Market SHORT, ต่ำกว่า → Limit ที่ EMA50 — 1 order/เหรียญ/วัน (BKK) · ปิดเซิร์ฟด้วย REVERSAL_AUTOTRADE_ENABLED=0";
+  "Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — gate Quality Signal: เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5 — entry EMA50 บน 15m: เหนือ EMA50 → Market SHORT, ต่ำกว่า → Limit ที่ EMA50 — 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0";
 
 export function getLiffConfig() {
   return {
@@ -1065,8 +1065,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     tp1PartialPct: row.reversalAutoTradeTp1PartialPct ?? null,
     tp2PricePct: row.reversalAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.reversalAutoTradeMaxHoldHours ?? null,
-    gateBodyWick80: row.reversalAutoTradeGateBodyWick80 !== false,
-    gateLenRank315: row.reversalAutoTradeGateLenRank315 !== false,
+    gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
   };
 }
 
@@ -1502,9 +1501,11 @@ function parseReversalAutoTradeNested(
     if (x === "0" || x === 0 || x === "false") return false;
     return defaultOn;
   };
-  const gateBodyWick80 = parseGateBool("gateBodyWick80", true);
-  const gateLenRank315 = parseGateBool("gateLenRank315", true);
-  if (enabled && !gateBodyWick80 && !gateLenRank315) {
+  const gateQualitySignal =
+    "gateQualitySignal" in o
+      ? parseGateBool("gateQualitySignal", true)
+      : parseGateBool("gateBodyWick80", true) || parseGateBool("gateLenRank315", true);
+  if (enabled && !gateQualitySignal) {
     return { ok: false, error: "reversal_gate_required" };
   }
 
@@ -1523,8 +1524,7 @@ function parseReversalAutoTradeNested(
     reversalAutoTradeTp2PricePct: mTp2.v as number | null | undefined,
     reversalAutoTradeMaxHoldHours:
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
-    reversalAutoTradeGateBodyWick80: gateBodyWick80,
-    reversalAutoTradeGateLenRank315: gateLenRank315,
+    reversalAutoTradeGateQualitySignal: gateQualitySignal,
   };
   if (tpSlEnabled !== undefined) patchPart.reversalAutoTradeTpSlEnabled = tpSlEnabled;
   return { ok: true, patch: patchPart };
