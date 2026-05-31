@@ -340,6 +340,7 @@ function ReversalStatsSection({
     }
     await downloadCsv(statsCsvFilename(csvPrefix), candleReversalStatsToCsv(rows), {
       telegramExportPath: `/api/tma/reversal-stats.csv?tf=${tf}${csvQuery}`,
+      preferClientCsvInTma: true,
     });
   }, [csvPrefix, csvQuery, rows, tf]);
 

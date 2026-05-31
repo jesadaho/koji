@@ -279,15 +279,9 @@ async function deliverCsvBlob(
       return false;
     };
 
-    // Snowball ฯลฯ — desktop: CSV ตามตัวกรอง (Share/Save) ก่อน · mobile: downloadFile ก่อน (Share ใน WebView มักไม่ขึ้น)
+    // preferClientCsvInTma — CSV จากตารางหลัง filter (ไม่ fallback API เพราะ API ไม่รู้ตัวกรองบนหน้า)
     if (preferClientCsvInTma && hasClientCsv) {
-      if (isMobilePlatform()) {
-        if (await tryServerCsvDelivery()) return true;
-        if (await tryClientBlobDelivery()) return true;
-      } else {
-        if (await tryClientBlobDelivery()) return true;
-        if (await tryServerCsvDelivery()) return true;
-      }
+      if (await tryClientBlobDelivery()) return true;
     } else {
       if (await tryServerCsvDelivery()) return true;
       if (await tryClientBlobDelivery()) return true;
@@ -330,6 +324,14 @@ export async function downloadCsv(
   const preferClient = opts?.preferClientCsvInTma;
 
   if (content.trim() && (await deliverCsvBlob(filename, content, exportPath, preferClient))) {
+    return;
+  }
+
+  // มี CSV จากตารางแล้วแต่ส่งไฟล์ไม่ได้ — ไม่ดึง API (ข้อมูลไม่ตรงตัวกรองบนหน้า)
+  if (preferClient && content.trim()) {
+    window.alert(
+      "ดาวน์โหลดไม่สำเร็จ — ลอง Share / คัดลอก หรือเปิด Mini App บนเดสก์ท็อป",
+    );
     return;
   }
 
