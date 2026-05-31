@@ -9,9 +9,18 @@ import {
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
 
-export type SnowballMatrixFilter = "all" | "qualitySignal" | "snipers" | "whaleRiders" | "highWinrate";
+export type SnowballMatrixFilter =
+  | "all"
+  | "qualitySignal"
+  | "qualityShortSignal"
+  | "snipers"
+  | "whaleRiders"
+  | "highWinrate";
 
 export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = "เขียว 2 วัน · Funding > −0.10%";
+
+export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA =
+  "เขียว 1 วัน · Vol×SMA > 3× · R% สัญญาณ > 8%";
 
 export const SNOWBALL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: SnowballMatrixFilter;
@@ -19,6 +28,7 @@ export const SNOWBALL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
 }> = [
   { value: "all", label: "ทั้งหมด" },
   { value: "qualitySignal", label: "✨ Quality Signal" },
+  { value: "qualityShortSignal", label: "✨ Quality Short Signal" },
   { value: "snipers", label: "🥇 Snipers" },
   { value: "whaleRiders", label: "🚀 Whale Riders" },
   { value: "highWinrate", label: "📈 High Winrate" },
@@ -31,6 +41,9 @@ export function snowballMatrixFilterLabel(filter: SnowballMatrixFilter): string 
 export function snowballMatrixFilterTitle(filter: SnowballMatrixFilter): string {
   if (filter === "qualitySignal") {
     return `Quality Signal: ${SNOWBALL_QUALITY_SIGNAL_CRITERIA}`;
+  }
+  if (filter === "qualityShortSignal") {
+    return `Quality Short Signal: ${SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA}`;
   }
   if (filter === "snipers") {
     return "The Snipers (LONG): BTC 4h↑·1h↑ · R% สัญญาณ 1–5% · Wick<0.20 · Vol×SMA≥2×";
@@ -59,6 +72,10 @@ function barRangePctInRange(pct: number | null | undefined, minPct: number, maxP
   return pct != null && Number.isFinite(pct) && pct >= minPct && pct <= maxPct;
 }
 
+function barRangePctAbove(pct: number | null | undefined, minExclusive: number): boolean {
+  return pct != null && Number.isFinite(pct) && pct > minExclusive;
+}
+
 function wickBelow(row: Pick<SnowballStatsRow, "wickScore">, maxWick: number): boolean {
   const w = row.wickScore;
   return w != null && Number.isFinite(w) && w >= 0 && w < maxWick;
@@ -70,6 +87,14 @@ function volXsmaAtLeast(
 ): boolean {
   const v = snowballStatsVolVsSmaDisplay(row);
   return v != null && Number.isFinite(v) && v >= minRatio;
+}
+
+function volXsmaAbove(
+  row: Pick<SnowballStatsRow, "confirmVolVsSma" | "signalVolVsSma" | "signalBarTf">,
+  minExclusive: number,
+): boolean {
+  const v = snowballStatsVolVsSmaDisplay(row);
+  return v != null && Number.isFinite(v) && v > minExclusive;
 }
 
 function confirmVolRankTop10(row: Pick<SnowballStatsRow, "confirmVolRank">): boolean {
@@ -112,6 +137,24 @@ export function snowballRowMatchesQualitySignalMatrix(row: SnowballStatsRow): bo
   return snowballMatchesQualitySignal(row);
 }
 
+/** ✨ Quality Short Signal — เขียว 1 วัน · Vol×SMA > 3 · R% สัญญาณ > 8% */
+export function snowballMatchesQualityShortSignal(
+  row: Pick<
+    SnowballStatsRow,
+    "greenDaysBeforeSignal" | "confirmVolVsSma" | "signalVolVsSma" | "signalBarTf" | "barRangePctSignal"
+  >,
+): boolean {
+  return (
+    greenDaysBeforeSignalIs(row, 1) &&
+    volXsmaAbove(row, 3) &&
+    barRangePctAbove(row.barRangePctSignal, 8)
+  );
+}
+
+export function snowballRowMatchesQualityShortSignalMatrix(row: SnowballStatsRow): boolean {
+  return snowballMatchesQualityShortSignal(row);
+}
+
 /** 📈 High Winrate — BTC 4h↓ + Day1 เขียว 2 วันติดก่อนสัญญาณ */
 export function snowballRowMatchesHighWinrateMatrix(row: SnowballStatsRow): boolean {
   if (!btcSar4hDown(row)) return false;
@@ -138,7 +181,9 @@ export function snowballStatsRowMatchesMatrixFilter(
 ): boolean {
   if (filter === "all") return true;
   if (filter === "qualitySignal") return snowballRowMatchesQualitySignalMatrix(row);
+  if (filter === "qualityShortSignal") return snowballRowMatchesQualityShortSignalMatrix(row);
   if (filter === "snipers") return snowballRowMatchesSnipersMatrix(row);
   if (filter === "whaleRiders") return snowballRowMatchesWhaleRidersMatrix(row);
-  return snowballRowMatchesHighWinrateMatrix(row);
+  if (filter === "highWinrate") return snowballRowMatchesHighWinrateMatrix(row);
+  return true;
 }
