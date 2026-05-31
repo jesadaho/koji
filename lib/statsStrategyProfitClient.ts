@@ -46,6 +46,28 @@ export function formatStatsStrategyProfitPct(pct: number): string {
   return `${sign}${pct.toFixed(2)}%`;
 }
 
+/** การเคลื่อนไหวราคาขาลงสูงสุดก่อนเสีย margin ทั้งก้อน (≈ 100% / leverage) */
+export function maxAdversePricePctForLeverage(leverage: number): number {
+  return 100 / leverage;
+}
+
+/** จำกัด % ขาดทุนตาม leverage — เช่น 5x → ไม่ต่ำกว่า -20% ราคา */
+export function capStrategyProfitPctForLeverage(
+  profitPct: number,
+  leverage: number | null | undefined,
+): number {
+  if (!Number.isFinite(profitPct) || profitPct >= 0) return profitPct;
+  if (leverage == null || !Number.isFinite(leverage) || leverage <= 0) return profitPct;
+  return Math.max(profitPct, -maxAdversePricePctForLeverage(leverage));
+}
+
+export function resolveStatsStrategyDisplayPct(
+  profitPct: number,
+  leverage: number | null | undefined,
+): number {
+  return capStrategyProfitPctForLeverage(profitPct, leverage);
+}
+
 export function statsStrategyProfitCellTitle(
   profitPct: number | null | undefined,
   exitReason: StatsTpSlExitReason | null | undefined,
@@ -54,24 +76,34 @@ export function statsStrategyProfitCellTitle(
   const base = STATS_STRATEGY_PROFIT_COLUMN_TITLE;
   if (profitPct == null || !Number.isFinite(profitPct)) return base;
   const tag = statsStrategyExitReasonShort(exitReason);
-  const usdt = formatStatsStrategyProfitUsdt(sizing?.marginUsdt, sizing?.leverage, profitPct);
+  const displayPct = resolveStatsStrategyDisplayPct(profitPct, sizing?.leverage);
+  const usdt = formatStatsStrategyProfitUsdt(sizing?.marginUsdt, sizing?.leverage, displayPct);
   const marginNote =
     sizing?.marginUsdt != null && sizing.marginUsdt > 0 && sizing?.leverage != null && sizing.leverage > 0
       ? ` · margin ${sizing.marginUsdt}×${Math.floor(sizing.leverage)}`
       : "";
-  const parts = [base + marginNote, tag ? `ออก: ${tag}` : "", formatStatsStrategyProfitPct(profitPct), usdt].filter(
-    Boolean,
-  );
+  const cappedNote =
+    displayPct !== profitPct && sizing?.leverage != null && sizing.leverage > 0
+      ? ` (จำกัดที่ ${formatStatsStrategyProfitPct(displayPct)} @${Math.floor(sizing.leverage)}x)`
+      : "";
+  const parts = [
+    base + marginNote,
+    tag ? `ออก: ${tag}` : "",
+    formatStatsStrategyProfitPct(displayPct) + cappedNote,
+    usdt,
+  ].filter(Boolean);
   return parts.join(" · ");
 }
 
-/** P/L USDT จาก margin × leverage × % ราคา (เทียบ auto-open history) */
+/** P/L USDT จาก margin × leverage × % ราคา (เทียบ auto-open history) — ขาดทุนไม่เกิน margin */
 export function strategyProfitUsdtFromMargin(
   marginUsdt: number,
   leverage: number,
   profitPct: number,
 ): number {
-  return marginUsdt * leverage * (profitPct / 100);
+  const pct = capStrategyProfitPctForLeverage(profitPct, leverage);
+  const usdt = marginUsdt * leverage * (pct / 100);
+  return Math.max(usdt, -marginUsdt);
 }
 
 export function formatStatsStrategyProfitUsdt(
@@ -88,7 +120,8 @@ export function formatStatsStrategyProfitUsdt(
   ) {
     return null;
   }
-  const usdt = strategyProfitUsdtFromMargin(marginUsdt, leverage, profitPct);
+  const displayPct = resolveStatsStrategyDisplayPct(profitPct, leverage);
+  const usdt = strategyProfitUsdtFromMargin(marginUsdt, leverage, displayPct);
   const sign = usdt >= 0 ? "+" : "";
   return `${sign}${usdt.toFixed(2)} USDT`;
 }
@@ -102,11 +135,12 @@ export function statsStrategyProfitCsvCell(
   if (!statsStrategyProfitFinalized(pct48h)) return "";
   if (strategyProfitPct == null || !Number.isFinite(strategyProfitPct)) return "";
   const tag = statsStrategyExitReasonShort(strategyExitReason);
-  const pctPart = formatStatsStrategyProfitPct(strategyProfitPct);
+  const displayPct = resolveStatsStrategyDisplayPct(strategyProfitPct, sizing?.leverage);
+  const pctPart = formatStatsStrategyProfitPct(displayPct);
   const usdtPart = formatStatsStrategyProfitUsdt(
     sizing?.marginUsdt,
     sizing?.leverage,
-    strategyProfitPct,
+    displayPct,
   );
   const core = tag ? `${pctPart} (${tag})` : pctPart;
   return usdtPart ? `${core} · ${usdtPart}` : core;

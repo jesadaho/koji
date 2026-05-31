@@ -3,6 +3,7 @@
 import {
   formatStatsStrategyProfitPct,
   formatStatsStrategyProfitUsdt,
+  resolveStatsStrategyDisplayPct,
   statsStrategyExitReasonShort,
   statsStrategyProfitFinalized,
   statsStrategyProfitCellTitle,
@@ -33,12 +34,16 @@ export function StatsStrategyProfitCell(props: {
       </span>
     );
   }
+  const displayPct = resolveStatsStrategyDisplayPct(pct, props.leverage);
   const tag = statsStrategyExitReasonShort(props.strategyExitReason);
-  const usdtLine = formatStatsStrategyProfitUsdt(props.marginUsdt, props.leverage, pct);
+  const usdtLine = formatStatsStrategyProfitUsdt(props.marginUsdt, props.leverage, displayPct);
   const sizing = { marginUsdt: props.marginUsdt, leverage: props.leverage };
   return (
-    <span style={statsStrategyProfitPnlStyle(pct)} title={statsStrategyProfitCellTitle(pct, props.strategyExitReason, sizing)}>
-      {formatStatsStrategyProfitPct(pct)}
+    <span
+      style={statsStrategyProfitPnlStyle(displayPct)}
+      title={statsStrategyProfitCellTitle(pct, props.strategyExitReason, sizing)}
+    >
+      {formatStatsStrategyProfitPct(displayPct)}
       {usdtLine ? (
         <span style={{ display: "block", fontSize: "0.88em", fontWeight: 500, opacity: 0.88 }}>
           {usdtLine}

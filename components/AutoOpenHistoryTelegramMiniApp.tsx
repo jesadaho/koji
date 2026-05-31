@@ -25,6 +25,10 @@ import {
   prepareTelegramMiniAppShell,
 } from "@/lib/kojiTelegramWebApp";
 import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
+import {
+  formatStatsStrategyProfitUsdt,
+  resolveStatsStrategyDisplayPct,
+} from "@/lib/statsStrategyProfitClient";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -74,9 +78,8 @@ function pnlStyle(pct: number): { color: string } {
 }
 
 function fmtPnlUsdt(marginUsdt: number, leverage: number, pct: number): string {
-  const usdt = marginUsdt * leverage * (pct / 100);
-  const s = usdt >= 0 ? "+" : "";
-  return `${s}${usdt.toFixed(2)} USDT`;
+  const line = formatStatsStrategyProfitUsdt(marginUsdt, leverage, pct);
+  return line ?? "—";
 }
 
 function contractKey(symbol: string): string {
@@ -119,6 +122,7 @@ function fmtMarginCell(row: AutoOpenOrderLogRow): ReactNode {
 function fmtStrategyPnlCell(row: AutoOpenOrderLogRow): ReactNode {
   if (!autoOpenHorizonDue(row, 48) || !autoOpenStrategyFinalized(row)) return "—";
   const pct = row.strategyPct!;
+  const displayPct = resolveStatsStrategyDisplayPct(pct, row.leverage);
   const usdtLine =
     row.marginUsdt != null &&
     row.leverage != null &&
@@ -127,11 +131,11 @@ function fmtStrategyPnlCell(row: AutoOpenOrderLogRow): ReactNode {
       ? fmtPnlUsdt(row.marginUsdt, row.leverage, pct)
       : null;
   return (
-    <span style={{ whiteSpace: "nowrap", ...pnlStyle(pct) }} title="ผล @48h ตามกติกา Snowball/Reversal stats">
+    <span style={{ whiteSpace: "nowrap", ...pnlStyle(displayPct) }} title="ผล @48h ตามกติกา Snowball/Reversal stats">
       <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
         {autoOpenStrategyOutcomeLabel(row.strategyOutcome as AutoOpenStrategyOutcome)}
       </span>
-      {fmtPct(pct)}
+      {fmtPct(displayPct)}
       {usdtLine ? (
         <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
           {usdtLine}
@@ -155,6 +159,7 @@ function fmtPnlCell(
     return "—";
   }
   const pct = pctVsEntrySide(row.side, entry, markPrice);
+  const displayPct = resolveStatsStrategyDisplayPct(pct, row.leverage);
   const usdtLine =
     row.marginUsdt != null &&
     row.leverage != null &&
@@ -163,8 +168,8 @@ function fmtPnlCell(
       ? fmtPnlUsdt(row.marginUsdt, row.leverage, pct)
       : null;
   return (
-    <span style={{ whiteSpace: "nowrap", ...pnlStyle(pct) }}>
-      {fmtPct(pct)}
+    <span style={{ whiteSpace: "nowrap", ...pnlStyle(displayPct) }}>
+      {fmtPct(displayPct)}
       {usdtLine ? (
         <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
           {usdtLine}
