@@ -458,10 +458,12 @@ export async function saveTradingViewMexcSettings(
         ? input.snowballAutoTradeGreen2DaysLongAllGrades
         : prev?.snowballAutoTradeGreen2DaysLongAllGrades ?? false,
 
-    snowballAutoTradeQualitySignalGateEnabled:
-      input.snowballAutoTradeQualitySignalGateEnabled !== undefined
-        ? input.snowballAutoTradeQualitySignalGateEnabled
-        : prev?.snowballAutoTradeQualitySignalGateEnabled ?? false,
+    snowballAutoTradeQualitySignalLongEnabled:
+      input.snowballAutoTradeQualitySignalLongEnabled !== undefined
+        ? input.snowballAutoTradeQualitySignalLongEnabled
+        : prev?.snowballAutoTradeQualitySignalLongEnabled ??
+          prev?.snowballAutoTradeQualitySignalGateEnabled ??
+          false,
 
     snowballAutoTradeQualityShortSignalShortEnabled:
       input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined

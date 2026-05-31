@@ -94,7 +94,7 @@ type Phase = "loading" | "setup" | "ready";
 
 type SnowballAutoTradeApiBundle = {
   enabled?: boolean;
-  qualitySignalGateEnabled?: boolean;
+  qualitySignalLongEnabled?: boolean;
   qualityShortSignalShortEnabled?: boolean;
   sundayAllShortEnabled?: boolean;
   marginUsdt?: number | null;
@@ -155,7 +155,7 @@ export default function SettingsTelegramMiniApp() {
   const [mexcSecretInput, setMexcSecretInput] = useState("");
 
   const [snowEnabled, setSnowEnabled] = useState(false);
-  const [snowQualitySignalGate, setSnowQualitySignalGate] = useState(false);
+  const [snowQualitySignalLong, setSnowQualitySignalLong] = useState(false);
   const [snowQualityShortShort, setSnowQualityShortShort] = useState(false);
   const [snowSundayAllShort, setSnowSundayAllShort] = useState(false);
   const [snowMarginDefault, setSnowMarginDefault] = useState("");
@@ -211,7 +211,7 @@ export default function SettingsTelegramMiniApp() {
     if (!st) return;
 
     setSnowEnabled(Boolean(st.enabled));
-    setSnowQualitySignalGate(Boolean(st.qualitySignalGateEnabled));
+    setSnowQualitySignalLong(Boolean(st.qualitySignalLongEnabled));
     setSnowQualityShortShort(Boolean(st.qualityShortSignalShortEnabled));
     setSnowSundayAllShort(Boolean(st.sundayAllShortEnabled));
     setSnowMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
@@ -578,7 +578,7 @@ export default function SettingsTelegramMiniApp() {
     try {
       const snowballAutoTrade: Record<string, unknown> = {
         enabled: snowEnabled,
-        qualitySignalGateEnabled: snowQualitySignalGate,
+        qualitySignalLongEnabled: snowQualitySignalLong,
         qualityShortSignalShortEnabled: snowQualityShortShort,
         sundayAllShortEnabled: snowSundayAllShort,
         marginUsdt: snowMarginDefault.trim() ? marginDefaultParsed : null,
@@ -1015,7 +1015,7 @@ export default function SettingsTelegramMiniApp() {
         <h2>Snowball auto-open (MEXC)</h2>
         <p className="sub" style={{ marginTop: 0 }}>
           เมื่อ <strong>Snowball ส่งสัญญาณสำเร็จ (closed bar)</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน market ตามทิศสัญญาณ —{" "}
-          <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · Action Plan = Monitor จะไม่เปิด · ตัวเลือกด้านล่างแยก ✨ Quality Signal / ✨ Quality Short Signal / วันอาทิตย์
+          ค่าเริ่มต้น <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · ตัวเลือกด้านล่าง: ✨ Quality Signal → Long · ✨ Quality Short Signal → Short · วันอาทิตย์ → Short ทุกสัญญาณ
         </p>
         <p className="sub" style={{ marginTop: "0.5rem" }}>
           <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
@@ -1049,13 +1049,13 @@ export default function SettingsTelegramMiniApp() {
         <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
           <input
             type="checkbox"
-            checked={snowQualitySignalGate}
-            onChange={(e) => setSnowQualitySignalGate(e.target.checked)}
+            checked={snowQualitySignalLong}
+            onChange={(e) => setSnowQualitySignalLong(e.target.checked)}
           />
           <span className="tmaCheckboxField__text">
-            <strong style={{ fontWeight: 600 }}>✨ Quality Signal (gate)</strong>
+            <strong style={{ fontWeight: 600 }}>✨ Quality Signal → Long</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              เปิด auto-open เฉพาะเมื่อสัญญาณตรง matrix ✨ Quality Signal — เขียว <strong>2</strong> วัน · Funding &gt; −0.10% · สัญญาณที่ไม่ตรงจะข้าม (ไม่สั่ง MEXC)
+              สัญญาณที่ตรง matrix ✨ Quality Signal — เขียว <strong>2</strong> วัน · Funding &gt; −0.10% — เปิด <strong>Long</strong> บน MEXC · เปิดตัวเลือกนี้แล้วไม่ตรงเกณฑ์จะไม่ auto-open
             </span>
           </span>
         </label>
@@ -1069,7 +1069,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>✨ Quality Short Signal → Short</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              สัญญาณ Snowball <strong>LONG</strong> ที่ตรง matrix ✨ Quality Short Signal — เขียว <strong>1</strong> วัน · Vol×SMA &gt; 3× · R% สัญญาณ &gt; 8% — เปิด <strong>Short</strong> บน MEXC แทน Long
+              สัญญาณที่ตรง matrix ✨ Quality Short Signal — เขียว <strong>1</strong> วัน · Vol×SMA &gt; 3× · R% สัญญาณ &gt; 8% — เปิด <strong>Short</strong> บน MEXC · เปิดตัวเลือกนี้แล้วไม่ตรงเกณฑ์จะไม่ auto-open
             </span>
           </span>
         </label>

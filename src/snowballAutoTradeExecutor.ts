@@ -113,6 +113,7 @@ function resolveSnowballAutoOpenSide(
   alertSide: SnowballAutoTradeAlertSide,
   input: {
     greenDaysBeforeSignal?: number | null;
+    fundingRate?: number | null;
     barRangePctSignal?: number | null;
     signalBarTf: "15m" | "1h" | "4h";
     vol: number;
@@ -120,17 +121,27 @@ function resolveSnowballAutoOpenSide(
     signalVolVsSma?: number | null;
     confirmVolVsSma?: number | null;
   },
-): SnowballAutoTradeSide {
+): SnowballAutoTradeSide | null {
   const defaultSide: SnowballAutoTradeSide = alertSide === "bear" ? "short" : "long";
+  const qsOn = snowballQualitySignalLongEnabled(row);
+  const qssOn = row.snowballAutoTradeQualityShortSignalShortEnabled === true;
+  const qsMatch = snowballMatchesQualitySignal({
+    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
+    fundingRate: input.fundingRate ?? null,
+  });
+  const qssMatch = snowballAutoOpenMatchesQualityShortSignal(input);
+
   if (row.snowballAutoTradeSundayAllShortEnabled === true && bkkIsSundayNow()) {
     return "short";
   }
-  if (
-    alertSide === "long" &&
-    row.snowballAutoTradeQualityShortSignalShortEnabled === true &&
-    snowballAutoOpenMatchesQualityShortSignal(input)
-  ) {
+  if (qssOn && qssMatch) {
     return "short";
+  }
+  if (qsOn && qsMatch) {
+    return "long";
+  }
+  if (qsOn || qssOn) {
+    return null;
   }
   return defaultSide;
 }
@@ -267,10 +278,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     signalVolVsSma: input.signalVolVsSma,
     confirmVolVsSma: input.confirmVolVsSma,
   };
-  const matchesQualitySignal = snowballMatchesQualitySignal({
-    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
-    fundingRate: input.fundingRate ?? null,
-  });
+  const qualitySideInput = {
+    ...qualityShortInput,
+    fundingRate: input.fundingRate,
+  };
 
   const [map, state0] = await Promise.all([
     loadTradingViewMexcSettingsFullMap(),
@@ -307,21 +318,29 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       continue;
     }
 
-    if (row.snowballAutoTradeQualitySignalGateEnabled === true && !matchesQualitySignal) {
-      logSnowballAutoOpen(userId, logSignal, "skipped", "quality_signal_gate");
+    const side = resolveSnowballAutoOpenSide(row, input.alertSide, qualitySideInput);
+    if (side === null) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "quality_filter_no_match");
       continue;
     }
 
-    const side = resolveSnowballAutoOpenSide(row, input.alertSide, qualityShortInput);
+    const defaultSide: SnowballAutoTradeSide = input.alertSide === "bear" ? "short" : "long";
     const sundayShortOverride =
       row.snowballAutoTradeSundayAllShortEnabled === true &&
       bkkIsSundayNow() &&
-      input.alertSide === "long";
+      side === "short" &&
+      defaultSide === "long";
     const qualityShortOverride =
       !sundayShortOverride &&
-      input.alertSide === "long" &&
       row.snowballAutoTradeQualityShortSignalShortEnabled === true &&
-      side === "short";
+      side === "short" &&
+      defaultSide === "long";
+    const qualitySignalLongOverride =
+      !sundayShortOverride &&
+      !qualityShortOverride &&
+      snowballQualitySignalLongEnabled(row) &&
+      side === "long" &&
+      defaultSide !== "long";
 
     if (hasOpenedSnowballContractToday(state[userId], sym, dayKey)) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "already_opened_today", { side });
@@ -479,16 +498,20 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         sundayShortOverride
           ? "✅ เปิด SHORT จาก Snowball (วันอาทิตย์ — สัญญาณ LONG)"
           : qualityShortOverride
-            ? "✅ เปิด SHORT จาก Snowball (✨ Quality Short Signal — สัญญาณ LONG)"
-            : long
-              ? "✅ เปิด LONG จาก Snowball"
-              : "✅ เปิด SHORT จาก Snowball",
+            ? "✅ เปิด SHORT จาก Snowball (✨ Quality Short Signal)"
+            : qualitySignalLongOverride
+              ? "✅ เปิด LONG จาก Snowball (✨ Quality Signal)"
+              : long
+                ? "✅ เปิด LONG จาก Snowball"
+                : "✅ เปิด SHORT จาก Snowball",
         `[${shortContractLabel(sym)}]/USDT`,
         sundayShortOverride
           ? "เกณฑ์: วันอาทิตย์ (เวลาไทย) — Short ทุกสัญญาณ Snowball"
           : qualityShortOverride
             ? `เกณฑ์: ${SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA}`
-            : "",
+            : qualitySignalLongOverride
+              ? `เกณฑ์: ${SNOWBALL_QUALITY_SIGNAL_CRITERIA}`
+              : "",
         gradeKey ? `Grade ${gradeKey}` : "",
         `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
         `จุดเข้าอ้างอิง (บอท / Binance): ${fmtSnowballPriceUsdt(referenceEntryPrice)} USDT`,

@@ -126,7 +126,7 @@ import { isSnowballAutotradeEnabled } from "./snowballAutoTradeExecutor";
 import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — สัญญาณ LONG → Long · BEAR → Short (market) · ถ้าเปิด Quality Signal gate: เปิดเฉพาะเมื่อตรง ✨ Quality Signal (เขียว 2 วัน · Funding > −0.10%) · ถ้าเปิด Quality Short Signal: สัญญาณ LONG ที่ตรง ✨ Quality Short Signal (เขียว 1 วัน · Vol×SMA > 3 · R% สัญญาณ > 8%) → Short แทน · ถ้าเปิดวันอาทิตย์: ทุกสัญญาณในวันอาทิตย์ (เวลาไทย) → Short · Action Plan = Monitor จาก matrix 4h จะไม่เปิด · margin scale ตาม Action Plan · กลยุทธ์ TP/SL เหมือน Reversal · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
+  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ค่าเริ่มต้น LONG → Long · BEAR → Short · ถ้าเปิด ✨ Quality Signal: สัญญาณที่ตรง (เขียว 2 วัน · Funding > −0.10%) → Long · ถ้าเปิด ✨ Quality Short Signal: สัญญาณที่ตรง (เขียว 1 วัน · Vol×SMA > 3 · R% > 8%) → Short (ชนะ Quality Signal) · เปิดอย่างใดอย่างหนึ่งแล้วไม่ตรงเกณฑ์ → ข้าม · วันอาทิตย์ (ไทย) → Short ทุกสัญญาณ · Action Plan = Monitor ไม่เปิด · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
@@ -1090,7 +1090,10 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     tp1PartialPct: row.snowballAutoTradeTp1PartialPct ?? null,
     tp2PricePct: row.snowballAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.snowballAutoTradeMaxHoldHours ?? null,
-    qualitySignalGateEnabled: row.snowballAutoTradeQualitySignalGateEnabled ?? false,
+    qualitySignalLongEnabled:
+      row.snowballAutoTradeQualitySignalLongEnabled ??
+      row.snowballAutoTradeQualitySignalGateEnabled ??
+      false,
     qualityShortSignalShortEnabled: row.snowballAutoTradeQualityShortSignalShortEnabled ?? false,
     sundayAllShortEnabled: row.snowballAutoTradeSundayAllShortEnabled ?? false,
   };
@@ -1406,15 +1409,12 @@ function parseSnowballAutoTradeNested(
   else if (o.tpSlEnabled === "1" || o.tpSlEnabled === 1 || o.tpSlEnabled === "true") tpSlEnabled = true;
   else if (o.tpSlEnabled === "0" || o.tpSlEnabled === 0 || o.tpSlEnabled === "false") tpSlEnabled = false;
 
-  let qualitySignalGateEnabled = false;
-  if (typeof o.qualitySignalGateEnabled === "boolean") {
-    qualitySignalGateEnabled = o.qualitySignalGateEnabled;
-  } else if (
-    o.qualitySignalGateEnabled === "1" ||
-    o.qualitySignalGateEnabled === 1 ||
-    o.qualitySignalGateEnabled === "true"
-  ) {
-    qualitySignalGateEnabled = true;
+  let qualitySignalLongEnabled = false;
+  const qsRaw = o.qualitySignalLongEnabled ?? o.qualitySignalGateEnabled;
+  if (typeof qsRaw === "boolean") {
+    qualitySignalLongEnabled = qsRaw;
+  } else if (qsRaw === "1" || qsRaw === 1 || qsRaw === "true") {
+    qualitySignalLongEnabled = true;
   }
 
   let qualityShortSignalShortEnabled = false;
@@ -1447,7 +1447,7 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeRulesLong: null,
     snowballAutoTradeRulesBear: null,
     snowballAutoTradeGreen2DaysLongAllGrades: false,
-    snowballAutoTradeQualitySignalGateEnabled: qualitySignalGateEnabled,
+    snowballAutoTradeQualitySignalLongEnabled: qualitySignalLongEnabled,
     snowballAutoTradeQualityShortSignalShortEnabled: qualityShortSignalShortEnabled,
     snowballAutoTradeSundayAllShortEnabled: sundayAllShortEnabled,
     snowballAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
