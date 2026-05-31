@@ -6,6 +6,7 @@ import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
+  STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
   formatStatsStrategyProfitSummaryText,
   summarizeStatsStrategyProfit,
 } from "@/lib/statsStrategyProfitClient";
@@ -565,7 +566,10 @@ export default function SnowballStatsTelegramMiniApp() {
   );
 
   const strategyProfitSummaryText = useMemo(
-    () => formatStatsStrategyProfitSummaryText(summarizeStatsStrategyProfit(rows, strategySizing)),
+    () =>
+      formatStatsStrategyProfitSummaryText(
+        summarizeStatsStrategyProfit(rows, strategySizing, STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND),
+      ),
     [rows, strategySizing],
   );
 
@@ -799,7 +803,7 @@ export default function SnowballStatsTelegramMiniApp() {
         {strategyProfitSummaryText ? (
           <p
             className="sub"
-            title="สรุปคอลัมน์กำไรกลยุทธ์ (TP/SL ตาม Settings) — ชนะ/แพ้จาก % กลยุทธ์ต่อไม้ · รวม % = ผลรวมทุกไม้ · $ แยกชนะ/แพ้ (จำกัดขาดทุนตาม leverage)"
+            title="สรุปคอลัมน์กำไรกลยุทธ์ — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR ราย horizon (Win ≥ +3% · Loss ≤ −3% · ระหว่างนั้น = เสมอ ไม่นับเป็นชนะ) · $ รวมเฉพาะไม้ชนะ/แพ้ตามเกณฑ์นี้"
             style={{ marginBottom: "0.5rem", fontWeight: 600 }}
           >
             {strategyProfitSummaryText}

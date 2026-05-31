@@ -180,11 +180,38 @@ export type StatsStrategyProfitRowSlice = {
   strategyProfitPct?: number | null;
 };
 
+/** เกณฑ์ชนะ/แพ้/เสมอ — ตรง winrate ราย horizon (ไม่นับ % บวกเล็กน้อยเป็น “ชนะ”) */
+export type StatsStrategyWinLossBand = {
+  winMinPct: number;
+  lossMaxPct: number;
+};
+
+export const STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND: StatsStrategyWinLossBand = {
+  winMinPct: 3,
+  lossMaxPct: -3,
+};
+
+export const STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND: StatsStrategyWinLossBand = {
+  winMinPct: 2,
+  lossMaxPct: -2,
+};
+
+export function classifyStatsStrategyProfitPct(
+  displayPct: number,
+  band: StatsStrategyWinLossBand,
+): "win" | "loss" | "flat" {
+  if (displayPct >= band.winMinPct) return "win";
+  if (displayPct <= band.lossMaxPct) return "loss";
+  return "flat";
+}
+
 export type StatsStrategyProfitSummary = {
   trades: number;
   wins: number;
   losses: number;
   flats: number;
+  decisive: number;
+  winratePct: number | null;
   pending: number;
   sumPct: number;
   sumWinUsd: number | null;
@@ -195,6 +222,7 @@ export type StatsStrategyProfitSummary = {
 export function summarizeStatsStrategyProfit(
   rows: StatsStrategyProfitRowSlice[],
   sizing?: StatsStrategyCsvSizing,
+  band: StatsStrategyWinLossBand = STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
 ): StatsStrategyProfitSummary {
   let trades = 0;
   let wins = 0;
@@ -224,27 +252,33 @@ export function summarizeStatsStrategyProfit(
     const displayPct = resolveStatsStrategyDisplayPct(raw, leverage);
     trades += 1;
     sumPct += displayPct;
-    if (displayPct > 0) wins += 1;
-    else if (displayPct < 0) losses += 1;
+    const cls = classifyStatsStrategyProfitPct(displayPct, band);
+    if (cls === "win") wins += 1;
+    else if (cls === "loss") losses += 1;
     else flats += 1;
     if (canUsdt) {
       const usd = strategyProfitUsdtFromMargin(margin!, leverage!, raw);
       sumUsdt += usd;
-      if (usd > 0) sumWinUsd += usd;
-      else if (usd < 0) sumLossUsd += usd;
+      if (cls === "win") sumWinUsd += usd;
+      else if (cls === "loss") sumLossUsd += usd;
       hasUsdt = true;
     }
   }
+
+  const decisive = wins + losses;
+  const winratePct = decisive > 0 ? (wins / decisive) * 100 : null;
 
   return {
     trades,
     wins,
     losses,
     flats,
+    decisive,
+    winratePct,
     pending,
     sumPct,
-    sumWinUsd: hasUsdt ? sumWinUsd : null,
-    sumLossUsd: hasUsdt ? sumLossUsd : null,
+    sumWinUsd: hasUsdt && wins > 0 ? sumWinUsd : hasUsdt ? 0 : null,
+    sumLossUsd: hasUsdt && losses > 0 ? sumLossUsd : hasUsdt ? 0 : null,
     sumUsdt: hasUsdt ? sumUsdt : null,
   };
 }
@@ -259,6 +293,12 @@ export function formatStatsStrategyProfitSummaryText(
   const flatTag = summary.flats > 0 ? ` · เสมอ ${summary.flats}` : "";
   const pendingTag = summary.pending > 0 ? ` · รอผล ${summary.pending}` : "";
   const sumPart = formatStatsStrategyProfitPct(summary.sumPct);
+  const wrTag =
+    summary.decisive > 0 && summary.winratePct != null
+      ? `WR ${summary.winratePct.toFixed(1)}% (${summary.wins}/${summary.decisive}) · `
+      : summary.flats > 0
+        ? "WR — (0/0) · "
+        : "";
   const winUsdTag =
     summary.sumWinUsd != null && summary.wins > 0
       ? ` (${formatStatsStrategyProfitDollarAmount(summary.sumWinUsd)})`
@@ -268,10 +308,10 @@ export function formatStatsStrategyProfitSummaryText(
       ? ` (${formatStatsStrategyProfitDollarAmount(summary.sumLossUsd)})`
       : "";
   const netUsdTag =
-    summary.sumUsdt != null && summary.wins > 0 && summary.losses > 0
+    summary.sumUsdt != null && (summary.wins > 0 || summary.losses > 0)
       ? ` · สุทธิ ${formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}`
       : "";
-  const core = `กลยุทธ์: ชนะ ${summary.wins}${winUsdTag} · แพ้ ${summary.losses}${lossUsdTag}${flatTag} · รวม ${sumPart} (${summary.trades} ไม้)${netUsdTag}`;
+  const core = `กลยุทธ์: ${wrTag}ชนะ ${summary.wins}${winUsdTag} · แพ้ ${summary.losses}${lossUsdTag}${flatTag} · รวม ${sumPart} (${summary.trades} ไม้)${netUsdTag}`;
   return `${core}${pendingTag}`;
 }
 

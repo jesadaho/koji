@@ -6,6 +6,7 @@ import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
+  STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
   formatStatsStrategyProfitSummaryText,
   summarizeStatsStrategyProfit,
 } from "@/lib/statsStrategyProfitClient";
@@ -290,7 +291,7 @@ function ReversalStatsSection({
   const strategyProfitSummaryText = useMemo(() => {
     if (tf !== "1h") return null;
     return formatStatsStrategyProfitSummaryText(
-      summarizeStatsStrategyProfit(filteredRows, strategySizing),
+      summarizeStatsStrategyProfit(filteredRows, strategySizing, STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND),
     );
   }, [filteredRows, strategySizing, tf]);
 
@@ -460,7 +461,7 @@ function ReversalStatsSection({
         {strategyProfitSummaryText ? (
           <span
             className="sub"
-            title="สรุปคอลัมน์กำไรกลยุทธ์ (TP/SL ตาม Settings) — ชนะ/แพ้จาก % กลยุทธ์ต่อไม้ · รวม % = ผลรวมทุกไม้ · $ = margin×leverage×% แยกชนะ/แพ้ (จำกัดขาดทุนตาม leverage)"
+            title="สรุปคอลัมน์กำไรกลยุทธ์ — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2% · ระหว่างนั้น = เสมอ) · $ รวมเฉพาะไม้ชนะ/แพ้ตามเกณฑ์นี้"
             style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
           >
             {strategyProfitSummaryText}
