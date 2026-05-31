@@ -35,6 +35,10 @@ export function bkkIsSundayNow(): boolean {
   return bkkWeekdayIndexNow() === 0;
 }
 
+export function bkkIsSaturdayNow(): boolean {
+  return bkkWeekdayIndexNow() === 6;
+}
+
 export type SnowballAutoTradeSide = "long" | "short";
 
 export type SnowballAutoTradeActive = {

@@ -26,6 +26,7 @@ import type { CandleReversalModel, CandleReversalTf } from "./candleReversalDete
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import { reversalMatchesQualitySignal } from "@/lib/reversalMatrixFilters";
+import { bkkIsSaturdayNow } from "./snowballAutoTradeStateStore";
 
 /** ค่าเริ่มต้นกลยุทธ์ TP/SL เมื่อ user ยังไม่ตั้งค่า (อ่านจาก settings ของ user) */
 const REVERSAL_TPSL_DEFAULT_TP1_PCT = 10;
@@ -364,11 +365,14 @@ export async function runReversalAutoTradeAfterReversalAlert(
       continue;
     }
 
+    const saturdayAllSignals =
+      row.reversalAutoTradeSaturdayAllSignalsEnabled === true && bkkIsSaturdayNow();
     const allowQuality =
       row.reversalAutoTradeGateQualitySignal !== undefined
         ? row.reversalAutoTradeGateQualitySignal !== false
         : row.reversalAutoTradeGateBodyWick80 !== false || row.reversalAutoTradeGateLenRank315 !== false;
     if (
+      !saturdayAllSignals &&
       !reversalAutotradePassesEntryGate({
         wickRatio,
         greenDaysBeforeSignal: input.greenDaysBeforeSignal,
@@ -631,7 +635,9 @@ export async function runReversalAutoTradeAfterReversalAlert(
         `[${shortContractLabel(contractSymbol)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${lev}x`,
         `สัญญาณ Reversal: ${input.model} · TF ${input.signalBarTf.toUpperCase()}`,
-        `Quality Signal ✓ · Wick ${wickPct.toFixed(1)}%${greenDays != null ? ` · เขียว ${greenDays}d` : ""}${rangeScore != null ? ` · Range ${rangeScore.toFixed(2)}` : ""}${lenRank != null ? ` · Len# ${lenRank}` : ""} · Body ${bodyPct.toFixed(1)}%`,
+        saturdayAllSignals
+          ? "เกณฑ์: วันเสาร์ (เวลาไทย) — auto-open ทุกสัญญาณ Reversal"
+          : `Quality Signal ✓ · Wick ${wickPct.toFixed(1)}%${greenDays != null ? ` · เขียว ${greenDays}d` : ""}${rangeScore != null ? ` · Range ${rangeScore.toFixed(2)}` : ""}${lenRank != null ? ` · Len# ${lenRank}` : ""} · Body ${bodyPct.toFixed(1)}%`,
         aboveEma
           ? `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} > EMA50 15m ~${fmtReversalAutoTradePrice(ema50)}`
           : `Limit ~${fmtReversalAutoTradePrice(ema50)} (EMA50 15m) · ราคาปัจจุบัน ~${fmtReversalAutoTradePrice(markPrice)}`,

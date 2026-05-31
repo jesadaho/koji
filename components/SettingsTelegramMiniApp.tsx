@@ -116,6 +116,7 @@ type ReversalAutoTradeApiBundle = {
   tp2PricePct?: number | null;
   maxHoldHours?: number | null;
   gateQualitySignal?: boolean;
+  saturdayAllSignalsEnabled?: boolean;
 };
 
 type TradingViewMexcResponse = {
@@ -184,6 +185,7 @@ export default function SettingsTelegramMiniApp() {
   const [revTp2PricePct, setRevTp2PricePct] = useState("");
   const [revMaxHoldHours, setRevMaxHoldHours] = useState("");
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
+  const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revSaveErr, setRevSaveErr] = useState("");
   const [revSaveOk, setRevSaveOk] = useState("");
   const [revSaving, setRevSaving] = useState(false);
@@ -261,6 +263,7 @@ export default function SettingsTelegramMiniApp() {
       st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
     );
     setRevGateQualitySignal(st.gateQualitySignal !== false);
+    setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.reversalAutoTrade]);
 
@@ -651,8 +654,8 @@ export default function SettingsTelegramMiniApp() {
       return;
     }
     if (revEnabled) {
-      if (!revGateQualitySignal) {
-        setRevSaveErr("เปิดใช้ Quality Signal gate ก่อนบันทึก");
+      if (!revGateQualitySignal && !revSaturdayAllSignals) {
+        setRevSaveErr("เปิดใช้ Quality Signal หรือวันเสาร์ (auto-open ทุกสัญญาณ) ก่อนบันทึก");
         return;
       }
       if (marginParsed == null || marginParsed <= 0) {
@@ -690,6 +693,7 @@ export default function SettingsTelegramMiniApp() {
       const reversalAutoTrade: Record<string, unknown> = {
         enabled: revEnabled,
         gateQualitySignal: revGateQualitySignal,
+        saturdayAllSignalsEnabled: revSaturdayAllSignals,
         marginUsdt: revMargin.trim() ? marginParsed : null,
         leverage: revLeverage.trim() ? levParsed : null,
         tpSlEnabled: revTpSlEnabled,
@@ -1287,11 +1291,25 @@ export default function SettingsTelegramMiniApp() {
           </span>
         </label>
 
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={revSaturdayAllSignals}
+            onChange={(e) => setRevSaturdayAllSignals(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>วันเสาร์ (เวลาไทย) → auto-open ทุกสัญญาณ</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              ทุกวันเสาร์ตามเวลาไทย (Asia/Bangkok) — สัญญาณ Reversal ทุกตัวเปิด <strong>SHORT</strong> บน MEXC โดยไม่กรอง Quality Signal
+            </span>
+          </span>
+        </label>
+
         <p className="sub" style={{ marginTop: "0.85rem", fontWeight: 600 }}>
           Margin / เลเวเรจ
         </p>
         <p className="sub" style={{ marginTop: 0 }}>
-          ใช้กับทุกสัญญาณที่ผ่าน gate ด้านบน
+          ใช้กับสัญญาณที่ผ่าน Quality Signal (หรือทุกสัญญาณในวันเสาร์ถ้าเปิดตัวเลือกด้านบน)
         </p>
         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
           <label className="sub" style={{ display: "block" }}>

@@ -128,6 +128,8 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeGateLenRank315?: boolean;
   /** Quality Signal: เขียว ≥1 วัน · Wick ≤0.20 · Range <4.5 */
   reversalAutoTradeGateQualitySignal?: boolean;
+  /** วันเสาร์ (เวลาไทย) — auto-open ทุกสัญญาณ Reversal (ข้าม Quality Signal gate) */
+  reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -284,6 +286,7 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeGateBodyWick80?: boolean;
   reversalAutoTradeGateLenRank315?: boolean;
   reversalAutoTradeGateQualitySignal?: boolean;
+  reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;
 };
 
 /**
@@ -356,7 +359,8 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeMaxHoldHours !== undefined ||
     input.reversalAutoTradeGateBodyWick80 !== undefined ||
     input.reversalAutoTradeGateLenRank315 !== undefined ||
-    input.reversalAutoTradeGateQualitySignal !== undefined;
+    input.reversalAutoTradeGateQualitySignal !== undefined ||
+    input.reversalAutoTradeSaturdayAllSignalsEnabled !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -621,6 +625,11 @@ export async function saveTradingViewMexcSettings(
         : prev?.reversalAutoTradeGateQualitySignal ??
           (prev?.reversalAutoTradeGateBodyWick80 !== false ||
             prev?.reversalAutoTradeGateLenRank315 !== false),
+
+    reversalAutoTradeSaturdayAllSignalsEnabled:
+      input.reversalAutoTradeSaturdayAllSignalsEnabled !== undefined
+        ? input.reversalAutoTradeSaturdayAllSignalsEnabled
+        : prev?.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
   };
 
   void touchedSnowballPatch;
