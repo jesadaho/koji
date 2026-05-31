@@ -148,6 +148,8 @@ export type ReversalAutoTradeInput = {
   wickRatio: number;
   /** ช่วงแท่ง ÷ ATR100 — คอลัมน์ Range ในสถิติ */
   rangeScore?: number | null;
+  /** อันดับความยาวแท่งใน lookback (Len#) — สำหรับ log */
+  rangeRankInLookback?: number | null;
   /** แท่ง Day1 เขียวติดก่อนแท่งสัญญาณ */
   greenDaysBeforeSignal?: number | null;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
