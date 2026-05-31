@@ -561,10 +561,12 @@ export async function runReversalAutoTradeAfterReversalAlert(
         input.rangeRankInLookback != null && Number.isFinite(input.rangeRankInLookback)
           ? Math.floor(input.rangeRankInLookback)
           : null;
-      const lenRankGate =
-        lenRank != null &&
-        lenRank >= REVERSAL_AUTOTRADE_LEN_RANK_MIN &&
-        lenRank <= REVERSAL_AUTOTRADE_LEN_RANK_MAX;
+      const greenDays =
+        input.greenDaysBeforeSignal != null && Number.isFinite(input.greenDaysBeforeSignal)
+          ? Math.floor(input.greenDaysBeforeSignal)
+          : null;
+      const rangeScore =
+        input.rangeScore != null && Number.isFinite(input.rangeScore) ? input.rangeScore : null;
 
       const plan = resolveReversalTpSlPlanFromRow(row);
 
@@ -629,7 +631,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         `[${shortContractLabel(contractSymbol)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${lev}x`,
         `สัญญาณ Reversal: ${input.model} · TF ${input.signalBarTf.toUpperCase()}`,
-        `Body ${bodyPct.toFixed(1)}% · Upper wick ${wickPct.toFixed(1)}%${lenRank != null ? ` · Len# ${lenRank}` : ""}${lenRankGate ? " (เกณฑ์ Len 3–15)" : ""}`,
+        `Quality Signal ✓ · Wick ${wickPct.toFixed(1)}%${greenDays != null ? ` · เขียว ${greenDays}d` : ""}${rangeScore != null ? ` · Range ${rangeScore.toFixed(2)}` : ""}${lenRank != null ? ` · Len# ${lenRank}` : ""} · Body ${bodyPct.toFixed(1)}%`,
         aboveEma
           ? `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} > EMA50 15m ~${fmtReversalAutoTradePrice(ema50)}`
           : `Limit ~${fmtReversalAutoTradePrice(ema50)} (EMA50 15m) · ราคาปัจจุบัน ~${fmtReversalAutoTradePrice(markPrice)}`,
