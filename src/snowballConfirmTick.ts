@@ -439,10 +439,11 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
             if (item.side === "long" && item.qualityTier === "b_plus" && sustainedBuyingPressure) {
               marginScale = snowballGradeBSustainedMarginScale();
             }
-            const greenDaysForAutoOpen =
-              item.side === "long"
-                ? await fetchGreenDaysBeforeSignalBar(item.symbol, item.signalBarOpenSec, item.snowTf)
-                : null;
+            const greenDaysForAutoOpen = await fetchGreenDaysBeforeSignalBar(
+              item.symbol,
+              item.signalBarOpenSec,
+              item.snowTf,
+            );
             const confirmVolVsSma = volSmaUse > 0 ? vo / volSmaUse : null;
             await runSnowballAutoTradeAfterSnowballAlert({
               contractSymbol: mexcContractSymbolFromBinanceSymbol(item.symbol),
@@ -458,9 +459,10 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               signalBarLow: item.side === "long" ? lo : null,
               vol: vo,
               volSma: volSmaUse,
+              greenDaysBeforeSignal: greenDaysForAutoOpen,
+              fundingRate: item.statsFundingRate ?? null,
               ...(item.side === "long"
                 ? {
-                    greenDaysBeforeSignal: greenDaysForAutoOpen,
                     barRangePctSignal: item.statsBarRangePctSignal ?? null,
                     signalVolVsSma: item.statsSignalVolVsSma ?? null,
                     confirmVolVsSma,

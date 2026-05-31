@@ -94,6 +94,7 @@ type Phase = "loading" | "setup" | "ready";
 
 type SnowballAutoTradeApiBundle = {
   enabled?: boolean;
+  qualitySignalGateEnabled?: boolean;
   qualityShortSignalShortEnabled?: boolean;
   sundayAllShortEnabled?: boolean;
   marginUsdt?: number | null;
@@ -154,6 +155,7 @@ export default function SettingsTelegramMiniApp() {
   const [mexcSecretInput, setMexcSecretInput] = useState("");
 
   const [snowEnabled, setSnowEnabled] = useState(false);
+  const [snowQualitySignalGate, setSnowQualitySignalGate] = useState(false);
   const [snowQualityShortShort, setSnowQualityShortShort] = useState(false);
   const [snowSundayAllShort, setSnowSundayAllShort] = useState(false);
   const [snowMarginDefault, setSnowMarginDefault] = useState("");
@@ -209,6 +211,7 @@ export default function SettingsTelegramMiniApp() {
     if (!st) return;
 
     setSnowEnabled(Boolean(st.enabled));
+    setSnowQualitySignalGate(Boolean(st.qualitySignalGateEnabled));
     setSnowQualityShortShort(Boolean(st.qualityShortSignalShortEnabled));
     setSnowSundayAllShort(Boolean(st.sundayAllShortEnabled));
     setSnowMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
@@ -575,6 +578,7 @@ export default function SettingsTelegramMiniApp() {
     try {
       const snowballAutoTrade: Record<string, unknown> = {
         enabled: snowEnabled,
+        qualitySignalGateEnabled: snowQualitySignalGate,
         qualityShortSignalShortEnabled: snowQualityShortShort,
         sundayAllShortEnabled: snowSundayAllShort,
         marginUsdt: snowMarginDefault.trim() ? marginDefaultParsed : null,
@@ -1011,7 +1015,7 @@ export default function SettingsTelegramMiniApp() {
         <h2>Snowball auto-open (MEXC)</h2>
         <p className="sub" style={{ marginTop: 0 }}>
           เมื่อ <strong>Snowball ส่งสัญญาณสำเร็จ (closed bar)</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน market ตามทิศสัญญาณ —{" "}
-          <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · Action Plan = Monitor จาก matrix 4h จะไม่เปิด · ตัวเลือกด้านล่าง: Quality Short Signal หรือวันอาทิตย์ (เวลาไทย) → Short
+          <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · Action Plan = Monitor จะไม่เปิด · ตัวเลือกด้านล่างแยก ✨ Quality Signal / ✨ Quality Short Signal / วันอาทิตย์
         </p>
         <p className="sub" style={{ marginTop: "0.5rem" }}>
           <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
@@ -1045,13 +1049,27 @@ export default function SettingsTelegramMiniApp() {
         <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
           <input
             type="checkbox"
+            checked={snowQualitySignalGate}
+            onChange={(e) => setSnowQualitySignalGate(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>✨ Quality Signal (gate)</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              เปิด auto-open เฉพาะเมื่อสัญญาณตรง matrix ✨ Quality Signal — เขียว <strong>2</strong> วัน · Funding &gt; −0.10% · สัญญาณที่ไม่ตรงจะข้าม (ไม่สั่ง MEXC)
+            </span>
+          </span>
+        </label>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
             checked={snowQualityShortShort}
             onChange={(e) => setSnowQualityShortShort(e.target.checked)}
           />
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>✨ Quality Short Signal → Short</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              สัญญาณ Snowball <strong>LONG</strong> ที่ตรงเกณฑ์เดียวกับ matrix ✨ Quality Short Signal — เขียว 1 วัน · Vol×SMA &gt; 3× · R% สัญญาณ &gt; 8% — เปิด <strong>Short</strong> บน MEXC แทน Long
+              สัญญาณ Snowball <strong>LONG</strong> ที่ตรง matrix ✨ Quality Short Signal — เขียว <strong>1</strong> วัน · Vol×SMA &gt; 3× · R% สัญญาณ &gt; 8% — เปิด <strong>Short</strong> บน MEXC แทน Long
             </span>
           </span>
         </label>

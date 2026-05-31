@@ -3639,6 +3639,7 @@ export async function runPublicIndicatorFeedInternal(
                   volSma: vsE!,
                   actionPlan: longActionPlan,
                   greenDaysBeforeSignal: longGreenDaysForAlert,
+                  fundingRate: longMktCtxForAlert?.fundingRate ?? null,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
                   ...(marginScale != null ? { marginScale } : {}),
                 });
@@ -4183,6 +4184,8 @@ export async function runPublicIndicatorFeedInternal(
                   signalBarLow: null,
                   vol: vE!,
                   volSma: vsE!,
+                  greenDaysBeforeSignal: bearGreenDaysForAlert,
+                  fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
                 });
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open SHORT", symbol, e);

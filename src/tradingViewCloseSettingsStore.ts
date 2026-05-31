@@ -77,6 +77,10 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap;
   /** สัญญาณ LONG + เขียว 2 วัน + Funding > −0.10% → เปิด Long ทุกเกรด (ข้าม matrix) */
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
+  /** สัญญาณที่ตรง ✨ Quality Signal → Long */
+  snowballAutoTradeQualitySignalLongEnabled?: boolean;
+  /** @deprecated ใช้ snowballAutoTradeQualitySignalLongEnabled */
+  snowballAutoTradeQualitySignalGateEnabled?: boolean;
   /** สัญญาณ LONG ที่ตรง ✨ Quality Short Signal → เปิด Short บน MEXC แทน Long */
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   /** วันอาทิตย์ (เวลาไทย) — Snowball ทุกสัญญาณ → Short */
@@ -252,6 +256,7 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeRulesLong?: SnowballAutoTradeGradeRulesMap | null;
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap | null;
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
+  snowballAutoTradeQualitySignalLongEnabled?: boolean;
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   snowballAutoTradeSundayAllShortEnabled?: boolean;
   snowballAutoTradeMarginUsdt?: number | null;
@@ -322,6 +327,7 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeRulesLong !== undefined ||
     input.snowballAutoTradeRulesBear !== undefined ||
     input.snowballAutoTradeGreen2DaysLongAllGrades !== undefined ||
+    input.snowballAutoTradeQualitySignalLongEnabled !== undefined ||
     input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined ||
     input.snowballAutoTradeSundayAllShortEnabled !== undefined ||
     input.snowballAutoTradeMarginUsdt !== undefined ||
@@ -451,6 +457,11 @@ export async function saveTradingViewMexcSettings(
       input.snowballAutoTradeGreen2DaysLongAllGrades !== undefined
         ? input.snowballAutoTradeGreen2DaysLongAllGrades
         : prev?.snowballAutoTradeGreen2DaysLongAllGrades ?? false,
+
+    snowballAutoTradeQualitySignalGateEnabled:
+      input.snowballAutoTradeQualitySignalGateEnabled !== undefined
+        ? input.snowballAutoTradeQualitySignalGateEnabled
+        : prev?.snowballAutoTradeQualitySignalGateEnabled ?? false,
 
     snowballAutoTradeQualityShortSignalShortEnabled:
       input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined

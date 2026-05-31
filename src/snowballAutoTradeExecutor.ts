@@ -30,8 +30,17 @@ import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import {
   SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA,
+  SNOWBALL_QUALITY_SIGNAL_CRITERIA,
   snowballMatchesQualityShortSignal,
+  snowballMatchesQualitySignal,
 } from "@/lib/snowballMatrixFilters";
+
+function snowballQualitySignalLongEnabled(row: TradingViewMexcUserSettings): boolean {
+  return (
+    row.snowballAutoTradeQualitySignalLongEnabled === true ||
+    row.snowballAutoTradeQualitySignalGateEnabled === true
+  );
+}
 
 /**
  * ค่าเริ่มต้นเปิด — ผู้ใช้เปิด/ปิดหลักใน Mini App (`snowballAutoTradeEnabled`)
@@ -221,8 +230,9 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   marginScale?: number;
   /** จาก matrix 4h — monitor = ไม่ auto-open */
   actionPlan?: SnowballActionPlan | null;
-  /** สำหรับ Quality Short Signal → Short (สัญญาณ LONG เท่านั้น) */
+  /** Quality Signal / Quality Short Signal */
   greenDaysBeforeSignal?: number | null;
+  fundingRate?: number | null;
   barRangePctSignal?: number | null;
   signalVolVsSma?: number | null;
   confirmVolVsSma?: number | null;
@@ -257,6 +267,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     signalVolVsSma: input.signalVolVsSma,
     confirmVolVsSma: input.confirmVolVsSma,
   };
+  const matchesQualitySignal = snowballMatchesQualitySignal({
+    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
+    fundingRate: input.fundingRate ?? null,
+  });
 
   const [map, state0] = await Promise.all([
     loadTradingViewMexcSettingsFullMap(),
@@ -290,6 +304,11 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     const row = rowRaw as TradingViewMexcUserSettings;
     if (!row.snowballAutoTradeEnabled) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "user_disabled");
+      continue;
+    }
+
+    if (row.snowballAutoTradeQualitySignalGateEnabled === true && !matchesQualitySignal) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "quality_signal_gate");
       continue;
     }
 
