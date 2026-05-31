@@ -13,6 +13,11 @@ import {
 } from "@/src/tmaCsvExportToken";
 import { consumeTmaStagedCsv, putTmaStagedCsv } from "@/src/tmaCsvStagingStore";
 import { candleReversalStatsToCsv } from "@/lib/candleReversalStatsCsvExport";
+import {
+  filterCandleReversalStatsRows,
+  reversalStatsFilterQueryFromSearchParams,
+  type ReversalStatsFilterQuery,
+} from "@/lib/candleReversalStatsFilters";
 import { rsiDivergenceStatsToCsv } from "@/lib/rsiDivergenceStatsCsvExport";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
 import { statsCsvAttachmentResponse, statsCsvFilename } from "@/lib/statsCsvResponse";
@@ -211,17 +216,13 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       const auth = await authenticateTmaCsvDownload(req, "reversal-stats.csv");
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const data = await liffGetCandleReversalStats(auth.telegramUserId);
-      const tfRaw = req.nextUrl.searchParams.get("tf")?.toLowerCase();
-      const tfFilter = tfRaw === "1d" || tfRaw === "1h" ? tfRaw : null;
-      const sideRaw = req.nextUrl.searchParams.get("side")?.toLowerCase();
-      const sideFilter = sideRaw === "long" || sideRaw === "short" ? sideRaw : null;
-      let rows = data.rows;
-      if (tfFilter) rows = rows.filter((r) => (r.signalBarTf ?? "1d") === tfFilter);
-      if (sideFilter) rows = rows.filter((r) => (r.tradeSide ?? "short") === sideFilter);
+      const fq = reversalStatsFilterQueryFromSearchParams(req.nextUrl.searchParams);
+      const rows = filterCandleReversalStatsRows(data.rows, fq);
       const csv = candleReversalStatsToCsv(rows);
       const filenameParts = ["reversal-stats"];
-      if (tfFilter) filenameParts.push(tfFilter);
-      if (sideFilter) filenameParts.push(sideFilter);
+      if (fq.tf) filenameParts.push(fq.tf);
+      if (fq.side) filenameParts.push(fq.side);
+      if (fq.matrix && fq.matrix !== "all") filenameParts.push(fq.matrix);
       const filenamePrefix = filenameParts.join("-");
       return statsCsvAttachmentResponse(csv, statsCsvFilename(filenamePrefix));
     }
@@ -334,17 +335,31 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     if (segs.length === 1 && a === "csv-export-staging") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
       if (!auth.ok) return json({ error: auth.error }, auth.status);
-      let body: { csv?: string; filename?: string };
+      let body: {
+        csv?: string;
+        filename?: string;
+        source?: string;
+        filters?: ReversalStatsFilterQuery;
+      };
       try {
-        body = (await req.json()) as { csv?: string; filename?: string };
+        body = (await req.json()) as typeof body;
       } catch {
         return json({ error: "JSON ไม่ถูกต้อง" }, 400);
       }
-      const put = putTmaStagedCsv(
-        auth.telegramUserId,
-        typeof body.csv === "string" ? body.csv : "",
-        typeof body.filename === "string" ? body.filename : "export.csv",
-      );
+      const filename =
+        typeof body.filename === "string" && body.filename.trim()
+          ? body.filename.trim()
+          : "export.csv";
+
+      let csvText = typeof body.csv === "string" ? body.csv : "";
+      if (body.source === "reversal-stats") {
+        const data = await liffGetCandleReversalStats(auth.telegramUserId);
+        const fq = body.filters ?? {};
+        const rows = filterCandleReversalStatsRows(data.rows, fq);
+        csvText = candleReversalStatsToCsv(rows);
+      }
+
+      const put = putTmaStagedCsv(auth.telegramUserId, csvText, filename);
       if ("error" in put) {
         const msg =
           put.error === "csv_too_large"

@@ -1,0 +1,163 @@
+/**
+ * ตัวกรองสถิติ Reversal — ใช้ร่วม Mini App + API export CSV
+ */
+
+import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
+import {
+  reversalStatsRowMatchesMatrixFilter,
+  type ReversalMatrixFilter,
+} from "@/lib/reversalMatrixFilters";
+import {
+  statsRowMatchesVolVsSmaFilter,
+  STATS_VOL_VS_SMA_FILTER_OPTIONS,
+  type StatsVolVsSmaFilter,
+} from "@/lib/statsVolVsSmaFilter";
+
+export type ReversalShapeFilter = "all" | "wick80" | "body80" | "wickOrBody80";
+export type ReversalDayFilter = "all" | "3" | "7" | "30" | "90";
+export type ReversalLenRankFilter = "all" | "rank3to15";
+
+export const REVERSAL_DAY_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalDayFilter; label: string }> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "3", label: "3 วัน" },
+  { value: "7", label: "7 วัน" },
+  { value: "30", label: "30 วัน" },
+  { value: "90", label: "90 วัน" },
+];
+
+export const REVERSAL_LEN_RANK_FILTER_OPTIONS: ReadonlyArray<{
+  value: ReversalLenRankFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "rank3to15", label: "อันดับ 3–15" },
+];
+
+export type ReversalStatsFilterQuery = {
+  tf?: "1d" | "1h";
+  side?: "long" | "short";
+  days?: ReversalDayFilter;
+  shape?: ReversalShapeFilter;
+  lenRank?: ReversalLenRankFilter;
+  vol?: StatsVolVsSmaFilter;
+  matrix?: ReversalMatrixFilter;
+};
+
+export function reversalShapeFilterLabel(filter: ReversalShapeFilter): string {
+  if (filter === "wick80") return "ไส้ >= 80%";
+  if (filter === "body80") return "เนื้อ >= 80%";
+  if (filter === "wickOrBody80") return "ไส้หรือเนื้อ >= 80%";
+  return "ทั้งหมด";
+}
+
+export function reversalDayFilterLabel(filter: ReversalDayFilter): string {
+  return REVERSAL_DAY_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function reversalLenRankFilterLabel(filter: ReversalLenRankFilter): string {
+  return REVERSAL_LEN_RANK_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+function reversalAlertedAtMs(row: CandleReversalStatsRow): number {
+  return row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)
+    ? row.alertedAtMs
+    : Date.parse(row.alertedAtIso);
+}
+
+export function reversalRowMatchesShapeFilter(
+  row: CandleReversalStatsRow,
+  filter: ReversalShapeFilter,
+): boolean {
+  if (filter === "all") return true;
+  const wickOk = row.wickRatioPct != null && Number.isFinite(row.wickRatioPct) && row.wickRatioPct >= 80;
+  const bodyOk = row.bodyPct != null && Number.isFinite(row.bodyPct) && row.bodyPct >= 80;
+  if (filter === "wick80") return wickOk;
+  if (filter === "body80") return bodyOk;
+  return wickOk || bodyOk;
+}
+
+export function reversalRowMatchesDayFilter(
+  row: CandleReversalStatsRow,
+  filter: ReversalDayFilter,
+): boolean {
+  if (filter === "all") return true;
+  const days = Number(filter);
+  const cutoffMs = Date.now() - days * 24 * 3600 * 1000;
+  const ms = reversalAlertedAtMs(row);
+  return Number.isFinite(ms) && ms >= cutoffMs;
+}
+
+export function reversalRowMatchesLenRankFilter(
+  row: CandleReversalStatsRow,
+  filter: ReversalLenRankFilter,
+): boolean {
+  if (filter === "all") return true;
+  const rank = row.rangeRankInLookback;
+  if (rank == null || !Number.isFinite(rank)) return false;
+  const r = Math.floor(rank);
+  return r >= 3 && r <= 15;
+}
+
+export function reversalRowMatchesVolVsSmaFilter(
+  row: CandleReversalStatsRow,
+  filter: StatsVolVsSmaFilter,
+): boolean {
+  return statsRowMatchesVolVsSmaFilter(row.signalVolVsSma, filter);
+}
+
+export function filterCandleReversalStatsRows(
+  rows: CandleReversalStatsRow[],
+  q: ReversalStatsFilterQuery,
+): CandleReversalStatsRow[] {
+  return rows.filter((r) => {
+    if (q.tf && (r.signalBarTf ?? "1d") !== q.tf) return false;
+    if (q.side && (r.tradeSide ?? "short") !== q.side) return false;
+    if (q.days && q.days !== "all" && !reversalRowMatchesDayFilter(r, q.days)) return false;
+    if (q.shape && q.shape !== "all" && !reversalRowMatchesShapeFilter(r, q.shape)) return false;
+    if (q.lenRank && q.lenRank !== "all" && !reversalRowMatchesLenRankFilter(r, q.lenRank)) return false;
+    if (q.vol && q.vol !== "all" && !reversalRowMatchesVolVsSmaFilter(r, q.vol)) return false;
+    if (q.matrix && q.matrix !== "all" && !reversalStatsRowMatchesMatrixFilter(r, q.matrix)) return false;
+    return true;
+  });
+}
+
+const SHAPE_SET = new Set<string>(["all", "wick80", "body80", "wickOrBody80"]);
+const DAY_SET = new Set<string>(["all", "3", "7", "30", "90"]);
+const LEN_SET = new Set<string>(["all", "rank3to15"]);
+const VOL_SET = new Set(STATS_VOL_VS_SMA_FILTER_OPTIONS.map((o) => o.value));
+const MATRIX_SET = new Set<string>(["all", "qualitySignal"]);
+
+function pickEnum<T extends string>(raw: string | null, allowed: Set<string>, fallback: T): T {
+  const k = raw?.trim().toLowerCase() ?? "";
+  return (allowed.has(k) ? k : fallback) as T;
+}
+
+/** อ่าน query จาก URL / searchParams */
+export function reversalStatsFilterQueryFromSearchParams(
+  sp: URLSearchParams,
+): ReversalStatsFilterQuery {
+  const tfRaw = sp.get("tf")?.toLowerCase();
+  const sideRaw = sp.get("side")?.toLowerCase();
+  const q: ReversalStatsFilterQuery = {};
+  if (tfRaw === "1d" || tfRaw === "1h") q.tf = tfRaw;
+  if (sideRaw === "long" || sideRaw === "short") q.side = sideRaw;
+  q.days = pickEnum(sp.get("days"), DAY_SET, "all");
+  q.shape = pickEnum(sp.get("shape"), SHAPE_SET, "all");
+  q.lenRank = pickEnum(sp.get("lenRank"), LEN_SET, "all");
+  q.vol = pickEnum(sp.get("vol"), VOL_SET, "all");
+  q.matrix = pickEnum(sp.get("matrix"), MATRIX_SET, "all");
+  return q;
+}
+
+export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): string {
+  const p = new URLSearchParams();
+  if (q.tf) p.set("tf", q.tf);
+  if (q.side) p.set("side", q.side);
+  if (q.days && q.days !== "all") p.set("days", q.days);
+  if (q.shape && q.shape !== "all") p.set("shape", q.shape);
+  if (q.lenRank && q.lenRank !== "all") p.set("lenRank", q.lenRank);
+  if (q.vol && q.vol !== "all") p.set("vol", q.vol);
+  if (q.matrix && q.matrix !== "all") p.set("matrix", q.matrix);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}

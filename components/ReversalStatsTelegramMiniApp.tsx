@@ -40,12 +40,28 @@ import {
   statsVolVsSmaFilterLabel,
   type StatsVolVsSmaFilter,
 } from "@/lib/statsVolVsSmaFilter";
-import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
+import { copyCsvToClipboard, downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
+import {
+  buildReversalStatsCsvSearchParams,
+  REVERSAL_DAY_FILTER_OPTIONS,
+  REVERSAL_LEN_RANK_FILTER_OPTIONS,
+  reversalDayFilterLabel,
+  reversalLenRankFilterLabel,
+  reversalRowMatchesDayFilter,
+  reversalRowMatchesLenRankFilter,
+  reversalRowMatchesShapeFilter,
+  reversalRowMatchesVolVsSmaFilter,
+  reversalShapeFilterLabel,
+  reversalStatsRowMatchesMatrixFilter,
+  type ReversalDayFilter,
+  type ReversalLenRankFilter,
+  type ReversalShapeFilter,
+  type ReversalStatsFilterQuery,
+} from "@/lib/candleReversalStatsFilters";
 import {
   REVERSAL_MATRIX_FILTER_OPTIONS,
   reversalMatrixFilterLabel,
   reversalMatrixFilterTitle,
-  reversalStatsRowMatchesMatrixFilter,
   type ReversalMatrixFilter,
 } from "@/lib/reversalMatrixFilters";
 
@@ -156,72 +172,13 @@ function SortTh({
   );
 }
 
-type ReversalShapeFilter = "all" | "wick80" | "body80" | "wickOrBody80";
-type ReversalDayFilter = "all" | "3" | "7" | "30" | "90";
-type ReversalLenRankFilter = "all" | "rank3to15";
 type ReversalVolVsSmaFilter = StatsVolVsSmaFilter;
 
-const REVERSAL_LEN_RANK_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalLenRankFilter; label: string }> = [
-  { value: "all", label: "ทั้งหมด" },
-  { value: "rank3to15", label: "อันดับ 3–15" },
-];
-
-const REVERSAL_DAY_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalDayFilter; label: string }> = [
-  { value: "all", label: "ทั้งหมด" },
-  { value: "3", label: "3 วัน" },
-  { value: "7", label: "7 วัน" },
-  { value: "30", label: "30 วัน" },
-  { value: "90", label: "90 วัน" },
-];
-
-function reversalShapeFilterLabel(filter: ReversalShapeFilter): string {
-  if (filter === "wick80") return "ไส้ >= 80%";
-  if (filter === "body80") return "เนื้อ >= 80%";
-  if (filter === "wickOrBody80") return "ไส้หรือเนื้อ >= 80%";
-  return "ทั้งหมด";
-}
-
-function reversalRowMatchesShapeFilter(row: CandleReversalStatsRow, filter: ReversalShapeFilter): boolean {
-  if (filter === "all") return true;
-  const wickOk = row.wickRatioPct != null && Number.isFinite(row.wickRatioPct) && row.wickRatioPct >= 80;
-  const bodyOk = row.bodyPct != null && Number.isFinite(row.bodyPct) && row.bodyPct >= 80;
-  if (filter === "wick80") return wickOk;
-  if (filter === "body80") return bodyOk;
-  return wickOk || bodyOk;
-}
-
-function reversalAlertedAtMs(row: CandleReversalStatsRow): number {
-  return row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)
-    ? row.alertedAtMs
-    : Date.parse(row.alertedAtIso);
-}
-
-function reversalRowMatchesDayFilter(row: CandleReversalStatsRow, filter: ReversalDayFilter): boolean {
-  if (filter === "all") return true;
-  const days = Number(filter);
-  const cutoffMs = Date.now() - days * 24 * 3600 * 1000;
-  const ms = reversalAlertedAtMs(row);
-  return Number.isFinite(ms) && ms >= cutoffMs;
-}
-
-function reversalDayFilterLabel(filter: ReversalDayFilter): string {
-  return REVERSAL_DAY_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
-}
-
-function reversalLenRankFilterLabel(filter: ReversalLenRankFilter): string {
-  return REVERSAL_LEN_RANK_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
-}
-
-function reversalRowMatchesLenRankFilter(row: CandleReversalStatsRow, filter: ReversalLenRankFilter): boolean {
-  if (filter === "all") return true;
-  const rank = row.rangeRankInLookback;
-  if (rank == null || !Number.isFinite(rank)) return false;
-  const r = Math.floor(rank);
-  return r >= 3 && r <= 15;
-}
-
-function reversalRowMatchesVolVsSmaFilter(row: CandleReversalStatsRow, filter: ReversalVolVsSmaFilter): boolean {
-  return statsRowMatchesVolVsSmaFilter(row.signalVolVsSma, filter);
+function parseSideFromCsvQuery(csvQuery: string): "long" | "short" | undefined {
+  const m = csvQuery.match(/(?:^|&)side=(long|short)/i);
+  if (!m) return undefined;
+  const s = m[1]!.toLowerCase();
+  return s === "long" || s === "short" ? s : undefined;
 }
 
 function reversalWinrateSummary(rows: CandleReversalStatsRow[]): string {
@@ -333,16 +290,39 @@ function ReversalStatsSection({
       ? "Max adverse ตลอดช่วง follow-up (long: low ต่ำสุดจาก entry)"
       : "Max adverse ตลอดช่วง follow-up (short: high สูงสุดจาก entry)");
 
+  const exportFilterQuery = useMemo((): ReversalStatsFilterQuery => {
+    const side = parseSideFromCsvQuery(csvQuery);
+    return {
+      tf,
+      ...(side ? { side } : {}),
+      days: dayFilter,
+      shape: shapeFilter,
+      lenRank: lenRankFilter,
+      vol: volVsSmaFilter,
+      matrix: matrixFilter,
+    };
+  }, [csvQuery, dayFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
+
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
-    await downloadCsv(statsCsvFilename(csvPrefix), candleReversalStatsToCsv(rows), {
-      telegramExportPath: `/api/tma/reversal-stats.csv?tf=${tf}${csvQuery}`,
+    const csv = candleReversalStatsToCsv(rows);
+    await downloadCsv(statsCsvFilename(csvPrefix), csv, {
+      telegramExportPath: `/api/tma/reversal-stats.csv${buildReversalStatsCsvSearchParams(exportFilterQuery)}`,
       preferClientCsvInTma: true,
+      stagedReversalFilters: exportFilterQuery,
     });
-  }, [csvPrefix, csvQuery, rows, tf]);
+  }, [csvPrefix, exportFilterQuery, rows]);
+
+  const copyCsv = useCallback(async () => {
+    if (rows.length === 0) {
+      window.alert("ยังไม่มีแถวให้คัดลอก");
+      return;
+    }
+    await copyCsvToClipboard(candleReversalStatsToCsv(rows));
+  }, [rows]);
 
   return (
     <section className="sparkStatsMatrixSection" style={{ marginTop: "1.5rem" }}>
@@ -638,14 +618,23 @@ function ReversalStatsSection({
       <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
         {footnote}
       </p>
-      <p className="sparkStatsActionRow" style={{ marginTop: "0.5rem" }}>
+      <p className="sparkStatsActionRow" style={{ marginTop: "0.5rem", gap: "0.5rem" }}>
         <button
           type="button"
           className="sparkStatsRefreshBtn"
           disabled={rows.length === 0}
-          onClick={exportCsv}
+          onClick={() => void exportCsv()}
         >
           Export CSV
+        </button>
+        <button
+          type="button"
+          className="sparkStatsRefreshBtn"
+          disabled={rows.length === 0}
+          onClick={() => void copyCsv()}
+          title="ทางเลือกเมื่อดาวน์โหลดใน Telegram ไม่ขึ้น"
+        >
+          คัดลอก CSV
         </button>
       </p>
     </section>

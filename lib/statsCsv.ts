@@ -1,5 +1,6 @@
 /** CSV build + download สำหรับตารางสถิติ Mini App (UTF-8 BOM สำหรับ Excel / Google Sheets) */
 
+import type { ReversalStatsFilterQuery } from "@/lib/candleReversalStatsFilters";
 import { getTelegramInitData } from "@/lib/kojiTelegramWebApp";
 
 export function escapeCsvCell(v: string | number | null | undefined): string {
@@ -23,10 +24,12 @@ export function statsCsvFilename(prefix: string): string {
 }
 
 export type DownloadCsvOptions = {
-  /** เช่น `/api/tma/snowball-stats.csv` — fallback สำหรับ Telegram.WebApp.downloadFile */
+  /** เช่น `/api/tma/reversal-stats.csv?tf=1h&matrix=qualitySignal` — downloadFile + filter บนเซิร์ฟ */
   telegramExportPath?: string;
-  /** ใน TMA ใช้ CSV จากหน้า (ตรงตาราง) ก่อนดึงจาก API */
+  /** ใน TMA ใช้ CSV หลัง filter ก่อน API ทั้งก้อน */
   preferClientCsvInTma?: boolean;
+  /** ส่งตัวกรองให้เซิร์ฟสร้าง CSV (POST เล็ก — ไม่ส่งทั้งไฟล์) */
+  stagedReversalFilters?: ReversalStatsFilterQuery;
 };
 
 function apiOrigin(): string {
@@ -169,11 +172,23 @@ async function tryTelegramDownloadFile(filename: string, exportPath: string): Pr
   return tryTelegramDownloadFileUrl(filename, url);
 }
 
-/** อัปโหลด CSV หลัง filter ชั่วคราว แล้ว downloadFile (มือถือใน Telegram) */
-async function tryTelegramStagedCsvDelivery(filename: string, csv: string): Promise<boolean> {
+type StagedCsvResult = { ok: true } | { ok: false; error: string };
+
+/** อัปโหลดชั่วคราวแล้ว downloadFile — ใช้ filters แทนส่ง CSV ทั้งก้อนเมื่อเป็น Reversal */
+async function tryTelegramStagedCsvDelivery(
+  filename: string,
+  csv: string,
+  stagedReversalFilters?: ReversalStatsFilterQuery,
+): Promise<StagedCsvResult> {
   const initData = getTelegramInitData();
-  if (!initData) return false;
+  if (!initData) return { ok: false, error: "ไม่มี initData — เปิดใหม่จากปุ่ม Mini App ในแชท" };
+
   const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+  const body =
+    stagedReversalFilters != null
+      ? { source: "reversal-stats", filename: name, filters: stagedReversalFilters }
+      : { csv, filename: name };
+
   let res: Response;
   try {
     res = await fetch(`${apiOrigin()}/api/tma/csv-export-staging`, {
@@ -182,36 +197,41 @@ async function tryTelegramStagedCsvDelivery(filename: string, csv: string): Prom
         Authorization: `tma ${initData}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ csv, filename: name }),
+      body: JSON.stringify(body),
     });
-  } catch {
-    return false;
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "เชื่อมต่อ API ไม่ได้",
+    };
   }
   const text = await res.text();
-  if (!res.ok) return false;
+  if (!res.ok) {
+    return { ok: false, error: parseApiErrorBody(text, res.statusText || `HTTP ${res.status}`) };
+  }
   let parsed: { token?: string; path?: string };
   try {
     parsed = JSON.parse(text) as { token?: string; path?: string };
   } catch {
-    return false;
+    return { ok: false, error: "ตอบกลับ staging ไม่ถูกต้อง" };
   }
   const token = typeof parsed.token === "string" ? parsed.token.trim() : "";
   const path = typeof parsed.path === "string" && parsed.path.trim() ? parsed.path.trim() : "stats-export.csv";
-  if (!token) return false;
-  const exportPath = `/api/tma/${path}?csv_token=${encodeURIComponent(token)}`;
-  const url = `${apiOrigin()}${exportPath}`;
-  if (await tryTelegramDownloadFileUrl(name, url)) return true;
+  if (!token) return { ok: false, error: "ไม่ได้รับ token ดาวน์โหลด" };
+
+  const url = `${apiOrigin()}/api/tma/${path}?csv_token=${encodeURIComponent(token)}`;
+  if (await tryTelegramDownloadFileUrl(name, url)) return { ok: true };
   try {
     const w = window.Telegram?.WebApp;
     if (w?.openLink) {
       w.openLink(url);
       window.alert("เปิดลิงก์ดาวน์โหลดในเบราว์เซอร์แล้ว — กดบันทึก/แชร์ไฟล์ CSV");
-      return true;
+      return { ok: true };
     }
   } catch {
     /* ignore */
   }
-  return false;
+  return { ok: false, error: "Telegram downloadFile / openLink ไม่สำเร็จ" };
 }
 
 /** เปิด URL ดาวน์โหลดในเบราว์เซอร์ภายนอก (มือถือ/เดสก์ท็อปที่ downloadFile ไม่ขึ้น) */
@@ -304,11 +324,13 @@ async function deliverCsvBlob(
   csv: string,
   exportPath?: string,
   preferClientCsvInTma?: boolean,
-): Promise<boolean> {
+  stagedReversalFilters?: ReversalStatsFilterQuery,
+): Promise<{ ok: boolean; lastError?: string }> {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const name = filename.endsWith(".csv") ? filename : `${filename}.csv`;
   const inTma = isTelegramMiniApp();
   const hasClientCsv = Boolean(csv.trim());
+  let lastError: string | undefined;
 
   if (inTma) {
     const tryClientBlobDelivery = async (): Promise<boolean> => {
@@ -328,25 +350,29 @@ async function deliverCsvBlob(
       return false;
     };
 
-    // preferClientCsvInTma — CSV จากตารางหลัง filter (staging + downloadFile บนมือถือ)
     if (preferClientCsvInTma && hasClientCsv) {
-      if (await tryClientBlobDelivery()) return true;
-      if (await tryTelegramStagedCsvDelivery(name, csv)) return true;
+      const staged = await tryTelegramStagedCsvDelivery(name, csv, stagedReversalFilters);
+      if (staged.ok) return { ok: true };
+      lastError = staged.error;
+
+      if (await tryServerCsvDelivery()) return { ok: true };
+
+      if (await tryClientBlobDelivery()) return { ok: true };
     } else {
-      if (await tryServerCsvDelivery()) return true;
-      if (await tryClientBlobDelivery()) return true;
+      if (await tryServerCsvDelivery()) return { ok: true };
+      if (await tryClientBlobDelivery()) return { ok: true };
     }
 
     if (await tryClipboardCsv(csv)) {
       window.alert("คัดลอก CSV ไปคลิปบอร์ดแล้ว — วางใน Numbers / Excel แล้วบันทึกเป็นไฟล์");
-      return true;
+      return { ok: true };
     }
-    return false;
+    return { ok: false, lastError };
   }
 
-  if (await trySaveFilePicker(name, blob)) return true;
+  if (await trySaveFilePicker(name, blob)) return { ok: true };
   tryAnchorDownload(name, blob);
-  return true;
+  return { ok: true };
 }
 
 /**
@@ -372,19 +398,23 @@ export async function downloadCsv(
   }
 
   const preferClient = opts?.preferClientCsvInTma;
+  const stagedReversalFilters = opts?.stagedReversalFilters;
 
-  if (content.trim() && (await deliverCsvBlob(filename, content, exportPath, preferClient))) {
+  const delivered = await deliverCsvBlob(
+    filename,
+    content,
+    exportPath,
+    preferClient,
+    stagedReversalFilters,
+  );
+  if (content.trim() && delivered.ok) {
     return;
   }
 
-  // มี CSV จากตารางแล้วแต่ส่งไฟล์ไม่ได้ — ไม่ดึง API ทั้งก้อน (ไม่ตรงตัวกรอง)
   if (preferClient && content.trim()) {
-    if (await tryClipboardCsv(content)) {
-      window.alert("คัดลอก CSV ไปคลิปบอร์ดแล้ว — วางใน Numbers / Excel แล้วบันทึกเป็นไฟล์");
-      return;
-    }
+    const hint = delivered.lastError ? `\n\n${delivered.lastError}` : "";
     window.alert(
-      "ดาวน์โหลดไม่สำเร็จ — ลองอีกครั้งหรืออัปเดต Telegram (รองรับ downloadFile)",
+      `ดาวน์โหลดไม่สำเร็จ — กดปุ่ม「คัดลอก CSV」ด้านล่างตาราง แล้ววางใน Excel${hint}`,
     );
     return;
   }
@@ -395,14 +425,31 @@ export async function downloadCsv(
       window.alert(fetched.error);
       return;
     }
-    if (await deliverCsvBlob(filename, fetched.csv, exportPath, preferClient)) {
-      return;
-    }
+    const again = await deliverCsvBlob(
+      filename,
+      fetched.csv,
+      exportPath,
+      preferClient,
+      stagedReversalFilters,
+    );
+    if (again.ok) return;
   }
 
-  window.alert(
-    "ดาวน์โหลดไม่สำเร็จ — ลองอัปเดต Telegram หรือใช้ Share / คัดลอกจากปุ่มเดิม",
-  );
+  window.alert("ดาวน์โหลดไม่สำเร็จ — ลองกด「คัดลอก CSV」หรืออัปเดต Telegram");
+}
+
+/** คัดลอก CSV ไปคลิปบอร์ด (ทางเลือกเมื่อ downloadFile ไม่ขึ้น) */
+export async function copyCsvToClipboard(csv: string): Promise<boolean> {
+  if (!csv.trim()) {
+    window.alert("ยังไม่มีแถวให้คัดลอก");
+    return false;
+  }
+  if (await tryClipboardCsv(csv)) {
+    window.alert("คัดลอก CSV ไปคลิปบอร์ดแล้ว — วางใน Numbers / Excel");
+    return true;
+  }
+  window.alert("คัดลอกไม่สำเร็จ — ลองเปิด Mini App บนเดสก์ท็อป");
+  return false;
 }
 
 export function statsFmtPrice(p: number | null | undefined): string {
