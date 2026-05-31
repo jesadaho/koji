@@ -19,6 +19,7 @@ import {
 } from "@/src/snowballLongBreakoutGrade";
 import { displayGradeToQualityTier } from "@/src/snowballLongGradeMatrix";
 import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
+import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 import {
   STATS_VOL_VS_SMA_FILTER_OPTIONS,
   statsRowMatchesVolVsSmaFilter,
@@ -141,6 +142,9 @@ export type SnowballStatsRow = {
   maxDrawdownPct: number | null;
   /** Max adverse จาก entry ตลอดช่วง follow-up 48h (ไม่ตัดที่ MFE) */
   followUpMaxAdversePct: number | null;
+  /** กำไร % ตามกลยุทธ์ TP1/TP2/48h (จำลองบน 15m) — มีเมื่อครบ 48h */
+  strategyProfitPct?: number | null;
+  strategyExitReason?: StatsTpSlExitReason | null;
   resultRr: string | null;
   outcome: SnowballStatsOutcome;
   /** migration: รีเซ็ต horizon หลังแก้ anchor 4h two-bar (ปิดแท่ง confirm) */

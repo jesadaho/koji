@@ -1,4 +1,5 @@
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
+import { simulateStatsTpSlProfit } from "@/lib/tpSlStrategySimulate";
 import {
   fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesRange,
@@ -309,7 +310,10 @@ export async function runSnowballStatsFollowUpTick(
       (row.pct24h == null && nowSec >= ac + SEC_24H) ||
       (row.pct48h == null && nowSec >= ac + SEC_48H);
     const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < ac + SEC_48H;
-    if (!pending && !needs48h && !needsHorizonBackfill && !needsFollowUpAdverse) continue;
+    const needsStrategyProfit = row.pct48h != null && row.strategyProfitPct == null;
+    if (!pending && !needs48h && !needsHorizonBackfill && !needsFollowUpAdverse && !needsStrategyProfit) {
+      continue;
+    }
 
     const windowEndHorizonSec = Math.min(nowSec, ac + SEC_48H);
     const windowEndMfeSec = Math.min(nowSec, ac + SEC_24H);
@@ -421,6 +425,34 @@ export async function runSnowballStatsFollowUpTick(
       row.price48h = p;
       row.pct48h = pctVsEntry(row.side, entry, p);
       rowTouched = true;
+    }
+
+    if (row.pct48h != null && nowSec >= ac + SEC_48H) {
+      const sim = simulateStatsTpSlProfit({
+        side: row.side,
+        entry,
+        high,
+        low,
+        iFirst,
+        iLast: iLastHorizon,
+        pctAt48h: row.pct48h,
+      });
+      if (sim) {
+        if (row.strategyProfitPct !== sim.profitPct) {
+          row.strategyProfitPct = sim.profitPct;
+          rowTouched = true;
+        }
+        if (row.strategyExitReason !== sim.exitReason) {
+          row.strategyExitReason = sim.exitReason;
+          rowTouched = true;
+        }
+      }
+    } else if (nowSec < ac + SEC_48H) {
+      if (row.strategyProfitPct != null || row.strategyExitReason != null) {
+        row.strategyProfitPct = null;
+        row.strategyExitReason = null;
+        rowTouched = true;
+      }
     }
 
     if (pending) {

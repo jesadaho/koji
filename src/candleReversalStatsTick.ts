@@ -1,5 +1,6 @@
 import type { CandleReversalSignalBarTf } from "@/lib/candleReversalStatsClient";
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
+import { simulateStatsTpSlProfit } from "@/lib/tpSlStrategySimulate";
 import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import {
   fetchBinanceUsdmKlines,
@@ -261,6 +262,29 @@ async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<n
   return updated;
 }
 
+function applyReversal1hStrategyProfit(
+  row: CandleReversalStatsRow,
+  high: number[],
+  low: number[],
+  iFirst: number,
+  iLast: number,
+): void {
+  if (row.pct48h == null || !Number.isFinite(row.pct48h)) return;
+  const side = reversalTradeSide(row);
+  const sim = simulateStatsTpSlProfit({
+    side,
+    entry: row.entryPrice,
+    high,
+    low,
+    iFirst,
+    iLast,
+    pctAt48h: row.pct48h,
+  });
+  if (!sim) return;
+  row.strategyProfitPct = sim.profitPct;
+  row.strategyExitReason = sim.exitReason;
+}
+
 async function followUpCandleReversal1hRow(
   row: CandleReversalStatsRow,
   nowMs: number,
@@ -372,6 +396,13 @@ async function followUpCandleReversal1hRow(
     row.pct48h = null;
   }
 
+  if (row.pct48h != null && nowSec >= h48End) {
+    applyReversal1hStrategyProfit(row, h15, l15, i15First, i15Last);
+  } else if (nowSec < h48End) {
+    row.strategyProfitPct = null;
+    row.strategyExitReason = null;
+  }
+
   // Reversal 1H: ปิดผลเร็วขึ้นที่ 24h (ใช้ pct24h)
   // pct48h ยังคำนวณเก็บไว้สำหรับ winrate horizon 48h ในตาราง
   // เซต outcome เฉพาะตอนที่ยัง pending — ป้องกัน follow-up ครั้งหลัง flip ผล
@@ -396,6 +427,7 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
     if (row.pct12h == null && nowSec >= ac + 12 * HOUR_SEC) return true;
     if (row.pct24h == null && nowSec >= ac + 24 * HOUR_SEC) return true;
     if (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC) return true;
+    if (row.pct48h != null && row.strategyProfitPct == null) return true;
     return false;
   }
   if (nowSec < ac + DAY_SEC && row.pct1d != null) return true;

@@ -16,6 +16,7 @@ import {
   candleReversalVolScoreLabel,
   type CandleReversalStatsRow,
 } from "@/lib/candleReversalStatsClient";
+import { statsStrategyProfitCsvCell } from "@/lib/statsStrategyProfitClient";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -49,6 +50,7 @@ const HEADERS = [
   "สวน max",
   "F&G",
   "Sentiment",
+  "กำไรกลยุทธ์",
   "ผล",
 ];
 
@@ -105,6 +107,7 @@ function candleReversalStatsRowToCsvCells(r: CandleReversalStatsRow): string[] {
       : "",
     marketSentimentFngLabel(r.marketSentiment),
     marketSentimentSentimentLabel(r.marketSentiment),
+    statsStrategyProfitCsvCell(r.pct48h, r.strategyProfitPct, r.strategyExitReason),
     candleReversalOutcomeLabel(r.outcome),
   ];
 }

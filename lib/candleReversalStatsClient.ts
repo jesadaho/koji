@@ -1,6 +1,7 @@
 /** Client-safe candle reversal stats types (no Node.js / Redis). */
 
 import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
+import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 
 export type CandleReversalSignalBarTf = "1d" | "1h";
 
@@ -67,6 +68,9 @@ export type CandleReversalStatsRow = {
   maxDrawdownPct: number | null;
   /** Max adverse จาก entry ตลอดช่วง follow-up (ไม่ตัดที่ MFE) */
   followUpMaxAdversePct: number | null;
+  /** กำไร % ตามกลยุทธ์ TP1/TP2/48h (จำลองบน 15m) — มีเมื่อครบ 48h */
+  strategyProfitPct?: number | null;
+  strategyExitReason?: StatsTpSlExitReason | null;
   outcome: CandleReversalOutcome;
 };
 

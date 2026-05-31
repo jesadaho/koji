@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
+import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
+import { STATS_STRATEGY_PROFIT_COLUMN_TITLE } from "@/lib/statsStrategyProfitClient";
 import {
   getTelegramInitData,
   loadTelegramWebApp,
@@ -884,6 +886,9 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col" title="การเปลี่ยนแปลง vol โดยประมาณ 24h">
                   VolΔ24h
                 </th>
+                <th scope="col" title={STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
+                  กำไรกลยุทธ์
+                </th>
                 <th scope="col">ผล</th>
                 {isAdmin ? <th scope="col" className="snowStatsDelCol" aria-label="ลบ" /> : null}
               </tr>
@@ -891,7 +896,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 37 : 36} className="sub">
+                  <td colSpan={isAdmin ? 38 : 37} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
                       : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
@@ -967,6 +972,13 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>
                     <td>{marketSentimentBtcDominanceLabel(r.marketSentiment)}</td>
                     <td>{marketSentimentVolChange24hLabel(r.marketSentiment)}</td>
+                    <td>
+                      <StatsStrategyProfitCell
+                        pct48h={r.pct48h}
+                        strategyProfitPct={r.strategyProfitPct}
+                        strategyExitReason={r.strategyExitReason}
+                      />
+                    </td>
                     <td>{outcomeLabel(r.outcome)}</td>
                     {isAdmin ? (
                       <td className="snowStatsDelCol">

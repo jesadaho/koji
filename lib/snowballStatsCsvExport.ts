@@ -23,6 +23,7 @@ import {
   snowballStatsVolumeCascadeLabel,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
+import { statsStrategyProfitCsvCell } from "@/lib/statsStrategyProfitClient";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -62,6 +63,7 @@ const HEADERS = [
   "Sentiment",
   "BTC.D",
   "VolΔ24h",
+  "กำไรกลยุทธ์",
   "ผล",
 ];
 
@@ -115,6 +117,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     marketSentimentSentimentLabel(r.marketSentiment),
     marketSentimentBtcDominanceLabel(r.marketSentiment),
     marketSentimentVolChange24hLabel(r.marketSentiment),
+    statsStrategyProfitCsvCell(r.pct48h, r.strategyProfitPct, r.strategyExitReason),
     snowballOutcomeLabel(r.outcome),
   ];
 }

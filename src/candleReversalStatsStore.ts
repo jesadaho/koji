@@ -111,6 +111,11 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     price7d: nullNum(r.price7d),
     pct7d: nullNum(r.pct7d),
     followUpMaxAdversePct: nullNum(r.followUpMaxAdversePct),
+    strategyProfitPct: nullNum(r.strategyProfitPct),
+    strategyExitReason:
+      typeof r.strategyExitReason === "string" && r.strategyExitReason.trim()
+        ? (r.strategyExitReason.trim() as CandleReversalStatsRow["strategyExitReason"])
+        : null,
   };
 }
 
@@ -329,6 +334,8 @@ export async function appendCandleReversalStatsRow(
     durationToMfeHours: null,
     maxDrawdownPct: null,
     followUpMaxAdversePct: null,
+    strategyProfitPct: null,
+    strategyExitReason: null,
     outcome: "pending",
   };
 

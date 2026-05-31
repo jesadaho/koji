@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
+import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
+import { STATS_STRATEGY_PROFIT_COLUMN_TITLE } from "@/lib/statsStrategyProfitClient";
 import {
   getTelegramInitData,
   loadTelegramWebApp,
@@ -283,7 +285,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 23 : 22) + extraRankCols + 2;
+  const emptyColSpan = (has48h ? 24 : 22) + extraRankCols + 2;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -546,6 +548,11 @@ function ReversalStatsSection({
               <th scope="col" title="Sentiment จาก F&G — Bullish / Neutral / Bearish">
                 Sentiment
               </th>
+              {has48h ? (
+                <th scope="col" title={STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
+                  กำไรกลยุทธ์
+                </th>
+              ) : null}
               <SortTh
                 label="ผล"
                 sortKey="outcome"
@@ -607,6 +614,15 @@ function ReversalStatsSection({
                     </td>
                     <td>{marketSentimentFngLabel(r.marketSentiment)}</td>
                     <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>
+                    {has48h ? (
+                      <td>
+                        <StatsStrategyProfitCell
+                          pct48h={r.pct48h}
+                          strategyProfitPct={r.strategyProfitPct}
+                          strategyExitReason={r.strategyExitReason}
+                        />
+                      </td>
+                    ) : null}
                     <td>{candleReversalOutcomeLabel(r.outcome)}</td>
                   </tr>
                 );
