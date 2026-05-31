@@ -133,6 +133,8 @@ type SnowballAutoTradeApiBundle = {
   direction?: string;
   rulesLong?: Record<string, "long" | "short">;
   rulesBear?: Record<string, "long" | "short">;
+  /** สัญญาณ LONG + เขียว 2 วัน → เปิด Long ทุกเกรด */
+  green2DaysLongAllGrades?: boolean;
   marginUsdt?: number | null;
   leverage?: number | null;
   tpSlEnabled?: boolean;
@@ -192,6 +194,7 @@ export default function SettingsTelegramMiniApp() {
   const [mexcSecretInput, setMexcSecretInput] = useState("");
 
   const [snowEnabled, setSnowEnabled] = useState(false);
+  const [snowGreen2DaysLongAllGrades, setSnowGreen2DaysLongAllGrades] = useState(false);
   const [snowRulesLong, setSnowRulesLong] = useState(() => emptySnowGradeRules());
   const [snowRulesBear, setSnowRulesBear] = useState(() => emptySnowGradeRules());
   const [snowMarginDefault, setSnowMarginDefault] = useState("");
@@ -248,6 +251,7 @@ export default function SettingsTelegramMiniApp() {
     if (!st) return;
 
     setSnowEnabled(Boolean(st.enabled));
+    setSnowGreen2DaysLongAllGrades(Boolean(st.green2DaysLongAllGrades));
     setSnowRulesLong(hydrateSnowGradeRules(st.rulesLong));
     setSnowRulesBear(hydrateSnowGradeRules(st.rulesBear));
     setSnowMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
@@ -615,6 +619,7 @@ export default function SettingsTelegramMiniApp() {
     try {
       const snowballAutoTrade: Record<string, unknown> = {
         enabled: snowEnabled,
+        green2DaysLongAllGrades: snowGreen2DaysLongAllGrades,
         rulesLong: serializeSnowGradeRules(snowRulesLong),
         rulesBear: serializeSnowGradeRules(snowRulesBear),
         marginUsdt: snowMarginDefault.trim() ? marginDefaultParsed : null,
@@ -1080,6 +1085,20 @@ export default function SettingsTelegramMiniApp() {
           <input type="checkbox" checked={snowEnabled} onChange={(e) => setSnowEnabled(e.target.checked)} />
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>เปิดใช้ Snowball auto-open</strong>
+          </span>
+        </label>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={snowGreen2DaysLongAllGrades}
+            onChange={(e) => setSnowGreen2DaysLongAllGrades(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>เขียว 2 วัน + Funding &gt; −0.10% → Long ทุกเกรด</strong>
+            <span style={{ display: "block", opacity: 0.9, fontWeight: 400, marginTop: "0.2rem" }}>
+              สัญญาณ Snowball LONG ที่เขียว 2 วันก่อนแท่งสัญญาณ และ Funding &gt; −0.10% จะสั่ง Long บน MEXC แม้เกรดนั้นตั้ง «ปิด» ในตารางด้านล่าง
+            </span>
           </span>
         </label>
 

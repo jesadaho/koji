@@ -3585,6 +3585,7 @@ export async function runPublicIndicatorFeedInternal(
                 );
               }
             }
+            let longMktCtx: Awaited<ReturnType<typeof fetchSnowballAlertMarketContext>> | null = null;
             if (!intrabar && !skipSnowballTgForPending) {
               try {
                 const longActionPlan =
@@ -3596,6 +3597,11 @@ export async function runPublicIndicatorFeedInternal(
                 } else if (longBreakoutGrade === "b_plus" && sustainedBuyingPressure) {
                   marginScale = snowballGradeBSustainedMarginScale();
                 }
+                const [longGreenDaysForAutoOpen, longMktCtxFetched] = await Promise.all([
+                  fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf),
+                  fetchSnowballAlertMarketContext(symbol),
+                ]);
+                longMktCtx = longMktCtxFetched;
                 await runSnowballAutoTradeAfterSnowballAlert({
                   contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
                   binanceSymbol: symbol,
@@ -3614,6 +3620,8 @@ export async function runPublicIndicatorFeedInternal(
                       : null,
                   vol: vE!,
                   volSma: vsE!,
+                  greenDaysBeforeSignal: longGreenDaysForAutoOpen,
+                  fundingRate: longMktCtx?.fundingRate ?? null,
                   ...(marginScale != null ? { marginScale } : {}),
                 });
               } catch (e) {
@@ -3621,7 +3629,9 @@ export async function runPublicIndicatorFeedInternal(
               }
             }
             const longVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
-            const longMktCtx = !intrabar ? await fetchSnowballAlertMarketContext(symbol) : null;
+            if (!intrabar && longMktCtx == null) {
+              longMktCtx = await fetchSnowballAlertMarketContext(symbol);
+            }
             const longConfirmGateSteps = buildSnowballLongConfirmGateStepsForStats(
               snowTf,
               twoBarInline,

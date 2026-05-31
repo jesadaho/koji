@@ -75,6 +75,8 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeRulesLong?: SnowballAutoTradeGradeRulesMap;
   /** สัญญาณ Snowball BEAR (SUPER ฯลฯ) */
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap;
+  /** สัญญาณ LONG + เขียว 2 วัน + Funding > −0.10% → เปิด Long ทุกเกรด (ข้าม matrix) */
+  snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
   snowballAutoTradeMarginUsdt?: number;
   snowballAutoTradeLeverage?: number;
   /** @deprecated ใช้ TP/SL strategy — เก็บไว้สำหรับ active เก่า */
@@ -243,6 +245,7 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeDirection?: SnowballAutoTradeDirection;
   snowballAutoTradeRulesLong?: SnowballAutoTradeGradeRulesMap | null;
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap | null;
+  snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
   snowballAutoTradeMarginUsdt?: number | null;
   snowballAutoTradeLeverage?: number | null;
   snowballAutoTradeQuickTpEnabled?: boolean;
@@ -309,6 +312,7 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeDirection !== undefined ||
     input.snowballAutoTradeRulesLong !== undefined ||
     input.snowballAutoTradeRulesBear !== undefined ||
+    input.snowballAutoTradeGreen2DaysLongAllGrades !== undefined ||
     input.snowballAutoTradeMarginUsdt !== undefined ||
     input.snowballAutoTradeLeverage !== undefined ||
     input.snowballAutoTradeQuickTpEnabled !== undefined ||
@@ -430,6 +434,11 @@ export async function saveTradingViewMexcSettings(
         : input.snowballAutoTradeRulesBear !== undefined
           ? input.snowballAutoTradeRulesBear
           : prev?.snowballAutoTradeRulesBear,
+
+    snowballAutoTradeGreen2DaysLongAllGrades:
+      input.snowballAutoTradeGreen2DaysLongAllGrades !== undefined
+        ? input.snowballAutoTradeGreen2DaysLongAllGrades
+        : prev?.snowballAutoTradeGreen2DaysLongAllGrades ?? false,
 
     snowballAutoTradeMarginUsdt:
       input.snowballAutoTradeMarginUsdt === null

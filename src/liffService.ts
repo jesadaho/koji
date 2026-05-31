@@ -121,7 +121,7 @@ import {
 
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ตั้งเกรด matrix (A+ … F) และทิศ Long/Short แยกบล็อกสัญญาณ LONG กับ BEAR · เมื่อสัญญาณตรงเกรดที่ตั้งไว้ สั่ง Market ทันที · กลยุทธ์ TP/SL (TP1 partial + SL บังทุน / TP2 / max hold) เหมือน Reversal รองรับทั้ง LONG และ SHORT · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
+  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ตั้งเกรด matrix (A+ … F) และทิศ Long/Short แยกบล็อกสัญญาณ LONG กับ BEAR · ตัวเลือก «เขียว 2 วัน → Long ทุกเกรด» เปิด Long เมื่อสัญญาณ LONG + เขียว 2 วัน + Funding > −0.10% โดยไม่สน matrix ต่อเกรด · เมื่อสัญญาณตรงเกรดที่ตั้งไว้ สั่ง Market ทันที · กลยุทธ์ TP/SL (TP1 partial + SL บังทุน / TP2 / max hold) เหมือน Reversal รองรับทั้ง LONG และ SHORT · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
@@ -1033,6 +1033,7 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     direction: row.snowballAutoTradeDirection ?? "both",
     rulesLong,
     rulesBear,
+    green2DaysLongAllGrades: row.snowballAutoTradeGreen2DaysLongAllGrades ?? false,
     marginUsdt: row.snowballAutoTradeMarginUsdt ?? null,
     leverage: row.snowballAutoTradeLeverage ?? null,
     tpSlEnabled: row.snowballAutoTradeTpSlEnabled ?? true,
@@ -1374,6 +1375,24 @@ function parseSnowballAutoTradeNested(
   else if (o.tpSlEnabled === "1" || o.tpSlEnabled === 1 || o.tpSlEnabled === "true") tpSlEnabled = true;
   else if (o.tpSlEnabled === "0" || o.tpSlEnabled === 0 || o.tpSlEnabled === "false") tpSlEnabled = false;
 
+  let green2DaysLongAllGrades: boolean | undefined;
+  if ("green2DaysLongAllGrades" in o) {
+    if (typeof o.green2DaysLongAllGrades === "boolean") green2DaysLongAllGrades = o.green2DaysLongAllGrades;
+    else if (
+      o.green2DaysLongAllGrades === "1" ||
+      o.green2DaysLongAllGrades === 1 ||
+      o.green2DaysLongAllGrades === "true"
+    ) {
+      green2DaysLongAllGrades = true;
+    } else if (
+      o.green2DaysLongAllGrades === "0" ||
+      o.green2DaysLongAllGrades === 0 ||
+      o.green2DaysLongAllGrades === "false"
+    ) {
+      green2DaysLongAllGrades = false;
+    }
+  }
+
   const patchPart: Omit<
     SaveTradingViewMexcInput,
     "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
@@ -1392,6 +1411,9 @@ function parseSnowballAutoTradeNested(
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
   };
   if (tpSlEnabled !== undefined) patchPart.snowballAutoTradeTpSlEnabled = tpSlEnabled;
+  if (green2DaysLongAllGrades !== undefined) {
+    patchPart.snowballAutoTradeGreen2DaysLongAllGrades = green2DaysLongAllGrades;
+  }
   return { ok: true, patch: patchPart };
 }
 

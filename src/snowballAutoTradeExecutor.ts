@@ -164,6 +164,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   volSma: number;
   /** สัดส่วน margin (เช่น 0.5 สำหรับ action plan Light) */
   marginScale?: number;
+  /** แท่งเขียวติดกันก่อนแท่งสัญญาณ (daily) — ใช้กับ green2DaysLongAllGrades */
+  greenDaysBeforeSignal?: number | null;
+  /** Funding rate ทศนิยม (MEXC) — ใช้กับ green2DaysLongAllGrades (> −0.10%) */
+  fundingRate?: number | null;
 }): Promise<{ usersAttempted: number; usersSucceeded: number }> {
   if (!isSnowballAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
 
@@ -221,7 +225,13 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       continue;
     }
 
-    const side = resolveSnowballAutoOpenSideForUser(row, input.alertSide, gradeKey);
+    const side = resolveSnowballAutoOpenSideForUser(
+      row,
+      input.alertSide,
+      gradeKey,
+      input.greenDaysBeforeSignal,
+      input.fundingRate,
+    );
     if (!side) {
       logSnowballAutoOpen(
         userId,

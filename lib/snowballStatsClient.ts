@@ -469,6 +469,13 @@ export function snowballStatsVolRankFilterLabel(filter: SnowballVolRankFilter): 
 /** Funding rate ทศนิยม (×100 = %) — −0.001 = −0.10% */
 export const SNOWBALL_FUNDING_LT_NEG_010_DECIMAL = -0.001;
 
+/** Funding > −0.10% (ไม่รวมเท่ากับ −0.10%) */
+export function snowballFundingRateGtNeg010Pct(fundingRate: number | null | undefined): boolean {
+  const fr = fundingRate;
+  if (fr == null || !Number.isFinite(fr)) return false;
+  return fr > SNOWBALL_FUNDING_LT_NEG_010_DECIMAL;
+}
+
 export type SnowballFundingFilter = "all" | "ltNeg010";
 
 export const SNOWBALL_FUNDING_FILTER_OPTIONS: ReadonlyArray<{
