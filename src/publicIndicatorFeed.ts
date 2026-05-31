@@ -3618,6 +3618,7 @@ export async function runPublicIndicatorFeedInternal(
                 } else if (longBreakoutGrade === "b_plus" && sustainedBuyingPressure) {
                   marginScale = snowballGradeBSustainedMarginScale();
                 }
+                const longVolSnapAuto = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
                 await runSnowballAutoTradeAfterSnowballAlert({
                   contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
                   binanceSymbol: symbol,
@@ -3637,6 +3638,8 @@ export async function runPublicIndicatorFeedInternal(
                   vol: vE!,
                   volSma: vsE!,
                   actionPlan: longActionPlan,
+                  greenDaysBeforeSignal: longGreenDaysForAlert,
+                  barRangePctSignal: longVolSnapAuto.barRangePctSignal,
                   ...(marginScale != null ? { marginScale } : {}),
                 });
               } catch (e) {

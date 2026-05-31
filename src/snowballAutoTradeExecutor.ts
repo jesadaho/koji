@@ -27,6 +27,10 @@ import { computeSvpHoleYn } from "./snowballStatsStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
+import {
+  SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA,
+  snowballMatchesQualityShortSignal,
+} from "@/lib/snowballMatrixFilters";
 
 /**
  * ค่าเริ่มต้นเปิด — ผู้ใช้เปิด/ปิดหลักใน Mini App (`snowballAutoTradeEnabled`)
@@ -68,6 +72,54 @@ function fmtSnowballPriceUsdt(p: number): string {
 
 async function notifyLines(userId: string, lines: string[]): Promise<void> {
   await notifyTradingViewWebhookTelegram(userId, lines.filter(Boolean).join("\n"));
+}
+
+function snowballAutoOpenMatchesQualityShortSignal(input: {
+  greenDaysBeforeSignal?: number | null;
+  barRangePctSignal?: number | null;
+  signalBarTf: "15m" | "1h" | "4h";
+  vol: number;
+  volSma: number;
+  signalVolVsSma?: number | null;
+  confirmVolVsSma?: number | null;
+}): boolean {
+  const signalVolVsSma =
+    input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0
+      ? input.signalVolVsSma
+      : input.volSma > 0 && Number.isFinite(input.volSma)
+        ? input.vol / input.volSma
+        : null;
+  return snowballMatchesQualityShortSignal({
+    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
+    barRangePctSignal: input.barRangePctSignal ?? null,
+    signalBarTf: input.signalBarTf,
+    signalVolVsSma,
+    confirmVolVsSma: input.confirmVolVsSma ?? null,
+  });
+}
+
+function resolveSnowballAutoOpenSide(
+  row: TradingViewMexcUserSettings,
+  alertSide: SnowballAutoTradeAlertSide,
+  input: {
+    greenDaysBeforeSignal?: number | null;
+    barRangePctSignal?: number | null;
+    signalBarTf: "15m" | "1h" | "4h";
+    vol: number;
+    volSma: number;
+    signalVolVsSma?: number | null;
+    confirmVolVsSma?: number | null;
+  },
+): SnowballAutoTradeSide {
+  const defaultSide: SnowballAutoTradeSide = alertSide === "bear" ? "short" : "long";
+  if (
+    alertSide === "long" &&
+    row.snowballAutoTradeQualityShortSignalShortEnabled === true &&
+    snowballAutoOpenMatchesQualityShortSignal(input)
+  ) {
+    return "short";
+  }
+  return defaultSide;
 }
 
 function hasActiveUsdtPosition(
@@ -165,6 +217,11 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   marginScale?: number;
   /** จาก matrix 4h — monitor = ไม่ auto-open */
   actionPlan?: SnowballActionPlan | null;
+  /** สำหรับ Quality Short Signal → Short (สัญญาณ LONG เท่านั้น) */
+  greenDaysBeforeSignal?: number | null;
+  barRangePctSignal?: number | null;
+  signalVolVsSma?: number | null;
+  confirmVolVsSma?: number | null;
 }): Promise<{ usersAttempted: number; usersSucceeded: number }> {
   if (!isSnowballAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
   if (input.actionPlan === "monitor") return { usersAttempted: 0, usersSucceeded: 0 };
@@ -187,7 +244,15 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     momentumDowngrade: input.momentumDowngrade,
   };
   const gradeKey = snowballAutoTradeGradeKeyFromAlert(gradeInput);
-  const tradeSide: SnowballAutoTradeSide = input.alertSide === "bear" ? "short" : "long";
+  const qualityShortInput = {
+    greenDaysBeforeSignal: input.greenDaysBeforeSignal,
+    barRangePctSignal: input.barRangePctSignal,
+    signalBarTf: input.signalBarTf,
+    vol: input.vol,
+    volSma: input.volSma,
+    signalVolVsSma: input.signalVolVsSma,
+    confirmVolVsSma: input.confirmVolVsSma,
+  };
 
   const [map, state0] = await Promise.all([
     loadTradingViewMexcSettingsFullMap(),
@@ -224,7 +289,11 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       continue;
     }
 
-    const side = tradeSide;
+    const side = resolveSnowballAutoOpenSide(row, input.alertSide, qualityShortInput);
+    const qualityShortOverride =
+      input.alertSide === "long" &&
+      row.snowballAutoTradeQualityShortSignalShortEnabled === true &&
+      side === "short";
 
     if (hasOpenedSnowballContractToday(state[userId], sym, dayKey)) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "already_opened_today", { side });
@@ -379,8 +448,13 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
 
       await notifyLines(userId, [
         "Koji — Snowball auto-open (MEXC)",
-        long ? "✅ เปิด LONG จาก Snowball" : "✅ เปิด SHORT จาก Snowball",
+        qualityShortOverride
+          ? "✅ เปิด SHORT จาก Snowball (✨ Quality Short Signal — สัญญาณ LONG)"
+          : long
+            ? "✅ เปิด LONG จาก Snowball"
+            : "✅ เปิด SHORT จาก Snowball",
         `[${shortContractLabel(sym)}]/USDT`,
+        qualityShortOverride ? `เกณฑ์: ${SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA}` : "",
         gradeKey ? `Grade ${gradeKey}` : "",
         `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
         `จุดเข้าอ้างอิง (บอท / Binance): ${fmtSnowballPriceUsdt(referenceEntryPrice)} USDT`,

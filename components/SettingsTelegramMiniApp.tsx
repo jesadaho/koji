@@ -94,6 +94,7 @@ type Phase = "loading" | "setup" | "ready";
 
 type SnowballAutoTradeApiBundle = {
   enabled?: boolean;
+  qualityShortSignalShortEnabled?: boolean;
   marginUsdt?: number | null;
   leverage?: number | null;
   tpSlEnabled?: boolean;
@@ -152,6 +153,7 @@ export default function SettingsTelegramMiniApp() {
   const [mexcSecretInput, setMexcSecretInput] = useState("");
 
   const [snowEnabled, setSnowEnabled] = useState(false);
+  const [snowQualityShortShort, setSnowQualityShortShort] = useState(false);
   const [snowMarginDefault, setSnowMarginDefault] = useState("");
   const [snowLevDefault, setSnowLevDefault] = useState("");
   const [snowTpSlEnabled, setSnowTpSlEnabled] = useState(true);
@@ -205,6 +207,7 @@ export default function SettingsTelegramMiniApp() {
     if (!st) return;
 
     setSnowEnabled(Boolean(st.enabled));
+    setSnowQualityShortShort(Boolean(st.qualityShortSignalShortEnabled));
     setSnowMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
     setSnowLevDefault(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
     setSnowTpSlEnabled(st.tpSlEnabled !== false);
@@ -569,6 +572,7 @@ export default function SettingsTelegramMiniApp() {
     try {
       const snowballAutoTrade: Record<string, unknown> = {
         enabled: snowEnabled,
+        qualityShortSignalShortEnabled: snowQualityShortShort,
         marginUsdt: snowMarginDefault.trim() ? marginDefaultParsed : null,
         leverage: snowLevDefault.trim() ? levDefaultParsed : null,
         tpSlEnabled: snowTpSlEnabled,
@@ -1003,7 +1007,7 @@ export default function SettingsTelegramMiniApp() {
         <h2>Snowball auto-open (MEXC)</h2>
         <p className="sub" style={{ marginTop: 0 }}>
           เมื่อ <strong>Snowball ส่งสัญญาณสำเร็จ (closed bar)</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน market ตามทิศสัญญาณ —{" "}
-          <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · Action Plan = Monitor จาก matrix 4h จะไม่เปิด
+          <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · Action Plan = Monitor จาก matrix 4h จะไม่เปิด · ตัวเลือกด้านล่าง: สัญญาณ LONG ที่ตรง ✨ Quality Short Signal → Short
         </p>
         <p className="sub" style={{ marginTop: "0.5rem" }}>
           <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
@@ -1031,6 +1035,20 @@ export default function SettingsTelegramMiniApp() {
           <input type="checkbox" checked={snowEnabled} onChange={(e) => setSnowEnabled(e.target.checked)} />
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>เปิดใช้ Snowball auto-open</strong>
+          </span>
+        </label>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={snowQualityShortShort}
+            onChange={(e) => setSnowQualityShortShort(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>✨ Quality Short Signal → Short</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              สัญญาณ Snowball <strong>LONG</strong> ที่ตรงเกณฑ์เดียวกับ matrix ✨ Quality Short Signal — เขียว 1 วัน · Vol×SMA &gt; 3× · R% สัญญาณ &gt; 8% — เปิด <strong>Short</strong> บน MEXC แทน Long
+            </span>
           </span>
         </label>
 

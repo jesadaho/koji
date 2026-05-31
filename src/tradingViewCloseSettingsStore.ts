@@ -77,6 +77,8 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap;
   /** สัญญาณ LONG + เขียว 2 วัน + Funding > −0.10% → เปิด Long ทุกเกรด (ข้าม matrix) */
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
+  /** สัญญาณ LONG ที่ตรง ✨ Quality Short Signal → เปิด Short บน MEXC แทน Long */
+  snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   snowballAutoTradeMarginUsdt?: number;
   snowballAutoTradeLeverage?: number;
   /** @deprecated ใช้ TP/SL strategy — เก็บไว้สำหรับ active เก่า */
@@ -248,6 +250,7 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeRulesLong?: SnowballAutoTradeGradeRulesMap | null;
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap | null;
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
+  snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   snowballAutoTradeMarginUsdt?: number | null;
   snowballAutoTradeLeverage?: number | null;
   snowballAutoTradeQuickTpEnabled?: boolean;
@@ -316,6 +319,7 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeRulesLong !== undefined ||
     input.snowballAutoTradeRulesBear !== undefined ||
     input.snowballAutoTradeGreen2DaysLongAllGrades !== undefined ||
+    input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined ||
     input.snowballAutoTradeMarginUsdt !== undefined ||
     input.snowballAutoTradeLeverage !== undefined ||
     input.snowballAutoTradeQuickTpEnabled !== undefined ||
@@ -443,6 +447,11 @@ export async function saveTradingViewMexcSettings(
       input.snowballAutoTradeGreen2DaysLongAllGrades !== undefined
         ? input.snowballAutoTradeGreen2DaysLongAllGrades
         : prev?.snowballAutoTradeGreen2DaysLongAllGrades ?? false,
+
+    snowballAutoTradeQualityShortSignalShortEnabled:
+      input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined
+        ? input.snowballAutoTradeQualityShortSignalShortEnabled
+        : prev?.snowballAutoTradeQualityShortSignalShortEnabled ?? false,
 
     snowballAutoTradeMarginUsdt:
       input.snowballAutoTradeMarginUsdt === null
