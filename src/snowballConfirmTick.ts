@@ -24,7 +24,6 @@ import {
 } from "./snowballConfirmStore";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import { saveSnowballConfirmLastRoundStats } from "./snowballConfirmRoundStatsStore";
-import { fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import {
   appendSnowballStatsRow,
   isSnowballStatsEnabled,
