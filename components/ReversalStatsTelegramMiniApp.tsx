@@ -52,7 +52,6 @@ import {
   reversalRowMatchesShapeFilter,
   reversalRowMatchesVolVsSmaFilter,
   reversalShapeFilterLabel,
-  reversalStatsRowMatchesMatrixFilter,
   type ReversalDayFilter,
   type ReversalLenRankFilter,
   type ReversalShapeFilter,
@@ -62,6 +61,7 @@ import {
   REVERSAL_MATRIX_FILTER_OPTIONS,
   reversalMatrixFilterLabel,
   reversalMatrixFilterTitle,
+  reversalStatsRowMatchesMatrixFilter,
   type ReversalMatrixFilter,
 } from "@/lib/reversalMatrixFilters";
 
