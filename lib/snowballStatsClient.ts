@@ -19,6 +19,7 @@ import {
 } from "@/src/snowballLongBreakoutGrade";
 import { displayGradeToQualityTier } from "@/src/snowballLongGradeMatrix";
 import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
+import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 import {
   STATS_VOL_VS_SMA_FILTER_OPTIONS,
@@ -145,6 +146,7 @@ export type SnowballStatsRow = {
   /** กำไร % ตามกลยุทธ์ TP1/TP2/48h (จำลองบน 15m) — มีเมื่อครบ 48h */
   strategyProfitPct?: number | null;
   strategyExitReason?: StatsTpSlExitReason | null;
+  strategyProfitByPlan?: StrategyProfitByPlanMap | null;
   resultRr: string | null;
   outcome: SnowballStatsOutcome;
   /** migration: รีเซ็ต horizon หลังแก้ anchor 4h two-bar (ปิดแท่ง confirm) */
@@ -155,6 +157,7 @@ export type SnowballStatsApiPayload = {
   rows: SnowballStatsRow[];
   /** ลบแถว / ล้างสถิติทั้งหมด — เฉพาะ KOJI_ADMIN_IDS */
   isAdmin?: boolean;
+  viewerTpSlPlanSummary?: string;
 };
 
 function snowballStatsAlertSideLabel(alert: SnowballStatsAlertSide): "Long" | "Short" {

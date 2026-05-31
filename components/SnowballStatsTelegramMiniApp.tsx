@@ -886,7 +886,7 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col" title="การเปลี่ยนแปลง vol โดยประมาณ 24h">
                   VolΔ24h
                 </th>
-                <th scope="col" title={STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
+                <th scope="col" title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
                   กำไรกลยุทธ์
                 </th>
                 <th scope="col">ผล</th>

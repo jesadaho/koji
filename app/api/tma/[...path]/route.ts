@@ -199,7 +199,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
     if (segs.length === 1 && a === "snowball-stats.csv") {
       const auth = await authenticateTmaCsvDownload(req, "snowball-stats.csv");
       if (!auth.ok) return json({ error: auth.error }, auth.status);
-      const data = await liffGetSnowballStats();
+      const data = await liffGetSnowballStats(auth.telegramUserId);
       const csv = snowballStatsToCsv(data.rows);
       return statsCsvAttachmentResponse(csv, statsCsvFilename("snowball-stats"));
     }

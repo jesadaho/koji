@@ -1,6 +1,7 @@
 import type { CandleReversalSignalBarTf } from "@/lib/candleReversalStatsClient";
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
-import { simulateStatsTpSlProfit } from "@/lib/tpSlStrategySimulate";
+import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
+import { DEFAULT_STATS_TPSL_PLAN, simulateStatsTpSlProfit } from "@/lib/tpSlStrategySimulate";
 import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import {
   fetchBinanceUsdmKlines,
@@ -283,6 +284,11 @@ function applyReversal1hStrategyProfit(
   if (!sim) return;
   row.strategyProfitPct = sim.profitPct;
   row.strategyExitReason = sim.exitReason;
+  const key = statsTpSlPlanCacheKey(DEFAULT_STATS_TPSL_PLAN);
+  row.strategyProfitByPlan = {
+    ...row.strategyProfitByPlan,
+    [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
+  };
 }
 
 async function followUpCandleReversal1hRow(
@@ -401,6 +407,7 @@ async function followUpCandleReversal1hRow(
   } else if (nowSec < h48End) {
     row.strategyProfitPct = null;
     row.strategyExitReason = null;
+    row.strategyProfitByPlan = undefined;
   }
 
   // Reversal 1H: ปิดผลเร็วขึ้นที่ 24h (ใช้ pct24h)

@@ -116,6 +116,10 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
       typeof r.strategyExitReason === "string" && r.strategyExitReason.trim()
         ? (r.strategyExitReason.trim() as CandleReversalStatsRow["strategyExitReason"])
         : null,
+    strategyProfitByPlan:
+      r.strategyProfitByPlan && typeof r.strategyProfitByPlan === "object"
+        ? r.strategyProfitByPlan
+        : undefined,
   };
 }
 

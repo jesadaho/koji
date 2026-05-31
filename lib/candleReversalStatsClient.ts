@@ -1,6 +1,7 @@
 /** Client-safe candle reversal stats types (no Node.js / Redis). */
 
 import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
+import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 
 export type CandleReversalSignalBarTf = "1d" | "1h";
@@ -71,6 +72,8 @@ export type CandleReversalStatsRow = {
   /** กำไร % ตามกลยุทธ์ TP1/TP2/48h (จำลองบน 15m) — มีเมื่อครบ 48h */
   strategyProfitPct?: number | null;
   strategyExitReason?: StatsTpSlExitReason | null;
+  /** cache ตามชุด TP/SL (key = tp1-tp1p-tp2-maxH) */
+  strategyProfitByPlan?: StrategyProfitByPlanMap | null;
   outcome: CandleReversalOutcome;
 };
 
@@ -78,6 +81,8 @@ export type CandleReversalStatsApiPayload = {
   rows: CandleReversalStatsRow[];
   /** true เมื่อ Telegram user อยู่ใน KOJI_ADMIN_IDS */
   isAdmin?: boolean;
+  /** สรุปกลยุทธ์ของผู้ดู (จาก Settings) */
+  viewerTpSlPlanSummary?: string;
 };
 
 export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): string {

@@ -67,10 +67,19 @@ import {
 } from "./snowballStatsTick";
 import { isAdminTelegramUserId } from "./adminIds";
 import {
+  resolveViewerStatsTpSlPlan,
+  viewerStatsTpSlPlanSummary,
+} from "@/lib/statsTpSlPlanForUser";
+import {
   loadCandleReversalStatsState,
   removeCandleReversalStatsDuplicatePendingRows,
   resetCandleReversalStatsState,
+  saveCandleReversalStatsState,
 } from "./candleReversalStatsStore";
+import {
+  enrichCandleReversalStatsWithViewerStrategyProfit,
+  enrichSnowballStatsWithViewerStrategyProfit,
+} from "./statsStrategyProfitEnrich";
 import {
   correctCandleReversalStatsOutcome,
   runCandleReversalStatsFollowUpTick,
@@ -749,6 +758,27 @@ export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
   return buildSparkStatsApiPayload(state);
 }
 
+async function finalizeSnowballStatsPayload(
+  rows: SnowballStatsApiPayload["rows"],
+  telegramUserId: number | undefined,
+  persistState: { rows: SnowballStatsApiPayload["rows"] },
+): Promise<SnowballStatsApiPayload> {
+  let viewerTpSlPlanSummary: string | undefined;
+  if (telegramUserId != null) {
+    const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "snowball");
+    viewerTpSlPlanSummary = viewerStatsTpSlPlanSummary(plan);
+    const dirty = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
+    if (dirty > 0) {
+      await saveSnowballStatsState(persistState);
+    }
+  }
+  return {
+    rows,
+    ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
+    ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
+  };
+}
+
 /** สถิติ Snowball (global) — ต้องผ่าน auth เหมือน spark-stats */
 export async function liffGetSnowballStats(telegramUserId?: number): Promise<SnowballStatsApiPayload> {
   const st = await loadSnowballStatsState();
@@ -767,17 +797,11 @@ export async function liffGetSnowballStats(telegramUserId?: number): Promise<Sno
     await runSnowballStatsFollowUpTick(Date.now());
     const refreshed = await loadSnowballStatsState();
     const rows = [...refreshed.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
-    return {
-      rows,
-      ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
-    };
+    return finalizeSnowballStatsPayload(rows, telegramUserId, refreshed);
   }
 
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
-  return {
-    rows,
-    ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
-  };
+  return finalizeSnowballStatsPayload(rows, telegramUserId, st);
 }
 
 export async function liffGetAutoOpenOrderHistory(
@@ -859,9 +883,19 @@ export async function liffGetCandleReversalStats(
 ): Promise<CandleReversalStatsApiPayload> {
   const st = await loadCandleReversalStatsState();
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
+  let viewerTpSlPlanSummary: string | undefined;
+  if (telegramUserId != null) {
+    const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "reversal");
+    viewerTpSlPlanSummary = viewerStatsTpSlPlanSummary(plan);
+    const dirty = await enrichCandleReversalStatsWithViewerStrategyProfit(rows, plan);
+    if (dirty > 0) {
+      await saveCandleReversalStatsState(st);
+    }
+  }
   return {
     rows,
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
+    ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
   };
 }
 

@@ -1,0 +1,89 @@
+import {
+  DEFAULT_STATS_TPSL_PLAN,
+  statsTpSlPlanSummary,
+  type StatsTpSlPlan,
+} from "@/lib/tpSlStrategySimulate";
+import { loadTradingViewMexcSettingsFullMap } from "@/src/tradingViewCloseSettingsStore";
+import { resolveSnowballTpSlPlanFromRow } from "@/src/snowballAutoTradeTpSlPlan";
+
+export type StatsTpSlPlanSource = "reversal" | "snowball";
+
+export type ViewerStatsTpSlPlan = StatsTpSlPlan & {
+  tpSlEnabled: boolean;
+};
+
+export function statsTpSlPlanCacheKey(plan: StatsTpSlPlan): string {
+  return `${plan.tp1PricePct}-${plan.tp1PartialPct}-${plan.tp2PricePct}-${plan.maxHoldHours}`;
+}
+
+function reversalTpSlPlanFromSettings(
+  row: NonNullable<Awaited<ReturnType<typeof loadTradingViewMexcSettingsFullMap>>[string]>,
+): ViewerStatsTpSlPlan {
+  const en = row.reversalAutoTradeTpSlEnabled !== false;
+  const t1 =
+    typeof row.reversalAutoTradeTp1PricePct === "number" &&
+    Number.isFinite(row.reversalAutoTradeTp1PricePct) &&
+    row.reversalAutoTradeTp1PricePct > 0
+      ? row.reversalAutoTradeTp1PricePct
+      : DEFAULT_STATS_TPSL_PLAN.tp1PricePct;
+  const t1p =
+    typeof row.reversalAutoTradeTp1PartialPct === "number" &&
+    Number.isFinite(row.reversalAutoTradeTp1PartialPct) &&
+    row.reversalAutoTradeTp1PartialPct > 0
+      ? row.reversalAutoTradeTp1PartialPct
+      : DEFAULT_STATS_TPSL_PLAN.tp1PartialPct;
+  const t2 =
+    typeof row.reversalAutoTradeTp2PricePct === "number" &&
+    Number.isFinite(row.reversalAutoTradeTp2PricePct) &&
+    row.reversalAutoTradeTp2PricePct > 0
+      ? row.reversalAutoTradeTp2PricePct
+      : DEFAULT_STATS_TPSL_PLAN.tp2PricePct;
+  const mh =
+    typeof row.reversalAutoTradeMaxHoldHours === "number" &&
+    Number.isFinite(row.reversalAutoTradeMaxHoldHours) &&
+    row.reversalAutoTradeMaxHoldHours > 0
+      ? row.reversalAutoTradeMaxHoldHours
+      : DEFAULT_STATS_TPSL_PLAN.maxHoldHours;
+  return {
+    tpSlEnabled: en,
+    tp1PricePct: t1,
+    tp1PartialPct: Math.min(100, t1p),
+    tp2PricePct: t2,
+    maxHoldHours: mh,
+  };
+}
+
+function snowballTpSlPlanFromSettings(
+  row: NonNullable<Awaited<ReturnType<typeof loadTradingViewMexcSettingsFullMap>>[string]>,
+): ViewerStatsTpSlPlan {
+  const p = resolveSnowballTpSlPlanFromRow(row);
+  return {
+    tpSlEnabled: p.enabled,
+    tp1PricePct: p.tp1PricePct,
+    tp1PartialPct: p.tp1PartialPct,
+    tp2PricePct: p.tp2PricePct,
+    maxHoldHours: p.maxHoldHours,
+  };
+}
+
+export async function resolveViewerStatsTpSlPlan(
+  telegramUserId: number,
+  source: StatsTpSlPlanSource,
+): Promise<ViewerStatsTpSlPlan> {
+  const userId = `tg:${telegramUserId}`;
+  const map = await loadTradingViewMexcSettingsFullMap();
+  const row = map[userId];
+  if (!row) {
+    return { tpSlEnabled: true, ...DEFAULT_STATS_TPSL_PLAN };
+  }
+  return source === "reversal"
+    ? reversalTpSlPlanFromSettings(row)
+    : snowballTpSlPlanFromSettings(row);
+}
+
+export function viewerStatsTpSlPlanSummary(plan: ViewerStatsTpSlPlan): string {
+  if (!plan.tpSlEnabled) {
+    return `ปิด TP/SL — ถือครบ ${plan.maxHoldHours}h (ปิดที่ horizon)`;
+  }
+  return statsTpSlPlanSummary(plan);
+}

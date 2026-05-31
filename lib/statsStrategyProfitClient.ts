@@ -5,6 +5,13 @@ import {
   type StatsTpSlExitReason,
 } from "@/lib/tpSlStrategySimulate";
 
+export type StrategyProfitByPlanEntry = {
+  profitPct: number;
+  exitReason: StatsTpSlExitReason;
+};
+
+export type StrategyProfitByPlanMap = Partial<Record<string, StrategyProfitByPlanEntry>>;
+
 export { DEFAULT_STATS_TPSL_PLAN, statsTpSlPlanSummary };
 
 export const STATS_STRATEGY_PROFIT_COLUMN_TITLE = statsTpSlPlanSummary(DEFAULT_STATS_TPSL_PLAN);

@@ -216,6 +216,7 @@ type ReversalStatsSectionProps = {
   showHighRank?: boolean;
   showLowRank?: boolean;
   adverseTitle?: string;
+  strategyPlanTitle?: string;
 };
 
 function ReversalStatsSection({
@@ -230,6 +231,7 @@ function ReversalStatsSection({
   showHighRank = true,
   showLowRank = false,
   adverseTitle,
+  strategyPlanTitle = STATS_STRATEGY_PROFIT_COLUMN_TITLE,
 }: ReversalStatsSectionProps) {
   const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
   const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
@@ -549,7 +551,7 @@ function ReversalStatsSection({
                 Sentiment
               </th>
               {has48h ? (
-                <th scope="col" title={STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
+                <th scope="col" title={strategyPlanTitle}>
                   กำไรกลยุทธ์
                 </th>
               ) : null}
@@ -911,6 +913,7 @@ export default function ReversalStatsTelegramMiniApp() {
         tf="1h"
         title="สถิติ Reversal · 1H Short"
         subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
+        strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
         emptyHint="ยังไม่มีแถว 1H Short — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
         footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_SHORT}`}
         csvPrefix="reversal-stats-1h-short"
@@ -922,6 +925,7 @@ export default function ReversalStatsTelegramMiniApp() {
         tf="1h"
         title="สถิติ Reversal · Long 1H"
         subtitle="Long · แท่งเขียวยาว + low ต่ำสุด 24 แท่ง · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
+        strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
         emptyHint="ยังไม่มีแถว Long 1H — รอสัญญาณ Reversal Long ส่งสำเร็จ (CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED)"
         footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_LONG}`}
         csvPrefix="reversal-stats-1h-long"

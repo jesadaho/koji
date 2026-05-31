@@ -182,6 +182,7 @@ function resetSnowballStatsFollowUpFields(row: SnowballStatsRow): void {
   row.followUpMaxAdversePct = null;
   row.strategyProfitPct = null;
   row.strategyExitReason = null;
+  row.strategyProfitByPlan = undefined;
   row.resultRr = null;
   row.outcome = "pending";
 }

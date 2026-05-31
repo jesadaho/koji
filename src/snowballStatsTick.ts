@@ -1,5 +1,6 @@
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
-import { simulateStatsTpSlProfit } from "@/lib/tpSlStrategySimulate";
+import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
+import { DEFAULT_STATS_TPSL_PLAN, simulateStatsTpSlProfit } from "@/lib/tpSlStrategySimulate";
 import {
   fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesRange,
@@ -446,11 +447,25 @@ export async function runSnowballStatsFollowUpTick(
           row.strategyExitReason = sim.exitReason;
           rowTouched = true;
         }
+        const key = statsTpSlPlanCacheKey(DEFAULT_STATS_TPSL_PLAN);
+        const prev = row.strategyProfitByPlan?.[key];
+        if (!prev || prev.profitPct !== sim.profitPct || prev.exitReason !== sim.exitReason) {
+          row.strategyProfitByPlan = {
+            ...row.strategyProfitByPlan,
+            [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
+          };
+          rowTouched = true;
+        }
       }
     } else if (nowSec < ac + SEC_48H) {
-      if (row.strategyProfitPct != null || row.strategyExitReason != null) {
+      if (
+        row.strategyProfitPct != null ||
+        row.strategyExitReason != null ||
+        row.strategyProfitByPlan != null
+      ) {
         row.strategyProfitPct = null;
         row.strategyExitReason = null;
+        row.strategyProfitByPlan = undefined;
         rowTouched = true;
       }
     }
