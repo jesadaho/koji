@@ -41,6 +41,13 @@ import {
   type StatsVolVsSmaFilter,
 } from "@/lib/statsVolVsSmaFilter";
 import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
+import {
+  REVERSAL_MATRIX_FILTER_OPTIONS,
+  reversalMatrixFilterLabel,
+  reversalMatrixFilterTitle,
+  reversalStatsRowMatchesMatrixFilter,
+  type ReversalMatrixFilter,
+} from "@/lib/reversalMatrixFilters";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -270,6 +277,7 @@ function ReversalStatsSection({
   const [dayFilter, setDayFilter] = useState<ReversalDayFilter>("all");
   const [lenRankFilter, setLenRankFilter] = useState<ReversalLenRankFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<ReversalVolVsSmaFilter>("all");
+  const [matrixFilter, setMatrixFilter] = useState<ReversalMatrixFilter>("all");
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -286,9 +294,10 @@ function ReversalStatsSection({
           reversalRowMatchesShapeFilter(r, shapeFilter) &&
           reversalRowMatchesDayFilter(r, dayFilter) &&
           reversalRowMatchesLenRankFilter(r, lenRankFilter) &&
-          reversalRowMatchesVolVsSmaFilter(r, volVsSmaFilter),
+          reversalRowMatchesVolVsSmaFilter(r, volVsSmaFilter) &&
+          reversalStatsRowMatchesMatrixFilter(r, matrixFilter),
       ),
-    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter],
+    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, matrixFilter],
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
   const winrateText = useMemo(() => reversalWinrateSummary(filteredRows), [filteredRows]);
@@ -410,6 +419,27 @@ function ReversalStatsSection({
             ))}
           </select>
         </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          Matrix
+          <select
+            value={matrixFilter}
+            onChange={(e) => setMatrixFilter(e.currentTarget.value as ReversalMatrixFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "10rem" }}
+            title={reversalMatrixFilterTitle(matrixFilter)}
+          >
+            {REVERSAL_MATRIX_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {matrixFilter !== "all" ? (
+          <p className="sub" style={{ width: "100%", margin: 0 }} title={reversalMatrixFilterTitle(matrixFilter)}>
+            {reversalMatrixFilterTitle(matrixFilter)}
+          </p>
+        ) : null}
         <span className="sub">
           แสดง {filteredRows.length}/{rawRows.length} · {winrateText}
         </span>
@@ -549,7 +579,7 @@ function ReversalStatsSection({
               <tr>
                 <td colSpan={emptyColSpan} className="sub">
                   {rawRows.length > 0
-                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)}`
+                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                     : emptyHint}
                 </td>
               </tr>
