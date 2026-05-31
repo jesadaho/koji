@@ -83,7 +83,9 @@ export type CandleReversalStatsApiPayload = {
   isAdmin?: boolean;
   /** สรุปกลยุทธ์ของผู้ดู (จาก Settings) */
   viewerTpSlPlanSummary?: string;
-  /** margin USDT จาก Settings — คำนวณ P/L เป็น USDT ในตาราง */
+  /** ค่า TP/SL ของผู้ดู (สำหรับ breakdown ในเซลล์) */
+  viewerTpSlPlan?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
+  /** margin USDT จาก Settings — คำนวณ P/L เป็น $ ในตาราง */
   viewerStrategyMarginUsdt?: number | null;
   viewerStrategyLeverage?: number | null;
 };

@@ -799,7 +799,7 @@ export default function SnowballStatsTelegramMiniApp() {
         {strategyProfitSummaryText ? (
           <p
             className="sub"
-            title="สรุปคอลัมน์กำไรกลยุทธ์ (TP/SL ตาม Settings) — ชนะ/แพ้จาก % กลยุทธ์ต่อไม้ · รวม % = ผลรวมทุกไม้ · USDT = ผลรวมต่อไม้ (จำกัดขาดทุนตาม leverage)"
+            title="สรุปคอลัมน์กำไรกลยุทธ์ (TP/SL ตาม Settings) — ชนะ/แพ้จาก % กลยุทธ์ต่อไม้ · รวม % = ผลรวมทุกไม้ · $ แยกชนะ/แพ้ (จำกัดขาดทุนตาม leverage)"
             style={{ marginBottom: "0.5rem", fontWeight: 600 }}
           >
             {strategyProfitSummaryText}
@@ -1005,6 +1005,7 @@ export default function SnowballStatsTelegramMiniApp() {
                         strategyExitReason={r.strategyExitReason}
                         marginUsdt={payload?.viewerStrategyMarginUsdt}
                         leverage={payload?.viewerStrategyLeverage}
+                        tpSlPlan={payload?.viewerTpSlPlan}
                       />
                     </td>
                     <td>{outcomeLabel(r.outcome)}</td>

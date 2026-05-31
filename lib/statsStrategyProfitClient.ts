@@ -2,7 +2,10 @@ import type { CSSProperties } from "react";
 import {
   DEFAULT_STATS_TPSL_PLAN,
   statsTpSlPlanSummary,
+  statsTpSlProfitLegBreakdown,
+  statsTpSlTheoreticalMaxProfitPct,
   type StatsTpSlExitReason,
+  type StatsTpSlPlan,
 } from "@/lib/tpSlStrategySimulate";
 
 export type StrategyProfitByPlanEntry = {
@@ -32,12 +35,49 @@ export function statsStrategyProfitPnlStyle(pct: number): CSSProperties {
 }
 
 export function statsStrategyExitReasonShort(reason: StatsTpSlExitReason | null | undefined): string {
-  if (reason === "tp2_full") return "TP2";
+  if (reason === "tp2_full") return "TP2 เต็ม";
   if (reason === "tp1_tp2") return "TP1+TP2";
   if (reason === "tp1_be") return "TP1+BE";
   if (reason === "tp1_48h") return "TP1+48h";
   if (reason === "tp1_only") return "TP1";
   if (reason === "time_48h") return "48h";
+  return "";
+}
+
+export function statsStrategyExitReasonBreakdownLine(
+  reason: StatsTpSlExitReason | null | undefined,
+  plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
+): string | null {
+  const legs = reason ? statsTpSlProfitLegBreakdown(reason, plan) : null;
+  if (!legs) return null;
+  if (reason === "tp1_tp2") {
+    return `TP1 ${plan.tp1PartialPct}%@${plan.tp1PricePct}% + ที่เหลือปิด@${plan.tp2PricePct}% → ${formatStatsStrategyProfitPct(legs.tp1LegPct)}+${formatStatsStrategyProfitPct(legs.tp2LegPct)}`;
+  }
+  if (reason === "tp2_full") {
+    return `TP2 ปิดทั้งหมด @${plan.tp2PricePct}% (ไม่ผ่าน TP1)`;
+  }
+  if (reason === "tp1_only") {
+    return `TP1 ปิด ${plan.tp1PartialPct}% @${plan.tp1PricePct}%`;
+  }
+  return null;
+}
+
+export function statsStrategyExitReasonDetail(
+  reason: StatsTpSlExitReason | null | undefined,
+  plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
+): string {
+  if (reason === "tp1_tp2") {
+    const max = statsTpSlTheoreticalMaxProfitPct("tp1_tp2", plan);
+    const f = plan.tp1PartialPct;
+    return `TP1 ปิด ${f}% ที่ราคา ${plan.tp1PricePct}% · ส่วนที่เหลือปิดทั้งหมดที่ TP2 ${plan.tp2PricePct}% — กำไรรวมสูงสุด ≈ ${max != null ? formatStatsStrategyProfitPct(max) : "—"} (ไม่ใช่ ${plan.tp1PricePct}%+${plan.tp2PricePct}% เต็ม position)`;
+  }
+  if (reason === "tp2_full") {
+    return `ราคาแตะ TP2 ${plan.tp2PricePct}% ก่อน TP1 — ปิดทั้ง position → กำไรสูงสุด ${formatStatsStrategyProfitPct(plan.tp2PricePct)}`;
+  }
+  if (reason === "tp1_be") return "หลัง TP1 ราคากลับแตะ SL ที่ entry — ส่วนที่เหลือออกเสมอ";
+  if (reason === "tp1_48h") return `หลัง TP1 ถือส่วนที่เหลือจนครบ ${plan.maxHoldHours}h`;
+  if (reason === "tp1_only") return `แตะ TP1 แล้วปิดครบ ${plan.tp1PartialPct}% ที่ ${plan.tp1PricePct}%`;
+  if (reason === "time_48h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   return "";
 }
 
@@ -72,6 +112,7 @@ export function statsStrategyProfitCellTitle(
   profitPct: number | null | undefined,
   exitReason: StatsTpSlExitReason | null | undefined,
   sizing?: { marginUsdt?: number | null; leverage?: number | null },
+  plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
 ): string {
   const base = STATS_STRATEGY_PROFIT_COLUMN_TITLE;
   if (profitPct == null || !Number.isFinite(profitPct)) return base;
@@ -86,16 +127,20 @@ export function statsStrategyProfitCellTitle(
     displayPct !== profitPct && sizing?.leverage != null && sizing.leverage > 0
       ? ` (จำกัดที่ ${formatStatsStrategyProfitPct(displayPct)} @${Math.floor(sizing.leverage)}x)`
       : "";
+  const exitDetail = exitReason ? statsStrategyExitReasonDetail(exitReason, plan) : "";
+  const breakdown = statsStrategyExitReasonBreakdownLine(exitReason, plan);
   const parts = [
     base + marginNote,
     tag ? `ออก: ${tag}` : "",
+    exitDetail,
+    breakdown,
     formatStatsStrategyProfitPct(displayPct) + cappedNote,
     usdt,
   ].filter(Boolean);
   return parts.join(" · ");
 }
 
-/** P/L USDT จาก margin × leverage × % ราคา (เทียบ auto-open history) — ขาดทุนไม่เกิน margin */
+/** P/L $ จาก margin × leverage × % ราคา (เทียบ auto-open history) — ขาดทุนไม่เกิน margin */
 export function strategyProfitUsdtFromMargin(
   marginUsdt: number,
   leverage: number,
@@ -104,6 +149,11 @@ export function strategyProfitUsdtFromMargin(
   const pct = capStrategyProfitPctForLeverage(profitPct, leverage);
   const usdt = marginUsdt * leverage * (pct / 100);
   return Math.max(usdt, -marginUsdt);
+}
+
+export function formatStatsStrategyProfitDollarAmount(amount: number): string {
+  const sign = amount >= 0 ? "+" : "";
+  return `${sign}${amount.toFixed(2)} $`;
 }
 
 export function formatStatsStrategyProfitUsdt(
@@ -122,8 +172,7 @@ export function formatStatsStrategyProfitUsdt(
   }
   const displayPct = resolveStatsStrategyDisplayPct(profitPct, leverage);
   const usdt = strategyProfitUsdtFromMargin(marginUsdt, leverage, displayPct);
-  const sign = usdt >= 0 ? "+" : "";
-  return `${sign}${usdt.toFixed(2)} USDT`;
+  return formatStatsStrategyProfitDollarAmount(usdt);
 }
 
 export type StatsStrategyProfitRowSlice = {
@@ -138,6 +187,8 @@ export type StatsStrategyProfitSummary = {
   flats: number;
   pending: number;
   sumPct: number;
+  sumWinUsd: number | null;
+  sumLossUsd: number | null;
   sumUsdt: number | null;
 };
 
@@ -152,6 +203,8 @@ export function summarizeStatsStrategyProfit(
   let pending = 0;
   let sumPct = 0;
   let sumUsdt = 0;
+  let sumWinUsd = 0;
+  let sumLossUsd = 0;
   let hasUsdt = false;
   const margin = sizing?.marginUsdt;
   const leverage = sizing?.leverage;
@@ -175,7 +228,10 @@ export function summarizeStatsStrategyProfit(
     else if (displayPct < 0) losses += 1;
     else flats += 1;
     if (canUsdt) {
-      sumUsdt += strategyProfitUsdtFromMargin(margin!, leverage!, raw);
+      const usd = strategyProfitUsdtFromMargin(margin!, leverage!, raw);
+      sumUsdt += usd;
+      if (usd > 0) sumWinUsd += usd;
+      else if (usd < 0) sumLossUsd += usd;
       hasUsdt = true;
     }
   }
@@ -187,6 +243,8 @@ export function summarizeStatsStrategyProfit(
     flats,
     pending,
     sumPct,
+    sumWinUsd: hasUsdt ? sumWinUsd : null,
+    sumLossUsd: hasUsdt ? sumLossUsd : null,
     sumUsdt: hasUsdt ? sumUsdt : null,
   };
 }
@@ -201,12 +259,20 @@ export function formatStatsStrategyProfitSummaryText(
   const flatTag = summary.flats > 0 ? ` · เสมอ ${summary.flats}` : "";
   const pendingTag = summary.pending > 0 ? ` · รอผล ${summary.pending}` : "";
   const sumPart = formatStatsStrategyProfitPct(summary.sumPct);
-  const usdtPart =
-    summary.sumUsdt != null
-      ? `${summary.sumUsdt >= 0 ? "+" : ""}${summary.sumUsdt.toFixed(2)} USDT`
-      : null;
-  const core = `กลยุทธ์: ชนะ ${summary.wins} · แพ้ ${summary.losses}${flatTag} · รวม ${sumPart} (${summary.trades} ไม้)`;
-  return usdtPart ? `${core} · ${usdtPart}${pendingTag}` : `${core}${pendingTag}`;
+  const winUsdTag =
+    summary.sumWinUsd != null && summary.wins > 0
+      ? ` (${formatStatsStrategyProfitDollarAmount(summary.sumWinUsd)})`
+      : "";
+  const lossUsdTag =
+    summary.sumLossUsd != null && summary.losses > 0
+      ? ` (${formatStatsStrategyProfitDollarAmount(summary.sumLossUsd)})`
+      : "";
+  const netUsdTag =
+    summary.sumUsdt != null && summary.wins > 0 && summary.losses > 0
+      ? ` · สุทธิ ${formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}`
+      : "";
+  const core = `กลยุทธ์: ชนะ ${summary.wins}${winUsdTag} · แพ้ ${summary.losses}${lossUsdTag}${flatTag} · รวม ${sumPart} (${summary.trades} ไม้)${netUsdTag}`;
+  return `${core}${pendingTag}`;
 }
 
 export function statsStrategyProfitCsvCell(

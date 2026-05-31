@@ -158,6 +158,7 @@ export type SnowballStatsApiPayload = {
   /** ลบแถว / ล้างสถิติทั้งหมด — เฉพาะ KOJI_ADMIN_IDS */
   isAdmin?: boolean;
   viewerTpSlPlanSummary?: string;
+  viewerTpSlPlan?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
   viewerStrategyMarginUsdt?: number | null;
   viewerStrategyLeverage?: number | null;
 };

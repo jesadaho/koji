@@ -30,6 +30,37 @@ export function statsTpSlPlanSummary(plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PL
   return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · TP2 ${plan.tp2PricePct}% · SL@entry · ${plan.maxHoldHours}h`;
 }
 
+function tp1PartialFraction(plan: StatsTpSlPlan): number {
+  return Math.min(0.99, Math.max(0.01, plan.tp1PartialPct / 100));
+}
+
+/** กำไร % สูงสุด (เทียบ notional เต็ม) ตาม exit path — ใช้อธิบายใน UI */
+export function statsTpSlTheoreticalMaxProfitPct(
+  reason: StatsTpSlExitReason,
+  plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
+): number | null {
+  const f = tp1PartialFraction(plan);
+  if (reason === "tp2_full") return plan.tp2PricePct;
+  if (reason === "tp1_only") return f * plan.tp1PricePct;
+  if (reason === "tp1_tp2") return f * plan.tp1PricePct + (1 - f) * plan.tp2PricePct;
+  return null;
+}
+
+/** แยกส่วน TP1 / TP2 สำหรับ tooltip (เทียบ notional เต็ม) */
+export function statsTpSlProfitLegBreakdown(
+  reason: StatsTpSlExitReason,
+  plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
+): { tp1LegPct: number; tp2LegPct: number } | null {
+  if (reason !== "tp1_tp2" && reason !== "tp1_only" && reason !== "tp2_full") return null;
+  const f = tp1PartialFraction(plan);
+  if (reason === "tp2_full") return { tp1LegPct: 0, tp2LegPct: plan.tp2PricePct };
+  if (reason === "tp1_only") return { tp1LegPct: f * plan.tp1PricePct, tp2LegPct: 0 };
+  return {
+    tp1LegPct: f * plan.tp1PricePct,
+    tp2LegPct: (1 - f) * plan.tp2PricePct,
+  };
+}
+
 function favorablePctInBar(
   side: "long" | "short",
   entry: number,

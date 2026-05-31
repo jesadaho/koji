@@ -223,6 +223,7 @@ type ReversalStatsSectionProps = {
   strategyPlanTitle?: string;
   strategyMarginUsdt?: number | null;
   strategyLeverage?: number | null;
+  strategyTpSlPlan?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
 };
 
 function ReversalStatsSection({
@@ -240,6 +241,7 @@ function ReversalStatsSection({
   strategyPlanTitle = STATS_STRATEGY_PROFIT_COLUMN_TITLE,
   strategyMarginUsdt,
   strategyLeverage,
+  strategyTpSlPlan,
 }: ReversalStatsSectionProps) {
   const strategySizing = useMemo(
     () => ({ marginUsdt: strategyMarginUsdt, leverage: strategyLeverage }),
@@ -458,7 +460,7 @@ function ReversalStatsSection({
         {strategyProfitSummaryText ? (
           <span
             className="sub"
-            title="สรุปคอลัมน์กำไรกลยุทธ์ (TP/SL ตาม Settings) — ชนะ/แพ้จาก % กลยุทธ์ต่อไม้ · รวม % = ผลรวมทุกไม้ · USDT = margin×leverage×% (จำกัดขาดทุนตาม leverage)"
+            title="สรุปคอลัมน์กำไรกลยุทธ์ (TP/SL ตาม Settings) — ชนะ/แพ้จาก % กลยุทธ์ต่อไม้ · รวม % = ผลรวมทุกไม้ · $ = margin×leverage×% แยกชนะ/แพ้ (จำกัดขาดทุนตาม leverage)"
             style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
           >
             {strategyProfitSummaryText}
@@ -651,6 +653,7 @@ function ReversalStatsSection({
                           strategyExitReason={r.strategyExitReason}
                           marginUsdt={strategyMarginUsdt}
                           leverage={strategyLeverage}
+                          tpSlPlan={strategyTpSlPlan}
                         />
                       </td>
                     ) : null}
@@ -945,6 +948,7 @@ export default function ReversalStatsTelegramMiniApp() {
         strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
         strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
         strategyLeverage={payload?.viewerStrategyLeverage}
+        strategyTpSlPlan={payload?.viewerTpSlPlan}
         emptyHint="ยังไม่มีแถว 1H Short — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
         footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_SHORT}`}
         csvPrefix="reversal-stats-1h-short"
@@ -959,6 +963,7 @@ export default function ReversalStatsTelegramMiniApp() {
         strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
         strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
         strategyLeverage={payload?.viewerStrategyLeverage}
+        strategyTpSlPlan={payload?.viewerTpSlPlan}
         emptyHint="ยังไม่มีแถว Long 1H — รอสัญญาณ Reversal Long ส่งสำเร็จ (CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED)"
         footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_LONG}`}
         csvPrefix="reversal-stats-1h-long"

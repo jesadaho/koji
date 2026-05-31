@@ -70,6 +70,7 @@ import {
   resolveViewerStatsTpSlPlan,
   resolveViewerStatsTradeSizing,
   viewerStatsTpSlPlanSummary,
+  viewerStatsTpSlPlanPayload,
 } from "@/lib/statsTpSlPlanForUser";
 import {
   loadCandleReversalStatsState,
@@ -765,6 +766,7 @@ async function finalizeSnowballStatsPayload(
   persistState: { rows: SnowballStatsApiPayload["rows"] },
 ): Promise<SnowballStatsApiPayload> {
   let viewerTpSlPlanSummary: string | undefined;
+  let viewerTpSlPlan: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
   let viewerStrategyMarginUsdt: number | null | undefined;
   let viewerStrategyLeverage: number | null | undefined;
   if (telegramUserId != null) {
@@ -773,6 +775,7 @@ async function finalizeSnowballStatsPayload(
       resolveViewerStatsTradeSizing(telegramUserId, "snowball"),
     ]);
     viewerTpSlPlanSummary = viewerStatsTpSlPlanSummary(plan);
+    viewerTpSlPlan = viewerStatsTpSlPlanPayload(plan);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
     const dirty = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
@@ -784,6 +787,7 @@ async function finalizeSnowballStatsPayload(
     rows,
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
     ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
+    ...(viewerTpSlPlan ? { viewerTpSlPlan } : {}),
     ...(viewerStrategyMarginUsdt != null ? { viewerStrategyMarginUsdt } : {}),
     ...(viewerStrategyLeverage != null ? { viewerStrategyLeverage } : {}),
   };
@@ -894,6 +898,7 @@ export async function liffGetCandleReversalStats(
   const st = await loadCandleReversalStatsState();
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
   let viewerTpSlPlanSummary: string | undefined;
+  let viewerTpSlPlan: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
   let viewerStrategyMarginUsdt: number | null | undefined;
   let viewerStrategyLeverage: number | null | undefined;
   if (telegramUserId != null) {
@@ -902,6 +907,7 @@ export async function liffGetCandleReversalStats(
       resolveViewerStatsTradeSizing(telegramUserId, "reversal"),
     ]);
     viewerTpSlPlanSummary = viewerStatsTpSlPlanSummary(plan);
+    viewerTpSlPlan = viewerStatsTpSlPlanPayload(plan);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
     const dirty = await enrichCandleReversalStatsWithViewerStrategyProfit(rows, plan);
@@ -913,6 +919,7 @@ export async function liffGetCandleReversalStats(
     rows,
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
     ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
+    ...(viewerTpSlPlan ? { viewerTpSlPlan } : {}),
     ...(viewerStrategyMarginUsdt != null ? { viewerStrategyMarginUsdt } : {}),
     ...(viewerStrategyLeverage != null ? { viewerStrategyLeverage } : {}),
   };

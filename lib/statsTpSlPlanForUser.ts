@@ -81,6 +81,15 @@ export async function resolveViewerStatsTpSlPlan(
     : snowballTpSlPlanFromSettings(row);
 }
 
+export function viewerStatsTpSlPlanPayload(plan: ViewerStatsTpSlPlan): StatsTpSlPlan {
+  return {
+    tp1PricePct: plan.tp1PricePct,
+    tp1PartialPct: plan.tp1PartialPct,
+    tp2PricePct: plan.tp2PricePct,
+    maxHoldHours: plan.maxHoldHours,
+  };
+}
+
 export function viewerStatsTpSlPlanSummary(plan: ViewerStatsTpSlPlan): string {
   if (!plan.tpSlEnabled) {
     return `ปิด TP/SL — ถือครบ ${plan.maxHoldHours}h (ปิดที่ horizon)`;
