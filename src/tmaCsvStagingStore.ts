@@ -17,9 +17,9 @@ function storeKey(telegramUserId: number, stagingId: string): string {
 
 function purgeExpired(): void {
   const now = Date.now();
-  for (const [k, v] of store) {
+  store.forEach((v, k) => {
     if (v.expMs <= now) store.delete(k);
-  }
+  });
 }
 
 export function putTmaStagedCsv(
