@@ -1,4 +1,8 @@
 import type { AutoOpenOrderLogRow, AutoOpenSource } from "@/lib/autoOpenOrderLogClient";
+import {
+  formatStatsStrategyProfitDollarAmount,
+  strategyProfitUsdtFromMargin,
+} from "@/lib/statsStrategyProfitClient";
 
 /** ผลตามกติกา stats / strategy หลังครบ 48h (ไม่ใช่ success/skipped ของการสั่ง) */
 export type AutoOpenStrategyOutcome =
@@ -155,4 +159,120 @@ export function autoOpenStrategyFinalized(
     row.pct48h != null &&
     Number.isFinite(row.pct48h)
   );
+}
+
+export function isAutoOpenStrategyWinOutcome(
+  outcome: string | null | undefined,
+): boolean {
+  return (
+    outcome === "win" ||
+    outcome === "win_trend" ||
+    outcome === "win_quick_tp30"
+  );
+}
+
+export type AutoOpenStrategy48hSummary = {
+  /** เปิดสำเร็จ + ครบผล@48h */
+  trades: number;
+  wins: number;
+  losses: number;
+  flats: number;
+  /** เปิดสำเร็จแต่ยังไม่ครบ 48h */
+  pending: number;
+  decisive: number;
+  winratePct: number | null;
+  sumUsdt: number | null;
+};
+
+/** สรุป Win/Loss ตามคอลัมน์ ผล@48h — เฉพาะไม้ที่สั่งเปิดสำเร็จ */
+export function summarizeAutoOpenStrategy48h(
+  rows: AutoOpenOrderLogRow[],
+): AutoOpenStrategy48hSummary {
+  let trades = 0;
+  let wins = 0;
+  let losses = 0;
+  let flats = 0;
+  let pending = 0;
+  let sumUsdt = 0;
+  let hasUsdt = false;
+
+  for (const r of rows) {
+    if (r.outcome !== "success") continue;
+
+    if (!autoOpenStrategyFinalized(r)) {
+      pending += 1;
+      continue;
+    }
+
+    trades += 1;
+    const o = r.strategyOutcome;
+    if (isAutoOpenStrategyWinOutcome(o)) wins += 1;
+    else if (o === "loss") losses += 1;
+    else flats += 1;
+
+    const marginBase = r.marginUsdt;
+    const scale =
+      r.marginScale != null && Number.isFinite(r.marginScale) && r.marginScale > 0
+        ? r.marginScale
+        : 1;
+    const margin =
+      marginBase != null && Number.isFinite(marginBase) && marginBase > 0
+        ? marginBase * scale
+        : null;
+    const lev = r.leverage;
+    const pct = r.strategyPct;
+    if (
+      margin != null &&
+      lev != null &&
+      Number.isFinite(lev) &&
+      lev > 0 &&
+      pct != null &&
+      Number.isFinite(pct)
+    ) {
+      const usd = strategyProfitUsdtFromMargin(margin, lev, pct);
+      if (usd != null && Number.isFinite(usd)) {
+        sumUsdt += usd;
+        hasUsdt = true;
+      }
+    }
+  }
+
+  const decisive = wins + losses;
+  const winratePct = decisive > 0 ? (wins / decisive) * 100 : null;
+
+  return {
+    trades,
+    wins,
+    losses,
+    flats,
+    pending,
+    decisive,
+    winratePct,
+    sumUsdt: hasUsdt ? sumUsdt : null,
+  };
+}
+
+export function formatAutoOpenStrategy48hSummaryText(
+  summary: AutoOpenStrategy48hSummary,
+): string | null {
+  if (summary.trades === 0 && summary.pending === 0) return null;
+  if (summary.trades === 0) {
+    return summary.pending > 0
+      ? `ผล@48h: รอผล ${summary.pending} ไม้ (ยังไม่ครบ 48h)`
+      : null;
+  }
+
+  const flatPart = summary.flats > 0 ? ` · เสมอ ${summary.flats}` : "";
+  const pendingPart =
+    summary.pending > 0 ? ` · รอผล ${summary.pending}` : "";
+  const wrPart =
+    summary.decisive > 0 && summary.winratePct != null
+      ? ` · WR ${summary.winratePct.toFixed(1)}% (${summary.wins}/${summary.decisive})`
+      : "";
+  const netPart =
+    summary.sumUsdt != null
+      ? ` · สุทธิ ${formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}`
+      : "";
+
+  return `ผล@48h: ชนะ ${summary.wins} ไม้ · แพ้ ${summary.losses} ไม้${flatPart} · รวม ${summary.trades} ไม้${wrPart}${netPart}${pendingPart}`;
 }

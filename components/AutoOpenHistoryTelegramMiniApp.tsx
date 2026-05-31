@@ -16,6 +16,8 @@ import { autoOpenHorizonDue, resolveAutoOpenEntryPrice, pctVsEntrySide } from "@
 import {
   autoOpenStrategyFinalized,
   autoOpenStrategyOutcomeLabel,
+  formatAutoOpenStrategy48hSummaryText,
+  summarizeAutoOpenStrategy48h,
   type AutoOpenStrategyOutcome,
 } from "@/lib/autoOpenStrategyOutcome";
 import { autoOpenOrderLogToCsv } from "@/lib/autoOpenOrderLogCsvExport";
@@ -406,6 +408,15 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     return filterAutoOpenLogsByDays(rows, Number(dayFilter));
   }, [rows, dayFilter]);
 
+  const strategy48hSummary = useMemo(
+    () => summarizeAutoOpenStrategy48h(displayRows),
+    [displayRows],
+  );
+  const strategy48hSummaryText = useMemo(
+    () => formatAutoOpenStrategy48hSummaryText(strategy48hSummary),
+    [strategy48hSummary],
+  );
+
   const successRate =
     summary && summary.total > 0
       ? `${((summary.success / summary.total) * 100).toFixed(1)}%`
@@ -532,6 +543,15 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </div>
 
       <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
+        {strategy48hSummaryText ? (
+          <p
+            className="sub"
+            title="นับเฉพาะไม้ที่สั่งเปิดสำเร็จและครบ follow-up 48h · ชนะ/แพ้ตามกติกา Snowball (Quick TP30/Trend/MFE) และ Reversal (±2% ที่ 48h) · เสมอ = ระหว่างเกณฑ์ชนะ–แพ้"
+            style={{ marginTop: 0, marginBottom: "0.65rem", fontWeight: 600 }}
+          >
+            {strategy48hSummaryText}
+          </p>
+        ) : null}
         <div className="marketsFundingHistTableWrap" style={{ overflowX: "auto" }}>
           <table className="marketsFundingHistTable sparkStatsTable">
             <thead>
