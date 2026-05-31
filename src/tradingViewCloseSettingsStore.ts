@@ -79,6 +79,8 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
   /** สัญญาณ LONG ที่ตรง ✨ Quality Short Signal → เปิด Short บน MEXC แทน Long */
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
+  /** วันอาทิตย์ (เวลาไทย) — Snowball ทุกสัญญาณ → Short */
+  snowballAutoTradeSundayAllShortEnabled?: boolean;
   snowballAutoTradeMarginUsdt?: number;
   snowballAutoTradeLeverage?: number;
   /** @deprecated ใช้ TP/SL strategy — เก็บไว้สำหรับ active เก่า */
@@ -251,6 +253,7 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap | null;
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
+  snowballAutoTradeSundayAllShortEnabled?: boolean;
   snowballAutoTradeMarginUsdt?: number | null;
   snowballAutoTradeLeverage?: number | null;
   snowballAutoTradeQuickTpEnabled?: boolean;
@@ -320,6 +323,7 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeRulesBear !== undefined ||
     input.snowballAutoTradeGreen2DaysLongAllGrades !== undefined ||
     input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined ||
+    input.snowballAutoTradeSundayAllShortEnabled !== undefined ||
     input.snowballAutoTradeMarginUsdt !== undefined ||
     input.snowballAutoTradeLeverage !== undefined ||
     input.snowballAutoTradeQuickTpEnabled !== undefined ||
@@ -452,6 +456,11 @@ export async function saveTradingViewMexcSettings(
       input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined
         ? input.snowballAutoTradeQualityShortSignalShortEnabled
         : prev?.snowballAutoTradeQualityShortSignalShortEnabled ?? false,
+
+    snowballAutoTradeSundayAllShortEnabled:
+      input.snowballAutoTradeSundayAllShortEnabled !== undefined
+        ? input.snowballAutoTradeSundayAllShortEnabled
+        : prev?.snowballAutoTradeSundayAllShortEnabled ?? false,
 
     snowballAutoTradeMarginUsdt:
       input.snowballAutoTradeMarginUsdt === null

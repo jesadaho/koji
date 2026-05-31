@@ -21,6 +21,20 @@ export function bkkSnowballAutoTradeDayKeyNow(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 }
 
+/** 0 = Sunday … 6 = Saturday (Asia/Bangkok, no DST) */
+export function bkkWeekdayIndexNow(): number {
+  const w =
+    new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Bangkok", weekday: "short" }).format(
+      new Date(),
+    ) ?? "";
+  const map: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return map[w] ?? 0;
+}
+
+export function bkkIsSundayNow(): boolean {
+  return bkkWeekdayIndexNow() === 0;
+}
+
 export type SnowballAutoTradeSide = "long" | "short";
 
 export type SnowballAutoTradeActive = {

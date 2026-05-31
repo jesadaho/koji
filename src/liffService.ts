@@ -126,7 +126,7 @@ import { isSnowballAutotradeEnabled } from "./snowballAutoTradeExecutor";
 import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — สัญญาณ LONG → Long · BEAR → Short (market) · ถ้าเปิด Quality Short Signal: สัญญาณ LONG ที่ตรง ✨ Quality Short Signal (เขียว 1 วัน · Vol×SMA > 3 · R% สัญญาณ > 8%) → Short แทน · Action Plan = Monitor จาก matrix 4h จะไม่เปิด · margin scale ตาม Action Plan (Full/Standard/Light) · กลยุทธ์ TP/SL (TP1 partial + SL บังทุน / TP2 / max hold) เหมือน Reversal · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
+  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — สัญญาณ LONG → Long · BEAR → Short (market) · ถ้าเปิด Quality Short Signal: สัญญาณ LONG ที่ตรง ✨ Quality Short Signal (เขียว 1 วัน · Vol×SMA > 3 · R% สัญญาณ > 8%) → Short แทน · ถ้าเปิดวันอาทิตย์: ทุกสัญญาณ Snowball ในวันอาทิตย์ (เวลาไทย) → Short · Action Plan = Monitor จาก matrix 4h จะไม่เปิด · margin scale ตาม Action Plan (Full/Standard/Light) · กลยุทธ์ TP/SL (TP1 partial + SL บังทุน / TP2 / max hold) เหมือน Reversal · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
@@ -1091,6 +1091,7 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     tp2PricePct: row.snowballAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.snowballAutoTradeMaxHoldHours ?? null,
     qualityShortSignalShortEnabled: row.snowballAutoTradeQualityShortSignalShortEnabled ?? false,
+    sundayAllShortEnabled: row.snowballAutoTradeSundayAllShortEnabled ?? false,
   };
 }
 
@@ -1415,6 +1416,17 @@ function parseSnowballAutoTradeNested(
     qualityShortSignalShortEnabled = true;
   }
 
+  let sundayAllShortEnabled = false;
+  if (typeof o.sundayAllShortEnabled === "boolean") {
+    sundayAllShortEnabled = o.sundayAllShortEnabled;
+  } else if (
+    o.sundayAllShortEnabled === "1" ||
+    o.sundayAllShortEnabled === 1 ||
+    o.sundayAllShortEnabled === "true"
+  ) {
+    sundayAllShortEnabled = true;
+  }
+
   const patchPart: Omit<
     SaveTradingViewMexcInput,
     "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
@@ -1424,6 +1436,7 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeRulesBear: null,
     snowballAutoTradeGreen2DaysLongAllGrades: false,
     snowballAutoTradeQualityShortSignalShortEnabled: qualityShortSignalShortEnabled,
+    snowballAutoTradeSundayAllShortEnabled: sundayAllShortEnabled,
     snowballAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
     snowballAutoTradeLeverage: mLev.v as number | null | undefined,
     snowballAutoTradeQuickTpEnabled: false,

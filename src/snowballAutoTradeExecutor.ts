@@ -16,6 +16,7 @@ import {
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
 import { resolveSnowballTpSlPlanFromRow } from "./snowballAutoTradeTpSlPlan";
 import {
+  bkkIsSundayNow,
   bkkSnowballAutoTradeDayKeyNow,
   hasOpenedSnowballContractToday,
   loadSnowballAutoTradeState,
@@ -112,6 +113,9 @@ function resolveSnowballAutoOpenSide(
   },
 ): SnowballAutoTradeSide {
   const defaultSide: SnowballAutoTradeSide = alertSide === "bear" ? "short" : "long";
+  if (row.snowballAutoTradeSundayAllShortEnabled === true && bkkIsSundayNow()) {
+    return "short";
+  }
   if (
     alertSide === "long" &&
     row.snowballAutoTradeQualityShortSignalShortEnabled === true &&
@@ -290,7 +294,12 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     }
 
     const side = resolveSnowballAutoOpenSide(row, input.alertSide, qualityShortInput);
+    const sundayShortOverride =
+      row.snowballAutoTradeSundayAllShortEnabled === true &&
+      bkkIsSundayNow() &&
+      input.alertSide === "long";
     const qualityShortOverride =
+      !sundayShortOverride &&
       input.alertSide === "long" &&
       row.snowballAutoTradeQualityShortSignalShortEnabled === true &&
       side === "short";
@@ -448,13 +457,19 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
 
       await notifyLines(userId, [
         "Koji — Snowball auto-open (MEXC)",
-        qualityShortOverride
-          ? "✅ เปิด SHORT จาก Snowball (✨ Quality Short Signal — สัญญาณ LONG)"
-          : long
-            ? "✅ เปิด LONG จาก Snowball"
-            : "✅ เปิด SHORT จาก Snowball",
+        sundayShortOverride
+          ? "✅ เปิด SHORT จาก Snowball (วันอาทิตย์ — สัญญาณ LONG)"
+          : qualityShortOverride
+            ? "✅ เปิด SHORT จาก Snowball (✨ Quality Short Signal — สัญญาณ LONG)"
+            : long
+              ? "✅ เปิด LONG จาก Snowball"
+              : "✅ เปิด SHORT จาก Snowball",
         `[${shortContractLabel(sym)}]/USDT`,
-        qualityShortOverride ? `เกณฑ์: ${SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA}` : "",
+        sundayShortOverride
+          ? "เกณฑ์: วันอาทิตย์ (เวลาไทย) — Short ทุกสัญญาณ Snowball"
+          : qualityShortOverride
+            ? `เกณฑ์: ${SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA}`
+            : "",
         gradeKey ? `Grade ${gradeKey}` : "",
         `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
         `จุดเข้าอ้างอิง (บอท / Binance): ${fmtSnowballPriceUsdt(referenceEntryPrice)} USDT`,
