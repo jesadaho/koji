@@ -83,6 +83,9 @@ export type CandleReversalStatsApiPayload = {
   isAdmin?: boolean;
   /** สรุปกลยุทธ์ของผู้ดู (จาก Settings) */
   viewerTpSlPlanSummary?: string;
+  /** margin USDT จาก Settings — คำนวณ P/L เป็น USDT ในตาราง */
+  viewerStrategyMarginUsdt?: number | null;
+  viewerStrategyLeverage?: number | null;
 };
 
 export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): string {

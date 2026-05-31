@@ -23,7 +23,10 @@ import {
   snowballStatsVolumeCascadeLabel,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
-import { statsStrategyProfitCsvCell } from "@/lib/statsStrategyProfitClient";
+import {
+  statsStrategyProfitCsvCell,
+  type StatsStrategyCsvSizing,
+} from "@/lib/statsStrategyProfitClient";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -75,7 +78,7 @@ function snowballOutcomeLabel(o: SnowballStatsRow["outcome"]): string {
   return "Flat";
 }
 
-function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
+function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyCsvSizing): string[] {
   return [
     r.symbol,
     statsCoinLabel(r.symbol),
@@ -117,14 +120,14 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow): string[] {
     marketSentimentSentimentLabel(r.marketSentiment),
     marketSentimentBtcDominanceLabel(r.marketSentiment),
     marketSentimentVolChange24hLabel(r.marketSentiment),
-    statsStrategyProfitCsvCell(r.pct48h, r.strategyProfitPct, r.strategyExitReason),
+    statsStrategyProfitCsvCell(r.pct48h, r.strategyProfitPct, r.strategyExitReason, sizing),
     snowballOutcomeLabel(r.outcome),
   ];
 }
 
-export function snowballStatsToCsv(rows: SnowballStatsRow[]): string {
+export function snowballStatsToCsv(rows: SnowballStatsRow[], sizing?: StatsStrategyCsvSizing): string {
   return buildCsv(
     HEADERS,
-    rows.map((r) => snowballStatsRowToCsvCells(r)),
+    rows.map((r) => snowballStatsRowToCsvCells(r, sizing)),
   );
 }

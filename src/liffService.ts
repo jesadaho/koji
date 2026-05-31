@@ -68,6 +68,7 @@ import {
 import { isAdminTelegramUserId } from "./adminIds";
 import {
   resolveViewerStatsTpSlPlan,
+  resolveViewerStatsTradeSizing,
   viewerStatsTpSlPlanSummary,
 } from "@/lib/statsTpSlPlanForUser";
 import {
@@ -764,9 +765,16 @@ async function finalizeSnowballStatsPayload(
   persistState: { rows: SnowballStatsApiPayload["rows"] },
 ): Promise<SnowballStatsApiPayload> {
   let viewerTpSlPlanSummary: string | undefined;
+  let viewerStrategyMarginUsdt: number | null | undefined;
+  let viewerStrategyLeverage: number | null | undefined;
   if (telegramUserId != null) {
-    const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "snowball");
+    const [plan, sizing] = await Promise.all([
+      resolveViewerStatsTpSlPlan(telegramUserId, "snowball"),
+      resolveViewerStatsTradeSizing(telegramUserId, "snowball"),
+    ]);
     viewerTpSlPlanSummary = viewerStatsTpSlPlanSummary(plan);
+    viewerStrategyMarginUsdt = sizing.marginUsdt;
+    viewerStrategyLeverage = sizing.leverage;
     const dirty = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
     if (dirty > 0) {
       await saveSnowballStatsState(persistState);
@@ -776,6 +784,8 @@ async function finalizeSnowballStatsPayload(
     rows,
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
     ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
+    ...(viewerStrategyMarginUsdt != null ? { viewerStrategyMarginUsdt } : {}),
+    ...(viewerStrategyLeverage != null ? { viewerStrategyLeverage } : {}),
   };
 }
 
@@ -884,9 +894,16 @@ export async function liffGetCandleReversalStats(
   const st = await loadCandleReversalStatsState();
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
   let viewerTpSlPlanSummary: string | undefined;
+  let viewerStrategyMarginUsdt: number | null | undefined;
+  let viewerStrategyLeverage: number | null | undefined;
   if (telegramUserId != null) {
-    const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "reversal");
+    const [plan, sizing] = await Promise.all([
+      resolveViewerStatsTpSlPlan(telegramUserId, "reversal"),
+      resolveViewerStatsTradeSizing(telegramUserId, "reversal"),
+    ]);
     viewerTpSlPlanSummary = viewerStatsTpSlPlanSummary(plan);
+    viewerStrategyMarginUsdt = sizing.marginUsdt;
+    viewerStrategyLeverage = sizing.leverage;
     const dirty = await enrichCandleReversalStatsWithViewerStrategyProfit(rows, plan);
     if (dirty > 0) {
       await saveCandleReversalStatsState(st);
@@ -896,6 +913,8 @@ export async function liffGetCandleReversalStats(
     rows,
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
     ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
+    ...(viewerStrategyMarginUsdt != null ? { viewerStrategyMarginUsdt } : {}),
+    ...(viewerStrategyLeverage != null ? { viewerStrategyLeverage } : {}),
   };
 }
 

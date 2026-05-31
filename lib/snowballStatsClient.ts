@@ -158,6 +158,8 @@ export type SnowballStatsApiPayload = {
   /** ลบแถว / ล้างสถิติทั้งหมด — เฉพาะ KOJI_ADMIN_IDS */
   isAdmin?: boolean;
   viewerTpSlPlanSummary?: string;
+  viewerStrategyMarginUsdt?: number | null;
+  viewerStrategyLeverage?: number | null;
 };
 
 function snowballStatsAlertSideLabel(alert: SnowballStatsAlertSide): "Long" | "Short" {

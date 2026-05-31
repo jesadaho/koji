@@ -87,3 +87,34 @@ export function viewerStatsTpSlPlanSummary(plan: ViewerStatsTpSlPlan): string {
   }
   return statsTpSlPlanSummary(plan);
 }
+
+export type ViewerStatsTradeSizing = {
+  marginUsdt: number | null;
+  leverage: number | null;
+};
+
+function positiveNum(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
+}
+
+export async function resolveViewerStatsTradeSizing(
+  telegramUserId: number,
+  source: StatsTpSlPlanSource,
+): Promise<ViewerStatsTradeSizing> {
+  const userId = `tg:${telegramUserId}`;
+  const map = await loadTradingViewMexcSettingsFullMap();
+  const row = map[userId];
+  if (!row) {
+    return { marginUsdt: null, leverage: null };
+  }
+  if (source === "reversal") {
+    return {
+      marginUsdt: positiveNum(row.reversalAutoTradeMarginUsdt),
+      leverage: positiveNum(row.reversalAutoTradeLeverage),
+    };
+  }
+  return {
+    marginUsdt: positiveNum(row.snowballAutoTradeMarginUsdt),
+    leverage: positiveNum(row.snowballAutoTradeLeverage),
+  };
+}

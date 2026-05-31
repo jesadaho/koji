@@ -552,16 +552,24 @@ export default function SnowballStatsTelegramMiniApp() {
     [rows],
   );
 
+  const strategySizing = useMemo(
+    () => ({
+      marginUsdt: payload?.viewerStrategyMarginUsdt,
+      leverage: payload?.viewerStrategyLeverage,
+    }),
+    [payload?.viewerStrategyMarginUsdt, payload?.viewerStrategyLeverage],
+  );
+
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
-    await downloadCsv(statsCsvFilename("snowball-stats"), snowballStatsToCsv(rows), {
+    await downloadCsv(statsCsvFilename("snowball-stats"), snowballStatsToCsv(rows, strategySizing), {
       telegramExportPath: "/api/tma/snowball-stats.csv",
       preferClientCsvInTma: true,
     });
-  }, [rows]);
+  }, [rows, strategySizing]);
 
   if (phase === "loading") {
     return (
@@ -977,6 +985,8 @@ export default function SnowballStatsTelegramMiniApp() {
                         pct48h={r.pct48h}
                         strategyProfitPct={r.strategyProfitPct}
                         strategyExitReason={r.strategyExitReason}
+                        marginUsdt={payload?.viewerStrategyMarginUsdt}
+                        leverage={payload?.viewerStrategyLeverage}
                       />
                     </td>
                     <td>{outcomeLabel(r.outcome)}</td>

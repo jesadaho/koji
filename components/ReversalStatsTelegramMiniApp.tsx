@@ -217,6 +217,8 @@ type ReversalStatsSectionProps = {
   showLowRank?: boolean;
   adverseTitle?: string;
   strategyPlanTitle?: string;
+  strategyMarginUsdt?: number | null;
+  strategyLeverage?: number | null;
 };
 
 function ReversalStatsSection({
@@ -232,7 +234,13 @@ function ReversalStatsSection({
   showLowRank = false,
   adverseTitle,
   strategyPlanTitle = STATS_STRATEGY_PROFIT_COLUMN_TITLE,
+  strategyMarginUsdt,
+  strategyLeverage,
 }: ReversalStatsSectionProps) {
+  const strategySizing = useMemo(
+    () => ({ marginUsdt: strategyMarginUsdt, leverage: strategyLeverage }),
+    [strategyMarginUsdt, strategyLeverage],
+  );
   const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
   const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
   const [dayFilter, setDayFilter] = useState<ReversalDayFilter>("all");
@@ -312,21 +320,21 @@ function ReversalStatsSection({
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
-    const csv = candleReversalStatsToCsv(rows);
+    const csv = candleReversalStatsToCsv(rows, strategySizing);
     await downloadCsv(statsCsvFilename(csvPrefix), csv, {
       telegramExportPath: `/api/tma/reversal-stats.csv${buildReversalStatsCsvSearchParams(exportFilterQuery)}`,
       preferClientCsvInTma: true,
       stagedReversalFilters: exportFilterQuery,
     });
-  }, [csvPrefix, exportFilterQuery, rows]);
+  }, [csvPrefix, exportFilterQuery, rows, strategySizing]);
 
   const copyCsv = useCallback(async () => {
     if (rows.length === 0) {
       window.alert("ยังไม่มีแถวให้คัดลอก");
       return;
     }
-    await copyCsvToClipboard(candleReversalStatsToCsv(rows));
-  }, [rows]);
+    await copyCsvToClipboard(candleReversalStatsToCsv(rows, strategySizing));
+  }, [rows, strategySizing]);
 
   return (
     <section className="sparkStatsMatrixSection" style={{ marginTop: "1.5rem" }}>
@@ -622,6 +630,8 @@ function ReversalStatsSection({
                           pct48h={r.pct48h}
                           strategyProfitPct={r.strategyProfitPct}
                           strategyExitReason={r.strategyExitReason}
+                          marginUsdt={strategyMarginUsdt}
+                          leverage={strategyLeverage}
                         />
                       </td>
                     ) : null}
@@ -914,6 +924,8 @@ export default function ReversalStatsTelegramMiniApp() {
         title="สถิติ Reversal · 1H Short"
         subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
         strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
+        strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
+        strategyLeverage={payload?.viewerStrategyLeverage}
         emptyHint="ยังไม่มีแถว 1H Short — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
         footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_SHORT}`}
         csvPrefix="reversal-stats-1h-short"
@@ -926,6 +938,8 @@ export default function ReversalStatsTelegramMiniApp() {
         title="สถิติ Reversal · Long 1H"
         subtitle="Long · แท่งเขียวยาว + low ต่ำสุด 24 แท่ง · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
         strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
+        strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
+        strategyLeverage={payload?.viewerStrategyLeverage}
         emptyHint="ยังไม่มีแถว Long 1H — รอสัญญาณ Reversal Long ส่งสำเร็จ (CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED)"
         footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_LONG}`}
         csvPrefix="reversal-stats-1h-long"

@@ -16,7 +16,12 @@ import {
   candleReversalVolScoreLabel,
   type CandleReversalStatsRow,
 } from "@/lib/candleReversalStatsClient";
-import { statsStrategyProfitCsvCell } from "@/lib/statsStrategyProfitClient";
+import {
+  statsStrategyProfitCsvCell,
+  type StatsStrategyCsvSizing,
+} from "@/lib/statsStrategyProfitClient";
+
+export type { StatsStrategyCsvSizing } from "@/lib/statsStrategyProfitClient";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -72,7 +77,10 @@ function reversalHorizonCsvCells(r: CandleReversalStatsRow): [string, string, st
   ];
 }
 
-function candleReversalStatsRowToCsvCells(r: CandleReversalStatsRow): string[] {
+function candleReversalStatsRowToCsvCells(
+  r: CandleReversalStatsRow,
+  sizing?: StatsStrategyCsvSizing,
+): string[] {
   const [h1, h2, h3, h4] = reversalHorizonCsvCells(r);
   return [
     r.symbol,
@@ -107,14 +115,17 @@ function candleReversalStatsRowToCsvCells(r: CandleReversalStatsRow): string[] {
       : "",
     marketSentimentFngLabel(r.marketSentiment),
     marketSentimentSentimentLabel(r.marketSentiment),
-    statsStrategyProfitCsvCell(r.pct48h, r.strategyProfitPct, r.strategyExitReason),
+    statsStrategyProfitCsvCell(r.pct48h, r.strategyProfitPct, r.strategyExitReason, sizing),
     candleReversalOutcomeLabel(r.outcome),
   ];
 }
 
-export function candleReversalStatsToCsv(rows: CandleReversalStatsRow[]): string {
+export function candleReversalStatsToCsv(
+  rows: CandleReversalStatsRow[],
+  sizing?: StatsStrategyCsvSizing,
+): string {
   return buildCsv(
     HEADERS,
-    rows.map((r) => candleReversalStatsRowToCsvCells(r)),
+    rows.map((r) => candleReversalStatsRowToCsvCells(r, sizing)),
   );
 }
