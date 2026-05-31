@@ -7,7 +7,7 @@ import type {
   TradingViewMexcUserSettings,
 } from "./tradingViewCloseSettingsStore";
 import type { SnowballAutoTradeSide } from "./snowballAutoTradeStateStore";
-import { snowballFundingRateGtNeg010Pct } from "@/lib/snowballStatsClient";
+import { snowballMatchesQualitySignal } from "@/lib/snowballMatrixFilters";
 
 export const SNOWBALL_AUTO_TRADE_GRADE_KEYS: readonly SnowballAutoTradeGradeKey[] = [
   "A+",
@@ -130,8 +130,7 @@ export function resolveSnowballAutoOpenSideForUser(
   if (
     alertSide === "long" &&
     cfg.snowballAutoTradeGreen2DaysLongAllGrades === true &&
-    greenDaysBeforeSignal === 2 &&
-    snowballFundingRateGtNeg010Pct(fundingRate)
+    snowballMatchesQualitySignal({ greenDaysBeforeSignal, fundingRate })
   ) {
     return "long";
   }

@@ -1,17 +1,24 @@
 /**
  * Matrix presets สำหรับกรองสถิติ Snowball (LONG)
- * — The Snipers / The Whale Riders / High Winrate
+ * — Quality Signal / The Snipers / The Whale Riders / High Winrate
  */
 
-import { snowballStatsVolVsSmaDisplay, type SnowballStatsRow } from "@/lib/snowballStatsClient";
+import {
+  snowballFundingRateGtNeg010Pct,
+  snowballStatsVolVsSmaDisplay,
+  type SnowballStatsRow,
+} from "@/lib/snowballStatsClient";
 
-export type SnowballMatrixFilter = "all" | "snipers" | "whaleRiders" | "highWinrate";
+export type SnowballMatrixFilter = "all" | "qualitySignal" | "snipers" | "whaleRiders" | "highWinrate";
+
+export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = "เขียว 2 วัน · Funding > −0.10%";
 
 export const SNOWBALL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: SnowballMatrixFilter;
   label: string;
 }> = [
   { value: "all", label: "ทั้งหมด" },
+  { value: "qualitySignal", label: "✨ Quality Signal" },
   { value: "snipers", label: "🥇 Snipers" },
   { value: "whaleRiders", label: "🚀 Whale Riders" },
   { value: "highWinrate", label: "📈 High Winrate" },
@@ -22,6 +29,9 @@ export function snowballMatrixFilterLabel(filter: SnowballMatrixFilter): string 
 }
 
 export function snowballMatrixFilterTitle(filter: SnowballMatrixFilter): string {
+  if (filter === "qualitySignal") {
+    return `Quality Signal: ${SNOWBALL_QUALITY_SIGNAL_CRITERIA}`;
+  }
   if (filter === "snipers") {
     return "The Snipers (LONG): BTC 4h↑·1h↑ · R% สัญญาณ 1–5% · Wick<0.20 · Vol×SMA≥2×";
   }
@@ -91,6 +101,17 @@ function greenDaysBeforeSignalIs(
   return n != null && Number.isFinite(n) && Math.floor(n) === days;
 }
 
+/** ✨ Quality Signal — เขียว 2 วันก่อนสัญญาณ + Funding > −0.10% (ตรง auto-open green2 gate) */
+export function snowballMatchesQualitySignal(
+  row: Pick<SnowballStatsRow, "greenDaysBeforeSignal" | "fundingRate">,
+): boolean {
+  return greenDaysBeforeSignalIs(row, 2) && snowballFundingRateGtNeg010Pct(row.fundingRate);
+}
+
+export function snowballRowMatchesQualitySignalMatrix(row: SnowballStatsRow): boolean {
+  return snowballMatchesQualitySignal(row);
+}
+
 /** 📈 High Winrate — BTC 4h↓ + Day1 เขียว 2 วันติดก่อนสัญญาณ */
 export function snowballRowMatchesHighWinrateMatrix(row: SnowballStatsRow): boolean {
   if (!btcSar4hDown(row)) return false;
@@ -116,6 +137,7 @@ export function snowballStatsRowMatchesMatrixFilter(
   filter: SnowballMatrixFilter,
 ): boolean {
   if (filter === "all") return true;
+  if (filter === "qualitySignal") return snowballRowMatchesQualitySignalMatrix(row);
   if (filter === "snipers") return snowballRowMatchesSnipersMatrix(row);
   if (filter === "whaleRiders") return snowballRowMatchesWhaleRidersMatrix(row);
   return snowballRowMatchesHighWinrateMatrix(row);
