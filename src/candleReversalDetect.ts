@@ -1,5 +1,12 @@
+import { reversalMatchesQualitySignal } from "@/lib/reversalMatrixFilters";
+import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { emaLine } from "./indicatorMath";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
+
+export type CandleReversalAlertQualityContext = {
+  greenDaysBeforeSignal?: number | null;
+  rangeScore?: number | null;
+};
 
 export type CandleReversalTf = "1d" | "1h";
 
@@ -911,17 +918,31 @@ function candleReversalLookbackContextSuffix(sig: CandleReversalSignal): string 
   return parts.length ? ` · ${parts.join(" · ")}` : "";
 }
 
-export function buildCandleReversalAlertMessage(symbol: string, sig: CandleReversalSignal): string {
+export function buildCandleReversalAlertMessage(
+  symbol: string,
+  sig: CandleReversalSignal,
+  qualityCtx?: CandleReversalAlertQualityContext,
+): string {
   const base = symbol.replace(/USDT$/i, "");
   const tfLabel = sig.tf.toUpperCase();
   const wickPct = (sig.wickRatio * 100).toFixed(1);
   const bodyPct = (sig.bodyRatio * 100).toFixed(1);
   const modelTh = candleReversalModelLabelTh(sig.model);
   const sideTag = sig.tradeSide === "long" ? " Long" : "";
+  const qualitySignal =
+    qualityCtx != null &&
+    reversalMatchesQualitySignal({
+      greenDaysBeforeSignal: qualityCtx.greenDaysBeforeSignal,
+      wickRatio: sig.wickRatio,
+      rangeScore: qualityCtx.rangeScore,
+    });
 
   if (sig.model === "longest_green_body") {
     return [
-      `🟢 [Reversal ${tfLabel}${sideTag}] ${base} — ${modelTh}`,
+      withQualitySignalAlertHeader(
+        `🟢 [Reversal ${tfLabel}${sideTag}] ${base} — ${modelTh}`,
+        qualitySignal,
+      ),
       `แท่งปิด: O ${fmtReversalPrice(sig.o)} · H ${fmtReversalPrice(sig.h)} · L ${fmtReversalPrice(sig.l)} · C ${fmtReversalPrice(sig.c)}`,
       `เนื้อเขียว ${bodyPct}% · ไส้ล่าง ${wickPct}%${candleReversalLookbackContextSuffix(sig)} · โซน EMA20 (ม้วนขึ้น/เพิ่งขึ้น)`,
       "",
@@ -936,7 +957,7 @@ export function buildCandleReversalAlertMessage(symbol: string, sig: CandleRever
 
   if (sig.model === "inverted_doji") {
     return [
-      `🎯 [Reversal ${tfLabel}] ${base} — ${modelTh}`,
+      withQualitySignalAlertHeader(`🎯 [Reversal ${tfLabel}] ${base} — ${modelTh}`, qualitySignal),
       `แท่งปิด: O ${fmtReversalPrice(sig.o)} · H ${fmtReversalPrice(sig.h)} · L ${fmtReversalPrice(sig.l)} · C ${fmtReversalPrice(sig.c)}`,
       `แท่งแดง · ไส้บน ${wickPct}% · เนื้อ ${bodyPct}% ของช่วงแท่ง${candleReversalLookbackContextSuffix(sig)}`,
       "",
@@ -964,7 +985,7 @@ export function buildCandleReversalAlertMessage(symbol: string, sig: CandleRever
         ];
 
   return [
-    `🔻 [Reversal ${tfLabel}] ${base} — ${modelTh}${ctx}`,
+    withQualitySignalAlertHeader(`🔻 [Reversal ${tfLabel}] ${base} — ${modelTh}${ctx}`, qualitySignal),
     `แท่งปิด: O ${fmtReversalPrice(sig.o)} · H ${fmtReversalPrice(sig.h)} · L ${fmtReversalPrice(sig.l)} · C ${fmtReversalPrice(sig.c)}`,
     sig.model === "longest_red_body"
       ? `เนื้อแดง ${bodyPct}%${candleReversalLookbackContextSuffix(sig)} · โซน EMA20 (ม้วนลง/เพิ่งหลุด)`

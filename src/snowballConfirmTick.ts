@@ -5,7 +5,10 @@ import {
   type BinanceIndicatorTf,
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
+import { snowballMatchesQualitySignal } from "@/lib/snowballMatrixFilters";
+import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
+import { fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import {
   isPublicSnowballTripleCheckEnabled,
@@ -142,6 +145,7 @@ function buildConfirmedMessage(opts: {
   volSma: number | null;
   volRank: number | null;
   volRankLookback: number;
+  qualitySignal?: boolean;
 }): string {
   const { item, bar2Close, bar2High, bar2Low, bar2Volume, bar2OpenSec, volRatio, volSma, volRank, volRankLookback } =
     opts;
@@ -164,7 +168,10 @@ function buildConfirmedMessage(opts: {
   const volRankStr =
     volRank != null && Number.isFinite(volRank) ? `อันดับ vol #${volRank}/${volRankLookback}` : `อันดับ vol —/${volRankLookback}`;
   const lines: string[] = [
-    `✅ Confirmed (${sideLabel}) — Snowball ${item.snowTf}`,
+    withQualitySignalAlertHeader(
+      `✅ Confirmed (${sideLabel}) — Snowball ${item.snowTf}`,
+      opts.qualitySignal === true,
+    ),
     `${pairSlashed(item.symbol)} — Binance USDT-M`,
     "",
     `แท่งสัญญาณ: เปิด ${sigOpenBkk} → ปิด ${sigCloseBkk} · ${refLabel}=${refStr}`,
@@ -293,6 +300,16 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
           Number.isFinite(volSmaConfirm) && volSmaConfirm > 0 ? volSmaConfirm : null;
         const volRankLookback = Math.min(SNOWBALL_CONFIRM_VOL_SMA_PERIOD, idx + 1);
         const volRank = volumeRankInWindow(volume, Math.max(0, idx - (volRankLookback - 1)), idx, idx);
+        const greenDaysForConfirm =
+          item.side === "long"
+            ? await fetchGreenDaysBeforeSignalBar(item.symbol, item.signalBarOpenSec, item.snowTf)
+            : null;
+        const confirmQualitySignal =
+          item.side === "long" &&
+          snowballMatchesQualitySignal({
+            greenDaysBeforeSignal: greenDaysForConfirm,
+            fundingRate: item.statsFundingRate ?? null,
+          });
         const text = buildConfirmedMessage({
           item,
           bar2Close: cl,
@@ -304,6 +321,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
           volSma: volSmaConfirmUse,
           volRank,
           volRankLookback,
+          qualitySignal: confirmQualitySignal,
         });
         let sendOk = false;
         try {

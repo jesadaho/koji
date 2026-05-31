@@ -74,6 +74,8 @@ import {
   snowballTwoBarInlinePullbackMaxFrac,
   type SnowballTwoBarInlineEval,
 } from "./snowballTwoBarInline";
+import { snowballMatchesQualitySignal } from "@/lib/snowballMatrixFilters";
+import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import {
@@ -1706,6 +1708,8 @@ function buildSnowballTripleCheckMessage(
     sustainedBuyingPressure?: boolean;
     /** เปิดแท่งที่ใช้แสดงเวลาปิดในหัวข้อ (two-bar = แท่ง confirm) */
     alertClosedBarOpenSec?: number;
+    /** ผ่านเกณฑ์ Quality Signal (เขียว 2 วัน · Funding > −0.10%) */
+    qualitySignal?: boolean;
   }
 ): string {
   const pair = pairSlashNoDollar(symbol);
@@ -1867,28 +1871,31 @@ function buildSnowballTripleCheckMessage(
         : gradeDPlus
           ? "📎 Auto-open: Grade D+ (Long) — ไม่สั่งเปิดอัตโนมัติ (momentum อ่อน · 1H confirm ผ่าน)"
           : g === "c_plus"
-          ? "📎 Auto-open: ตามเกรดที่ตั้งใน Mini App (Long/Short)"
+          ? "📎 Auto-open: ตามทิศสัญญาณ LONG เมื่อเปิดใช้ใน Settings"
           : g === "b_plus"
             ? args.sustainedBuyingPressure
               ? `📎 Auto-open: Grade B + sustained flow — Long ครึ่งไม้ (~${(snowballGradeBSustainedMarginScale() * 100).toFixed(0)}% margin) เมื่อเปิด Double Barrier`
               : "📎 Auto-open: Grade B — ไม่สั่งเปิดอัตโนมัติ (ต้อง sustained momentum 1H หรือรอ A+)"
             : "";
-    const longHeadline = (() => {
-      const sfx = sniperSuffix;
-      if (gradeF) {
-        return `🔴 [${snowballLongGradeFLabel()}] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-      }
-      if (gradeDPlus) {
-        return `🟡 [${snowballLongGradePlusLabel("d_plus")}] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-      }
-      if (args.breakout1hConfirmUsed) {
-        return `🟢 [Breakout Entry · 1H Confirm] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-      }
-      if (g === "a_plus") return `🟢 [Grade A+ · Real Breakout] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-      if (g === "b_plus") return `🟡 [Grade B · Volume Break] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-      if (g === "c_plus") return `🟠 [Grade C · Empty Break] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-      return `🟢 [LONG Candidate] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-    })();
+    const longHeadline = withQualitySignalAlertHeader(
+      (() => {
+        const sfx = sniperSuffix;
+        if (gradeF) {
+          return `🔴 [${snowballLongGradeFLabel()}] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        }
+        if (gradeDPlus) {
+          return `🟡 [${snowballLongGradePlusLabel("d_plus")}] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        }
+        if (args.breakout1hConfirmUsed) {
+          return `🟢 [Breakout Entry · 1H Confirm] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        }
+        if (g === "a_plus") return `🟢 [Grade A+ · Real Breakout] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (g === "b_plus") return `🟡 [Grade B · Volume Break] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (g === "c_plus") return `🟠 [Grade C · Empty Break] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        return `🟢 [LONG Candidate] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+      })(),
+      args.qualitySignal === true,
+    );
 
     const out: string[] = [
       longHeadline,
@@ -1955,11 +1962,14 @@ function buildSnowballTripleCheckMessage(
   const refPx = formatUsdPrice(args.refSwing);
 
   const dbShort = Boolean(args.doubleBarrierEnabled && args.shortQualityTier);
-  const shortHeadline = !dbShort
-    ? `🔴 [SHORT Candidate] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`
-    : args.shortQualityTier === "b_plus"
-      ? `🟡 [WATCHLIST - B+] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`
-      : `🔴 [SUPER SNOWBALL - A+] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`;
+  const shortHeadline = withQualitySignalAlertHeader(
+    !dbShort
+      ? `🔴 [SHORT Candidate] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`
+      : args.shortQualityTier === "b_plus"
+        ? `🟡 [WATCHLIST - B+] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`
+        : `🔴 [SUPER SNOWBALL - A+] — Snowball Triple-Check (${args.snowballTfDisplay} LL)${bearSniperSuffix}`,
+    args.qualitySignal === true,
+  );
   const bearBarrier2 =
     args.doubleBarrierEnabled && args.shortDoubleBarrierChecklistLine
       ? args.shortDoubleBarrierChecklistLine
@@ -3486,6 +3496,15 @@ export async function runPublicIndicatorFeedInternal(
           }
         }
 
+        const [longGreenDaysForAlert, longMktCtxForAlert] = await Promise.all([
+          fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf),
+          fetchSnowballAlertMarketContext(symbol),
+        ]);
+        const longQualitySignal = snowballMatchesQualitySignal({
+          greenDaysBeforeSignal: longGreenDaysForAlert,
+          fundingRate: longMktCtxForAlert?.fundingRate ?? null,
+        });
+
         const msg = buildSnowballTripleCheckMessage(symbol, "bull", signalBarOpenSec, {
           close: entryClosePx,
           refSwing: refPlaybook,
@@ -3543,6 +3562,7 @@ export async function runPublicIndicatorFeedInternal(
           trendMomentum,
           sustainedBuyingPressure,
           alertClosedBarOpenSec: twoBarInline ? t15[iConf]! : signalBarOpenSec,
+          qualitySignal: longQualitySignal,
         });
         const longPendingConfirm =
           !twoBarInline && !longBreakout1h && !intrabar && longRiskFlags.length > 0 && Boolean(longConfirmTrigger);
@@ -3585,7 +3605,8 @@ export async function runPublicIndicatorFeedInternal(
                 );
               }
             }
-            let longMktCtx: Awaited<ReturnType<typeof fetchSnowballAlertMarketContext>> | null = null;
+            let longMktCtx: Awaited<ReturnType<typeof fetchSnowballAlertMarketContext>> | null =
+              longMktCtxForAlert;
             if (!intrabar && !skipSnowballTgForPending) {
               try {
                 const longActionPlan =
@@ -3597,7 +3618,6 @@ export async function runPublicIndicatorFeedInternal(
                 } else if (longBreakoutGrade === "b_plus" && sustainedBuyingPressure) {
                   marginScale = snowballGradeBSustainedMarginScale();
                 }
-                longMktCtx = await fetchSnowballAlertMarketContext(symbol);
                 await runSnowballAutoTradeAfterSnowballAlert({
                   contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
                   binanceSymbol: symbol,
@@ -4069,6 +4089,15 @@ export async function runPublicIndicatorFeedInternal(
           }
         }
 
+        const [bearGreenDaysForAlert, bearMktCtxForAlert] = await Promise.all([
+          fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf),
+          fetchSnowballAlertMarketContext(symbol),
+        ]);
+        const bearQualitySignal = snowballMatchesQualitySignal({
+          greenDaysBeforeSignal: bearGreenDaysForAlert,
+          fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
+        });
+
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", signalBarOpenSec, {
           close: clE!,
           refSwing: priorMinLow,
@@ -4104,6 +4133,7 @@ export async function runPublicIndicatorFeedInternal(
               : undefined,
           inlineTwoBarFootnote: inlineTwoBarFootnoteBear,
           alertClosedBarOpenSec: twoBarInline ? t15[iConf]! : signalBarOpenSec,
+          qualitySignal: bearQualitySignal,
         });
         const bearPendingConfirm =
           !twoBarInline && !intrabar && bearRiskFlags.length > 0 && Boolean(bearConfirmTrigger);
