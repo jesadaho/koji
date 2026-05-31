@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
-import { STATS_STRATEGY_PROFIT_COLUMN_TITLE } from "@/lib/statsStrategyProfitClient";
+import {
+  STATS_STRATEGY_PROFIT_COLUMN_TITLE,
+  formatStatsStrategyProfitSummaryText,
+  summarizeStatsStrategyProfit,
+} from "@/lib/statsStrategyProfitClient";
 import {
   getTelegramInitData,
   loadTelegramWebApp,
@@ -560,6 +564,11 @@ export default function SnowballStatsTelegramMiniApp() {
     [payload?.viewerStrategyMarginUsdt, payload?.viewerStrategyLeverage],
   );
 
+  const strategyProfitSummaryText = useMemo(
+    () => formatStatsStrategyProfitSummaryText(summarizeStatsStrategyProfit(rows, strategySizing)),
+    [rows, strategySizing],
+  );
+
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
       window.alert("ยังไม่มีแถวให้ export");
@@ -787,6 +796,15 @@ export default function SnowballStatsTelegramMiniApp() {
         >
           WR · {horizonWinrateText}
         </p>
+        {strategyProfitSummaryText ? (
+          <p
+            className="sub"
+            title="สรุปคอลัมน์กำไรกลยุทธ์ (TP/SL ตาม Settings) — ชนะ/แพ้จาก % กลยุทธ์ต่อไม้ · รวม % = ผลรวมทุกไม้ · USDT = ผลรวมต่อไม้ (จำกัดขาดทุนตาม leverage)"
+            style={{ marginBottom: "0.5rem", fontWeight: 600 }}
+          >
+            {strategyProfitSummaryText}
+          </p>
+        ) : null}
         <div className="sparkMatrixScroll">
           <table className="sparkMatrixTable sparkMatrixTable--compact">
             <thead>

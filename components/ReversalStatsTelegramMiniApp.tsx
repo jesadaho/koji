@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
-import { STATS_STRATEGY_PROFIT_COLUMN_TITLE } from "@/lib/statsStrategyProfitClient";
+import {
+  STATS_STRATEGY_PROFIT_COLUMN_TITLE,
+  formatStatsStrategyProfitSummaryText,
+  summarizeStatsStrategyProfit,
+} from "@/lib/statsStrategyProfitClient";
 import {
   getTelegramInitData,
   loadTelegramWebApp,
@@ -281,6 +285,12 @@ function ReversalStatsSection({
         : null,
     [filteredRows, tf],
   );
+  const strategyProfitSummaryText = useMemo(() => {
+    if (tf !== "1h") return null;
+    return formatStatsStrategyProfitSummaryText(
+      summarizeStatsStrategyProfit(filteredRows, strategySizing),
+    );
+  }, [filteredRows, strategySizing, tf]);
 
   const horizonLabels = useMemo<[string, string, string, string | null]>(
     () => (tf === "1h" ? ["4h", "12h", "24h", "48h"] : ["1d", "3d", "7d", null]),
@@ -443,6 +453,15 @@ function ReversalStatsSection({
             style={{ display: "block", marginTop: "0.15rem" }}
           >
             WR · {horizonWinrateText}
+          </span>
+        ) : null}
+        {strategyProfitSummaryText ? (
+          <span
+            className="sub"
+            title="สรุปคอลัมน์กำไรกลยุทธ์ (TP/SL ตาม Settings) — ชนะ/แพ้จาก % กลยุทธ์ต่อไม้ · รวม % = ผลรวมทุกไม้ · USDT = margin×leverage×% (จำกัดขาดทุนตาม leverage)"
+            style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+          >
+            {strategyProfitSummaryText}
           </span>
         ) : null}
       </div>

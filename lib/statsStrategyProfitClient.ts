@@ -126,6 +126,89 @@ export function formatStatsStrategyProfitUsdt(
   return `${sign}${usdt.toFixed(2)} USDT`;
 }
 
+export type StatsStrategyProfitRowSlice = {
+  pct48h?: number | null;
+  strategyProfitPct?: number | null;
+};
+
+export type StatsStrategyProfitSummary = {
+  trades: number;
+  wins: number;
+  losses: number;
+  flats: number;
+  pending: number;
+  sumPct: number;
+  sumUsdt: number | null;
+};
+
+export function summarizeStatsStrategyProfit(
+  rows: StatsStrategyProfitRowSlice[],
+  sizing?: StatsStrategyCsvSizing,
+): StatsStrategyProfitSummary {
+  let trades = 0;
+  let wins = 0;
+  let losses = 0;
+  let flats = 0;
+  let pending = 0;
+  let sumPct = 0;
+  let sumUsdt = 0;
+  let hasUsdt = false;
+  const margin = sizing?.marginUsdt;
+  const leverage = sizing?.leverage;
+  const canUsdt =
+    margin != null && leverage != null && margin > 0 && leverage > 0;
+
+  for (const row of rows) {
+    if (!statsStrategyProfitFinalized(row.pct48h)) {
+      pending += 1;
+      continue;
+    }
+    const raw = row.strategyProfitPct;
+    if (raw == null || !Number.isFinite(raw)) {
+      pending += 1;
+      continue;
+    }
+    const displayPct = resolveStatsStrategyDisplayPct(raw, leverage);
+    trades += 1;
+    sumPct += displayPct;
+    if (displayPct > 0) wins += 1;
+    else if (displayPct < 0) losses += 1;
+    else flats += 1;
+    if (canUsdt) {
+      sumUsdt += strategyProfitUsdtFromMargin(margin!, leverage!, raw);
+      hasUsdt = true;
+    }
+  }
+
+  return {
+    trades,
+    wins,
+    losses,
+    flats,
+    pending,
+    sumPct,
+    sumUsdt: hasUsdt ? sumUsdt : null,
+  };
+}
+
+export function formatStatsStrategyProfitSummaryText(
+  summary: StatsStrategyProfitSummary,
+): string | null {
+  if (summary.trades === 0 && summary.pending === 0) return null;
+  if (summary.trades === 0) {
+    return summary.pending > 0 ? `กลยุทธ์: รอผล ${summary.pending} ไม้` : null;
+  }
+  const flatTag = summary.flats > 0 ? ` · เสมอ ${summary.flats}` : "";
+  const pendingTag = summary.pending > 0 ? ` · รอผล ${summary.pending}` : "";
+  const sumPart = formatStatsStrategyProfitPct(summary.sumPct);
+  const usdtPart =
+    summary.sumUsdt != null
+      ? `${summary.sumUsdt >= 0 ? "+" : ""}${summary.sumUsdt.toFixed(2)} USDT`
+      : null;
+  const core = `กลยุทธ์: ชนะ ${summary.wins} · แพ้ ${summary.losses}${flatTag} · รวม ${sumPart} (${summary.trades} ไม้)`;
+  return usdtPart ? `${core} · ${usdtPart}${pendingTag}` : `${core}${pendingTag}`;
+}
+
 export function statsStrategyProfitCsvCell(
   pct48h: number | null | undefined,
   strategyProfitPct: number | null | undefined,
