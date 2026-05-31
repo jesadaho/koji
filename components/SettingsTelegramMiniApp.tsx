@@ -298,11 +298,7 @@ export default function SettingsTelegramMiniApp() {
     setRevMaxHoldHours(
       st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
     );
-    setRevGateQualitySignal(
-      st.gateQualitySignal !== undefined
-        ? st.gateQualitySignal !== false
-        : st.gateBodyWick80 !== false || st.gateLenRank315 !== false,
-    );
+    setRevGateQualitySignal(st.gateQualitySignal !== false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.reversalAutoTrade]);
 
