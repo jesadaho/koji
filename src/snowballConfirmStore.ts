@@ -50,7 +50,7 @@ export type SnowballPendingConfirm = {
   alertedAtMs: number;
   riskFlags: SnowballPendingConfirmFlag[];
   qualityTier?: "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus";
-  /** เกรด matrix ตอนแจ้ง (4h LONG) — ใช้กรอง auto-open ต่อ user */
+  /** เกรด matrix ตอนแจ้ง (4h LONG) — ใช้บันทึก stats / ประวัติ */
   statsDisplayGrade?: SnowballDisplayGrade;
   /**
    * true = แท่ง 1 ไม่ส่ง TG / ไม่ autotrade — ให้เรียก Snowball auto-open หลัง ✅ Confirmed (เมื่อเป็น Super A+)

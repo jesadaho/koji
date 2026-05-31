@@ -9,41 +9,6 @@ import {
   loadTelegramWebApp,
   prepareTelegramMiniAppShell,
 } from "@/lib/kojiTelegramWebApp";
-import { SNOWBALL_AUTO_TRADE_GRADE_KEYS } from "@/src/snowballAutoTradeGradeRules";
-import type { SnowballAutoTradeGradeKey } from "@/src/tradingViewCloseSettingsStore";
-
-type SnowballGradeRuleChoice = "off" | "long" | "short";
-
-function emptySnowGradeRules(): Record<SnowballAutoTradeGradeKey, SnowballGradeRuleChoice> {
-  const r = {} as Record<SnowballAutoTradeGradeKey, SnowballGradeRuleChoice>;
-  for (const k of SNOWBALL_AUTO_TRADE_GRADE_KEYS) r[k] = "off";
-  return r;
-}
-
-function hydrateSnowGradeRules(
-  map: Record<string, unknown> | null | undefined
-): Record<SnowballAutoTradeGradeKey, SnowballGradeRuleChoice> {
-  const r = emptySnowGradeRules();
-  if (!map || typeof map !== "object") return r;
-  for (const [k, v] of Object.entries(map)) {
-    if (k in r && (v === "long" || v === "short")) {
-      r[k as SnowballAutoTradeGradeKey] = v;
-    }
-  }
-  return r;
-}
-
-function serializeSnowGradeRules(
-  rows: Record<SnowballAutoTradeGradeKey, SnowballGradeRuleChoice>
-): Record<string, "long" | "short"> {
-  const out: Record<string, "long" | "short"> = {};
-  for (const k of SNOWBALL_AUTO_TRADE_GRADE_KEYS) {
-    const c = rows[k];
-    if (c === "long" || c === "short") out[k] = c;
-  }
-  return out;
-}
-
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 async function readApiResponse(res: Response): Promise<{ text: string; parsed: unknown }> {
@@ -129,12 +94,6 @@ type Phase = "loading" | "setup" | "ready";
 
 type SnowballAutoTradeApiBundle = {
   enabled?: boolean;
-  /** @deprecated ใช้ rulesLong/rulesBear */
-  direction?: string;
-  rulesLong?: Record<string, "long" | "short">;
-  rulesBear?: Record<string, "long" | "short">;
-  /** สัญญาณ LONG + เขียว 2 วัน → เปิด Long ทุกเกรด */
-  green2DaysLongAllGrades?: boolean;
   marginUsdt?: number | null;
   leverage?: number | null;
   tpSlEnabled?: boolean;
@@ -193,9 +152,6 @@ export default function SettingsTelegramMiniApp() {
   const [mexcSecretInput, setMexcSecretInput] = useState("");
 
   const [snowEnabled, setSnowEnabled] = useState(false);
-  const [snowGreen2DaysLongAllGrades, setSnowGreen2DaysLongAllGrades] = useState(false);
-  const [snowRulesLong, setSnowRulesLong] = useState(() => emptySnowGradeRules());
-  const [snowRulesBear, setSnowRulesBear] = useState(() => emptySnowGradeRules());
   const [snowMarginDefault, setSnowMarginDefault] = useState("");
   const [snowLevDefault, setSnowLevDefault] = useState("");
   const [snowTpSlEnabled, setSnowTpSlEnabled] = useState(true);
@@ -249,9 +205,6 @@ export default function SettingsTelegramMiniApp() {
     if (!st) return;
 
     setSnowEnabled(Boolean(st.enabled));
-    setSnowGreen2DaysLongAllGrades(Boolean(st.green2DaysLongAllGrades));
-    setSnowRulesLong(hydrateSnowGradeRules(st.rulesLong));
-    setSnowRulesBear(hydrateSnowGradeRules(st.rulesBear));
     setSnowMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
     setSnowLevDefault(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
     setSnowTpSlEnabled(st.tpSlEnabled !== false);
@@ -616,9 +569,6 @@ export default function SettingsTelegramMiniApp() {
     try {
       const snowballAutoTrade: Record<string, unknown> = {
         enabled: snowEnabled,
-        green2DaysLongAllGrades: snowGreen2DaysLongAllGrades,
-        rulesLong: serializeSnowGradeRules(snowRulesLong),
-        rulesBear: serializeSnowGradeRules(snowRulesBear),
         marginUsdt: snowMarginDefault.trim() ? marginDefaultParsed : null,
         leverage: snowLevDefault.trim() ? levDefaultParsed : null,
         tpSlEnabled: snowTpSlEnabled,
@@ -1052,8 +1002,8 @@ export default function SettingsTelegramMiniApp() {
       <div id="snowball-auto-open" className="card" style={{ marginTop: "1.25rem" }}>
         <h2>Snowball auto-open (MEXC)</h2>
         <p className="sub" style={{ marginTop: 0 }}>
-          เมื่อ <strong>Snowball ส่งสัญญาณสำเร็จ (closed bar)</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน{" "}
-          <strong>LONG</strong>/<strong>SHORT</strong> (market) ตามสัญญาณ Snowball โดยใช้ราคาแนะนำของบอทเป็นจุดอ้างอิงสำหรับการคำนวณ Quick TP/กติกา 24h.
+          เมื่อ <strong>Snowball ส่งสัญญาณสำเร็จ (closed bar)</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน market ตามทิศสัญญาณ —{" "}
+          <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · Action Plan = Monitor จาก matrix 4h จะไม่เปิด
         </p>
         <p className="sub" style={{ marginTop: "0.5rem" }}>
           <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
@@ -1083,104 +1033,6 @@ export default function SettingsTelegramMiniApp() {
             <strong style={{ fontWeight: 600 }}>เปิดใช้ Snowball auto-open</strong>
           </span>
         </label>
-
-        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
-          <input
-            type="checkbox"
-            checked={snowGreen2DaysLongAllGrades}
-            onChange={(e) => setSnowGreen2DaysLongAllGrades(e.target.checked)}
-          />
-          <span className="tmaCheckboxField__text">
-            <strong style={{ fontWeight: 600 }}>เขียว 2 วัน + Funding &gt; −0.10% → Long ทุกเกรด</strong>
-            <span style={{ display: "block", opacity: 0.9, fontWeight: 400, marginTop: "0.2rem" }}>
-              สัญญาณ Snowball LONG ที่เขียว 2 วันก่อนแท่งสัญญาณ และ Funding &gt; −0.10% จะสั่ง Long บน MEXC แม้เกรดนั้นตั้ง «ปิด» ในตารางด้านล่าง
-            </span>
-          </span>
-        </label>
-
-        <p className="sub" style={{ marginTop: "0.85rem", fontWeight: 600 }}>
-          เกรดที่ auto-open (สัญญาณ LONG ในแชท)
-        </p>
-        <p className="sub" style={{ marginTop: 0, opacity: 0.9 }}>
-          แต่ละแถว: ปิด = ไม่เปิด · Long/Short = ทิศบน MEXC เมื่อสัญญาณเป็นเกรดนั้น
-        </p>
-        <div style={{ marginTop: "0.5rem", overflowX: "auto" }}>
-          <table className="sub" style={{ width: "100%", maxWidth: "28rem", borderCollapse: "collapse", fontSize: "0.92em" }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", padding: "0.25rem 0.35rem" }}>Grade</th>
-                <th style={{ textAlign: "center", padding: "0.25rem" }}>ปิด</th>
-                <th style={{ textAlign: "center", padding: "0.25rem" }}>Long</th>
-                <th style={{ textAlign: "center", padding: "0.25rem" }}>Short</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SNOWBALL_AUTO_TRADE_GRADE_KEYS.map((grade) => (
-                <tr key={`long-${grade}`}>
-                  <td style={{ padding: "0.2rem 0.35rem", fontWeight: 600 }}>{grade}</td>
-                  {(["off", "long", "short"] as const).map((choice) => (
-                    <td key={choice} style={{ textAlign: "center", padding: "0.2rem" }}>
-                      <input
-                        type="radio"
-                        name={`snow-long-${grade}`}
-                        checked={snowRulesLong[grade] === choice}
-                        onChange={() =>
-                          setSnowRulesLong((prev) => ({
-                            ...prev,
-                            [grade]: choice,
-                          }))
-                        }
-                        aria-label={`LONG ${grade} ${choice}`}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
-          เกรดที่ auto-open (สัญญาณ BEAR ในแชท)
-        </p>
-        <p className="sub" style={{ marginTop: 0, opacity: 0.9 }}>
-          ตั้งแยกจากบล็อก LONG — เช่น BEAR A+ → Short แต่ LONG A+ → Long ได้
-        </p>
-        <div style={{ marginTop: "0.5rem", overflowX: "auto" }}>
-          <table className="sub" style={{ width: "100%", maxWidth: "28rem", borderCollapse: "collapse", fontSize: "0.92em" }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: "left", padding: "0.25rem 0.35rem" }}>Grade</th>
-                <th style={{ textAlign: "center", padding: "0.25rem" }}>ปิด</th>
-                <th style={{ textAlign: "center", padding: "0.25rem" }}>Long</th>
-                <th style={{ textAlign: "center", padding: "0.25rem" }}>Short</th>
-              </tr>
-            </thead>
-            <tbody>
-              {SNOWBALL_AUTO_TRADE_GRADE_KEYS.map((grade) => (
-                <tr key={`bear-${grade}`}>
-                  <td style={{ padding: "0.2rem 0.35rem", fontWeight: 600 }}>{grade}</td>
-                  {(["off", "long", "short"] as const).map((choice) => (
-                    <td key={choice} style={{ textAlign: "center", padding: "0.2rem" }}>
-                      <input
-                        type="radio"
-                        name={`snow-bear-${grade}`}
-                        checked={snowRulesBear[grade] === choice}
-                        onChange={() =>
-                          setSnowRulesBear((prev) => ({
-                            ...prev,
-                            [grade]: choice,
-                          }))
-                        }
-                        aria-label={`BEAR ${grade} ${choice}`}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
 
         <p className="sub" style={{ marginTop: "0.85rem", fontWeight: 600 }}>
           Margin / เลเวเรจ (default)

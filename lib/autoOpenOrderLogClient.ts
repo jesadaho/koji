@@ -66,8 +66,9 @@ export type AutoOpenOrderLogSummary = {
 
 const REASON_LABELS: Record<string, string> = {
   user_disabled: "ปิด auto-open ใน Settings",
-  grade_off: "เกรดนี้ตั้งเป็น ปิด",
-  unknown_grade: "ไม่ระบุเกรดสัญญาณ",
+  grade_off: "เกรดนี้ตั้งเป็น ปิด (legacy)",
+  unknown_grade: "ไม่ระบุเกรดสัญญาณ (legacy)",
+  action_plan_monitor: "Action Plan = Monitor",
   already_opened_today: "เปิดเหรียญนี้แล้ววันนี้ (BKK)",
   no_mexc_creds: "ยังไม่ใส่ MEXC API",
   invalid_margin_or_leverage: "margin หรือ leverage ไม่ถูกต้อง",

@@ -101,7 +101,7 @@ function greenDaysBeforeSignalIs(
   return n != null && Number.isFinite(n) && Math.floor(n) === days;
 }
 
-/** ✨ Quality Signal — เขียว 2 วันก่อนสัญญาณ + Funding > −0.10% (ตรง auto-open green2 gate) */
+/** ✨ Quality Signal — เขียว 2 วันก่อนสัญญาณ + Funding > −0.10% */
 export function snowballMatchesQualitySignal(
   row: Pick<SnowballStatsRow, "greenDaysBeforeSignal" | "fundingRate">,
 ): boolean {

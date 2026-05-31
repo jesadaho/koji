@@ -8,10 +8,9 @@ import {
   loadTradingViewMexcSettingsFullMap,
   type TradingViewMexcUserSettings,
 } from "./tradingViewCloseSettingsStore";
-import type { SnowballDisplayGrade } from "./snowballLongGradeMatrix";
+import type { SnowballActionPlan, SnowballDisplayGrade } from "./snowballLongGradeMatrix";
 import {
   snowballAutoTradeGradeKeyFromAlert,
-  resolveSnowballAutoOpenSideForUser,
   type SnowballAutoTradeAlertGradeInput,
 } from "./snowballAutoTradeGradeRules";
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
@@ -121,7 +120,7 @@ function logSnowballAutoOpen(
     leverage?: number;
   },
 ): void {
-  // ข้าม (ปิด auto-open / เกรด off / มีโพซิชันแล้ว ฯลฯ) — ไม่ลงประวัติ auto-open
+  // ข้าม (ปิด auto-open / monitor / มีโพซิชันแล้ว ฯลฯ) — ไม่ลงประวัติ auto-open
   if (outcome === "skipped") return;
 
   const shouldLogEntry =
@@ -164,12 +163,11 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   volSma: number;
   /** สัดส่วน margin (เช่น 0.5 สำหรับ action plan Light) */
   marginScale?: number;
-  /** แท่งเขียวติดกันก่อนแท่งสัญญาณ (daily) — ใช้กับ green2DaysLongAllGrades */
-  greenDaysBeforeSignal?: number | null;
-  /** Funding rate ทศนิยม (MEXC) — ใช้กับ green2DaysLongAllGrades (> −0.10%) */
-  fundingRate?: number | null;
+  /** จาก matrix 4h — monitor = ไม่ auto-open */
+  actionPlan?: SnowballActionPlan | null;
 }): Promise<{ usersAttempted: number; usersSucceeded: number }> {
   if (!isSnowballAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
+  if (input.actionPlan === "monitor") return { usersAttempted: 0, usersSucceeded: 0 };
 
   const sym = input.contractSymbol.trim();
   if (!sym) return { usersAttempted: 0, usersSucceeded: 0 };
@@ -189,6 +187,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     momentumDowngrade: input.momentumDowngrade,
   };
   const gradeKey = snowballAutoTradeGradeKeyFromAlert(gradeInput);
+  const tradeSide: SnowballAutoTradeSide = input.alertSide === "bear" ? "short" : "long";
 
   const [map, state0] = await Promise.all([
     loadTradingViewMexcSettingsFullMap(),
@@ -225,22 +224,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       continue;
     }
 
-    const side = resolveSnowballAutoOpenSideForUser(
-      row,
-      input.alertSide,
-      gradeKey,
-      input.greenDaysBeforeSignal,
-      input.fundingRate,
-    );
-    if (!side) {
-      logSnowballAutoOpen(
-        userId,
-        logSignal,
-        "skipped",
-        gradeKey ? "grade_off" : "unknown_grade",
-      );
-      continue;
-    }
+    const side = tradeSide;
 
     if (hasOpenedSnowballContractToday(state[userId], sym, dayKey)) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "already_opened_today", { side });

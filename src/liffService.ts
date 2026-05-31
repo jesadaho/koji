@@ -110,7 +110,6 @@ import {
   ensureTradingViewMexcUserRow,
   orderSideEffective,
   saveTradingViewMexcSettings,
-  type SnowballAutoTradeDirection,
   type SaveTradingViewMexcInput,
   type SparkAutoTradeByVol,
   type SparkAutoTradeOrderSide,
@@ -125,14 +124,9 @@ import type { SparkVolBand } from "./sparkTierContext";
 import { newTvWebhookNonce } from "./tradingViewWebhookNonceStore";
 import { isSnowballAutotradeEnabled } from "./snowballAutoTradeExecutor";
 import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
-import {
-  effectiveSnowballAutoTradeRules,
-  sanitizeSnowballAutoTradeGradeRulesMap,
-} from "./snowballAutoTradeGradeRules";
-
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ตั้งเกรด matrix (A+ … F) และทิศ Long/Short แยกบล็อกสัญญาณ LONG กับ BEAR · ตัวเลือก «เขียว 2 วัน → Long ทุกเกรด» เปิด Long เมื่อสัญญาณ LONG + เขียว 2 วัน + Funding > −0.10% โดยไม่สน matrix ต่อเกรด · เมื่อสัญญาณตรงเกรดที่ตั้งไว้ สั่ง Market ทันที · กลยุทธ์ TP/SL (TP1 partial + SL บังทุน / TP2 / max hold) เหมือน Reversal รองรับทั้ง LONG และ SHORT · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
+  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — สัญญาณ LONG → Long · BEAR → Short (market) ตามทิศสัญญาณ · Action Plan = Monitor จาก matrix 4h จะไม่เปิด · margin scale ตาม Action Plan (Full/Standard/Light) · กลยุทธ์ TP/SL (TP1 partial + SL บังทุน / TP2 / max hold) เหมือน Reversal · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
@@ -1087,13 +1081,8 @@ export function tradingViewSparkAutoTradePayloadFromRow(row: TradingViewMexcUser
 export function tradingViewSnowballAutoTradePayloadFromRow(
   row: TradingViewMexcUserSettings
 ): Record<string, unknown> {
-  const { rulesLong, rulesBear } = effectiveSnowballAutoTradeRules(row);
   return {
     enabled: row.snowballAutoTradeEnabled ?? false,
-    direction: row.snowballAutoTradeDirection ?? "both",
-    rulesLong,
-    rulesBear,
-    green2DaysLongAllGrades: row.snowballAutoTradeGreen2DaysLongAllGrades ?? false,
     marginUsdt: row.snowballAutoTradeMarginUsdt ?? null,
     leverage: row.snowballAutoTradeLeverage ?? null,
     tpSlEnabled: row.snowballAutoTradeTpSlEnabled ?? true,
@@ -1352,14 +1341,6 @@ function parseSparkAutoTradeNested(
   return { ok: true, patch: patchPart };
 }
 
-function normalizeSnowballDirection(raw: unknown): SnowballAutoTradeDirection | null {
-  const k = typeof raw === "string" ? raw.trim().toLowerCase().replace(/-/g, "_") : "";
-  if (k === "" || k === "both") return "both";
-  if (k === "long_only" || k === "longonly") return "long_only";
-  if (k === "short_only" || k === "shortonly") return "short_only";
-  return null;
-}
-
 function parseSnowballAutoTradeNested(
   raw: unknown
 ):
@@ -1372,18 +1353,6 @@ function parseSnowballAutoTradeNested(
   let enabled = false;
   if (typeof o.enabled === "boolean") enabled = o.enabled;
   else if (o.enabled === "1" || o.enabled === 1 || o.enabled === "true") enabled = true;
-
-  const dir = normalizeSnowballDirection(o.direction);
-  const hasRulesLongKey = "rulesLong" in o;
-  const hasRulesBearKey = "rulesBear" in o;
-  const rulesLong = hasRulesLongKey
-    ? sanitizeSnowballAutoTradeGradeRulesMap(o.rulesLong) ?? null
-    : undefined;
-  const rulesBear = hasRulesBearKey
-    ? sanitizeSnowballAutoTradeGradeRulesMap(o.rulesBear) ?? null
-    : undefined;
-  const hasRules = hasRulesLongKey || hasRulesBearKey;
-  if (!hasRules && !dir) return { ok: false, error: "snowball_direction_invalid" };
 
   const numOrEmpty = (
     key: string
@@ -1434,32 +1403,14 @@ function parseSnowballAutoTradeNested(
   else if (o.tpSlEnabled === "1" || o.tpSlEnabled === 1 || o.tpSlEnabled === "true") tpSlEnabled = true;
   else if (o.tpSlEnabled === "0" || o.tpSlEnabled === 0 || o.tpSlEnabled === "false") tpSlEnabled = false;
 
-  let green2DaysLongAllGrades: boolean | undefined;
-  if ("green2DaysLongAllGrades" in o) {
-    if (typeof o.green2DaysLongAllGrades === "boolean") green2DaysLongAllGrades = o.green2DaysLongAllGrades;
-    else if (
-      o.green2DaysLongAllGrades === "1" ||
-      o.green2DaysLongAllGrades === 1 ||
-      o.green2DaysLongAllGrades === "true"
-    ) {
-      green2DaysLongAllGrades = true;
-    } else if (
-      o.green2DaysLongAllGrades === "0" ||
-      o.green2DaysLongAllGrades === 0 ||
-      o.green2DaysLongAllGrades === "false"
-    ) {
-      green2DaysLongAllGrades = false;
-    }
-  }
-
   const patchPart: Omit<
     SaveTradingViewMexcInput,
     "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
   > = {
     snowballAutoTradeEnabled: enabled,
-    ...(dir ? { snowballAutoTradeDirection: dir } : {}),
-    ...(hasRulesLongKey ? { snowballAutoTradeRulesLong: rulesLong } : {}),
-    ...(hasRulesBearKey ? { snowballAutoTradeRulesBear: rulesBear } : {}),
+    snowballAutoTradeRulesLong: null,
+    snowballAutoTradeRulesBear: null,
+    snowballAutoTradeGreen2DaysLongAllGrades: false,
     snowballAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
     snowballAutoTradeLeverage: mLev.v as number | null | undefined,
     snowballAutoTradeQuickTpEnabled: false,
@@ -1470,9 +1421,6 @@ function parseSnowballAutoTradeNested(
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
   };
   if (tpSlEnabled !== undefined) patchPart.snowballAutoTradeTpSlEnabled = tpSlEnabled;
-  if (green2DaysLongAllGrades !== undefined) {
-    patchPart.snowballAutoTradeGreen2DaysLongAllGrades = green2DaysLongAllGrades;
-  }
   return { ok: true, patch: patchPart };
 }
 
