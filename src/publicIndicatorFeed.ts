@@ -3607,12 +3607,13 @@ export async function runPublicIndicatorFeedInternal(
             }
             let longMktCtx: Awaited<ReturnType<typeof fetchSnowballAlertMarketContext>> | null =
               longMktCtxForAlert;
-            if (!intrabar && !skipSnowballTgForPending) {
+            const runLongAutoOpenNow = !intrabar && (!skipSnowballTgForPending || longQualitySignal);
+            if (runLongAutoOpenNow) {
               try {
                 const longActionPlan =
                   gradeResolution.kind === "grade" ? gradeResolution.actionPlan ?? null : null;
                 let marginScale: number | undefined;
-                if (longActionPlan != null) {
+                if (!longQualitySignal && longActionPlan != null) {
                   const apm = snowballActionPlanMarginScale(longActionPlan);
                   if (apm !== 1.0) marginScale = apm;
                 } else if (longBreakoutGrade === "b_plus" && sustainedBuyingPressure) {
@@ -3637,12 +3638,17 @@ export async function runPublicIndicatorFeedInternal(
                       : null,
                   vol: vE!,
                   volSma: vsE!,
-                  actionPlan: longActionPlan,
+                  actionPlan: longQualitySignal ? null : longActionPlan,
                   greenDaysBeforeSignal: longGreenDaysForAlert,
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
                   ...(marginScale != null ? { marginScale } : {}),
                 });
+                if (longQualitySignal && skipSnowballTgForPending) {
+                  console.info(
+                    `[indicatorPublicFeed] Snowball LONG auto-open at alert (✨ Quality Signal, pending confirm) ${symbol} ${snowTf}`,
+                  );
+                }
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open", symbol, e);
               }

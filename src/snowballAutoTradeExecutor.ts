@@ -131,14 +131,15 @@ function resolveSnowballAutoOpenSide(
   });
   const qssMatch = snowballAutoOpenMatchesQualityShortSignal(input);
 
+  /** Quality Signal ชนะ Sunday / Quality Short — ต้อง Long เมื่อตรงเกณฑ์ */
+  if (qsOn && qsMatch) {
+    return "long";
+  }
   if (row.snowballAutoTradeSundayAllShortEnabled === true && bkkIsSundayNow()) {
     return "short";
   }
   if (qssOn && qssMatch) {
     return "short";
-  }
-  if (qsOn && qsMatch) {
-    return "long";
   }
   if (qsOn || qssOn) {
     return null;
@@ -249,7 +250,15 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   confirmVolVsSma?: number | null;
 }): Promise<{ usersAttempted: number; usersSucceeded: number }> {
   if (!isSnowballAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
-  if (input.actionPlan === "monitor") return { usersAttempted: 0, usersSucceeded: 0 };
+
+  const qualitySignalMatch = snowballMatchesQualitySignal({
+    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
+    fundingRate: input.fundingRate ?? null,
+  });
+
+  if (input.actionPlan === "monitor" && !qualitySignalMatch) {
+    return { usersAttempted: 0, usersSucceeded: 0 };
+  }
 
   const sym = input.contractSymbol.trim();
   if (!sym) return { usersAttempted: 0, usersSucceeded: 0 };
