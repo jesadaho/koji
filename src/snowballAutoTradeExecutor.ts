@@ -14,6 +14,7 @@ import {
   type SnowballAutoTradeAlertGradeInput,
 } from "./snowballAutoTradeGradeRules";
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
+import { placeTpPlanOrdersAfterOpen } from "./autoTradeTpSlPlanOrders";
 import { resolveSnowballTpSlPlanFromRow } from "./snowballAutoTradeTpSlPlan";
 import {
   bkkIsSundayNow,
@@ -156,16 +157,24 @@ function hasActiveUsdtPosition(
 }
 
 /** ราคาเข้าเฉลี่ยจาก MEXC — ใช้คำนวณ Quick TP ให้ใกล้ UI จริง (ไม่ใช่แค่ close Binance) */
+function findMexcOpenPosition(
+  positions: OpenPositionRow[],
+  contractSymbol: string,
+  side: SnowballAutoTradeSide,
+): OpenPositionRow | undefined {
+  const sym = contractSymbol.trim();
+  const wantType = side === "long" ? 1 : 2;
+  return positions.find(
+    (x) => x.symbol === sym && x.state === 1 && Number(x.holdVol) > 0 && x.positionType === wantType,
+  );
+}
+
 function readMexcAvgEntryPrice(
   positions: OpenPositionRow[],
   contractSymbol: string,
   side: SnowballAutoTradeSide,
 ): number | null {
-  const sym = contractSymbol.trim();
-  const wantType = side === "long" ? 1 : 2;
-  const p = positions.find(
-    (x) => x.symbol === sym && x.state === 1 && Number(x.holdVol) > 0 && x.positionType === wantType,
-  );
+  const p = findMexcOpenPosition(positions, contractSymbol, side);
   if (!p) return null;
   const o = Number(p.openAvgPrice);
   if (Number.isFinite(o) && o > 0) return o;
@@ -463,8 +472,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       }
 
       let mexcAvgEntry: number | null = null;
+      let posAfterOpen: OpenPositionRow | undefined;
       try {
         const posAfter = await getOpenPositions(creds, sym);
+        posAfterOpen = findMexcOpenPosition(posAfter, sym, side);
         mexcAvgEntry = readMexcAvgEntryPrice(posAfter, sym, side);
       } catch (e) {
         console.error("[snowballAutoTrade] getOpenPositions after open", sym, userId, e);
@@ -476,6 +487,56 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         mexcAvgEntry != null &&
         Number.isFinite(mexcAvgEntry) &&
         mexcAvgEntry > 0;
+
+      let exchangeTpLines: string[] = [];
+      let exchangeTpWarnings: string[] = [];
+      let tpSlPlanForState: {
+        enabled: boolean;
+        tp1PricePct: number;
+        tp1PartialPct: number;
+        tp2PricePct: number;
+        maxHoldHours: number;
+        tp1PlanOrderId?: string;
+        tp2PlanOrderId?: string;
+        initialHoldVol?: number;
+        tp1PlanVol?: number;
+      } | null = null;
+
+      if (trackedTpSl) {
+        tpSlPlanForState = {
+          enabled: true,
+          tp1PricePct: tpPlan.tp1PricePct,
+          tp1PartialPct: tpPlan.tp1PartialPct,
+          tp2PricePct: tpPlan.tp2PricePct,
+          maxHoldHours: tpPlan.maxHoldHours,
+        };
+        if (posAfterOpen) {
+          try {
+            const placed = await placeTpPlanOrdersAfterOpen(creds, {
+              contractSymbol: sym,
+              position: posAfterOpen,
+              entry: mexcAvgEntry!,
+              side,
+              tp1PricePct: tpPlan.tp1PricePct,
+              tp1PartialPct: tpPlan.tp1PartialPct,
+              tp2PricePct: tpPlan.tp2PricePct,
+            });
+            if (placed) {
+              exchangeTpLines = placed.notifyLines;
+              exchangeTpWarnings = placed.warnings;
+              if (placed.tp1PlanOrderId) tpSlPlanForState.tp1PlanOrderId = placed.tp1PlanOrderId;
+              if (placed.tp2PlanOrderId) tpSlPlanForState.tp2PlanOrderId = placed.tp2PlanOrderId;
+              tpSlPlanForState.initialHoldVol = placed.initialHoldVol;
+              tpSlPlanForState.tp1PlanVol = placed.tp1Vol;
+            }
+          } catch (e) {
+            console.error("[snowballAutoTrade] placeTpPlanOrdersAfterOpen", sym, userId, e);
+            exchangeTpWarnings.push(
+              `วาง plan TP ไม่สำเร็จ: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200),
+            );
+          }
+        }
+      }
 
       state = withRecordedSnowballSuccessfulOpen(
         state,
@@ -492,15 +553,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           signalBarLow: input.signalBarLow,
           svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
           leverage: Math.floor(leverage),
-          tpSlPlan: trackedTpSl
-            ? {
-                enabled: true,
-                tp1PricePct: tpPlan.tp1PricePct,
-                tp1PartialPct: tpPlan.tp1PartialPct,
-                tp2PricePct: tpPlan.tp2PricePct,
-                maxHoldHours: tpPlan.maxHoldHours,
-              }
-            : null,
+          tpSlPlan: tpSlPlanForState,
         },
         dayKey,
       );
@@ -541,6 +594,11 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           ? trackedTpSl
             ? [
                 `กลยุทธ์ TP/SL: TP1 ${tpPlan.tp1PricePct}% ปิด ${tpPlan.tp1PartialPct}% · TP2 ${tpPlan.tp2PricePct}% ปิดทั้งหมด`,
+                exchangeTpLines.length
+                  ? "Plan TP บน MEXC (วางทันทีหลังเปิด):"
+                  : "Plan TP: ใช้ tick ปิด market (วาง plan ไม่สำเร็จหรือยังไม่วาง)",
+                ...exchangeTpLines,
+                ...exchangeTpWarnings.map((w) => `⚠️ ${w}`),
                 `ครบ ${tpPlan.maxHoldHours} ชม.: ปิดทั้งหมด (force) · SL บังทุนหลัง TP1`,
               ]
             : ["⚠️ กลยุทธ์ TP/SL เปิดอยู่แต่ดึงราคาเข้า MEXC ไม่ได้ — จะไม่ track TP/SL รอบนี้"]

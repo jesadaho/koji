@@ -1,5 +1,5 @@
+import { cancelActiveTpSlPlanOrders, tp1PlanLikelyFilled } from "./autoTradeTpSlPlanOrders";
 import {
-  cancelPlanOrders,
   closeAllOpenForSymbol,
   createPartialCloseOrder,
   fetchContractDetailPublic,
@@ -70,13 +70,7 @@ async function handlePositionDisappeared(args: {
   active: ReversalAutoTradeActive;
 }): Promise<void> {
   const { userId, creds, active } = args;
-  if (active.slPlanOrderId) {
-    try {
-      await cancelPlanOrders(creds, [active.slPlanOrderId]);
-    } catch (e) {
-      console.error("[reversalTpSlTick] cancel plan order on disappeared", active.contractSymbol, e);
-    }
-  }
+  await cancelActiveTpSlPlanOrders(creds, active);
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
     "ℹ️ ตำแหน่งถูกปิดภายนอกระบบ (อาจจาก SL บังทุน หรือปิดมือ)",
@@ -88,13 +82,7 @@ async function handlePositionDisappeared(args: {
 
 async function handleMaxHoldForceClose(ctx: TpSlContext): Promise<{ closed: boolean }> {
   const { userId, creds, active, markPrice } = ctx;
-  if (active.slPlanOrderId) {
-    try {
-      await cancelPlanOrders(creds, [active.slPlanOrderId]);
-    } catch (e) {
-      console.error("[reversalTpSlTick] cancel plan order on 48h", active.contractSymbol, e);
-    }
-  }
+  await cancelActiveTpSlPlanOrders(creds, active);
   const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
   if (!r.success) {
     await notifyLines(userId, [
@@ -119,13 +107,7 @@ async function handleMaxHoldForceClose(ctx: TpSlContext): Promise<{ closed: bool
 
 async function handleTp2Hit(ctx: TpSlContext): Promise<{ closed: boolean }> {
   const { userId, creds, active, markPrice } = ctx;
-  if (active.slPlanOrderId) {
-    try {
-      await cancelPlanOrders(creds, [active.slPlanOrderId]);
-    } catch (e) {
-      console.error("[reversalTpSlTick] cancel plan order on TP2", active.contractSymbol, e);
-    }
-  }
+  await cancelActiveTpSlPlanOrders(creds, active);
   const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
   const drop = pricePctDrop(active.side, active.mexcAvgEntryPrice, markPrice);
   if (!r.success) {
@@ -145,6 +127,38 @@ async function handleTp2Hit(ctx: TpSlContext): Promise<{ closed: boolean }> {
     `Entry: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)}`,
   ]);
   return { closed: true };
+}
+
+async function handleTp1BreakevenSlOnly(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrderId?: string }> {
+  const { userId, creds, active, position, markPrice, positionMode } = ctx;
+  const drop = pricePctDrop(active.side, active.mexcAvgEntryPrice, markPrice);
+
+  if (!(position.holdVol > 0)) {
+    return { tp1Done: true };
+  }
+
+  const slRes = await placePlanOrderStopLoss(creds, {
+    contractSymbol: active.contractSymbol,
+    position,
+    triggerPrice: active.mexcAvgEntryPrice,
+    positionMode,
+  });
+  const slOrderId =
+    slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
+      ? String((slRes.data as { orderId: unknown }).orderId)
+      : undefined;
+
+  await notifyLines(userId, [
+    "Koji — Reversal TP/SL (MEXC)",
+    `🎯 Plan TP1 execute แล้ว — ราคาเคลื่อน ${drop.toFixed(2)}% (≥ ${active.tp1PricePct}%)`,
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    `Entry MEXC: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)} · holdVol คงเหลือ: ${position.holdVol}`,
+    slRes.success
+      ? `🛡️ ตั้ง SL บังทุน @ ${fmtPrice(active.mexcAvgEntryPrice)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
+      : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — กรุณาตั้งเองที่ MEXC`,
+  ]);
+
+  return { tp1Done: true, slOrderId };
 }
 
 async function handleTp1Hit(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrderId?: string }> {
@@ -291,8 +305,20 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           continue;
         }
 
+        const exchangeTp1 = Boolean(a.tp1PlanOrderId?.trim());
+        const exchangeTp2 = Boolean(a.tp2PlanOrderId?.trim());
+
+        if (exchangeTp1 && !a.tp1Done && tp1PlanLikelyFilled(a.initialHoldVol, a.tp1PlanVol, pos.holdVol)) {
+          const r = await handleTp1BreakevenSlOnly(ctx);
+          if (r.tp1Done) {
+            state = withReversalTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);
+            actionsCount += 1;
+          }
+          continue;
+        }
+
         const drop = pricePctDrop(a.side, a.mexcAvgEntryPrice, mark);
-        if (Number.isFinite(drop) && drop >= a.tp2PricePct) {
+        if (!exchangeTp2 && Number.isFinite(drop) && drop >= a.tp2PricePct) {
           const r = await handleTp2Hit(ctx);
           if (r.closed) {
             state = withReversalActiveRemoved(state, userId, a.contractSymbol, a.side);
@@ -301,7 +327,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           continue;
         }
 
-        if (!a.tp1Done && Number.isFinite(drop) && drop >= a.tp1PricePct) {
+        if (!exchangeTp1 && !a.tp1Done && Number.isFinite(drop) && drop >= a.tp1PricePct) {
           const r = await handleTp1Hit(ctx);
           if (r.tp1Done) {
             state = withReversalTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);

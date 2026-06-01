@@ -1,5 +1,5 @@
+import { cancelActiveTpSlPlanOrders, tp1PlanLikelyFilled } from "./autoTradeTpSlPlanOrders";
 import {
-  cancelPlanOrders,
   closeAllOpenForSymbol,
   createPartialCloseOrder,
   fetchContractDetailPublic,
@@ -104,13 +104,7 @@ async function handlePositionDisappeared(args: {
   active: SnowballAutoTradeActive;
 }): Promise<void> {
   const { userId, creds, active } = args;
-  if (active.slPlanOrderId) {
-    try {
-      await cancelPlanOrders(creds, [active.slPlanOrderId]);
-    } catch (e) {
-      console.error("[snowballTpSlTick] cancel plan order on disappeared", active.contractSymbol, e);
-    }
-  }
+  await cancelActiveTpSlPlanOrders(creds, active);
   await notifyLines(userId, [
     "Koji — Snowball TP/SL (MEXC)",
     "ℹ️ ตำแหน่งถูกปิดภายนอกระบบ (อาจจาก SL บังทุน หรือปิดมือ)",
@@ -122,13 +116,7 @@ async function handlePositionDisappeared(args: {
 
 async function handleMaxHoldForceClose(ctx: TpSlContext): Promise<{ closed: boolean }> {
   const { userId, creds, active, markPrice, entry } = ctx;
-  if (active.slPlanOrderId) {
-    try {
-      await cancelPlanOrders(creds, [active.slPlanOrderId]);
-    } catch (e) {
-      console.error("[snowballTpSlTick] cancel plan order on max hold", active.contractSymbol, e);
-    }
-  }
+  await cancelActiveTpSlPlanOrders(creds, active);
   const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
   const maxH = active.maxHoldHours ?? 48;
   if (!r.success) {
@@ -154,13 +142,7 @@ async function handleMaxHoldForceClose(ctx: TpSlContext): Promise<{ closed: bool
 
 async function handleTp2Hit(ctx: TpSlContext): Promise<{ closed: boolean }> {
   const { userId, creds, active, markPrice, entry } = ctx;
-  if (active.slPlanOrderId) {
-    try {
-      await cancelPlanOrders(creds, [active.slPlanOrderId]);
-    } catch (e) {
-      console.error("[snowballTpSlTick] cancel plan order on TP2", active.contractSymbol, e);
-    }
-  }
+  await cancelActiveTpSlPlanOrders(creds, active);
   const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
   const move = pricePctFavorable(active.side, entry, markPrice);
   const tp2 = active.tp2PricePct ?? 25;
@@ -181,6 +163,40 @@ async function handleTp2Hit(ctx: TpSlContext): Promise<{ closed: boolean }> {
     `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)}`,
   ]);
   return { closed: true };
+}
+
+/** หลัง plan TP1 execute บน MEXC — ตั้ง SL บังทุนที่เหลือ (ไม่ partial close ซ้ำ) */
+async function handleTp1BreakevenSlOnly(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrderId?: string }> {
+  const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
+  const move = pricePctFavorable(active.side, entry, markPrice);
+  const tp1 = active.tp1PricePct ?? 10;
+
+  if (!(position.holdVol > 0)) {
+    return { tp1Done: true };
+  }
+
+  const slRes = await placePlanOrderStopLoss(creds, {
+    contractSymbol: active.contractSymbol,
+    position,
+    triggerPrice: entry,
+    positionMode,
+  });
+  const slOrderId =
+    slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
+      ? String((slRes.data as { orderId: unknown }).orderId)
+      : undefined;
+
+  await notifyLines(userId, [
+    "Koji — Snowball TP/SL (MEXC)",
+    `🎯 Plan TP1 execute แล้ว — ราคาเคลื่อน ${move.toFixed(2)}% (≥ ${tp1}%)`,
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    `Entry MEXC: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · holdVol คงเหลือ: ${position.holdVol}`,
+    slRes.success
+      ? `🛡️ ตั้ง SL บังทุน @ ${fmtPrice(entry)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
+      : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — กรุณาตั้งเองที่ MEXC`,
+  ]);
+
+  return { tp1Done: true, slOrderId };
 }
 
 async function handleTp1Hit(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrderId?: string }> {
@@ -334,9 +350,21 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
           continue;
         }
 
+        const exchangeTp1 = Boolean(a.tp1PlanOrderId?.trim());
+        const exchangeTp2 = Boolean(a.tp2PlanOrderId?.trim());
+
+        if (exchangeTp1 && !a.tp1Done && tp1PlanLikelyFilled(a.initialHoldVol, a.tp1PlanVol, pos.holdVol)) {
+          const r = await handleTp1BreakevenSlOnly(ctx);
+          if (r.tp1Done) {
+            state = withSnowballTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);
+            actionsCount += 1;
+          }
+          continue;
+        }
+
         const move = pricePctFavorable(a.side, entry, mark);
         const tp2 = a.tp2PricePct ?? 25;
-        if (Number.isFinite(move) && move >= tp2) {
+        if (!exchangeTp2 && Number.isFinite(move) && move >= tp2) {
           const r = await handleTp2Hit(ctx);
           if (r.closed) {
             state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
@@ -346,7 +374,7 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
         }
 
         const tp1 = a.tp1PricePct ?? 10;
-        if (!a.tp1Done && Number.isFinite(move) && move >= tp1) {
+        if (!exchangeTp1 && !a.tp1Done && Number.isFinite(move) && move >= tp1) {
           const r = await handleTp1Hit(ctx);
           if (r.tp1Done) {
             state = withSnowballTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);

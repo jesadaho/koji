@@ -742,6 +742,61 @@ export async function placePlanOrderStopLoss(
 }
 
 /**
+ * วาง plan/trigger order ปิดทำกำไร (TP):
+ *   - LONG  → close side 4; triggerType 1 (ราคา ≥ triggerPrice)
+ *   - SHORT → close side 2; triggerType 2 (ราคา ≤ triggerPrice)
+ */
+export async function placePlanOrderTakeProfit(
+  creds: MexcCredentials,
+  p: {
+    contractSymbol: string;
+    position: OpenPositionRow;
+    vol: number;
+    triggerPrice: number;
+    positionMode: 1 | 2;
+  }
+): Promise<MexcOk<PlanOrderCreateData>> {
+  const { position } = p;
+  if (!(p.triggerPrice > 0) || !Number.isFinite(p.triggerPrice)) {
+    return { success: false, code: -1, message: "triggerPrice ไม่ถูกต้อง" };
+  }
+  if (!(p.vol > 0) || !Number.isFinite(p.vol)) {
+    return { success: false, code: -1, message: "vol ไม่ถูกต้อง" };
+  }
+  if (p.vol > position.holdVol) {
+    return { success: false, code: -1, message: "vol > holdVol" };
+  }
+  const isShort = position.positionType === 2;
+  const isLong = position.positionType === 1;
+  if (!isShort && !isLong) {
+    return { success: false, code: -1, message: "positionType ไม่รองรับ" };
+  }
+  const side = isShort ? 2 : 4;
+  const triggerType = isShort ? 2 : 1;
+  const openType = position.openType === 2 ? 2 : 1;
+  const body: Record<string, unknown> = {
+    symbol: p.contractSymbol.trim(),
+    vol: p.vol,
+    side,
+    openType,
+    triggerPrice: p.triggerPrice,
+    triggerType,
+    executeCycle: 2,
+    orderType: 5,
+    trend: 1,
+    price: p.triggerPrice,
+    positionMode: p.positionMode,
+  };
+  if (position.leverage != null && Number.isFinite(position.leverage)) {
+    body.leverage = position.leverage;
+  }
+  if (p.positionMode === 2) {
+    body.reduceOnly = true;
+  }
+  return mexcPrivatePost<PlanOrderCreateData>(creds, "/api/v1/private/planorder/place", body);
+}
+
+/**
  * ยกเลิก plan/trigger order ตาม orderId list (MEXC `/api/v1/private/planorder/cancel`)
  * ไม่ throw — fail แบบ silent (เก็บผลใน return)
  */

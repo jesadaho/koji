@@ -44,6 +44,10 @@ export type ReversalAutoTradeActive = {
   maxHoldHours: number;
   /** orderId ของ plan SL ที่ตั้งหลัง TP1 — ใช้ cancel ตอน TP2/48h */
   slPlanOrderId?: string;
+  tp1PlanOrderId?: string;
+  tp2PlanOrderId?: string;
+  initialHoldVol?: number;
+  tp1PlanVol?: number;
 };
 
 export type ReversalAutoTradePerUserState = {
@@ -114,6 +118,19 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
         : 48;
     const slId =
       typeof o.slPlanOrderId === "string" && o.slPlanOrderId.trim() ? o.slPlanOrderId.trim() : undefined;
+    const tp1Plan =
+      typeof o.tp1PlanOrderId === "string" && o.tp1PlanOrderId.trim() ? o.tp1PlanOrderId.trim() : undefined;
+    const tp2Plan =
+      typeof o.tp2PlanOrderId === "string" && o.tp2PlanOrderId.trim() ? o.tp2PlanOrderId.trim() : undefined;
+    const initHold =
+      typeof o.initialHoldVol === "number" && Number.isFinite(o.initialHoldVol) && o.initialHoldVol > 0
+        ? o.initialHoldVol
+        : undefined;
+    const tp1PlanVolRaw = (o as { tp1PlanVol?: unknown }).tp1PlanVol;
+    const tp1PlanVol =
+      typeof tp1PlanVolRaw === "number" && Number.isFinite(tp1PlanVolRaw) && tp1PlanVolRaw > 0
+        ? tp1PlanVolRaw
+        : undefined;
     if (
       !sym ||
       !binanceSymbol ||
@@ -141,6 +158,10 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
       maxHoldHours: maxH,
     };
     if (slId) row.slPlanOrderId = slId;
+    if (tp1Plan) row.tp1PlanOrderId = tp1Plan;
+    if (tp2Plan) row.tp2PlanOrderId = tp2Plan;
+    if (initHold != null) row.initialHoldVol = initHold;
+    if (tp1PlanVol != null) row.tp1PlanVol = tp1PlanVol;
     out.push(row);
   }
   const bySym = new Map<string, ReversalAutoTradeActive>();
@@ -280,6 +301,10 @@ export function withReversalActiveOpen(
     tp1PartialPct: number;
     tp2PricePct: number;
     maxHoldHours: number;
+    tp1PlanOrderId?: string;
+    tp2PlanOrderId?: string;
+    initialHoldVol?: number;
+    tp1PlanVol?: number;
   },
   dayKey: string
 ): ReversalAutoTradeState {
@@ -303,6 +328,10 @@ export function withReversalActiveOpen(
     tp2PricePct: p.tp2PricePct > 0 ? p.tp2PricePct : 25,
     maxHoldHours: p.maxHoldHours > 0 ? p.maxHoldHours : 48,
   };
+  if (p.tp1PlanOrderId?.trim()) row.tp1PlanOrderId = p.tp1PlanOrderId.trim();
+  if (p.tp2PlanOrderId?.trim()) row.tp2PlanOrderId = p.tp2PlanOrderId.trim();
+  if (typeof p.initialHoldVol === "number" && p.initialHoldVol > 0) row.initialHoldVol = p.initialHoldVol;
+  if (typeof p.tp1PlanVol === "number" && p.tp1PlanVol > 0) row.tp1PlanVol = p.tp1PlanVol;
   activeNext.push(row);
   return {
     ...state,

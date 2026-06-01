@@ -68,6 +68,11 @@ export type SnowballAutoTradeActive = {
   tp2PricePct?: number;
   maxHoldHours?: number;
   slPlanOrderId?: string;
+  /** plan TP บน MEXC — วางทันทีหลัง open */
+  tp1PlanOrderId?: string;
+  tp2PlanOrderId?: string;
+  initialHoldVol?: number;
+  tp1PlanVol?: number;
 };
 
 export type SnowballAutoTradePerUserState = {
@@ -135,6 +140,19 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
     const maxH = typeof o.maxHoldHours === "number" && Number.isFinite(o.maxHoldHours) ? o.maxHoldHours : NaN;
     const slPlan =
       typeof o.slPlanOrderId === "string" && o.slPlanOrderId.trim() ? o.slPlanOrderId.trim() : undefined;
+    const tp1Plan =
+      typeof o.tp1PlanOrderId === "string" && o.tp1PlanOrderId.trim() ? o.tp1PlanOrderId.trim() : undefined;
+    const tp2Plan =
+      typeof o.tp2PlanOrderId === "string" && o.tp2PlanOrderId.trim() ? o.tp2PlanOrderId.trim() : undefined;
+    const initHold =
+      typeof o.initialHoldVol === "number" && Number.isFinite(o.initialHoldVol) && o.initialHoldVol > 0
+        ? o.initialHoldVol
+        : undefined;
+    const tp1PlanVolRaw = (o as { tp1PlanVol?: unknown }).tp1PlanVol;
+    const tp1PlanVol =
+      typeof tp1PlanVolRaw === "number" && Number.isFinite(tp1PlanVolRaw) && tp1PlanVolRaw > 0
+        ? tp1PlanVolRaw
+        : undefined;
     if (
       !sym ||
       !binanceSymbol ||
@@ -172,6 +190,10 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
       row.tp2PricePct = Number.isFinite(tp2Pct) && tp2Pct > 0 ? tp2Pct : 25;
       row.maxHoldHours = Number.isFinite(maxH) && maxH > 0 ? maxH : 48;
       if (slPlan) row.slPlanOrderId = slPlan;
+      if (tp1Plan) row.tp1PlanOrderId = tp1Plan;
+      if (tp2Plan) row.tp2PlanOrderId = tp2Plan;
+      if (initHold != null) row.initialHoldVol = initHold;
+      if (tp1PlanVol != null) row.tp1PlanVol = tp1PlanVol;
     } else if (qEn) {
       row.quickTpEnabled = true;
       row.quickTpRoiPct = Number.isFinite(qRoi) && qRoi > 0 ? qRoi : 30;
@@ -300,6 +322,10 @@ export function withRecordedSnowballSuccessfulOpen(
       tp1PartialPct: number;
       tp2PricePct: number;
       maxHoldHours: number;
+      tp1PlanOrderId?: string;
+      tp2PlanOrderId?: string;
+      initialHoldVol?: number;
+      tp1PlanVol?: number;
     } | null;
     /** legacy Quick TP เมื่อ tpSlPlan ปิด */
     quickTpEnabled?: boolean;
@@ -341,6 +367,14 @@ export function withRecordedSnowballSuccessfulOpen(
     activeRow.tp1PartialPct = plan.tp1PartialPct;
     activeRow.tp2PricePct = plan.tp2PricePct;
     activeRow.maxHoldHours = plan.maxHoldHours;
+    if (plan.tp1PlanOrderId?.trim()) activeRow.tp1PlanOrderId = plan.tp1PlanOrderId.trim();
+    if (plan.tp2PlanOrderId?.trim()) activeRow.tp2PlanOrderId = plan.tp2PlanOrderId.trim();
+    if (typeof plan.initialHoldVol === "number" && plan.initialHoldVol > 0) {
+      activeRow.initialHoldVol = plan.initialHoldVol;
+    }
+    if (typeof plan.tp1PlanVol === "number" && plan.tp1PlanVol > 0) {
+      activeRow.tp1PlanVol = plan.tp1PlanVol;
+    }
   } else if (p.quickTpEnabled) {
     activeRow.quickTpEnabled = true;
     activeRow.quickTpRoiPct = (p.quickTpRoiPct ?? 0) > 0 ? (p.quickTpRoiPct as number) : 30;

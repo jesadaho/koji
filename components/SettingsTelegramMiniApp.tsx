@@ -1126,14 +1126,14 @@ export default function SettingsTelegramMiniApp() {
         </div>
 
         <p className="sub" style={{ marginTop: "1.1rem", fontWeight: 600 }}>
-          กลยุทธ์ TP/SL (รัน cron tick หลังเปิด Market)
+          กลยุทธ์ TP/SL (วาง plan TP บน MEXC ทันทีหลังเปิด + tick สำหรับ SL/max hold)
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
           <li>
-            <strong>TP1</strong>: ราคาเคลื่อนในทิศกำไร ≥ <code>TP1 %</code> → ปิด <code>TP1 ปิด %</code> ของ vol และตั้ง MEXC SL บังทุน @ entry (LONG/SHORT)
+            <strong>TP1 / TP2</strong>: วาง plan order บน MEXC ทันทีหลังเปิด (TP1 ปิด <code>TP1 ปิด %</code> @ <code>TP1 %</code> · TP2 ปิดที่เหลือ @ <code>TP2 %</code>)
           </li>
           <li>
-            <strong>TP2</strong>: เคลื่อน ≥ <code>TP2 %</code> → ปิดทั้งหมด + ยกเลิก SL plan
+            <strong>หลัง TP1 execute</strong>: tick ตั้ง MEXC SL บังทุน @ entry (LONG/SHORT)
           </li>
           <li>
             <strong>ครบ {snowMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force market) + ยกเลิก SL plan
@@ -1339,11 +1339,11 @@ export default function SettingsTelegramMiniApp() {
         </div>
 
         <p className="sub" style={{ marginTop: "1.1rem", fontWeight: 600 }}>
-          กลยุทธ์ TP/SL (รัน cron tick หลังเปิด Market)
+          กลยุทธ์ TP/SL (วาง plan TP บน MEXC ทันทีหลัง Market SHORT + tick สำหรับ SL/max hold)
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
-          <li><strong>TP1</strong>: ราคาดิ่ง ≥ <code>TP1 %</code> → ปิด <code>TP1 ปิด %</code> ของ vol และตั้ง MEXC SL บังทุน @ entry</li>
-          <li><strong>TP2</strong>: ราคาดิ่ง ≥ <code>TP2 %</code> → ปิดทั้งหมด + ยกเลิก SL plan</li>
+          <li><strong>TP1 / TP2</strong>: วาง plan order ทันทีหลังเปิด (TP1 @ <code>TP1 %</code> · TP2 @ <code>TP2 %</code>)</li>
+          <li><strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุน @ entry</li>
           <li><strong>ครบ {revMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force market) + ยกเลิก SL plan</li>
           <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
         </ul>
