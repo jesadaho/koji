@@ -240,10 +240,29 @@ export async function fetchAllBinanceUsdmLinearSymbols(): Promise<string[]> {
   }
 }
 
+/** last price จาก Binance USDT-M perp — fallback เมื่อ MEXC ticker ไม่ได้ */
+export async function fetchBinanceUsdmLastPrice(symbol: string): Promise<number | null> {
+  if (!isBinanceIndicatorFapiEnabled()) return null;
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return null;
+  try {
+    const { data } = await axios.get<{ symbol?: string; price?: string }>(`${FAPI}/fapi/v1/ticker/price`, {
+      params: { symbol: sym },
+      timeout: 15_000,
+    });
+    const p = Number(data?.price);
+    return Number.isFinite(p) && p > 0 ? p : null;
+  } catch (e) {
+    if (isBinance451Geo(e)) {
+      logBinance451Once("ticker/price", sym);
+    } else {
+      console.error("[binanceIndicatorKline] ticker/price", sym, axiosBrief(e));
+    }
+    return null;
+  }
+}
+
 /**
- * ดึง Top N สัญญา USDT-M (ยกเว้น BTC/ETH และคู่ stable ที่กำหนด) เรียงจาก quoteVolume สูงสุด
- */
-/** quoteVolume USDT จาก ticker 24hr (Futures USDT-M) */
 export async function fetchBinanceUsdmQuoteVol24h(symbol: string): Promise<number | null> {
   if (!isBinanceIndicatorFapiEnabled()) return null;
   const sym = symbol.trim().toUpperCase();
