@@ -1711,7 +1711,7 @@ function buildSnowballTripleCheckMessage(
     sustainedBuyingPressure?: boolean;
     /** เปิดแท่งที่ใช้แสดงเวลาปิดในหัวข้อ (two-bar = แท่ง confirm) */
     alertClosedBarOpenSec?: number;
-    /** ผ่านเกณฑ์ Quality Signal (เขียว 2 วัน · Funding > −0.10%) */
+    /** ผ่านเกณฑ์ Quality Signal (เขียว 2–3 วัน · Funding > −0.10%) */
     qualitySignal?: boolean;
   }
 ): string {

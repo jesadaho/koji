@@ -1059,7 +1059,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>✨ Quality Signal → Long</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              สัญญาณที่ตรง matrix ✨ Quality Signal — เขียว <strong>2</strong> วัน · Funding &gt; −0.10% — สั่ง <strong>Long</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะ Quality Short / วันอาทิตย์เมื่อตรงเกณฑ์ Long
+              สัญญาณที่ตรง matrix ✨ Quality Signal — เขียว <strong>2–3</strong> วัน · Funding &gt; −0.10% — สั่ง <strong>Long</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะ Quality Short / วันอาทิตย์เมื่อตรงเกณฑ์ Long
             </span>
           </span>
         </label>

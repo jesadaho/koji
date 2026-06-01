@@ -17,7 +17,7 @@ export type SnowballMatrixFilter =
   | "whaleRiders"
   | "highWinrate";
 
-export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = "เขียว 2 วัน · Funding > −0.10%";
+export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = "เขียว 2–3 วัน · Funding > −0.10%";
 
 export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA =
   "เขียว 1 วัน · Vol×SMA > 3× · R% สัญญาณ > 8%";
@@ -126,11 +126,21 @@ function greenDaysBeforeSignalIs(
   return n != null && Number.isFinite(n) && Math.floor(n) === days;
 }
 
-/** ✨ Quality Signal — เขียว 2 วันก่อนสัญญาณ + Funding > −0.10% */
+function greenDaysBeforeSignalIsOneOf(
+  row: Pick<SnowballStatsRow, "greenDaysBeforeSignal">,
+  days: readonly number[],
+): boolean {
+  return days.some((d) => greenDaysBeforeSignalIs(row, d));
+}
+
+/** ✨ Quality Signal — เขียว 2–3 วันก่อนสัญญาณ + Funding > −0.10% */
 export function snowballMatchesQualitySignal(
   row: Pick<SnowballStatsRow, "greenDaysBeforeSignal" | "fundingRate">,
 ): boolean {
-  return greenDaysBeforeSignalIs(row, 2) && snowballFundingRateGtNeg010Pct(row.fundingRate);
+  return (
+    greenDaysBeforeSignalIsOneOf(row, [2, 3]) &&
+    snowballFundingRateGtNeg010Pct(row.fundingRate)
+  );
 }
 
 export function snowballRowMatchesQualitySignalMatrix(row: SnowballStatsRow): boolean {

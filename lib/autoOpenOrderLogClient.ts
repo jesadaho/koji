@@ -77,7 +77,7 @@ const REASON_LABELS: Record<string, string> = {
   mexc_order_rejected: "MEXC ปฏิเสธคำสั่ง",
   ema_or_price_unavailable: "ดึง EMA50/mark ไม่ได้",
   entry_gate: "สัญญาณไม่ผ่าน gate (legacy)",
-  quality_signal_gate: "สัญญาณไม่ผ่าน Quality Signal (เขียว 2 วัน · Funding > −0.10%)",
+  quality_signal_gate: "สัญญาณไม่ผ่าน Quality Signal (เขียว 2–3 วัน · Funding > −0.10%)",
   quality_filter_no_match: "ไม่ตรงเกณฑ์ Quality Signal / Quality Short Signal ที่เปิดไว้",
   network_error: "ข้อผิดพลาดเครือข่าย/MEXC",
   open_success_market: "เปิดสำเร็จ (Market)",
