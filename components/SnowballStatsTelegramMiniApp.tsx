@@ -71,7 +71,7 @@ import {
   marketSentimentSentimentLabel,
   marketSentimentVolChange24hLabel,
 } from "@/lib/marketSentiment";
-import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
+import { copyCsvToClipboard, downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 import { fundingRateVisualClass } from "@/src/marketsFormat";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -582,6 +582,14 @@ export default function SnowballStatsTelegramMiniApp() {
       telegramExportPath: "/api/tma/snowball-stats.csv",
       preferClientCsvInTma: true,
     });
+  }, [rows, strategySizing]);
+
+  const copyCsv = useCallback(async () => {
+    if (rows.length === 0) {
+      window.alert("ยังไม่มีแถวให้คัดลอก");
+      return;
+    }
+    await copyCsvToClipboard(snowballStatsToCsv(rows, strategySizing));
   }, [rows, strategySizing]);
 
   if (phase === "loading") {
@@ -1137,6 +1145,15 @@ export default function SnowballStatsTelegramMiniApp() {
             onClick={() => void exportCsv()}
           >
             Export CSV
+          </button>
+          <button
+            type="button"
+            className="sparkStatsRefreshBtn"
+            disabled={rows.length === 0}
+            onClick={() => void copyCsv()}
+            title="ทางเลือกเมื่อดาวน์โหลดใน Telegram ไม่ขึ้น"
+          >
+            คัดลอก CSV
           </button>
           {isAdmin ? (
             <button
