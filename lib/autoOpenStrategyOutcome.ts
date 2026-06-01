@@ -1,8 +1,20 @@
 import type { AutoOpenOrderLogRow, AutoOpenSource } from "@/lib/autoOpenOrderLogClient";
 import {
+  accumulateAutoOpenPnlUsdt,
+  autoOpenContractSymbolKey,
+  autoOpenFollowUpEligible,
+  emptyAutoOpenPnlUsdtAccumulator,
+  finalizeAutoOpenPnlUsdtBucket,
+  pctVsEntrySide,
+  resolveAutoOpenEntryPrice,
+  type AutoOpenPnlUsdtBucket,
+} from "@/lib/autoOpenFollowUp";
+import {
   formatStatsStrategyProfitDollarAmount,
   strategyProfitUsdtFromMargin,
 } from "@/lib/statsStrategyProfitClient";
+
+export type { AutoOpenPnlUsdtBucket };
 
 /** ผลตามกติกา stats / strategy หลังครบ 48h (ไม่ใช่ success/skipped ของการสั่ง) */
 export type AutoOpenStrategyOutcome =
@@ -186,6 +198,10 @@ export type AutoOpenStrategy48hSummary = {
   decisive: number;
   winratePct: number | null;
   sumUsdt: number | null;
+  /** สุทธิ USDT เฉพาะ outcome สำเร็จ */
+  sumUsdtSuccess: number | null;
+  /** สุทธิ USDT เฉพาะ outcome ล้มเหลว (สมมติ) */
+  sumUsdtFailed: number | null;
 };
 
 function autoOpenStrategy48hEligible(row: AutoOpenOrderLogRow): boolean {
@@ -205,6 +221,10 @@ export function summarizeAutoOpenStrategy48h(
   let pending = 0;
   let sumUsdt = 0;
   let hasUsdt = false;
+  let sumUsdtSuccess = 0;
+  let hasUsdtSuccess = false;
+  let sumUsdtFailed = 0;
+  let hasUsdtFailed = false;
 
   for (const r of rows) {
     if (!autoOpenStrategy48hEligible(r)) continue;
@@ -245,6 +265,13 @@ export function summarizeAutoOpenStrategy48h(
       if (usd != null && Number.isFinite(usd)) {
         sumUsdt += usd;
         hasUsdt = true;
+        if (r.outcome === "failed") {
+          sumUsdtFailed += usd;
+          hasUsdtFailed = true;
+        } else {
+          sumUsdtSuccess += usd;
+          hasUsdtSuccess = true;
+        }
       }
     }
   }
@@ -263,17 +290,95 @@ export function summarizeAutoOpenStrategy48h(
     decisive,
     winratePct,
     sumUsdt: hasUsdt ? sumUsdt : null,
+    sumUsdtSuccess: hasUsdtSuccess ? sumUsdtSuccess : null,
+    sumUsdtFailed: hasUsdtFailed ? sumUsdtFailed : null,
   };
+}
+
+export function formatAutoOpenPnlBucketParts(
+  label: string,
+  bucket: Pick<AutoOpenPnlUsdtBucket, "sumUsdt" | "sumUsdtSuccess" | "sumUsdtFailed">,
+  successTrades: number,
+  failedTrades: number,
+): string {
+  if (bucket.sumUsdt == null) return "";
+  const head = `${label} ${formatStatsStrategyProfitDollarAmount(bucket.sumUsdt)}`;
+  const showSplit =
+    failedTrades > 0 && (bucket.sumUsdtSuccess != null || bucket.sumUsdtFailed != null);
+  if (!showSplit) return ` · ${head}`;
+  const sub: string[] = [];
+  if (successTrades > 0 && bucket.sumUsdtSuccess != null) {
+    sub.push(`สำเร็จ ${formatStatsStrategyProfitDollarAmount(bucket.sumUsdtSuccess)}`);
+  }
+  if (failedTrades > 0 && bucket.sumUsdtFailed != null) {
+    sub.push(`ล้มเหลว(สมมติ) ${formatStatsStrategyProfitDollarAmount(bucket.sumUsdtFailed)}`);
+  }
+  if (sub.length === 0) return ` · ${head}`;
+  return ` · ${head} (${sub.join(" · ")})`;
+}
+
+/** P/L mark สด — ไม้ที่ยังไม่ครบผล@48h */
+export function summarizeAutoOpenUnrealizedPnl(
+  rows: AutoOpenOrderLogRow[],
+  markPrices: Record<string, number>,
+): AutoOpenPnlUsdtBucket {
+  const acc = emptyAutoOpenPnlUsdtAccumulator();
+
+  for (const r of rows) {
+    if (!autoOpenStrategy48hEligible(r)) continue;
+    if (autoOpenStrategyFinalized(r)) continue;
+    if (!autoOpenFollowUpEligible(r)) continue;
+    if (r.side !== "long" && r.side !== "short") continue;
+
+    const entry = resolveAutoOpenEntryPrice(r);
+    if (entry == null) continue;
+    const mark = markPrices[autoOpenContractSymbolKey(r.contractSymbol)];
+    if (mark == null || !Number.isFinite(mark)) continue;
+
+    const pct = pctVsEntrySide(r.side, entry, mark);
+    accumulateAutoOpenPnlUsdt(acc, r, pct);
+  }
+
+  return finalizeAutoOpenPnlUsdtBucket(acc);
+}
+
+function formatAutoOpenClosedNetUsdtParts(summary: AutoOpenStrategy48hSummary): string {
+  return formatAutoOpenPnlBucketParts(
+    "ปิดแล้ว",
+    summary,
+    summary.successTrades,
+    summary.failedTrades,
+  );
+}
+
+function formatAutoOpenUnrealisedNetUsdtParts(bucket: AutoOpenPnlUsdtBucket): string {
+  const core = formatAutoOpenPnlBucketParts(
+    "Unrealised",
+    bucket,
+    bucket.successTrades,
+    bucket.failedTrades,
+  );
+  if (!core) return "";
+  return bucket.trades > 0 ? `${core} (${bucket.trades} ไม้)` : core;
 }
 
 export function formatAutoOpenStrategy48hSummaryText(
   summary: AutoOpenStrategy48hSummary,
+  unrealised?: AutoOpenPnlUsdtBucket,
 ): string | null {
-  if (summary.trades === 0 && summary.pending === 0) return null;
+  const unrealPart = unrealised ? formatAutoOpenUnrealisedNetUsdtParts(unrealised) : "";
+
+  if (summary.trades === 0 && summary.pending === 0) {
+    if (!unrealPart) return null;
+    return unrealPart.replace(/^ · /, "");
+  }
+
   if (summary.trades === 0) {
-    return summary.pending > 0
-      ? `ผล@48h: รอผล ${summary.pending} ไม้ (ยังไม่ครบ 48h)`
-      : null;
+    const pendingLine =
+      summary.pending > 0
+        ? `ผล@48h: รอผล ${summary.pending} ไม้ (ยังไม่ครบ 48h)`
+        : "ผล@48h:";
+    return `${pendingLine}${unrealPart}`;
   }
 
   const flatPart = summary.flats > 0 ? ` · เสมอ ${summary.flats}` : "";
@@ -283,14 +388,11 @@ export function formatAutoOpenStrategy48hSummaryText(
     summary.decisive > 0 && summary.winratePct != null
       ? ` · WR ${summary.winratePct.toFixed(1)}% (${summary.wins}/${summary.decisive})`
       : "";
-  const netPart =
-    summary.sumUsdt != null
-      ? ` · สุทธิ ${formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}`
-      : "";
+  const closedPart = formatAutoOpenClosedNetUsdtParts(summary);
   const failedPart =
     summary.failedTrades > 0
       ? ` · ล้มเหลว(สมมติ) ${summary.failedTrades}`
       : "";
 
-  return `ผล@48h: ชนะ ${summary.wins} ไม้ · แพ้ ${summary.losses} ไม้${flatPart} · รวม ${summary.trades} ไม้ (สำเร็จ ${summary.successTrades}${failedPart})${wrPart}${netPart}${pendingPart}`;
+  return `ผล@48h: ชนะ ${summary.wins} ไม้ · แพ้ ${summary.losses} ไม้${flatPart} · รวม ${summary.trades} ไม้ (สำเร็จ ${summary.successTrades}${failedPart})${wrPart}${closedPart}${unrealPart}${pendingPart}`;
 }

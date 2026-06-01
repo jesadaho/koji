@@ -18,6 +18,8 @@ import {
   autoOpenStrategyOutcomeLabel,
   formatAutoOpenStrategy48hSummaryText,
   summarizeAutoOpenStrategy48h,
+  summarizeAutoOpenUnrealizedPnl,
+  type AutoOpenPnlUsdtBucket,
   type AutoOpenStrategy48hSummary,
   type AutoOpenStrategyOutcome,
 } from "@/lib/autoOpenStrategyOutcome";
@@ -91,72 +93,150 @@ function pnlAmountStyle(amount: number): { color: string; fontWeight: number } {
   return { color: "inherit", fontWeight: 600 };
 }
 
-function renderAutoOpenStrategy48hSummary(summary: AutoOpenStrategy48hSummary): ReactNode | null {
-  if (summary.trades === 0 && summary.pending === 0) return null;
-  if (summary.trades === 0) {
-    return summary.pending > 0 ? (
+function renderPnlBucketSplit(
+  bucket: Pick<AutoOpenPnlUsdtBucket, "sumUsdtSuccess" | "sumUsdtFailed">,
+  successTrades: number,
+  failedTrades: number,
+): ReactNode | null {
+  if (failedTrades <= 0 || (bucket.sumUsdtSuccess == null && bucket.sumUsdtFailed == null)) {
+    return null;
+  }
+  return (
+    <span style={{ color: PNL_MUTED }}>
+      {" ("}
+      {successTrades > 0 && bucket.sumUsdtSuccess != null ? (
+        <>
+          สำเร็จ{" "}
+          <span style={pnlAmountStyle(bucket.sumUsdtSuccess)}>
+            {formatStatsStrategyProfitDollarAmount(bucket.sumUsdtSuccess)}
+          </span>
+        </>
+      ) : null}
+      {successTrades > 0 &&
+      bucket.sumUsdtSuccess != null &&
+      failedTrades > 0 &&
+      bucket.sumUsdtFailed != null
+        ? " · "
+        : null}
+      {failedTrades > 0 && bucket.sumUsdtFailed != null ? (
+        <>
+          <span style={{ color: "var(--warn, #b86)" }}>ล้มเหลว(สมมติ)</span>{" "}
+          <span style={pnlAmountStyle(bucket.sumUsdtFailed)}>
+            {formatStatsStrategyProfitDollarAmount(bucket.sumUsdtFailed)}
+          </span>
+        </>
+      ) : null}
+      {")"}
+    </span>
+  );
+}
+
+function renderPnlBucketLine(
+  label: string,
+  bucket: AutoOpenPnlUsdtBucket,
+  opts?: { showTradeCount?: boolean },
+): ReactNode | null {
+  if (bucket.sumUsdt == null) return null;
+  return (
+    <>
+      {" · "}
+      <span>{label} </span>
+      <span style={pnlAmountStyle(bucket.sumUsdt)}>
+        {formatStatsStrategyProfitDollarAmount(bucket.sumUsdt)}
+      </span>
+      {renderPnlBucketSplit(bucket, bucket.successTrades, bucket.failedTrades)}
+      {opts?.showTradeCount && bucket.trades > 0 ? (
+        <span style={{ color: PNL_MUTED }}> ({bucket.trades} ไม้)</span>
+      ) : null}
+    </>
+  );
+}
+
+function shouldShowAutoOpenPnlSummary(
+  closed: AutoOpenStrategy48hSummary,
+  unrealised: AutoOpenPnlUsdtBucket,
+): boolean {
+  return (
+    closed.trades > 0 ||
+    closed.pending > 0 ||
+    unrealised.trades > 0 ||
+    unrealised.sumUsdt != null
+  );
+}
+
+function renderAutoOpenStrategy48hSummary(
+  closed: AutoOpenStrategy48hSummary,
+  unrealised: AutoOpenPnlUsdtBucket,
+): ReactNode | null {
+  if (!shouldShowAutoOpenPnlSummary(closed, unrealised)) return null;
+
+  const closedBucket: AutoOpenPnlUsdtBucket = {
+    trades: closed.trades,
+    successTrades: closed.successTrades,
+    failedTrades: closed.failedTrades,
+    sumUsdt: closed.sumUsdt,
+    sumUsdtSuccess: closed.sumUsdtSuccess,
+    sumUsdtFailed: closed.sumUsdtFailed,
+  };
+
+  if (closed.trades === 0) {
+    return (
       <>
         <span>ผล@48h: </span>
-        <span style={{ color: PNL_MUTED }}>รอผล {summary.pending} ไม้</span>
-        <span style={{ color: PNL_MUTED }}> (ยังไม่ครบ 48h)</span>
+        {closed.pending > 0 ? (
+          <span style={{ color: PNL_MUTED }}>
+            รอผล {closed.pending} ไม้ (ยังไม่ครบ 48h)
+          </span>
+        ) : null}
+        {renderPnlBucketLine("Unrealised", unrealised, { showTradeCount: true })}
       </>
-    ) : null;
+    );
   }
 
   const wrNode =
-    summary.decisive > 0 && summary.winratePct != null ? (
+    closed.decisive > 0 && closed.winratePct != null ? (
       <>
         {" · "}
-        <span style={pnlAmountStyle(summary.winratePct - 50)}>
-          WR {summary.winratePct.toFixed(1)}% ({summary.wins}/{summary.decisive})
-        </span>
-      </>
-    ) : null;
-
-  const netNode =
-    summary.sumUsdt != null ? (
-      <>
-        {" · "}
-        <span>สุทธิ </span>
-        <span style={pnlAmountStyle(summary.sumUsdt)}>
-          {formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}
+        <span style={pnlAmountStyle(closed.winratePct - 50)}>
+          WR {closed.winratePct.toFixed(1)}% ({closed.wins}/{closed.decisive})
         </span>
       </>
     ) : null;
 
   const pendingNode =
-    summary.pending > 0 ? (
+    closed.pending > 0 ? (
       <>
         {" · "}
-        <span style={{ color: PNL_MUTED }}>รอผล {summary.pending}</span>
+        <span style={{ color: PNL_MUTED }}>รอผล {closed.pending}</span>
       </>
     ) : null;
 
   return (
     <>
       <span>ผล@48h: </span>
-      <span style={{ color: PNL_OK, fontWeight: 600 }}>ชนะ {summary.wins} ไม้</span>
+      <span style={{ color: PNL_OK, fontWeight: 600 }}>ชนะ {closed.wins} ไม้</span>
       <span> · </span>
-      <span style={{ color: PNL_DANGER, fontWeight: 600 }}>แพ้ {summary.losses} ไม้</span>
-      {summary.flats > 0 ? (
+      <span style={{ color: PNL_DANGER, fontWeight: 600 }}>แพ้ {closed.losses} ไม้</span>
+      {closed.flats > 0 ? (
         <>
           <span> · </span>
-          <span style={{ color: PNL_MUTED }}>เสมอ {summary.flats}</span>
+          <span style={{ color: PNL_MUTED }}>เสมอ {closed.flats}</span>
         </>
       ) : null}
-      <span> · รวม {summary.trades} ไม้ </span>
+      <span> · รวม {closed.trades} ไม้ </span>
       <span style={{ color: PNL_MUTED }}>
-        (สำเร็จ {summary.successTrades}
-        {summary.failedTrades > 0 ? (
+        (สำเร็จ {closed.successTrades}
+        {closed.failedTrades > 0 ? (
           <>
             {" · "}
-            <span style={{ color: "var(--warn, #b86)" }}>ล้มเหลว(สมมติ) {summary.failedTrades}</span>
+            <span style={{ color: "var(--warn, #b86)" }}>ล้มเหลว(สมมติ) {closed.failedTrades}</span>
           </>
         ) : null}
         )
       </span>
       {wrNode}
-      {netNode}
+      {renderPnlBucketLine("ปิดแล้ว", closedBucket)}
+      {renderPnlBucketLine("Unrealised", unrealised, { showTradeCount: true })}
       {pendingNode}
     </>
   );
@@ -495,13 +575,17 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     () => summarizeAutoOpenStrategy48h(displayRows),
     [displayRows],
   );
+  const unrealisedPnlSummary = useMemo(
+    () => summarizeAutoOpenUnrealizedPnl(displayRows, markPrices),
+    [displayRows, markPrices],
+  );
   const strategy48hSummaryNode = useMemo(
-    () => renderAutoOpenStrategy48hSummary(strategy48hSummary),
-    [strategy48hSummary],
+    () => renderAutoOpenStrategy48hSummary(strategy48hSummary, unrealisedPnlSummary),
+    [strategy48hSummary, unrealisedPnlSummary],
   );
   const strategy48hSummaryTitle = useMemo(
-    () => formatAutoOpenStrategy48hSummaryText(strategy48hSummary),
-    [strategy48hSummary],
+    () => formatAutoOpenStrategy48hSummaryText(strategy48hSummary, unrealisedPnlSummary),
+    [strategy48hSummary, unrealisedPnlSummary],
   );
 
   const successRate =
@@ -635,7 +719,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             className="sub"
             title={
               strategy48hSummaryTitle ??
-              "นับไม้สั่งสำเร็จ + ล้มเหลวที่มี entry สมมติและครบ follow-up 48h · ชนะ/แพ้ตามกติกา Snowball (Quick TP30/Trend/MFE) และ Reversal (±2% ที่ 48h) · ล้มเหลว = P/L สมมติ (ไม่ได้เปิดจริง) · เสมอ = ระหว่างเกณฑ์ชนะ–แพ้"
+              "ชนะ/แพ้@48h = ไม้ครบ 48h · ปิดแล้ว = P/L ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่มี entry อ้างอิง"
             }
             style={{ marginTop: 0, marginBottom: "0.65rem", lineHeight: 1.45 }}
           >
@@ -717,7 +801,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </section>
 
       <p className="sub" style={{ marginTop: "0.5rem" }}>
-        ราคาปัจจุบัน = MEXC perp last · P/L = mark สด · ผล@48h = กติกาเดียวกับสถิติ (Snowball: Quick TP30/MFE+ปิด 48h · Reversal: ±2% ที่ 48h) · cron อัปเดต follow-up
+        ราคาปัจจุบัน = MEXC perp last · P/L = mark สด · ปิดแล้ว = ผล@48h ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h · cron อัปเดต follow-up
       </p>
 
       <p className="sub" style={{ marginTop: "1rem" }}>

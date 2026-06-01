@@ -1,6 +1,95 @@
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
+import { strategyProfitUsdtFromMargin } from "@/lib/statsStrategyProfitClient";
 
 const HOUR_SEC = 3600;
+
+export type AutoOpenPnlUsdtBucket = {
+  trades: number;
+  successTrades: number;
+  failedTrades: number;
+  sumUsdt: number | null;
+  sumUsdtSuccess: number | null;
+  sumUsdtFailed: number | null;
+};
+
+export function autoOpenContractSymbolKey(symbol: string): string {
+  return symbol.trim().toUpperCase();
+}
+
+export function autoOpenRowMarginUsdt(row: AutoOpenOrderLogRow): number | null {
+  const marginBase = row.marginUsdt;
+  const scale =
+    row.marginScale != null && Number.isFinite(row.marginScale) && row.marginScale > 0
+      ? row.marginScale
+      : 1;
+  if (marginBase == null || !Number.isFinite(marginBase) || marginBase <= 0) return null;
+  return marginBase * scale;
+}
+
+export function accumulateAutoOpenPnlUsdt(
+  bucket: {
+    trades: number;
+    successTrades: number;
+    failedTrades: number;
+    sumUsdt: number;
+    hasUsdt: boolean;
+    sumUsdtSuccess: number;
+    hasUsdtSuccess: boolean;
+    sumUsdtFailed: number;
+    hasUsdtFailed: boolean;
+  },
+  row: AutoOpenOrderLogRow,
+  profitPct: number,
+): void {
+  const margin = autoOpenRowMarginUsdt(row);
+  const lev = row.leverage;
+  if (margin == null || lev == null || !Number.isFinite(lev) || lev <= 0 || !Number.isFinite(profitPct)) {
+    return;
+  }
+  const usd = strategyProfitUsdtFromMargin(margin, lev, profitPct);
+  if (usd == null || !Number.isFinite(usd)) return;
+
+  bucket.trades += 1;
+  if (row.outcome === "failed") bucket.failedTrades += 1;
+  else bucket.successTrades += 1;
+
+  bucket.sumUsdt += usd;
+  bucket.hasUsdt = true;
+  if (row.outcome === "failed") {
+    bucket.sumUsdtFailed += usd;
+    bucket.hasUsdtFailed = true;
+  } else {
+    bucket.sumUsdtSuccess += usd;
+    bucket.hasUsdtSuccess = true;
+  }
+}
+
+export function emptyAutoOpenPnlUsdtAccumulator() {
+  return {
+    trades: 0,
+    successTrades: 0,
+    failedTrades: 0,
+    sumUsdt: 0,
+    hasUsdt: false,
+    sumUsdtSuccess: 0,
+    hasUsdtSuccess: false,
+    sumUsdtFailed: 0,
+    hasUsdtFailed: false,
+  };
+}
+
+export function finalizeAutoOpenPnlUsdtBucket(
+  acc: ReturnType<typeof emptyAutoOpenPnlUsdtAccumulator>,
+): AutoOpenPnlUsdtBucket {
+  return {
+    trades: acc.trades,
+    successTrades: acc.successTrades,
+    failedTrades: acc.failedTrades,
+    sumUsdt: acc.hasUsdt ? acc.sumUsdt : null,
+    sumUsdtSuccess: acc.hasUsdtSuccess ? acc.sumUsdtSuccess : null,
+    sumUsdtFailed: acc.hasUsdtFailed ? acc.sumUsdtFailed : null,
+  };
+}
 
 /** คืน entry ที่ใช้แสดง/follow-up — รองรับแถวเก่าที่มีแค่ mark/ema */
 export function resolveAutoOpenEntryPrice(row: AutoOpenOrderLogRow): number | undefined {
