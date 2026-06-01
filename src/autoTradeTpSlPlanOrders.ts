@@ -194,7 +194,14 @@ export function tp1PlanLikelyFilled(
   tp1Vol: number | undefined,
   currentHoldVol: number,
 ): boolean {
-  if (!(initialHoldVol > 0) || !(currentHoldVol >= 0)) return false;
+  if (
+    typeof initialHoldVol !== "number" ||
+    !Number.isFinite(initialHoldVol) ||
+    !(initialHoldVol > 0) ||
+    !(currentHoldVol >= 0)
+  ) {
+    return false;
+  }
   if (typeof tp1Vol === "number" && tp1Vol > 0) {
     return currentHoldVol <= initialHoldVol - tp1Vol + 1e-9;
   }
