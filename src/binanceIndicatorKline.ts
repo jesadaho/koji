@@ -262,7 +262,7 @@ export async function fetchBinanceUsdmLastPrice(symbol: string): Promise<number 
   }
 }
 
-/**
+/** quoteVolume USDT จาก ticker 24hr (Futures USDT-M) */
 export async function fetchBinanceUsdmQuoteVol24h(symbol: string): Promise<number | null> {
   if (!isBinanceIndicatorFapiEnabled()) return null;
   const sym = symbol.trim().toUpperCase();
