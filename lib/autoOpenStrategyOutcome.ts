@@ -172,23 +172,33 @@ export function isAutoOpenStrategyWinOutcome(
 }
 
 export type AutoOpenStrategy48hSummary = {
-  /** เปิดสำเร็จ + ครบผล@48h */
+  /** ครบผล@48h (เปิดสำเร็จ + ล้มเหลวที่มี entry สมมติ) */
   trades: number;
+  /** ใน trades — outcome สำเร็จ */
+  successTrades: number;
+  /** ใน trades — outcome ล้มเหลว (P/L สมมติ ไม่ได้เปิดจริง) */
+  failedTrades: number;
   wins: number;
   losses: number;
   flats: number;
-  /** เปิดสำเร็จแต่ยังไม่ครบ 48h */
+  /** ยังไม่ครบ 48h */
   pending: number;
   decisive: number;
   winratePct: number | null;
   sumUsdt: number | null;
 };
 
-/** สรุป Win/Loss ตามคอลัมน์ ผล@48h — เฉพาะไม้ที่สั่งเปิดสำเร็จ */
+function autoOpenStrategy48hEligible(row: AutoOpenOrderLogRow): boolean {
+  return row.outcome === "success" || row.outcome === "failed";
+}
+
+/** สรุป Win/Loss ตามคอลัมน์ ผล@48h — ไม้สำเร็จ + ล้มเหลวที่ติดตามราคาได้ */
 export function summarizeAutoOpenStrategy48h(
   rows: AutoOpenOrderLogRow[],
 ): AutoOpenStrategy48hSummary {
   let trades = 0;
+  let successTrades = 0;
+  let failedTrades = 0;
   let wins = 0;
   let losses = 0;
   let flats = 0;
@@ -197,7 +207,7 @@ export function summarizeAutoOpenStrategy48h(
   let hasUsdt = false;
 
   for (const r of rows) {
-    if (r.outcome !== "success") continue;
+    if (!autoOpenStrategy48hEligible(r)) continue;
 
     if (!autoOpenStrategyFinalized(r)) {
       pending += 1;
@@ -205,6 +215,8 @@ export function summarizeAutoOpenStrategy48h(
     }
 
     trades += 1;
+    if (r.outcome === "failed") failedTrades += 1;
+    else successTrades += 1;
     const o = r.strategyOutcome;
     if (isAutoOpenStrategyWinOutcome(o)) wins += 1;
     else if (o === "loss") losses += 1;
@@ -242,6 +254,8 @@ export function summarizeAutoOpenStrategy48h(
 
   return {
     trades,
+    successTrades,
+    failedTrades,
     wins,
     losses,
     flats,
@@ -273,6 +287,10 @@ export function formatAutoOpenStrategy48hSummaryText(
     summary.sumUsdt != null
       ? ` · สุทธิ ${formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}`
       : "";
+  const failedPart =
+    summary.failedTrades > 0
+      ? ` · ล้มเหลว(สมมติ) ${summary.failedTrades}`
+      : "";
 
-  return `ผล@48h: ชนะ ${summary.wins} ไม้ · แพ้ ${summary.losses} ไม้${flatPart} · รวม ${summary.trades} ไม้${wrPart}${netPart}${pendingPart}`;
+  return `ผล@48h: ชนะ ${summary.wins} ไม้ · แพ้ ${summary.losses} ไม้${flatPart} · รวม ${summary.trades} ไม้ (สำเร็จ ${summary.successTrades}${failedPart})${wrPart}${netPart}${pendingPart}`;
 }

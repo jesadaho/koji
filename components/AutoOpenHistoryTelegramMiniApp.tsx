@@ -546,7 +546,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
         {strategy48hSummaryText ? (
           <p
             className="sub"
-            title="นับเฉพาะไม้ที่สั่งเปิดสำเร็จและครบ follow-up 48h · ชนะ/แพ้ตามกติกา Snowball (Quick TP30/Trend/MFE) และ Reversal (±2% ที่ 48h) · เสมอ = ระหว่างเกณฑ์ชนะ–แพ้"
+            title="นับไม้สั่งสำเร็จ + ล้มเหลวที่มี entry สมมติและครบ follow-up 48h · ชนะ/แพ้ตามกติกา Snowball (Quick TP30/Trend/MFE) และ Reversal (±2% ที่ 48h) · ล้มเหลว = P/L สมมติ (ไม่ได้เปิดจริง) · เสมอ = ระหว่างเกณฑ์ชนะ–แพ้"
             style={{ marginTop: 0, marginBottom: "0.65rem", fontWeight: 600 }}
           >
             {strategy48hSummaryText}
