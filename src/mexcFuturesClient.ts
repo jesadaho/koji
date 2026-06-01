@@ -8,7 +8,7 @@ export function mexcFuturesBaseUrl(): string {
   return b && b.startsWith("http") ? b.replace(/\/$/, "") : DEFAULT_BASE;
 }
 
-type MexcOk<T> = { success: boolean; code: number; data?: T; message?: string };
+export type MexcOk<T> = { success: boolean; code: number; data?: T; message?: string };
 
 function signHmac256(secret: string, payload: string): string {
   return createHmac("sha256", secret).update(payload, "utf8").digest("hex");
