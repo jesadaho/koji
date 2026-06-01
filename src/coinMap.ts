@@ -13,7 +13,7 @@ export const BASE_TO_CONTRACT: Record<string, string> = {
   matic: "POL_USDT",
   pol: "POL_USDT",
   sui: "SUI_USDT",
-  ton: "TON_USDT",
+  ton: "TONCOIN_USDT",
   pepe: "PEPE_USDT",
 };
 

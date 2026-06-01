@@ -309,27 +309,42 @@ export async function verifyMexcFuturesApiForUser(
   };
 }
 
+type MexcTickerRow = {
+  symbol?: string;
+  lastPrice?: number;
+  fairPrice?: number;
+  indexPrice?: number;
+  riseFallRate?: number;
+  change24hPercent?: number;
+};
+
+function pickTickerMarkPrice(row: MexcTickerRow | null | undefined): number | null {
+  if (!row || typeof row !== "object") return null;
+  const last = row.lastPrice;
+  const fair = row.fairPrice;
+  const index = row.indexPrice;
+  if (typeof last === "number" && Number.isFinite(last) && last > 0) return last;
+  if (typeof fair === "number" && Number.isFinite(fair) && fair > 0) return fair;
+  if (typeof index === "number" && Number.isFinite(index) && index > 0) return index;
+  return null;
+}
+
 /** ราคา last จาก public ticker สำหรับ market order (contract symbol เช่น BTC_USDT) */
 export async function getContractLastPricePublic(symbol: string): Promise<number | null> {
   const url = `${mexcFuturesBaseUrl()}/api/v1/contract/ticker`;
   try {
     const { data } = await axios.get<{
       success: boolean;
-      data?:
-        | { symbol?: string; lastPrice?: number; fairPrice?: number; riseFallRate?: number; change24hPercent?: number }
-        | { symbol?: string; lastPrice?: number; fairPrice?: number; riseFallRate?: number; change24hPercent?: number }[];
+      data?: MexcTickerRow | MexcTickerRow[];
     }>(url, { params: { symbol }, timeout: 15_000, validateStatus: () => true });
     if (!data?.success) return null;
     const row = data.data;
     if (Array.isArray(row)) {
       const one = row.find((r) => r.symbol === symbol) ?? row[0];
-      const p = one?.lastPrice ?? one?.fairPrice;
-      return typeof p === "number" && Number.isFinite(p) && p > 0 ? p : null;
+      return pickTickerMarkPrice(one);
     }
     if (row && typeof row === "object") {
-      const p = (row as { lastPrice?: number; fairPrice?: number }).lastPrice;
-      const q = p ?? (row as { fairPrice?: number }).fairPrice;
-      return typeof q === "number" && Number.isFinite(q) && q > 0 ? q : null;
+      return pickTickerMarkPrice(row);
     }
   } catch {
     return null;
@@ -342,19 +357,15 @@ export async function getContractTickerPublic(symbol: string): Promise<{ lastPri
   try {
     const { data } = await axios.get<{
       success: boolean;
-      data?:
-        | { symbol?: string; lastPrice?: number; fairPrice?: number; riseFallRate?: number; change24hPercent?: number }
-        | { symbol?: string; lastPrice?: number; fairPrice?: number; riseFallRate?: number; change24hPercent?: number }[];
+      data?: MexcTickerRow & { symbol?: string } | Array<MexcTickerRow & { symbol?: string }>;
     }>(url, { params: { symbol }, timeout: 15_000, validateStatus: () => true });
     if (!data?.success) return null;
     const row = data.data;
     const one = Array.isArray(row) ? (row.find((r) => r.symbol === symbol) ?? row[0]) : row;
-    if (!one || typeof one !== "object") return null;
-    const lp = (one as { lastPrice?: number; fairPrice?: number }).lastPrice ?? (one as { fairPrice?: number }).fairPrice;
-    const lastPrice = typeof lp === "number" && Number.isFinite(lp) && lp > 0 ? lp : null;
+    const lastPrice = pickTickerMarkPrice(one);
     if (lastPrice == null) return null;
-    const rf = (one as { riseFallRate?: number }).riseFallRate;
-    const ch = (one as { change24hPercent?: number }).change24hPercent;
+    const rf = one?.riseFallRate;
+    const ch = one?.change24hPercent;
     const pct =
       typeof rf === "number" && Number.isFinite(rf) ? rf * 100 :
       typeof ch === "number" && Number.isFinite(ch) ? ch :
@@ -686,7 +697,8 @@ export async function createPartialCloseOrder(
   return mexcPrivatePost<OrderCreateData>(creds, "/api/v1/private/order/create", body);
 }
 
-export type PlanOrderCreateData = { orderId?: string; ts?: number };
+/** MEXC อาจคืน order id เป็น string โดยตรง หรือ object */
+export type PlanOrderCreateData = string | { orderId?: string | number; ts?: number };
 
 /**
  * วาง plan/trigger order (MEXC `/api/v1/private/planorder/place`)

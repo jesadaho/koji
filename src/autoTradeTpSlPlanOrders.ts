@@ -26,12 +26,16 @@ export function favorableTpTriggerPrice(
 export function extractPlanOrderId(res: MexcOk<PlanOrderCreateData>): string | undefined {
   if (!res.success || res.data == null) return undefined;
   const d = res.data;
-  if (typeof d === "string" && d.trim()) return d.trim();
-  if (typeof d === "object" && d !== null && "orderId" in d) {
-    const id = (d as { orderId: unknown }).orderId;
-    if (typeof id === "string" && id.trim()) return id.trim();
-    if (typeof id === "number" && Number.isFinite(id)) return String(id);
+  if (typeof d === "string") {
+    const s = d.trim();
+    return s || undefined;
   }
+  const id = d.orderId;
+  if (typeof id === "string") {
+    const s = id.trim();
+    return s || undefined;
+  }
+  if (typeof id === "number" && Number.isFinite(id)) return String(id);
   return undefined;
 }
 
