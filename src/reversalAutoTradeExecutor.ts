@@ -8,7 +8,7 @@ import {
 } from "./mexcFuturesClient";
 import { fetchBinanceUsdmKlines } from "./binanceIndicatorKline";
 import { emaLine } from "./indicatorMath";
-import { resolveContractSymbol } from "./coinMap";
+import { resolveMexcContractFromBinanceSymbol } from "./coinMap";
 import {
   loadTradingViewMexcSettingsFullMap,
   type TradingViewMexcUserSettings,
@@ -73,11 +73,7 @@ function fmtReversalAutoTradePrice(p: number): string {
 }
 
 function binanceUsdtPerpToMexcContract(binanceSymbol: string): string | null {
-  const sym = binanceSymbol.trim().toUpperCase();
-  if (!sym.endsWith("USDT") || sym.length < 5) return null;
-  const base = sym.slice(0, -4);
-  const resolved = resolveContractSymbol(base);
-  return resolved?.contractSymbol ?? `${base}_USDT`;
+  return resolveMexcContractFromBinanceSymbol(binanceSymbol);
 }
 
 async function notifyLines(userId: string, lines: string[]): Promise<void> {
@@ -352,7 +348,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         const t = await getContractTickerPublic(contractSymbol!);
         if (!t || !(t.lastPrice > 0)) {
           lastMarketPrice = null;
-          return { error: "ดึงราคาตลาดล่าสุดจาก MEXC ไม่สำเร็จ" };
+          return { error: `ดึงราคาตลาดล่าสุดจาก MEXC ไม่สำเร็จ (${contractSymbol})` };
         }
         lastMarketPrice = t.lastPrice;
       } catch (e) {

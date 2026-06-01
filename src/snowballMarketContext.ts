@@ -3,7 +3,7 @@
  */
 
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
-import { resolveContractSymbol } from "./coinMap";
+import { resolveMexcContractFromBinanceSymbol } from "./coinMap";
 import { fetchBinanceUsdmKlines, fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { computeParabolicSarLast } from "./indicatorMath";
 import { fetchContractTickerSingle } from "./mexcMarkets";
@@ -34,11 +34,7 @@ export type SnowballAlertMarketContext = {
 };
 
 function binanceUsdtPerpToMexcContract(binanceSymbol: string): string | null {
-  const sym = binanceSymbol.trim().toUpperCase();
-  if (!sym.endsWith("USDT") || sym.length < 5) return null;
-  const base = sym.slice(0, -4);
-  const resolved = resolveContractSymbol(base);
-  return resolved?.contractSymbol ?? `${base}_USDT`;
+  return resolveMexcContractFromBinanceSymbol(binanceSymbol);
 }
 
 function snowballBtcPsarBars(tf: "4h" | "1h"): number {

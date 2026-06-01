@@ -318,15 +318,23 @@ type MexcTickerRow = {
   change24hPercent?: number;
 };
 
+function numTickerPrice(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+  if (typeof v === "string") {
+    const n = Number(v.trim());
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
 function pickTickerMarkPrice(row: MexcTickerRow | null | undefined): number | null {
   if (!row || typeof row !== "object") return null;
-  const last = row.lastPrice;
-  const fair = row.fairPrice;
-  const index = row.indexPrice;
-  if (typeof last === "number" && Number.isFinite(last) && last > 0) return last;
-  if (typeof fair === "number" && Number.isFinite(fair) && fair > 0) return fair;
-  if (typeof index === "number" && Number.isFinite(index) && index > 0) return index;
-  return null;
+  return (
+    numTickerPrice(row.lastPrice) ??
+    numTickerPrice(row.fairPrice) ??
+    numTickerPrice(row.indexPrice) ??
+    null
+  );
 }
 
 /** ราคา last จาก public ticker สำหรับ market order (contract symbol เช่น BTC_USDT) */
