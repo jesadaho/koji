@@ -8,10 +8,12 @@ import {
   autoOpenReasonLabel,
   autoOpenSourceLabel,
   filterAutoOpenLogsByDays,
+  summarizeAutoOpenOrderLogs,
   type AutoOpenOrderLogApiPayload,
   type AutoOpenOrderLogRow,
   type AutoOpenSource,
 } from "@/lib/autoOpenOrderLogClient";
+import { groupAutoOpenLogsByBkkWeek } from "@/lib/autoOpenWeekGroup";
 import { autoOpenHorizonDue, resolveAutoOpenEntryPrice, pctVsEntrySide } from "@/lib/autoOpenFollowUp";
 import {
   autoOpenStrategyFinalized,
@@ -362,6 +364,143 @@ function fmtHorizonCell(
   );
 }
 
+function renderAutoOpenHistoryTableBody(
+  rows: AutoOpenOrderLogRow[],
+  markPrices: Record<string, number>,
+  emptyMessage: string,
+): ReactNode {
+  if (rows.length === 0) {
+    return (
+      <tr>
+        <td colSpan={17} className="sub">
+          {emptyMessage}
+        </td>
+      </tr>
+    );
+  }
+  return rows.map((r) => {
+    const nowPx = markPrices[contractKey(r.contractSymbol)];
+    return (
+      <tr key={r.id}>
+        <td>
+          <code className="marketsFundingHistTime">{formatBkk(r.atMs)}</code>
+        </td>
+        <td>{autoOpenSourceLabel(r.source)}</td>
+        <td>{coinLabel(r.binanceSymbol || r.contractSymbol)}</td>
+        <td>{r.side ? r.side.toUpperCase() : "—"}</td>
+        <td>{fmtMarginCell(r)}</td>
+        <td>{fmtLeverage(r.leverage)}</td>
+        <td>{fmtPrice(resolveAutoOpenEntryPrice(r))}</td>
+        <td>{fmtPrice(nowPx)}</td>
+        <td>{fmtPnlCell(r, nowPx)}</td>
+        <td>{fmtStrategyPnlCell(r)}</td>
+        <td>{r.gradeKey ?? r.model ?? "—"}</td>
+        <td>
+          <span style={outcomeStyle(r.outcome)}>{autoOpenOutcomeLabel(r.outcome)}</span>
+        </td>
+        <td>
+          {autoOpenReasonLabel(r.reasonCode)}
+          {r.reasonDetail ? (
+            <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
+              {r.reasonDetail}
+            </span>
+          ) : null}
+        </td>
+        <td>{fmtHorizonCell(r, 4, r.price4h, r.pct4h)}</td>
+        <td>{fmtHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
+        <td>{fmtHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
+        <td>{fmtHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
+      </tr>
+    );
+  });
+}
+
+const AUTO_OPEN_HISTORY_EMPTY_MSG =
+  "ยังไม่มีบันทึก — จะมีเมื่อมีสัญญาณและระบบประเมิน auto-open ของบัญชีคุณ";
+
+function AutoOpenHistoryTable({
+  rows,
+  markPrices,
+  emptyMessage = "ยังไม่มีบันทึกในช่วงนี้",
+}: {
+  rows: AutoOpenOrderLogRow[];
+  markPrices: Record<string, number>;
+  emptyMessage?: string;
+}) {
+  return (
+    <div className="marketsFundingHistTableWrap" style={{ overflowX: "auto" }}>
+      <table className="marketsFundingHistTable sparkStatsTable">
+        <thead>
+          <tr>
+            <th>เวลา (BKK)</th>
+            <th>แหล่ง</th>
+            <th>เหรียญ</th>
+            <th>ทิศ</th>
+            <th>Margin</th>
+            <th>Lev</th>
+            <th>Entry</th>
+            <th>ปัจจุบัน</th>
+            <th>P/L</th>
+            <th title="หลังครบ 48h — Quick TP30 / Trend หรือ Win-Loss ตามแหล่งสัญญาณ">
+              ผล@48h
+            </th>
+            <th>เกรด/โมเดล</th>
+            <th>ผล</th>
+            <th>เหตุผล</th>
+            <th>4h</th>
+            <th>12h</th>
+            <th>24h</th>
+            <th>48h</th>
+          </tr>
+        </thead>
+        <tbody>{renderAutoOpenHistoryTableBody(rows, markPrices, emptyMessage)}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function AutoOpenWeekSection({
+  weekLabel,
+  rows,
+  markPrices,
+}: {
+  weekLabel: string;
+  rows: AutoOpenOrderLogRow[];
+  markPrices: Record<string, number>;
+}) {
+  const orderSummary = useMemo(() => summarizeAutoOpenOrderLogs(rows), [rows]);
+  const closed = useMemo(() => summarizeAutoOpenStrategy48h(rows), [rows]);
+  const unrealised = useMemo(() => summarizeAutoOpenUnrealizedPnl(rows, markPrices), [rows, markPrices]);
+  const summaryNode = useMemo(
+    () => renderAutoOpenStrategy48hSummary(closed, unrealised),
+    [closed, unrealised],
+  );
+  const successRate =
+    orderSummary.total > 0
+      ? `${((orderSummary.success / orderSummary.total) * 100).toFixed(1)}%`
+      : "—";
+
+  return (
+    <section style={{ marginBottom: "1.25rem" }}>
+      <h2
+        className="sparkStatsMatrixSectionTitle"
+        style={{ fontSize: "1rem", marginTop: 0, marginBottom: "0.4rem" }}
+      >
+        สัปดาห์ {weekLabel}
+        <span className="sub" style={{ fontWeight: "normal", marginLeft: "0.35rem" }}>
+          · {rows.length} รายการ · เปิดสำเร็จ {successRate}
+        </span>
+      </h2>
+      {summaryNode ? (
+        <div className="sub" style={{ marginBottom: "0.5rem", lineHeight: 1.45 }}>
+          {summaryNode}
+        </div>
+      ) : null}
+      <AutoOpenHistoryTable rows={rows} markPrices={markPrices} />
+    </section>
+  );
+}
+
 export default function AutoOpenHistoryTelegramMiniApp() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
@@ -369,6 +508,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   const [markPrices, setMarkPrices] = useState<Record<string, number>>({});
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [dayFilter, setDayFilter] = useState<DayFilter>("30");
+  const [splitByWeek, setSplitByWeek] = useState(false);
   const [clearingSkipped, setClearingSkipped] = useState(false);
 
   const apiGet = useCallback(async (path: string) => {
@@ -591,6 +731,11 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     [strategy48hSummary, unrealisedPnlSummary],
   );
 
+  const weekGroups = useMemo(
+    () => groupAutoOpenLogsByBkkWeek(displayRows),
+    [displayRows],
+  );
+
   const successRate =
     summary && summary.total > 0
       ? `${((summary.success / summary.total) * 100).toFixed(1)}%`
@@ -698,6 +843,14 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             <option value="all">ทั้งหมด</option>
           </select>
         </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+          <input
+            type="checkbox"
+            checked={splitByWeek}
+            onChange={(e) => setSplitByWeek(e.target.checked)}
+          />
+          แยกรายสัปดาห์
+        </label>
         <button type="button" className="btn" onClick={() => void loadHistory()}>
           รีเฟรช
         </button>
@@ -717,6 +870,18 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </div>
 
       <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
+        <p className="sub" style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+          {splitByWeek ? (
+            <>
+              สรุปรวมทั้งช่วงที่เลือก
+              <span className="tmaTabEn" style={{ marginLeft: "0.35rem" }}>
+                (สัปดาห์จันทร์–อาทิตย์ BKK)
+              </span>
+            </>
+          ) : (
+            "สรุป P/L"
+          )}
+        </p>
         {strategy48hSummaryNode ? (
           <div
             className="sub"
@@ -729,82 +894,31 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             {strategy48hSummaryNode}
           </div>
         ) : null}
-        <div className="marketsFundingHistTableWrap" style={{ overflowX: "auto" }}>
-          <table className="marketsFundingHistTable sparkStatsTable">
-            <thead>
-              <tr>
-                <th>เวลา (BKK)</th>
-                <th>แหล่ง</th>
-                <th>เหรียญ</th>
-                <th>ทิศ</th>
-                <th>Margin</th>
-                <th>Lev</th>
-                <th>Entry</th>
-                <th>ปัจจุบัน</th>
-                <th>P/L</th>
-                <th title="หลังครบ 48h — Quick TP30 / Trend หรือ Win-Loss ตามแหล่งสัญญาณ">
-                  ผล@48h
-                </th>
-                <th>เกรด/โมเดล</th>
-                <th>ผล</th>
-                <th>เหตุผล</th>
-                <th>4h</th>
-                <th>12h</th>
-                <th>24h</th>
-                <th>48h</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayRows.length === 0 ? (
-                <tr>
-                  <td colSpan={17} className="sub">
-                    ยังไม่มีบันทึก — จะมีเมื่อมีสัญญาณและระบบประเมิน auto-open ของบัญชีคุณ
-                  </td>
-                </tr>
-              ) : (
-                displayRows.map((r) => {
-                  const nowPx = markPrices[contractKey(r.contractSymbol)];
-                  return (
-                  <tr key={r.id}>
-                    <td>
-                      <code className="marketsFundingHistTime">{formatBkk(r.atMs)}</code>
-                    </td>
-                    <td>{autoOpenSourceLabel(r.source)}</td>
-                    <td>{coinLabel(r.binanceSymbol || r.contractSymbol)}</td>
-                    <td>{r.side ? r.side.toUpperCase() : "—"}</td>
-                    <td>{fmtMarginCell(r)}</td>
-                    <td>{fmtLeverage(r.leverage)}</td>
-                    <td>{fmtPrice(resolveAutoOpenEntryPrice(r))}</td>
-                    <td>{fmtPrice(nowPx)}</td>
-                    <td>{fmtPnlCell(r, nowPx)}</td>
-                    <td>{fmtStrategyPnlCell(r)}</td>
-                    <td>{r.gradeKey ?? r.model ?? "—"}</td>
-                    <td>
-                      <span style={outcomeStyle(r.outcome)}>{autoOpenOutcomeLabel(r.outcome)}</span>
-                    </td>
-                    <td>
-                      {autoOpenReasonLabel(r.reasonCode)}
-                      {r.reasonDetail ? (
-                        <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
-                          {r.reasonDetail}
-                        </span>
-                      ) : null}
-                    </td>
-                    <td>{fmtHorizonCell(r, 4, r.price4h, r.pct4h)}</td>
-                    <td>{fmtHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
-                    <td>{fmtHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
-                    <td>{fmtHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
-                  </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+
+        {splitByWeek ? (
+          weekGroups.length === 0 ? (
+            <p className="sub">ยังไม่มีบันทึก — จะมีเมื่อมีสัญญาณและระบบประเมิน auto-open ของบัญชีคุณ</p>
+          ) : (
+            weekGroups.map((g) => (
+              <AutoOpenWeekSection
+                key={g.weekKey}
+                weekLabel={g.weekLabel}
+                rows={g.rows}
+                markPrices={markPrices}
+              />
+            ))
+          )
+        ) : (
+          <AutoOpenHistoryTable
+            rows={displayRows}
+            markPrices={markPrices}
+            emptyMessage={AUTO_OPEN_HISTORY_EMPTY_MSG}
+          />
+        )}
       </section>
 
       <p className="sub" style={{ marginTop: "0.5rem" }}>
-        ราคาปัจจุบัน = MEXC perp last · P/L = mark สด · Realised = ผล@48h ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h · cron อัปเดต follow-up
+        ราคาปัจจุบัน = MEXC perp last · แยกรายสัปดาห์ = จันทร์–อาทิตย์ (BKK) · Realised / Unrealised ตามกติกาด้านบน · cron อัปเดต follow-up
       </p>
 
       <p className="sub" style={{ marginTop: "1rem" }}>
