@@ -131,15 +131,14 @@ function renderPnlBucketSplit(
   );
 }
 
-function renderPnlBucketLine(
+function renderPnlBucketRow(
   label: string,
   bucket: AutoOpenPnlUsdtBucket,
   opts?: { showTradeCount?: boolean },
 ): ReactNode | null {
   if (bucket.sumUsdt == null) return null;
   return (
-    <>
-      {" · "}
+    <div style={{ marginTop: "0.35rem" }}>
       <span>{label} </span>
       <span style={pnlAmountStyle(bucket.sumUsdt)}>
         {formatStatsStrategyProfitDollarAmount(bucket.sumUsdt)}
@@ -148,7 +147,7 @@ function renderPnlBucketLine(
       {opts?.showTradeCount && bucket.trades > 0 ? (
         <span style={{ color: PNL_MUTED }}> ({bucket.trades} ไม้)</span>
       ) : null}
-    </>
+    </div>
   );
 }
 
@@ -181,15 +180,17 @@ function renderAutoOpenStrategy48hSummary(
 
   if (closed.trades === 0) {
     return (
-      <>
-        <span>ผล@48h: </span>
-        {closed.pending > 0 ? (
-          <span style={{ color: PNL_MUTED }}>
-            รอผล {closed.pending} ไม้ (ยังไม่ครบ 48h)
-          </span>
-        ) : null}
-        {renderPnlBucketLine("Unrealised", unrealised, { showTradeCount: true })}
-      </>
+      <div>
+        <div>
+          <span>ผล@48h: </span>
+          {closed.pending > 0 ? (
+            <span style={{ color: PNL_MUTED }}>
+              รอผล {closed.pending} ไม้ (ยังไม่ครบ 48h)
+            </span>
+          ) : null}
+        </div>
+        {renderPnlBucketRow("Unrealised", unrealised, { showTradeCount: true })}
+      </div>
     );
   }
 
@@ -212,33 +213,35 @@ function renderAutoOpenStrategy48hSummary(
     ) : null;
 
   return (
-    <>
-      <span>ผล@48h: </span>
-      <span style={{ color: PNL_OK, fontWeight: 600 }}>ชนะ {closed.wins} ไม้</span>
-      <span> · </span>
-      <span style={{ color: PNL_DANGER, fontWeight: 600 }}>แพ้ {closed.losses} ไม้</span>
-      {closed.flats > 0 ? (
-        <>
-          <span> · </span>
-          <span style={{ color: PNL_MUTED }}>เสมอ {closed.flats}</span>
-        </>
-      ) : null}
-      <span> · รวม {closed.trades} ไม้ </span>
-      <span style={{ color: PNL_MUTED }}>
-        (สำเร็จ {closed.successTrades}
-        {closed.failedTrades > 0 ? (
+    <div>
+      <div>
+        <span>ผล@48h: </span>
+        <span style={{ color: PNL_OK, fontWeight: 600 }}>ชนะ {closed.wins} ไม้</span>
+        <span> · </span>
+        <span style={{ color: PNL_DANGER, fontWeight: 600 }}>แพ้ {closed.losses} ไม้</span>
+        {closed.flats > 0 ? (
           <>
-            {" · "}
-            <span style={{ color: "var(--warn, #b86)" }}>ล้มเหลว(สมมติ) {closed.failedTrades}</span>
+            <span> · </span>
+            <span style={{ color: PNL_MUTED }}>เสมอ {closed.flats}</span>
           </>
         ) : null}
-        )
-      </span>
-      {wrNode}
-      {renderPnlBucketLine("ปิดแล้ว", closedBucket)}
-      {renderPnlBucketLine("Unrealised", unrealised, { showTradeCount: true })}
-      {pendingNode}
-    </>
+        <span> · รวม {closed.trades} ไม้ </span>
+        <span style={{ color: PNL_MUTED }}>
+          (สำเร็จ {closed.successTrades}
+          {closed.failedTrades > 0 ? (
+            <>
+              {" · "}
+              <span style={{ color: "var(--warn, #b86)" }}>ล้มเหลว(สมมติ) {closed.failedTrades}</span>
+            </>
+          ) : null}
+          )
+        </span>
+        {wrNode}
+        {pendingNode}
+      </div>
+      {renderPnlBucketRow("Realised", closedBucket)}
+      {renderPnlBucketRow("Unrealised", unrealised, { showTradeCount: true })}
+    </div>
   );
 }
 
@@ -715,16 +718,16 @@ export default function AutoOpenHistoryTelegramMiniApp() {
 
       <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
         {strategy48hSummaryNode ? (
-          <p
+          <div
             className="sub"
             title={
               strategy48hSummaryTitle ??
-              "ชนะ/แพ้@48h = ไม้ครบ 48h · ปิดแล้ว = P/L ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่มี entry อ้างอิง"
+              "ชนะ/แพ้@48h = ไม้ครบ 48h · Realised = P/L ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่มี entry อ้างอิง"
             }
             style={{ marginTop: 0, marginBottom: "0.65rem", lineHeight: 1.45 }}
           >
             {strategy48hSummaryNode}
-          </p>
+          </div>
         ) : null}
         <div className="marketsFundingHistTableWrap" style={{ overflowX: "auto" }}>
           <table className="marketsFundingHistTable sparkStatsTable">
@@ -801,7 +804,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </section>
 
       <p className="sub" style={{ marginTop: "0.5rem" }}>
-        ราคาปัจจุบัน = MEXC perp last · P/L = mark สด · ปิดแล้ว = ผล@48h ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h · cron อัปเดต follow-up
+        ราคาปัจจุบัน = MEXC perp last · P/L = mark สด · Realised = ผล@48h ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h · cron อัปเดต follow-up
       </p>
 
       <p className="sub" style={{ marginTop: "1rem" }}>

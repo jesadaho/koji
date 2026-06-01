@@ -342,35 +342,50 @@ export function summarizeAutoOpenUnrealizedPnl(
   return finalizeAutoOpenPnlUsdtBucket(acc);
 }
 
-function formatAutoOpenClosedNetUsdtParts(summary: AutoOpenStrategy48hSummary): string {
-  return formatAutoOpenPnlBucketParts(
-    "ปิดแล้ว",
+function formatAutoOpenPnlBucketLine(
+  label: string,
+  bucket: Pick<AutoOpenPnlUsdtBucket, "sumUsdt" | "sumUsdtSuccess" | "sumUsdtFailed">,
+  successTrades: number,
+  failedTrades: number,
+  tradeCount?: number,
+): string {
+  const core = formatAutoOpenPnlBucketParts(label, bucket, successTrades, failedTrades).replace(
+    /^ · /,
+    "",
+  );
+  if (!core) return "";
+  return tradeCount != null && tradeCount > 0 ? `${core} (${tradeCount} ไม้)` : core;
+}
+
+function formatAutoOpenClosedNetUsdtLine(summary: AutoOpenStrategy48hSummary): string {
+  return formatAutoOpenPnlBucketLine(
+    "Realised",
     summary,
     summary.successTrades,
     summary.failedTrades,
   );
 }
 
-function formatAutoOpenUnrealisedNetUsdtParts(bucket: AutoOpenPnlUsdtBucket): string {
-  const core = formatAutoOpenPnlBucketParts(
+function formatAutoOpenUnrealisedNetUsdtLine(bucket: AutoOpenPnlUsdtBucket): string {
+  return formatAutoOpenPnlBucketLine(
     "Unrealised",
     bucket,
     bucket.successTrades,
     bucket.failedTrades,
+    bucket.trades,
   );
-  if (!core) return "";
-  return bucket.trades > 0 ? `${core} (${bucket.trades} ไม้)` : core;
 }
 
 export function formatAutoOpenStrategy48hSummaryText(
   summary: AutoOpenStrategy48hSummary,
   unrealised?: AutoOpenPnlUsdtBucket,
 ): string | null {
-  const unrealPart = unrealised ? formatAutoOpenUnrealisedNetUsdtParts(unrealised) : "";
+  const realisedLine = formatAutoOpenClosedNetUsdtLine(summary);
+  const unrealLine = unrealised ? formatAutoOpenUnrealisedNetUsdtLine(unrealised) : "";
+  const pnlLines = [realisedLine, unrealLine].filter(Boolean).join("\n");
 
   if (summary.trades === 0 && summary.pending === 0) {
-    if (!unrealPart) return null;
-    return unrealPart.replace(/^ · /, "");
+    return pnlLines || null;
   }
 
   if (summary.trades === 0) {
@@ -378,7 +393,7 @@ export function formatAutoOpenStrategy48hSummaryText(
       summary.pending > 0
         ? `ผล@48h: รอผล ${summary.pending} ไม้ (ยังไม่ครบ 48h)`
         : "ผล@48h:";
-    return `${pendingLine}${unrealPart}`;
+    return pnlLines ? `${pendingLine}\n${pnlLines}` : pendingLine;
   }
 
   const flatPart = summary.flats > 0 ? ` · เสมอ ${summary.flats}` : "";
@@ -388,11 +403,11 @@ export function formatAutoOpenStrategy48hSummaryText(
     summary.decisive > 0 && summary.winratePct != null
       ? ` · WR ${summary.winratePct.toFixed(1)}% (${summary.wins}/${summary.decisive})`
       : "";
-  const closedPart = formatAutoOpenClosedNetUsdtParts(summary);
   const failedPart =
     summary.failedTrades > 0
       ? ` · ล้มเหลว(สมมติ) ${summary.failedTrades}`
       : "";
 
-  return `ผล@48h: ชนะ ${summary.wins} ไม้ · แพ้ ${summary.losses} ไม้${flatPart} · รวม ${summary.trades} ไม้ (สำเร็จ ${summary.successTrades}${failedPart})${wrPart}${closedPart}${unrealPart}${pendingPart}`;
+  const statsLine = `ผล@48h: ชนะ ${summary.wins} ไม้ · แพ้ ${summary.losses} ไม้${flatPart} · รวม ${summary.trades} ไม้ (สำเร็จ ${summary.successTrades}${failedPart})${wrPart}${pendingPart}`;
+  return pnlLines ? `${statsLine}\n${pnlLines}` : statsLine;
 }
