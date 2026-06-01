@@ -18,6 +18,7 @@ import {
   autoOpenStrategyOutcomeLabel,
   formatAutoOpenStrategy48hSummaryText,
   summarizeAutoOpenStrategy48h,
+  type AutoOpenStrategy48hSummary,
   type AutoOpenStrategyOutcome,
 } from "@/lib/autoOpenStrategyOutcome";
 import { autoOpenOrderLogToCsv } from "@/lib/autoOpenOrderLogCsvExport";
@@ -28,6 +29,7 @@ import {
 } from "@/lib/kojiTelegramWebApp";
 import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 import {
+  formatStatsStrategyProfitDollarAmount,
   formatStatsStrategyProfitUsdt,
   resolveStatsStrategyDisplayPct,
 } from "@/lib/statsStrategyProfitClient";
@@ -77,6 +79,87 @@ function pnlStyle(pct: number): { color: string } {
   if (pct > 0) return { color: "var(--ok, #3a8)" };
   if (pct < 0) return { color: "var(--danger, #c44)" };
   return { color: "inherit" };
+}
+
+const PNL_OK = "var(--ok, #3a8)";
+const PNL_DANGER = "var(--danger, #c44)";
+const PNL_MUTED = "var(--muted, #888)";
+
+function pnlAmountStyle(amount: number): { color: string; fontWeight: number } {
+  if (amount > 0) return { color: PNL_OK, fontWeight: 600 };
+  if (amount < 0) return { color: PNL_DANGER, fontWeight: 600 };
+  return { color: "inherit", fontWeight: 600 };
+}
+
+function renderAutoOpenStrategy48hSummary(summary: AutoOpenStrategy48hSummary): ReactNode | null {
+  if (summary.trades === 0 && summary.pending === 0) return null;
+  if (summary.trades === 0) {
+    return summary.pending > 0 ? (
+      <>
+        <span>ผล@48h: </span>
+        <span style={{ color: PNL_MUTED }}>รอผล {summary.pending} ไม้</span>
+        <span style={{ color: PNL_MUTED }}> (ยังไม่ครบ 48h)</span>
+      </>
+    ) : null;
+  }
+
+  const wrNode =
+    summary.decisive > 0 && summary.winratePct != null ? (
+      <>
+        {" · "}
+        <span style={pnlAmountStyle(summary.winratePct - 50)}>
+          WR {summary.winratePct.toFixed(1)}% ({summary.wins}/{summary.decisive})
+        </span>
+      </>
+    ) : null;
+
+  const netNode =
+    summary.sumUsdt != null ? (
+      <>
+        {" · "}
+        <span>สุทธิ </span>
+        <span style={pnlAmountStyle(summary.sumUsdt)}>
+          {formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}
+        </span>
+      </>
+    ) : null;
+
+  const pendingNode =
+    summary.pending > 0 ? (
+      <>
+        {" · "}
+        <span style={{ color: PNL_MUTED }}>รอผล {summary.pending}</span>
+      </>
+    ) : null;
+
+  return (
+    <>
+      <span>ผล@48h: </span>
+      <span style={{ color: PNL_OK, fontWeight: 600 }}>ชนะ {summary.wins} ไม้</span>
+      <span> · </span>
+      <span style={{ color: PNL_DANGER, fontWeight: 600 }}>แพ้ {summary.losses} ไม้</span>
+      {summary.flats > 0 ? (
+        <>
+          <span> · </span>
+          <span style={{ color: PNL_MUTED }}>เสมอ {summary.flats}</span>
+        </>
+      ) : null}
+      <span> · รวม {summary.trades} ไม้ </span>
+      <span style={{ color: PNL_MUTED }}>
+        (สำเร็จ {summary.successTrades}
+        {summary.failedTrades > 0 ? (
+          <>
+            {" · "}
+            <span style={{ color: "var(--warn, #b86)" }}>ล้มเหลว(สมมติ) {summary.failedTrades}</span>
+          </>
+        ) : null}
+        )
+      </span>
+      {wrNode}
+      {netNode}
+      {pendingNode}
+    </>
+  );
 }
 
 function fmtPnlUsdt(marginUsdt: number, leverage: number, pct: number): string {
@@ -412,7 +495,11 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     () => summarizeAutoOpenStrategy48h(displayRows),
     [displayRows],
   );
-  const strategy48hSummaryText = useMemo(
+  const strategy48hSummaryNode = useMemo(
+    () => renderAutoOpenStrategy48hSummary(strategy48hSummary),
+    [strategy48hSummary],
+  );
+  const strategy48hSummaryTitle = useMemo(
     () => formatAutoOpenStrategy48hSummaryText(strategy48hSummary),
     [strategy48hSummary],
   );
@@ -543,13 +630,16 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </div>
 
       <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
-        {strategy48hSummaryText ? (
+        {strategy48hSummaryNode ? (
           <p
             className="sub"
-            title="นับไม้สั่งสำเร็จ + ล้มเหลวที่มี entry สมมติและครบ follow-up 48h · ชนะ/แพ้ตามกติกา Snowball (Quick TP30/Trend/MFE) และ Reversal (±2% ที่ 48h) · ล้มเหลว = P/L สมมติ (ไม่ได้เปิดจริง) · เสมอ = ระหว่างเกณฑ์ชนะ–แพ้"
-            style={{ marginTop: 0, marginBottom: "0.65rem", fontWeight: 600 }}
+            title={
+              strategy48hSummaryTitle ??
+              "นับไม้สั่งสำเร็จ + ล้มเหลวที่มี entry สมมติและครบ follow-up 48h · ชนะ/แพ้ตามกติกา Snowball (Quick TP30/Trend/MFE) และ Reversal (±2% ที่ 48h) · ล้มเหลว = P/L สมมติ (ไม่ได้เปิดจริง) · เสมอ = ระหว่างเกณฑ์ชนะ–แพ้"
+            }
+            style={{ marginTop: 0, marginBottom: "0.65rem", lineHeight: 1.45 }}
           >
-            {strategy48hSummaryText}
+            {strategy48hSummaryNode}
           </p>
         ) : null}
         <div className="marketsFundingHistTableWrap" style={{ overflowX: "auto" }}>
