@@ -272,23 +272,10 @@ export async function runReversalAutoTradeAfterReversalAlert(
       : undefined;
 
   const contractSymbolEarly = binanceUsdtPerpToMexcContract(binanceSymbol);
-  const gateSignalBase: ReversalAutoOpenLogSignal | null = contractSymbolEarly
-    ? {
-        contractSymbol: contractSymbolEarly,
-        binanceSymbol,
-        signalBarTf: input.signalBarTf,
-        model: input.model,
-        signalBarOpenSec: input.signalBarOpenSec,
-        bodyRatio,
-        wickRatio,
-        rangeRankInLookback: input.rangeRankInLookback,
-      }
-    : null;
+  if (!contractSymbolEarly) return { usersAttempted: 0, usersSucceeded: 0 };
+  const contractSymbol: string = contractSymbolEarly;
 
-  const contractSymbol = contractSymbolEarly;
-  if (!contractSymbol) return { usersAttempted: 0, usersSucceeded: 0 };
-
-  const logSignal: ReversalAutoOpenLogSignal = gateSignalBase ?? {
+  const logSignal: ReversalAutoOpenLogSignal = {
     contractSymbol,
     binanceSymbol,
     signalBarTf: input.signalBarTf,
