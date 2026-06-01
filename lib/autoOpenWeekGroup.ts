@@ -68,7 +68,7 @@ export function groupAutoOpenLogsByBkkWeek(rows: AutoOpenOrderLogRow[]): AutoOpe
     if (list) list.push(r);
     else map.set(key, [r]);
   }
-  return [...map.entries()]
+  return Array.from(map.entries())
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([weekKey, weekRows]) => ({
       weekKey,
