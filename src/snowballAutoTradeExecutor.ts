@@ -131,14 +131,14 @@ function resolveSnowballAutoOpenSide(
   });
   const qssMatch = snowballAutoOpenMatchesQualityShortSignal(input);
 
-  /** Quality Signal ชนะ Sunday / Quality Short — ต้อง Long เมื่อตรงเกณฑ์ */
+  /** Quality Signal / Quality Short ชนะ Sunday และ default */
   if (qsOn && qsMatch) {
     return "long";
   }
-  if (row.snowballAutoTradeSundayAllShortEnabled === true && bkkIsSundayNow()) {
+  if (qssOn && qssMatch) {
     return "short";
   }
-  if (qssOn && qssMatch) {
+  if (row.snowballAutoTradeSundayAllShortEnabled === true && bkkIsSundayNow()) {
     return "short";
   }
   if (qsOn || qssOn) {
@@ -255,8 +255,18 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
     fundingRate: input.fundingRate ?? null,
   });
+  const qualityShortMatch = snowballAutoOpenMatchesQualityShortSignal({
+    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
+    barRangePctSignal: input.barRangePctSignal ?? null,
+    signalBarTf: input.signalBarTf,
+    vol: input.vol,
+    volSma: input.volSma,
+    signalVolVsSma: input.signalVolVsSma ?? null,
+    confirmVolVsSma: input.confirmVolVsSma ?? null,
+  });
+  const forceMatrixOpen = qualitySignalMatch || qualityShortMatch;
 
-  if (input.actionPlan === "monitor" && !qualitySignalMatch) {
+  if (input.actionPlan === "monitor" && !forceMatrixOpen) {
     return { usersAttempted: 0, usersSucceeded: 0 };
   }
 

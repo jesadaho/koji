@@ -1059,7 +1059,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>✨ Quality Signal → Long</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              สัญญาณที่ตรง matrix ✨ Quality Signal — เขียว <strong>2</strong> วัน · Funding &gt; −0.10% — สั่ง <strong>Long</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะ Quality Short / วันอาทิตย์
+              สัญญาณที่ตรง matrix ✨ Quality Signal — เขียว <strong>2</strong> วัน · Funding &gt; −0.10% — สั่ง <strong>Long</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะ Quality Short / วันอาทิตย์เมื่อตรงเกณฑ์ Long
             </span>
           </span>
         </label>
@@ -1073,7 +1073,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>✨ Quality Short Signal → Short</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              สัญญาณที่ตรง matrix ✨ Quality Short Signal — เขียว <strong>1</strong> วัน · Vol×SMA &gt; 3× · R% สัญญาณ &gt; 8% — เปิด <strong>Short</strong> บน MEXC · เปิดตัวเลือกนี้แล้วไม่ตรงเกณฑ์จะไม่ auto-open
+              สัญญาณที่ตรง matrix ✨ Quality Short Signal — เขียว <strong>1</strong> วัน · Vol×SMA &gt; 3× · R% สัญญาณ &gt; 8% — สั่ง <strong>Short</strong> ทันทีตอนแจ้ง (ไม่รอ confirm) · ชนะวันอาทิตย์ (ถ้าไม่ตรง Quality Signal Long)
             </span>
           </span>
         </label>

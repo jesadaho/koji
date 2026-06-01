@@ -74,7 +74,10 @@ import {
   snowballTwoBarInlinePullbackMaxFrac,
   type SnowballTwoBarInlineEval,
 } from "./snowballTwoBarInline";
-import { snowballMatchesQualitySignal } from "@/lib/snowballMatrixFilters";
+import {
+  snowballMatchesQualityShortSignal,
+  snowballMatchesQualitySignal,
+} from "@/lib/snowballMatrixFilters";
 import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
@@ -3607,19 +3610,31 @@ export async function runPublicIndicatorFeedInternal(
             }
             let longMktCtx: Awaited<ReturnType<typeof fetchSnowballAlertMarketContext>> | null =
               longMktCtxForAlert;
-            const runLongAutoOpenNow = !intrabar && (!skipSnowballTgForPending || longQualitySignal);
+            const longVolSnapAuto = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
+            const longSignalVolVsSma =
+              typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
+                ? vE! / vsE
+                : null;
+            const longQualityShortSignal = snowballMatchesQualityShortSignal({
+              greenDaysBeforeSignal: longGreenDaysForAlert,
+              barRangePctSignal: longVolSnapAuto.barRangePctSignal,
+              signalBarTf: snowTf,
+              signalVolVsSma: longSignalVolVsSma,
+            });
+            const runLongAutoOpenNow =
+              !intrabar &&
+              (!skipSnowballTgForPending || longQualitySignal || longQualityShortSignal);
             if (runLongAutoOpenNow) {
               try {
                 const longActionPlan =
                   gradeResolution.kind === "grade" ? gradeResolution.actionPlan ?? null : null;
                 let marginScale: number | undefined;
-                if (!longQualitySignal && longActionPlan != null) {
+                if (!longQualitySignal && !longQualityShortSignal && longActionPlan != null) {
                   const apm = snowballActionPlanMarginScale(longActionPlan);
                   if (apm !== 1.0) marginScale = apm;
                 } else if (longBreakoutGrade === "b_plus" && sustainedBuyingPressure) {
                   marginScale = snowballGradeBSustainedMarginScale();
                 }
-                const longVolSnapAuto = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
                 await runSnowballAutoTradeAfterSnowballAlert({
                   contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
                   binanceSymbol: symbol,
@@ -3638,15 +3653,17 @@ export async function runPublicIndicatorFeedInternal(
                       : null,
                   vol: vE!,
                   volSma: vsE!,
-                  actionPlan: longQualitySignal ? null : longActionPlan,
+                  actionPlan:
+                    longQualitySignal || longQualityShortSignal ? null : longActionPlan,
                   greenDaysBeforeSignal: longGreenDaysForAlert,
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
+                  signalVolVsSma: longSignalVolVsSma,
                   ...(marginScale != null ? { marginScale } : {}),
                 });
-                if (longQualitySignal && skipSnowballTgForPending) {
+                if ((longQualitySignal || longQualityShortSignal) && skipSnowballTgForPending) {
                   console.info(
-                    `[indicatorPublicFeed] Snowball LONG auto-open at alert (✨ Quality Signal, pending confirm) ${symbol} ${snowTf}`,
+                    `[indicatorPublicFeed] Snowball LONG auto-open at alert (${longQualitySignal ? "✨ Quality Signal" : "✨ Quality Short Signal"}, pending confirm) ${symbol} ${snowTf}`,
                   );
                 }
               } catch (e) {
@@ -4107,6 +4124,17 @@ export async function runPublicIndicatorFeedInternal(
           greenDaysBeforeSignal: bearGreenDaysForAlert,
           fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
         });
+        const bearVolSnapAuto = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
+        const bearSignalVolVsSma =
+          typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
+            ? vE! / vsE
+            : null;
+        const bearQualityShortSignal = snowballMatchesQualityShortSignal({
+          greenDaysBeforeSignal: bearGreenDaysForAlert,
+          barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
+          signalBarTf: snowTf,
+          signalVolVsSma: bearSignalVolVsSma,
+        });
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", signalBarOpenSec, {
           close: clE!,
@@ -4176,7 +4204,8 @@ export async function runPublicIndicatorFeedInternal(
                 pushSnowScanSymList(snowScanStats.bearSentSymbols, `${symbol} BEAR`);
               }
             }
-            if (!intrabar && !skipBearTgForPending) {
+            const runBearAutoOpenNow = !intrabar && (!skipBearTgForPending || bearQualityShortSignal);
+            if (runBearAutoOpenNow) {
               try {
                 await runSnowballAutoTradeAfterSnowballAlert({
                   contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
@@ -4192,7 +4221,14 @@ export async function runPublicIndicatorFeedInternal(
                   volSma: vsE!,
                   greenDaysBeforeSignal: bearGreenDaysForAlert,
                   fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
+                  barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
+                  signalVolVsSma: bearSignalVolVsSma,
                 });
+                if (bearQualityShortSignal && skipBearTgForPending) {
+                  console.info(
+                    `[indicatorPublicFeed] Snowball BEAR auto-open at alert (✨ Quality Short Signal, pending confirm) ${symbol} ${snowTf}`,
+                  );
+                }
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open SHORT", symbol, e);
               }

@@ -364,6 +364,13 @@ function fmtHorizonCell(
   );
 }
 
+function fmtMaxDdCell(row: AutoOpenOrderLogRow): ReactNode {
+  if (!autoOpenHorizonDue(row, 48)) return "-";
+  const dd = row.maxDrawdownPct;
+  if (dd == null || !Number.isFinite(dd)) return "—";
+  return <span style={{ whiteSpace: "nowrap" }}>{dd.toFixed(2)}%</span>;
+}
+
 function renderAutoOpenHistoryTableBody(
   rows: AutoOpenOrderLogRow[],
   markPrices: Record<string, number>,
@@ -372,7 +379,7 @@ function renderAutoOpenHistoryTableBody(
   if (rows.length === 0) {
     return (
       <tr>
-        <td colSpan={17} className="sub">
+        <td colSpan={18} className="sub">
           {emptyMessage}
         </td>
       </tr>
@@ -410,6 +417,7 @@ function renderAutoOpenHistoryTableBody(
         <td>{fmtHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
         <td>{fmtHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
         <td>{fmtHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
+        <td title="Max drawdown % ถึง MFE ในกรอบ 48h (15m)">{fmtMaxDdCell(r)}</td>
       </tr>
     );
   });
@@ -451,6 +459,7 @@ function AutoOpenHistoryTable({
             <th>12h</th>
             <th>24h</th>
             <th>48h</th>
+            <th title="Max drawdown % ถึง MFE ในกรอบ 48h">Max DD</th>
           </tr>
         </thead>
         <tbody>{renderAutoOpenHistoryTableBody(rows, markPrices, emptyMessage)}</tbody>
@@ -918,7 +927,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </section>
 
       <p className="sub" style={{ marginTop: "0.5rem" }}>
-        ราคาปัจจุบัน = MEXC perp last · แยกรายสัปดาห์ = จันทร์–อาทิตย์ (BKK) · Realised / Unrealised ตามกติกาด้านบน · cron อัปเดต follow-up
+        ราคาปัจจุบัน = MEXC perp last · Max DD = drawdown สูงสุดถึง MFE ใน 48h · แยกรายสัปดาห์ = จันทร์–อาทิตย์ (BKK) · cron อัปเดต follow-up
       </p>
 
       <p className="sub" style={{ marginTop: "1rem" }}>
