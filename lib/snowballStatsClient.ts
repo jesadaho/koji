@@ -108,6 +108,8 @@ export type SnowballStatsRow = {
   confirmVolRank?: number | null;
   confirmVolRankLb?: number | null;
   greenDaysBeforeSignal?: number | null;
+  /** เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) */
+  greenDaysBeforeSignalBkk?: number | null;
   svpHoleYn: "Y" | "N";
   /** Stage 1 ceiling จาก Base-Offset matrix (A / B / C) — 4h เท่านั้น */
   structureCeiling?: "A" | "B" | "C" | null;

@@ -18,6 +18,7 @@ export async function fetchGreenDaysBeforeReversalSignal(
   symbol: string,
   signalBarOpenSec: number,
   signalBarTf: CandleReversalSignalBarTf,
+  opts?: { dayTzOffsetSec?: number },
 ): Promise<number | null> {
-  return fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, signalBarTf);
+  return fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, signalBarTf, opts);
 }

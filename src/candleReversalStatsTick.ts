@@ -544,7 +544,7 @@ async function followUpCandleReversal1dRow(
 }
 
 async function backfillGreenDaysBeforeSignal(rows: CandleReversalStatsRow[]): Promise<number> {
-  const need = rows.filter((r) => r.greenDaysBeforeSignal == null);
+  const need = rows.filter((r) => r.greenDaysBeforeSignal == null || r.greenDaysBeforeSignalBkk == null);
   if (need.length === 0) return 0;
 
   const packBySymbol = new Map<string, BinanceKlinePack | null>();
@@ -562,10 +562,22 @@ async function backfillGreenDaysBeforeSignal(rows: CandleReversalStatsRow[]): Pr
       packBySymbol.set(sym, pack);
     }
     const tf = signalBarTf(row);
-    const n = countGreenDaysBeforeSignalBar(pack, row.signalBarOpenSec, tf);
-    if (n == null) continue;
-    row.greenDaysBeforeSignal = n;
-    updated += 1;
+    let touched = false;
+    if (row.greenDaysBeforeSignal == null) {
+      const n = countGreenDaysBeforeSignalBar(pack, row.signalBarOpenSec, tf);
+      if (n != null) {
+        row.greenDaysBeforeSignal = n;
+        touched = true;
+      }
+    }
+    if (row.greenDaysBeforeSignalBkk == null) {
+      const nBkk = countGreenDaysBeforeSignalBar(pack, row.signalBarOpenSec, tf, { dayTzOffsetSec: 7 * 3600 });
+      if (nBkk != null) {
+        row.greenDaysBeforeSignalBkk = nBkk;
+        touched = true;
+      }
+    }
+    if (touched) updated += 1;
   }
   return updated;
 }

@@ -487,6 +487,12 @@ function ReversalStatsSection({
                 activeSort={sort}
                 onSort={onSortColumn}
               />
+              <th
+                scope="col"
+                title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) — แท่ง Day1 เขียวติดก่อนวันสัญญาณ"
+              >
+                เขียว(BKK)
+              </th>
               <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
@@ -614,6 +620,9 @@ function ReversalStatsSection({
                     </td>
                     <td title="แท่ง Day1 เขียวติดก่อนสัญญาณ">
                       {candleReversalGreenDaysLabel(r.greenDaysBeforeSignal)}
+                    </td>
+                    <td title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้)">
+                      {candleReversalGreenDaysLabel(r.greenDaysBeforeSignalBkk)}
                     </td>
                     <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
                     <td>

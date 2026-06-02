@@ -8,7 +8,7 @@ import {
 import { snowballMatchesQualitySignal } from "@/lib/snowballMatrixFilters";
 import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
-import { fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
+import { BKK_DAY_TZ_OFFSET_SEC, fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import {
   isPublicSnowballTripleCheckEnabled,
@@ -374,6 +374,12 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               item.signalBarOpenSec,
               item.snowTf,
             );
+            const greenDaysBeforeSignalBkk = await fetchGreenDaysBeforeSignalBar(
+              item.symbol,
+              item.signalBarOpenSec,
+              item.snowTf,
+              { dayTzOffsetSec: BKK_DAY_TZ_OFFSET_SEC },
+            );
             await appendSnowballStatsRow({
               symbol: item.symbol,
               side: statsTradeSide,
@@ -422,6 +428,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               confirmVolRank: volRank,
               confirmVolRankLb: volRank != null && Number.isFinite(volRank) ? volRankLookback : null,
               greenDaysBeforeSignal,
+              greenDaysBeforeSignalBkk,
             });
           } catch (e) {
             console.error("[snowballConfirmTick] append snowball stats after confirm", item.symbol, item.side, e);

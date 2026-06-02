@@ -1,6 +1,7 @@
 import { fetchBinanceUsdmKlines, type BinanceKlinePack } from "./binanceIndicatorKline";
 
 const ONE_DAY_SEC = 86400;
+export const BKK_DAY_TZ_OFFSET_SEC = 7 * 3600;
 
 export type GreenDayStreakSignalTf = "1d" | "1h" | "15m" | "4h";
 
@@ -30,6 +31,7 @@ export function countGreenDaysBeforeSignalBar(
   pack1d: BinanceKlinePack | null,
   signalBarOpenSec: number,
   signalBarTf: GreenDayStreakSignalTf,
+  opts?: { dayTzOffsetSec?: number },
 ): number | null {
   if (!pack1d?.timeSec?.length || !Number.isFinite(signalBarOpenSec)) return null;
   const { open, close, timeSec } = pack1d;
@@ -42,7 +44,16 @@ export function countGreenDaysBeforeSignalBar(
     return countGreenStreakEndingAt(open, close, iSig - 1);
   }
 
-  const dayOpen = Math.floor(signalBarOpenSec / ONE_DAY_SEC) * ONE_DAY_SEC;
+  /**
+   * สำหรับสัญญาณที่ไม่ใช่ 1D: นับจากแท่ง 1D ที่ “ปิดแล้ว” ก่อนวันปฏิทินของสัญญาณ
+   * โดยสามารถตัดวันตาม timezone ของกราฟ เพื่อให้ตรงกับที่ผู้ใช้เห็น
+   */
+  const dayTzOffsetSec =
+    opts?.dayTzOffsetSec != null && Number.isFinite(opts.dayTzOffsetSec)
+      ? Math.trunc(opts.dayTzOffsetSec)
+      : 0;
+  const dayOpen =
+    Math.floor((signalBarOpenSec + dayTzOffsetSec) / ONE_DAY_SEC) * ONE_DAY_SEC - dayTzOffsetSec;
   let firstIdxOnSignalDay = timeSec.length;
   for (let i = 0; i < timeSec.length; i++) {
     if (timeSec[i]! >= dayOpen) {
@@ -61,10 +72,11 @@ export async function fetchGreenDaysBeforeSignalBar(
   symbol: string,
   signalBarOpenSec: number,
   signalBarTf: GreenDayStreakSignalTf,
+  opts?: { dayTzOffsetSec?: number },
 ): Promise<number | null> {
   try {
     const pack = await fetchBinanceUsdmKlines(symbol.trim().toUpperCase(), "1d", 90);
-    return countGreenDaysBeforeSignalBar(pack, signalBarOpenSec, signalBarTf);
+    return countGreenDaysBeforeSignalBar(pack, signalBarOpenSec, signalBarTf, opts);
   } catch (e) {
     console.error("[greenDayStreak] fetch 1d", symbol, e);
     return null;

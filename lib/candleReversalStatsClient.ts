@@ -48,6 +48,8 @@ export type CandleReversalStatsRow = {
   marketSentiment?: MarketSentimentSnapshot | null;
   /** แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ — ไม่นับแท่งสัญญาณ */
   greenDaysBeforeSignal?: number | null;
+  /** เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) */
+  greenDaysBeforeSignalBkk?: number | null;
   /** 1H signal — checkpoint จากปิดแท่ง 15m (แบบ Snowball) */
   price4h: number | null;
   pct4h: number | null;

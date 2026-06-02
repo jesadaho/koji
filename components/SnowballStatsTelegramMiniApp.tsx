@@ -870,6 +870,12 @@ export default function SnowballStatsTelegramMiniApp() {
                 </th>
                 <th
                   scope="col"
+                  title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) — แท่ง Day1 เขียวติดก่อนวันสัญญาณ"
+                >
+                  เขียว(BKK)
+                </th>
+                <th
+                  scope="col"
                   title="4h = Vol แท่งสัญญาณ ÷ SMA(4H) (Signal Vol Spurt) · อื่นๆ = 1H confirm หรือ signal"
                 >
                   Vol×SMA
@@ -934,7 +940,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 38 : 37} className="sub">
+                    <td colSpan={isAdmin ? 39 : 38} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
                       : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
@@ -983,6 +989,7 @@ export default function SnowballStatsTelegramMiniApp() {
                     </td>
                     <td>{snowballStatsVolumeCascadeLabel(r.volumeCascadeYn)}</td>
                     <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal)}</td>
+                    <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignalBkk)}</td>
                     <td>{snowballStatsConfirmVolVsSmaLabel(snowballStatsVolVsSmaDisplay(r))}</td>
                     <td>{snowballStatsConfirmVolRankLabel(r.confirmVolRank, r.confirmVolRankLb)}</td>
                     <td>{fmtSnowballHorizonCell(r, 4, r.price4h, r.pct4h)}</td>

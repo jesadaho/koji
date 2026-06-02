@@ -178,6 +178,7 @@ export type AppendCandleReversalStatsInput = {
   wickScore?: number | null;
   afterInvertedDoji?: boolean;
   greenDaysBeforeSignal?: number | null;
+  greenDaysBeforeSignalBkk?: number | null;
 };
 
 function normalizeStatsSymbol(symbol: string): string {
@@ -216,6 +217,21 @@ export function candleReversalPendingStatsKeys(rows: CandleReversalStatsRow[]): 
     keys.add(pendingReversalStatsKey(r.symbol, r.signalBarTf ?? "1d", r.tradeSide ?? "short"));
   }
   return keys;
+}
+
+/** มี pending reversal แถวใดๆ อยู่แล้วสำหรับเหรียญนี้ (ไม่สน tf/ทิศ) */
+export function hasAnyPendingCandleReversalSymbol(
+  rows: CandleReversalStatsRow[],
+  symbol: string,
+): boolean {
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return false;
+  for (const r of rows) {
+    if (!r || r.outcome !== "pending") continue;
+    const s = typeof r.symbol === "string" ? r.symbol.trim().toUpperCase() : "";
+    if (s === sym) return true;
+  }
+  return false;
 }
 
 /**
@@ -319,6 +335,12 @@ export async function appendCandleReversalStatsRow(
       Number.isFinite(input.greenDaysBeforeSignal) &&
       input.greenDaysBeforeSignal >= 0
         ? Math.floor(input.greenDaysBeforeSignal)
+        : null,
+    greenDaysBeforeSignalBkk:
+      input.greenDaysBeforeSignalBkk != null &&
+      Number.isFinite(input.greenDaysBeforeSignalBkk) &&
+      input.greenDaysBeforeSignalBkk >= 0
+        ? Math.floor(input.greenDaysBeforeSignalBkk)
         : null,
     price4h: null,
     pct4h: null,

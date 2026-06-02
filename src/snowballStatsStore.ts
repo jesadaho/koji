@@ -156,6 +156,7 @@ export type AppendSnowballStatsInput = {
   confirmVolRank?: number | null;
   confirmVolRankLb?: number | null;
   greenDaysBeforeSignal?: number | null;
+  greenDaysBeforeSignalBkk?: number | null;
   breakout1hConfirmFail?: boolean;
   alertQualityTier?: SnowballStatsQualityTier;
   momentumDowngrade?: boolean;
@@ -513,6 +514,12 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       Number.isFinite(input.greenDaysBeforeSignal) &&
       input.greenDaysBeforeSignal >= 0
         ? Math.floor(input.greenDaysBeforeSignal)
+        : null,
+    greenDaysBeforeSignalBkk:
+      input.greenDaysBeforeSignalBkk != null &&
+      Number.isFinite(input.greenDaysBeforeSignalBkk) &&
+      input.greenDaysBeforeSignalBkk >= 0
+        ? Math.floor(input.greenDaysBeforeSignalBkk)
         : null,
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,

@@ -59,6 +59,7 @@ import {
   type CandleReversalTf,
 } from "./candleReversalDetect";
 import { fetchGreenDaysBeforeReversalSignal } from "./candleReversalGreenDayStreak";
+import { BKK_DAY_TZ_OFFSET_SEC } from "./greenDayStreak";
 import { candleReversalSignalVolVsSmaAt } from "./candleReversalSignalVolVsSma";
 import { snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { runReversalAutoTradeAfterReversalAlert } from "./reversalAutoTradeExecutor";
@@ -624,6 +625,12 @@ async function notifyResults(
         sig.barOpenSec,
         sig.tf,
       );
+      const greenDaysBeforeSignalBkk = await fetchGreenDaysBeforeReversalSignal(
+        row.symbol,
+        sig.barOpenSec,
+        sig.tf,
+        { dayTzOffsetSec: BKK_DAY_TZ_OFFSET_SEC },
+      );
       const msg = buildCandleReversalAlertMessage(row.symbol, sig, {
         greenDaysBeforeSignal,
         rangeScore: row.evals.rangeScore,
@@ -653,6 +660,7 @@ async function notifyResults(
           wickScore: row.evals.wickScore,
           afterInvertedDoji: sig.afterInvertedDoji,
           greenDaysBeforeSignal,
+          greenDaysBeforeSignalBkk,
         });
         if (appended) {
           pendingStatsKeys.add(pendingKey);
