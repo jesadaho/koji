@@ -181,6 +181,14 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsFundingRateOk = Number.isFinite(statsFundingRate);
   const statsAtrPct14d = Number(o.statsAtrPct14d);
   const statsAtrPct14dOk = Number.isFinite(statsAtrPct14d) && statsAtrPct14d > 0;
+  const statsRangeRankInLookback = Number(o.statsRangeRankInLookback);
+  const statsRangeRankInLookbackOk =
+    Number.isFinite(statsRangeRankInLookback) && statsRangeRankInLookback >= 1;
+  const statsLenLookbackBars = Number(o.statsLenLookbackBars);
+  const statsLenLookbackBarsOk =
+    Number.isFinite(statsLenLookbackBars) && statsLenLookbackBars >= 2;
+  const statsLenPercentilePct = Number(o.statsLenPercentilePct);
+  const statsLenPercentilePctOk = Number.isFinite(statsLenPercentilePct);
   const statsSignalVolVsSma = Number(o.statsSignalVolVsSma);
   const statsSignalVolVsSmaOk = Number.isFinite(statsSignalVolVsSma) && statsSignalVolVsSma > 0;
   const statsVolStrictOk =
