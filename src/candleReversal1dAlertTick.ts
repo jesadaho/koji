@@ -33,6 +33,7 @@ import {
 } from "./candleReversalStatsStore";
 import {
   buildCandleReversalAlertMessage,
+  reversalShortSkipsLowerWickDominant,
   DEFAULT_CANDLE_REVERSAL_1D_ENV,
   DEFAULT_CANDLE_REVERSAL_1H_ENV,
   candleReversalBarIndexBarsAgo,
@@ -612,6 +613,15 @@ async function notifyResults(
 
     const sig = row.evals.signal;
     const tradeSide = sig.tradeSide ?? "short";
+    if (tradeSide === "short") {
+      const upperWick = sig.wickRatio;
+      const lowerWick = sig.lowerWickRatio ?? 0;
+      if (reversalShortSkipsLowerWickDominant(upperWick, lowerWick)) {
+        scanStats.skippedLowerWickDominant += 1;
+        pushReversalScanSymList(scanStats.skippedLowerWickDominantSymbols, row.symbol);
+        continue;
+      }
+    }
     const pendingKey = reversalPendingStatsKey(row.symbol, sig.tf, tradeSide);
     if (pendingStatsKeys.has(pendingKey)) {
       scanStats.deduped += 1;
@@ -649,6 +659,10 @@ async function notifyResults(
           retestPrice: sig.retestPrice,
           slPrice: sig.slPrice,
           wickRatioPct: Number.isFinite(sig.wickRatio) ? sig.wickRatio * 100 : null,
+          lowerWickRatioPct:
+            tradeSide === "short" && sig.lowerWickRatio != null && Number.isFinite(sig.lowerWickRatio)
+              ? sig.lowerWickRatio * 100
+              : null,
           bodyPct: sig.bodyRatio * 100,
           highRankInLookback: sig.highRankInLookback ?? null,
           lowRankInLookback: sig.lowRankInLookback ?? null,

@@ -14,6 +14,7 @@ import {
   candleReversalSignalVolVsSmaLabel,
   candleReversalTradeSideLabel,
   candleReversalVolScoreLabel,
+  candleReversalWickRatioPctLabel,
   type CandleReversalStatsRow,
 } from "@/lib/candleReversalStatsClient";
 import {
@@ -39,7 +40,8 @@ const HEADERS = [
   "Entry",
   "Retest",
   "SL",
-  "ไส้%",
+  "ไส้บน%",
+  "ไส้ล่าง%",
   "เนื้อ%",
   "Len#",
   "Vol#",
@@ -98,7 +100,12 @@ function candleReversalStatsRowToCsvCells(
     statsFmtPrice(r.entryPrice),
     statsFmtPrice(r.retestPrice),
     statsFmtPrice(r.slPrice),
-    r.wickRatioPct != null && Number.isFinite(r.wickRatioPct) ? `${r.wickRatioPct.toFixed(1)}%` : "",
+    (r.tradeSide ?? "short") === "short"
+      ? candleReversalWickRatioPctLabel(r.wickRatioPct).replace("—", "")
+      : "",
+    (r.tradeSide ?? "short") === "short"
+      ? candleReversalWickRatioPctLabel(r.lowerWickRatioPct).replace("—", "")
+      : candleReversalWickRatioPctLabel(r.wickRatioPct).replace("—", ""),
     r.bodyPct != null && Number.isFinite(r.bodyPct) ? `${r.bodyPct.toFixed(1)}%` : "",
     candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars),
     candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars),

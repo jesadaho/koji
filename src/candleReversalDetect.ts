@@ -27,7 +27,10 @@ export type CandleReversalSignal = {
   h: number;
   l: number;
   c: number;
+  /** ไส้หลักใน stats/Quality — Short: ไส้บน · Long: ไส้ล่าง */
   wickRatio: number;
+  /** Short เท่านั้น — ไส้ล่าง ÷ ช่วงแท่ง (0–1) */
+  lowerWickRatio?: number;
   bodyRatio: number;
   retestPrice: number;
   slPrice: number;
@@ -277,6 +280,8 @@ function buildSignal(
   const lb = lbRaw != null && Number.isFinite(lbRaw) && lbRaw >= 2 ? Math.floor(lbRaw) : null;
   const rangeRankInLookback =
     lb != null ? rangeRankInWindow(h, l, Math.max(0, i - lb + 1), i, i) : undefined;
+  const lowerWickRatio =
+    tradeSide === "short" ? candleLowerWickRatio(pack, i) : undefined;
   return {
     tf,
     model,
@@ -287,6 +292,7 @@ function buildSignal(
     l: l[i]!,
     c: c[i]!,
     wickRatio,
+    ...(lowerWickRatio != null ? { lowerWickRatio } : {}),
     bodyRatio,
     retestPrice,
     slPrice,

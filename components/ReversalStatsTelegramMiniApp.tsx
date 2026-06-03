@@ -34,6 +34,7 @@ import {
   sortCandleReversalStatsRows,
   candleReversalSignalVolVsSmaLabel,
   candleReversalVolScoreLabel,
+  candleReversalWickRatioPctLabel,
   type CandleReversalSignalBarTf,
   type CandleReversalStatsApiPayload,
   type CandleReversalStatsRow,
@@ -534,7 +535,20 @@ function ReversalStatsSection({
               <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
               <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
-              <SortTh label="ไส้%" sortKey="wickPct" title="ไส้บน ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
+              <SortTh
+                label="ไส้บน%"
+                sortKey="wickPct"
+                title="Short: ไส้บน ÷ ช่วงแท่ง · Long: —"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+              <SortTh
+                label="ไส้ล่าง%"
+                sortKey="lowerWickPct"
+                title="Short: ไส้ล่าง ÷ ช่วงแท่ง · Long: ไส้ล่าง (wick หลัก)"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
               <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
               <SortTh
                 label="Len#"
@@ -682,7 +696,16 @@ function ReversalStatsSection({
                     <td>{fmtPrice(r.entryPrice)}</td>
                     <td>{fmtPrice(r.retestPrice)}</td>
                     <td>{fmtPrice(r.slPrice)}</td>
-                    <td>{r.wickRatioPct != null ? `${r.wickRatioPct.toFixed(1)}%` : "—"}</td>
+                    <td title="ไส้บน (Short)">
+                      {(r.tradeSide ?? "short") === "short"
+                        ? candleReversalWickRatioPctLabel(r.wickRatioPct)
+                        : "—"}
+                    </td>
+                    <td title={(r.tradeSide ?? "short") === "short" ? "ไส้ล่าง (Short)" : "ไส้ล่าง (Long)"}>
+                      {(r.tradeSide ?? "short") === "short"
+                        ? candleReversalWickRatioPctLabel(r.lowerWickRatioPct)
+                        : candleReversalWickRatioPctLabel(r.wickRatioPct)}
+                    </td>
                     <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
                     <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
                     <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>

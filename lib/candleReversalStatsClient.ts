@@ -28,7 +28,10 @@ export type CandleReversalStatsRow = {
   entryPrice: number;
   retestPrice: number;
   slPrice: number;
+  /** Short: ไส้บน ÷ ช่วงแท่ง (%) · Long: ไส้ล่าง */
   wickRatioPct: number | null;
+  /** Short เท่านั้น — ไส้ล่าง ÷ ช่วงแท่ง (%) */
+  lowerWickRatioPct?: number | null;
   bodyPct: number | null;
   /** อันดับ high ในรอบ lookbackBars (1 = สูงสุด) */
   highRankInLookback: number | null;
@@ -120,6 +123,25 @@ export function candleReversalTradeSideLabel(side: CandleReversalTradeSide): str
   return side === "long" ? "Long" : "Short";
 }
 
+export function candleReversalWickRatioPctLabel(pct: number | null | undefined): string {
+  if (pct == null || !Number.isFinite(pct)) return "—";
+  return `${pct.toFixed(1)}%`;
+}
+
+/** Short: ไส้บน + ไส้ล่าง · Long: แสดงไส้ล่าง (wickRatioPct) เท่านั้น */
+export function candleReversalWickCellsLabel(
+  row: Pick<CandleReversalStatsRow, "tradeSide" | "wickRatioPct" | "lowerWickRatioPct">,
+): string {
+  const side = row.tradeSide ?? "short";
+  if (side === "long") {
+    return candleReversalWickRatioPctLabel(row.wickRatioPct);
+  }
+  const upper = candleReversalWickRatioPctLabel(row.wickRatioPct);
+  const lower = candleReversalWickRatioPctLabel(row.lowerWickRatioPct);
+  if (upper === "—" && lower === "—") return "—";
+  return `บน ${upper} · ล่าง ${lower}`;
+}
+
 /** คำอธิบายตัวย่อโมเดล (header / footnote) */
 export const CANDLE_REVERSAL_MODEL_SHORT_LEGEND =
   "โดจิ=โดจิกลับหัว · ทุบ=แท่งแดงทุบ · แดงยาว=แท่งแดงทุบยาว · เขียวยาว=แท่งเขียวทุบยาว";
@@ -181,6 +203,7 @@ export type CandleReversalStatsSortKey =
   | "retest"
   | "sl"
   | "wickPct"
+  | "lowerWickPct"
   | "bodyPct"
   | "rangeRank"
   | "volRank"
@@ -282,6 +305,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.slPrice, b.slPrice);
     case "wickPct":
       return cmpNumNullLast(a.wickRatioPct, b.wickRatioPct);
+    case "lowerWickPct":
+      return cmpNumNullLast(a.lowerWickRatioPct, b.lowerWickRatioPct);
     case "bodyPct":
       return cmpNumNullLast(a.bodyPct, b.bodyPct);
     case "rangeRank":

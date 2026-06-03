@@ -89,6 +89,9 @@ export type CandleReversalTfScanSummaryStats = {
   longestGreenPassSymbols: string[];
   deduped: number;
   dedupedSymbols: string[];
+  /** Short: ไส้ล่าง > ไส้บน — ข้ามแจ้งเตือน/stats/auto-open */
+  skippedLowerWickDominant: number;
+  skippedLowerWickDominantSymbols: string[];
   cappedByRunLimit: number;
   cappedByRunLimitSymbols: string[];
   sent: number;
@@ -114,6 +117,8 @@ export function emptyCandleReversalTfScanSummaryStats(tf: CandleReversalTf): Can
     longestGreenPassSymbols: [],
     deduped: 0,
     dedupedSymbols: [],
+    skippedLowerWickDominant: 0,
+    skippedLowerWickDominantSymbols: [],
     cappedByRunLimit: 0,
     cappedByRunLimitSymbols: [],
     sent: 0,
@@ -184,6 +189,8 @@ export function formatCandleReversalScanSummaryMessage(opts: {
 
   lines.push("");
   lines.push("— ส่งแจ้งเตือน —");
+  lines.push(`ข้าม Short (ไส้ล่าง > ไส้บน): ${stats.skippedLowerWickDominant}`);
+  lines.push(...formatSymbolListLines("  ", stats.skippedLowerWickDominantSymbols));
   lines.push(`ติด dedupe (แท่งเดิม / มี pending อยู่แล้ว): ${stats.deduped}`);
   lines.push(...formatSymbolListLines("  ", stats.dedupedSymbols));
   lines.push(`เกิน cap ต่อรอบ (${alertCapPerRun}/run): ${stats.cappedByRunLimit}`);

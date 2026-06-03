@@ -116,6 +116,7 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
       typeof r.strategyExitReason === "string" && r.strategyExitReason.trim()
         ? (r.strategyExitReason.trim() as CandleReversalStatsRow["strategyExitReason"])
         : null,
+    lowerWickRatioPct: nullNum(r.lowerWickRatioPct),
     strategyProfitPct24h: nullNum(r.strategyProfitPct24h),
     strategyExitReason24h:
       typeof r.strategyExitReason24h === "string" && r.strategyExitReason24h.trim()
@@ -172,6 +173,7 @@ export type AppendCandleReversalStatsInput = {
   retestPrice: number;
   slPrice: number;
   wickRatioPct?: number | null;
+  lowerWickRatioPct?: number | null;
   bodyPct?: number | null;
   highRankInLookback?: number | null;
   lowRankInLookback?: number | null;
@@ -321,6 +323,10 @@ export async function appendCandleReversalStatsRow(
     slPrice: input.slPrice,
     wickRatioPct:
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,
+    lowerWickRatioPct:
+      input.lowerWickRatioPct != null && Number.isFinite(input.lowerWickRatioPct)
+        ? input.lowerWickRatioPct
+        : null,
     bodyPct: input.bodyPct != null && Number.isFinite(input.bodyPct) ? input.bodyPct : null,
     highRankInLookback: finiteRank(input.highRankInLookback),
     lowRankInLookback: finiteRank(input.lowRankInLookback),
