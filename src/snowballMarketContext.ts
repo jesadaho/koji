@@ -39,6 +39,10 @@ export type SnowballAlertMarketContext = {
   fundingRate: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d: number | null;
+  /** EMA(12) 4h ของคู่สัญญาณ — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
+  ema4hSlopePct7d: number | null;
+  /** EMA(12) 1d ของคู่สัญญาณ — slope % ย้อนหลัง 7 แท่ง */
+  ema1dSlopePct7d: number | null;
 };
 
 function binanceUsdtPerpToMexcContract(binanceSymbol: string): string | null {
