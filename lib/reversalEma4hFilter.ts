@@ -1,4 +1,4 @@
-/** ตัวกรอง EMA4h slope — Reversal stats Mini App + CSV export */
+/** ตัวกรอง EMA4h slope — Reversal / Snowball stats Mini App + CSV export */
 
 import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 

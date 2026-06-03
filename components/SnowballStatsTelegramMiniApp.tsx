@@ -34,6 +34,13 @@ import {
   prepareTelegramMiniAppShell,
 } from "@/lib/kojiTelegramWebApp";
 import {
+  REVERSAL_EMA4H_FILTER_OPTIONS,
+  reversalEma4hFilterLabel,
+  reversalEma4hFilterTitle,
+  reversalRowMatchesEma4hFilter,
+  type ReversalEma4hFilter,
+} from "@/lib/reversalEma4hFilter";
+import {
   SNOWBALL_MATRIX_FILTER_OPTIONS,
   snowballMatrixFilterLabel,
   snowballMatrixFilterTitle,
@@ -308,6 +315,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
   const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
+  const [ema4hFilter, setEma4hFilter] = useState<ReversalEma4hFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<SnowballMatrixFilter>("all");
   const [fundingFilter, setFundingFilter] = useState<SnowballFundingFilter>("all");
   const [greenDaysFilter, setGreenDaysFilter] = useState<SnowballGreenDaysFilter>("all");
@@ -549,6 +557,10 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => snowballStatsRowMatchesVolRankFilter(r, volRankFilter));
     }
 
+    if (ema4hFilter !== "all") {
+      result = result.filter((r) => reversalRowMatchesEma4hFilter(r, ema4hFilter));
+    }
+
     if (matrixFilter !== "all") {
       result = result.filter((r) => snowballStatsRowMatchesMatrixFilter(r, matrixFilter));
     }
@@ -569,6 +581,7 @@ export default function SnowballStatsTelegramMiniApp() {
     dowFilter,
     volVsSmaFilter,
     volRankFilter,
+    ema4hFilter,
     matrixFilter,
     fundingFilter,
     greenDaysFilter,
@@ -759,7 +772,7 @@ export default function SnowballStatsTelegramMiniApp() {
               <td colSpan={isAdmin ? 43 : 42} className="sub">
                 {allRows.length === 0
                   ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
+                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
               </td>
             </tr>
           ) : (
@@ -1027,6 +1040,25 @@ export default function SnowballStatsTelegramMiniApp() {
               title="อันดับ vol 1H จาก breakout confirm eval — 1 = สูงสุดในรอบ lookback"
             >
               {SNOWBALL_VOL_RANK_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            EMA4h∠7d
+            <select
+              value={ema4hFilter}
+              onChange={(e) => setEma4hFilter(e.currentTarget.value as ReversalEma4hFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "5.5rem" }}
+              title={reversalEma4hFilterTitle(ema4hFilter)}
+            >
+              {REVERSAL_EMA4H_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
