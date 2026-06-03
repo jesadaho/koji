@@ -25,6 +25,7 @@ export const REVERSAL_EMA4H_FILTER_OPTIONS: ReadonlyArray<{
   { value: "gt3", label: "> 3" },
   { value: "gt5", label: "> 5" },
   { value: "gt0lt30", label: "> 0 < 30" },
+  { value: "gt20", label: "> 20" },
   { value: "gt30", label: "> 30" },
   { value: "gt50", label: "> 50" },
 ];
