@@ -17,8 +17,8 @@ export type ReversalQualitySignalProfile = "short" | "long1h";
 export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
   "(เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5) หรือ (EMA4H < 0% และ > −30%)";
 
-/** ข้อความเกณฑ์ Quality Signal — สถิติ Reversal · Long 1H */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA = "EMA4H < −3%";
+/** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA = "EMA4H < −3% (fade SHORT)";
 
 export const REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO = 0.2;
 export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
