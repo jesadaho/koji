@@ -133,10 +133,12 @@ export function summarizeAutoOpenOrderLogs(rows: AutoOpenOrderLogRow[]): AutoOpe
     }
   }
 
-  const topReasonCodes = Array.from(reasonCounts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([code, count]) => ({ code, label: autoOpenReasonLabel(code), count }));
+  const topReasonCodes: { code: string; label: string; count: number }[] = [];
+  reasonCounts.forEach((count, code) => {
+    topReasonCodes.push({ code, label: autoOpenReasonLabel(code), count });
+  });
+  topReasonCodes.sort((a, b) => b.count - a.count);
+  const topReasonCodesTop5 = topReasonCodes.slice(0, 5);
 
   return {
     total: rows.length,
@@ -144,7 +146,7 @@ export function summarizeAutoOpenOrderLogs(rows: AutoOpenOrderLogRow[]): AutoOpe
     skipped,
     failed,
     bySource,
-    topReasonCodes,
+    topReasonCodes: topReasonCodesTop5,
   };
 }
 

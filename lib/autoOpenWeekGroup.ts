@@ -61,18 +61,27 @@ export type AutoOpenWeekGroup = {
 
 /** จัดกลุ่มตามสัปดาห์ (จันทร์ BKK) — เรียงสัปดาห์ใหม่ → เก่า */
 export function groupAutoOpenLogsByBkkWeek(rows: AutoOpenOrderLogRow[]): AutoOpenWeekGroup[] {
-  const map = new Map<string, AutoOpenOrderLogRow[]>();
+  const weekKeys: string[] = [];
+  const byWeek: Record<string, AutoOpenOrderLogRow[]> = {};
   for (const r of rows) {
     const key = autoOpenBkkWeekStartKey(r.atMs);
-    const list = map.get(key);
-    if (list) list.push(r);
-    else map.set(key, [r]);
+    const list = byWeek[key];
+    if (list) {
+      list.push(r);
+    } else {
+      byWeek[key] = [r];
+      weekKeys.push(key);
+    }
   }
-  return Array.from(map.entries())
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([weekKey, weekRows]) => ({
+  weekKeys.sort((a, b) => b.localeCompare(a));
+  const groups: AutoOpenWeekGroup[] = [];
+  for (const weekKey of weekKeys) {
+    const weekRows = byWeek[weekKey]!;
+    groups.push({
       weekKey,
       weekLabel: formatAutoOpenBkkWeekLabel(weekKey),
       rows: weekRows.sort((a, b) => b.atMs - a.atMs),
-    }));
+    });
+  }
+  return groups;
 }
