@@ -81,6 +81,12 @@ export type SnowballStatsRow = {
   maxUpperWick100?: number | null;
   rangeScore?: number | null;
   wickScore?: number | null;
+  /** อันดับความยาวแท่งใน lookback (1 = ยาวสุด) */
+  rangeRankInLookback?: number | null;
+  /** จำนวนแท่งในรอบ Len rank */
+  lenLookbackBars?: number | null;
+  /** Len percentile 0–100 (100 = ยาวสุดในรอบ) */
+  lenPercentilePct?: number | null;
   barRangePctPrev?: number | null;
   barRangePctSignal?: number | null;
   barRangePct2Sum?: number | null;

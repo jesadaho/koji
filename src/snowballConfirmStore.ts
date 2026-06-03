@@ -77,6 +77,9 @@ export type SnowballPendingConfirm = {
   statsMarketCapUsd?: number | null;
   statsFundingRate?: number | null;
   statsAtrPct14d?: number | null;
+  statsRangeRankInLookback?: number | null;
+  statsLenLookbackBars?: number | null;
+  statsLenPercentilePct?: number | null;
   statsSignalVolVsSma?: number | null;
   statsVolStrictOk?: boolean;
   statsVolNearMissOnly?: boolean;
@@ -265,6 +268,9 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsMarketCapUsdOk ? { statsMarketCapUsd } : {}),
     ...(statsFundingRateOk ? { statsFundingRate } : {}),
     ...(statsAtrPct14dOk ? { statsAtrPct14d } : {}),
+    ...(statsRangeRankInLookbackOk ? { statsRangeRankInLookback } : {}),
+    ...(statsLenLookbackBarsOk ? { statsLenLookbackBars } : {}),
+    ...(statsLenPercentilePctOk ? { statsLenPercentilePct } : {}),
     ...(statsSignalVolVsSmaOk ? { statsSignalVolVsSma } : {}),
     ...(statsVolStrictOk !== undefined ? { statsVolStrictOk } : {}),
     ...(statsVolNearMissOnly !== undefined ? { statsVolNearMissOnly } : {}),

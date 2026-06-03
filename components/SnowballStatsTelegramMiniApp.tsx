@@ -12,7 +12,9 @@ import {
 } from "@/components/StatsWeekGroupUi";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
+import { candleReversalLookbackRankCell } from "@/lib/candleReversalStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
+import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
   STATS_STRATEGY_PROFIT_HOLD_24H,
@@ -652,6 +654,12 @@ export default function SnowballStatsTelegramMiniApp() {
             <th scope="col">Entry</th>
             <th scope="col">Range</th>
             <th scope="col">Wick</th>
+            <th scope="col" title="อันดับความยาวแท่ง (high-low) ในรอบ lookback — 1 = ยาวสุด">
+              Len#
+            </th>
+            <th scope="col" title="Len percentile — 100% = ยาวสุดในรอบ lookback">
+              Len%
+            </th>
             <th scope="col">R% ก่อน</th>
             <th scope="col">R% สัญญาณ</th>
             <th scope="col">R% 2แท่ง</th>
@@ -770,6 +778,8 @@ export default function SnowballStatsTelegramMiniApp() {
                 <td>{fmtPrice(r.entryPrice)}</td>
                 <td>{snowballStatsVolScoreLabel(r.rangeScore)}</td>
                 <td>{snowballStatsVolScoreLabel(r.wickScore)}</td>
+                <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lenLookbackBars)}</td>
+                <td title="Len percentile">{statsLenPercentileLabel(r.lenPercentilePct)}</td>
                 <td>{snowballStatsBarRangePctLabel(r.barRangePctPrev)}</td>
                 <td>{snowballStatsBarRangePctLabel(r.barRangePctSignal)}</td>
                 <td>{snowballStatsBarRangePctLabel(r.barRangePct2Sum)}</td>

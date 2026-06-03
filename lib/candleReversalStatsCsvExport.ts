@@ -4,7 +4,7 @@ import {
 } from "@/lib/marketSentiment";
 import {
   candleReversalDayOfWeekBkk,
-  candleReversalEmaTrendCsvLabel,
+  candleReversalEmaSlopeCsvLabel,
   candleReversalGreenDaysLabel,
   candleReversalLookbackRankCell,
   candleReversalLowLookbackRankCell,
@@ -31,6 +31,7 @@ import {
   snowballStatsQuoteVol24hLabel,
 } from "@/lib/snowballStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
+import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -46,8 +47,8 @@ const HEADERS = [
   "Entry",
   "Vol 24h",
   "Mcap",
-  "EMA 4h",
-  "EMA 1d",
+  "EMA4h slope 7d %",
+  "EMA1d slope 7d %",
   "ATR% 14D",
   "Retest",
   "SL",
@@ -55,6 +56,7 @@ const HEADERS = [
   "ไส้ล่าง%",
   "เนื้อ%",
   "Len#",
+  "Len%",
   "Vol#",
   "Vol×SMA",
   "High#",
@@ -111,8 +113,8 @@ function candleReversalStatsRowToCsvCells(
     statsFmtPrice(r.entryPrice),
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
-    candleReversalEmaTrendCsvLabel(r.ema4hTrend),
-    candleReversalEmaTrendCsvLabel(r.ema1dTrend),
+    candleReversalEmaSlopeCsvLabel(r.ema4hSlopePct7d),
+    candleReversalEmaSlopeCsvLabel(r.ema1dSlopePct7d),
     statsAtrPct14dLabel(r.atrPct14d),
     statsFmtPrice(r.retestPrice),
     statsFmtPrice(r.slPrice),
@@ -124,6 +126,7 @@ function candleReversalStatsRowToCsvCells(
       : candleReversalWickRatioPctLabel(r.wickRatioPct).replace("—", ""),
     r.bodyPct != null && Number.isFinite(r.bodyPct) ? `${r.bodyPct.toFixed(1)}%` : "",
     candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars),
+    statsLenPercentileLabel(r.lenPercentilePct),
     candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars),
     candleReversalSignalVolVsSmaLabel(r.signalVolVsSma),
     candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars),

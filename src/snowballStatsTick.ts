@@ -1,3 +1,4 @@
+import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
 import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
 import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
@@ -357,6 +358,7 @@ export async function runSnowballStatsFollowUpTick(
 
   const migrations = applySnowballStatsRowMigrations(state.rows);
   dirty += migrations;
+  dirty += backfillSnowballLenPercentilePct(state.rows);
   const trendMomentum = await backfillSnowballTrendMomentumFields(state.rows);
   dirty += trendMomentum;
   const confirmGateSteps = await backfillSnowballConfirmGateSteps(state.rows);

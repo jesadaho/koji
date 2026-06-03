@@ -13,6 +13,7 @@ import {
 } from "@/components/StatsWeekGroupUi";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
+import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
   STATS_STRATEGY_PROFIT_HOLD_24H,
@@ -33,8 +34,8 @@ import {
 } from "@/lib/snowballStatsClient";
 import {
   candleReversalDayOfWeekBkk,
-  candleReversalEma4hTrendLabel,
-  candleReversalEma1dTrendLabel,
+  candleReversalEma4hSlopeLabel,
+  candleReversalEma1dSlopeLabel,
   candleReversalGreenDaysLabel,
   candleReversalHorizonWinrateSummary,
   CANDLE_REVERSAL_MODEL_SHORT_LEGEND,
@@ -351,7 +352,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 25 : 22) + extraRankCols + 6;
+  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 6;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -436,16 +437,16 @@ function ReversalStatsSection({
               onSort={onSortColumn}
             />
             <SortTh
-              label="EMA4h"
+              label="EMA4h∠7d"
               sortKey="ema4h"
-              title="EMA6/12 4h — ↑ uptrend (ปิด>EMA12 และ EMA6>EMA12) · ↓ downtrend"
+              title="EMA(12) 4h slope % ย้อนหลัง 7 วัน (42 แท่ง) — (EMAวันนี้−EMA7วันก่อน)/EMA7วันก่อน×100"
               activeSort={sort}
               onSort={onSortColumn}
             />
             <SortTh
-              label="EMA1d"
+              label="EMA1d∠7d"
               sortKey="ema1d"
-              title="EMA6/12 1d — ↑ uptrend · ↓ downtrend (เกณฑ์เดียวกับ 4h)"
+              title="EMA(12) 1d slope % ย้อนหลัง 7 แท่ง — (EMAวันนี้−EMA7แท่งก่อน)/EMA7แท่งก่อน×100"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -477,6 +478,13 @@ function ReversalStatsSection({
               label="Len#"
               sortKey="rangeRank"
               title="อันดับความยาวแท่ง (high-low) ในรอบ lookback"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Len%"
+              sortKey="lenPct"
+              title="Len percentile — 100% = ยาวสุดในรอบ lookback"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -625,8 +633,8 @@ function ReversalStatsSection({
                   <td>{fmtPrice(r.entryPrice)}</td>
                   <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
-                  <td title="EMA6/12 4h">{candleReversalEma4hTrendLabel(r.ema4hTrend)}</td>
-                  <td title="EMA6/12 1d">{candleReversalEma1dTrendLabel(r.ema1dTrend)}</td>
+                  <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
+                  <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
                   <td title="ATR(14) 1d ÷ close">{statsAtrPct14dLabel(r.atrPct14d)}</td>
                   <td>{fmtPrice(r.retestPrice)}</td>
                   <td>{fmtPrice(r.slPrice)}</td>
@@ -642,6 +650,7 @@ function ReversalStatsSection({
                   </td>
                   <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
                   <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
+                  <td title="Len percentile">{statsLenPercentileLabel(r.lenPercentilePct)}</td>
                   <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
                   <td>{candleReversalSignalVolVsSmaLabel(r.signalVolVsSma)}</td>
                   {showHighRank ? (

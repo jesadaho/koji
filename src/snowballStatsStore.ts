@@ -11,6 +11,7 @@ import {
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
 import type { SnowballLongStructureTier } from "@/src/snowballLongBreakoutGrade";
+import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
@@ -132,6 +133,9 @@ export type AppendSnowballStatsInput = {
   maxUpperWick100?: number | null;
   rangeScore?: number | null;
   wickScore?: number | null;
+  rangeRankInLookback?: number | null;
+  lenLookbackBars?: number | null;
+  lenPercentilePct?: number | null;
   barRangePctPrev?: number | null;
   barRangePctSignal?: number | null;
   barRangePct2Sum?: number | null;
@@ -449,6 +453,25 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     barRangePctPrev,
     barRangePctSignal,
     barRangePct2Sum,
+    rangeRankInLookback:
+      input.rangeRankInLookback != null && Number.isFinite(input.rangeRankInLookback) && input.rangeRankInLookback >= 1
+        ? Math.floor(input.rangeRankInLookback)
+        : null,
+    lenLookbackBars:
+      input.lenLookbackBars != null && Number.isFinite(input.lenLookbackBars) && input.lenLookbackBars >= 2
+        ? Math.floor(input.lenLookbackBars)
+        : null,
+    lenPercentilePct:
+      input.lenPercentilePct != null && Number.isFinite(input.lenPercentilePct)
+        ? input.lenPercentilePct
+        : lenPercentilePctFromRank(
+            input.rangeRankInLookback != null && Number.isFinite(input.rangeRankInLookback)
+              ? Math.floor(input.rangeRankInLookback)
+              : null,
+            input.lenLookbackBars != null && Number.isFinite(input.lenLookbackBars)
+              ? Math.floor(input.lenLookbackBars)
+              : null,
+          ),
     btcPsar4hTrend:
       input.btcPsar4hTrend === "up" || input.btcPsar4hTrend === "down" ? input.btcPsar4hTrend : null,
     btcPsar4hClose:

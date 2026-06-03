@@ -9,6 +9,7 @@ import {
 } from "@/lib/candleReversalStatsClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
+import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 
 export type { CandleReversalStatsApiPayload, CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
@@ -129,9 +130,10 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
         : undefined,
     quoteVol24hUsdt: nullNum(r.quoteVol24hUsdt),
     marketCapUsd: nullNum(r.marketCapUsd),
-    ema4hTrend: r.ema4hTrend === "up" || r.ema4hTrend === "down" ? r.ema4hTrend : null,
-    ema1dTrend: r.ema1dTrend === "up" || r.ema1dTrend === "down" ? r.ema1dTrend : null,
+    ema4hSlopePct7d: nullNum(r.ema4hSlopePct7d),
+    ema1dSlopePct7d: nullNum(r.ema1dSlopePct7d),
     atrPct14d: nullNum(r.atrPct14d),
+    lenPercentilePct: nullNum(r.lenPercentilePct),
   };
 }
 
@@ -184,6 +186,7 @@ export type AppendCandleReversalStatsInput = {
   highRankInLookback?: number | null;
   lowRankInLookback?: number | null;
   rangeRankInLookback?: number | null;
+  lenPercentilePct?: number | null;
   volRankInLookback?: number | null;
   signalVolVsSma?: number | null;
   lookbackBars?: number | null;
@@ -308,8 +311,8 @@ export async function appendCandleReversalStatsRow(
 
   let quoteVol24hUsdt: number | null = null;
   let marketCapUsd: number | null = null;
-  let ema4hTrend: CandleReversalStatsRow["ema4hTrend"] = null;
-  let ema1dTrend: CandleReversalStatsRow["ema1dTrend"] = null;
+  let ema4hSlopePct7d: CandleReversalStatsRow["ema4hSlopePct7d"] = null;
+  let ema1dSlopePct7d: CandleReversalStatsRow["ema1dSlopePct7d"] = null;
   let atrPct14d: number | null = null;
   try {
     const snap = await fetchReversalAlertMarketSnapshot(input.symbol);
@@ -321,8 +324,10 @@ export async function appendCandleReversalStatsRow(
       snap.marketCapUsd != null && Number.isFinite(snap.marketCapUsd) && snap.marketCapUsd > 0
         ? snap.marketCapUsd
         : null;
-    ema4hTrend = snap.ema4hTrend;
-    ema1dTrend = snap.ema1dTrend;
+    ema4hSlopePct7d =
+      snap.ema4hSlopePct7d != null && Number.isFinite(snap.ema4hSlopePct7d) ? snap.ema4hSlopePct7d : null;
+    ema1dSlopePct7d =
+      snap.ema1dSlopePct7d != null && Number.isFinite(snap.ema1dSlopePct7d) ? snap.ema1dSlopePct7d : null;
     atrPct14d =
       snap.atrPct14d != null && Number.isFinite(snap.atrPct14d) && snap.atrPct14d > 0
         ? snap.atrPct14d
@@ -354,8 +359,8 @@ export async function appendCandleReversalStatsRow(
     slPrice: input.slPrice,
     quoteVol24hUsdt,
     marketCapUsd,
-    ema4hTrend,
-    ema1dTrend,
+    ema4hSlopePct7d,
+    ema1dSlopePct7d,
     atrPct14d,
     wickRatioPct:
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,
@@ -367,6 +372,13 @@ export async function appendCandleReversalStatsRow(
     highRankInLookback: finiteRank(input.highRankInLookback),
     lowRankInLookback: finiteRank(input.lowRankInLookback),
     rangeRankInLookback: finiteRank(input.rangeRankInLookback),
+    lenPercentilePct:
+      input.lenPercentilePct != null && Number.isFinite(input.lenPercentilePct)
+        ? input.lenPercentilePct
+        : lenPercentilePctFromRank(
+            finiteRank(input.rangeRankInLookback),
+            finiteRank(input.lookbackBars),
+          ),
     volRankInLookback: finiteRank(input.volRankInLookback),
     signalVolVsSma:
       input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0

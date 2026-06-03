@@ -1,4 +1,5 @@
 import type { CandleReversalSignalBarTf } from "@/lib/candleReversalStatsClient";
+import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
 import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
 import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
@@ -20,6 +21,7 @@ import {
   candleReversalSignalVolVsSmaAt,
   candleReversalVolSmaPeriod,
 } from "./candleReversalSignalVolVsSma";
+import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import {
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
@@ -204,6 +206,49 @@ function computeRangeRankInLookbackFromPack(pack: BinanceKlinePack, i: number, l
     if (vj > vi + eps) strictlyHigher++;
   }
   return strictlyHigher + 1;
+}
+
+function backfillLenPercentilePct(rows: CandleReversalStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (row.lenPercentilePct != null && Number.isFinite(row.lenPercentilePct)) continue;
+    const pct = lenPercentilePctFromRank(row.rangeRankInLookback, row.lookbackBars);
+    if (pct == null) continue;
+    row.lenPercentilePct = pct;
+    updated += 1;
+  }
+  return updated;
+}
+
+async function backfillReversalEmaSlopes(rows: CandleReversalStatsRow[]): Promise<number> {
+  const snapCache = new Map<string, Awaited<ReturnType<typeof fetchReversalAlertMarketSnapshot>>>();
+  let updated = 0;
+  for (const row of rows) {
+    const need4h = row.ema4hSlopePct7d == null || !Number.isFinite(row.ema4hSlopePct7d);
+    const need1d = row.ema1dSlopePct7d == null || !Number.isFinite(row.ema1dSlopePct7d);
+    if (!need4h && !need1d) continue;
+    const sym = row.symbol.trim().toUpperCase();
+    let snap = snapCache.get(sym);
+    if (!snap) {
+      try {
+        snap = await fetchReversalAlertMarketSnapshot(sym);
+        snapCache.set(sym, snap);
+      } catch {
+        continue;
+      }
+    }
+    let rowDirty = false;
+    if (need4h && snap.ema4hSlopePct7d != null && Number.isFinite(snap.ema4hSlopePct7d)) {
+      row.ema4hSlopePct7d = snap.ema4hSlopePct7d;
+      rowDirty = true;
+    }
+    if (need1d && snap.ema1dSlopePct7d != null && Number.isFinite(snap.ema1dSlopePct7d)) {
+      row.ema1dSlopePct7d = snap.ema1dSlopePct7d;
+      rowDirty = true;
+    }
+    if (rowDirty) updated += 1;
+  }
+  return updated;
 }
 
 async function backfillRangeRankInLookback(rows: CandleReversalStatsRow[]): Promise<number> {
@@ -664,6 +709,8 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
   const nowSec = Math.floor(nowMs / 1000);
 
   dirty += await backfillRangeRankInLookback(state.rows);
+  dirty += backfillLenPercentilePct(state.rows);
+  dirty += await backfillReversalEmaSlopes(state.rows);
   dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += backfill1hOutcomeTo24h(state.rows);

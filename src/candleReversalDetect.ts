@@ -1,3 +1,5 @@
+import { statsRangeRankInWindow } from "@/lib/statsLenPercentile";
+import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { reversalMatchesQualitySignal } from "@/lib/reversalMatrixFilters";
 import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { emaLine } from "./indicatorMath";
@@ -120,15 +122,7 @@ function volumeRankInWindow(volume: number[], start: number, end: number, i: num
 }
 
 function rangeRankInWindow(high: number[], low: number[], start: number, end: number, i: number): number {
-  const vi = high[i]! - low[i]!;
-  const eps = Math.max(1e-12, Math.abs(vi) * 1e-10);
-  let strictlyHigher = 0;
-  for (let j = start; j <= end; j++) {
-    if (j === i) continue;
-    const vj = high[j]! - low[j]!;
-    if (vj > vi + eps) strictlyHigher++;
-  }
-  return strictlyHigher + 1;
+  return statsRangeRankInWindow(high, low, start, end, i);
 }
 
 /** % ระยะปิดจาก EMA — บวก = เหนือเส้น · ลบ = ใต้เส้น */

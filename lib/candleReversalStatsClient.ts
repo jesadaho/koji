@@ -1,6 +1,7 @@
 /** Client-safe candle reversal stats types (no Node.js / Redis). */
 
 import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
+import { statsEmaSlopePctLabel } from "@/lib/statsEmaSlope";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 
@@ -32,10 +33,10 @@ export type CandleReversalStatsRow = {
   quoteVol24hUsdt?: number | null;
   /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
   marketCapUsd?: number | null;
-  /** EMA6/12 4h — up = uptrend · down = downtrend */
-  ema4hTrend?: "up" | "down" | null;
-  /** EMA6/12 1d — up = uptrend · down = downtrend */
-  ema1dTrend?: "up" | "down" | null;
+  /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
+  ema4hSlopePct7d?: number | null;
+  /** EMA(12) 1d — slope % ย้อนหลัง 7 แท่ง */
+  ema1dSlopePct7d?: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d?: number | null;
   /** Short: ไส้บน ÷ ช่วงแท่ง (%) · Long: ไส้ล่าง */
@@ -49,6 +50,8 @@ export type CandleReversalStatsRow = {
   lowRankInLookback: number | null;
   /** อันดับ “ความยาวแท่ง” (high-low) ในรอบ lookbackBars (1 = ยาวสุด) */
   rangeRankInLookback: number | null;
+  /** Len percentile 0–100 จาก rangeRank + lookbackBars (100 = ยาวสุดในรอบ) */
+  lenPercentilePct?: number | null;
   /** อันดับ volume ในรอบ lookbackBars (1 = สูงสุด) */
   volRankInLookback: number | null;
   /** Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด */
@@ -221,6 +224,7 @@ export type CandleReversalStatsSortKey =
   | "lowerWickPct"
   | "bodyPct"
   | "rangeRank"
+  | "lenPct"
   | "volRank"
   | "volVsSma"
   | "highRank"
@@ -275,19 +279,6 @@ function cmpNumNullLast(a: number | null | undefined, b: number | null | undefin
   return a! - b!;
 }
 
-function emaTrendSortRank(t: "up" | "down" | null | undefined): number {
-  if (t === "up") return 2;
-  if (t === "down") return 1;
-  return 0;
-}
-
-function cmpEmaTrend(
-  a: "up" | "down" | null | undefined,
-  b: "up" | "down" | null | undefined,
-): number {
-  return emaTrendSortRank(a) - emaTrendSortRank(b);
-}
-
 function reversalHorizonPct(row: CandleReversalStatsRow, idx: 0 | 1 | 2 | 3): number | null {
   const tf = row.signalBarTf ?? "1d";
   if (tf === "1h") {
@@ -332,9 +323,9 @@ function compareCandleReversalStatsRows(
     case "mcap":
       return cmpNumNullLast(a.marketCapUsd, b.marketCapUsd);
     case "ema4h":
-      return cmpEmaTrend(a.ema4hTrend, b.ema4hTrend);
+      return cmpNumNullLast(a.ema4hSlopePct7d, b.ema4hSlopePct7d);
     case "ema1d":
-      return cmpEmaTrend(a.ema1dTrend, b.ema1dTrend);
+      return cmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
     case "atr14d":
       return cmpNumNullLast(a.atrPct14d, b.atrPct14d);
     case "retest":
@@ -349,6 +340,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.bodyPct, b.bodyPct);
     case "rangeRank":
       return cmpNumNullLast(a.rangeRankInLookback, b.rangeRankInLookback);
+    case "lenPct":
+      return cmpNumNullLast(a.lenPercentilePct, b.lenPercentilePct);
     case "volRank":
       return cmpNumNullLast(a.volRankInLookback, b.volRankInLookback);
     case "volVsSma":
@@ -401,27 +394,17 @@ export function candleReversalGreenDaysLabel(v: number | null | undefined): stri
   return `${Math.floor(v)} วัน`;
 }
 
-export function candleReversalEmaTrendChip(
-  tf: "4h" | "1d",
-  trend: "up" | "down" | null | undefined,
-): string {
-  if (trend === "up") return `${tf}↑`;
-  if (trend === "down") return `${tf}↓`;
-  return `${tf}—`;
+export function candleReversalEma4hSlopeLabel(pct: CandleReversalStatsRow["ema4hSlopePct7d"]): string {
+  return statsEmaSlopePctLabel(pct);
 }
 
-export function candleReversalEma4hTrendLabel(trend: CandleReversalStatsRow["ema4hTrend"]): string {
-  return candleReversalEmaTrendChip("4h", trend);
+export function candleReversalEma1dSlopeLabel(pct: CandleReversalStatsRow["ema1dSlopePct7d"]): string {
+  return statsEmaSlopePctLabel(pct);
 }
 
-export function candleReversalEma1dTrendLabel(trend: CandleReversalStatsRow["ema1dTrend"]): string {
-  return candleReversalEmaTrendChip("1d", trend);
-}
-
-export function candleReversalEmaTrendCsvLabel(trend: "up" | "down" | null | undefined): string {
-  if (trend === "up") return "uptrend";
-  if (trend === "down") return "downtrend";
-  return "";
+export function candleReversalEmaSlopeCsvLabel(pct: number | null | undefined): string {
+  if (pct == null || !Number.isFinite(pct)) return "";
+  return pct.toFixed(4);
 }
 
 export function candleReversalStatsSortDefaultDir(key: CandleReversalStatsSortKey): CandleReversalStatsSortDir {

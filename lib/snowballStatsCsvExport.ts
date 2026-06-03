@@ -29,7 +29,9 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_48H,
   type StatsStrategyCsvSizing,
 } from "@/lib/statsStrategyProfitClient";
+import { candleReversalLookbackRankCell } from "@/lib/candleReversalStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
+import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -95,6 +97,8 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyC
     statsFmtPrice(r.entryPrice),
     snowballStatsVolScoreLabel(r.rangeScore),
     snowballStatsVolScoreLabel(r.wickScore),
+    candleReversalLookbackRankCell(r.rangeRankInLookback, r.lenLookbackBars),
+    statsLenPercentileLabel(r.lenPercentilePct),
     snowballStatsBarRangePctLabel(r.barRangePctPrev),
     snowballStatsBarRangePctLabel(r.barRangePctSignal),
     snowballStatsBarRangePctLabel(r.barRangePct2Sum),

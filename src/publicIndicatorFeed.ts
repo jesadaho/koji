@@ -80,6 +80,7 @@ import {
 } from "@/lib/snowballMatrixFilters";
 import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
+import { computeSnowballSignalLenPercentile } from "./statsLenPercentile";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import {
   calculateTrendMomentumMetrics,
@@ -3671,6 +3672,7 @@ export async function runPublicIndicatorFeedInternal(
               }
             }
             const longVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
+            const longLenSnap = packSb ? computeSnowballSignalLenPercentile(packSb, iSig) : null;
             if (!intrabar && longMktCtx == null) {
               longMktCtx = await fetchSnowballAlertMarketContext(symbol);
             }
@@ -3735,6 +3737,9 @@ export async function runPublicIndicatorFeedInternal(
                   statsMarketCapUsd: longMktCtx?.marketCapUsd ?? null,
                   statsFundingRate: longMktCtx?.fundingRate ?? null,
                   statsAtrPct14d: longMktCtx?.atrPct14d ?? null,
+                  statsRangeRankInLookback: longLenSnap?.rangeRankInLookback ?? null,
+                  statsLenLookbackBars: longLenSnap?.lookbackBars ?? null,
+                  statsLenPercentilePct: longLenSnap?.lenPercentilePct ?? null,
                   statsSignalVolVsSma:
                     typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
                       ? vE! / vsE
@@ -3843,6 +3848,9 @@ export async function runPublicIndicatorFeedInternal(
                   marketCapUsd: longMktCtx?.marketCapUsd ?? null,
                   fundingRate: longMktCtx?.fundingRate ?? null,
                   atrPct14d: longMktCtx?.atrPct14d ?? null,
+                  rangeRankInLookback: longLenSnap?.rangeRankInLookback ?? null,
+                  lenLookbackBars: longLenSnap?.lookbackBars ?? null,
+                  lenPercentilePct: longLenSnap?.lenPercentilePct ?? null,
                   signalVolVsSma:
                     typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
                   volStrictOk,
@@ -4236,6 +4244,7 @@ export async function runPublicIndicatorFeedInternal(
               }
             }
             const bearVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
+            const bearLenSnap = packSb ? computeSnowballSignalLenPercentile(packSb, iSig) : null;
             const bearMktCtx = !intrabar ? await fetchSnowballAlertMarketContext(symbol) : null;
             const pack1hTrendBear = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
             const trendMomentumBear = calculateTrendMomentumMetrics(pack1hTrendBear, {
@@ -4272,6 +4281,9 @@ export async function runPublicIndicatorFeedInternal(
                   statsMarketCapUsd: bearMktCtx?.marketCapUsd ?? null,
                   statsFundingRate: bearMktCtx?.fundingRate ?? null,
                   statsAtrPct14d: bearMktCtx?.atrPct14d ?? null,
+                  statsRangeRankInLookback: bearLenSnap?.rangeRankInLookback ?? null,
+                  statsLenLookbackBars: bearLenSnap?.lookbackBars ?? null,
+                  statsLenPercentilePct: bearLenSnap?.lenPercentilePct ?? null,
                   ...(skipBearTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -4322,6 +4334,9 @@ export async function runPublicIndicatorFeedInternal(
                   marketCapUsd: bearMktCtx?.marketCapUsd ?? null,
                   fundingRate: bearMktCtx?.fundingRate ?? null,
                   atrPct14d: bearMktCtx?.atrPct14d ?? null,
+                  rangeRankInLookback: bearLenSnap?.rangeRankInLookback ?? null,
+                  lenLookbackBars: bearLenSnap?.lookbackBars ?? null,
+                  lenPercentilePct: bearLenSnap?.lenPercentilePct ?? null,
                   ...trendMomentumStatsFields(trendMomentumBear),
                   greenDaysBeforeSignal: bearGreenDays,
                 });
