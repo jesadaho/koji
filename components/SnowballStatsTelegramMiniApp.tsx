@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
+import {
+  StatsSplitByWeekCheckbox,
+  StatsWeekSectionTitle,
+  StatsWeekSplitHint,
+} from "@/components/StatsWeekGroupUi";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
+import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
   STATS_STRATEGY_PROFIT_HOLD_24H,
@@ -84,6 +90,12 @@ const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
   "ทิศ = ทิศสัญญาณ Snowball · Grade = เกรดสุทธิชั้นเดียว · คลิก Grade ดูโครงสร้าง HH48/VAH และเหตุผล D+/F";
+
+const SNOWBALL_HORIZON_WR = [
+  { label: "12h", pctKey: "pct12h" },
+  { label: "24h", pctKey: "pct24h" },
+  { label: "48h", pctKey: "pct48h" },
+] as const;
 
 type SnowballDayFilter = "all" | "7" | "30" | "90";
 type SnowballGradeFilter = "all" | "A+" | "B" | "C" | "D+" | "F";
@@ -551,13 +563,14 @@ export default function SnowballStatsTelegramMiniApp() {
     greenDaysFilter,
   ]);
 
+  const [splitByWeek, setSplitByWeek] = useState(false);
+  const weekGroups = useMemo(
+    () => groupRowsByBkkWeek(rows, statsRowAlertedAtMs),
+    [rows],
+  );
+
   const horizonWinrateText = useMemo(
-    () =>
-      snowballHorizonWinrateSummary(rows, [
-        { label: "12h", pctKey: "pct12h" },
-        { label: "24h", pctKey: "pct24h" },
-        { label: "48h", pctKey: "pct48h" },
-      ]),
+    () => snowballHorizonWinrateSummary(rows, SNOWBALL_HORIZON_WR),
     [rows],
   );
 
@@ -615,6 +628,236 @@ export default function SnowballStatsTelegramMiniApp() {
     }
     await copyCsvToClipboard(snowballStatsToCsv(rows, strategySizing));
   }, [rows, strategySizing]);
+
+  const renderTable = (tableRows: SnowballStatsRow[]) => (
+    <div className="sparkMatrixScroll">
+      <table className="sparkMatrixTable sparkMatrixTable--compact">
+        <thead>
+          <tr>
+            <th scope="col" className="snowStatsStickyCoin">
+              เหรียญ
+            </th>
+            <th scope="col">ทิศ</th>
+            <th
+              scope="col"
+              className="snowStatsStickyGrade"
+              title="เกรดสุทธิ (A+/B/C/D+/F) — คลิกดูโครงสร้าง HH48/VAH และเหตุผล"
+            >
+              Grade
+            </th>
+            <th scope="col">วัน</th>
+            <th scope="col">เวลา (BKK)</th>
+            <th scope="col">Entry</th>
+            <th scope="col">Range</th>
+            <th scope="col">Wick</th>
+            <th scope="col">R% ก่อน</th>
+            <th scope="col">R% สัญญาณ</th>
+            <th scope="col">R% 2แท่ง</th>
+            <th scope="col" title="BTC PSAR — แท่ง 4h และ 1h ปิดล่าสุด (Binance)">
+              BTC SAR
+            </th>
+            <th scope="col">Vol 24h</th>
+            <th scope="col" title="Market cap USD (CoinGecko) ณ เวลาแจ้ง">
+              Mcap
+            </th>
+            <th scope="col" title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)">
+              Funding
+            </th>
+            <th scope="col" title="Vol cascade — volume 5 แท่ง 1H ล่าสุด ยอมไม่ยกฐานได้ 1 ครั้ง">
+              Vol↗
+            </th>
+            <th scope="col" title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ Snowball">
+              เขียว
+            </th>
+            <th scope="col" title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) — แท่ง Day1 เขียวติดก่อนวันสัญญาณ">
+              เขียว(BKK)
+            </th>
+            <th scope="col" title="4h = Vol แท่งสัญญาณ ÷ SMA(4H) (Signal Vol Spurt) · อื่นๆ = 1H confirm หรือ signal">
+              Vol×SMA
+            </th>
+            <th scope="col" title="อันดับ vol 1H จาก breakout confirm eval (48 แท่งมาตรฐาน) — บันทึกทุกแจ้ง 4h ที่มีข้อมูล 1H">
+              Vol rank
+            </th>
+            <th scope="col">4h</th>
+            <th scope="col">12h</th>
+            <th scope="col">24h</th>
+            <th scope="col">48h</th>
+            <th scope="col">Max ROI</th>
+            <th scope="col">Duration→MFE</th>
+            <th
+              scope="col"
+              title="Max DD ก่อนแจ้ง — 15m ย้อนหลัง 32 แท่ง (8 ชม.) · เกณฑ์ momentum Stage 3 (≤ default 7%)"
+            >
+              Max DD ก่อน
+            </th>
+            <th scope="col" title="Max DD หลังแจ้ง — adverse สูงสุดถึง MFE (24h) จาก entry">
+              Max DD หลัง
+            </th>
+            <th scope="col" title="Max adverse ตลอดช่วง follow-up 48h จาก entry (ไม่ตัดที่ MFE)">
+              Adv max
+            </th>
+            <th scope="col">SVP Hole</th>
+            <th scope="col">RR</th>
+            <th scope="col" title="Fear & Greed (Market Pulse snapshot ณ เวลาแจ้ง)">
+              F&G
+            </th>
+            <th scope="col" title="Sentiment จาก F&G — Bullish / Neutral / Bearish">
+              Sentiment
+            </th>
+            <th scope="col" title="BTC dominance % ณ เวลาแจ้ง">
+              BTC.D
+            </th>
+            <th scope="col" title="การเปลี่ยนแปลง vol โดยประมาณ 24h">
+              VolΔ24h
+            </th>
+            <th
+              scope="col"
+              title={
+                payload?.viewerTpSlPlan
+                  ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H, payload.viewerTpSlPlan)
+                  : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H)
+              }
+            >
+              กำไรกลยุทธ์ 24h
+            </th>
+            <th scope="col" title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
+              กำไรกลยุทธ์ 48h
+            </th>
+            <th scope="col">ผล</th>
+            {isAdmin ? <th scope="col" className="snowStatsDelCol" aria-label="ลบ" /> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {tableRows.length === 0 ? (
+            <tr>
+              <td colSpan={isAdmin ? 40 : 39} className="sub">
+                {allRows.length === 0
+                  ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
+                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
+              </td>
+            </tr>
+          ) : (
+            tableRows.map((r) => (
+              <tr key={r.id}>
+                <td className="snowStatsStickyCoin">
+                  {coinLabel(r.symbol)}
+                  <PendingConflictBadge conflictWith={r.conflictWith} />
+                </td>
+                <td>{snowballStatsSideLabel(r)}</td>
+                <td className={`snowStatsStickyGrade ${snowballStatsGradeCellClass(r)}`}>
+                  <button
+                    type="button"
+                    className="snowGradeCellBtn"
+                    title="ดูโครงสร้างและเหตุผลเกรด"
+                    onClick={() => setGradeDetailRow(r)}
+                  >
+                    {snowballStatsGradeDisplayLabel(r)}
+                  </button>
+                </td>
+                <td>
+                  <span style={{ whiteSpace: "nowrap" }}>
+                    {snowballStatsDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}
+                  </span>
+                </td>
+                <td>
+                  <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
+                </td>
+                <td>{fmtPrice(r.entryPrice)}</td>
+                <td>{snowballStatsVolScoreLabel(r.rangeScore)}</td>
+                <td>{snowballStatsVolScoreLabel(r.wickScore)}</td>
+                <td>{snowballStatsBarRangePctLabel(r.barRangePctPrev)}</td>
+                <td>{snowballStatsBarRangePctLabel(r.barRangePctSignal)}</td>
+                <td>{snowballStatsBarRangePctLabel(r.barRangePct2Sum)}</td>
+                <td>{snowballStatsBtcPsarCombinedLabel(r.btcPsar4hTrend, r.btcPsar1hTrend)}</td>
+                <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
+                <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
+                <td
+                  className={
+                    r.fundingRate != null && Number.isFinite(r.fundingRate)
+                      ? fundingRateVisualClass(r.fundingRate)
+                      : undefined
+                  }
+                >
+                  {snowballStatsFundingRateLabel(r.fundingRate)}
+                </td>
+                <td>{snowballStatsVolumeCascadeLabel(r.volumeCascadeYn)}</td>
+                <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal)}</td>
+                <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignalBkk)}</td>
+                <td>{snowballStatsConfirmVolVsSmaLabel(snowballStatsVolVsSmaDisplay(r))}</td>
+                <td>{snowballStatsConfirmVolRankLabel(r.confirmVolRank, r.confirmVolRankLb)}</td>
+                <td>{fmtSnowballHorizonCell(r, 4, r.price4h, r.pct4h)}</td>
+                <td>{fmtSnowballHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
+                <td>{fmtSnowballHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
+                <td>{fmtSnowballHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
+                <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
+                <td>
+                  {r.durationToMfeHours != null && Number.isFinite(r.durationToMfeHours)
+                    ? `${r.durationToMfeHours.toFixed(2)}h`
+                    : "—"}
+                </td>
+                <td>
+                  {r.signalMaxDdPct != null && Number.isFinite(r.signalMaxDdPct)
+                    ? `${r.signalMaxDdPct.toFixed(2)}%`
+                    : "—"}
+                </td>
+                <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
+                <td>
+                  {r.followUpMaxAdversePct != null ? `${r.followUpMaxAdversePct.toFixed(2)}%` : "—"}
+                </td>
+                <td>{r.svpHoleYn}</td>
+                <td>{r.resultRr ?? "—"}</td>
+                <td>{marketSentimentFngLabel(r.marketSentiment)}</td>
+                <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>
+                <td>{marketSentimentBtcDominanceLabel(r.marketSentiment)}</td>
+                <td>{marketSentimentVolChange24hLabel(r.marketSentiment)}</td>
+                <td>
+                  <StatsStrategyProfitCell
+                    holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
+                    pct24h={r.pct24h}
+                    pct48h={r.pct48h}
+                    strategyProfitPct24h={r.strategyProfitPct24h}
+                    strategyExitReason24h={r.strategyExitReason24h}
+                    marginUsdt={payload?.viewerStrategyMarginUsdt}
+                    leverage={payload?.viewerStrategyLeverage}
+                    tpSlPlan={payload?.viewerTpSlPlan}
+                  />
+                </td>
+                <td>
+                  <StatsStrategyProfitCell
+                    holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
+                    pct24h={r.pct24h}
+                    pct48h={r.pct48h}
+                    strategyProfitPct={r.strategyProfitPct}
+                    strategyExitReason={r.strategyExitReason}
+                    marginUsdt={payload?.viewerStrategyMarginUsdt}
+                    leverage={payload?.viewerStrategyLeverage}
+                    tpSlPlan={payload?.viewerTpSlPlan}
+                  />
+                </td>
+                <td>{outcomeLabel(r.outcome)}</td>
+                {isAdmin ? (
+                  <td className="snowStatsDelCol">
+                    <button
+                      type="button"
+                      className="snowStatsRowDelBtn"
+                      title="ลบแถวนี้"
+                      disabled={deleteBusy}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void deleteRow(r);
+                      }}
+                    >
+                      ลบ
+                    </button>
+                  </td>
+                ) : null}
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 
   if (phase === "loading") {
     return (
@@ -816,6 +1059,7 @@ export default function SnowballStatsTelegramMiniApp() {
               ))}
             </select>
           </label>
+          <StatsSplitByWeekCheckbox checked={splitByWeek} onChange={setSplitByWeek} />
           <span className="sub">
             แสดง {rows.length}/{allRows.length}
           </span>
@@ -832,291 +1076,52 @@ export default function SnowballStatsTelegramMiniApp() {
         >
           WR · {horizonWinrateText}
         </p>
-        {strategyProfitSummaryText24h || strategyProfitSummaryText48h ? (
-          <div style={{ marginBottom: "0.5rem" }}>
-            {strategyProfitSummaryText24h ? (
-              <p
-                className="sub"
-                title="สรุปคอลัมน์กำไรกลยุทธ์ 24h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +3% · Loss ≤ −3%)"
-                style={{ margin: "0 0 0.25rem", fontWeight: 600 }}
-              >
-                {strategyProfitSummaryText24h}
-              </p>
-            ) : null}
-            {strategyProfitSummaryText48h ? (
-              <p
-                className="sub"
-                title="สรุปคอลัมน์กำไรกลยุทธ์ 48h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +3% · Loss ≤ −3%)"
-                style={{ margin: 0, fontWeight: 600 }}
-              >
-                {strategyProfitSummaryText48h}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        <div className="sparkMatrixScroll">
-          <table className="sparkMatrixTable sparkMatrixTable--compact">
-            <thead>
-              <tr>
-                <th scope="col" className="snowStatsStickyCoin">
-                  เหรียญ
-                </th>
-                <th scope="col">ทิศ</th>
-                <th
-                  scope="col"
-                  className="snowStatsStickyGrade"
-                  title="เกรดสุทธิ (A+/B/C/D+/F) — คลิกดูโครงสร้าง HH48/VAH และเหตุผล"
+        <StatsWeekSplitHint splitByWeek={splitByWeek}>
+          {strategyProfitSummaryText24h || strategyProfitSummaryText48h ? (
+            <div style={{ marginBottom: "0.5rem" }}>
+              {strategyProfitSummaryText24h ? (
+                <p
+                  className="sub"
+                  title="สรุปคอลัมน์กำไรกลยุทธ์ 24h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +3% · Loss ≤ −3%)"
+                  style={{ margin: "0 0 0.25rem", fontWeight: 600 }}
                 >
-                  Grade
-                </th>
-                <th scope="col">วัน</th>
-                <th scope="col">เวลา (BKK)</th>
-                <th scope="col">Entry</th>
-                <th scope="col">Range</th>
-                <th scope="col">Wick</th>
-                <th scope="col">R% ก่อน</th>
-                <th scope="col">R% สัญญาณ</th>
-                <th scope="col">R% 2แท่ง</th>
-                <th scope="col" title="BTC PSAR — แท่ง 4h และ 1h ปิดล่าสุด (Binance)">
-                  BTC SAR
-                </th>
-                <th scope="col">Vol 24h</th>
-                <th
-                  scope="col"
-                  title="Market cap USD (CoinGecko) ณ เวลาแจ้ง"
+                  {strategyProfitSummaryText24h}
+                </p>
+              ) : null}
+              {strategyProfitSummaryText48h ? (
+                <p
+                  className="sub"
+                  title="สรุปคอลัมน์กำไรกลยุทธ์ 48h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +3% · Loss ≤ −3%)"
+                  style={{ margin: 0, fontWeight: 600 }}
                 >
-                  Mcap
-                </th>
-                <th
-                  scope="col"
-                  title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)"
-                >
-                  Funding
-                </th>
-                <th
-                  scope="col"
-                  title="Vol cascade — volume 5 แท่ง 1H ล่าสุด ยอมไม่ยกฐานได้ 1 ครั้ง"
-                >
-                  Vol↗
-                </th>
-                <th
-                  scope="col"
-                  title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ Snowball"
-                >
-                  เขียว
-                </th>
-                <th
-                  scope="col"
-                  title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) — แท่ง Day1 เขียวติดก่อนวันสัญญาณ"
-                >
-                  เขียว(BKK)
-                </th>
-                <th
-                  scope="col"
-                  title="4h = Vol แท่งสัญญาณ ÷ SMA(4H) (Signal Vol Spurt) · อื่นๆ = 1H confirm หรือ signal"
-                >
-                  Vol×SMA
-                </th>
-                <th
-                  scope="col"
-                  title="อันดับ vol 1H จาก breakout confirm eval (48 แท่งมาตรฐาน) — บันทึกทุกแจ้ง 4h ที่มีข้อมูล 1H"
-                >
-                  Vol rank
-                </th>
-                <th scope="col">4h</th>
-                <th scope="col">12h</th>
-                <th scope="col">24h</th>
-                <th scope="col">48h</th>
-                <th scope="col">Max ROI</th>
-                <th scope="col">Duration→MFE</th>
-                <th
-                  scope="col"
-                  title="Max DD ก่อนแจ้ง — 15m ย้อนหลัง 32 แท่ง (8 ชม.) · เกณฑ์ momentum Stage 3 (≤ default 7%)"
-                >
-                  Max DD ก่อน
-                </th>
-                <th
-                  scope="col"
-                  title="Max DD หลังแจ้ง — adverse สูงสุดถึง MFE (24h) จาก entry"
-                >
-                  Max DD หลัง
-                </th>
-                <th
-                  scope="col"
-                  title="Max adverse ตลอดช่วง follow-up 48h จาก entry (ไม่ตัดที่ MFE)"
-                >
-                  Adv max
-                </th>
-                <th scope="col">SVP Hole</th>
-                <th scope="col">RR</th>
-                <th
-                  scope="col"
-                  title="Fear & Greed (Market Pulse snapshot ณ เวลาแจ้ง)"
-                >
-                  F&G
-                </th>
-                <th
-                  scope="col"
-                  title="Sentiment จาก F&G — Bullish / Neutral / Bearish"
-                >
-                  Sentiment
-                </th>
-                <th scope="col" title="BTC dominance % ณ เวลาแจ้ง">
-                  BTC.D
-                </th>
-                <th scope="col" title="การเปลี่ยนแปลง vol โดยประมาณ 24h">
-                  VolΔ24h
-                </th>
-                <th
-                  scope="col"
-                  title={
-                    payload?.viewerTpSlPlan
-                      ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H, payload.viewerTpSlPlan)
-                      : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H)
-                  }
-                >
-                  กำไรกลยุทธ์ 24h
-                </th>
-                <th
-                  scope="col"
-                  title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
-                >
-                  กำไรกลยุทธ์ 48h
-                </th>
-                <th scope="col">ผล</th>
-                {isAdmin ? <th scope="col" className="snowStatsDelCol" aria-label="ลบ" /> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                    <td colSpan={isAdmin ? 40 : 39} className="sub">
-                    {allRows.length === 0
-                      ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                      : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="snowStatsStickyCoin">
-                      {coinLabel(r.symbol)}
-                      <PendingConflictBadge conflictWith={r.conflictWith} />
-                    </td>
-                    <td>{snowballStatsSideLabel(r)}</td>
-                    <td className={`snowStatsStickyGrade ${snowballStatsGradeCellClass(r)}`}>
-                      <button
-                        type="button"
-                        className="snowGradeCellBtn"
-                        title="ดูโครงสร้างและเหตุผลเกรด"
-                        onClick={() => setGradeDetailRow(r)}
-                      >
-                        {snowballStatsGradeDisplayLabel(r)}
-                      </button>
-                    </td>
-                    <td>
-                      <span style={{ whiteSpace: "nowrap" }}>
-                        {snowballStatsDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
-                    </td>
-                    <td>{fmtPrice(r.entryPrice)}</td>
-                    <td>{snowballStatsVolScoreLabel(r.rangeScore)}</td>
-                    <td>{snowballStatsVolScoreLabel(r.wickScore)}</td>
-                    <td>{snowballStatsBarRangePctLabel(r.barRangePctPrev)}</td>
-                    <td>{snowballStatsBarRangePctLabel(r.barRangePctSignal)}</td>
-                    <td>{snowballStatsBarRangePctLabel(r.barRangePct2Sum)}</td>
-                    <td>{snowballStatsBtcPsarCombinedLabel(r.btcPsar4hTrend, r.btcPsar1hTrend)}</td>
-                    <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
-                    <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
-                    <td
-                      className={
-                        r.fundingRate != null && Number.isFinite(r.fundingRate)
-                          ? fundingRateVisualClass(r.fundingRate)
-                          : undefined
-                      }
-                    >
-                      {snowballStatsFundingRateLabel(r.fundingRate)}
-                    </td>
-                    <td>{snowballStatsVolumeCascadeLabel(r.volumeCascadeYn)}</td>
-                    <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal)}</td>
-                    <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignalBkk)}</td>
-                    <td>{snowballStatsConfirmVolVsSmaLabel(snowballStatsVolVsSmaDisplay(r))}</td>
-                    <td>{snowballStatsConfirmVolRankLabel(r.confirmVolRank, r.confirmVolRankLb)}</td>
-                    <td>{fmtSnowballHorizonCell(r, 4, r.price4h, r.pct4h)}</td>
-                    <td>{fmtSnowballHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
-                    <td>{fmtSnowballHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
-                    <td>{fmtSnowballHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
-                    <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
-                    <td>
-                      {r.durationToMfeHours != null && Number.isFinite(r.durationToMfeHours)
-                        ? `${r.durationToMfeHours.toFixed(2)}h`
-                        : "—"}
-                    </td>
-                    <td>
-                      {r.signalMaxDdPct != null && Number.isFinite(r.signalMaxDdPct)
-                        ? `${r.signalMaxDdPct.toFixed(2)}%`
-                        : "—"}
-                    </td>
-                    <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
-                    <td>
-                      {r.followUpMaxAdversePct != null ? `${r.followUpMaxAdversePct.toFixed(2)}%` : "—"}
-                    </td>
-                    <td>{r.svpHoleYn}</td>
-                    <td>{r.resultRr ?? "—"}</td>
-                    <td>{marketSentimentFngLabel(r.marketSentiment)}</td>
-                    <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>
-                    <td>{marketSentimentBtcDominanceLabel(r.marketSentiment)}</td>
-                    <td>{marketSentimentVolChange24hLabel(r.marketSentiment)}</td>
-                    <td>
-                      <StatsStrategyProfitCell
-                        holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
-                        pct24h={r.pct24h}
-                        pct48h={r.pct48h}
-                        strategyProfitPct24h={r.strategyProfitPct24h}
-                        strategyExitReason24h={r.strategyExitReason24h}
-                        marginUsdt={payload?.viewerStrategyMarginUsdt}
-                        leverage={payload?.viewerStrategyLeverage}
-                        tpSlPlan={payload?.viewerTpSlPlan}
-                      />
-                    </td>
-                    <td>
-                      <StatsStrategyProfitCell
-                        holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
-                        pct24h={r.pct24h}
-                        pct48h={r.pct48h}
-                        strategyProfitPct={r.strategyProfitPct}
-                        strategyExitReason={r.strategyExitReason}
-                        marginUsdt={payload?.viewerStrategyMarginUsdt}
-                        leverage={payload?.viewerStrategyLeverage}
-                        tpSlPlan={payload?.viewerTpSlPlan}
-                      />
-                    </td>
-                    <td>{outcomeLabel(r.outcome)}</td>
-                    {isAdmin ? (
-                      <td className="snowStatsDelCol">
-                        <button
-                          type="button"
-                          className="snowStatsRowDelBtn"
-                          title="ลบแถวนี้"
-                          disabled={deleteBusy}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void deleteRow(r);
-                          }}
-                        >
-                          ลบ
-                        </button>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                  {strategyProfitSummaryText48h}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </StatsWeekSplitHint>
+        {splitByWeek ? (
+          weekGroups.length === 0 ? (
+            <p className="sub" style={{ marginTop: "0.5rem" }}>
+              {allRows.length > 0
+                ? "ไม่มีแถวที่ตรงกับ filter ในช่วงที่เลือก"
+                : "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"}
+            </p>
+          ) : (
+            weekGroups.map((g) => (
+              <div key={g.weekKey} style={{ marginBottom: "1.25rem" }}>
+                <StatsWeekSectionTitle
+                  weekLabel={g.weekLabel}
+                  rowCount={g.rows.length}
+                  extra={`WR · ${snowballHorizonWinrateSummary(g.rows, SNOWBALL_HORIZON_WR)}`}
+                />
+                {renderTable(g.rows)}
+              </div>
+            ))
+          )
+        ) : (
+          renderTable(rows)
+        )}
         <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
           {FOOTNOTE}
         </p>

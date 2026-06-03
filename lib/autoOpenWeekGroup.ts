@@ -53,18 +53,36 @@ export function formatAutoOpenBkkWeekLabel(weekStartYmd: string): string {
   return `${formatBkkShortDate(weekStartYmd)} – ${formatBkkShortDate(end)}`;
 }
 
-export type AutoOpenWeekGroup = {
+export type BkkWeekGroup<T> = {
   weekKey: string;
   weekLabel: string;
-  rows: AutoOpenOrderLogRow[];
+  rows: T[];
 };
 
+export type AutoOpenWeekGroup = BkkWeekGroup<AutoOpenOrderLogRow>;
+
+/** เวลาแจ้งจากแถวสถิติ (alertedAtMs / alertedAtIso) */
+export function statsRowAlertedAtMs(row: {
+  alertedAtMs?: number | null;
+  alertedAtIso?: string;
+}): number {
+  if (row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)) return row.alertedAtMs;
+  const ms = Date.parse(row.alertedAtIso ?? "");
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 /** จัดกลุ่มตามสัปดาห์ (จันทร์ BKK) — เรียงสัปดาห์ใหม่ → เก่า */
-export function groupAutoOpenLogsByBkkWeek(rows: AutoOpenOrderLogRow[]): AutoOpenWeekGroup[] {
+export function groupRowsByBkkWeek<T>(
+  rows: T[],
+  atMs: (row: T) => number,
+  sortRows?: (a: T, b: T) => number,
+): BkkWeekGroup<T>[] {
   const weekKeys: string[] = [];
-  const byWeek: Record<string, AutoOpenOrderLogRow[]> = {};
+  const byWeek: Record<string, T[]> = {};
   for (const r of rows) {
-    const key = autoOpenBkkWeekStartKey(r.atMs);
+    const ms = atMs(r);
+    if (!Number.isFinite(ms) || ms <= 0) continue;
+    const key = autoOpenBkkWeekStartKey(ms);
     const list = byWeek[key];
     if (list) {
       list.push(r);
@@ -74,14 +92,20 @@ export function groupAutoOpenLogsByBkkWeek(rows: AutoOpenOrderLogRow[]): AutoOpe
     }
   }
   weekKeys.sort((a, b) => b.localeCompare(a));
-  const groups: AutoOpenWeekGroup[] = [];
+  const cmp = sortRows ?? (() => 0);
+  const groups: BkkWeekGroup<T>[] = [];
   for (const weekKey of weekKeys) {
     const weekRows = byWeek[weekKey]!;
     groups.push({
       weekKey,
       weekLabel: formatAutoOpenBkkWeekLabel(weekKey),
-      rows: weekRows.sort((a, b) => b.atMs - a.atMs),
+      rows: weekRows.slice().sort(cmp),
     });
   }
   return groups;
+}
+
+/** จัดกลุ่มตามสัปดาห์ (จันทร์ BKK) — เรียงสัปดาห์ใหม่ → เก่า */
+export function groupAutoOpenLogsByBkkWeek(rows: AutoOpenOrderLogRow[]): AutoOpenWeekGroup[] {
+  return groupRowsByBkkWeek(rows, (r) => r.atMs, (a, b) => b.atMs - a.atMs);
 }

@@ -6,6 +6,12 @@ import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import {
+  StatsSplitByWeekCheckbox,
+  StatsWeekSectionTitle,
+  StatsWeekSplitHint,
+} from "@/components/StatsWeekGroupUi";
+import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
+import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
@@ -281,6 +287,11 @@ function ReversalStatsSection({
     [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, matrixFilter],
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
+  const [splitByWeek, setSplitByWeek] = useState(false);
+  const weekGroups = useMemo(
+    () => groupRowsByBkkWeek(filteredRows, statsRowAlertedAtMs),
+    [filteredRows],
+  );
   const winrateText = useMemo(() => reversalWinrateSummary(filteredRows), [filteredRows]);
   const horizonWinrateText = useMemo(
     () =>
@@ -372,6 +383,275 @@ function ReversalStatsSection({
     }
     await copyCsvToClipboard(candleReversalStatsToCsv(rows, strategySizing));
   }, [rows, strategySizing]);
+
+  const renderTable = (tableRows: CandleReversalStatsRow[]) => (
+    <div className="sparkMatrixScroll">
+      <table className="sparkMatrixTable sparkMatrixTable--compact">
+        <thead>
+          <tr>
+            <SortTh label="เหรียญ" sortKey="symbol" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="โมเดล"
+              sortKey="model"
+              title={CANDLE_REVERSAL_MODEL_SHORT_LEGEND}
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="เขียว"
+              sortKey="greenDays"
+              title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <th
+              scope="col"
+              title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) — แท่ง Day1 เขียวติดก่อนวันสัญญาณ"
+            >
+              เขียว(BKK)
+            </th>
+            <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="ไส้บน%"
+              sortKey="wickPct"
+              title="Short: ไส้บน ÷ ช่วงแท่ง · Long: —"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="ไส้ล่าง%"
+              sortKey="lowerWickPct"
+              title="Short: ไส้ล่าง ÷ ช่วงแท่ง · Long: ไส้ล่าง (wick หลัก)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="Len#"
+              sortKey="rangeRank"
+              title="อันดับความยาวแท่ง (high-low) ในรอบ lookback"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Vol#"
+              sortKey="volRank"
+              title="อันดับ volume ในรอบ lookback"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Vol×SMA"
+              sortKey="volVsSma"
+              title="Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            {showHighRank ? (
+              <SortTh
+                label="High#"
+                sortKey="highRank"
+                title="อันดับ high ในรอบ lookback"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
+            {showLowRank ? (
+              <SortTh
+                label="Low#"
+                sortKey="lowRank"
+                title="อันดับ low ในรอบ lookback"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
+            <SortTh label="Range" sortKey="range" title="ช่วงแท่ง ÷ ATR100" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Wick" sortKey="wick" title="ไส้ ÷ ATR100" activeSort={sort} onSort={onSortColumn} />
+            {horizonLabels[0] ? (
+              <SortTh
+                label={horizonLabels[0]!}
+                sortKey="h1"
+                title={horizonTitles[0] ?? undefined}
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
+            {horizonLabels[1] ? (
+              <SortTh
+                label={horizonLabels[1]!}
+                sortKey="h2"
+                title={horizonTitles[1] ?? undefined}
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
+            {horizonLabels[2] ? (
+              <SortTh
+                label={horizonLabels[2]!}
+                sortKey="h3"
+                title={horizonTitles[2] ?? undefined}
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
+            {horizonLabels[3] && has48h ? (
+              <SortTh
+                label={horizonLabels[3]!}
+                sortKey="h4"
+                title={horizonTitles[3] ?? undefined}
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
+            <SortTh label="Max ROI" sortKey="roi" title="Max favorable excursion" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Max DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSortColumn} />
+            <SortTh
+              label="สวน max"
+              sortKey="followUpAdverse"
+              title={followUpAdverseTitle}
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <th scope="col" title="Fear & Greed (Market Pulse snapshot ณ เวลาแจ้ง)">
+              F&G
+            </th>
+            <th scope="col" title="Sentiment จาก F&G — Bullish / Neutral / Bearish">
+              Sentiment
+            </th>
+            {has48h ? (
+              <th
+                scope="col"
+                title={
+                  strategyTpSlPlan
+                    ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H, strategyTpSlPlan)
+                    : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H)
+                }
+              >
+                กำไรกลยุทธ์ 24h
+              </th>
+            ) : null}
+            {has48h ? (
+              <th scope="col" title={strategyPlanTitle}>
+                กำไรกลยุทธ์ 48h
+              </th>
+            ) : null}
+            <SortTh
+              label="ผล"
+              sortKey="outcome"
+              title={tf === "1h" ? "ผลที่ 24h (ปิดเร็ว) · winrate ราย horizon ดูด้านบน" : "ผลหลังครบ horizon"}
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+          </tr>
+        </thead>
+        <tbody>
+          {tableRows.length === 0 ? (
+            <tr>
+              <td colSpan={emptyColSpan} className="sub">
+                {rawRows.length > 0
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  : emptyHint}
+              </td>
+            </tr>
+          ) : (
+            tableRows.map((r) => {
+              const horizons = reversalHorizonCells(r);
+              return (
+                <tr key={r.id}>
+                  <td>
+                    {coinLabel(r.symbol)}
+                    <PendingConflictBadge conflictWith={r.conflictWith} />
+                  </td>
+                  <td title={candleReversalModelLabel(r.model)}>
+                    {candleReversalModelShortLabel(r.model)}
+                  </td>
+                  <td title="แท่ง Day1 เขียวติดก่อนสัญญาณ">
+                    {candleReversalGreenDaysLabel(r.greenDaysBeforeSignal)}
+                  </td>
+                  <td title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้)">
+                    {candleReversalGreenDaysLabel(r.greenDaysBeforeSignalBkk)}
+                  </td>
+                  <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
+                  <td>
+                    <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
+                  </td>
+                  <td>{fmtPrice(r.entryPrice)}</td>
+                  <td>{fmtPrice(r.retestPrice)}</td>
+                  <td>{fmtPrice(r.slPrice)}</td>
+                  <td title="ไส้บน (Short)">
+                    {(r.tradeSide ?? "short") === "short"
+                      ? candleReversalWickRatioPctLabel(r.wickRatioPct)
+                      : "—"}
+                  </td>
+                  <td title={(r.tradeSide ?? "short") === "short" ? "ไส้ล่าง (Short)" : "ไส้ล่าง (Long)"}>
+                    {(r.tradeSide ?? "short") === "short"
+                      ? candleReversalWickRatioPctLabel(r.lowerWickRatioPct)
+                      : candleReversalWickRatioPctLabel(r.wickRatioPct)}
+                  </td>
+                  <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
+                  <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
+                  <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
+                  <td>{candleReversalSignalVolVsSmaLabel(r.signalVolVsSma)}</td>
+                  {showHighRank ? (
+                    <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
+                  ) : null}
+                  {showLowRank ? (
+                    <td>{candleReversalLowLookbackRankCell(r.lowRankInLookback, r.lookbackBars)}</td>
+                  ) : null}
+                  <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
+                  <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
+                  <td>{horizons[0]}</td>
+                  <td>{horizons[1]}</td>
+                  <td>{horizons[2]}</td>
+                  {has48h ? <td>{horizons[3]}</td> : null}
+                  <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
+                  <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
+                  <td>
+                    {r.followUpMaxAdversePct != null ? `${r.followUpMaxAdversePct.toFixed(2)}%` : "—"}
+                  </td>
+                  <td>{marketSentimentFngLabel(r.marketSentiment)}</td>
+                  <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>
+                  {has48h ? (
+                    <>
+                      <td>
+                        <StatsStrategyProfitCell
+                          holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
+                          pct24h={r.pct24h}
+                          pct48h={r.pct48h}
+                          strategyProfitPct24h={r.strategyProfitPct24h}
+                          strategyExitReason24h={r.strategyExitReason24h}
+                          marginUsdt={strategyMarginUsdt}
+                          leverage={strategyLeverage}
+                          tpSlPlan={strategyTpSlPlan}
+                        />
+                      </td>
+                      <td>
+                        <StatsStrategyProfitCell
+                          holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
+                          pct24h={r.pct24h}
+                          pct48h={r.pct48h}
+                          strategyProfitPct={r.strategyProfitPct}
+                          strategyExitReason={r.strategyExitReason}
+                          marginUsdt={strategyMarginUsdt}
+                          leverage={strategyLeverage}
+                          tpSlPlan={strategyTpSlPlan}
+                        />
+                      </td>
+                    </>
+                  ) : null}
+                  <td>{candleReversalOutcomeLabel(r.outcome)}</td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
     <section className="sparkStatsMatrixSection" style={{ marginTop: "1.5rem" }}>
@@ -465,6 +745,7 @@ function ReversalStatsSection({
             ))}
           </select>
         </label>
+        <StatsSplitByWeekCheckbox checked={splitByWeek} onChange={setSplitByWeek} />
         {matrixFilter !== "all" ? (
           <p className="sub" style={{ width: "100%", margin: 0 }} title={reversalMatrixFilterTitle(matrixFilter)}>
             {reversalMatrixFilterTitle(matrixFilter)}
@@ -482,289 +763,53 @@ function ReversalStatsSection({
             WR · {horizonWinrateText}
           </span>
         ) : null}
-        {strategyProfitSummaryText24h || strategyProfitSummaryText48h ? (
-          <>
-            {strategyProfitSummaryText24h ? (
-              <span
-                className="sub"
-                title="สรุปคอลัมน์กำไรกลยุทธ์ 24h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
-                style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
-              >
-                {strategyProfitSummaryText24h}
-              </span>
-            ) : null}
-            {strategyProfitSummaryText48h ? (
-              <span
-                className="sub"
-                title="สรุปคอลัมน์กำไรกลยุทธ์ 48h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
-                style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
-              >
-                {strategyProfitSummaryText48h}
-              </span>
-            ) : null}
-          </>
-        ) : null}
-      </div>
-      <div className="sparkMatrixScroll">
-        <table className="sparkMatrixTable sparkMatrixTable--compact">
-          <thead>
-            <tr>
-              <SortTh label="เหรียญ" sortKey="symbol" activeSort={sort} onSort={onSortColumn} />
-              <SortTh
-                label="โมเดล"
-                sortKey="model"
-                title={CANDLE_REVERSAL_MODEL_SHORT_LEGEND}
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              <SortTh
-                label="เขียว"
-                sortKey="greenDays"
-                title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              <th
-                scope="col"
-                title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) — แท่ง Day1 เขียวติดก่อนวันสัญญาณ"
-              >
-                เขียว(BKK)
-              </th>
-              <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
-              <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
-              <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
-              <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
-              <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
-              <SortTh
-                label="ไส้บน%"
-                sortKey="wickPct"
-                title="Short: ไส้บน ÷ ช่วงแท่ง · Long: —"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              <SortTh
-                label="ไส้ล่าง%"
-                sortKey="lowerWickPct"
-                title="Short: ไส้ล่าง ÷ ช่วงแท่ง · Long: ไส้ล่าง (wick หลัก)"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
-              <SortTh
-                label="Len#"
-                sortKey="rangeRank"
-                title="อันดับความยาวแท่ง (high-low) ในรอบ lookback"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              <SortTh
-                label="Vol#"
-                sortKey="volRank"
-                title="อันดับ volume ในรอบ lookback"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              <SortTh
-                label="Vol×SMA"
-                sortKey="volVsSma"
-                title="Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              {showHighRank ? (
-                <SortTh
-                  label="High#"
-                  sortKey="highRank"
-                  title="อันดับ high ในรอบ lookback"
-                  activeSort={sort}
-                  onSort={onSortColumn}
-                />
-              ) : null}
-              {showLowRank ? (
-                <SortTh
-                  label="Low#"
-                  sortKey="lowRank"
-                  title="อันดับ low ในรอบ lookback (1 = ต่ำสุด)"
-                  activeSort={sort}
-                  onSort={onSortColumn}
-                />
-              ) : null}
-              <SortTh label="Range" sortKey="range" activeSort={sort} onSort={onSortColumn} />
-              <SortTh label="Wick" sortKey="wick" activeSort={sort} onSort={onSortColumn} />
-              <SortTh
-                label={horizonLabels[0]}
-                sortKey="h1"
-                title={horizonTitles[0]}
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              <SortTh
-                label={horizonLabels[1]}
-                sortKey="h2"
-                title={horizonTitles[1]}
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              <SortTh
-                label={horizonLabels[2]}
-                sortKey="h3"
-                title={horizonTitles[2]}
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              {has48h && horizonLabels[3] && horizonTitles[3] ? (
-                <SortTh
-                  label={horizonLabels[3]}
-                  sortKey="h4"
-                  title={horizonTitles[3]}
-                  activeSort={sort}
-                  onSort={onSortColumn}
-                />
-              ) : null}
-              <SortTh label="ROI" sortKey="roi" title="Max ROI ถึง MFE" activeSort={sort} onSort={onSortColumn} />
-              <SortTh label="DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSort={onSortColumn} />
-              <SortTh
-                label="สวน max"
-                sortKey="followUpAdverse"
-                title={followUpAdverseTitle}
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-              <th scope="col" title="Fear & Greed (Market Pulse snapshot ณ เวลาแจ้ง)">
-                F&G
-              </th>
-              <th scope="col" title="Sentiment จาก F&G — Bullish / Neutral / Bearish">
-                Sentiment
-              </th>
-              {has48h ? (
-                <th
-                  scope="col"
-                  title={
-                    strategyTpSlPlan
-                      ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H, strategyTpSlPlan)
-                      : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H)
-                  }
+        <StatsWeekSplitHint splitByWeek={splitByWeek}>
+          {strategyProfitSummaryText24h || strategyProfitSummaryText48h ? (
+            <>
+              {strategyProfitSummaryText24h ? (
+                <span
+                  className="sub"
+                  title="สรุปคอลัมน์กำไรกลยุทธ์ 24h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
+                  style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
                 >
-                  กำไรกลยุทธ์ 24h
-                </th>
+                  {strategyProfitSummaryText24h}
+                </span>
               ) : null}
-              {has48h ? (
-                <th scope="col" title={strategyPlanTitle}>
-                  กำไรกลยุทธ์ 48h
-                </th>
+              {strategyProfitSummaryText48h ? (
+                <span
+                  className="sub"
+                  title="สรุปคอลัมน์กำไรกลยุทธ์ 48h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
+                  style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+                >
+                  {strategyProfitSummaryText48h}
+                </span>
               ) : null}
-              <SortTh
-                label="ผล"
-                sortKey="outcome"
-                title={tf === "1h" ? "ผลที่ 24h (ปิดเร็ว) · winrate ราย horizon ดูด้านบน" : "ผลหลังครบ horizon"}
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={emptyColSpan} className="sub">
-                  {rawRows.length > 0
-                    ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
-                    : emptyHint}
-                </td>
-              </tr>
-            ) : (
-              rows.map((r) => {
-                const horizons = reversalHorizonCells(r);
-                return (
-                  <tr key={r.id}>
-                    <td>
-                      {coinLabel(r.symbol)}
-                      <PendingConflictBadge conflictWith={r.conflictWith} />
-                    </td>
-                    <td title={candleReversalModelLabel(r.model)}>
-                      {candleReversalModelShortLabel(r.model)}
-                    </td>
-                    <td title="แท่ง Day1 เขียวติดก่อนสัญญาณ">
-                      {candleReversalGreenDaysLabel(r.greenDaysBeforeSignal)}
-                    </td>
-                    <td title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้)">
-                      {candleReversalGreenDaysLabel(r.greenDaysBeforeSignalBkk)}
-                    </td>
-                    <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
-                    <td>
-                      <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
-                    </td>
-                    <td>{fmtPrice(r.entryPrice)}</td>
-                    <td>{fmtPrice(r.retestPrice)}</td>
-                    <td>{fmtPrice(r.slPrice)}</td>
-                    <td title="ไส้บน (Short)">
-                      {(r.tradeSide ?? "short") === "short"
-                        ? candleReversalWickRatioPctLabel(r.wickRatioPct)
-                        : "—"}
-                    </td>
-                    <td title={(r.tradeSide ?? "short") === "short" ? "ไส้ล่าง (Short)" : "ไส้ล่าง (Long)"}>
-                      {(r.tradeSide ?? "short") === "short"
-                        ? candleReversalWickRatioPctLabel(r.lowerWickRatioPct)
-                        : candleReversalWickRatioPctLabel(r.wickRatioPct)}
-                    </td>
-                    <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
-                    <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
-                    <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
-                    <td>{candleReversalSignalVolVsSmaLabel(r.signalVolVsSma)}</td>
-                    {showHighRank ? (
-                      <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
-                    ) : null}
-                    {showLowRank ? (
-                      <td>{candleReversalLowLookbackRankCell(r.lowRankInLookback, r.lookbackBars)}</td>
-                    ) : null}
-                    <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
-                    <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
-                    <td>{horizons[0]}</td>
-                    <td>{horizons[1]}</td>
-                    <td>{horizons[2]}</td>
-                    {has48h ? <td>{horizons[3]}</td> : null}
-                    <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>
-                    <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
-                    <td>
-                      {r.followUpMaxAdversePct != null ? `${r.followUpMaxAdversePct.toFixed(2)}%` : "—"}
-                    </td>
-                    <td>{marketSentimentFngLabel(r.marketSentiment)}</td>
-                    <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>
-                    {has48h ? (
-                      <>
-                        <td>
-                          <StatsStrategyProfitCell
-                            holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
-                            pct24h={r.pct24h}
-                            pct48h={r.pct48h}
-                            strategyProfitPct24h={r.strategyProfitPct24h}
-                            strategyExitReason24h={r.strategyExitReason24h}
-                            marginUsdt={strategyMarginUsdt}
-                            leverage={strategyLeverage}
-                            tpSlPlan={strategyTpSlPlan}
-                          />
-                        </td>
-                        <td>
-                          <StatsStrategyProfitCell
-                            holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
-                            pct24h={r.pct24h}
-                            pct48h={r.pct48h}
-                            strategyProfitPct={r.strategyProfitPct}
-                            strategyExitReason={r.strategyExitReason}
-                            marginUsdt={strategyMarginUsdt}
-                            leverage={strategyLeverage}
-                            tpSlPlan={strategyTpSlPlan}
-                          />
-                        </td>
-                      </>
-                    ) : null}
-                    <td>{candleReversalOutcomeLabel(r.outcome)}</td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+            </>
+          ) : null}
+        </StatsWeekSplitHint>
       </div>
+      {splitByWeek ? (
+        weekGroups.length === 0 ? (
+          <p className="sub" style={{ marginTop: "0.5rem" }}>
+            {rawRows.length > 0
+              ? "ไม่มีแถวที่ตรงตัวกรองในช่วงที่เลือก"
+              : emptyHint}
+          </p>
+        ) : (
+          weekGroups.map((g) => (
+            <div key={g.weekKey} style={{ marginBottom: "1.25rem" }}>
+              <StatsWeekSectionTitle
+                weekLabel={g.weekLabel}
+                rowCount={g.rows.length}
+                extra={reversalWinrateSummary(g.rows)}
+              />
+              {renderTable(sortCandleReversalStatsRows(g.rows, sort))}
+            </div>
+          ))
+        )
+      ) : (
+        renderTable(rows)
+      )}
       <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
         {footnote}
       </p>
