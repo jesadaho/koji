@@ -8,6 +8,7 @@ import {
   StatsSplitByWeekCheckbox,
   StatsWeekSectionTitle,
   StatsWeekSplitHint,
+  StatsWeekStrategyProfitBlock,
 } from "@/components/StatsWeekGroupUi";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
@@ -1119,6 +1120,11 @@ export default function SnowballStatsTelegramMiniApp() {
                   weekLabel={g.weekLabel}
                   rowCount={g.rows.length}
                   extra={`WR · ${snowballHorizonWinrateSummary(g.rows, SNOWBALL_HORIZON_WR)}`}
+                />
+                <StatsWeekStrategyProfitBlock
+                  rows={g.rows}
+                  sizing={strategySizing}
+                  band={STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND}
                 />
                 {renderTable(g.rows)}
               </div>

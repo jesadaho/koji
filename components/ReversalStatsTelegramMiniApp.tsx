@@ -9,6 +9,7 @@ import {
   StatsSplitByWeekCheckbox,
   StatsWeekSectionTitle,
   StatsWeekSplitHint,
+  StatsWeekStrategyProfitBlock,
 } from "@/components/StatsWeekGroupUi";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
@@ -850,6 +851,13 @@ function ReversalStatsSection({
                 rowCount={g.rows.length}
                 extra={reversalWinrateSummary(g.rows)}
               />
+              {tf === "1h" ? (
+                <StatsWeekStrategyProfitBlock
+                  rows={g.rows}
+                  sizing={strategySizing}
+                  band={STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND}
+                />
+              ) : null}
               {renderTable(sortCandleReversalStatsRows(g.rows, sort))}
             </div>
           ))
