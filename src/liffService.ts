@@ -54,6 +54,7 @@ import {
   snowballStatsHorizonDue,
   type SnowballStatsApiPayload,
 } from "@/lib/snowballStatsClient";
+import { SNOWBALL_QUALITY_SIGNAL_CRITERIA } from "@/lib/snowballMatrixFilters";
 import {
   applySnowballStatsRowMigrations,
   deleteSnowballStatsRowById,
@@ -131,7 +132,7 @@ import { isSnowballAutotradeEnabled } from "./snowballAutoTradeExecutor";
 import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ค่าเริ่มต้น LONG → Long · BEAR → Short · ถ้าเปิด ✨ Quality Signal: สัญญาณที่ตรง (เขียว 2–3 วัน · Funding > −0.10%) → Long · ถ้าเปิด ✨ Quality Short Signal: สัญญาณที่ตรง (เขียว 1 วัน · Vol×SMA > 3 · R% > 8%) → Short (ชนะ Quality Signal) · เปิดอย่างใดอย่างหนึ่งแล้วไม่ตรงเกณฑ์ → ข้าม · วันอาทิตย์ (ไทย) → Short ทุกสัญญาณ · Action Plan = Monitor ไม่เปิด · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)";
+  `Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ค่าเริ่มต้น LONG → Long · BEAR → Short · ถ้าเปิด ✨ Quality Signal: สัญญาณที่ตรง (${SNOWBALL_QUALITY_SIGNAL_CRITERIA}) → Long · ถ้าเปิด ✨ Quality Short Signal: สัญญาณที่ตรง (เขียว 1 วัน · Vol×SMA > 3 · R% > 8%) → Short (ชนะ Quality Signal) · เปิดอย่างใดอย่างหนึ่งแล้วไม่ตรงเกณฑ์ → ข้าม · วันอาทิตย์ (ไทย) → Short ทุกสัญญาณ · Action Plan = Monitor ไม่เปิด · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)`;
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =

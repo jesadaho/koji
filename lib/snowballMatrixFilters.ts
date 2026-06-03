@@ -17,7 +17,9 @@ export type SnowballMatrixFilter =
   | "whaleRiders"
   | "highWinrate";
 
-export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = "เขียว 2–3 วัน · Funding > −0.10%";
+export const SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT = 30;
+
+export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `เขียว 2–3 วัน · Funding > −0.10% · EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}`;
 
 export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA =
   "เขียว 1 วัน · Vol×SMA > 3× · R% สัญญาณ > 8%";
@@ -133,13 +135,23 @@ function greenDaysBeforeSignalIsOneOf(
   return days.some((d) => greenDaysBeforeSignalIs(row, d));
 }
 
-/** ✨ Quality Signal — เขียว 2–3 วันก่อนสัญญาณ + Funding > −0.10% */
+/** ✨ Quality Signal — เขียว 2–3 วันก่อนสัญญาณ + Funding > −0.10% + EMA4h > 30% */
+function snowballMatchesQualitySignalEma4h(ema4hSlopePct7d?: number | null): boolean {
+  const pct = ema4hSlopePct7d;
+  return (
+    pct != null &&
+    Number.isFinite(pct) &&
+    pct > SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT
+  );
+}
+
 export function snowballMatchesQualitySignal(
-  row: Pick<SnowballStatsRow, "greenDaysBeforeSignal" | "fundingRate">,
+  row: Pick<SnowballStatsRow, "greenDaysBeforeSignal" | "fundingRate" | "ema4hSlopePct7d">,
 ): boolean {
   return (
     greenDaysBeforeSignalIsOneOf(row, [2, 3]) &&
-    snowballFundingRateGtNeg010Pct(row.fundingRate)
+    snowballFundingRateGtNeg010Pct(row.fundingRate) &&
+    snowballMatchesQualitySignalEma4h(row.ema4hSlopePct7d)
   );
 }
 

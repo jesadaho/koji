@@ -1712,7 +1712,7 @@ function buildSnowballTripleCheckMessage(
     sustainedBuyingPressure?: boolean;
     /** เปิดแท่งที่ใช้แสดงเวลาปิดในหัวข้อ (two-bar = แท่ง confirm) */
     alertClosedBarOpenSec?: number;
-    /** ผ่านเกณฑ์ Quality Signal (เขียว 2–3 วัน · Funding > −0.10%) */
+    /** ผ่านเกณฑ์ Quality Signal (เขียว 2–3 วัน · Funding > −0.10% · EMA4h > 30) */
     qualitySignal?: boolean;
   }
 ): string {
@@ -3507,6 +3507,7 @@ export async function runPublicIndicatorFeedInternal(
         const longQualitySignal = snowballMatchesQualitySignal({
           greenDaysBeforeSignal: longGreenDaysForAlert,
           fundingRate: longMktCtxForAlert?.fundingRate ?? null,
+          ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
         });
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bull", signalBarOpenSec, {
@@ -3658,6 +3659,7 @@ export async function runPublicIndicatorFeedInternal(
                     longQualitySignal || longQualityShortSignal ? null : longActionPlan,
                   greenDaysBeforeSignal: longGreenDaysForAlert,
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
+                  ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: longSignalVolVsSma,
                   ...(marginScale != null ? { marginScale } : {}),
@@ -4137,6 +4139,7 @@ export async function runPublicIndicatorFeedInternal(
         const bearQualitySignal = snowballMatchesQualitySignal({
           greenDaysBeforeSignal: bearGreenDaysForAlert,
           fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
+          ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
         });
         const bearVolSnapAuto = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
         const bearSignalVolVsSma =
@@ -4235,6 +4238,7 @@ export async function runPublicIndicatorFeedInternal(
                   volSma: vsE!,
                   greenDaysBeforeSignal: bearGreenDaysForAlert,
                   fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
+                  ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: bearSignalVolVsSma,
                 });

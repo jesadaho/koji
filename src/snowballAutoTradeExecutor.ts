@@ -121,6 +121,7 @@ function resolveSnowballAutoOpenSide(
   input: {
     greenDaysBeforeSignal?: number | null;
     fundingRate?: number | null;
+    ema4hSlopePct7d?: number | null;
     barRangePctSignal?: number | null;
     signalBarTf: "15m" | "1h" | "4h";
     vol: number;
@@ -135,6 +136,7 @@ function resolveSnowballAutoOpenSide(
   const qsMatch = snowballMatchesQualitySignal({
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
     fundingRate: input.fundingRate ?? null,
+    ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
   });
   const qssMatch = snowballAutoOpenMatchesQualityShortSignal(input);
 
@@ -260,6 +262,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   /** Quality Signal / Quality Short Signal */
   greenDaysBeforeSignal?: number | null;
   fundingRate?: number | null;
+  ema4hSlopePct7d?: number | null;
   barRangePctSignal?: number | null;
   signalVolVsSma?: number | null;
   confirmVolVsSma?: number | null;
@@ -269,6 +272,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   const qualitySignalMatch = snowballMatchesQualitySignal({
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
     fundingRate: input.fundingRate ?? null,
+    ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
   });
   const qualityShortMatch = snowballAutoOpenMatchesQualityShortSignal({
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
@@ -329,6 +333,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   const qualitySideInput = {
     ...qualityShortInput,
     fundingRate: input.fundingRate,
+    ema4hSlopePct7d: input.ema4hSlopePct7d,
   };
 
   const [map, state0] = await Promise.all([

@@ -1,3 +1,5 @@
+import { SNOWBALL_QUALITY_SIGNAL_CRITERIA } from "@/lib/snowballMatrixFilters";
+
 export type AutoOpenSource = "snowball" | "reversal";
 export type AutoOpenOutcome = "success" | "skipped" | "failed";
 
@@ -80,7 +82,7 @@ const REASON_LABELS: Record<string, string> = {
   ema_or_price_unavailable: "ดึง EMA50/mark ไม่ได้",
   mark_unavailable: "ดึงราคาตลาดไม่ได้",
   entry_gate: "สัญญาณไม่ผ่าน gate (legacy)",
-  quality_signal_gate: "สัญญาณไม่ผ่าน Quality Signal (เขียว 2–3 วัน · Funding > −0.10%)",
+  quality_signal_gate: `สัญญาณไม่ผ่าน Quality Signal (${SNOWBALL_QUALITY_SIGNAL_CRITERIA})`,
   quality_filter_no_match: "ไม่ตรงเกณฑ์ Quality Signal / Quality Short Signal ที่เปิดไว้",
   network_error: "ข้อผิดพลาดเครือข่าย/MEXC",
   open_success_market: "เปิดสำเร็จ (Market)",
