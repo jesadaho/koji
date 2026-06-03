@@ -204,6 +204,8 @@ export type CandleReversalStatsSortKey =
   | "day"
   | "time"
   | "entry"
+  | "vol24"
+  | "mcap"
   | "retest"
   | "sl"
   | "wickPct"
