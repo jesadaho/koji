@@ -76,6 +76,7 @@ export type SnowballPendingConfirm = {
   statsQuoteVol24hUsdt?: number | null;
   statsMarketCapUsd?: number | null;
   statsFundingRate?: number | null;
+  statsAtrPct14d?: number | null;
   statsSignalVolVsSma?: number | null;
   statsVolStrictOk?: boolean;
   statsVolNearMissOnly?: boolean;
@@ -175,6 +176,8 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsMarketCapUsdOk = Number.isFinite(statsMarketCapUsd) && statsMarketCapUsd > 0;
   const statsFundingRate = Number(o.statsFundingRate);
   const statsFundingRateOk = Number.isFinite(statsFundingRate);
+  const statsAtrPct14d = Number(o.statsAtrPct14d);
+  const statsAtrPct14dOk = Number.isFinite(statsAtrPct14d) && statsAtrPct14d > 0;
   const statsSignalVolVsSma = Number(o.statsSignalVolVsSma);
   const statsSignalVolVsSmaOk = Number.isFinite(statsSignalVolVsSma) && statsSignalVolVsSma > 0;
   const statsVolStrictOk =
@@ -261,6 +264,7 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsQuoteVol24hUsdtOk ? { statsQuoteVol24hUsdt } : {}),
     ...(statsMarketCapUsdOk ? { statsMarketCapUsd } : {}),
     ...(statsFundingRateOk ? { statsFundingRate } : {}),
+    ...(statsAtrPct14dOk ? { statsAtrPct14d } : {}),
     ...(statsSignalVolVsSmaOk ? { statsSignalVolVsSma } : {}),
     ...(statsVolStrictOk !== undefined ? { statsVolStrictOk } : {}),
     ...(statsVolNearMissOnly !== undefined ? { statsVolNearMissOnly } : {}),

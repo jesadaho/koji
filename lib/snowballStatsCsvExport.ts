@@ -29,6 +29,7 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_48H,
   type StatsStrategyCsvSizing,
 } from "@/lib/statsStrategyProfitClient";
+import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -48,6 +49,7 @@ const HEADERS = [
   "BTC SAR",
   "Vol 24h",
   "Mcap",
+  "ATR% 14D",
   "Funding",
   "Vol↗",
   "เขียว",
@@ -99,6 +101,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyC
     snowballStatsBtcPsarCombinedLabel(r.btcPsar4hTrend, r.btcPsar1hTrend),
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
+    statsAtrPct14dLabel(r.atrPct14d),
     snowballStatsFundingRateLabel(r.fundingRate),
     snowballStatsVolumeCascadeLabel(r.volumeCascadeYn),
     snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal),

@@ -93,6 +93,8 @@ export type SnowballStatsRow = {
   marketCapUsd?: number | null;
   /** Funding rate MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม) */
   fundingRate?: number | null;
+  /** Wilder ATR(14) บน 1d ÷ close × 100 */
+  atrPct14d?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
   /** Max DD% (stats-style 15m, lookback 32 แท่ง) ณ เวลาแจ้ง — undefined = แถวเก่าก่อนเพิ่ม field */
   signalMaxDdPct?: number | null;

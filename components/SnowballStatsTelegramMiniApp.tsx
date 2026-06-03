@@ -11,6 +11,7 @@ import {
 } from "@/components/StatsWeekGroupUi";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
+import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
   STATS_STRATEGY_PROFIT_HOLD_24H,
@@ -660,6 +661,9 @@ export default function SnowballStatsTelegramMiniApp() {
             <th scope="col" title="Market cap USD (CoinGecko) ณ เวลาแจ้ง">
               Mcap
             </th>
+            <th scope="col" title="Wilder ATR(14) บน 1d ÷ close × 100 — สูง = แกว่งเร็ว">
+              ATR%14D
+            </th>
             <th scope="col" title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)">
               Funding
             </th>
@@ -730,7 +734,7 @@ export default function SnowballStatsTelegramMiniApp() {
         <tbody>
           {tableRows.length === 0 ? (
             <tr>
-              <td colSpan={isAdmin ? 40 : 39} className="sub">
+              <td colSpan={isAdmin ? 41 : 40} className="sub">
                 {allRows.length === 0
                   ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
                   : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
@@ -771,6 +775,7 @@ export default function SnowballStatsTelegramMiniApp() {
                 <td>{snowballStatsBtcPsarCombinedLabel(r.btcPsar4hTrend, r.btcPsar1hTrend)}</td>
                 <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                 <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
+                <td>{statsAtrPct14dLabel(r.atrPct14d)}</td>
                 <td
                   className={
                     r.fundingRate != null && Number.isFinite(r.fundingRate)

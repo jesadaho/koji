@@ -11,6 +11,7 @@ import {
   StatsWeekSplitHint,
 } from "@/components/StatsWeekGroupUi";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
+import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
   STATS_STRATEGY_PROFIT_HOLD_24H,
@@ -447,6 +448,13 @@ function ReversalStatsSection({
               activeSort={sort}
               onSort={onSortColumn}
             />
+            <SortTh
+              label="ATR%14D"
+              sortKey="atr14d"
+              title="Wilder ATR(14) บนแท่ง 1d ÷ close × 100 — สูง = แกว่งเร็วข้ามเหรียญ"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
             <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
             <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
             <SortTh
@@ -618,6 +626,7 @@ function ReversalStatsSection({
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                   <td title="EMA6/12 4h">{candleReversalEma4hTrendLabel(r.ema4hTrend)}</td>
                   <td title="EMA6/12 1d">{candleReversalEma1dTrendLabel(r.ema1dTrend)}</td>
+                  <td title="ATR(14) 1d ÷ close">{statsAtrPct14dLabel(r.atrPct14d)}</td>
                   <td>{fmtPrice(r.retestPrice)}</td>
                   <td>{fmtPrice(r.slPrice)}</td>
                   <td title="ไส้บน (Short)">

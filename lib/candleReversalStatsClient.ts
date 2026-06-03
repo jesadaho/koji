@@ -36,6 +36,8 @@ export type CandleReversalStatsRow = {
   ema4hTrend?: "up" | "down" | null;
   /** EMA6/12 1d — up = uptrend · down = downtrend */
   ema1dTrend?: "up" | "down" | null;
+  /** Wilder ATR(14) บน 1d ÷ close × 100 */
+  atrPct14d?: number | null;
   /** Short: ไส้บน ÷ ช่วงแท่ง (%) · Long: ไส้ล่าง */
   wickRatioPct: number | null;
   /** Short เท่านั้น — ไส้ล่าง ÷ ช่วงแท่ง (%) */
@@ -212,6 +214,7 @@ export type CandleReversalStatsSortKey =
   | "mcap"
   | "ema4h"
   | "ema1d"
+  | "atr14d"
   | "retest"
   | "sl"
   | "wickPct"
@@ -332,6 +335,8 @@ function compareCandleReversalStatsRows(
       return cmpEmaTrend(a.ema4hTrend, b.ema4hTrend);
     case "ema1d":
       return cmpEmaTrend(a.ema1dTrend, b.ema1dTrend);
+    case "atr14d":
+      return cmpNumNullLast(a.atrPct14d, b.atrPct14d);
     case "retest":
       return cmpNumNullLast(a.retestPrice, b.retestPrice);
     case "sl":

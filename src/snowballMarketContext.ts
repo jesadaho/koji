@@ -7,6 +7,7 @@ import { resolveMexcContractFromBinanceSymbol } from "./coinMap";
 import { fetchBinanceUsdmKlines, fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { computeParabolicSarLast } from "./indicatorMath";
 import { fetchContractTickerSingle } from "./mexcMarkets";
+import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 
 const BTC_SYMBOL = "BTCUSDT";
 
@@ -31,6 +32,8 @@ export type SnowballAlertMarketContext = {
   marketCapUsd: number | null;
   /** Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม เช่น 0.0001 = 0.01%) */
   fundingRate: number | null;
+  /** Wilder ATR(14) บน 1d ÷ close × 100 */
+  atrPct14d: number | null;
 };
 
 function binanceUsdtPerpToMexcContract(binanceSymbol: string): string | null {
@@ -130,12 +133,13 @@ export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Pr
   const sym = binanceSymbol.trim().toUpperCase();
   const mexcContract = binanceUsdtPerpToMexcContract(sym);
   const base = binanceUsdtPerpBase(sym);
-  const [btc4h, btc1h, quoteVol24hUsdt, marketCapUsd, mexcTicker] = await Promise.all([
+  const [btc4h, btc1h, quoteVol24hUsdt, marketCapUsd, mexcTicker, atrPct14d] = await Promise.all([
     fetchBtcPsar4hSnapshot(),
     fetchBtcPsar1hSnapshot(),
     fetchBinanceUsdmQuoteVol24h(sym),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
     mexcContract ? fetchContractTickerSingle(mexcContract) : Promise.resolve(null),
+    fetchSymbolAtrPct14d(sym),
   ]);
   const fr = mexcTicker?.fundingRate;
   const fundingRate = typeof fr === "number" && Number.isFinite(fr) ? fr : null;
@@ -147,5 +151,6 @@ export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Pr
     quoteVol24hUsdt,
     marketCapUsd,
     fundingRate,
+    atrPct14d,
   };
 }

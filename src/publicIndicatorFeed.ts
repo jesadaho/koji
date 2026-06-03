@@ -3734,6 +3734,7 @@ export async function runPublicIndicatorFeedInternal(
                   statsQuoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                   statsMarketCapUsd: longMktCtx?.marketCapUsd ?? null,
                   statsFundingRate: longMktCtx?.fundingRate ?? null,
+                  statsAtrPct14d: longMktCtx?.atrPct14d ?? null,
                   statsSignalVolVsSma:
                     typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
                       ? vE! / vsE
@@ -3841,6 +3842,7 @@ export async function runPublicIndicatorFeedInternal(
                   quoteVol24hUsdt: longMktCtx?.quoteVol24hUsdt ?? null,
                   marketCapUsd: longMktCtx?.marketCapUsd ?? null,
                   fundingRate: longMktCtx?.fundingRate ?? null,
+                  atrPct14d: longMktCtx?.atrPct14d ?? null,
                   signalVolVsSma:
                     typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
                   volStrictOk,
@@ -4269,6 +4271,7 @@ export async function runPublicIndicatorFeedInternal(
                   statsQuoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
                   statsMarketCapUsd: bearMktCtx?.marketCapUsd ?? null,
                   statsFundingRate: bearMktCtx?.fundingRate ?? null,
+                  statsAtrPct14d: bearMktCtx?.atrPct14d ?? null,
                   ...(skipBearTgForPending ? { deferSnowballAutotradeToConfirm: true } : {}),
                 });
               } catch (pendErr) {
@@ -4318,6 +4321,7 @@ export async function runPublicIndicatorFeedInternal(
                   quoteVol24hUsdt: bearMktCtx?.quoteVol24hUsdt ?? null,
                   marketCapUsd: bearMktCtx?.marketCapUsd ?? null,
                   fundingRate: bearMktCtx?.fundingRate ?? null,
+                  atrPct14d: bearMktCtx?.atrPct14d ?? null,
                   ...trendMomentumStatsFields(trendMomentumBear),
                   greenDaysBeforeSignal: bearGreenDays,
                 });

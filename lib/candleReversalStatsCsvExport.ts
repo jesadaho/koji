@@ -30,6 +30,7 @@ import {
   snowballStatsMarketCapUsdLabel,
   snowballStatsQuoteVol24hLabel,
 } from "@/lib/snowballStatsClient";
+import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -47,6 +48,7 @@ const HEADERS = [
   "Mcap",
   "EMA 4h",
   "EMA 1d",
+  "ATR% 14D",
   "Retest",
   "SL",
   "ไส้บน%",
@@ -111,6 +113,7 @@ function candleReversalStatsRowToCsvCells(
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
     candleReversalEmaTrendCsvLabel(r.ema4hTrend),
     candleReversalEmaTrendCsvLabel(r.ema1dTrend),
+    statsAtrPct14dLabel(r.atrPct14d),
     statsFmtPrice(r.retestPrice),
     statsFmtPrice(r.slPrice),
     (r.tradeSide ?? "short") === "short"

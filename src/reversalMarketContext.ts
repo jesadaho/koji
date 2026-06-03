@@ -9,6 +9,7 @@ import {
   fetchBinanceUsdmQuoteVol24h,
   isBinanceIndicatorFapiEnabled,
 } from "./binanceIndicatorKline";
+import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 
 /** EMA6/12 + ราคาปิดแท่งล่าสุด — uptrend / downtrend (สอดคล้อง position checklist) */
 export type ReversalEmaTrend = "up" | "down";
@@ -42,6 +43,8 @@ export type ReversalAlertMarketSnapshot = {
   marketCapUsd: number | null;
   ema4hTrend: ReversalEmaTrend | null;
   ema1dTrend: ReversalEmaTrend | null;
+  /** Wilder ATR(14) บน 1d ÷ close × 100 */
+  atrPct14d: number | null;
 };
 
 /** ปิดแท่งล่าสุด vs EMA6/12 — up = ราคา>EMA12 และ EMA6>EMA12 · down = ราคา<EMA12 และ EMA6<EMA12 */
@@ -86,11 +89,12 @@ export async function fetchReversalAlertMarketSnapshot(
 ): Promise<ReversalAlertMarketSnapshot> {
   const sym = binanceSymbol.trim().toUpperCase();
   const base = binanceUsdtPerpBase(sym);
-  const [quoteVol24hUsdt, marketCapUsd, ema4hTrend, ema1dTrend] = await Promise.all([
+  const [quoteVol24hUsdt, marketCapUsd, ema4hTrend, ema1dTrend, atrPct14d] = await Promise.all([
     isBinanceIndicatorFapiEnabled() ? fetchBinanceUsdmQuoteVol24h(sym) : Promise.resolve(null),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
     fetchSymbolEmaTrendTf(sym, "4h"),
     fetchSymbolEmaTrendTf(sym, "1d"),
+    fetchSymbolAtrPct14d(sym),
   ]);
-  return { quoteVol24hUsdt, marketCapUsd, ema4hTrend, ema1dTrend };
+  return { quoteVol24hUsdt, marketCapUsd, ema4hTrend, ema1dTrend, atrPct14d };
 }
