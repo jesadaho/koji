@@ -1,0 +1,38 @@
+/** ตรวจเหรียญที่มี Snowball + Reversal pending พร้อมกัน (client-safe) */
+
+export type PendingStrategy = "snowball" | "reversal";
+
+export type PendingConflictSets = {
+  snowballPending: ReadonlySet<string>;
+  reversalPending: ReadonlySet<string>;
+};
+
+/** คีย์เหรียญ — รองรับ LABUSDT, LAB_USDT */
+export function pendingConflictSymbolKey(symbol: string): string {
+  let s = symbol.trim().toUpperCase();
+  if (!s) return "";
+  if (s.endsWith("_USDT")) s = s.slice(0, -5);
+  else if (s.endsWith("USDT") && s.length > 4) s = s.slice(0, -4);
+  return s.replace(/_/g, "");
+}
+
+export function hasDualPendingConflict(sets: PendingConflictSets, symbol: string): boolean {
+  const k = pendingConflictSymbolKey(symbol);
+  if (!k) return false;
+  return sets.snowballPending.has(k) && sets.reversalPending.has(k);
+}
+
+/** ชื่อฝั่งตรงข้ามเมื่อทั้งสอง pending — null ถ้าไม่ conflict */
+export function pendingConflictWithLabel(
+  sets: PendingConflictSets,
+  symbol: string,
+  self: PendingStrategy,
+): string | null {
+  if (!hasDualPendingConflict(sets, symbol)) return null;
+  return self === "snowball" ? "Reversal" : "Snowball";
+}
+
+export function pendingConflictBadgeText(conflictWith: string | null | undefined): string | null {
+  if (!conflictWith?.trim()) return null;
+  return `⚠ conflict w/ ${conflictWith.trim()}`;
+}

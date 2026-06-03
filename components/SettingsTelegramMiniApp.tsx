@@ -117,6 +117,7 @@ type ReversalAutoTradeApiBundle = {
   maxHoldHours?: number | null;
   gateQualitySignal?: boolean;
   saturdayAllSignalsEnabled?: boolean;
+  longSignalShortEnabled?: boolean;
 };
 
 type TradingViewMexcResponse = {
@@ -186,6 +187,7 @@ export default function SettingsTelegramMiniApp() {
   const [revMaxHoldHours, setRevMaxHoldHours] = useState("");
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
+  const [revLongSignalShort, setRevLongSignalShort] = useState(false);
   const [revSaveErr, setRevSaveErr] = useState("");
   const [revSaveOk, setRevSaveOk] = useState("");
   const [revSaving, setRevSaving] = useState(false);
@@ -264,6 +266,7 @@ export default function SettingsTelegramMiniApp() {
     );
     setRevGateQualitySignal(st.gateQualitySignal !== false);
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
+    setRevLongSignalShort(Boolean(st.longSignalShortEnabled));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.reversalAutoTrade]);
 
@@ -653,7 +656,7 @@ export default function SettingsTelegramMiniApp() {
       setRevSaveErr("Leverage ต้อง ≥ 1");
       return;
     }
-    if (revEnabled) {
+    if (revEnabled || revLongSignalShort) {
       if (!revGateQualitySignal && !revSaturdayAllSignals) {
         setRevSaveErr("เปิดใช้ Quality Signal หรือวันเสาร์ (auto-open ทุกสัญญาณ) ก่อนบันทึก");
         return;
@@ -692,6 +695,7 @@ export default function SettingsTelegramMiniApp() {
     try {
       const reversalAutoTrade: Record<string, unknown> = {
         enabled: revEnabled,
+        longSignalShortEnabled: revLongSignalShort,
         gateQualitySignal: revGateQualitySignal,
         saturdayAllSignalsEnabled: revSaturdayAllSignals,
         marginUsdt: revMargin.trim() ? marginParsed : null,
@@ -724,8 +728,13 @@ export default function SettingsTelegramMiniApp() {
       setMexcKeyInput("");
       setMexcSecretInput("");
       setRevSaveOk(
-        revEnabled
-          ? "บันทึกแล้ว · เปิดใช้ Reversal auto-open (SHORT)"
+        revEnabled || revLongSignalShort
+          ? `บันทึกแล้ว · Reversal auto-open: ${[
+              revEnabled ? "สัญญาณ Short" : "",
+              revLongSignalShort ? "Long→SHORT" : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")}`
           : "บันทึกแล้ว · ปิด Reversal auto-open"
       );
     } catch (e) {
@@ -1240,8 +1249,9 @@ export default function SettingsTelegramMiniApp() {
       <div id="reversal-auto-open" className="card" style={{ marginTop: "1.25rem" }}>
         <h2>Reversal auto-open (MEXC) — SHORT</h2>
         <p className="sub" style={{ marginTop: 0 }}>
-          เมื่อ <strong>Reversal alert ส่งสำเร็จในกลุ่ม</strong> ระบบจะสั่ง MEXC เปิด <strong>SHORT</strong> เมื่อสัญญาณผ่าน{" "}
-          <strong>Quality Signal</strong> (ถ้าเปิด gate ด้านล่าง) · entry แบบ hybrid ตาม <strong>EMA50 บน TF 15m</strong>:
+          เมื่อ <strong>Reversal alert ส่งสำเร็จในกลุ่ม</strong> ระบบจะสั่ง MEXC เปิด <strong>SHORT</strong> ตามตัวเลือกด้านล่าง
+          (สัญญาณ Short ตามแผน · หรือสัญญาณ Long แบบ fade) เมื่อผ่าน <strong>Quality Signal</strong> (ถ้าเปิด gate) · entry แบบ hybrid ตาม{" "}
+          <strong>EMA50 บน TF 15m</strong>:
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
           <li>ราคาตลาดอยู่<strong>เหนือ</strong> EMA50 15m → เปิด <strong>Market SHORT</strong> ทันที</li>
@@ -1272,7 +1282,21 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>เปิดใช้ Reversal auto-open (SHORT)</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              จำกัด 1 order/เหรียญ/วันไทย (BKK) — กันสั่งซ้ำในเหรียญเดียวกันต่อวัน
+              สัญญาณ Reversal แผน Short (เช่น longest red body, inverted doji) — จำกัด 1 order/เหรียญ/วันไทย (BKK)
+            </span>
+          </span>
+        </label>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={revLongSignalShort}
+            onChange={(e) => setRevLongSignalShort(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>สัญญาณ Reversal Long → เปิด SHORT (fade)</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              เมื่อแจ้งเตือน Reversal Long (เช่น longest green body) — สั่ง SHORT บน MEXC แทน · ใช้ gate / margin / TP เดียวกับด้านบน · 1 order/เหรียญ/วัน (BKK)
             </span>
           </span>
         </label>
@@ -1309,7 +1333,7 @@ export default function SettingsTelegramMiniApp() {
           Margin / เลเวเรจ
         </p>
         <p className="sub" style={{ marginTop: 0 }}>
-          ใช้กับสัญญาณที่ผ่าน Quality Signal (หรือทุกสัญญาณในวันเสาร์ถ้าเปิดตัวเลือกด้านบน)
+          ใช้กับสัญญาณ Short และ Long→SHORT ที่ผ่าน Quality Signal (หรือทุกสัญญาณในวันเสาร์ถ้าเปิดตัวเลือกด้านบน)
         </p>
         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
           <label className="sub" style={{ display: "block" }}>

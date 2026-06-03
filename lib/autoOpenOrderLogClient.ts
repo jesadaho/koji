@@ -44,6 +44,8 @@ export type AutoOpenOrderLogRow = {
   strategyOutcome?: string | null;
   /** P/L % ราคาตามกติกา strategy (ใช้แสดงผลจริง @48h) */
   strategyPct?: number | null;
+  /** มีสัญญาณอีกฝั่ง pending คู่กัน — แสดงในตาราง */
+  conflictWith?: string | null;
 };
 
 export type AutoOpenOrderLogApiPayload = {

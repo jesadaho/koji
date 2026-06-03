@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
+import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import {
   autoOpenOutcomeLabel,
   autoOpenReasonLabel,
@@ -393,7 +394,10 @@ function renderAutoOpenHistoryTableBody(
           <code className="marketsFundingHistTime">{formatBkk(r.atMs)}</code>
         </td>
         <td>{autoOpenSourceLabel(r.source)}</td>
-        <td>{coinLabel(r.binanceSymbol || r.contractSymbol)}</td>
+        <td>
+          {coinLabel(r.binanceSymbol || r.contractSymbol)}
+          <PendingConflictBadge conflictWith={r.conflictWith} />
+        </td>
         <td>{r.side ? r.side.toUpperCase() : "—"}</td>
         <td>{fmtMarginCell(r)}</td>
         <td>{fmtLeverage(r.leverage)}</td>

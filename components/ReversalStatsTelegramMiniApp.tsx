@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
+import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
@@ -614,7 +615,10 @@ function ReversalStatsSection({
                 const horizons = reversalHorizonCells(r);
                 return (
                   <tr key={r.id}>
-                    <td>{coinLabel(r.symbol)}</td>
+                    <td>
+                      {coinLabel(r.symbol)}
+                      <PendingConflictBadge conflictWith={r.conflictWith} />
+                    </td>
                     <td title={candleReversalModelLabel(r.model)}>
                       {candleReversalModelShortLabel(r.model)}
                     </td>

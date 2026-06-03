@@ -153,6 +153,8 @@ export type SnowballStatsRow = {
   outcome: SnowballStatsOutcome;
   /** migration: รีเซ็ต horizon หลังแก้ anchor 4h two-bar (ปิดแท่ง confirm) */
   horizonAnchorV2?: boolean;
+  /** มี Reversal pending คู่กัน — แสดงในตาราง */
+  conflictWith?: string | null;
 };
 
 export type SnowballStatsApiPayload = {

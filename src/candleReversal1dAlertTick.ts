@@ -672,23 +672,22 @@ async function notifyResults(
         scanStats.sentByModel[sig.model] = (scanStats.sentByModel[sig.model] ?? 0) + 1;
         pushReversalScanSymList(scanStats.sentSymbols, row.symbol);
 
-        if (tradeSide === "short") {
-          try {
-            await runReversalAutoTradeAfterReversalAlert({
-              binanceSymbol: row.symbol,
-              signalBarTf: sig.tf,
-              model: sig.model,
-              signalBarOpenSec: sig.barOpenSec,
-              bodyRatio: sig.bodyRatio,
-              wickRatio: sig.wickRatio,
-              rangeScore: row.evals.rangeScore,
-              rangeRankInLookback: sig.rangeRankInLookback ?? null,
-              greenDaysBeforeSignal,
-              signalClosePrice: sig.c,
-            });
-          } catch (e) {
-            console.error("[candleReversalAlertTick] reversal autotrade", row.symbol, sig.tf, e);
-          }
+        try {
+          await runReversalAutoTradeAfterReversalAlert({
+            alertTradeSide: tradeSide,
+            binanceSymbol: row.symbol,
+            signalBarTf: sig.tf,
+            model: sig.model,
+            signalBarOpenSec: sig.barOpenSec,
+            bodyRatio: sig.bodyRatio,
+            wickRatio: sig.wickRatio,
+            rangeScore: row.evals.rangeScore,
+            rangeRankInLookback: sig.rangeRankInLookback ?? null,
+            greenDaysBeforeSignal,
+            signalClosePrice: sig.c,
+          });
+        } catch (e) {
+          console.error("[candleReversalAlertTick] reversal autotrade", row.symbol, sig.tf, tradeSide, e);
         }
       }
     } catch (e) {

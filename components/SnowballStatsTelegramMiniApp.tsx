@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
+import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
@@ -949,7 +950,10 @@ export default function SnowballStatsTelegramMiniApp() {
               ) : (
                 rows.map((r) => (
                   <tr key={r.id}>
-                    <td className="snowStatsStickyCoin">{coinLabel(r.symbol)}</td>
+                    <td className="snowStatsStickyCoin">
+                      {coinLabel(r.symbol)}
+                      <PendingConflictBadge conflictWith={r.conflictWith} />
+                    </td>
                     <td>{snowballStatsSideLabel(r)}</td>
                     <td className={`snowStatsStickyGrade ${snowballStatsGradeCellClass(r)}`}>
                       <button

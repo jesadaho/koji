@@ -23,7 +23,7 @@ import {
   withReversalActiveOpen,
 } from "./reversalAutoTradeStateStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
-import type { CandleReversalModel, CandleReversalTf } from "./candleReversalDetect";
+import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } from "./candleReversalDetect";
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import { reversalMatchesQualitySignal } from "@/lib/reversalMatrixFilters";
@@ -140,6 +140,8 @@ function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings): {
 }
 
 export type ReversalAutoTradeInput = {
+  /** ทิศสัญญาณ Reversal ที่ยิง alert — short = แผน Short เดิม · long = fade เปิด SHORT */
+  alertTradeSide?: CandleReversalTradeSide;
   /** Binance USDT-M symbol เช่น BTCUSDT (ตามที่ Reversal alert scan) */
   binanceSymbol: string;
   /** TF ของสัญญาณ Reversal */
@@ -170,6 +172,7 @@ export type ReversalAutoTradeRunResult = {
 type ReversalAutoOpenLogSignal = {
   contractSymbol: string;
   binanceSymbol: string;
+  alertTradeSide: CandleReversalTradeSide;
   signalBarTf: CandleReversalTf;
   model: CandleReversalModel;
   signalBarOpenSec: number;
@@ -177,6 +180,12 @@ type ReversalAutoOpenLogSignal = {
   wickRatio: number;
   rangeRankInLookback?: number | null;
 };
+
+function reversalAutoOpenTelegramTitle(alertTradeSide: CandleReversalTradeSide): string {
+  return alertTradeSide === "long"
+    ? "Koji — Reversal auto-open (MEXC) · Long → SHORT"
+    : "Koji — Reversal auto-open (MEXC)";
+}
 
 function reversalIntendedEntry(
   aboveEma: boolean,
@@ -247,7 +256,8 @@ function logReversalAutoOpen(
 
 /**
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
- * - เปิดเฉพาะ user ที่ตั้ง `reversalAutoTradeEnabled` + มี MEXC creds
+ * - สัญญาณ Short: `reversalAutoTradeEnabled` · สัญญาณ Long (fade): `reversalAutoTradeLongSignalShortEnabled`
+ * - มี MEXC creds
  * - gate Quality Signal: เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5
  * - entry แบบ hybrid ตาม EMA50 บน TF 15m:
  *   - ราคาตลาด > EMA50 → Market SHORT ทันที
@@ -275,9 +285,13 @@ export async function runReversalAutoTradeAfterReversalAlert(
   if (!contractSymbolEarly) return { usersAttempted: 0, usersSucceeded: 0 };
   const contractSymbol: string = contractSymbolEarly;
 
+  const alertTradeSide: CandleReversalTradeSide = input.alertTradeSide === "long" ? "long" : "short";
+  const tgTitle = reversalAutoOpenTelegramTitle(alertTradeSide);
+
   const logSignal: ReversalAutoOpenLogSignal = {
     contractSymbol,
     binanceSymbol,
+    alertTradeSide,
     signalBarTf: input.signalBarTf,
     model: input.model,
     signalBarOpenSec: input.signalBarOpenSec,
@@ -408,8 +422,17 @@ export async function runReversalAutoTradeAfterReversalAlert(
   for (const [userId, rowRaw] of Object.entries(map)) {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
-    if (!row.reversalAutoTradeEnabled) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "user_disabled");
+    const userEnabledForAlert =
+      alertTradeSide === "long"
+        ? row.reversalAutoTradeLongSignalShortEnabled === true
+        : row.reversalAutoTradeEnabled === true;
+    if (!userEnabledForAlert) {
+      logReversalAutoOpen(
+        userId,
+        logSignal,
+        "skipped",
+        alertTradeSide === "long" ? "long_fade_disabled" : "user_disabled",
+      );
       continue;
     }
 
@@ -488,7 +511,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         signalClosePrice,
       );
       await notifyLines(userId, [
-        "Koji — Reversal auto-open (MEXC)",
+        tgTitle,
         "❌ เช็คโพซิชันจาก MEXC ไม่สำเร็จ — จึงไม่สั่งเปิด (ป้องกันซ้ำ)",
         `[${shortContractLabel(contractSymbol)}]/USDT (SHORT)`,
         `รายละเอียด: ${detail.slice(0, 320)}`,
@@ -501,7 +524,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         leverage: Math.floor(leverage),
       });
       await notifyLines(userId, [
-        "Koji — Reversal auto-open (MEXC)",
+        tgTitle,
         "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชันคู่สัญญานี้อยู่แล้ว",
         `[${shortContractLabel(contractSymbol)}]/USDT (SHORT)`,
         "ระบบจึงไม่เปิดซ้ำ (กันซ้อน margin / order ซ้ำ)",
@@ -523,7 +546,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         signalClosePrice,
       );
       await notifyLines(userId, [
-        "Koji — Reversal auto-open (MEXC)",
+        tgTitle,
         "❌ สั่งเปิดไม่สำเร็จ",
         `[${shortContractLabel(contractSymbol)}]/USDT (SHORT)`,
         entryRes.error,
@@ -577,7 +600,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           signalClosePrice,
         );
         await notifyLines(userId, [
-          "Koji — Reversal auto-open (MEXC)",
+          tgTitle,
           emaFallbackMarket
             ? "❌ สั่งเปิดไม่สำเร็จ (Market SHORT · ไม่มี EMA50)"
             : `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น SHORT${aboveEma ? " · Market (เหนือ EMA50 15m)" : " · Limit retest EMA50 15m"})`,
@@ -723,7 +746,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
       }
 
       await notifyLines(userId, [
-        "Koji — Reversal auto-open (MEXC)",
+        tgTitle,
         emaFallbackMarket
           ? "✅ เปิด Market SHORT (ไม่มี EMA50 → Market โดยตรง)"
           : aboveEma
@@ -762,7 +785,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         signalClosePrice,
       );
       await notifyLines(userId, [
-        "Koji — Reversal auto-open (MEXC)",
+        tgTitle,
         `❌ สั่งเปิดล้มเหลวจากข้อผิดพลาดระหว่างเรียก MEXC / เครือข่าย (ตั้งใจให้เป็น SHORT)`,
         `[${shortContractLabel(contractSymbol)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${lev}x`,

@@ -104,6 +104,8 @@ import {
 } from "@/lib/autoOpenOrderLogClient";
 import { listAutoOpenOrderLogsForUser, deleteSkippedAutoOpenOrderLogsForUser, countSkippedAutoOpenOrderLogsForUser } from "./autoOpenOrderLogStore";
 import { collectAutoOpenContractSymbols, fetchAutoOpenMarkPrices } from "./autoOpenMarkPrices";
+import { conflictWithForSymbol, loadPendingConflictSets } from "./signalPendingConflictServer";
+import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
 import { isPctStepPresetValue, PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import { clearPortfolioTrailingStateForUser } from "./portfolioTrailingAlertStateStore";
 import {
@@ -130,7 +132,7 @@ const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — gate Quality Signal: เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5 — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry EMA50 บน 15m: เหนือ → Market SHORT, ต่ำกว่า → Limit ที่ EMA50 — 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0";
+  "Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — สัญญาณ Short ตามแผน Short · ตัวเลือก Long → SHORT (fade) สำหรับสัญญาณ Reversal Long — gate Quality Signal: เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5 — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry EMA50 บน 15m: เหนือ → Market SHORT, ต่ำกว่า → Limit ที่ EMA50 — 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0";
 
 export function getLiffConfig() {
   return {
@@ -759,6 +761,12 @@ async function finalizeSnowballStatsPayload(
   telegramUserId: number | undefined,
   persistState: { rows: SnowballStatsApiPayload["rows"] },
 ): Promise<SnowballStatsApiPayload> {
+  const conflictSets = await loadPendingConflictSets();
+  const rowsWithConflict = rows.map((r) => ({
+    ...r,
+    conflictWith: conflictWithForSymbol(conflictSets, r.symbol, "snowball"),
+  }));
+
   let viewerTpSlPlanSummary: string | undefined;
   let viewerTpSlPlan: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
   let viewerStrategyMarginUsdt: number | null | undefined;
@@ -772,13 +780,13 @@ async function finalizeSnowballStatsPayload(
     viewerTpSlPlan = viewerStatsTpSlPlanPayload(plan);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
-    const dirty = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
+    const dirty = await enrichSnowballStatsWithViewerStrategyProfit(rowsWithConflict, plan);
     if (dirty > 0) {
       await saveSnowballStatsState(persistState);
     }
   }
   return {
-    rows,
+    rows: rowsWithConflict,
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
     ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
     ...(viewerTpSlPlan ? { viewerTpSlPlan } : {}),
@@ -816,7 +824,16 @@ export async function liffGetAutoOpenOrderHistory(
   userId: string,
   opts?: { days?: number; source?: AutoOpenSource },
 ): Promise<AutoOpenOrderLogApiPayload> {
-  const rows = await listAutoOpenOrderLogsForUser(userId, opts);
+  const rawRows = await listAutoOpenOrderLogsForUser(userId, opts);
+  const conflictSets = await loadPendingConflictSets();
+  const rows: AutoOpenOrderLogRow[] = rawRows.map((r) => ({
+    ...r,
+    conflictWith: conflictWithForSymbol(
+      conflictSets,
+      r.binanceSymbol || r.contractSymbol,
+      r.source,
+    ),
+  }));
   const skippedTotal = await countSkippedAutoOpenOrderLogsForUser(userId, {
     source: opts?.source,
   });
@@ -890,7 +907,14 @@ export async function liffGetCandleReversalStats(
   telegramUserId?: number,
 ): Promise<CandleReversalStatsApiPayload> {
   const st = await loadCandleReversalStatsState();
-  const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
+  const conflictSets = await loadPendingConflictSets();
+  const rows = [...st.rows]
+    .sort((a, b) => b.alertedAtMs - a.alertedAtMs)
+    .slice(0, 200)
+    .map((r) => ({
+      ...r,
+      conflictWith: conflictWithForSymbol(conflictSets, r.symbol, "reversal"),
+    }));
   let viewerTpSlPlanSummary: string | undefined;
   let viewerTpSlPlan: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
   let viewerStrategyMarginUsdt: number | null | undefined;
@@ -1122,6 +1146,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     maxHoldHours: row.reversalAutoTradeMaxHoldHours ?? null,
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
+    longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
   };
 }
 
@@ -1477,6 +1502,17 @@ function parseReversalAutoTradeNested(
   if (typeof o.enabled === "boolean") enabled = o.enabled;
   else if (o.enabled === "1" || o.enabled === 1 || o.enabled === "true") enabled = true;
 
+  let longSignalShortEnabled = false;
+  if (typeof o.longSignalShortEnabled === "boolean") {
+    longSignalShortEnabled = o.longSignalShortEnabled;
+  } else if (
+    o.longSignalShortEnabled === "1" ||
+    o.longSignalShortEnabled === 1 ||
+    o.longSignalShortEnabled === "true"
+  ) {
+    longSignalShortEnabled = true;
+  }
+
   const numOrEmpty = (
     key: string
   ): { v: number | null | undefined; err?: string } => {
@@ -1505,7 +1541,7 @@ function parseReversalAutoTradeNested(
     return { ok: false, error: "reversal_numeric_invalid" };
   }
 
-  if (enabled) {
+  if (enabled || longSignalShortEnabled) {
     const m = mMargin.v;
     const l = mLev.v;
     if (m == null || !(typeof m === "number" && Number.isFinite(m) && m > 0)) {
@@ -1564,7 +1600,7 @@ function parseReversalAutoTradeNested(
     saturdayAllSignalsEnabled = true;
   }
 
-  if (enabled && !gateQualitySignal && !saturdayAllSignalsEnabled) {
+  if ((enabled || longSignalShortEnabled) && !gateQualitySignal && !saturdayAllSignalsEnabled) {
     return { ok: false, error: "reversal_gate_required" };
   }
 
@@ -1585,6 +1621,7 @@ function parseReversalAutoTradeNested(
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
     reversalAutoTradeGateQualitySignal: gateQualitySignal,
     reversalAutoTradeSaturdayAllSignalsEnabled: saturdayAllSignalsEnabled,
+    reversalAutoTradeLongSignalShortEnabled: longSignalShortEnabled,
   };
   if (tpSlEnabled !== undefined) patchPart.reversalAutoTradeTpSlEnabled = tpSlEnabled;
   return { ok: true, patch: patchPart };
