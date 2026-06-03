@@ -135,7 +135,7 @@ const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
-  "Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — สัญญาณ Short ตามแผน Short · ตัวเลือก Long → SHORT (fade) สำหรับสัญญาณ Reversal Long — gate Quality Signal: เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5 — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry EMA50 บน 15m: เหนือ → Market SHORT, ต่ำกว่า → Limit ที่ EMA50 — 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0";
+  "Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — สัญญาณ Short ตามแผน Short · ตัวเลือก Long → SHORT (fade) สำหรับสัญญาณ Reversal Long — gate Quality Signal: (เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5) หรือ (EMA4H < 0% และ > −30%) — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry EMA50 บน 15m: เหนือ → Market SHORT, ต่ำกว่า → Limit ที่ EMA50 — 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0";
 
 export function getLiffConfig() {
   return {

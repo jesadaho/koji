@@ -43,11 +43,12 @@ export function isReversalAutotradeEnabled(): boolean {
   return true;
 }
 
-/** gate เปิดออเดอร์ — Quality Signal (เขียว ≥1 · Wick ≤0.20 · Range <4.5) */
+/** gate เปิดออเดอร์ — Quality Signal (classic หรือ EMA4H band) */
 export function reversalAutotradePassesEntryGate(input: {
   wickRatio: number;
   greenDaysBeforeSignal?: number | null;
   rangeScore?: number | null;
+  ema4hSlopePct7d?: number | null;
   allowQualitySignal?: boolean;
 }): boolean {
   if (input.allowQualitySignal === false) return false;
@@ -55,6 +56,7 @@ export function reversalAutotradePassesEntryGate(input: {
     wickRatio: input.wickRatio,
     greenDaysBeforeSignal: input.greenDaysBeforeSignal,
     rangeScore: input.rangeScore,
+    ema4hSlopePct7d: input.ema4hSlopePct7d,
   });
 }
 
@@ -160,6 +162,8 @@ export type ReversalAutoTradeInput = {
   rangeRankInLookback?: number | null;
   /** แท่ง Day1 เขียวติดก่อนแท่งสัญญาณ */
   greenDaysBeforeSignal?: number | null;
+  /** EMA(12) 4h slope 7 วัน % — สำหรับ Quality Signal (EMA4H band) */
+  ema4hSlopePct7d?: number | null;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
   signalClosePrice?: number;
 };
@@ -258,7 +262,7 @@ function logReversalAutoOpen(
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
  * - สัญญาณ Short: `reversalAutoTradeEnabled` · สัญญาณ Long (fade): `reversalAutoTradeLongSignalShortEnabled`
  * - มี MEXC creds
- * - gate Quality Signal: เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5
+ * - gate Quality Signal: (เขียว ≥1 · Wick ≤0.20 · Range <4.5) หรือ (EMA4H <0% และ >−30%)
  * - entry แบบ hybrid ตาม EMA50 บน TF 15m:
  *   - ราคาตลาด > EMA50 → Market SHORT ทันที
  *   - ราคาตลาด <= EMA50 → Limit SHORT ที่ราคา EMA50 (ดักรีเทสต์)
@@ -448,6 +452,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         wickRatio,
         greenDaysBeforeSignal: input.greenDaysBeforeSignal,
         rangeScore: input.rangeScore,
+        ema4hSlopePct7d: input.ema4hSlopePct7d,
         allowQualitySignal: allowQuality,
       })
     ) {
@@ -647,6 +652,10 @@ export async function runReversalAutoTradeAfterReversalAlert(
           : null;
       const rangeScore =
         input.rangeScore != null && Number.isFinite(input.rangeScore) ? input.rangeScore : null;
+      const ema4hPct =
+        input.ema4hSlopePct7d != null && Number.isFinite(input.ema4hSlopePct7d)
+          ? input.ema4hSlopePct7d
+          : null;
 
       const plan = resolveReversalTpSlPlanFromRow(row);
 
@@ -757,7 +766,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         `สัญญาณ Reversal: ${input.model} · TF ${input.signalBarTf.toUpperCase()}`,
         saturdayAllSignals
           ? "เกณฑ์: วันเสาร์ (เวลาไทย) — auto-open ทุกสัญญาณ Reversal"
-          : `Quality Signal ✓ · Wick ${wickPct.toFixed(1)}%${greenDays != null ? ` · เขียว ${greenDays}d` : ""}${rangeScore != null ? ` · Range ${rangeScore.toFixed(2)}` : ""}${lenRank != null ? ` · Len# ${lenRank}` : ""} · Body ${bodyPct.toFixed(1)}%`,
+          : `Quality Signal ✓ · Wick ${wickPct.toFixed(1)}%${greenDays != null ? ` · เขียว ${greenDays}d` : ""}${rangeScore != null ? ` · Range ${rangeScore.toFixed(2)}` : ""}${ema4hPct != null ? ` · EMA4h ${ema4hPct.toFixed(1)}%` : ""}${lenRank != null ? ` · Len# ${lenRank}` : ""} · Body ${bodyPct.toFixed(1)}%`,
         emaFallbackMarket
           ? `ราคาอ้างอิง ~${fmtReversalAutoTradePrice(markPrice)} (${markSource})`
           : aboveEma

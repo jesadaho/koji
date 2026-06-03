@@ -63,6 +63,7 @@ import { fetchGreenDaysBeforeReversalSignal } from "./candleReversalGreenDayStre
 import { BKK_DAY_TZ_OFFSET_SEC } from "./greenDayStreak";
 import { candleReversalSignalVolVsSmaAt } from "./candleReversalSignalVolVsSma";
 import { snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
+import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import { runReversalAutoTradeAfterReversalAlert } from "./reversalAutoTradeExecutor";
 
 function envFlagOn(key: string, defaultOn: boolean): boolean {
@@ -630,20 +631,21 @@ async function notifyResults(
     }
 
     try {
-      const greenDaysBeforeSignal = await fetchGreenDaysBeforeReversalSignal(
-        row.symbol,
-        sig.barOpenSec,
-        sig.tf,
-      );
-      const greenDaysBeforeSignalBkk = await fetchGreenDaysBeforeReversalSignal(
-        row.symbol,
-        sig.barOpenSec,
-        sig.tf,
-        { dayTzOffsetSec: BKK_DAY_TZ_OFFSET_SEC },
-      );
+      const [greenDaysBeforeSignal, greenDaysBeforeSignalBkk, mktSnap] = await Promise.all([
+        fetchGreenDaysBeforeReversalSignal(row.symbol, sig.barOpenSec, sig.tf),
+        fetchGreenDaysBeforeReversalSignal(row.symbol, sig.barOpenSec, sig.tf, {
+          dayTzOffsetSec: BKK_DAY_TZ_OFFSET_SEC,
+        }),
+        fetchReversalAlertMarketSnapshot(row.symbol),
+      ]);
+      const ema4hSlopePct7d =
+        mktSnap.ema4hSlopePct7d != null && Number.isFinite(mktSnap.ema4hSlopePct7d)
+          ? mktSnap.ema4hSlopePct7d
+          : null;
       const msg = buildCandleReversalAlertMessage(row.symbol, sig, {
         greenDaysBeforeSignal,
         rangeScore: row.evals.rangeScore,
+        ema4hSlopePct7d,
       });
       const ok = await sendPublicReversalFeedToSparkGroup(msg);
       if (ok && isCandleReversalStatsEnabled()) {
@@ -698,6 +700,7 @@ async function notifyResults(
             rangeScore: row.evals.rangeScore,
             rangeRankInLookback: sig.rangeRankInLookback ?? null,
             greenDaysBeforeSignal,
+            ema4hSlopePct7d,
             signalClosePrice: sig.c,
           });
         } catch (e) {

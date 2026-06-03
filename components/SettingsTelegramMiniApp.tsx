@@ -1310,7 +1310,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>Quality Signal</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range &lt; 4.5 (ตรง preset ในสถิติ Reversal)
+              (เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range &lt; 4.5) หรือ (EMA4H &lt; 0% และ &gt; −30%) — ตรง preset ในสถิติ Reversal
             </span>
           </span>
         </label>

@@ -6,12 +6,16 @@ import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 
 export type ReversalMatrixFilter = "all" | "qualitySignal";
 
-/** ข้อความเกณฑ์ Quality Signal (stats + auto-open) */
+/** ข้อความเกณฑ์ Quality Signal (stats + auto-open) — Reversal Short */
 export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
-  "เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5";
+  "(เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5) หรือ (EMA4H < 0% และ > −30%)";
 
 export const REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO = 0.2;
 export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
+/** EMA(12) 4h slope 7d — ช่วงล่าง (exclusive) */
+export const REVERSAL_QUALITY_SIGNAL_EMA4H_MIN_PCT = -30;
+/** EMA(12) 4h slope 7d — ช่วงบน (exclusive) */
+export const REVERSAL_QUALITY_SIGNAL_EMA4H_MAX_PCT = 0;
 
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
@@ -62,13 +66,10 @@ function rangeScoreBelow(maxExclusive: number, rangeScore?: number | null): bool
   return r != null && Number.isFinite(r) && r < maxExclusive;
 }
 
-/** ✨ Quality Signal — ใช้ร่วม stats filter และ Reversal auto-open gate */
-export function reversalMatchesQualitySignal(input: {
+function reversalMatchesQualitySignalClassic(input: {
   greenDaysBeforeSignal?: number | null;
-  /** ไส้บน / range — ทศนิยม 0–1 หรือ % 0–100 (auto-detect) */
   wickRatio?: number | null;
   wickRatioPct?: number | null;
-  /** ช่วงแท่ง ÷ ATR100 (คอลัมน์ Range ในสถิติ) */
   rangeScore?: number | null;
 }): boolean {
   if (!greenDaysBeforeSignalAtLeast({ greenDaysBeforeSignal: input.greenDaysBeforeSignal }, 1)) {
@@ -79,12 +80,40 @@ export function reversalMatchesQualitySignal(input: {
   return true;
 }
 
+/** EMA(12) 4h slope 7d — อยู่ระหว่าง −30% ถึง 0% (ไม่รวมขอบ) */
+function reversalMatchesQualitySignalEma4hBand(ema4hSlopePct7d?: number | null): boolean {
+  const pct = ema4hSlopePct7d;
+  if (pct == null || !Number.isFinite(pct)) return false;
+  return (
+    pct < REVERSAL_QUALITY_SIGNAL_EMA4H_MAX_PCT &&
+    pct > REVERSAL_QUALITY_SIGNAL_EMA4H_MIN_PCT
+  );
+}
+
+/** ✨ Quality Signal — ใช้ร่วม stats filter และ Reversal auto-open gate */
+export function reversalMatchesQualitySignal(input: {
+  greenDaysBeforeSignal?: number | null;
+  /** ไส้บน / range — ทศนิยม 0–1 หรือ % 0–100 (auto-detect) */
+  wickRatio?: number | null;
+  wickRatioPct?: number | null;
+  /** ช่วงแท่ง ÷ ATR100 (คอลัมน์ Range ในสถิติ) */
+  rangeScore?: number | null;
+  /** EMA(12) 4h slope 7 วัน % */
+  ema4hSlopePct7d?: number | null;
+}): boolean {
+  return (
+    reversalMatchesQualitySignalClassic(input) ||
+    reversalMatchesQualitySignalEma4hBand(input.ema4hSlopePct7d)
+  );
+}
+
 /** ✨ Quality Signal (แถวสถิติ) */
 export function reversalRowMatchesQualitySignalMatrix(row: CandleReversalStatsRow): boolean {
   return reversalMatchesQualitySignal({
     greenDaysBeforeSignal: row.greenDaysBeforeSignal,
     wickRatioPct: row.wickRatioPct,
     rangeScore: row.rangeScore,
+    ema4hSlopePct7d: row.ema4hSlopePct7d,
   });
 }
 

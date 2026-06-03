@@ -126,7 +126,7 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeGateBodyWick80?: boolean;
   /** @deprecated ใช้ gateQualitySignal */
   reversalAutoTradeGateLenRank315?: boolean;
-  /** Quality Signal: เขียว ≥1 วัน · Wick ≤0.20 · Range <4.5 */
+  /** Quality Signal: (เขียว ≥1 · Wick ≤0.20 · Range <4.5) หรือ (EMA4H <0% และ >−30%) */
   reversalAutoTradeGateQualitySignal?: boolean;
   /** วันเสาร์ (เวลาไทย) — auto-open ทุกสัญญาณ Reversal (ข้าม Quality Signal gate) */
   reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;
