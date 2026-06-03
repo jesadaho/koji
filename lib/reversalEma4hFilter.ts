@@ -10,6 +10,7 @@ export type ReversalEma4hFilter =
   | "gt3"
   | "gt5"
   | "gt0lt30"
+  | "gt20"
   | "gt30"
   | "gt50";
 
@@ -37,6 +38,7 @@ const EMA4H_SLOPE_THRESHOLD: Record<
   lt5: -5,
   gt3: 3,
   gt5: 5,
+  gt20: 20,
   gt30: 30,
   gt50: 50,
 };
