@@ -2,7 +2,7 @@
 
 import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 
-export type ReversalEma4hFilter = "all" | "lt0" | "lt3" | "lt5" | "gt3" | "gt5";
+export type ReversalEma4hFilter = "all" | "lt0" | "lt3" | "lt5" | "gt3" | "gt5" | "gt50";
 
 export const REVERSAL_EMA4H_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalEma4hFilter;
@@ -14,6 +14,7 @@ export const REVERSAL_EMA4H_FILTER_OPTIONS: ReadonlyArray<{
   { value: "lt5", label: "< -5" },
   { value: "gt3", label: "> 3" },
   { value: "gt5", label: "> 5" },
+  { value: "gt50", label: "> 50" },
 ];
 
 const EMA4H_SLOPE_THRESHOLD: Record<Exclude<ReversalEma4hFilter, "all">, number> = {
@@ -22,6 +23,7 @@ const EMA4H_SLOPE_THRESHOLD: Record<Exclude<ReversalEma4hFilter, "all">, number>
   lt5: -5,
   gt3: 3,
   gt5: 5,
+  gt50: 50,
 };
 
 export function reversalEma4hFilterLabel(filter: ReversalEma4hFilter): string {
