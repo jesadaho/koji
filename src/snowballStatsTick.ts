@@ -62,6 +62,18 @@ export type SnowballStatsAdminBackfillResult = {
 /** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
 const KLINE_GRAN_SEC = 900;
 
+function backfillSnowballLenPercentilePct(rows: SnowballStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (row.lenPercentilePct != null && Number.isFinite(row.lenPercentilePct)) continue;
+    const pct = lenPercentilePctFromRank(row.rangeRankInLookback, row.lenLookbackBars);
+    if (pct == null) continue;
+    row.lenPercentilePct = pct;
+    updated += 1;
+  }
+  return updated;
+}
+
 function pctVsEntry(side: "long" | "short", entry: number, price: number): number {
   if (side === "long") return ((price - entry) / entry) * 100;
   return ((entry - price) / entry) * 100;
