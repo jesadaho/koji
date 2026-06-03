@@ -1,6 +1,6 @@
 import { statsRangeRankInWindow } from "@/lib/statsLenPercentile";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
-import { reversalMatchesQualitySignal } from "@/lib/reversalMatrixFilters";
+import { reversalMatchesQualitySignalForAlert } from "@/lib/reversalMatrixFilters";
 import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { emaLine } from "./indicatorMath";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
@@ -941,7 +941,9 @@ export function buildCandleReversalAlertMessage(
   const sideTag = sig.tradeSide === "long" ? " Long" : "";
   const qualitySignal =
     qualityCtx != null &&
-    reversalMatchesQualitySignal({
+    reversalMatchesQualitySignalForAlert({
+      signalBarTf: sig.tf,
+      tradeSide: sig.tradeSide,
       greenDaysBeforeSignal: qualityCtx.greenDaysBeforeSignal,
       wickRatio: sig.wickRatio,
       rangeScore: qualityCtx.rangeScore,

@@ -26,7 +26,7 @@ import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNo
 import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } from "./candleReversalDetect";
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
-import { reversalMatchesQualitySignal } from "@/lib/reversalMatrixFilters";
+import { reversalMatchesQualitySignalForAlert } from "@/lib/reversalMatrixFilters";
 import { placeTpPlanOrdersAfterOpen } from "./autoTradeTpSlPlanOrders";
 import { bkkIsSaturdayNow } from "./snowballAutoTradeStateStore";
 
@@ -43,8 +43,10 @@ export function isReversalAutotradeEnabled(): boolean {
   return true;
 }
 
-/** gate เปิดออเดอร์ — Quality Signal (classic หรือ EMA4H band) */
+/** gate เปิดออเดอร์ — Quality Signal (Short หรือ Long 1H ตาม TF/side) */
 export function reversalAutotradePassesEntryGate(input: {
+  signalBarTf: CandleReversalTf;
+  alertTradeSide: CandleReversalTradeSide;
   wickRatio: number;
   greenDaysBeforeSignal?: number | null;
   rangeScore?: number | null;
@@ -52,7 +54,9 @@ export function reversalAutotradePassesEntryGate(input: {
   allowQualitySignal?: boolean;
 }): boolean {
   if (input.allowQualitySignal === false) return false;
-  return reversalMatchesQualitySignal({
+  return reversalMatchesQualitySignalForAlert({
+    signalBarTf: input.signalBarTf,
+    tradeSide: input.alertTradeSide,
     wickRatio: input.wickRatio,
     greenDaysBeforeSignal: input.greenDaysBeforeSignal,
     rangeScore: input.rangeScore,
@@ -262,7 +266,7 @@ function logReversalAutoOpen(
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
  * - สัญญาณ Short: `reversalAutoTradeEnabled` · สัญญาณ Long (fade): `reversalAutoTradeLongSignalShortEnabled`
  * - มี MEXC creds
- * - gate Quality Signal: (เขียว ≥1 · Wick ≤0.20 · Range <4.5) หรือ (EMA4H <0% และ >−30%)
+ * - gate Quality Signal: Short — (เขียว ≥1 · Wick ≤0.20 · Range <4.5) หรือ EMA4H −30%..0% · Long 1H — EMA4H <−3%
  * - entry แบบ hybrid ตาม EMA50 บน TF 15m:
  *   - ราคาตลาด > EMA50 → Market SHORT ทันที
  *   - ราคาตลาด <= EMA50 → Limit SHORT ที่ราคา EMA50 (ดักรีเทสต์)
@@ -449,6 +453,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
     if (
       !saturdayAllSignals &&
       !reversalAutotradePassesEntryGate({
+        signalBarTf: input.signalBarTf,
+        alertTradeSide,
         wickRatio,
         greenDaysBeforeSignal: input.greenDaysBeforeSignal,
         rangeScore: input.rangeScore,

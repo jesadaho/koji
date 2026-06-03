@@ -95,6 +95,7 @@ import {
   reversalMatrixFilterTitle,
   reversalStatsRowMatchesMatrixFilter,
   type ReversalMatrixFilter,
+  type ReversalQualitySignalProfile,
 } from "@/lib/reversalMatrixFilters";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -250,6 +251,8 @@ type ReversalStatsSectionProps = {
   strategyMarginUsdt?: number | null;
   strategyLeverage?: number | null;
   strategyTpSlPlan?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
+  /** เกณฑ์ ✨ Quality Signal ในตารางนี้ (ค่าเริ่มต้น = Short) */
+  qualitySignalProfile?: ReversalQualitySignalProfile;
 };
 
 function ReversalStatsSection({
@@ -260,6 +263,7 @@ function ReversalStatsSection({
   footnote,
   csvPrefix,
   csvQuery = "",
+  qualitySignalProfile = "short",
   rows: rawRows,
   showHighRank = true,
   showLowRank = false,
@@ -817,7 +821,7 @@ function ReversalStatsSection({
             onChange={(e) => setMatrixFilter(e.currentTarget.value as ReversalMatrixFilter)}
             className="tmaInput"
             style={{ width: "auto", minWidth: "10rem" }}
-            title={reversalMatrixFilterTitle(matrixFilter)}
+            title={reversalMatrixFilterTitle(matrixFilter, qualitySignalProfile)}
           >
             {REVERSAL_MATRIX_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -828,8 +832,12 @@ function ReversalStatsSection({
         </label>
         <StatsSplitByWeekCheckbox checked={splitByWeek} onChange={setSplitByWeek} />
         {matrixFilter !== "all" ? (
-          <p className="sub" style={{ width: "100%", margin: 0 }} title={reversalMatrixFilterTitle(matrixFilter)}>
-            {reversalMatrixFilterTitle(matrixFilter)}
+          <p
+            className="sub"
+            style={{ width: "100%", margin: 0 }}
+            title={reversalMatrixFilterTitle(matrixFilter, qualitySignalProfile)}
+          >
+            {reversalMatrixFilterTitle(matrixFilter, qualitySignalProfile)}
           </p>
         ) : null}
         <span className="sub">
@@ -1201,6 +1209,7 @@ export default function ReversalStatsTelegramMiniApp() {
         footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_LONG}`}
         csvPrefix="reversal-stats-1h-long"
         csvQuery="&side=long"
+        qualitySignalProfile="long1h"
         rows={hourLongRows}
         showHighRank={false}
         showLowRank

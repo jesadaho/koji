@@ -2,13 +2,23 @@
  * Matrix presets สำหรับกรองสถิติ Reversal
  */
 
-import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
+import type {
+  CandleReversalSignalBarTf,
+  CandleReversalStatsRow,
+  CandleReversalTradeSide,
+} from "@/lib/candleReversalStatsClient";
 
 export type ReversalMatrixFilter = "all" | "qualitySignal";
+
+/** โปรไฟล์ Quality Signal ในตารางสถิติ (แต่ละ section) */
+export type ReversalQualitySignalProfile = "short" | "long1h";
 
 /** ข้อความเกณฑ์ Quality Signal (stats + auto-open) — Reversal Short */
 export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
   "(เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5) หรือ (EMA4H < 0% และ > −30%)";
+
+/** ข้อความเกณฑ์ Quality Signal — สถิติ Reversal · Long 1H */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA = "EMA4H < −3%";
 
 export const REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO = 0.2;
 export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
@@ -16,6 +26,8 @@ export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
 export const REVERSAL_QUALITY_SIGNAL_EMA4H_MIN_PCT = -30;
 /** EMA(12) 4h slope 7d — ช่วงบน (exclusive) */
 export const REVERSAL_QUALITY_SIGNAL_EMA4H_MAX_PCT = 0;
+/** Long 1H stats — EMA4h slope ต้องต่ำกว่า (exclusive) */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_EMA4H_MAX_PCT = -3;
 
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
@@ -29,9 +41,18 @@ export function reversalMatrixFilterLabel(filter: ReversalMatrixFilter): string 
   return REVERSAL_MATRIX_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
 }
 
-export function reversalMatrixFilterTitle(filter: ReversalMatrixFilter): string {
+export function reversalQualitySignalCriteria(profile: ReversalQualitySignalProfile = "short"): string {
+  return profile === "long1h"
+    ? REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA
+    : REVERSAL_QUALITY_SIGNAL_CRITERIA;
+}
+
+export function reversalMatrixFilterTitle(
+  filter: ReversalMatrixFilter,
+  profile: ReversalQualitySignalProfile = "short",
+): string {
   if (filter === "qualitySignal") {
-    return `Quality Signal: ${REVERSAL_QUALITY_SIGNAL_CRITERIA}`;
+    return `Quality Signal: ${reversalQualitySignalCriteria(profile)}`;
   }
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
@@ -90,7 +111,16 @@ function reversalMatchesQualitySignalEma4hBand(ema4hSlopePct7d?: number | null):
   );
 }
 
-/** ✨ Quality Signal — ใช้ร่วม stats filter และ Reversal auto-open gate */
+/** ✨ Quality Signal — สถิติ Reversal · Long 1H */
+export function reversalMatchesQualitySignalLong1h(input: {
+  ema4hSlopePct7d?: number | null;
+}): boolean {
+  const pct = input.ema4hSlopePct7d;
+  if (pct == null || !Number.isFinite(pct)) return false;
+  return pct < REVERSAL_QUALITY_SIGNAL_LONG_1H_EMA4H_MAX_PCT;
+}
+
+/** ✨ Quality Signal — Reversal Short (และ 1D) */
 export function reversalMatchesQualitySignal(input: {
   greenDaysBeforeSignal?: number | null;
   /** ไส้บน / range — ทศนิยม 0–1 หรือ % 0–100 (auto-detect) */
@@ -107,9 +137,40 @@ export function reversalMatchesQualitySignal(input: {
   );
 }
 
+export function reversalUsesLong1hQualitySignal(
+  signalBarTf?: CandleReversalSignalBarTf | null,
+  tradeSide?: CandleReversalTradeSide | null,
+): boolean {
+  return (signalBarTf ?? "1d") === "1h" && tradeSide === "long";
+}
+
+/** ✨ Quality Signal — stats / auto-open / alert header */
+export function reversalMatchesQualitySignalForAlert(input: {
+  signalBarTf?: CandleReversalSignalBarTf | null;
+  tradeSide?: CandleReversalTradeSide | null;
+  greenDaysBeforeSignal?: number | null;
+  wickRatio?: number | null;
+  wickRatioPct?: number | null;
+  rangeScore?: number | null;
+  ema4hSlopePct7d?: number | null;
+}): boolean {
+  if (reversalUsesLong1hQualitySignal(input.signalBarTf, input.tradeSide)) {
+    return reversalMatchesQualitySignalLong1h({ ema4hSlopePct7d: input.ema4hSlopePct7d });
+  }
+  return reversalMatchesQualitySignal({
+    greenDaysBeforeSignal: input.greenDaysBeforeSignal,
+    wickRatio: input.wickRatio,
+    wickRatioPct: input.wickRatioPct,
+    rangeScore: input.rangeScore,
+    ema4hSlopePct7d: input.ema4hSlopePct7d,
+  });
+}
+
 /** ✨ Quality Signal (แถวสถิติ) */
 export function reversalRowMatchesQualitySignalMatrix(row: CandleReversalStatsRow): boolean {
-  return reversalMatchesQualitySignal({
+  return reversalMatchesQualitySignalForAlert({
+    signalBarTf: row.signalBarTf,
+    tradeSide: row.tradeSide,
     greenDaysBeforeSignal: row.greenDaysBeforeSignal,
     wickRatioPct: row.wickRatioPct,
     rangeScore: row.rangeScore,
