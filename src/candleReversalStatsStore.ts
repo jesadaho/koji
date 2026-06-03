@@ -9,6 +9,7 @@ import {
 } from "@/lib/candleReversalStatsClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
+import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 
 export type { CandleReversalStatsApiPayload, CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 
@@ -126,6 +127,8 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
       r.strategyProfitByPlan && typeof r.strategyProfitByPlan === "object"
         ? r.strategyProfitByPlan
         : undefined,
+    quoteVol24hUsdt: nullNum(r.quoteVol24hUsdt),
+    marketCapUsd: nullNum(r.marketCapUsd),
   };
 }
 
@@ -300,6 +303,22 @@ export async function appendCandleReversalStatsRow(
     /* ignore */
   }
 
+  let quoteVol24hUsdt: number | null = null;
+  let marketCapUsd: number | null = null;
+  try {
+    const snap = await fetchReversalAlertMarketSnapshot(input.symbol);
+    quoteVol24hUsdt =
+      snap.quoteVol24hUsdt != null && Number.isFinite(snap.quoteVol24hUsdt) && snap.quoteVol24hUsdt > 0
+        ? snap.quoteVol24hUsdt
+        : null;
+    marketCapUsd =
+      snap.marketCapUsd != null && Number.isFinite(snap.marketCapUsd) && snap.marketCapUsd > 0
+        ? snap.marketCapUsd
+        : null;
+  } catch {
+    /* ignore */
+  }
+
   const rangeScore =
     input.rangeScore != null && Number.isFinite(input.rangeScore) && input.rangeScore >= 0
       ? input.rangeScore
@@ -321,6 +340,8 @@ export async function appendCandleReversalStatsRow(
     entryPrice: input.entryPrice,
     retestPrice: input.retestPrice,
     slPrice: input.slPrice,
+    quoteVol24hUsdt,
+    marketCapUsd,
     wickRatioPct:
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,
     lowerWickRatioPct:

@@ -25,6 +25,10 @@ import {
 } from "@/lib/statsStrategyProfitClient";
 
 export type { StatsStrategyCsvSizing } from "@/lib/statsStrategyProfitClient";
+import {
+  snowballStatsMarketCapUsdLabel,
+  snowballStatsQuoteVol24hLabel,
+} from "@/lib/snowballStatsClient";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -38,6 +42,8 @@ const HEADERS = [
   "วัน",
   "เวลา (BKK)",
   "Entry",
+  "Vol 24h",
+  "Mcap",
   "Retest",
   "SL",
   "ไส้บน%",
@@ -98,6 +104,8 @@ function candleReversalStatsRowToCsvCells(
     candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs),
     statsFmtBkk(r.alertedAtIso),
     statsFmtPrice(r.entryPrice),
+    snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
+    snowballStatsMarketCapUsdLabel(r.marketCapUsd),
     statsFmtPrice(r.retestPrice),
     statsFmtPrice(r.slPrice),
     (r.tradeSide ?? "short") === "short"

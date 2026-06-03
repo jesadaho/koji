@@ -28,6 +28,10 @@ export type CandleReversalStatsRow = {
   entryPrice: number;
   retestPrice: number;
   slPrice: number;
+  /** Quote volume 24h USDT (Binance perp) ณ เวลาแจ้ง */
+  quoteVol24hUsdt?: number | null;
+  /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
+  marketCapUsd?: number | null;
   /** Short: ไส้บน ÷ ช่วงแท่ง (%) · Long: ไส้ล่าง */
   wickRatioPct: number | null;
   /** Short เท่านั้น — ไส้ล่าง ÷ ช่วงแท่ง (%) */
@@ -299,6 +303,10 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.alertedAtMs, b.alertedAtMs);
     case "entry":
       return cmpNumNullLast(a.entryPrice, b.entryPrice);
+    case "vol24":
+      return cmpNumNullLast(a.quoteVol24hUsdt, b.quoteVol24hUsdt);
+    case "mcap":
+      return cmpNumNullLast(a.marketCapUsd, b.marketCapUsd);
     case "retest":
       return cmpNumNullLast(a.retestPrice, b.retestPrice);
     case "sl":

@@ -26,6 +26,10 @@ import {
   prepareTelegramMiniAppShell,
 } from "@/lib/kojiTelegramWebApp";
 import {
+  snowballStatsMarketCapUsdLabel,
+  snowballStatsQuoteVol24hLabel,
+} from "@/lib/snowballStatsClient";
+import {
   candleReversalDayOfWeekBkk,
   candleReversalGreenDaysLabel,
   candleReversalHorizonWinrateSummary,
@@ -343,7 +347,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 25 : 22) + extraRankCols + 2;
+  const emptyColSpan = (has48h ? 25 : 22) + extraRankCols + 4;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -413,6 +417,20 @@ function ReversalStatsSection({
             <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
             <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
             <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="Vol 24h"
+              sortKey="vol24"
+              title="Quote volume 24h USDT (Binance perp) ณ เวลาแจ้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Mcap"
+              sortKey="mcap"
+              title="Market cap USD (CoinGecko) ณ เวลาแจ้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
             <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
             <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
             <SortTh
@@ -508,7 +526,7 @@ function ReversalStatsSection({
               />
             ) : null}
             <SortTh label="Max ROI" sortKey="roi" title="Max favorable excursion" activeSort={sort} onSort={onSortColumn} />
-            <SortTh label="Max DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSortColumn} />
+            <SortTh label="Max DD" sortKey="dd" title="Max drawdown ถึง MFE" activeSort={sort} onSort={onSortColumn} />
             <SortTh
               label="สวน max"
               sortKey="followUpAdverse"
@@ -580,6 +598,8 @@ function ReversalStatsSection({
                     <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
                   </td>
                   <td>{fmtPrice(r.entryPrice)}</td>
+                  <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
+                  <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                   <td>{fmtPrice(r.retestPrice)}</td>
                   <td>{fmtPrice(r.slPrice)}</td>
                   <td title="ไส้บน (Short)">
