@@ -134,8 +134,6 @@ function resolveSnowballAutoOpenSide(
   const qsOn = snowballQualitySignalLongEnabled(row);
   const qssOn = row.snowballAutoTradeQualityShortSignalShortEnabled === true;
   const qsMatch = snowballMatchesQualitySignal({
-    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
-    fundingRate: input.fundingRate ?? null,
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
   });
   const qssMatch = snowballAutoOpenMatchesQualityShortSignal(input);
@@ -270,8 +268,6 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   if (!isSnowballAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
 
   const qualitySignalMatch = snowballMatchesQualitySignal({
-    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
-    fundingRate: input.fundingRate ?? null,
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
   });
   const qualityShortMatch = snowballAutoOpenMatchesQualityShortSignal({

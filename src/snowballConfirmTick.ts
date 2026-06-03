@@ -306,8 +306,6 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
         const confirmQualitySignal =
           item.side === "long" &&
           snowballMatchesQualitySignal({
-            greenDaysBeforeSignal: greenDaysForConfirm,
-            fundingRate: item.statsFundingRate ?? null,
             ema4hSlopePct7d: item.statsEma4hSlopePct7d ?? null,
           });
         const text = buildConfirmedMessage({
