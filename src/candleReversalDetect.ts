@@ -461,6 +461,15 @@ export function evalLongestRedBody1h(
   });
 }
 
+/** Short reversal — ข้ามแจ้ง/stats/auto-open เมื่อไส้ล่าง > ไส้บน */
+export function reversalShortSkipsLowerWickDominant(
+  upperWickRatio: number,
+  lowerWickRatio: number,
+): boolean {
+  if (!Number.isFinite(upperWickRatio) || !Number.isFinite(lowerWickRatio)) return false;
+  return lowerWickRatio > upperWickRatio;
+}
+
 /** ไส้ล่างต่อช่วงแท่ง (0–1) */
 export function candleLowerWickRatio(pack: BinanceKlinePack, i: number): number {
   const { open: o, high: h, low: l, close: c } = pack;
