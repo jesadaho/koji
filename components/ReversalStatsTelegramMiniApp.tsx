@@ -73,13 +73,18 @@ import {
   REVERSAL_DAY_FILTER_OPTIONS,
   REVERSAL_LEN_RANK_FILTER_OPTIONS,
   reversalDayFilterLabel,
+  REVERSAL_EMA4H_FILTER_OPTIONS,
+  reversalEma4hFilterLabel,
+  reversalEma4hFilterTitle,
   reversalLenRankFilterLabel,
   reversalRowMatchesDayFilter,
+  reversalRowMatchesEma4hFilter,
   reversalRowMatchesLenRankFilter,
   reversalRowMatchesShapeFilter,
   reversalRowMatchesVolVsSmaFilter,
   reversalShapeFilterLabel,
   type ReversalDayFilter,
+  type ReversalEma4hFilter,
   type ReversalLenRankFilter,
   type ReversalShapeFilter,
   type ReversalStatsFilterQuery,
@@ -274,6 +279,7 @@ function ReversalStatsSection({
   const [lenRankFilter, setLenRankFilter] = useState<ReversalLenRankFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<ReversalVolVsSmaFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<ReversalMatrixFilter>("all");
+  const [ema4hFilter, setEma4hFilter] = useState<ReversalEma4hFilter>("all");
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -291,9 +297,10 @@ function ReversalStatsSection({
           reversalRowMatchesDayFilter(r, dayFilter) &&
           reversalRowMatchesLenRankFilter(r, lenRankFilter) &&
           reversalRowMatchesVolVsSmaFilter(r, volVsSmaFilter) &&
+          reversalRowMatchesEma4hFilter(r, ema4hFilter) &&
           reversalStatsRowMatchesMatrixFilter(r, matrixFilter),
       ),
-    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, matrixFilter],
+    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, matrixFilter],
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
   const [splitByWeek, setSplitByWeek] = useState(false);
@@ -368,9 +375,10 @@ function ReversalStatsSection({
       shape: shapeFilter,
       lenRank: lenRankFilter,
       vol: volVsSmaFilter,
+      ema4h: ema4hFilter,
       matrix: matrixFilter,
     };
-  }, [csvQuery, dayFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, ema4hFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -604,7 +612,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -780,6 +788,22 @@ function ReversalStatsSection({
             title="Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด"
           >
             {STATS_VOL_VS_SMA_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          EMA4h∠7d
+          <select
+            value={ema4hFilter}
+            onChange={(e) => setEma4hFilter(e.currentTarget.value as ReversalEma4hFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "5.5rem" }}
+            title={reversalEma4hFilterTitle(ema4hFilter)}
+          >
+            {REVERSAL_EMA4H_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
