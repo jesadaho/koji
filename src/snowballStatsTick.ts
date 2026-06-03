@@ -1,6 +1,12 @@
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
 import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
-import { DEFAULT_STATS_TPSL_PLAN, simulateStatsTpSlProfit } from "@/lib/tpSlStrategySimulate";
+import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
+import {
+  computeStatsStrategyProfitFromBars,
+  statsStrategyPlanAtHoldHours,
+  STATS_STRATEGY_PROFIT_HOLD_24H,
+  STATS_STRATEGY_PROFIT_HOLD_48H,
+} from "@/lib/statsStrategyProfitClient";
 import {
   fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesRange,
@@ -58,6 +64,75 @@ const KLINE_GRAN_SEC = 900;
 function pctVsEntry(side: "long" | "short", entry: number, price: number): number {
   if (side === "long") return ((price - entry) / entry) * 100;
   return ((entry - price) / entry) * 100;
+}
+
+function klineIndexLastThrough(
+  timeSec: number[],
+  barDurSec: number,
+  iFirst: number,
+  windowEndSec: number,
+): number {
+  let iLast = iFirst;
+  for (let i = iFirst; i < timeSec.length; i++) {
+    if (timeSec[i]! + barDurSec <= windowEndSec) iLast = i;
+  }
+  while (iLast >= iFirst && timeSec[iLast]! + barDurSec > windowEndSec) {
+    iLast--;
+  }
+  return iLast;
+}
+
+function applySnowballStrategyProfitAtHorizon(
+  row: SnowballStatsRow,
+  high: number[],
+  low: number[],
+  iFirst: number,
+  iLast: number,
+  holdHours: typeof STATS_STRATEGY_PROFIT_HOLD_24H | typeof STATS_STRATEGY_PROFIT_HOLD_48H,
+  pctAtHorizon: number,
+): boolean {
+  const sim = computeStatsStrategyProfitFromBars({
+    side: row.side,
+    entry: row.entryPrice,
+    high,
+    low,
+    iFirst,
+    iLast,
+    holdHours,
+    pctAtHorizon,
+    plan: DEFAULT_STATS_TPSL_PLAN,
+  });
+  if (!sim) return false;
+  let touched = false;
+  const key = statsTpSlPlanCacheKey(statsStrategyPlanAtHoldHours(DEFAULT_STATS_TPSL_PLAN, holdHours));
+  const prev = row.strategyProfitByPlan?.[key];
+  if (!prev || prev.profitPct !== sim.profitPct || prev.exitReason !== sim.exitReason) {
+    row.strategyProfitByPlan = {
+      ...row.strategyProfitByPlan,
+      [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
+    };
+    touched = true;
+  }
+  if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+    if (row.strategyProfitPct24h !== sim.profitPct) {
+      row.strategyProfitPct24h = sim.profitPct;
+      touched = true;
+    }
+    if (row.strategyExitReason24h !== sim.exitReason) {
+      row.strategyExitReason24h = sim.exitReason;
+      touched = true;
+    }
+    return touched;
+  }
+  if (row.strategyProfitPct !== sim.profitPct) {
+    row.strategyProfitPct = sim.profitPct;
+    touched = true;
+  }
+  if (row.strategyExitReason !== sim.exitReason) {
+    row.strategyExitReason = sim.exitReason;
+    touched = true;
+  }
+  return touched;
 }
 
 function rrRewardSource(): "close_24h" | "mfe" {
@@ -323,7 +398,9 @@ export async function runSnowballStatsFollowUpTick(
       (row.pct24h == null && nowSec >= ac + SEC_24H) ||
       (row.pct48h == null && nowSec >= ac + SEC_48H);
     const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < ac + SEC_48H;
-    const needsStrategyProfit = row.pct48h != null && row.strategyProfitPct == null;
+    const needsStrategyProfit =
+      (row.pct24h != null && row.strategyProfitPct24h == null) ||
+      (row.pct48h != null && row.strategyProfitPct == null);
     if (!pending && !needs48h && !needsHorizonBackfill && !needsFollowUpAdverse && !needsStrategyProfit) {
       continue;
     }
@@ -440,44 +517,46 @@ export async function runSnowballStatsFollowUpTick(
       rowTouched = true;
     }
 
+    if (row.pct24h != null && nowSec >= ac + SEC_24H) {
+      const iLast24 = klineIndexLastThrough(timeSec, KLINE_GRAN_SEC, iFirst, ac + SEC_24H);
+      if (iLast24 >= iFirst) {
+        rowTouched =
+          applySnowballStrategyProfitAtHorizon(
+            row,
+            high,
+            low,
+            iFirst,
+            iLast24,
+            STATS_STRATEGY_PROFIT_HOLD_24H,
+            row.pct24h,
+          ) || rowTouched;
+      }
+    } else if (nowSec < ac + SEC_24H) {
+      if (row.strategyProfitPct24h != null || row.strategyExitReason24h != null) {
+        row.strategyProfitPct24h = null;
+        row.strategyExitReason24h = null;
+        rowTouched = true;
+      }
+    }
+
     if (row.pct48h != null && nowSec >= ac + SEC_48H) {
-      const sim = simulateStatsTpSlProfit({
-        side: row.side,
-        entry,
-        high,
-        low,
-        iFirst,
-        iLast: iLastHorizon,
-        pctAt48h: row.pct48h,
-      });
-      if (sim) {
-        if (row.strategyProfitPct !== sim.profitPct) {
-          row.strategyProfitPct = sim.profitPct;
-          rowTouched = true;
-        }
-        if (row.strategyExitReason !== sim.exitReason) {
-          row.strategyExitReason = sim.exitReason;
-          rowTouched = true;
-        }
-        const key = statsTpSlPlanCacheKey(DEFAULT_STATS_TPSL_PLAN);
-        const prev = row.strategyProfitByPlan?.[key];
-        if (!prev || prev.profitPct !== sim.profitPct || prev.exitReason !== sim.exitReason) {
-          row.strategyProfitByPlan = {
-            ...row.strategyProfitByPlan,
-            [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
-          };
-          rowTouched = true;
-        }
+      const iLast48 = klineIndexLastThrough(timeSec, KLINE_GRAN_SEC, iFirst, ac + SEC_48H);
+      if (iLast48 >= iFirst) {
+        rowTouched =
+          applySnowballStrategyProfitAtHorizon(
+            row,
+            high,
+            low,
+            iFirst,
+            iLast48,
+            STATS_STRATEGY_PROFIT_HOLD_48H,
+            row.pct48h,
+          ) || rowTouched;
       }
     } else if (nowSec < ac + SEC_48H) {
-      if (
-        row.strategyProfitPct != null ||
-        row.strategyExitReason != null ||
-        row.strategyProfitByPlan != null
-      ) {
+      if (row.strategyProfitPct != null || row.strategyExitReason != null) {
         row.strategyProfitPct = null;
         row.strategyExitReason = null;
-        row.strategyProfitByPlan = undefined;
         rowTouched = true;
       }
     }

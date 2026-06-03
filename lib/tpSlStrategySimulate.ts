@@ -22,9 +22,16 @@ export type StatsTpSlExitReason =
   | "tp2_full"
   | "tp1_be"
   | "tp1_tp2"
+  | "tp1_24h"
   | "tp1_48h"
   | "tp1_only"
+  | "time_24h"
   | "time_48h";
+
+function holdTimeExitReason(plan: StatsTpSlPlan, afterTp1: boolean): StatsTpSlExitReason {
+  if (afterTp1) return plan.maxHoldHours <= 24 ? "tp1_24h" : "tp1_48h";
+  return plan.maxHoldHours <= 24 ? "time_24h" : "time_48h";
+}
 
 export function statsTpSlPlanSummary(plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN): string {
   return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · TP2 ${plan.tp2PricePct}% · SL@entry · ${plan.maxHoldHours}h`;
@@ -104,7 +111,7 @@ export function simulateStatsTpSlProfit(input: {
   let rem = 1;
   let profit = 0;
   let tp1Done = false;
-  let exitReason: StatsTpSlExitReason = "time_48h";
+  let exitReason: StatsTpSlExitReason = holdTimeExitReason(plan, false);
 
   for (let i = input.iFirst; i <= input.iLast; i++) {
     if (rem <= 0) break;
@@ -149,8 +156,7 @@ export function simulateStatsTpSlProfit(input: {
 
   if (rem > 0) {
     profit += rem * input.pctAt48h;
-    if (tp1Done) exitReason = "tp1_48h";
-    else exitReason = "time_48h";
+    exitReason = holdTimeExitReason(plan, tp1Done);
   }
 
   if (!Number.isFinite(profit)) return null;

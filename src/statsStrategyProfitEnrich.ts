@@ -7,6 +7,12 @@ import {
 } from "@/lib/statsTpSlPlanForUser";
 import type { StrategyProfitByPlanEntry, StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import {
+  statsStrategyPlanAtHoldHours,
+  STATS_STRATEGY_PROFIT_HOLD_24H,
+  STATS_STRATEGY_PROFIT_HOLD_48H,
+  type StatsStrategyProfitHorizon,
+} from "@/lib/statsStrategyProfitClient";
+import {
   simulateStatsTpSlProfit,
   type StatsTpSlPlan,
 } from "@/lib/tpSlStrategySimulate";
@@ -59,7 +65,10 @@ function simulateFromPack(input: {
   plan: ViewerStatsTpSlPlan;
 }): StrategyProfitByPlanEntry | null {
   if (!input.plan.tpSlEnabled) {
-    return { profitPct: input.pctAtClose, exitReason: "time_48h" };
+    return {
+      profitPct: input.pctAtClose,
+      exitReason: input.plan.maxHoldHours <= 24 ? "time_24h" : "time_48h",
+    };
   }
 
   const { timeSec, high, low } = input.pack;
@@ -104,127 +113,133 @@ async function fetchPackForRow(
   }
 }
 
-function applyCachedOrComputed(
+function applyHorizonFields(
   row: {
     strategyProfitByPlan?: StrategyProfitByPlanMap | null;
     strategyProfitPct?: number | null;
     strategyExitReason?: StrategyProfitByPlanEntry["exitReason"] | null;
+    strategyProfitPct24h?: number | null;
+    strategyExitReason24h?: StrategyProfitByPlanEntry["exitReason"] | null;
   },
+  holdHours: StatsStrategyProfitHorizon,
   cacheKey: string,
   computed: StrategyProfitByPlanEntry | null,
 ): boolean {
   if (!computed) return false;
   const prev = row.strategyProfitByPlan?.[cacheKey];
-  if (
+  const sameCached =
     prev &&
     prev.profitPct === computed.profitPct &&
-    prev.exitReason === computed.exitReason &&
-    row.strategyProfitPct === computed.profitPct &&
-    row.strategyExitReason === computed.exitReason
-  ) {
-    return false;
-  }
+    prev.exitReason === computed.exitReason;
+  const sameFields =
+    holdHours === STATS_STRATEGY_PROFIT_HOLD_24H
+      ? row.strategyProfitPct24h === computed.profitPct &&
+        row.strategyExitReason24h === computed.exitReason
+      : row.strategyProfitPct === computed.profitPct &&
+        row.strategyExitReason === computed.exitReason;
+  if (sameCached && sameFields) return false;
+
   row.strategyProfitByPlan = { ...row.strategyProfitByPlan, [cacheKey]: computed };
-  row.strategyProfitPct = computed.profitPct;
-  row.strategyExitReason = computed.exitReason;
+  if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+    row.strategyProfitPct24h = computed.profitPct;
+    row.strategyExitReason24h = computed.exitReason;
+  } else {
+    row.strategyProfitPct = computed.profitPct;
+    row.strategyExitReason = computed.exitReason;
+  }
   return true;
+}
+
+async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsRow | SnowballStatsRow>(opts: {
+  rows: T[];
+  plan: ViewerStatsTpSlPlan;
+  anchorCloseSec: (row: T) => number;
+  sideForRow: (row: T) => "long" | "short";
+  includeRow: (row: T) => boolean;
+}): Promise<number> {
+  const packBySymbol = new Map<string, BinanceKlinePack | null>();
+  let dirty = 0;
+
+  for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
+    const planH = statsStrategyPlanAtHoldHours(
+      {
+        tp1PricePct: opts.plan.tp1PricePct,
+        tp1PartialPct: opts.plan.tp1PartialPct,
+        tp2PricePct: opts.plan.tp2PricePct,
+        maxHoldHours: holdHours,
+      },
+      holdHours,
+    );
+    const viewerPlan: ViewerStatsTpSlPlan = { ...opts.plan, ...planH };
+    const cacheKey = statsTpSlPlanCacheKey(planH);
+
+    for (const row of opts.rows) {
+      if (!opts.includeRow(row)) continue;
+      if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H && row.pct24h == null) continue;
+      if (holdHours === STATS_STRATEGY_PROFIT_HOLD_48H && row.pct48h == null) continue;
+
+      const cached = row.strategyProfitByPlan?.[cacheKey];
+      if (cached) {
+        if (
+          applyHorizonFields(row, holdHours, cacheKey, cached)
+        ) {
+          dirty += 1;
+        }
+        continue;
+      }
+
+      const pctClose = pctAtPlanMaxHold(viewerPlan, row) ??
+        (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? row.pct24h : row.pct48h);
+      if (pctClose == null) continue;
+
+      const ac = opts.anchorCloseSec(row);
+      const windowEndSec = ac + holdHours * HOUR_SEC;
+      const sym = row.symbol.trim().toUpperCase();
+      let pack = packBySymbol.get(sym);
+      if (pack === undefined) {
+        pack = await fetchPackForRow(sym, row.signalBarOpenSec, windowEndSec);
+        packBySymbol.set(sym, pack);
+      }
+      if (!pack?.timeSec.length) continue;
+
+      const computed = simulateFromPack({
+        side: opts.sideForRow(row),
+        entry: row.entryPrice,
+        pack,
+        ac,
+        windowEndSec,
+        pctAtClose: pctClose,
+        plan: viewerPlan,
+      });
+      if (applyHorizonFields(row, holdHours, cacheKey, computed)) dirty += 1;
+    }
+  }
+
+  return dirty;
 }
 
 export async function enrichCandleReversalStatsWithViewerStrategyProfit(
   rows: CandleReversalStatsRow[],
   plan: ViewerStatsTpSlPlan,
 ): Promise<number> {
-  const cacheKey = statsTpSlPlanCacheKey(plan);
-  const packBySymbol = new Map<string, BinanceKlinePack | null>();
-  let dirty = 0;
-
-  for (const row of rows) {
-    if (row.signalBarTf !== "1h" || row.pct48h == null) continue;
-
-    const cached = row.strategyProfitByPlan?.[cacheKey];
-    if (cached) {
-      if (row.strategyProfitPct !== cached.profitPct || row.strategyExitReason !== cached.exitReason) {
-        row.strategyProfitPct = cached.profitPct;
-        row.strategyExitReason = cached.exitReason;
-        dirty += 1;
-      }
-      continue;
-    }
-
-    const pctClose = pctAtPlanMaxHold(plan, row) ?? row.pct48h;
-    if (pctClose == null) continue;
-
-    const ac = reversalAnchorCloseSec(row);
-    const windowEndSec = ac + Math.min(plan.maxHoldHours, 48) * HOUR_SEC;
-    const sym = row.symbol.trim().toUpperCase();
-    let pack = packBySymbol.get(sym);
-    if (pack === undefined) {
-      pack = await fetchPackForRow(sym, row.signalBarOpenSec, windowEndSec);
-      packBySymbol.set(sym, pack);
-    }
-    if (!pack?.timeSec.length) continue;
-
-    const side = row.tradeSide === "long" ? "long" : "short";
-    const computed = simulateFromPack({
-      side,
-      entry: row.entryPrice,
-      pack,
-      ac,
-      windowEndSec,
-      pctAtClose: pctClose,
-      plan,
-    });
-    if (applyCachedOrComputed(row, cacheKey, computed)) dirty += 1;
-  }
-
-  return dirty;
+  return enrichRowsWithViewerStrategyProfit({
+    rows,
+    plan,
+    anchorCloseSec: reversalAnchorCloseSec,
+    sideForRow: (row) => (row.tradeSide === "long" ? "long" : "short"),
+    includeRow: (row) => row.signalBarTf === "1h",
+  });
 }
 
 export async function enrichSnowballStatsWithViewerStrategyProfit(
   rows: SnowballStatsRow[],
   plan: ViewerStatsTpSlPlan,
 ): Promise<number> {
-  const cacheKey = statsTpSlPlanCacheKey(plan);
-  const packBySymbol = new Map<string, BinanceKlinePack | null>();
-  let dirty = 0;
-
-  for (const row of rows) {
-    if (row.pct48h == null) continue;
-
-    const cached = row.strategyProfitByPlan?.[cacheKey];
-    if (cached) {
-      if (row.strategyProfitPct !== cached.profitPct || row.strategyExitReason !== cached.exitReason) {
-        row.strategyProfitPct = cached.profitPct;
-        row.strategyExitReason = cached.exitReason;
-        dirty += 1;
-      }
-      continue;
-    }
-
-    const pctClose = pctAtPlanMaxHold(plan, row) ?? row.pct48h;
-    if (pctClose == null) continue;
-
-    const ac = snowballStatsAnchorCloseSec(row);
-    const windowEndSec = ac + Math.min(plan.maxHoldHours, 48) * HOUR_SEC;
-    const sym = row.symbol.trim().toUpperCase();
-    let pack = packBySymbol.get(sym);
-    if (pack === undefined) {
-      pack = await fetchPackForRow(sym, row.signalBarOpenSec, windowEndSec);
-      packBySymbol.set(sym, pack);
-    }
-    if (!pack?.timeSec.length) continue;
-
-    const computed = simulateFromPack({
-      side: row.side,
-      entry: row.entryPrice,
-      pack,
-      ac,
-      windowEndSec,
-      pctAtClose: pctClose,
-      plan,
-    });
-    if (applyCachedOrComputed(row, cacheKey, computed)) dirty += 1;
-  }
-
-  return dirty;
+  return enrichRowsWithViewerStrategyProfit({
+    rows,
+    plan,
+    anchorCloseSec: snowballStatsAnchorCloseSec,
+    sideForRow: (row) => row.side,
+    includeRow: () => true,
+  });
 }

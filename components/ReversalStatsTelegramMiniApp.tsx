@@ -7,8 +7,11 @@ import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
+  STATS_STRATEGY_PROFIT_HOLD_24H,
+  STATS_STRATEGY_PROFIT_HOLD_48H,
   STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
   formatStatsStrategyProfitSummaryText,
+  statsStrategyProfitColumnTitle,
   summarizeStatsStrategyProfit,
 } from "@/lib/statsStrategyProfitClient";
 import {
@@ -289,10 +292,29 @@ function ReversalStatsSection({
         : null,
     [filteredRows, tf],
   );
-  const strategyProfitSummaryText = useMemo(() => {
+  const strategyProfitSummaryText48h = useMemo(() => {
     if (tf !== "1h") return null;
     return formatStatsStrategyProfitSummaryText(
-      summarizeStatsStrategyProfit(filteredRows, strategySizing, STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND),
+      summarizeStatsStrategyProfit(
+        filteredRows,
+        strategySizing,
+        STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
+        STATS_STRATEGY_PROFIT_HOLD_48H,
+      ),
+      STATS_STRATEGY_PROFIT_HOLD_48H,
+    );
+  }, [filteredRows, strategySizing, tf]);
+
+  const strategyProfitSummaryText24h = useMemo(() => {
+    if (tf !== "1h") return null;
+    return formatStatsStrategyProfitSummaryText(
+      summarizeStatsStrategyProfit(
+        filteredRows,
+        strategySizing,
+        STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
+        STATS_STRATEGY_PROFIT_HOLD_24H,
+      ),
+      STATS_STRATEGY_PROFIT_HOLD_24H,
     );
   }, [filteredRows, strategySizing, tf]);
 
@@ -309,7 +331,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 24 : 22) + extraRankCols + 2;
+  const emptyColSpan = (has48h ? 25 : 22) + extraRankCols + 2;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -459,14 +481,27 @@ function ReversalStatsSection({
             WR · {horizonWinrateText}
           </span>
         ) : null}
-        {strategyProfitSummaryText ? (
-          <span
-            className="sub"
-            title="สรุปคอลัมน์กำไรกลยุทธ์ — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2% · ระหว่างนั้น = เสมอ) · $ รวมเฉพาะไม้ชนะ/แพ้ตามเกณฑ์นี้"
-            style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
-          >
-            {strategyProfitSummaryText}
-          </span>
+        {strategyProfitSummaryText24h || strategyProfitSummaryText48h ? (
+          <>
+            {strategyProfitSummaryText24h ? (
+              <span
+                className="sub"
+                title="สรุปคอลัมน์กำไรกลยุทธ์ 24h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
+                style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+              >
+                {strategyProfitSummaryText24h}
+              </span>
+            ) : null}
+            {strategyProfitSummaryText48h ? (
+              <span
+                className="sub"
+                title="สรุปคอลัมน์กำไรกลยุทธ์ 48h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
+                style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+              >
+                {strategyProfitSummaryText48h}
+              </span>
+            ) : null}
+          </>
         ) : null}
       </div>
       <div className="sparkMatrixScroll">
@@ -588,8 +623,20 @@ function ReversalStatsSection({
                 Sentiment
               </th>
               {has48h ? (
+                <th
+                  scope="col"
+                  title={
+                    strategyTpSlPlan
+                      ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H, strategyTpSlPlan)
+                      : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H)
+                  }
+                >
+                  กำไรกลยุทธ์ 24h
+                </th>
+              ) : null}
+              {has48h ? (
                 <th scope="col" title={strategyPlanTitle}>
-                  กำไรกลยุทธ์
+                  กำไรกลยุทธ์ 48h
                 </th>
               ) : null}
               <SortTh
@@ -660,16 +707,32 @@ function ReversalStatsSection({
                     <td>{marketSentimentFngLabel(r.marketSentiment)}</td>
                     <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>
                     {has48h ? (
-                      <td>
-                        <StatsStrategyProfitCell
-                          pct48h={r.pct48h}
-                          strategyProfitPct={r.strategyProfitPct}
-                          strategyExitReason={r.strategyExitReason}
-                          marginUsdt={strategyMarginUsdt}
-                          leverage={strategyLeverage}
-                          tpSlPlan={strategyTpSlPlan}
-                        />
-                      </td>
+                      <>
+                        <td>
+                          <StatsStrategyProfitCell
+                            holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
+                            pct24h={r.pct24h}
+                            pct48h={r.pct48h}
+                            strategyProfitPct24h={r.strategyProfitPct24h}
+                            strategyExitReason24h={r.strategyExitReason24h}
+                            marginUsdt={strategyMarginUsdt}
+                            leverage={strategyLeverage}
+                            tpSlPlan={strategyTpSlPlan}
+                          />
+                        </td>
+                        <td>
+                          <StatsStrategyProfitCell
+                            holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
+                            pct24h={r.pct24h}
+                            pct48h={r.pct48h}
+                            strategyProfitPct={r.strategyProfitPct}
+                            strategyExitReason={r.strategyExitReason}
+                            marginUsdt={strategyMarginUsdt}
+                            leverage={strategyLeverage}
+                            tpSlPlan={strategyTpSlPlan}
+                          />
+                        </td>
+                      </>
                     ) : null}
                     <td>{candleReversalOutcomeLabel(r.outcome)}</td>
                   </tr>

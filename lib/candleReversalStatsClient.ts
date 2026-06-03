@@ -71,9 +71,11 @@ export type CandleReversalStatsRow = {
   maxDrawdownPct: number | null;
   /** Max adverse จาก entry ตลอดช่วง follow-up (ไม่ตัดที่ MFE) */
   followUpMaxAdversePct: number | null;
-  /** กำไร % ตามกลยุทธ์ TP1/TP2/48h (จำลองบน 15m) — มีเมื่อครบ 48h */
+  /** กำไร % ตามกลยุทธ์ TP1/TP2 (จำลองบน 15m) — 48h ใน strategyProfitPct · 24h ใน strategyProfitPct24h */
   strategyProfitPct?: number | null;
   strategyExitReason?: StatsTpSlExitReason | null;
+  strategyProfitPct24h?: number | null;
+  strategyExitReason24h?: StatsTpSlExitReason | null;
   /** cache ตามชุด TP/SL (key = tp1-tp1p-tp2-maxH) */
   strategyProfitByPlan?: StrategyProfitByPlanMap | null;
   outcome: CandleReversalOutcome;

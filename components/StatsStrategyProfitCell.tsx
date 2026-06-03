@@ -6,29 +6,47 @@ import {
   resolveStatsStrategyDisplayPct,
   statsStrategyExitReasonBreakdownLine,
   statsStrategyExitReasonShort,
-  statsStrategyProfitFinalized,
+  statsStrategyPlanAtHoldHours,
+  statsStrategyProfitFinalizedAtHorizon,
   statsStrategyProfitCellTitle,
   statsStrategyProfitPnlStyle,
+  STATS_STRATEGY_PROFIT_HOLD_48H,
+  type StatsStrategyProfitHorizon,
 } from "@/lib/statsStrategyProfitClient";
 import { DEFAULT_STATS_TPSL_PLAN, type StatsTpSlExitReason, type StatsTpSlPlan } from "@/lib/tpSlStrategySimulate";
 
 export function StatsStrategyProfitCell(props: {
-  pct48h: number | null | undefined;
-  strategyProfitPct: number | null | undefined;
+  holdHours?: StatsStrategyProfitHorizon;
+  pct24h?: number | null;
+  pct48h?: number | null;
+  strategyProfitPct?: number | null;
+  strategyProfitPct24h?: number | null;
   strategyExitReason?: StatsTpSlExitReason | null;
+  strategyExitReason24h?: StatsTpSlExitReason | null;
   marginUsdt?: number | null;
   leverage?: number | null;
   tpSlPlan?: StatsTpSlPlan;
 }) {
-  const plan = props.tpSlPlan ?? DEFAULT_STATS_TPSL_PLAN;
-  if (!statsStrategyProfitFinalized(props.pct48h)) {
+  const holdHours = props.holdHours ?? STATS_STRATEGY_PROFIT_HOLD_48H;
+  const plan = statsStrategyPlanAtHoldHours(props.tpSlPlan ?? DEFAULT_STATS_TPSL_PLAN, holdHours);
+  const pctHorizon =
+    holdHours === 24 ? props.pct24h : props.pct48h;
+  const profitPct =
+    holdHours === 24 ? props.strategyProfitPct24h : props.strategyProfitPct;
+  const exitReason =
+    holdHours === 24 ? props.strategyExitReason24h : props.strategyExitReason;
+
+  if (!statsStrategyProfitFinalizedAtHorizon(
+    holdHours === 24 ? { pct24h: pctHorizon } : { pct48h: pctHorizon },
+    holdHours,
+  )) {
     return <>—</>;
   }
-  const pct = props.strategyProfitPct;
+  const pct = profitPct;
   if (pct == null || !Number.isFinite(pct)) {
     return (
       <span
-        title={statsStrategyProfitCellTitle(null, props.strategyExitReason, {
+        title={statsStrategyProfitCellTitle(null, exitReason, {
           marginUsdt: props.marginUsdt,
           leverage: props.leverage,
         }, plan)}
@@ -38,14 +56,14 @@ export function StatsStrategyProfitCell(props: {
     );
   }
   const displayPct = resolveStatsStrategyDisplayPct(pct, props.leverage);
-  const tag = statsStrategyExitReasonShort(props.strategyExitReason);
-  const breakdownLine = statsStrategyExitReasonBreakdownLine(props.strategyExitReason, plan);
+  const tag = statsStrategyExitReasonShort(exitReason);
+  const breakdownLine = statsStrategyExitReasonBreakdownLine(exitReason, plan);
   const usdtLine = formatStatsStrategyProfitUsdt(props.marginUsdt, props.leverage, displayPct);
   const sizing = { marginUsdt: props.marginUsdt, leverage: props.leverage };
   return (
     <span
       style={statsStrategyProfitPnlStyle(displayPct)}
-      title={statsStrategyProfitCellTitle(pct, props.strategyExitReason, sizing, plan)}
+      title={statsStrategyProfitCellTitle(pct, exitReason, sizing, plan)}
     >
       {formatStatsStrategyProfitPct(displayPct)}
       {usdtLine ? (

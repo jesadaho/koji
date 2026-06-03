@@ -1,7 +1,13 @@
 import type { CandleReversalSignalBarTf } from "@/lib/candleReversalStatsClient";
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
 import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
-import { DEFAULT_STATS_TPSL_PLAN, simulateStatsTpSlProfit } from "@/lib/tpSlStrategySimulate";
+import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
+import {
+  computeStatsStrategyProfitFromBars,
+  statsStrategyPlanAtHoldHours,
+  STATS_STRATEGY_PROFIT_HOLD_24H,
+  STATS_STRATEGY_PROFIT_HOLD_48H,
+} from "@/lib/statsStrategyProfitClient";
 import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import {
   fetchBinanceUsdmKlines,
@@ -263,32 +269,40 @@ async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<n
   return updated;
 }
 
-function applyReversal1hStrategyProfit(
+function applyReversal1hStrategyProfitAtHorizon(
   row: CandleReversalStatsRow,
   high: number[],
   low: number[],
   iFirst: number,
   iLast: number,
+  holdHours: typeof STATS_STRATEGY_PROFIT_HOLD_24H | typeof STATS_STRATEGY_PROFIT_HOLD_48H,
+  pctAtHorizon: number,
 ): void {
-  if (row.pct48h == null || !Number.isFinite(row.pct48h)) return;
   const side = reversalTradeSide(row);
-  const sim = simulateStatsTpSlProfit({
+  const sim = computeStatsStrategyProfitFromBars({
     side,
     entry: row.entryPrice,
     high,
     low,
     iFirst,
     iLast,
-    pctAt48h: row.pct48h,
+    holdHours,
+    pctAtHorizon,
+    plan: DEFAULT_STATS_TPSL_PLAN,
   });
   if (!sim) return;
-  row.strategyProfitPct = sim.profitPct;
-  row.strategyExitReason = sim.exitReason;
-  const key = statsTpSlPlanCacheKey(DEFAULT_STATS_TPSL_PLAN);
+  const key = statsTpSlPlanCacheKey(statsStrategyPlanAtHoldHours(DEFAULT_STATS_TPSL_PLAN, holdHours));
   row.strategyProfitByPlan = {
     ...row.strategyProfitByPlan,
     [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
   };
+  if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+    row.strategyProfitPct24h = sim.profitPct;
+    row.strategyExitReason24h = sim.exitReason;
+    return;
+  }
+  row.strategyProfitPct = sim.profitPct;
+  row.strategyExitReason = sim.exitReason;
 }
 
 async function followUpCandleReversal1hRow(
@@ -402,12 +416,36 @@ async function followUpCandleReversal1hRow(
     row.pct48h = null;
   }
 
+  if (row.pct24h != null && nowSec >= h24End) {
+    const i15Last24 = indexRangeThrough(t15, KLINE_15M_SEC, i15First, h24End);
+    applyReversal1hStrategyProfitAtHorizon(
+      row,
+      h15,
+      l15,
+      i15First,
+      i15Last24,
+      STATS_STRATEGY_PROFIT_HOLD_24H,
+      row.pct24h,
+    );
+  } else if (nowSec < h24End) {
+    row.strategyProfitPct24h = null;
+    row.strategyExitReason24h = null;
+  }
+
   if (row.pct48h != null && nowSec >= h48End) {
-    applyReversal1hStrategyProfit(row, h15, l15, i15First, i15Last);
+    const i15Last48 = indexRangeThrough(t15, KLINE_15M_SEC, i15First, h48End);
+    applyReversal1hStrategyProfitAtHorizon(
+      row,
+      h15,
+      l15,
+      i15First,
+      i15Last48,
+      STATS_STRATEGY_PROFIT_HOLD_48H,
+      row.pct48h,
+    );
   } else if (nowSec < h48End) {
     row.strategyProfitPct = null;
     row.strategyExitReason = null;
-    row.strategyProfitByPlan = undefined;
   }
 
   // Reversal 1H: ปิดผลเร็วขึ้นที่ 24h (ใช้ pct24h)
@@ -434,6 +472,7 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
     if (row.pct12h == null && nowSec >= ac + 12 * HOUR_SEC) return true;
     if (row.pct24h == null && nowSec >= ac + 24 * HOUR_SEC) return true;
     if (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC) return true;
+    if (row.pct24h != null && row.strategyProfitPct24h == null) return true;
     if (row.pct48h != null && row.strategyProfitPct == null) return true;
     return false;
   }

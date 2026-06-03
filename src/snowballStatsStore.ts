@@ -183,6 +183,8 @@ function resetSnowballStatsFollowUpFields(row: SnowballStatsRow): void {
   row.followUpMaxAdversePct = null;
   row.strategyProfitPct = null;
   row.strategyExitReason = null;
+  row.strategyProfitPct24h = null;
+  row.strategyExitReason24h = null;
   row.strategyProfitByPlan = undefined;
   row.resultRr = null;
   row.outcome = "pending";
@@ -536,6 +538,8 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     followUpMaxAdversePct: null,
     strategyProfitPct: null,
     strategyExitReason: null,
+    strategyProfitPct24h: null,
+    strategyExitReason24h: null,
     resultRr: null,
     outcome: "pending",
   };

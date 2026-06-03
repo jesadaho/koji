@@ -7,8 +7,11 @@ import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
+  STATS_STRATEGY_PROFIT_HOLD_24H,
+  STATS_STRATEGY_PROFIT_HOLD_48H,
   STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
   formatStatsStrategyProfitSummaryText,
+  statsStrategyProfitColumnTitle,
   summarizeStatsStrategyProfit,
 } from "@/lib/statsStrategyProfitClient";
 import {
@@ -566,10 +569,30 @@ export default function SnowballStatsTelegramMiniApp() {
     [payload?.viewerStrategyMarginUsdt, payload?.viewerStrategyLeverage],
   );
 
-  const strategyProfitSummaryText = useMemo(
+  const strategyProfitSummaryText48h = useMemo(
     () =>
       formatStatsStrategyProfitSummaryText(
-        summarizeStatsStrategyProfit(rows, strategySizing, STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND),
+        summarizeStatsStrategyProfit(
+          rows,
+          strategySizing,
+          STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
+          STATS_STRATEGY_PROFIT_HOLD_48H,
+        ),
+        STATS_STRATEGY_PROFIT_HOLD_48H,
+      ),
+    [rows, strategySizing],
+  );
+
+  const strategyProfitSummaryText24h = useMemo(
+    () =>
+      formatStatsStrategyProfitSummaryText(
+        summarizeStatsStrategyProfit(
+          rows,
+          strategySizing,
+          STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
+          STATS_STRATEGY_PROFIT_HOLD_24H,
+        ),
+        STATS_STRATEGY_PROFIT_HOLD_24H,
       ),
     [rows, strategySizing],
   );
@@ -809,14 +832,27 @@ export default function SnowballStatsTelegramMiniApp() {
         >
           WR · {horizonWinrateText}
         </p>
-        {strategyProfitSummaryText ? (
-          <p
-            className="sub"
-            title="สรุปคอลัมน์กำไรกลยุทธ์ — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR ราย horizon (Win ≥ +3% · Loss ≤ −3% · ระหว่างนั้น = เสมอ ไม่นับเป็นชนะ) · $ รวมเฉพาะไม้ชนะ/แพ้ตามเกณฑ์นี้"
-            style={{ marginBottom: "0.5rem", fontWeight: 600 }}
-          >
-            {strategyProfitSummaryText}
-          </p>
+        {strategyProfitSummaryText24h || strategyProfitSummaryText48h ? (
+          <div style={{ marginBottom: "0.5rem" }}>
+            {strategyProfitSummaryText24h ? (
+              <p
+                className="sub"
+                title="สรุปคอลัมน์กำไรกลยุทธ์ 24h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +3% · Loss ≤ −3%)"
+                style={{ margin: "0 0 0.25rem", fontWeight: 600 }}
+              >
+                {strategyProfitSummaryText24h}
+              </p>
+            ) : null}
+            {strategyProfitSummaryText48h ? (
+              <p
+                className="sub"
+                title="สรุปคอลัมน์กำไรกลยุทธ์ 48h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +3% · Loss ≤ −3%)"
+                style={{ margin: 0, fontWeight: 600 }}
+              >
+                {strategyProfitSummaryText48h}
+              </p>
+            ) : null}
+          </div>
         ) : null}
         <div className="sparkMatrixScroll">
           <table className="sparkMatrixTable sparkMatrixTable--compact">
@@ -931,8 +967,21 @@ export default function SnowballStatsTelegramMiniApp() {
                 <th scope="col" title="การเปลี่ยนแปลง vol โดยประมาณ 24h">
                   VolΔ24h
                 </th>
-                <th scope="col" title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
-                  กำไรกลยุทธ์
+                <th
+                  scope="col"
+                  title={
+                    payload?.viewerTpSlPlan
+                      ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H, payload.viewerTpSlPlan)
+                      : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H)
+                  }
+                >
+                  กำไรกลยุทธ์ 24h
+                </th>
+                <th
+                  scope="col"
+                  title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
+                >
+                  กำไรกลยุทธ์ 48h
                 </th>
                 <th scope="col">ผล</th>
                 {isAdmin ? <th scope="col" className="snowStatsDelCol" aria-label="ลบ" /> : null}
@@ -941,7 +990,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                    <td colSpan={isAdmin ? 39 : 38} className="sub">
+                    <td colSpan={isAdmin ? 40 : 39} className="sub">
                     {allRows.length === 0
                       ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
                       : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
@@ -1023,6 +1072,20 @@ export default function SnowballStatsTelegramMiniApp() {
                     <td>{marketSentimentVolChange24hLabel(r.marketSentiment)}</td>
                     <td>
                       <StatsStrategyProfitCell
+                        holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
+                        pct24h={r.pct24h}
+                        pct48h={r.pct48h}
+                        strategyProfitPct24h={r.strategyProfitPct24h}
+                        strategyExitReason24h={r.strategyExitReason24h}
+                        marginUsdt={payload?.viewerStrategyMarginUsdt}
+                        leverage={payload?.viewerStrategyLeverage}
+                        tpSlPlan={payload?.viewerTpSlPlan}
+                      />
+                    </td>
+                    <td>
+                      <StatsStrategyProfitCell
+                        holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
+                        pct24h={r.pct24h}
                         pct48h={r.pct48h}
                         strategyProfitPct={r.strategyProfitPct}
                         strategyExitReason={r.strategyExitReason}

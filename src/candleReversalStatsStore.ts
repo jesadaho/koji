@@ -116,6 +116,11 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
       typeof r.strategyExitReason === "string" && r.strategyExitReason.trim()
         ? (r.strategyExitReason.trim() as CandleReversalStatsRow["strategyExitReason"])
         : null,
+    strategyProfitPct24h: nullNum(r.strategyProfitPct24h),
+    strategyExitReason24h:
+      typeof r.strategyExitReason24h === "string" && r.strategyExitReason24h.trim()
+        ? (r.strategyExitReason24h.trim() as CandleReversalStatsRow["strategyExitReason24h"])
+        : null,
     strategyProfitByPlan:
       r.strategyProfitByPlan && typeof r.strategyProfitByPlan === "object"
         ? r.strategyProfitByPlan
@@ -362,6 +367,8 @@ export async function appendCandleReversalStatsRow(
     followUpMaxAdversePct: null,
     strategyProfitPct: null,
     strategyExitReason: null,
+    strategyProfitPct24h: null,
+    strategyExitReason24h: null,
     outcome: "pending",
   };
 

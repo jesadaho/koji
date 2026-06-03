@@ -18,6 +18,8 @@ import {
 } from "@/lib/candleReversalStatsClient";
 import {
   statsStrategyProfitCsvCell,
+  STATS_STRATEGY_PROFIT_HOLD_24H,
+  STATS_STRATEGY_PROFIT_HOLD_48H,
   type StatsStrategyCsvSizing,
 } from "@/lib/statsStrategyProfitClient";
 
@@ -55,7 +57,8 @@ const HEADERS = [
   "สวน max",
   "F&G",
   "Sentiment",
-  "กำไรกลยุทธ์",
+  "กำไรกลยุทธ์ 24h",
+  "กำไรกลยุทธ์ 48h",
   "ผล",
 ];
 
@@ -115,7 +118,20 @@ function candleReversalStatsRowToCsvCells(
       : "",
     marketSentimentFngLabel(r.marketSentiment),
     marketSentimentSentimentLabel(r.marketSentiment),
-    statsStrategyProfitCsvCell(r.pct48h, r.strategyProfitPct, r.strategyExitReason, sizing),
+    statsStrategyProfitCsvCell(
+      r.pct24h,
+      r.strategyProfitPct24h,
+      r.strategyExitReason24h,
+      sizing,
+      STATS_STRATEGY_PROFIT_HOLD_24H,
+    ),
+    statsStrategyProfitCsvCell(
+      r.pct48h,
+      r.strategyProfitPct,
+      r.strategyExitReason,
+      sizing,
+      STATS_STRATEGY_PROFIT_HOLD_48H,
+    ),
     candleReversalOutcomeLabel(r.outcome),
   ];
 }

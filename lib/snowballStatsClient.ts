@@ -145,9 +145,11 @@ export type SnowballStatsRow = {
   maxDrawdownPct: number | null;
   /** Max adverse จาก entry ตลอดช่วง follow-up 48h (ไม่ตัดที่ MFE) */
   followUpMaxAdversePct: number | null;
-  /** กำไร % ตามกลยุทธ์ TP1/TP2/48h (จำลองบน 15m) — มีเมื่อครบ 48h */
+  /** กำไร % ตามกลยุทธ์ TP1/TP2 (จำลองบน 15m) — 48h ใน strategyProfitPct · 24h ใน strategyProfitPct24h */
   strategyProfitPct?: number | null;
   strategyExitReason?: StatsTpSlExitReason | null;
+  strategyProfitPct24h?: number | null;
+  strategyExitReason24h?: StatsTpSlExitReason | null;
   strategyProfitByPlan?: StrategyProfitByPlanMap | null;
   resultRr: string | null;
   outcome: SnowballStatsOutcome;
