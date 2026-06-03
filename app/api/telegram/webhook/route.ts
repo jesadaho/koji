@@ -246,7 +246,7 @@ function formatSnowballStatsBackfillReply(r: SnowballStatsAdminBackfillResult): 
     `แถวในตาราง: ${r.totalRows}`,
     "",
     `migration: ${f.migrations} · trend 1H: ${f.trendMomentum} · gate steps: ${f.confirmGateSteps}`,
-    `green days: ${f.greenDays} · grade 4h follow-up: ${f.grade4h} · horizon/MFE: ${f.horizonRows}`,
+    `green days: ${f.greenDays} · EMA slope: ${f.emaSlopes} · grade 4h: ${f.grade4h} · horizon/MFE: ${f.horizonRows}`,
     `รวมแถวที่แตะ (dirty): ${f.dirty}`,
     "",
     `4h ครบเวลาแต่ pct4h ว่าง — ก่อน: ${r.missingHorizon4hBefore} · หลัง: ${r.missingHorizon4hAfter}`,

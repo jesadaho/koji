@@ -8,6 +8,11 @@ import { fetchBinanceUsdmKlines, fetchBinanceUsdmQuoteVol24h, isBinanceIndicator
 import { computeParabolicSarLast } from "./indicatorMath";
 import { fetchContractTickerSingle } from "./mexcMarkets";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
+import {
+  fetchSymbolEmaSlopePctTf,
+  STATS_EMA1D_SLOPE_LOOKBACK_BARS,
+  STATS_EMA4H_SLOPE_LOOKBACK_BARS,
+} from "./statsEmaSlope";
 
 const BTC_SYMBOL = "BTCUSDT";
 
@@ -133,14 +138,17 @@ export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Pr
   const sym = binanceSymbol.trim().toUpperCase();
   const mexcContract = binanceUsdtPerpToMexcContract(sym);
   const base = binanceUsdtPerpBase(sym);
-  const [btc4h, btc1h, quoteVol24hUsdt, marketCapUsd, mexcTicker, atrPct14d] = await Promise.all([
-    fetchBtcPsar4hSnapshot(),
-    fetchBtcPsar1hSnapshot(),
-    fetchBinanceUsdmQuoteVol24h(sym),
-    base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
-    mexcContract ? fetchContractTickerSingle(mexcContract) : Promise.resolve(null),
-    fetchSymbolAtrPct14d(sym),
-  ]);
+  const [btc4h, btc1h, quoteVol24hUsdt, marketCapUsd, mexcTicker, atrPct14d, ema4hSlopePct7d, ema1dSlopePct7d] =
+    await Promise.all([
+      fetchBtcPsar4hSnapshot(),
+      fetchBtcPsar1hSnapshot(),
+      fetchBinanceUsdmQuoteVol24h(sym),
+      base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
+      mexcContract ? fetchContractTickerSingle(mexcContract) : Promise.resolve(null),
+      fetchSymbolAtrPct14d(sym),
+      fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
+      fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
+    ]);
   const fr = mexcTicker?.fundingRate;
   const fundingRate = typeof fr === "number" && Number.isFinite(fr) ? fr : null;
   return {
@@ -152,5 +160,7 @@ export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Pr
     marketCapUsd,
     fundingRate,
     atrPct14d,
+    ema4hSlopePct7d,
+    ema1dSlopePct7d,
   };
 }

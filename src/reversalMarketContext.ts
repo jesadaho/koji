@@ -3,17 +3,12 @@
  */
 
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
-import {
-  fetchBinanceUsdmKlines,
-  fetchBinanceUsdmQuoteVol24h,
-  isBinanceIndicatorFapiEnabled,
-} from "./binanceIndicatorKline";
+import { fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 import {
-  computeEmaSlopePctFromPack,
+  fetchSymbolEmaSlopePctTf,
   STATS_EMA1D_SLOPE_LOOKBACK_BARS,
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
-  statsEmaSlopeMinKlineBars,
 } from "./statsEmaSlope";
 
 const mcapCache = new Map<string, { atMs: number; mcap: number | null }>();
@@ -46,18 +41,6 @@ export type ReversalAlertMarketSnapshot = {
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d: number | null;
 };
-
-async function fetchSymbolEmaSlopePctTf(
-  symbol: string,
-  tf: "4h" | "1d",
-  lookbackBars: number,
-): Promise<number | null> {
-  if (!isBinanceIndicatorFapiEnabled()) return null;
-  const limit = statsEmaSlopeMinKlineBars(lookbackBars);
-  const pack = await fetchBinanceUsdmKlines(symbol, tf, limit);
-  if (!pack) return null;
-  return computeEmaSlopePctFromPack(pack, lookbackBars);
-}
 
 /** Vol 24h + Mcap + EMA slope 4h/1d ณ เวลาแจ้ง */
 export async function fetchReversalAlertMarketSnapshot(

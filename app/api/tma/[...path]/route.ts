@@ -545,6 +545,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         scanned: r.scanned,
         changedOutcome: r.changedOutcome,
         changedRr: r.changedRr,
+        followUp: r.followUp,
       });
     }
 

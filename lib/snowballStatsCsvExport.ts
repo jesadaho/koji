@@ -30,6 +30,7 @@ import {
   type StatsStrategyCsvSizing,
 } from "@/lib/statsStrategyProfitClient";
 import { candleReversalLookbackRankCell } from "@/lib/candleReversalStatsClient";
+import { candleReversalEmaSlopeCsvLabel } from "@/lib/candleReversalStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPrice } from "@/lib/statsCsv";
@@ -106,6 +107,8 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyC
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
     statsAtrPct14dLabel(r.atrPct14d),
+    candleReversalEmaSlopeCsvLabel(r.ema4hSlopePct7d),
+    candleReversalEmaSlopeCsvLabel(r.ema1dSlopePct7d),
     snowballStatsFundingRateLabel(r.fundingRate),
     snowballStatsVolumeCascadeLabel(r.volumeCascadeYn),
     snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal),

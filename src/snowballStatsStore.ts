@@ -147,6 +147,8 @@ export type AppendSnowballStatsInput = {
   marketCapUsd?: number | null;
   fundingRate?: number | null;
   atrPct14d?: number | null;
+  ema4hSlopePct7d?: number | null;
+  ema1dSlopePct7d?: number | null;
   signalVolVsSma?: number | null;
   volStrictOk?: boolean | null;
   volNearMissOnly?: boolean | null;
@@ -497,6 +499,14 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     atrPct14d:
       input.atrPct14d != null && Number.isFinite(input.atrPct14d) && input.atrPct14d > 0
         ? input.atrPct14d
+        : null,
+    ema4hSlopePct7d:
+      input.ema4hSlopePct7d != null && Number.isFinite(input.ema4hSlopePct7d)
+        ? input.ema4hSlopePct7d
+        : null,
+    ema1dSlopePct7d:
+      input.ema1dSlopePct7d != null && Number.isFinite(input.ema1dSlopePct7d)
+        ? input.ema1dSlopePct7d
         : null,
     signalVolVsSma:
       input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0

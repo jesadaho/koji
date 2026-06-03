@@ -13,6 +13,10 @@ import {
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import { candleReversalLookbackRankCell } from "@/lib/candleReversalStatsClient";
+import {
+  candleReversalEma4hSlopeLabel,
+  candleReversalEma1dSlopeLabel,
+} from "@/lib/candleReversalStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
@@ -400,12 +404,15 @@ export default function SnowballStatsTelegramMiniApp() {
         scanned?: number;
         changedOutcome?: number;
         changedRr?: number;
+        followUp?: { emaSlopes?: number; dirty?: number };
       } | null;
       const scanned = typeof r?.scanned === "number" ? r.scanned : 0;
       const changedOutcome = typeof r?.changedOutcome === "number" ? r.changedOutcome : 0;
       const changedRr = typeof r?.changedRr === "number" ? r.changedRr : 0;
+      const emaSlopes = typeof r?.followUp?.emaSlopes === "number" ? r.followUp.emaSlopes : 0;
+      const followDirty = typeof r?.followUp?.dirty === "number" ? r.followUp.dirty : 0;
       setCorrectOk(
-        `ปรับเสร็จ — สแกน ${scanned} แถว · เปลี่ยน outcome ${changedOutcome} · เปลี่ยน RR ${changedRr}`,
+        `ปรับเสร็จ — สแกน ${scanned} แถว · outcome ${changedOutcome} · RR ${changedRr} · backfill ${followDirty} แถว (EMA slope ${emaSlopes})`,
       );
       await loadStats();
     } catch (e) {
@@ -673,6 +680,12 @@ export default function SnowballStatsTelegramMiniApp() {
             <th scope="col" title="Wilder ATR(14) บน 1d ÷ close × 100 — สูง = แกว่งเร็ว">
               ATR%14D
             </th>
+            <th scope="col" title="EMA(12) 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)">
+              EMA4h∠7d
+            </th>
+            <th scope="col" title="EMA(12) 1d slope % ย้อนหลัง 7 แท่ง">
+              EMA1d∠7d
+            </th>
             <th scope="col" title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)">
               Funding
             </th>
@@ -743,7 +756,7 @@ export default function SnowballStatsTelegramMiniApp() {
         <tbody>
           {tableRows.length === 0 ? (
             <tr>
-              <td colSpan={isAdmin ? 41 : 40} className="sub">
+              <td colSpan={isAdmin ? 43 : 42} className="sub">
                 {allRows.length === 0
                   ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
                   : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
@@ -787,6 +800,8 @@ export default function SnowballStatsTelegramMiniApp() {
                 <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                 <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                 <td>{statsAtrPct14dLabel(r.atrPct14d)}</td>
+                <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
+                <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
                 <td
                   className={
                     r.fundingRate != null && Number.isFinite(r.fundingRate)

@@ -1,6 +1,10 @@
 import { computeEmaLast } from "./emaUtils";
 import { emaSlopePctFromValues } from "@/lib/statsEmaSlope";
-import type { BinanceKlinePack } from "./binanceIndicatorKline";
+import {
+  fetchBinanceUsdmKlines,
+  isBinanceIndicatorFapiEnabled,
+  type BinanceKlinePack,
+} from "./binanceIndicatorKline";
 
 /** EMA ช้า — สอดคล้อง EMA12 ในเกณฑ์ trend เดิม */
 export const STATS_EMA_SLOPE_PERIOD = 12;
@@ -41,4 +45,17 @@ export function computeEmaSlopePctFromPack(
   const iClosed = pack.close.length - 2;
   const closes = pack.close.slice(0, iClosed + 1);
   return computeEmaSlopePctFromCloses(closes, emaPeriod, lookbackBars);
+}
+
+export async function fetchSymbolEmaSlopePctTf(
+  symbol: string,
+  tf: "4h" | "1d",
+  lookbackBars: number,
+): Promise<number | null> {
+  if (!isBinanceIndicatorFapiEnabled()) return null;
+  const sym = symbol.trim().toUpperCase();
+  const limit = statsEmaSlopeMinKlineBars(lookbackBars);
+  const pack = await fetchBinanceUsdmKlines(sym, tf, limit);
+  if (!pack) return null;
+  return computeEmaSlopePctFromPack(pack, lookbackBars);
 }

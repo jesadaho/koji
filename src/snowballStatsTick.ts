@@ -1,4 +1,9 @@
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
+import {
+  fetchSymbolEmaSlopePctTf,
+  STATS_EMA1D_SLOPE_LOOKBACK_BARS,
+  STATS_EMA4H_SLOPE_LOOKBACK_BARS,
+} from "./statsEmaSlope";
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
 import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
 import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
@@ -43,6 +48,7 @@ export type SnowballStatsFollowUpResult = {
   greenDays: number;
   grade4h: number;
   horizonRows: number;
+  emaSlopes: number;
 };
 
 export type SnowballStatsAdminBackfillResult = {
@@ -61,6 +67,41 @@ export type SnowballStatsAdminBackfillResult = {
 
 /** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
 const KLINE_GRAN_SEC = 900;
+
+async function backfillSnowballEmaSlopes(rows: SnowballStatsRow[]): Promise<number> {
+  const slopeCache = new Map<string, { ema4h: number | null; ema1d: number | null }>();
+  let updated = 0;
+  for (const row of rows) {
+    const need4h = row.ema4hSlopePct7d == null || !Number.isFinite(row.ema4hSlopePct7d);
+    const need1d = row.ema1dSlopePct7d == null || !Number.isFinite(row.ema1dSlopePct7d);
+    if (!need4h && !need1d) continue;
+    const sym = row.symbol.trim().toUpperCase();
+    let cached = slopeCache.get(sym);
+    if (!cached) {
+      try {
+        const [ema4h, ema1d] = await Promise.all([
+          fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
+          fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
+        ]);
+        cached = { ema4h, ema1d };
+        slopeCache.set(sym, cached);
+      } catch {
+        continue;
+      }
+    }
+    let rowDirty = false;
+    if (need4h && cached.ema4h != null && Number.isFinite(cached.ema4h)) {
+      row.ema4hSlopePct7d = cached.ema4h;
+      rowDirty = true;
+    }
+    if (need1d && cached.ema1d != null && Number.isFinite(cached.ema1d)) {
+      row.ema1dSlopePct7d = cached.ema1d;
+      rowDirty = true;
+    }
+    if (rowDirty) updated += 1;
+  }
+  return updated;
+}
 
 function backfillSnowballLenPercentilePct(rows: SnowballStatsRow[]): number {
   let updated = 0;
@@ -354,6 +395,7 @@ export async function runSnowballStatsFollowUpTick(
     greenDays: 0,
     grade4h: 0,
     horizonRows: 0,
+    emaSlopes: 0,
   };
   resetBinanceIndicatorFapi451LogDedupe();
   if (!isSnowballStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return empty;
@@ -371,6 +413,8 @@ export async function runSnowballStatsFollowUpTick(
   const migrations = applySnowballStatsRowMigrations(state.rows);
   dirty += migrations;
   dirty += backfillSnowballLenPercentilePct(state.rows);
+  const emaSlopes = await backfillSnowballEmaSlopes(state.rows);
+  dirty += emaSlopes;
   const trendMomentum = await backfillSnowballTrendMomentumFields(state.rows);
   dirty += trendMomentum;
   const confirmGateSteps = await backfillSnowballConfirmGateSteps(state.rows);
@@ -675,6 +719,7 @@ export async function runSnowballStatsFollowUpTick(
     greenDays,
     grade4h,
     horizonRows,
+    emaSlopes,
   };
 }
 
@@ -688,7 +733,12 @@ export async function runSnowballStatsFollowUpTick(
  */
 export async function correctSnowballStatsOutcomeFromPct24h(opts?: {
   symbol?: string;
-}): Promise<{ scanned: number; changedOutcome: number; changedRr: number }> {
+}): Promise<{
+  scanned: number;
+  changedOutcome: number;
+  changedRr: number;
+  followUp: SnowballStatsFollowUpResult;
+}> {
   const symbolFilter = opts?.symbol?.trim()
     ? toBinanceUsdtPerpSymbol(opts.symbol.trim()).toUpperCase()
     : undefined;
@@ -740,7 +790,9 @@ export async function correctSnowballStatsOutcomeFromPct24h(opts?: {
     await saveSnowballStatsState(state);
   }
 
-  return { scanned, changedOutcome, changedRr };
+  const followUp = await runSnowballStatsFollowUpTick(Date.now(), { symbol: symbolFilter });
+
+  return { scanned, changedOutcome, changedRr, followUp };
 }
 
 /** Admin — รีเติม migration / horizon / trend momentum / gate steps (ไม่สแกนสัญญาณใหม่) */
@@ -768,6 +820,7 @@ export async function runSnowballStatsAdminBackfill(opts?: {
         greenDays: 0,
         grade4h: 0,
         horizonRows: 0,
+        emaSlopes: 0,
       },
       missingHorizon4hBefore: 0,
       missingHorizon4hAfter: 0,
@@ -789,6 +842,7 @@ export async function runSnowballStatsAdminBackfill(opts?: {
         greenDays: 0,
         grade4h: 0,
         horizonRows: 0,
+        emaSlopes: 0,
       },
       missingHorizon4hBefore: 0,
       missingHorizon4hAfter: 0,

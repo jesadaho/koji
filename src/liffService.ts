@@ -90,7 +90,10 @@ import {
   correctRsiDivergenceStatsOutcome,
   runRsiDivergenceStatsFollowUpTick,
 } from "./rsiDivergenceStatsTick";
-import { correctSnowballStatsOutcomeFromPct24h } from "./snowballStatsTick";
+import {
+  correctSnowballStatsOutcomeFromPct24h,
+  type SnowballStatsFollowUpResult,
+} from "./snowballStatsTick";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
 import {
   loadRsiDivergenceStatsState,
@@ -889,7 +892,13 @@ export async function liffCorrectSnowballStatsOutcome(
   telegramUserId: number,
   opts?: { symbol?: string },
 ): Promise<
-  | { ok: true; scanned: number; changedOutcome: number; changedRr: number }
+  | {
+      ok: true;
+      scanned: number;
+      changedOutcome: number;
+      changedRr: number;
+      followUp: SnowballStatsFollowUpResult;
+    }
   | { ok: false; status: number; error: string }
 > {
   if (!isAdminTelegramUserId(telegramUserId)) {
