@@ -129,6 +129,8 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
         : undefined,
     quoteVol24hUsdt: nullNum(r.quoteVol24hUsdt),
     marketCapUsd: nullNum(r.marketCapUsd),
+    ema4hTrend: r.ema4hTrend === "up" || r.ema4hTrend === "down" ? r.ema4hTrend : null,
+    ema1dTrend: r.ema1dTrend === "up" || r.ema1dTrend === "down" ? r.ema1dTrend : null,
   };
 }
 
@@ -305,6 +307,8 @@ export async function appendCandleReversalStatsRow(
 
   let quoteVol24hUsdt: number | null = null;
   let marketCapUsd: number | null = null;
+  let ema4hTrend: CandleReversalStatsRow["ema4hTrend"] = null;
+  let ema1dTrend: CandleReversalStatsRow["ema1dTrend"] = null;
   try {
     const snap = await fetchReversalAlertMarketSnapshot(input.symbol);
     quoteVol24hUsdt =
@@ -315,6 +319,8 @@ export async function appendCandleReversalStatsRow(
       snap.marketCapUsd != null && Number.isFinite(snap.marketCapUsd) && snap.marketCapUsd > 0
         ? snap.marketCapUsd
         : null;
+    ema4hTrend = snap.ema4hTrend;
+    ema1dTrend = snap.ema1dTrend;
   } catch {
     /* ignore */
   }
@@ -342,6 +348,8 @@ export async function appendCandleReversalStatsRow(
     slPrice: input.slPrice,
     quoteVol24hUsdt,
     marketCapUsd,
+    ema4hTrend,
+    ema1dTrend,
     wickRatioPct:
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,
     lowerWickRatioPct:

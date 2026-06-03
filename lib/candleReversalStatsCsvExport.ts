@@ -4,6 +4,7 @@ import {
 } from "@/lib/marketSentiment";
 import {
   candleReversalDayOfWeekBkk,
+  candleReversalEmaTrendCsvLabel,
   candleReversalGreenDaysLabel,
   candleReversalLookbackRankCell,
   candleReversalLowLookbackRankCell,
@@ -44,6 +45,8 @@ const HEADERS = [
   "Entry",
   "Vol 24h",
   "Mcap",
+  "EMA 4h",
+  "EMA 1d",
   "Retest",
   "SL",
   "ไส้บน%",
@@ -106,6 +109,8 @@ function candleReversalStatsRowToCsvCells(
     statsFmtPrice(r.entryPrice),
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
+    candleReversalEmaTrendCsvLabel(r.ema4hTrend),
+    candleReversalEmaTrendCsvLabel(r.ema1dTrend),
     statsFmtPrice(r.retestPrice),
     statsFmtPrice(r.slPrice),
     (r.tradeSide ?? "short") === "short"

@@ -31,6 +31,8 @@ import {
 } from "@/lib/snowballStatsClient";
 import {
   candleReversalDayOfWeekBkk,
+  candleReversalEma4hTrendLabel,
+  candleReversalEma1dTrendLabel,
   candleReversalGreenDaysLabel,
   candleReversalHorizonWinrateSummary,
   CANDLE_REVERSAL_MODEL_SHORT_LEGEND,
@@ -347,7 +349,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 25 : 22) + extraRankCols + 4;
+  const emptyColSpan = (has48h ? 25 : 22) + extraRankCols + 6;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -428,6 +430,20 @@ function ReversalStatsSection({
               label="Mcap"
               sortKey="mcap"
               title="Market cap USD (CoinGecko) ณ เวลาแจ้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="EMA4h"
+              sortKey="ema4h"
+              title="EMA6/12 4h — ↑ uptrend (ปิด>EMA12 และ EMA6>EMA12) · ↓ downtrend"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="EMA1d"
+              sortKey="ema1d"
+              title="EMA6/12 1d — ↑ uptrend · ↓ downtrend (เกณฑ์เดียวกับ 4h)"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -600,6 +616,8 @@ function ReversalStatsSection({
                   <td>{fmtPrice(r.entryPrice)}</td>
                   <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
+                  <td title="EMA6/12 4h">{candleReversalEma4hTrendLabel(r.ema4hTrend)}</td>
+                  <td title="EMA6/12 1d">{candleReversalEma1dTrendLabel(r.ema1dTrend)}</td>
                   <td>{fmtPrice(r.retestPrice)}</td>
                   <td>{fmtPrice(r.slPrice)}</td>
                   <td title="ไส้บน (Short)">
