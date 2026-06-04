@@ -420,6 +420,26 @@ export function snowballStatsBarRangePctLabel(value: number | null | undefined):
   return `${value.toFixed(2)}%`;
 }
 
+/** Efficiency Score = R% 2แท่ง ÷ Vol×SMA (ตัวหารเป็นอัตราส่วน vol/SMA เช่น 2.5× → 2.5) */
+export function snowballStatsEfficiencyScore(
+  row: Pick<SnowballStatsRow, "barRangePct2Sum" | "confirmVolVsSma" | "signalVolVsSma" | "signalBarTf">,
+): number | null {
+  const r2 = row.barRangePct2Sum;
+  const vol = snowballStatsVolVsSmaDisplay(row);
+  if (r2 == null || !Number.isFinite(r2) || vol == null || !Number.isFinite(vol) || vol <= 0) {
+    return null;
+  }
+  return r2 / vol;
+}
+
+export function snowballStatsEfficiencyScoreLabel(
+  row: Pick<SnowballStatsRow, "barRangePct2Sum" | "confirmVolVsSma" | "signalVolVsSma" | "signalBarTf">,
+): string {
+  const v = snowballStatsEfficiencyScore(row);
+  if (v == null || !Number.isFinite(v)) return "—";
+  return v.toFixed(2);
+}
+
 function snowballStatsBtcPsarTrendChip(
   tf: "4h" | "1h",
   trend: "up" | "down" | null | undefined,
@@ -836,6 +856,7 @@ export type SnowballStatsSortKey =
   | "greenDays"
   | "greenDaysBkk"
   | "volVsSma"
+  | "efficiencyScore"
   | "volRank"
   | "h4"
   | "h12"
@@ -991,6 +1012,8 @@ function compareSnowballStatsRows(
       return statsCmpNumNullLast(a.greenDaysBeforeSignalBkk, b.greenDaysBeforeSignalBkk);
     case "volVsSma":
       return statsCmpNumNullLast(snowballStatsVolVsSmaDisplay(a), snowballStatsVolVsSmaDisplay(b));
+    case "efficiencyScore":
+      return statsCmpNumNullLast(snowballStatsEfficiencyScore(a), snowballStatsEfficiencyScore(b));
     case "volRank":
       return statsCmpNumNullLast(a.confirmVolRank, b.confirmVolRank);
     case "h4":

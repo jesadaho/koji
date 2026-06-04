@@ -52,6 +52,7 @@ import {
   snowballStatsBarRangePctLabel,
   snowballStatsConfirmVolRankLabel,
   snowballStatsConfirmVolVsSmaLabel,
+  snowballStatsEfficiencyScoreLabel,
   snowballStatsRowMatchesFundingFilter,
   snowballStatsRowMatchesGreenDaysFilter,
   snowballStatsRowMatchesVolRankFilter,
@@ -867,6 +868,13 @@ export default function SnowballStatsTelegramMiniApp() {
               onSort={onSortColumn}
             />
             <SortTh
+              label="Eff Score"
+              sortKey="efficiencyScore"
+              title="Efficiency Score = R% 2แท่ง ÷ Vol×SMA"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
               label="Vol rank"
               sortKey="volRank"
               title="อันดับ vol 1H จาก breakout confirm eval"
@@ -961,7 +969,7 @@ export default function SnowballStatsTelegramMiniApp() {
         <tbody>
           {tableRows.length === 0 ? (
             <tr>
-              <td colSpan={isAdmin ? 43 : 42} className="sub">
+              <td colSpan={isAdmin ? 44 : 43} className="sub">
                 {allRows.length === 0
                   ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
                   : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
