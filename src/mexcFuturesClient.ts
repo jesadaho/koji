@@ -394,6 +394,10 @@ export type MexcContractDetailPublic = {
   maxVol?: number;
   volUnit?: number;
   volScale?: number;
+  /** ทศนิยมราคาที่ MEXC ยอมรับ */
+  priceScale?: number;
+  /** tick ราคา (เช่น 0.00001 สำหรับ SEI) */
+  priceUnit?: number;
   minLeverage?: number;
   maxLeverage?: number;
 };
@@ -458,6 +462,33 @@ export function computeOpenVolFromNotionalUsdt(
 }
 
 /**
+ * ปัดราคาให้ตรง priceUnit / priceScale ของสัญญา — ป้องกัน MEXC "Price or quantity precision error"
+ */
+export function roundMexcPrice(priceRaw: number, detail: MexcContractDetailPublic): number {
+  if (!(priceRaw > 0) || !Number.isFinite(priceRaw)) return NaN;
+
+  const priceUnit = Number(detail.priceUnit);
+  if (Number.isFinite(priceUnit) && priceUnit > 0) {
+    const steps = Math.round(priceRaw / priceUnit + 1e-9);
+    let rounded = steps * priceUnit;
+    const scale = Number(detail.priceScale);
+    if (Number.isFinite(scale) && scale >= 0) {
+      rounded = Number(rounded.toFixed(Math.min(20, Math.floor(scale))));
+    }
+    return rounded > 0 ? rounded : NaN;
+  }
+
+  const scale = Number(detail.priceScale);
+  if (Number.isFinite(scale) && scale >= 0) {
+    const factor = 10 ** Math.floor(scale);
+    const rounded = Math.round(priceRaw * factor) / factor;
+    return rounded > 0 ? rounded : NaN;
+  }
+
+  return priceRaw;
+}
+
+/**
  * เปิด market: side 1 long, 3 short — notionalUsdt = marginUsdt * leverage (ประมาณมูลค่า position)
  * openType default = 1 isolated (ถ้าต้องการ cross margin ให้ส่ง openType เป็น 2 ชัดเจน)
  */
@@ -492,9 +523,13 @@ export async function createOpenMarketOrder(
   const maxLev = Number(detail.maxLeverage) || 500;
   const lev = Math.min(maxLev, Math.max(minLev, levIn));
 
-  const mark = await getContractLastPricePublic(symbol);
-  if (mark == null || !(mark > 0)) {
+  const markRaw = await getContractLastPricePublic(symbol);
+  if (markRaw == null || !(markRaw > 0)) {
     return { success: false, code: -1, message: "ดึงราคาไม่ได้" };
+  }
+  const mark = roundMexcPrice(markRaw, detail);
+  if (!(mark > 0)) {
+    return { success: false, code: -1, message: "ปัดราคา mark ไม่ได้" };
   }
 
   const notionalUsdt = margin * lev;
@@ -521,7 +556,8 @@ export async function createOpenMarketOrder(
 
   const tp = p.takeProfitPrice;
   if (typeof tp === "number" && Number.isFinite(tp) && tp > 0) {
-    body.takeProfitPrice = tp;
+    const tpRounded = roundMexcPrice(tp, detail);
+    if (tpRounded > 0) body.takeProfitPrice = tpRounded;
     const trend = Number(p.profitTrend);
     if (Number.isFinite(trend) && trend >= 1 && trend <= 3) body.profitTrend = trend;
   }
@@ -565,8 +601,13 @@ export async function createOpenLimitOrder(
   const maxLev = Number(detail.maxLeverage) || 500;
   const lev = Math.min(maxLev, Math.max(minLev, levIn));
 
+  const limitRounded = roundMexcPrice(limitPrice, detail);
+  if (!(limitRounded > 0)) {
+    return { success: false, code: -1, message: "ปัด limitPrice ไม่ได้" };
+  }
+
   const notionalUsdt = margin * lev;
-  const volResult = computeOpenVolFromNotionalUsdt(notionalUsdt, limitPrice, detail);
+  const volResult = computeOpenVolFromNotionalUsdt(notionalUsdt, limitRounded, detail);
   if ("error" in volResult) {
     return { success: false, code: -1, message: volResult.error };
   }
@@ -578,7 +619,7 @@ export async function createOpenLimitOrder(
 
   const body: Record<string, unknown> = {
     symbol,
-    price: limitPrice,
+    price: limitRounded,
     vol,
     side,
     type: 1,
@@ -589,7 +630,8 @@ export async function createOpenLimitOrder(
 
   const tp = p.takeProfitPrice;
   if (typeof tp === "number" && Number.isFinite(tp) && tp > 0) {
-    body.takeProfitPrice = tp;
+    const tpRounded = roundMexcPrice(tp, detail);
+    if (tpRounded > 0) body.takeProfitPrice = tpRounded;
     const trend = Number(p.profitTrend);
     if (Number.isFinite(trend) && trend >= 1 && trend <= 3) body.profitTrend = trend;
   }
@@ -736,20 +778,27 @@ export async function placePlanOrderStopLoss(
   if (!isShort && !isLong) {
     return { success: false, code: -1, message: "positionType ไม่รองรับ" };
   }
+  const sym = p.contractSymbol.trim();
+  const detail = await fetchContractDetailPublic(sym);
+  const trigger =
+    detail != null ? roundMexcPrice(p.triggerPrice, detail) : p.triggerPrice;
+  if (!(trigger > 0)) {
+    return { success: false, code: -1, message: "ปัด triggerPrice ไม่ได้" };
+  }
   const side = isShort ? 2 : 4;
   const triggerType = isShort ? 1 : 2;
   const openType = position.openType === 2 ? 2 : 1;
   const body: Record<string, unknown> = {
-    symbol: p.contractSymbol.trim(),
+    symbol: sym,
     vol: position.holdVol,
     side,
     openType,
-    triggerPrice: p.triggerPrice,
+    triggerPrice: trigger,
     triggerType,
     executeCycle: 2,
     orderType: 5,
     trend: 1,
-    price: p.triggerPrice,
+    price: trigger,
     positionMode: p.positionMode,
   };
   if (position.leverage != null && Number.isFinite(position.leverage)) {
@@ -791,20 +840,27 @@ export async function placePlanOrderTakeProfit(
   if (!isShort && !isLong) {
     return { success: false, code: -1, message: "positionType ไม่รองรับ" };
   }
+  const sym = p.contractSymbol.trim();
+  const detail = await fetchContractDetailPublic(sym);
+  const trigger =
+    detail != null ? roundMexcPrice(p.triggerPrice, detail) : p.triggerPrice;
+  if (!(trigger > 0)) {
+    return { success: false, code: -1, message: "ปัด triggerPrice ไม่ได้" };
+  }
   const side = isShort ? 2 : 4;
   const triggerType = isShort ? 2 : 1;
   const openType = position.openType === 2 ? 2 : 1;
   const body: Record<string, unknown> = {
-    symbol: p.contractSymbol.trim(),
+    symbol: sym,
     vol: p.vol,
     side,
     openType,
-    triggerPrice: p.triggerPrice,
+    triggerPrice: trigger,
     triggerType,
     executeCycle: 2,
     orderType: 5,
     trend: 1,
-    price: p.triggerPrice,
+    price: trigger,
     positionMode: p.positionMode,
   };
   if (position.leverage != null && Number.isFinite(position.leverage)) {
