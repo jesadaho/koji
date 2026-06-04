@@ -12,6 +12,7 @@ import {
   StatsWeekStrategyProfitBlock,
 } from "@/components/StatsWeekGroupUi";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
+import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
@@ -217,24 +218,25 @@ function parseSideFromCsvQuery(csvQuery: string): "long" | "short" | undefined {
 }
 
 function reversalWinrateSummary(rows: CandleReversalStatsRow[]): string {
-  const done = rows.filter((r) => r.outcome !== "pending");
+  const scoped = excludePendingConflictRows(rows);
+  const done = scoped.filter((r) => r.outcome !== "pending");
   const wins = done.filter((r) => r.outcome === "win").length;
   const losses = done.filter((r) => r.outcome === "loss").length;
   const decisive = wins + losses;
   const flats = done.length - decisive;
-  const pending = rows.length - done.length;
+  const pending = scoped.length - done.length;
 
   const pendingTag = pending > 0 ? ` · Pending ${pending}` : "";
   const flatTag = flats > 0 ? ` +${flats}f` : "";
 
   if (decisive === 0) {
     if (flats > 0) {
-      return `Winrate: — (0/0${flatTag}) · ปิดผล ${done.length}/${rows.length}${pendingTag}`;
+      return `Winrate: — (0/0${flatTag}) · ปิดผล ${done.length}/${scoped.length}${pendingTag}`;
     }
-    return `Winrate: — · ปิดผล 0/${rows.length}${pendingTag}`;
+    return `Winrate: — · ปิดผล 0/${scoped.length}${pendingTag}`;
   }
   const winrate = (wins / decisive) * 100;
-  return `Winrate: ${winrate.toFixed(1)}% (${wins}/${decisive}${flatTag}) · ปิดผล ${done.length}/${rows.length}${pendingTag}`;
+  return `Winrate: ${winrate.toFixed(1)}% (${wins}/${decisive}${flatTag}) · ปิดผล ${done.length}/${scoped.length}${pendingTag}`;
 }
 
 type ReversalStatsSectionProps = {

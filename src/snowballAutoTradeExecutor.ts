@@ -16,12 +16,7 @@ import {
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
 import { placeTpPlanOrdersAfterOpen } from "./autoTradeTpSlPlanOrders";
 import { resolveSnowballTpSlPlanFromRow } from "./snowballAutoTradeTpSlPlan";
-import {
-  hasAnyPendingCandleReversalSymbol,
-  type CandleReversalStatsRow,
-  isCandleReversalStatsEnabled,
-  loadCandleReversalStatsState,
-} from "./candleReversalStatsStore";
+import { shouldSkipAutoOpenForPendingConflict } from "./signalPendingConflictServer";
 import {
   bkkIsSundayNow,
   bkkSnowballAutoTradeDayKeyNow,
@@ -290,14 +285,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   const binanceSymbol = input.binanceSymbol.trim().toUpperCase();
   if (!binanceSymbol) return { usersAttempted: 0, usersSucceeded: 0 };
 
-  // ถ้าเหรียญนี้มี reversal pending อยู่แล้ว ให้ Snowball ข้าม (กันเปิดซ้อน/ชนกัน)
+  // Reversal pending / conflict สองฝั่ง — ไม่ auto-open
   try {
-    if (isCandleReversalStatsEnabled()) {
-      const rev = await loadCandleReversalStatsState();
-      const rows: CandleReversalStatsRow[] = Array.isArray(rev?.rows) ? rev.rows : [];
-      if (hasAnyPendingCandleReversalSymbol(rows, binanceSymbol)) {
-        return { usersAttempted: 0, usersSucceeded: 0 };
-      }
+    if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "snowball")) {
+      return { usersAttempted: 0, usersSucceeded: 0 };
     }
   } catch {
     /* ignore: fallback to allow snowball */

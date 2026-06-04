@@ -36,3 +36,14 @@ export function pendingConflictBadgeText(conflictWith: string | null | undefined
   if (!conflictWith?.trim()) return null;
   return `⚠ conflict w/ ${conflictWith.trim()}`;
 }
+
+/** แถวที่ Snowball + Reversal pending พร้อมกัน (มี conflict badge) */
+export function rowHasPendingConflict(row: { conflictWith?: string | null }): boolean {
+  return Boolean(row.conflictWith?.trim());
+}
+
+export function excludePendingConflictRows<T extends { conflictWith?: string | null }>(
+  rows: readonly T[],
+): T[] {
+  return rows.filter((r) => !rowHasPendingConflict(r));
+}

@@ -60,3 +60,15 @@ export function conflictWithForSymbol(
 ): string | null {
   return pendingConflictWithLabel(sets, symbol, self);
 }
+
+/** ข้าม auto-open เมื่อฝั่งตรงข้ามยัง pending (รวมกรณี conflict สองฝั่ง) */
+export async function shouldSkipAutoOpenForPendingConflict(
+  binanceSymbol: string,
+  self: PendingStrategy,
+): Promise<boolean> {
+  const sets = await loadPendingConflictSets();
+  const k = pendingConflictSymbolKey(binanceSymbol);
+  if (!k) return false;
+  if (self === "snowball") return sets.reversalPending.has(k);
+  return sets.snowballPending.has(k);
+}

@@ -8,6 +8,7 @@ import {
   snowballStatsGradeChecklistFooter,
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
+import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import { statsFmtPctCell } from "@/lib/statsCsv";
 import { formatFunding } from "@/src/marketsFormat";
 import {
@@ -535,6 +536,7 @@ export type SnowballGreenDaysFilter =
   | "d1"
   | "d2"
   | "d3"
+  | "gt3"
   | "ge2"
   | "has"
   | "none";
@@ -548,6 +550,7 @@ export const SNOWBALL_GREEN_DAYS_FILTER_OPTIONS: ReadonlyArray<{
   { value: "d1", label: "1 วัน" },
   { value: "d2", label: "2 วัน" },
   { value: "d3", label: "3 วัน" },
+  { value: "gt3", label: "> 3 วัน" },
   { value: "ge2", label: "≥ 2 วัน" },
   { value: "has", label: "มีข้อมูล" },
   { value: "none", label: "ไม่มีข้อมูล" },
@@ -572,6 +575,7 @@ export function snowballStatsRowMatchesGreenDaysFilter(
   if (filter === "d1") return n === 1;
   if (filter === "d2") return n === 2;
   if (filter === "d3") return n === 3;
+  if (filter === "gt3") return n > 3;
   return n >= 2;
 }
 
@@ -748,7 +752,7 @@ export function snowballHorizonWinrate(
   let wins = 0;
   let losses = 0;
   let done = 0;
-  for (const r of rows) {
+  for (const r of excludePendingConflictRows(rows)) {
     const o = snowballPctToHorizonOutcome(r[pctKey]);
     if (o == null) continue;
     done += 1;

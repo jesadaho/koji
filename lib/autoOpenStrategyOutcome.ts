@@ -1,4 +1,5 @@
 import type { AutoOpenOrderLogRow, AutoOpenSource } from "@/lib/autoOpenOrderLogClient";
+import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import {
   accumulateAutoOpenPnlUsdt,
   autoOpenContractSymbolKey,
@@ -194,6 +195,7 @@ function autoOpenStrategy48hEligible(row: AutoOpenOrderLogRow): boolean {
 export function summarizeAutoOpenStrategy48h(
   rows: AutoOpenOrderLogRow[],
 ): AutoOpenStrategy48hSummary {
+  rows = excludePendingConflictRows(rows);
   let trades = 0;
   let successTrades = 0;
   let failedTrades = 0;
@@ -304,6 +306,7 @@ export function summarizeAutoOpenUnrealizedPnl(
   rows: AutoOpenOrderLogRow[],
   markPrices: Record<string, number>,
 ): AutoOpenPnlUsdtBucket {
+  rows = excludePendingConflictRows(rows);
   const acc = emptyAutoOpenPnlUsdtAccumulator();
 
   for (const r of rows) {

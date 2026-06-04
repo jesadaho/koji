@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import {
   DEFAULT_STATS_TPSL_PLAN,
   simulateStatsTpSlProfit,
@@ -375,6 +376,7 @@ export function formatStatsStrategyProfitUsdt(
 }
 
 export type StatsStrategyProfitRowSlice = StatsStrategyLiquidationMetrics & {
+  conflictWith?: string | null;
   pct24h?: number | null;
   pct48h?: number | null;
   strategyProfitPct?: number | null;
@@ -459,7 +461,7 @@ export function summarizeStatsStrategyProfit(
   const canUsdt =
     margin != null && leverage != null && margin > 0 && leverage > 0;
 
-  for (const row of rows) {
+  for (const row of excludePendingConflictRows(rows)) {
     if (!statsStrategyProfitFinalizedAtHorizon(row, holdHours)) {
       pending += 1;
       continue;

@@ -1,4 +1,5 @@
 import { SNOWBALL_QUALITY_SIGNAL_CRITERIA } from "@/lib/snowballMatrixFilters";
+import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 
 export type AutoOpenSource = "snowball" | "reversal";
 export type AutoOpenOutcome = "success" | "skipped" | "failed";
@@ -111,6 +112,7 @@ function emptyBySource(): AutoOpenOrderLogSummary["bySource"] {
 }
 
 export function summarizeAutoOpenOrderLogs(rows: AutoOpenOrderLogRow[]): AutoOpenOrderLogSummary {
+  rows = excludePendingConflictRows(rows);
   const bySource = emptyBySource();
   const reasonCounts = new Map<string, number>();
   let success = 0;

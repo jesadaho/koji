@@ -15,6 +15,7 @@ import {
   type AutoOpenSource,
 } from "@/lib/autoOpenOrderLogClient";
 import { groupAutoOpenLogsByBkkWeek } from "@/lib/autoOpenWeekGroup";
+import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import { autoOpenHorizonDue, resolveAutoOpenEntryPrice, pctVsEntrySide } from "@/lib/autoOpenFollowUp";
 import {
   autoOpenStrategyFinalized,
@@ -723,8 +724,9 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   }, [phase, contractSymbols, apiGet]);
 
   const displayRows = useMemo(() => {
-    if (dayFilter === "all") return rows;
-    return filterAutoOpenLogsByDays(rows, Number(dayFilter));
+    const scoped = excludePendingConflictRows(rows);
+    if (dayFilter === "all") return scoped;
+    return filterAutoOpenLogsByDays(scoped, Number(dayFilter));
   }, [rows, dayFilter]);
 
   const strategy48hSummary = useMemo(
