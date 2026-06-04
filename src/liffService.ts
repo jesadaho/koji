@@ -50,10 +50,7 @@ import {
 } from "./volumeSignalAlertTick";
 import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
-import {
-  snowballStatsHorizonDue,
-  type SnowballStatsApiPayload,
-} from "@/lib/snowballStatsClient";
+import type { SnowballStatsApiPayload } from "@/lib/snowballStatsClient";
 import { SNOWBALL_QUALITY_SIGNAL_CRITERIA } from "@/lib/snowballMatrixFilters";
 import {
   REVERSAL_QUALITY_SIGNAL_CRITERIA,
@@ -67,8 +64,9 @@ import {
   saveSnowballStatsState,
 } from "./snowballStatsStore";
 import {
-  backfillSnowballConfirmGateSteps,
-  runSnowballStatsFollowUpTick,
+  correctSnowballStatsOutcomeFromPct48h,
+  runSnowballStatsAdminBackfill,
+  type SnowballStatsAdminBackfillResult,
 } from "./snowballStatsTick";
 import { isAdminTelegramUserId } from "./adminIds";
 import {
@@ -95,10 +93,6 @@ import {
   correctRsiDivergenceStatsOutcome,
   runRsiDivergenceStatsFollowUpTick,
 } from "./rsiDivergenceStatsTick";
-import {
-  correctSnowballStatsOutcomeFromPct24h,
-  type SnowballStatsFollowUpResult,
-} from "./snowballStatsTick";
 import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
 import {
   loadRsiDivergenceStatsState,
@@ -764,10 +758,9 @@ export async function liffGetSparkStats(): Promise<SparkStatsApiPayload> {
   return buildSparkStatsApiPayload(state);
 }
 
-async function finalizeSnowballStatsPayload(
+async function buildSnowballStatsPayload(
   rows: SnowballStatsApiPayload["rows"],
   telegramUserId: number | undefined,
-  persistState: { rows: SnowballStatsApiPayload["rows"] },
 ): Promise<SnowballStatsApiPayload> {
   const conflictSets = await loadPendingConflictSets();
   const rowsWithConflict = rows.map((r) => ({
@@ -788,10 +781,6 @@ async function finalizeSnowballStatsPayload(
     viewerTpSlPlan = viewerStatsTpSlPlanPayload(plan);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
-    const dirty = await enrichSnowballStatsWithViewerStrategyProfit(rowsWithConflict, plan);
-    if (dirty > 0) {
-      await saveSnowballStatsState(persistState);
-    }
   }
   return {
     rows: rowsWithConflict,
@@ -803,29 +792,49 @@ async function finalizeSnowballStatsPayload(
   };
 }
 
-/** สถิติ Snowball (global) — ต้องผ่าน auth เหมือน spark-stats */
+/** สถิติ Snowball (global) — โหลดเร็ว ไม่ backfill Binance บน request (ใช้ปุ่ม Backfill) */
 export async function liffGetSnowballStats(telegramUserId?: number): Promise<SnowballStatsApiPayload> {
   const st = await loadSnowballStatsState();
   const migrated = applySnowballStatsRowMigrations(st.rows);
-  const confirmBackfill = await backfillSnowballConfirmGateSteps(st.rows);
-  if (migrated > 0 || confirmBackfill > 0) await saveSnowballStatsState(st);
-
-  const needsHorizonRefill = st.rows.some(
-    (r) =>
-      r.signalBarTf === "4h" &&
-      r.horizonAnchorV2 === true &&
-      r.pct4h == null &&
-      snowballStatsHorizonDue(r, 4),
-  );
-  if (needsHorizonRefill) {
-    await runSnowballStatsFollowUpTick(Date.now());
-    const refreshed = await loadSnowballStatsState();
-    const rows = [...refreshed.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
-    return finalizeSnowballStatsPayload(rows, telegramUserId, refreshed);
-  }
+  if (migrated > 0) await saveSnowballStatsState(st);
 
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
-  return finalizeSnowballStatsPayload(rows, telegramUserId, st);
+  return buildSnowballStatsPayload(rows, telegramUserId);
+}
+
+/** Admin — backfill EMA / horizon / gate / กำไรกลยุทธ์ (ดึง Binance) */
+export async function liffBackfillSnowballStats(
+  telegramUserId: number,
+  opts?: { symbol?: string },
+): Promise<
+  | (SnowballStatsAdminBackfillResult & { strategyProfitEnriched: number })
+  | { ok: false; status: number; error: string }
+> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  try {
+    const backfill = await runSnowballStatsAdminBackfill({ symbol: opts?.symbol });
+    if (!backfill.ok) {
+      return {
+        ok: false,
+        status: 503,
+        error: backfill.skippedReason ?? "backfill ไม่สำเร็จ",
+      };
+    }
+
+    const st = await loadSnowballStatsState();
+    const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
+    const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "snowball");
+    const strategyProfitEnriched = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
+    if (strategyProfitEnriched > 0) {
+      await saveSnowballStatsState(st);
+    }
+
+    return { ...backfill, strategyProfitEnriched };
+  } catch (e) {
+    return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export async function liffGetAutoOpenOrderHistory(
@@ -890,8 +899,8 @@ export async function liffResetSnowballStats(
 }
 
 /**
- * Admin — บังคับ recompute `outcome` + `resultRr` ของทุกแถวที่มี `pct24h` แล้ว (ข้าม pending guard)
- * ใช้ค่า pct24h / maxRoiPct ที่บันทึกอยู่แล้ว (ไม่ refetch kline)
+ * Admin — บังคับ recompute `outcome` + `resultRr` ของทุกแถวที่มี `pct48h` แล้ว (ข้าม pending guard)
+ * ใช้ค่า pct48h / maxRoiPct ที่บันทึกอยู่แล้ว (ไม่ refetch kline)
  */
 export async function liffCorrectSnowballStatsOutcome(
   telegramUserId: number,
@@ -902,7 +911,6 @@ export async function liffCorrectSnowballStatsOutcome(
       scanned: number;
       changedOutcome: number;
       changedRr: number;
-      followUp: SnowballStatsFollowUpResult;
     }
   | { ok: false; status: number; error: string }
 > {
@@ -910,7 +918,7 @@ export async function liffCorrectSnowballStatsOutcome(
     return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
   }
   try {
-    const r = await correctSnowballStatsOutcomeFromPct24h({ symbol: opts?.symbol });
+    const r = await correctSnowballStatsOutcomeFromPct48h({ symbol: opts?.symbol });
     return { ok: true, ...r };
   } catch (e) {
     return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };

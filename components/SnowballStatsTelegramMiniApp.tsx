@@ -104,7 +104,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const MAX_API_DEBUG_BODY = 12_000;
 
 const FOOTNOTE =
-  "ทิศ = ทิศสัญญาณ Snowball · Grade = เกรดสุทธิชั้นเดียว · คลิก Grade ดูโครงสร้าง HH48/VAH และเหตุผล D+/F";
+  "ทิศ = ทิศสัญญาณ Snowball · ผล = ปิดที่ 48h (pct48h) · แจ้งซ้ำต่อเหรียญ+TF+ทิศภายใน 48h · Grade = เกรดสุทธิ · คลิกดู HH48/VAH";
 
 const SNOWBALL_HORIZON_WR = [
   { label: "12h", pctKey: "pct12h" },
@@ -310,6 +310,9 @@ export default function SnowballStatsTelegramMiniApp() {
   const [correctBusy, setCorrectBusy] = useState(false);
   const [correctErr, setCorrectErr] = useState<string | null>(null);
   const [correctOk, setCorrectOk] = useState<string | null>(null);
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillErr, setBackfillErr] = useState<string | null>(null);
+  const [backfillOk, setBackfillOk] = useState<string | null>(null);
   const [dayFilter, setDayFilter] = useState<SnowballDayFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<SnowballGradeFilter>("all");
   const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
@@ -395,10 +398,10 @@ export default function SnowballStatsTelegramMiniApp() {
     }
   }, [api, loadStats]);
 
-  const correctOutcomeFromPct24h = useCallback(async () => {
+  const correctOutcomeFromPct48h = useCallback(async () => {
     if (
       !window.confirm(
-        "ปรับ result ทุกแถวให้ตรงกับ pct24h?\n\nระบบจะ recompute outcome/RR จากค่า pct24h ที่บันทึกอยู่ — ทับของเดิม โดยไม่สนใจ pending guard",
+        "ปรับ result ทุกแถวให้ตรงกับ pct48h?\n\nrecompute outcome/RR จากผล 48 ชม. ที่บันทึกอยู่ — ไม่ดึง Binance",
       )
     ) {
       return;
@@ -408,25 +411,64 @@ export default function SnowballStatsTelegramMiniApp() {
     setCorrectOk(null);
     try {
       const r = (await api("/snowball-stats/correct", { method: "POST", body: "{}" })) as {
-        ok?: boolean;
         scanned?: number;
         changedOutcome?: number;
         changedRr?: number;
-        followUp?: { emaSlopes?: number; dirty?: number };
       } | null;
       const scanned = typeof r?.scanned === "number" ? r.scanned : 0;
       const changedOutcome = typeof r?.changedOutcome === "number" ? r.changedOutcome : 0;
       const changedRr = typeof r?.changedRr === "number" ? r.changedRr : 0;
-      const emaSlopes = typeof r?.followUp?.emaSlopes === "number" ? r.followUp.emaSlopes : 0;
-      const followDirty = typeof r?.followUp?.dirty === "number" ? r.followUp.dirty : 0;
       setCorrectOk(
-        `ปรับเสร็จ — สแกน ${scanned} แถว · outcome ${changedOutcome} · RR ${changedRr} · backfill ${followDirty} แถว (EMA slope ${emaSlopes})`,
+        `ปรับ result (48h) เสร็จ — สแกน ${scanned} แถว · outcome ${changedOutcome} · RR ${changedRr}`,
       );
       await loadStats();
     } catch (e) {
       setCorrectErr(e instanceof Error ? e.message : String(e));
     } finally {
       setCorrectBusy(false);
+    }
+  }, [api, loadStats]);
+
+  const backfillStats = useCallback(async () => {
+    if (
+      !window.confirm(
+        "Backfill สถิติ Snowball?\n\nดึง Binance — EMA slope · horizon · gate steps · กำไรกลยุทธ์ ฯลฯ\n\nอาจใช้เวลาหลายนาที",
+      )
+    ) {
+      return;
+    }
+    setBackfillBusy(true);
+    setBackfillErr(null);
+    setBackfillOk(null);
+    try {
+      const r = (await api("/snowball-stats/backfill", { method: "POST", body: "{}" })) as {
+        durationMs?: number;
+        followUp?: {
+          dirty?: number;
+          emaSlopes?: number;
+          confirmGateSteps?: number;
+          horizonRows?: number;
+        };
+        strategyProfitEnriched?: number;
+        missingHorizon4hBefore?: number;
+        missingHorizon4hAfter?: number;
+      } | null;
+      const sec = ((r?.durationMs ?? 0) / 1000).toFixed(1);
+      const dirty = r?.followUp?.dirty ?? 0;
+      const ema = r?.followUp?.emaSlopes ?? 0;
+      const gates = r?.followUp?.confirmGateSteps ?? 0;
+      const horizons = r?.followUp?.horizonRows ?? 0;
+      const strat = r?.strategyProfitEnriched ?? 0;
+      const missBefore = r?.missingHorizon4hBefore ?? 0;
+      const missAfter = r?.missingHorizon4hAfter ?? 0;
+      setBackfillOk(
+        `Backfill เสร็จ ${sec}s — อัปเดต ${dirty} แถว · EMA ${ema} · gate ${gates} · horizon ${horizons} · กำไรกลยุทธ์ ${strat} · 4h ว่าง ${missBefore}→${missAfter}`,
+      );
+      await loadStats();
+    } catch (e) {
+      setBackfillErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBackfillBusy(false);
     }
   }, [api, loadStats]);
 
@@ -762,7 +804,9 @@ export default function SnowballStatsTelegramMiniApp() {
             <th scope="col" title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
               กำไรกลยุทธ์ 48h
             </th>
-            <th scope="col">ผล</th>
+            <th scope="col" title="ปิดผลที่ 48h จาก pct48h · win_quick_tp30 จาก MFE 48h">
+              ผล @48h
+            </th>
             {isAdmin ? <th scope="col" className="snowStatsDelCol" aria-label="ลบ" /> : null}
           </tr>
         </thead>
@@ -1138,7 +1182,7 @@ export default function SnowballStatsTelegramMiniApp() {
         ) : null}
         <p
           className="sub"
-          title="Winrate ราย horizon — นับเฉพาะแถวที่มี follow-up ครบ horizon นั้น · เกณฑ์ Win ≥ +3% · Loss ≤ -3% · ทิศของสัญญาณถูกปรับให้บวก = ฝั่งกำไรแล้ว · WR ไม่นับ flat (decisive = wins + losses), +Nf = จำนวน flat"
+          title="Winrate ราย horizon — คอลัมน์ผลใช้ 48h · เกณฑ์ Win ≥ +3% · Loss ≤ -3% · WR ไม่นับ flat (decisive = wins + losses), +Nf = จำนวน flat"
           style={{ marginBottom: "0.5rem" }}
         >
           WR · {horizonWinrateText}
@@ -1310,11 +1354,22 @@ export default function SnowballStatsTelegramMiniApp() {
             <button
               type="button"
               className="sparkStatsRefreshBtn"
-              disabled={correctBusy || allRows.length === 0}
-              onClick={() => void correctOutcomeFromPct24h()}
-              title="Recompute outcome/RR ทุกแถวจาก pct24h ที่บันทึกอยู่ — ข้าม pending guard (ทำงานบน dataset ทั้งหมด ไม่สนใจ filter)"
+              disabled={backfillBusy || allRows.length === 0}
+              onClick={() => void backfillStats()}
+              title="ดึง Binance — EMA · horizon · gate · กำไรกลยุทธ์ (ช้า — กดเมื่อต้องการอัปเดตข้อมูล)"
             >
-              {correctBusy ? "กำลังปรับ…" : "ปรับ result และ backfill"}
+              {backfillBusy ? "กำลัง backfill…" : "Backfill"}
+            </button>
+          ) : null}
+          {isAdmin ? (
+            <button
+              type="button"
+              className="sparkStatsRefreshBtn"
+              disabled={correctBusy || allRows.length === 0}
+              onClick={() => void correctOutcomeFromPct48h()}
+              title="Recompute outcome/RR จาก pct48h (ผล 48 ชม.) — ไม่ดึง Binance"
+            >
+              {correctBusy ? "กำลังปรับ…" : "ปรับ result (48h)"}
             </button>
           ) : null}
           {isAdmin ? (
@@ -1336,6 +1391,16 @@ export default function SnowballStatsTelegramMiniApp() {
         {correctOk && !correctErr ? (
           <p className="sub" style={{ marginTop: "0.5rem", color: "#2a9d6a" }} role="status">
             {correctOk}
+          </p>
+        ) : null}
+        {backfillErr ? (
+          <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
+            {backfillErr}
+          </p>
+        ) : null}
+        {backfillOk && !backfillErr ? (
+          <p className="sub" style={{ marginTop: "0.5rem", color: "#2a9d6a" }} role="status">
+            {backfillOk}
           </p>
         ) : null}
         {resetErr ? (

@@ -189,13 +189,15 @@ function applySnowballStrategyProfitAtHorizon(
   return touched;
 }
 
-function rrRewardSource(): "close_24h" | "mfe" {
+function rrRewardSource(): "close_48h" | "mfe" {
   const v = process.env.SNOWBALL_STATS_RR_REWARD_SOURCE?.trim().toLowerCase();
-  return v === "mfe" ? "mfe" : "close_24h";
+  if (v === "mfe") return "mfe";
+  if (v === "close_24h" || v === "close_48h") return "close_48h";
+  return "close_48h";
 }
 
 /**
- * Threshold สำหรับ win_trend (= pct24h) — pct24h ≥ winMin → win_trend, pct24h ≤ -winMin → loss, else flat
+ * Threshold สำหรับ win_trend (= pct48h) — pct48h ≥ winMin → win_trend, pct48h ≤ -winMin → loss, else flat
  * Default 3% (เพื่อให้ "flat band" กว้างพอที่จะไม่ตัดสินว่าแพ้/ชนะจากการขยับเล็กน้อย)
  */
 function outcomeWinMinPct(): number {
@@ -208,6 +210,52 @@ function outcomeQuickTp30MinPct(): number {
   const v = Number(process.env.SNOWBALL_STATS_OUTCOME_QUICK_TP30_MIN_PCT);
   if (Number.isFinite(v) && v > 0 && v < 200) return v;
   return 30;
+}
+
+function applySnowballOutcomeFromPct48h(row: SnowballStatsRow): boolean {
+  const pct48 = row.pct48h;
+  if (pct48 == null || !Number.isFinite(pct48)) return false;
+
+  const winMin = outcomeWinMinPct();
+  const quickTp30 = outcomeQuickTp30MinPct();
+  let nextOutcome: SnowballStatsOutcome;
+  if (
+    row.maxRoiPct != null &&
+    Number.isFinite(row.maxRoiPct) &&
+    row.maxRoiPct >= quickTp30
+  ) {
+    nextOutcome = "win_quick_tp30";
+  } else if (pct48 >= winMin) {
+    nextOutcome = "win_trend";
+  } else if (pct48 <= -winMin) {
+    nextOutcome = "loss";
+  } else {
+    nextOutcome = "flat";
+  }
+
+  const reward = rrRewardSource() === "mfe" ? (row.maxRoiPct ?? 0) : pct48;
+  const nextRr = formatRr(reward, row.maxDrawdownPct ?? 0);
+
+  let dirty = false;
+  if (row.outcome !== nextOutcome) {
+    row.outcome = nextOutcome;
+    dirty = true;
+  }
+  if (row.resultRr !== nextRr) {
+    row.resultRr = nextRr;
+    dirty = true;
+  }
+  return dirty;
+}
+
+/** แถวที่ปิดผลเก่าที่ 24h → คำนวณ outcome ใหม่จาก pct48h */
+function backfillSnowballOutcomeTo48h(rows: SnowballStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (row.pct48h == null || !Number.isFinite(row.pct48h)) continue;
+    if (applySnowballOutcomeFromPct48h(row)) updated += 1;
+  }
+  return updated;
 }
 
 async function backfillSnowballGreenDaysBeforeSignal(rows: SnowballStatsRow[]): Promise<number> {
@@ -412,6 +460,7 @@ export async function runSnowballStatsFollowUpTick(
 
   const migrations = applySnowballStatsRowMigrations(state.rows);
   dirty += migrations;
+  dirty += backfillSnowballOutcomeTo48h(state.rows);
   dirty += backfillSnowballLenPercentilePct(state.rows);
   const emaSlopes = await backfillSnowballEmaSlopes(state.rows);
   dirty += emaSlopes;
@@ -464,7 +513,7 @@ export async function runSnowballStatsFollowUpTick(
     }
 
     const windowEndHorizonSec = Math.min(nowSec, ac + SEC_48H);
-    const windowEndMfeSec = Math.min(nowSec, ac + SEC_24H);
+    const windowEndMfeSec = Math.min(nowSec, ac + SEC_48H);
 
     const pack = await fetchBinanceUsdmKlinesRange(row.symbol, "15m", {
       startTimeMs: row.signalBarOpenSec * 1000,
@@ -678,28 +727,9 @@ export async function runSnowballStatsFollowUpTick(
         rowTouched = true;
 
         const finalized =
-          nowSec >= ac + SEC_24H && row.pct24h != null && row.price24h != null;
-        if (finalized) {
-          const winMin = outcomeWinMinPct();
-          const quickTp30 = outcomeQuickTp30MinPct();
-          const pct24 = row.pct24h ?? 0;
-          if (
-            row.maxRoiPct != null &&
-            Number.isFinite(row.maxRoiPct) &&
-            row.maxRoiPct >= quickTp30
-          ) {
-            row.outcome = "win_quick_tp30";
-          } else if (pct24 >= winMin) {
-            row.outcome = "win_trend";
-          } else if (pct24 <= -winMin) {
-            row.outcome = "loss";
-          } else {
-            row.outcome = "flat";
-          }
-
-          const reward =
-            rrRewardSource() === "mfe" ? (row.maxRoiPct ?? 0) : (row.pct24h ?? 0);
-          row.resultRr = formatRr(reward, row.maxDrawdownPct ?? 0);
+          nowSec >= ac + SEC_48H && row.pct48h != null && row.price48h != null;
+        if (finalized && applySnowballOutcomeFromPct48h(row)) {
+          rowTouched = true;
         }
       }
     }
@@ -724,20 +754,19 @@ export async function runSnowballStatsFollowUpTick(
 }
 
 /**
- * Admin — ปรับ `outcome` + `resultRr` ของทุกแถวที่มี `pct24h` แล้ว
+ * Admin — ปรับ `outcome` + `resultRr` ของทุกแถวที่มี `pct48h` แล้ว
  * โดยข้าม pending guard (จะ overwrite แม้ outcome เดิมจะเป็น loss/win_trend/win_quick_tp30/flat)
  *
- * ใช้สำหรับกรณีกฎ outcome เปลี่ยน / เคยถูก finalize ก่อนกฎใหม่ / ต้องการ recalc ให้ตรงกับ pct24h ที่บันทึกอยู่
+ * ใช้สำหรับกรณีกฎ outcome เปลี่ยน / เคยถูก finalize ที่ 24h / ต้องการ recalc ให้ตรงกับ pct48h ที่บันทึกอยู่
  *
- * ไม่ refetch kline / ไม่แก้ pct24h — ใช้ค่าที่เก็บไว้ในแถวเท่านั้น
+ * ไม่ refetch kline / ไม่แก้ pct48h — ใช้ค่าที่เก็บไว้ในแถวเท่านั้น
  */
-export async function correctSnowballStatsOutcomeFromPct24h(opts?: {
+export async function correctSnowballStatsOutcomeFromPct48h(opts?: {
   symbol?: string;
 }): Promise<{
   scanned: number;
   changedOutcome: number;
   changedRr: number;
-  followUp: SnowballStatsFollowUpResult;
 }> {
   const symbolFilter = opts?.symbol?.trim()
     ? toBinanceUsdtPerpSymbol(opts.symbol.trim()).toUpperCase()
@@ -748,41 +777,16 @@ export async function correctSnowballStatsOutcomeFromPct24h(opts?: {
   let changedOutcome = 0;
   let changedRr = 0;
 
-  const winMin = outcomeWinMinPct();
-  const quickTp30 = outcomeQuickTp30MinPct();
-  const rewardSrc = rrRewardSource();
-
   for (const row of state.rows) {
     if (symbolFilter && row.symbol.trim().toUpperCase() !== symbolFilter) continue;
-    if (row.pct24h == null || !Number.isFinite(row.pct24h)) continue;
+    if (row.pct48h == null || !Number.isFinite(row.pct48h)) continue;
     scanned += 1;
 
-    const pct24 = row.pct24h;
-    let nextOutcome: SnowballStatsOutcome;
-    if (
-      row.maxRoiPct != null &&
-      Number.isFinite(row.maxRoiPct) &&
-      row.maxRoiPct >= quickTp30
-    ) {
-      nextOutcome = "win_quick_tp30";
-    } else if (pct24 >= winMin) {
-      nextOutcome = "win_trend";
-    } else if (pct24 <= -winMin) {
-      nextOutcome = "loss";
-    } else {
-      nextOutcome = "flat";
-    }
-
-    const reward = rewardSrc === "mfe" ? (row.maxRoiPct ?? 0) : pct24;
-    const nextRr = formatRr(reward, row.maxDrawdownPct ?? 0);
-
-    if (row.outcome !== nextOutcome) {
-      row.outcome = nextOutcome;
-      changedOutcome += 1;
-    }
-    if (row.resultRr !== nextRr) {
-      row.resultRr = nextRr;
-      changedRr += 1;
+    const prevOutcome = row.outcome;
+    const prevRr = row.resultRr;
+    if (applySnowballOutcomeFromPct48h(row)) {
+      if (row.outcome !== prevOutcome) changedOutcome += 1;
+      if (row.resultRr !== prevRr) changedRr += 1;
     }
   }
 
@@ -790,9 +794,18 @@ export async function correctSnowballStatsOutcomeFromPct24h(opts?: {
     await saveSnowballStatsState(state);
   }
 
-  const followUp = await runSnowballStatsFollowUpTick(Date.now(), { symbol: symbolFilter });
+  return { scanned, changedOutcome, changedRr };
+}
 
-  return { scanned, changedOutcome, changedRr, followUp };
+/** @deprecated ใช้ correctSnowballStatsOutcomeFromPct48h */
+export async function correctSnowballStatsOutcomeFromPct24h(
+  opts?: { symbol?: string },
+): Promise<{
+  scanned: number;
+  changedOutcome: number;
+  changedRr: number;
+}> {
+  return correctSnowballStatsOutcomeFromPct48h(opts);
 }
 
 /** Admin — รีเติม migration / horizon / trend momentum / gate steps (ไม่สแกนสัญญาณใหม่) */

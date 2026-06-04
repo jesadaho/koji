@@ -237,6 +237,17 @@ function publicCooldownMs(): number {
   return 4 * 3600 * 1000;
 }
 
+/** Cooldown แจ้ง Snowball ต่อ key (เหรียญ+TF+ทิศ) — default 48 ชม. */
+export function snowballPublicCooldownMs(): number {
+  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_COOLDOWN_MS);
+  if (Number.isFinite(v) && v > 0) return v;
+  return 48 * 3600 * 1000;
+}
+
+function cooldownMsForFeedKey(key: string): number {
+  return key.includes("|SNOWBALL|") ? snowballPublicCooldownMs() : publicCooldownMs();
+}
+
 function symbolListTtlMs(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SYMBOL_LIST_TTL_MS);
   if (Number.isFinite(v) && v >= 60_000) return v;
@@ -1211,7 +1222,7 @@ function emaParams(): { fast: number; slow: number } {
 function inCooldown(state: IndicatorPublicFeedState, key: string, nowMs: number): boolean {
   const t = state.lastNotifyMs?.[key];
   if (t == null || !Number.isFinite(t)) return false;
-  return nowMs - t < publicCooldownMs();
+  return nowMs - t < cooldownMsForFeedKey(key);
 }
 
 /** Snowball dedupe ต่อเหรียญ+TF+ทิศ+แท่งสัญญาณ — ยิงแล้วไม่ยิงซ้ำแท่งเดิม (แท่ง 4h ใหม่ยิงได้) */
