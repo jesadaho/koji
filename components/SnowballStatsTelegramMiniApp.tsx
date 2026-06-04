@@ -1028,6 +1028,9 @@ export default function SnowballStatsTelegramMiniApp() {
                 <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal)}</td>
                 <td>{snowballStatsGreenDaysLabel(r.greenDaysBeforeSignalBkk)}</td>
                 <td>{snowballStatsConfirmVolVsSmaLabel(snowballStatsVolVsSmaDisplay(r))}</td>
+                <td title="Efficiency Score = R% 2แท่ง ÷ Vol×SMA">
+                  {snowballStatsEfficiencyScoreLabel(r)}
+                </td>
                 <td>{snowballStatsConfirmVolRankLabel(r.confirmVolRank, r.confirmVolRankLb)}</td>
                 <td>{fmtSnowballHorizonCell(r, 4, r.price4h, r.pct4h)}</td>
                 <td>{fmtSnowballHorizonCell(r, 12, r.price12h, r.pct12h)}</td>
