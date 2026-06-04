@@ -523,7 +523,7 @@ type StagedPopupRow = Pick<
 >;
 
 function snowballStatsOutcomeLabel(o: SnowballStatsRow["outcome"]): string {
-  if (o === "win_trend" || o === "win_quick_tp30") return "Win (Trend)";
+  if (o === "win_trend") return "Win (Trend)";
   if (o === "loss") return "Loss";
   if (o === "flat") return "Flat";
   return "Pending";
