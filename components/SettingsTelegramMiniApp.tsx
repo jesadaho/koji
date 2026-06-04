@@ -5,6 +5,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import { PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import { SNOWBALL_QUALITY_SIGNAL_CRITERIA } from "@/lib/snowballMatrixFilters";
 import {
+  REVERSAL_QUALITY_SIGNAL_CRITERIA,
+  REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA,
+} from "@/lib/reversalMatrixFilters";
+import {
   getTelegramInitData,
   getTelegramMiniAppDisplayName,
   loadTelegramWebApp,
@@ -1311,7 +1315,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>Quality Signal</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              Short: (เขียว ≥ 1 · Wick ≤ 0.20 · Range &lt; 4.5) หรือ EMA4H −30%..0% · Long 1H fade SHORT: EMA4H &lt; −3% — ตรง preset สถิติ Reversal
+              Short: {REVERSAL_QUALITY_SIGNAL_CRITERIA} · Long 1H fade SHORT: {REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA} — ตรง preset สถิติ Reversal
             </span>
           </span>
         </label>

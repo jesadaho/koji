@@ -266,7 +266,7 @@ function logReversalAutoOpen(
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
  * - สัญญาณ Short: `reversalAutoTradeEnabled` · สัญญาณ Long (fade): `reversalAutoTradeLongSignalShortEnabled`
  * - มี MEXC creds
- * - gate Quality Signal: Short — (เขียว ≥1 · Wick ≤0.20 · Range <4.5) หรือ EMA4H −30%..0% · Long 1H — EMA4H <−3%
+ * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — EMA4H <−3%
  * - entry แบบ hybrid ตาม EMA50 บน TF 15m:
  *   - ราคาตลาด > EMA50 → Market SHORT ทันที
  *   - ราคาตลาด <= EMA50 → Limit SHORT ที่ราคา EMA50 (ดักรีเทสต์)

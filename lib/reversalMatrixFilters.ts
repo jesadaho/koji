@@ -15,13 +15,15 @@ export type ReversalQualitySignalProfile = "short" | "long1h";
 
 /** ข้อความเกณฑ์ Quality Signal (stats + auto-open) — Reversal Short */
 export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
-  "(เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5) หรือ (EMA4H < 0% และ > −30%)";
+  "(เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5 · EMA4H < 30%) หรือ (EMA4H < 0% และ > −30%)";
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA = "EMA4H < −3% (fade SHORT)";
 
 export const REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO = 0.2;
 export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
+/** EMA(12) 4h slope 7d — classic path ต้องต่ำกว่า (exclusive) */
+export const REVERSAL_QUALITY_SIGNAL_CLASSIC_EMA4H_MAX_PCT = 30;
 /** EMA(12) 4h slope 7d — ช่วงล่าง (exclusive) */
 export const REVERSAL_QUALITY_SIGNAL_EMA4H_MIN_PCT = -30;
 /** EMA(12) 4h slope 7d — ช่วงบน (exclusive) */
@@ -87,17 +89,27 @@ function rangeScoreBelow(maxExclusive: number, rangeScore?: number | null): bool
   return r != null && Number.isFinite(r) && r < maxExclusive;
 }
 
+function ema4hSlopeBelow(maxExclusive: number, ema4hSlopePct7d?: number | null): boolean {
+  const pct = ema4hSlopePct7d;
+  return pct != null && Number.isFinite(pct) && pct < maxExclusive;
+}
+
+/** เขียว ≥ 1 · Wick ≤ 0.20 · Range < 4.5 · EMA4H < 30% */
 function reversalMatchesQualitySignalClassic(input: {
   greenDaysBeforeSignal?: number | null;
   wickRatio?: number | null;
   wickRatioPct?: number | null;
   rangeScore?: number | null;
+  ema4hSlopePct7d?: number | null;
 }): boolean {
   if (!greenDaysBeforeSignalAtLeast({ greenDaysBeforeSignal: input.greenDaysBeforeSignal }, 1)) {
     return false;
   }
   if (!wickRatioAtMost(input, REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO)) return false;
   if (!rangeScoreBelow(REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE, input.rangeScore)) return false;
+  if (!ema4hSlopeBelow(REVERSAL_QUALITY_SIGNAL_CLASSIC_EMA4H_MAX_PCT, input.ema4hSlopePct7d)) {
+    return false;
+  }
   return true;
 }
 
@@ -132,8 +144,13 @@ export function reversalMatchesQualitySignal(input: {
   ema4hSlopePct7d?: number | null;
 }): boolean {
   return (
-    reversalMatchesQualitySignalClassic(input) ||
-    reversalMatchesQualitySignalEma4hBand(input.ema4hSlopePct7d)
+    reversalMatchesQualitySignalClassic({
+      greenDaysBeforeSignal: input.greenDaysBeforeSignal,
+      wickRatio: input.wickRatio,
+      wickRatioPct: input.wickRatioPct,
+      rangeScore: input.rangeScore,
+      ema4hSlopePct7d: input.ema4hSlopePct7d,
+    }) || reversalMatchesQualitySignalEma4hBand(input.ema4hSlopePct7d)
   );
 }
 
