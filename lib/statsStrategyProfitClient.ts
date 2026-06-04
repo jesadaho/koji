@@ -221,7 +221,9 @@ export function statsStrategyExitReasonDetail(
   if (reason === "tp2_full") {
     return `ราคาแตะ TP2 ${plan.tp2PricePct}% ก่อน TP1 — ปิดทั้ง position → กำไรสูงสุด ${formatStatsStrategyProfitPct(plan.tp2PricePct)}`;
   }
-  if (reason === "tp1_be") return "หลัง TP1 ราคากลับแตะ SL ที่ entry — ส่วนที่เหลือออกเสมอ";
+  if (reason === "tp1_be") {
+    return "ROI ถึงเกณฑ์ TP1 แล้ว SL@entry — ราคากลับแตะทุน ส่วนที่เหลือออกเสมอ (ไม่ต้องรอ partial TP1)";
+  }
   if (reason === "tp1_24h") return `หลัง TP1 ถือส่วนที่เหลือจนครบ ${plan.maxHoldHours}h`;
   if (reason === "tp1_48h") return `หลัง TP1 ถือส่วนที่เหลือจนครบ ${plan.maxHoldHours}h`;
   if (reason === "tp1_only") return `แตะ TP1 แล้วปิดครบ ${plan.tp1PartialPct}% ที่ ${plan.tp1PricePct}%`;

@@ -391,6 +391,29 @@ export function withRecordedSnowballSuccessfulOpen(
   };
 }
 
+/** ROI ถึง TP1% — ตั้ง SL@entry โดยยังไม่ปิด partial TP1 */
+export function withSnowballSlAtEntryArmed(
+  state: SnowballAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: SnowballAutoTradeSide,
+  slPlanOrderId?: string,
+): SnowballAutoTradeState {
+  const uid = userId.trim();
+  const prev = state[uid];
+  if (!prev?.active?.length) return state;
+  const sym = contractSymbol.trim().toUpperCase();
+  const nextActive = normalizeActive(prev.active).map((x) => {
+    if (x.contractSymbol === sym && x.side === side) {
+      const updated: SnowballAutoTradeActive = { ...x };
+      if (slPlanOrderId?.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
+      return updated;
+    }
+    return x;
+  });
+  return { ...state, [uid]: { ...prev, active: nextActive } };
+}
+
 export function withSnowballTp1Done(
   state: SnowballAutoTradeState,
   userId: string,

@@ -16,6 +16,7 @@ import {
   loadReversalAutoTradeState,
   saveReversalAutoTradeState,
   withReversalActiveRemoved,
+  withReversalSlAtEntryArmed,
   withReversalTp1Done,
   type ReversalAutoTradeActive,
 } from "./reversalAutoTradeStateStore";
@@ -129,6 +130,39 @@ async function handleTp2Hit(ctx: TpSlContext): Promise<{ closed: boolean }> {
   return { closed: true };
 }
 
+async function handleSlAtEntryOnRoi(ctx: TpSlContext): Promise<{ ok: boolean; slOrderId?: string }> {
+  const { userId, creds, active, position, markPrice, positionMode } = ctx;
+  const drop = pricePctDrop(active.side, active.mexcAvgEntryPrice, markPrice);
+  const entry = active.mexcAvgEntryPrice;
+
+  if (!(position.holdVol > 0)) {
+    return { ok: false };
+  }
+
+  const slRes = await placePlanOrderStopLoss(creds, {
+    contractSymbol: active.contractSymbol,
+    position,
+    triggerPrice: entry,
+    positionMode,
+  });
+  const slOrderId =
+    slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
+      ? String((slRes.data as { orderId: unknown }).orderId)
+      : undefined;
+
+  await notifyLines(userId, [
+    "Koji — Reversal TP/SL (MEXC)",
+    `🛡️ ROI ≥ ${active.tp1PricePct}% — ตั้ง SL บังทุน @ ${fmtPrice(entry)} (ไม่รอ partial TP1)`,
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${drop.toFixed(2)}%`,
+    slRes.success
+      ? `plan order${slOrderId ? ` #${slOrderId}` : ""}`
+      : `⚠️ ไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — ตั้งเองที่ MEXC`,
+  ]);
+
+  return { ok: slRes.success, slOrderId };
+}
+
 async function handleTp1BreakevenSlOnly(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrderId?: string }> {
   const { userId, creds, active, position, markPrice, positionMode } = ctx;
   const drop = pricePctDrop(active.side, active.mexcAvgEntryPrice, markPrice);
@@ -224,16 +258,23 @@ async function handleTp1Hit(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrd
     return { tp1Done: true };
   }
 
-  const slRes = await placePlanOrderStopLoss(creds, {
-    contractSymbol: active.contractSymbol,
-    position: remaining,
-    triggerPrice: active.mexcAvgEntryPrice,
-    positionMode,
-  });
-  const slOrderId =
-    slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
-      ? String((slRes.data as { orderId: unknown }).orderId)
-      : undefined;
+  let slOrderId = active.slPlanOrderId?.trim();
+  let slLine = slOrderId ? `🛡️ SL@entry ตั้งแล้ว (#${slOrderId})` : "";
+  if (!slOrderId) {
+    const slRes = await placePlanOrderStopLoss(creds, {
+      contractSymbol: active.contractSymbol,
+      position: remaining,
+      triggerPrice: active.mexcAvgEntryPrice,
+      positionMode,
+    });
+    slOrderId =
+      slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
+        ? String((slRes.data as { orderId: unknown }).orderId)
+        : undefined;
+    slLine = slRes.success
+      ? `🛡️ ตั้ง SL บังทุน @ ${fmtPrice(active.mexcAvgEntryPrice)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
+      : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — ตั้งเองที่ MEXC`;
+  }
 
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
@@ -241,9 +282,7 @@ async function handleTp1Hit(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrd
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry MEXC: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)}`,
     `Partial vol ปิด: ${partialVol} · holdVol คงเหลือ: ${remaining.holdVol}`,
-    slRes.success
-      ? `🛡️ ตั้ง SL บังทุน @ ${fmtPrice(active.mexcAvgEntryPrice)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
-      : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — กรุณาตั้งเองที่ MEXC`,
+    slLine,
   ]);
 
   return { tp1Done: true, slOrderId };
@@ -325,6 +364,14 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
             actionsCount += 1;
           }
           continue;
+        }
+
+        if (!a.slPlanOrderId?.trim() && Number.isFinite(drop) && drop >= a.tp1PricePct) {
+          const r = await handleSlAtEntryOnRoi(ctx);
+          if (r.ok) {
+            state = withReversalSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
+            actionsCount += 1;
+          }
         }
 
         if (!exchangeTp1 && !a.tp1Done && Number.isFinite(drop) && drop >= a.tp1PricePct) {

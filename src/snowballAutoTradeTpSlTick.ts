@@ -16,6 +16,7 @@ import {
   loadSnowballAutoTradeState,
   saveSnowballAutoTradeState,
   withSnowballActiveRemoved,
+  withSnowballSlAtEntryArmed,
   withSnowballTp1Done,
   type SnowballAutoTradeActive,
   type SnowballAutoTradeSide,
@@ -165,6 +166,40 @@ async function handleTp2Hit(ctx: TpSlContext): Promise<{ closed: boolean }> {
   return { closed: true };
 }
 
+/** ROI ถึง TP1% — ตั้ง SL@entry ทันที (ไม่ต้องรอ partial TP1) */
+async function handleSlAtEntryOnRoi(ctx: TpSlContext): Promise<{ ok: boolean; slOrderId?: string }> {
+  const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
+  const move = pricePctFavorable(active.side, entry, markPrice);
+  const tp1 = active.tp1PricePct ?? 10;
+
+  if (!(position.holdVol > 0)) {
+    return { ok: false };
+  }
+
+  const slRes = await placePlanOrderStopLoss(creds, {
+    contractSymbol: active.contractSymbol,
+    position,
+    triggerPrice: entry,
+    positionMode,
+  });
+  const slOrderId =
+    slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
+      ? String((slRes.data as { orderId: unknown }).orderId)
+      : undefined;
+
+  await notifyLines(userId, [
+    "Koji — Snowball TP/SL (MEXC)",
+    `🛡️ ROI ≥ ${tp1}% — ตั้ง SL บังทุน @ ${fmtPrice(entry)} (ไม่รอ partial TP1)`,
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    `Entry MEXC: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${move.toFixed(2)}%`,
+    slRes.success
+      ? `plan order${slOrderId ? ` #${slOrderId}` : ""}`
+      : `⚠️ ไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — ตั้งเองที่ MEXC`,
+  ]);
+
+  return { ok: slRes.success, slOrderId };
+}
+
 /** หลัง plan TP1 execute บน MEXC — ตั้ง SL บังทุนที่เหลือ (ไม่ partial close ซ้ำ) */
 async function handleTp1BreakevenSlOnly(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrderId?: string }> {
   const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
@@ -263,16 +298,23 @@ async function handleTp1Hit(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrd
     return { tp1Done: true };
   }
 
-  const slRes = await placePlanOrderStopLoss(creds, {
-    contractSymbol: active.contractSymbol,
-    position: remaining,
-    triggerPrice: entry,
-    positionMode,
-  });
-  const slOrderId =
-    slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
-      ? String((slRes.data as { orderId: unknown }).orderId)
-      : undefined;
+  let slOrderId = active.slPlanOrderId?.trim();
+  let slLine = slOrderId ? `🛡️ SL@entry ตั้งแล้ว (#${slOrderId})` : "";
+  if (!slOrderId) {
+    const slRes = await placePlanOrderStopLoss(creds, {
+      contractSymbol: active.contractSymbol,
+      position: remaining,
+      triggerPrice: entry,
+      positionMode,
+    });
+    slOrderId =
+      slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
+        ? String((slRes.data as { orderId: unknown }).orderId)
+        : undefined;
+    slLine = slRes.success
+      ? `🛡️ ตั้ง SL บังทุน @ ${fmtPrice(entry)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
+      : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — ตั้งเองที่ MEXC`;
+  }
 
   await notifyLines(userId, [
     "Koji — Snowball TP/SL (MEXC)",
@@ -280,9 +322,7 @@ async function handleTp1Hit(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrd
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry MEXC: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)}`,
     `Partial vol ปิด: ${partialVol} · holdVol คงเหลือ: ${remaining.holdVol}`,
-    slRes.success
-      ? `🛡️ ตั้ง SL บังทุน @ ${fmtPrice(entry)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
-      : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — กรุณาตั้งเองที่ MEXC`,
+    slLine,
   ]);
 
   return { tp1Done: true, slOrderId };
@@ -374,6 +414,14 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
         }
 
         const tp1 = a.tp1PricePct ?? 10;
+        if (!a.slPlanOrderId?.trim() && Number.isFinite(move) && move >= tp1) {
+          const r = await handleSlAtEntryOnRoi(ctx);
+          if (r.ok) {
+            state = withSnowballSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
+            actionsCount += 1;
+          }
+        }
+
         if (!exchangeTp1 && !a.tp1Done && Number.isFinite(move) && move >= tp1) {
           const r = await handleTp1Hit(ctx);
           if (r.tp1Done) {

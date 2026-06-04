@@ -367,6 +367,28 @@ export function withReversalActiveRemoved(
   };
 }
 
+export function withReversalSlAtEntryArmed(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: "short" | "long",
+  slPlanOrderId?: string,
+): ReversalAutoTradeState {
+  const uid = userId.trim();
+  const prev = state[uid];
+  if (!prev?.active?.length) return state;
+  const sym = contractSymbol.trim().toUpperCase();
+  const nextActive = normalizeActive(prev.active).map((x) => {
+    if (x.contractSymbol === sym && x.side === side) {
+      const updated: ReversalAutoTradeActive = { ...x };
+      if (slPlanOrderId?.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
+      return updated;
+    }
+    return x;
+  });
+  return { ...state, [uid]: { ...prev, active: nextActive } };
+}
+
 export function withReversalTp1Done(
   state: ReversalAutoTradeState,
   userId: string,

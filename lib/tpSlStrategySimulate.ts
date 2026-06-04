@@ -1,6 +1,6 @@
 /**
  * จำลองกำไร % (เทียบ entry เต็มโน้ต) ตามกลยุทธ์ auto-open TP/SL บนแท่ง 15m
- * TP1 partial → SL @ entry → TP2 → ปิดที่ 48h
+ * ROI ≥ TP1% → SL@entry (ไม่ต้องรอ partial TP1) · TP1 partial · TP2 · ปิดที่ maxHold
  */
 
 export type StatsTpSlPlan = {
@@ -35,7 +35,7 @@ function holdTimeExitReason(plan: StatsTpSlPlan, afterTp1: boolean): StatsTpSlEx
 }
 
 export function statsTpSlPlanSummary(plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN): string {
-  return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · TP2 ${plan.tp2PricePct}% · SL@entry · ${plan.maxHoldHours}h`;
+  return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · ROI≥${plan.tp1PricePct}%→SL@entry · TP2 ${plan.tp2PricePct}% · ${plan.maxHoldHours}h`;
 }
 
 function tp1PartialFraction(plan: StatsTpSlPlan): number {
@@ -134,14 +134,16 @@ export function simulateStatsTpSlProfit(input: {
   let rem = 1;
   let profit = 0;
   let tp1Done = false;
+  /** ROI ถึง TP1% แล้ว — SL บังทุนที่ entry (ไม่ต้องรอ partial TP1) */
+  let slAtEntryArmed = false;
   let exitReason: StatsTpSlExitReason = holdTimeExitReason(plan, false);
 
   for (let i = input.iFirst; i <= input.iLast; i++) {
     if (rem <= 0) break;
     const hi = input.high[i]!;
     const lo = input.low[i]!;
-    // ก่อน TP1 เท่านั้น — หลัง TP1 มี SL@entry ส่วนที่เหลือไม่โดน LQ ทั้งโน้ตจาก wick ภายหลัง
-    if (liqPct != null && !tp1Done) {
+    const beProtected = slAtEntryArmed || tp1Done;
+    if (liqPct != null && !beProtected) {
       const adv = adversePctInBar(input.side, entry, hi, lo);
       if (Number.isFinite(adv) && adv > liqPct) {
         return { profitPct: -liqPct, exitReason: "liquidated" };
@@ -150,26 +152,29 @@ export function simulateStatsTpSlProfit(input: {
     const fav = favorablePctInBar(input.side, entry, hi, lo);
     if (!Number.isFinite(fav)) continue;
 
-    if (!tp1Done) {
-      if (fav >= tp2) {
-        profit += rem * tp2;
+    if (!tp1Done && fav >= tp2) {
+      profit += rem * tp2;
+      rem = 0;
+      exitReason = "tp2_full";
+      break;
+    }
+
+    if (fav >= tp1) {
+      slAtEntryArmed = true;
+    }
+
+    if (!tp1Done && fav >= tp1) {
+      profit += rem * partialFrac * tp1;
+      rem *= 1 - partialFrac;
+      tp1Done = true;
+      if (rem <= 1e-9) {
         rem = 0;
-        exitReason = "tp2_full";
+        exitReason = "tp1_only";
         break;
-      }
-      if (fav >= tp1) {
-        profit += rem * partialFrac * tp1;
-        rem *= 1 - partialFrac;
-        tp1Done = true;
-        if (rem <= 1e-9) {
-          rem = 0;
-          exitReason = "tp1_only";
-          break;
-        }
       }
     }
 
-    if (tp1Done && rem > 0) {
+    if (slAtEntryArmed && rem > 0) {
       if (breakevenSlHit(input.side, entry, hi, lo)) {
         rem = 0;
         exitReason = "tp1_be";
