@@ -19,7 +19,7 @@ import {
   type SnowballLongStructureTier,
 } from "@/src/snowballLongBreakoutGrade";
 import { displayGradeToQualityTier } from "@/src/snowballLongGradeMatrix";
-import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
+import type { MarketSentimentLabel, MarketSentimentSnapshot } from "@/lib/marketSentiment";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 import {
@@ -809,4 +809,264 @@ export function snowballStatsDayOfWeekBkk(
     timeZone: "Asia/Bangkok",
     weekday: "short",
   });
+}
+
+export type SnowballStatsSortKey =
+  | "symbol"
+  | "side"
+  | "grade"
+  | "day"
+  | "time"
+  | "entry"
+  | "range"
+  | "wick"
+  | "lenRank"
+  | "lenPct"
+  | "barRangePrev"
+  | "barRangeSignal"
+  | "barRange2Sum"
+  | "btcPsar"
+  | "vol24"
+  | "mcap"
+  | "atr14d"
+  | "ema4h"
+  | "ema1d"
+  | "funding"
+  | "volCascade"
+  | "greenDays"
+  | "greenDaysBkk"
+  | "volVsSma"
+  | "volRank"
+  | "h4"
+  | "h12"
+  | "h24"
+  | "h48"
+  | "maxRoi"
+  | "durationMfe"
+  | "signalMaxDd"
+  | "maxDrawdown"
+  | "followUpAdverse"
+  | "svpHole"
+  | "resultRr"
+  | "fng"
+  | "sentiment"
+  | "btcDom"
+  | "volChange24h"
+  | "strategyProfit24h"
+  | "strategyProfit48h"
+  | "outcome";
+
+export type SnowballStatsSortDir = "asc" | "desc";
+
+export type SnowballStatsSort = {
+  key: SnowballStatsSortKey;
+  dir: SnowballStatsSortDir;
+};
+
+export const SNOWBALL_STATS_DEFAULT_SORT: SnowballStatsSort = {
+  key: "time",
+  dir: "desc",
+};
+
+const QUALITY_TIER_SORT_ORDER: Record<SnowballStatsQualityTier, number> = {
+  a_plus: 0,
+  b_plus: 1,
+  c_plus: 2,
+  d_plus: 3,
+  f_plus: 4,
+};
+
+const OUTCOME_SORT_ORDER: Record<SnowballStatsOutcome, number> = {
+  win_trend: 0,
+  flat: 1,
+  loss: 2,
+  pending: 3,
+};
+
+const SENTIMENT_SORT_ORDER: Record<MarketSentimentLabel, number> = {
+  Bullish: 0,
+  Neutral: 1,
+  Bearish: 2,
+};
+
+function statsCmpStr(a: string, b: string): number {
+  return a.localeCompare(b, "en", { sensitivity: "base" });
+}
+
+function statsCmpNumNullLast(a: number | null | undefined, b: number | null | undefined): number {
+  const fa = a != null && Number.isFinite(a);
+  const fb = b != null && Number.isFinite(b);
+  if (!fa && !fb) return 0;
+  if (!fa) return 1;
+  if (!fb) return -1;
+  return a! - b!;
+}
+
+function statsCmpYnNullLast(a: "Y" | "N" | null | undefined, b: "Y" | "N" | null | undefined): number {
+  const oa = a === "Y" ? 0 : a === "N" ? 1 : 2;
+  const ob = b === "Y" ? 0 : b === "N" ? 1 : 2;
+  return oa - ob;
+}
+
+const DISPLAY_GRADE_SORT_ORDER: Record<string, number> = {
+  "A+": 0,
+  A: 1,
+  "A-": 2,
+  "B+": 3,
+  B: 4,
+  "B-": 5,
+  "C+": 6,
+  C: 7,
+  "C-": 8,
+  D: 9,
+  "D+": 10,
+  F: 11,
+};
+
+function snowballStatsGradeSortOrder(row: SnowballStatsRow): number {
+  const tier = effectiveQualityTier(row);
+  if (tier) return QUALITY_TIER_SORT_ORDER[tier] ?? 50;
+  const dg = row.displayGrade;
+  if (dg && dg in DISPLAY_GRADE_SORT_ORDER) return DISPLAY_GRADE_SORT_ORDER[dg]!;
+  return 50;
+}
+
+function compareSnowballStatsRows(
+  a: SnowballStatsRow,
+  b: SnowballStatsRow,
+  key: SnowballStatsSortKey,
+): number {
+  switch (key) {
+    case "symbol":
+      return statsCmpStr(a.symbol, b.symbol);
+    case "side":
+      return statsCmpStr(a.side, b.side);
+    case "grade":
+      return snowballStatsGradeSortOrder(a) - snowballStatsGradeSortOrder(b);
+    case "day":
+      return (
+        statsCmpStr(snowballStatsDayOfWeekBkk(a.alertedAtIso, a.alertedAtMs), snowballStatsDayOfWeekBkk(b.alertedAtIso, b.alertedAtMs)) ||
+        statsCmpNumNullLast(a.alertedAtMs, b.alertedAtMs)
+      );
+    case "time":
+      return statsCmpNumNullLast(a.alertedAtMs, b.alertedAtMs);
+    case "entry":
+      return statsCmpNumNullLast(a.entryPrice, b.entryPrice);
+    case "range":
+      return statsCmpNumNullLast(a.rangeScore, b.rangeScore);
+    case "wick":
+      return statsCmpNumNullLast(a.wickScore, b.wickScore);
+    case "lenRank":
+      return statsCmpNumNullLast(a.rangeRankInLookback, b.rangeRankInLookback);
+    case "lenPct":
+      return statsCmpNumNullLast(a.lenPercentilePct, b.lenPercentilePct);
+    case "barRangePrev":
+      return statsCmpNumNullLast(a.barRangePctPrev, b.barRangePctPrev);
+    case "barRangeSignal":
+      return statsCmpNumNullLast(a.barRangePctSignal, b.barRangePctSignal);
+    case "barRange2Sum":
+      return statsCmpNumNullLast(a.barRangePct2Sum, b.barRangePct2Sum);
+    case "btcPsar":
+      return statsCmpStr(
+        snowballStatsBtcPsarCombinedLabel(a.btcPsar4hTrend, a.btcPsar1hTrend),
+        snowballStatsBtcPsarCombinedLabel(b.btcPsar4hTrend, b.btcPsar1hTrend),
+      );
+    case "vol24":
+      return statsCmpNumNullLast(a.quoteVol24hUsdt, b.quoteVol24hUsdt);
+    case "mcap":
+      return statsCmpNumNullLast(a.marketCapUsd, b.marketCapUsd);
+    case "atr14d":
+      return statsCmpNumNullLast(a.atrPct14d, b.atrPct14d);
+    case "ema4h":
+      return statsCmpNumNullLast(a.ema4hSlopePct7d, b.ema4hSlopePct7d);
+    case "ema1d":
+      return statsCmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
+    case "funding":
+      return statsCmpNumNullLast(a.fundingRate, b.fundingRate);
+    case "volCascade":
+      return statsCmpYnNullLast(a.volumeCascadeYn, b.volumeCascadeYn);
+    case "greenDays":
+      return statsCmpNumNullLast(a.greenDaysBeforeSignal, b.greenDaysBeforeSignal);
+    case "greenDaysBkk":
+      return statsCmpNumNullLast(a.greenDaysBeforeSignalBkk, b.greenDaysBeforeSignalBkk);
+    case "volVsSma":
+      return statsCmpNumNullLast(snowballStatsVolVsSmaDisplay(a), snowballStatsVolVsSmaDisplay(b));
+    case "volRank":
+      return statsCmpNumNullLast(a.confirmVolRank, b.confirmVolRank);
+    case "h4":
+      return statsCmpNumNullLast(a.pct4h, b.pct4h);
+    case "h12":
+      return statsCmpNumNullLast(a.pct12h, b.pct12h);
+    case "h24":
+      return statsCmpNumNullLast(a.pct24h, b.pct24h);
+    case "h48":
+      return statsCmpNumNullLast(a.pct48h, b.pct48h);
+    case "maxRoi":
+      return statsCmpNumNullLast(a.maxRoiPct, b.maxRoiPct);
+    case "durationMfe":
+      return statsCmpNumNullLast(a.durationToMfeHours, b.durationToMfeHours);
+    case "signalMaxDd":
+      return statsCmpNumNullLast(a.signalMaxDdPct, b.signalMaxDdPct);
+    case "maxDrawdown":
+      return statsCmpNumNullLast(a.maxDrawdownPct, b.maxDrawdownPct);
+    case "followUpAdverse":
+      return statsCmpNumNullLast(a.followUpMaxAdversePct, b.followUpMaxAdversePct);
+    case "svpHole":
+      return statsCmpYnNullLast(a.svpHoleYn, b.svpHoleYn);
+    case "resultRr":
+      return statsCmpStr(a.resultRr ?? "", b.resultRr ?? "");
+    case "fng":
+      return statsCmpNumNullLast(a.marketSentiment?.fngValue, b.marketSentiment?.fngValue);
+    case "sentiment": {
+      const sa = a.marketSentiment?.sentiment;
+      const sb = b.marketSentiment?.sentiment;
+      const oa = sa ? SENTIMENT_SORT_ORDER[sa] ?? 99 : 99;
+      const ob = sb ? SENTIMENT_SORT_ORDER[sb] ?? 99 : 99;
+      return oa - ob;
+    }
+    case "btcDom":
+      return statsCmpNumNullLast(a.marketSentiment?.btcDominancePct, b.marketSentiment?.btcDominancePct);
+    case "volChange24h":
+      return statsCmpNumNullLast(
+        a.marketSentiment?.volumeChangePct24hApprox,
+        b.marketSentiment?.volumeChangePct24hApprox,
+      );
+    case "strategyProfit24h":
+      return statsCmpNumNullLast(a.strategyProfitPct24h, b.strategyProfitPct24h);
+    case "strategyProfit48h":
+      return statsCmpNumNullLast(a.strategyProfitPct, b.strategyProfitPct);
+    case "outcome":
+      return (OUTCOME_SORT_ORDER[a.outcome] ?? 99) - (OUTCOME_SORT_ORDER[b.outcome] ?? 99);
+    default:
+      return 0;
+  }
+}
+
+export function sortSnowballStatsRows(
+  rows: SnowballStatsRow[],
+  sort: SnowballStatsSort,
+): SnowballStatsRow[] {
+  const mul = sort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const c = compareSnowballStatsRows(a, b, sort.key);
+    return c !== 0 ? c * mul : statsCmpNumNullLast(a.alertedAtMs, b.alertedAtMs) * -1;
+  });
+}
+
+export function snowballStatsSortDefaultDir(key: SnowballStatsSortKey): SnowballStatsSortDir {
+  if (
+    key === "symbol" ||
+    key === "side" ||
+    key === "grade" ||
+    key === "day" ||
+    key === "btcPsar" ||
+    key === "svpHole" ||
+    key === "volCascade" ||
+    key === "resultRr" ||
+    key === "sentiment" ||
+    key === "outcome"
+  ) {
+    return "asc";
+  }
+  return "desc";
 }

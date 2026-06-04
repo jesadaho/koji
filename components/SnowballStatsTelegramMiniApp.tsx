@@ -86,8 +86,13 @@ import {
   snowballStatsQuoteVol24hLabel,
   snowballStatsVolScoreLabel,
   snowballStatsVolumeCascadeLabel,
+  SNOWBALL_STATS_DEFAULT_SORT,
+  sortSnowballStatsRows,
+  snowballStatsSortDefaultDir,
   type SnowballStatsApiPayload,
   type SnowballStatsRow,
+  type SnowballStatsSort,
+  type SnowballStatsSortKey,
 } from "@/lib/snowballStatsClient";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
 import {
@@ -295,6 +300,48 @@ function outcomeLabel(o: SnowballStatsRow["outcome"] | "win_quick_tp30"): string
   return "Flat";
 }
 
+function sortMark(active: boolean, dir: SnowballStatsSort["dir"]): string {
+  if (!active) return "";
+  return dir === "asc" ? " ↑" : " ↓";
+}
+
+function SortTh({
+  label,
+  sortKey,
+  title,
+  className,
+  activeSort,
+  onSort,
+}: {
+  label: string;
+  sortKey: SnowballStatsSortKey;
+  title?: string;
+  className?: string;
+  activeSort: SnowballStatsSort;
+  onSort: (key: SnowballStatsSortKey) => void;
+}) {
+  const active = activeSort.key === sortKey;
+  return (
+    <th
+      scope="col"
+      title={title ? `${title} · กดเรียง` : "กดเรียง"}
+      className={`sparkStatsSortTh${active ? " sparkStatsSortTh--active" : ""}${className ? ` ${className}` : ""}`}
+      onClick={() => onSort(sortKey)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSort(sortKey);
+        }
+      }}
+      tabIndex={0}
+      role="columnheader"
+      aria-sort={active ? (activeSort.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      {label}
+      {sortMark(active, activeSort.dir)}
+    </th>
+  );
+}
 
 export default function SnowballStatsTelegramMiniApp() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -321,8 +368,17 @@ export default function SnowballStatsTelegramMiniApp() {
   const [matrixFilter, setMatrixFilter] = useState<SnowballMatrixFilter>("all");
   const [fundingFilter, setFundingFilter] = useState<SnowballFundingFilter>("all");
   const [greenDaysFilter, setGreenDaysFilter] = useState<SnowballGreenDaysFilter>("all");
+  const [sort, setSort] = useState<SnowballStatsSort>(SNOWBALL_STATS_DEFAULT_SORT);
 
   const isAdmin = payload?.isAdmin === true;
+
+  const onSortColumn = useCallback((key: SnowballStatsSortKey) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: snowballStatsSortDefaultDir(key) },
+    );
+  }, []);
 
   const api = useCallback(async (path: string, opts: RequestInit = {}) => {
     const initData = getTelegramInitData();
@@ -628,6 +684,8 @@ export default function SnowballStatsTelegramMiniApp() {
     greenDaysFilter,
   ]);
 
+  const sortedRows = useMemo(() => sortSnowballStatsRows(rows, sort), [rows, sort]);
+
   const [splitByWeek, setSplitByWeek] = useState(false);
   const weekGroups = useMemo(
     () => groupRowsByBkkWeek(rows, statsRowAlertedAtMs),
@@ -699,113 +757,204 @@ export default function SnowballStatsTelegramMiniApp() {
       <table className="sparkMatrixTable sparkMatrixTable--compact">
         <thead>
           <tr>
-            <th scope="col" className="snowStatsStickyCoin">
-              เหรียญ
-            </th>
-            <th scope="col">ทิศ</th>
-            <th
-              scope="col"
+            <SortTh
+              label="เหรียญ"
+              sortKey="symbol"
+              className="snowStatsStickyCoin"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh label="ทิศ" sortKey="side" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="Grade"
+              sortKey="grade"
               className="snowStatsStickyGrade"
               title="เกรดสุทธิ (A+/B/C/D+/F) — คลิกดูโครงสร้าง HH48/VAH และเหตุผล"
-            >
-              Grade
-            </th>
-            <th scope="col">วัน</th>
-            <th scope="col">เวลา (BKK)</th>
-            <th scope="col">Entry</th>
-            <th scope="col">Range</th>
-            <th scope="col">Wick</th>
-            <th scope="col" title="อันดับความยาวแท่ง (high-low) ในรอบ lookback — 1 = ยาวสุด">
-              Len#
-            </th>
-            <th scope="col" title="Len percentile — 100% = ยาวสุดในรอบ lookback">
-              Len%
-            </th>
-            <th scope="col">R% ก่อน</th>
-            <th scope="col">R% สัญญาณ</th>
-            <th scope="col">R% 2แท่ง</th>
-            <th scope="col" title="BTC PSAR — แท่ง 4h และ 1h ปิดล่าสุด (Binance)">
-              BTC SAR
-            </th>
-            <th scope="col">Vol 24h</th>
-            <th scope="col" title="Market cap USD (CoinGecko) ณ เวลาแจ้ง">
-              Mcap
-            </th>
-            <th scope="col" title="Wilder ATR(14) บน 1d ÷ close × 100 — สูง = แกว่งเร็ว">
-              ATR%14D
-            </th>
-            <th scope="col" title="EMA(12) 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)">
-              EMA4h∠7d
-            </th>
-            <th scope="col" title="EMA(12) 1d slope % ย้อนหลัง 7 แท่ง">
-              EMA1d∠7d
-            </th>
-            <th scope="col" title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)">
-              Funding
-            </th>
-            <th scope="col" title="Vol cascade — volume 5 แท่ง 1H ล่าสุด ยอมไม่ยกฐานได้ 1 ครั้ง">
-              Vol↗
-            </th>
-            <th scope="col" title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ Snowball">
-              เขียว
-            </th>
-            <th scope="col" title="เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) — แท่ง Day1 เขียวติดก่อนวันสัญญาณ">
-              เขียว(BKK)
-            </th>
-            <th scope="col" title="4h = Vol แท่งสัญญาณ ÷ SMA(4H) (Signal Vol Spurt) · อื่นๆ = 1H confirm หรือ signal">
-              Vol×SMA
-            </th>
-            <th scope="col" title="อันดับ vol 1H จาก breakout confirm eval (48 แท่งมาตรฐาน) — บันทึกทุกแจ้ง 4h ที่มีข้อมูล 1H">
-              Vol rank
-            </th>
-            <th scope="col">4h</th>
-            <th scope="col">12h</th>
-            <th scope="col">24h</th>
-            <th scope="col">48h</th>
-            <th scope="col">Max ROI</th>
-            <th scope="col">Duration→MFE</th>
-            <th
-              scope="col"
-              title="Max DD ก่อนแจ้ง — 15m ย้อนหลัง 32 แท่ง (8 ชม.) · เกณฑ์ momentum Stage 3 (≤ default 7%)"
-            >
-              Max DD ก่อน
-            </th>
-            <th scope="col" title="Max DD หลังแจ้ง — adverse สูงสุดถึง MFE (24h) จาก entry">
-              Max DD หลัง
-            </th>
-            <th scope="col" title="Max adverse ตลอดช่วง follow-up 48h จาก entry (ไม่ตัดที่ MFE)">
-              Adv max
-            </th>
-            <th scope="col">SVP Hole</th>
-            <th scope="col">RR</th>
-            <th scope="col" title="Fear & Greed (Market Pulse snapshot ณ เวลาแจ้ง)">
-              F&G
-            </th>
-            <th scope="col" title="Sentiment จาก F&G — Bullish / Neutral / Bearish">
-              Sentiment
-            </th>
-            <th scope="col" title="BTC dominance % ณ เวลาแจ้ง">
-              BTC.D
-            </th>
-            <th scope="col" title="การเปลี่ยนแปลง vol โดยประมาณ 24h">
-              VolΔ24h
-            </th>
-            <th
-              scope="col"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh label="วัน" sortKey="day" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="เวลา (BKK)" sortKey="time" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Range" sortKey="range" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Wick" sortKey="wick" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="Len#"
+              sortKey="lenRank"
+              title="อันดับความยาวแท่ง (high-low) ในรอบ lookback — 1 = ยาวสุด"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Len%"
+              sortKey="lenPct"
+              title="Len percentile — 100% = ยาวสุดในรอบ lookback"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh label="R% ก่อน" sortKey="barRangePrev" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="R% สัญญาณ" sortKey="barRangeSignal" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="R% 2แท่ง" sortKey="barRange2Sum" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="BTC SAR"
+              sortKey="btcPsar"
+              title="BTC PSAR — แท่ง 4h และ 1h ปิดล่าสุด (Binance)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh label="Vol 24h" sortKey="vol24" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="Mcap"
+              sortKey="mcap"
+              title="Market cap USD (CoinGecko) ณ เวลาแจ้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="ATR%14D"
+              sortKey="atr14d"
+              title="Wilder ATR(14) บน 1d ÷ close × 100 — สูง = แกว่งเร็ว"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="EMA4h∠7d"
+              sortKey="ema4h"
+              title="EMA(12) 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="EMA1d∠7d"
+              sortKey="ema1d"
+              title="EMA(12) 1d slope % ย้อนหลัง 7 แท่ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Funding"
+              sortKey="funding"
+              title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Vol↗"
+              sortKey="volCascade"
+              title="Vol cascade — volume 5 แท่ง 1H ล่าสุด ยอมไม่ยกฐานได้ 1 ครั้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="เขียว"
+              sortKey="greenDays"
+              title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ Snowball"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="เขียว(BKK)"
+              sortKey="greenDaysBkk"
+              title="เขียวตามวันปฏิทิน BKK — แท่ง Day1 เขียวติดก่อนวันสัญญาณ"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Vol×SMA"
+              sortKey="volVsSma"
+              title="4h = Vol แท่งสัญญาณ ÷ SMA(4H) · อื่นๆ = 1H confirm หรือ signal"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Vol rank"
+              sortKey="volRank"
+              title="อันดับ vol 1H จาก breakout confirm eval"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh label="4h" sortKey="h4" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="12h" sortKey="h12" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="24h" sortKey="h24" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="48h" sortKey="h48" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Max ROI" sortKey="maxRoi" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Duration→MFE" sortKey="durationMfe" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="Max DD ก่อน"
+              sortKey="signalMaxDd"
+              title="Max DD ก่อนแจ้ง — 15m ย้อนหลัง 32 แท่ง (8 ชม.)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Max DD หลัง"
+              sortKey="maxDrawdown"
+              title="Max DD หลังแจ้ง — adverse สูงสุดถึง MFE (24h)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Adv max"
+              sortKey="followUpAdverse"
+              title="Max adverse ตลอดช่วง follow-up 48h"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh label="SVP Hole" sortKey="svpHole" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="RR" sortKey="resultRr" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="F&G"
+              sortKey="fng"
+              title="Fear & Greed (Market Pulse snapshot ณ เวลาแจ้ง)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Sentiment"
+              sortKey="sentiment"
+              title="Sentiment จาก F&G — Bullish / Neutral / Bearish"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="BTC.D"
+              sortKey="btcDom"
+              title="BTC dominance % ณ เวลาแจ้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="VolΔ24h"
+              sortKey="volChange24h"
+              title="การเปลี่ยนแปลง vol โดยประมาณ 24h"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="กำไรกลยุทธ์ 24h"
+              sortKey="strategyProfit24h"
               title={
                 payload?.viewerTpSlPlan
                   ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H, payload.viewerTpSlPlan)
                   : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H)
               }
-            >
-              กำไรกลยุทธ์ 24h
-            </th>
-            <th scope="col" title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
-              กำไรกลยุทธ์ 48h
-            </th>
-            <th scope="col" title="ปิดผลที่ 48h จาก pct48h (Win ≥ +3% · Loss ≤ -3%)">
-              ผล @48h
-            </th>
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="กำไรกลยุทธ์ 48h"
+              sortKey="strategyProfit48h"
+              title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="ผล @48h"
+              sortKey="outcome"
+              title="ปิดผลที่ 48h จาก pct48h (Win ≥ +3% · Loss ≤ -3%)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
             {isAdmin ? <th scope="col" className="snowStatsDelCol" aria-label="ลบ" /> : null}
           </tr>
         </thead>
@@ -1230,12 +1379,12 @@ export default function SnowballStatsTelegramMiniApp() {
                   sizing={strategySizing}
                   band={STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND}
                 />
-                {renderTable(g.rows)}
+                {renderTable(sortSnowballStatsRows(g.rows, sort))}
               </div>
             ))
           )
         ) : (
-          renderTable(rows)
+          renderTable(sortedRows)
         )}
         <p className="sparkStatsMatrixSectionIntro" style={{ marginTop: "0.75rem" }}>
           {FOOTNOTE}
