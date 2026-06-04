@@ -136,6 +136,16 @@ export function candleReversalTradeSideLabel(side: CandleReversalTradeSide): str
   return side === "long" ? "Long" : "Short";
 }
 
+/** ทิศวัดผล follow-up — Long 1H fade SHORT ใช้ short แม้ tradeSide เป็น long */
+export function reversalStatsMeasureSide(
+  row: Pick<CandleReversalStatsRow, "signalBarTf" | "tradeSide">,
+): CandleReversalTradeSide {
+  const tf = row.signalBarTf ?? "1d";
+  const signal = row.tradeSide ?? "short";
+  if (tf === "1h" && signal === "long") return "short";
+  return signal;
+}
+
 export function candleReversalWickRatioPctLabel(pct: number | null | undefined): string {
   if (pct == null || !Number.isFinite(pct)) return "—";
   return `${pct.toFixed(1)}%`;
@@ -426,7 +436,7 @@ export const CANDLE_REVERSAL_STATS_LOSS_MAX_PCT_DEFAULT = -2;
 export type CandleReversalHorizonWinrate = {
   /** จำนวน row ที่มีค่า pct ครบ — wins + losses + flats */
   done: number;
-  /** จำนวน row ที่ pct >= WIN_MIN_PCT — Short bias (pct = (entry - price) / entry × 100) */
+  /** จำนวน row ที่ pct >= WIN_MIN_PCT — ตาม measure side (Long 1H = fade SHORT) */
   wins: number;
   /** จำนวน row ที่ pct <= LOSS_MAX_PCT */
   losses: number;

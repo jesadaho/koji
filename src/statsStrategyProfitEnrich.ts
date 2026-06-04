@@ -1,4 +1,7 @@
-import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
+import {
+  reversalStatsMeasureSide,
+  type CandleReversalStatsRow,
+} from "@/lib/candleReversalStatsClient";
 import { snowballStatsAnchorCloseSec } from "@/lib/snowballStatsClient";
 import type { SnowballStatsRow } from "@/lib/snowballStatsClient";
 import {
@@ -226,7 +229,7 @@ export async function enrichCandleReversalStatsWithViewerStrategyProfit(
     rows,
     plan,
     anchorCloseSec: reversalAnchorCloseSec,
-    sideForRow: (row) => (row.tradeSide === "long" ? "long" : "short"),
+    sideForRow: (row) => reversalStatsMeasureSide(row),
     includeRow: (row) => row.signalBarTf === "1h",
   });
 }

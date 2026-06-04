@@ -106,7 +106,7 @@ const FOOTNOTE_1H_SHORT =
   "Binance USDT-M · Short · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · winrate แยก 12h/24h/48h · ไม่ส่ง Telegram follow-up";
 
 const FOOTNOTE_1H_LONG =
-  "Binance USDT-M · Long · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · winrate แยก 12h/24h/48h · ไม่ส่ง Telegram follow-up";
+  "Binance USDT-M · สัญญาณ Long · วัดผล fade SHORT · 1H follow-up 4h/12h/24h/48h (ปิด 15m) · MFE/Max DD/Adv max ฝั่ง Short · ผลที่ 24h · winrate/กำไรกลยุทธ์ อิงทิศ SHORT · ไม่ส่ง Telegram follow-up";
 
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
@@ -253,6 +253,8 @@ type ReversalStatsSectionProps = {
   strategyTpSlPlan?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
   /** เกณฑ์ ✨ Quality Signal ในตารางนี้ (ค่าเริ่มต้น = Short) */
   qualitySignalProfile?: ReversalQualitySignalProfile;
+  /** tooltip คอลัมน์ผล */
+  outcomeColumnTitle?: string;
 };
 
 function ReversalStatsSection({
@@ -272,6 +274,7 @@ function ReversalStatsSection({
   strategyMarginUsdt,
   strategyLeverage,
   strategyTpSlPlan,
+  outcomeColumnTitle,
 }: ReversalStatsSectionProps) {
   const strategySizing = useMemo(
     () => ({ marginUsdt: strategyMarginUsdt, leverage: strategyLeverage }),
@@ -605,7 +608,12 @@ function ReversalStatsSection({
             <SortTh
               label="ผล"
               sortKey="outcome"
-              title={tf === "1h" ? "ผลที่ 24h (ปิดเร็ว) · winrate ราย horizon ดูด้านบน" : "ผลหลังครบ horizon"}
+              title={
+                outcomeColumnTitle ??
+                (tf === "1h"
+                  ? "ผลที่ 24h (ปิดเร็ว) · winrate ราย horizon ดูด้านบน"
+                  : "ผลหลังครบ horizon")
+              }
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -1203,8 +1211,8 @@ export default function ReversalStatsTelegramMiniApp() {
 
       <ReversalStatsSection
         tf="1h"
-        title="สถิติ Reversal · Long 1H"
-        subtitle="Long · แท่งเขียวยาว + low ต่ำสุด 24 แท่ง · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
+        title="สถิติ Reversal · Long 1H (fade SHORT)"
+        subtitle="สัญญาณ Long · วัดผลฝั่ง Short (fade) · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
         strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
         strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
         strategyLeverage={payload?.viewerStrategyLeverage}
@@ -1214,6 +1222,7 @@ export default function ReversalStatsTelegramMiniApp() {
         csvPrefix="reversal-stats-1h-long"
         csvQuery="&side=long"
         qualitySignalProfile="long1h"
+        outcomeColumnTitle="ผล fade SHORT @24h (ปิดเร็ว) · winrate/กำไรกลยุทธ์ ฝั่ง Short"
         rows={hourLongRows}
         showHighRank={false}
         showLowRank

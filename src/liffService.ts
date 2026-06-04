@@ -982,7 +982,9 @@ export async function liffBackfillCandleReversalStats(
   }
   try {
     const { removed: removedDupes } = await removeCandleReversalStatsDuplicatePendingRows();
-    const updated = await runCandleReversalStatsFollowUpTick(Date.now());
+    const updated = await runCandleReversalStatsFollowUpTick(Date.now(), {
+      forceLong1hFadeShort: true,
+    });
     const { scanned, changedOutcome } = await correctCandleReversalStatsOutcome();
     return { ok: true, updated, scanned, changedOutcome, removedDupes };
   } catch (e) {

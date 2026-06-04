@@ -1,4 +1,7 @@
-import type { CandleReversalSignalBarTf } from "@/lib/candleReversalStatsClient";
+import {
+  reversalStatsMeasureSide,
+  type CandleReversalSignalBarTf,
+} from "@/lib/candleReversalStatsClient";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
 import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
@@ -57,8 +60,8 @@ function followup1dDays(): number {
   return 7;
 }
 
-function reversalTradeSide(row: CandleReversalStatsRow): "short" | "long" {
-  return row.tradeSide === "long" ? "long" : "short";
+function reversalMeasureSide(row: CandleReversalStatsRow): "short" | "long" {
+  return reversalStatsMeasureSide(row);
 }
 
 function pctVsEntry(entry: number, price: number, side: "short" | "long"): number {
@@ -323,7 +326,7 @@ function applyReversal1hStrategyProfitAtHorizon(
   holdHours: typeof STATS_STRATEGY_PROFIT_HOLD_24H | typeof STATS_STRATEGY_PROFIT_HOLD_48H,
   pctAtHorizon: number,
 ): void {
-  const side = reversalTradeSide(row);
+  const side = reversalMeasureSide(row);
   const sim = computeStatsStrategyProfitFromBars({
     side,
     entry: row.entryPrice,
@@ -357,7 +360,7 @@ async function followUpCandleReversal1hRow(
 ): Promise<boolean> {
   const entry = row.entryPrice;
   const ac = anchorCloseSec(row);
-  const side = reversalTradeSide(row);
+  const side = reversalMeasureSide(row);
   const followSec = followup1hHours() * HOUR_SEC;
   const windowEndSec = Math.min(nowSec, ac + followSec);
 
@@ -386,18 +389,12 @@ async function followUpCandleReversal1hRow(
     if (iHFirst >= 0) {
       const iHLast = indexRangeThrough(hT, HOUR_SEC, iHFirst, windowEndSec);
       if (iHLast >= iHFirst) {
-        mfe =
-          side === "long"
-            ? computeMfeFromPackLong(hT, hH, hL, HOUR_SEC, iHFirst, iHLast, ac, entry)
-            : computeMfeFromPack(hT, hH, hL, HOUR_SEC, iHFirst, iHLast, ac, entry);
+        mfe = computeMfeFromPack(hT, hH, hL, HOUR_SEC, iHFirst, iHLast, ac, entry);
       }
     }
   }
   if (!mfe) {
-    mfe =
-      side === "long"
-        ? computeMfeFromPackLong(t15, h15, l15, KLINE_15M_SEC, i15First, i15Last, ac, entry)
-        : computeMfeFromPack(t15, h15, l15, KLINE_15M_SEC, i15First, i15Last, ac, entry);
+    mfe = computeMfeFromPack(t15, h15, l15, KLINE_15M_SEC, i15First, i15Last, ac, entry);
   }
   if (!mfe) return false;
 
@@ -700,7 +697,31 @@ export async function correctCandleReversalStatsOutcome(opts?: {
   return { scanned, changedOutcome };
 }
 
-export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise<number> {
+/** คำนวณ follow-up Long 1H ใหม่ด้วย measure side fade SHORT (หลังเปลี่ยน logic) */
+async function refreshLong1hFadeShortFollowUp(
+  rows: CandleReversalStatsRow[],
+  nowMs: number,
+  nowSec: number,
+): Promise<number> {
+  let dirty = 0;
+  for (const row of rows) {
+    if (signalBarTf(row) !== "1h" || row.tradeSide !== "long") continue;
+    const ac = anchorCloseSec(row);
+    if (nowSec < ac + 24 * HOUR_SEC) continue;
+    row.strategyProfitByPlan = undefined;
+    row.strategyProfitPct = null;
+    row.strategyProfitPct24h = null;
+    row.strategyExitReason = null;
+    row.strategyExitReason24h = null;
+    if (await followUpCandleReversal1hRow(row, nowMs, nowSec)) dirty += 1;
+  }
+  return dirty;
+}
+
+export async function runCandleReversalStatsFollowUpTick(
+  nowMs: number,
+  opts?: { forceLong1hFadeShort?: boolean },
+): Promise<number> {
   resetBinanceIndicatorFapi451LogDedupe();
   if (!isCandleReversalStatsEnabled() || !isBinanceIndicatorFapiEnabled()) return 0;
 
@@ -714,6 +735,9 @@ export async function runCandleReversalStatsFollowUpTick(nowMs: number): Promise
   dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += backfill1hOutcomeTo24h(state.rows);
+  if (opts?.forceLong1hFadeShort) {
+    dirty += await refreshLong1hFadeShortFollowUp(state.rows, nowMs, nowSec);
+  }
 
   for (const row of state.rows) {
     const entry = row.entryPrice;
