@@ -561,7 +561,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         /* no body = backfill ทั้งตาราง */
       }
       const r = await liffBackfillSnowballStats(auth.telegramUserId, { symbol });
-      if (!r.ok) return json({ error: r.error }, r.status);
+      if (r.ok === false) return json({ error: r.error }, r.status);
       return json(r);
     }
 

@@ -802,14 +802,15 @@ export async function liffGetSnowballStats(telegramUserId?: number): Promise<Sno
   return buildSnowballStatsPayload(rows, telegramUserId);
 }
 
+export type LiffBackfillSnowballStatsResult =
+  | (SnowballStatsAdminBackfillResult & { ok: true; strategyProfitEnriched: number })
+  | { ok: false; status: number; error: string };
+
 /** Admin — backfill EMA / horizon / gate / กำไรกลยุทธ์ (ดึง Binance) */
 export async function liffBackfillSnowballStats(
   telegramUserId: number,
   opts?: { symbol?: string },
-): Promise<
-  | (SnowballStatsAdminBackfillResult & { strategyProfitEnriched: number })
-  | { ok: false; status: number; error: string }
-> {
+): Promise<LiffBackfillSnowballStatsResult> {
   if (!isAdminTelegramUserId(telegramUserId)) {
     return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
   }
@@ -831,7 +832,7 @@ export async function liffBackfillSnowballStats(
       await saveSnowballStatsState(st);
     }
 
-    return { ...backfill, strategyProfitEnriched };
+    return { ...backfill, ok: true, strategyProfitEnriched };
   } catch (e) {
     return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
   }
