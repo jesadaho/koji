@@ -64,22 +64,19 @@ export function statsStrategyProfitColumnTitle(
   return statsTpSlPlanSummary(statsStrategyPlanAtHoldHours(plan, holdHours));
 }
 
-/** ค่า max DD / สวน max จากแถวสถิติ — ใช้เช็ค liquidate แบบ isolated */
+/** ค่าหลังแจ้งเท่านั้น — Max DD ถึง MFE + Adv max ตลอด follow-up (ไม่รวม Max DD ก่อนสัญญาณ) */
 export type StatsStrategyLiquidationMetrics = {
+  /** Max DD หลังแจ้ง — drawdown ถึง MFE */
   maxDrawdownPct?: number | null;
+  /** Adv max — สวนสูงสุดตลอด follow-up จาก entry */
   followUpMaxAdversePct?: number | null;
-  signalMaxDdPct?: number | null;
 };
 
 export function maxRowAdversePctForLiquidation(
   metrics: StatsStrategyLiquidationMetrics,
 ): number | null {
   const vals: number[] = [];
-  for (const v of [
-    metrics.followUpMaxAdversePct,
-    metrics.maxDrawdownPct,
-    metrics.signalMaxDdPct,
-  ]) {
+  for (const v of [metrics.followUpMaxAdversePct, metrics.maxDrawdownPct]) {
     if (v != null && Number.isFinite(v) && v >= 0) vals.push(v);
   }
   if (vals.length === 0) return null;
@@ -216,7 +213,7 @@ export function statsStrategyExitReasonDetail(
   if (reason === "time_24h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   if (reason === "time_48h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   if (reason === "liquidated") {
-    return "สวนราคาเกินเกณฑ์ isolated (≈ 100% ÷ leverage) — ถือว่าโดน liquidate สูญ margin";
+    return "Max DD หลังหรือ Adv max เกินเกณฑ์ isolated (≈ 100% ÷ leverage) — ถือว่าโดน liquidate สูญ margin";
   }
   return "";
 }

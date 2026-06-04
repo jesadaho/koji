@@ -28,7 +28,6 @@ export function StatsStrategyProfitCell(props: {
   tpSlPlan?: StatsTpSlPlan;
   maxDrawdownPct?: number | null;
   followUpMaxAdversePct?: number | null;
-  signalMaxDdPct?: number | null;
 }) {
   const holdHours = props.holdHours ?? STATS_STRATEGY_PROFIT_HOLD_48H;
   const plan = statsStrategyPlanAtHoldHours(props.tpSlPlan ?? DEFAULT_STATS_TPSL_PLAN, holdHours);
@@ -61,7 +60,6 @@ export function StatsStrategyProfitCell(props: {
   const liquidationMetrics = {
     maxDrawdownPct: props.maxDrawdownPct,
     followUpMaxAdversePct: props.followUpMaxAdversePct,
-    signalMaxDdPct: props.signalMaxDdPct,
   };
   const resolved = resolveStatsStrategyProfitOutcome({
     profitPct: pct,

@@ -139,11 +139,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyC
       r.strategyExitReason24h,
       sizing,
       STATS_STRATEGY_PROFIT_HOLD_24H,
-      {
-        maxDrawdownPct: r.maxDrawdownPct,
-        followUpMaxAdversePct: r.followUpMaxAdversePct,
-        signalMaxDdPct: r.signalMaxDdPct,
-      },
+      { maxDrawdownPct: r.maxDrawdownPct, followUpMaxAdversePct: r.followUpMaxAdversePct },
     ),
     statsStrategyProfitCsvCell(
       r.pct48h,
@@ -151,11 +147,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyC
       r.strategyExitReason,
       sizing,
       STATS_STRATEGY_PROFIT_HOLD_48H,
-      {
-        maxDrawdownPct: r.maxDrawdownPct,
-        followUpMaxAdversePct: r.followUpMaxAdversePct,
-        signalMaxDdPct: r.signalMaxDdPct,
-      },
+      { maxDrawdownPct: r.maxDrawdownPct, followUpMaxAdversePct: r.followUpMaxAdversePct },
     ),
     snowballOutcomeLabel(r.outcome),
   ];
