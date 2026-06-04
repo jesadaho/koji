@@ -1154,6 +1154,7 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
       false,
     qualityShortSignalShortEnabled: row.snowballAutoTradeQualityShortSignalShortEnabled ?? false,
     sundayAllShortEnabled: row.snowballAutoTradeSundayAllShortEnabled ?? false,
+    referenceEma20_1hEnabled: row.snowballAutoTradeReferenceEma20_1hEnabled ?? false,
   };
 }
 
@@ -1511,6 +1512,14 @@ function parseSnowballAutoTradeNested(
     sundayAllShortEnabled = true;
   }
 
+  let referenceEma20_1hEnabled = false;
+  const emaRefRaw = o.referenceEma20_1hEnabled ?? o.referenceEma201hEnabled;
+  if (typeof emaRefRaw === "boolean") {
+    referenceEma20_1hEnabled = emaRefRaw;
+  } else if (emaRefRaw === "1" || emaRefRaw === 1 || emaRefRaw === "true") {
+    referenceEma20_1hEnabled = true;
+  }
+
   const patchPart: Omit<
     SaveTradingViewMexcInput,
     "mexcApiKey" | "mexcSecret" | "clearMexcCreds" | "rotateWebhookToken"
@@ -1522,6 +1531,7 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeQualitySignalLongEnabled: qualitySignalLongEnabled,
     snowballAutoTradeQualityShortSignalShortEnabled: qualityShortSignalShortEnabled,
     snowballAutoTradeSundayAllShortEnabled: sundayAllShortEnabled,
+    snowballAutoTradeReferenceEma20_1hEnabled: referenceEma20_1hEnabled,
     snowballAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
     snowballAutoTradeLeverage: mLev.v as number | null | undefined,
     snowballAutoTradeQuickTpEnabled: false,

@@ -151,7 +151,18 @@ function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings): {
     typeof row.reversalAutoTradeMaxHoldHours === "number" && Number.isFinite(row.reversalAutoTradeMaxHoldHours) && row.reversalAutoTradeMaxHoldHours > 0
       ? row.reversalAutoTradeMaxHoldHours
       : REVERSAL_TPSL_DEFAULT_MAX_HOURS;
-  return { enabled: en, tp1PricePct: t1, tp1PartialPct: Math.min(100, t1p), tp2PricePct: t2, maxHoldHours: mh };
+  return {
+    enabled: en,
+    tp1PricePct: t1,
+    tp1PartialPct: Math.min(100, t1p),
+    tp2PricePct: t2,
+    maxHoldHours: mh,
+    slArmRoiPct: parseSlArmRoiPct(row.reversalAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
+    slEntryOffsetPct: parseSlEntryOffsetPct(
+      row.reversalAutoTradeSlEntryOffsetPct,
+      DEFAULT_SL_ENTRY_OFFSET_PCT,
+    ),
+  };
 }
 
 export type ReversalAutoTradeInput = {

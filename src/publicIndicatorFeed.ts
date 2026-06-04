@@ -29,6 +29,7 @@ import {
   useCloudStorage,
 } from "./remoteJsonStore";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
+import { snowballEma20_1hReferencePrice } from "./snowballReferenceEma20_1h";
 import {
   buildSnowballLongBreakout1hConfirmGateSteps,
   evaluateSnowballLongBreakout1hConfirm,
@@ -3657,6 +3658,10 @@ export async function runPublicIndicatorFeedInternal(
                   momentumFailGradeF: longBreakoutGrade === "f_plus",
                   momentumDowngrade: longBreakoutGrade === "d_plus",
                   referenceEntryPrice: entryClosePx,
+                  referenceEntryPriceEma20_1h: snowballEma20_1hReferencePrice(
+                    pack1hTrend,
+                    Math.floor(now / 1000),
+                  ),
                   signalBarOpenSec,
                   signalBarTf: snowTf,
                   signalBarLow:
@@ -4240,6 +4245,10 @@ export async function runPublicIndicatorFeedInternal(
                   displayGrade: dbOn && shortTier === "a_plus" ? "A+" : undefined,
                   qualityTier: shortTier,
                   referenceEntryPrice: twoBarInline ? c15[iConf]! : clE!,
+                  referenceEntryPriceEma20_1h: snowballEma20_1hReferencePrice(
+                    packsDiv1hExtra[idx] ?? pack1hForTwoBar,
+                    Math.floor(now / 1000),
+                  ),
                   signalBarOpenSec,
                   signalBarTf: snowTf,
                   signalBarLow: null,

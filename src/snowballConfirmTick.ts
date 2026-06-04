@@ -10,6 +10,7 @@ import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
 import { BKK_DAY_TZ_OFFSET_SEC, fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
+import { snowballEma20_1hReferencePrice } from "./snowballReferenceEma20_1h";
 import {
   isPublicSnowballTripleCheckEnabled,
   snowballConfirmBarEnabled,
@@ -467,6 +468,10 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               momentumFailGradeF: item.qualityTier === "f_plus",
               momentumDowngrade: item.qualityTier === "d_plus",
               referenceEntryPrice: cl,
+              referenceEntryPriceEma20_1h: snowballEma20_1hReferencePrice(
+                pack1hTrend,
+                bar2OpenSec + tfDurationSec(snowTf),
+              ),
               signalBarOpenSec: bar2OpenSec,
               signalBarTf: item.snowTf,
               signalBarLow: item.side === "long" ? lo : null,

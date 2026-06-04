@@ -85,6 +85,11 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   /** วันอาทิตย์ (เวลาไทย) — Snowball ทุกสัญญาณ → Short */
   snowballAutoTradeSundayAllShortEnabled?: boolean;
+  /**
+   * จุดอ้างอิง auto-open (log / Quick TP fallback / Telegram) = EMA20 แท่ง 1h ปิดล่าสุด
+   * — ยังเปิด market ที่ MEXC ทันที (ไม่รอราคาแตะ EMA)
+   */
+  snowballAutoTradeReferenceEma20_1hEnabled?: boolean;
   snowballAutoTradeMarginUsdt?: number;
   snowballAutoTradeLeverage?: number;
   /** @deprecated ใช้ TP/SL strategy — เก็บไว้สำหรับ active เก่า */
@@ -269,6 +274,7 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeQualitySignalLongEnabled?: boolean;
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   snowballAutoTradeSundayAllShortEnabled?: boolean;
+  snowballAutoTradeReferenceEma20_1hEnabled?: boolean;
   snowballAutoTradeMarginUsdt?: number | null;
   snowballAutoTradeLeverage?: number | null;
   snowballAutoTradeQuickTpEnabled?: boolean;
@@ -346,6 +352,7 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeQualitySignalLongEnabled !== undefined ||
     input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined ||
     input.snowballAutoTradeSundayAllShortEnabled !== undefined ||
+    input.snowballAutoTradeReferenceEma20_1hEnabled !== undefined ||
     input.snowballAutoTradeMarginUsdt !== undefined ||
     input.snowballAutoTradeLeverage !== undefined ||
     input.snowballAutoTradeQuickTpEnabled !== undefined ||
@@ -496,6 +503,11 @@ export async function saveTradingViewMexcSettings(
       input.snowballAutoTradeSundayAllShortEnabled !== undefined
         ? input.snowballAutoTradeSundayAllShortEnabled
         : prev?.snowballAutoTradeSundayAllShortEnabled ?? false,
+
+    snowballAutoTradeReferenceEma20_1hEnabled:
+      input.snowballAutoTradeReferenceEma20_1hEnabled !== undefined
+        ? input.snowballAutoTradeReferenceEma20_1hEnabled
+        : prev?.snowballAutoTradeReferenceEma20_1hEnabled ?? false,
 
     snowballAutoTradeMarginUsdt:
       input.snowballAutoTradeMarginUsdt === null

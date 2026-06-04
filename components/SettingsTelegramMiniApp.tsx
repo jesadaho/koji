@@ -111,6 +111,8 @@ type SnowballAutoTradeApiBundle = {
   maxHoldHours?: number | null;
   slArmRoiPct?: number | null;
   slEntryOffsetPct?: number | null;
+  /** จุดอ้างอิง = EMA20 @1h (ยังเปิด market) */
+  referenceEma20_1hEnabled?: boolean;
 };
 
 type ReversalAutoTradeApiBundle = {
@@ -169,6 +171,7 @@ export default function SettingsTelegramMiniApp() {
   const [snowQualitySignalLong, setSnowQualitySignalLong] = useState(false);
   const [snowQualityShortShort, setSnowQualityShortShort] = useState(false);
   const [snowSundayAllShort, setSnowSundayAllShort] = useState(false);
+  const [snowReferenceEma20_1h, setSnowReferenceEma20_1h] = useState(false);
   const [snowMarginDefault, setSnowMarginDefault] = useState("");
   const [snowLevDefault, setSnowLevDefault] = useState("");
   const [snowTpSlEnabled, setSnowTpSlEnabled] = useState(true);
@@ -231,6 +234,7 @@ export default function SettingsTelegramMiniApp() {
     setSnowQualitySignalLong(Boolean(st.qualitySignalLongEnabled));
     setSnowQualityShortShort(Boolean(st.qualityShortSignalShortEnabled));
     setSnowSundayAllShort(Boolean(st.sundayAllShortEnabled));
+    setSnowReferenceEma20_1h(Boolean(st.referenceEma20_1hEnabled));
     setSnowMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
     setSnowLevDefault(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
     setSnowTpSlEnabled(st.tpSlEnabled !== false);
@@ -630,6 +634,7 @@ export default function SettingsTelegramMiniApp() {
         qualitySignalLongEnabled: snowQualitySignalLong,
         qualityShortSignalShortEnabled: snowQualityShortShort,
         sundayAllShortEnabled: snowSundayAllShort,
+        referenceEma20_1hEnabled: snowReferenceEma20_1h,
         marginUsdt: snowMarginDefault.trim() ? marginDefaultParsed : null,
         leverage: snowLevDefault.trim() ? levDefaultParsed : null,
         tpSlEnabled: snowTpSlEnabled,
@@ -1162,6 +1167,20 @@ export default function SettingsTelegramMiniApp() {
             <strong style={{ fontWeight: 600 }}>วันอาทิตย์ (เวลาไทย) → Short ทุกสัญญาณ</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
               ทุกวันอาทิตย์ตามเวลาไทย (Asia/Bangkok) — สัญญาณ Snowball <strong>LONG</strong> และ <strong>BEAR</strong> เปิด <strong>Short</strong> บน MEXC (LONG จะถูกกลับทิศ · BEAR ยังเป็น Short ตามปกติ)
+            </span>
+          </span>
+        </label>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={snowReferenceEma20_1h}
+            onChange={(e) => setSnowReferenceEma20_1h(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>จุดอ้างอิง = EMA20 @1h</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              ใช้ค่า EMA20 แท่ง 1h ปิดล่าสุดเป็นจุดอ้างอิงใน Telegram / ประวัติ auto-open / Quick TP (เมื่อดึงราคา MEXC ไม่ได้) — ยัง<strong>เปิด market</strong> ที่ MEXC ทันที ไม่รอราคาแตะ EMA · TP/SL บน exchange ยังอิงราคาเข้าเฉลี่ย MEXC
             </span>
           </span>
         </label>

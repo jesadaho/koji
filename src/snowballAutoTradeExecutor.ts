@@ -36,6 +36,7 @@ import {
   snowballMatchesQualityShortSignal,
   snowballMatchesQualitySignal,
 } from "@/lib/snowballMatrixFilters";
+import { resolveSnowballAutoTradeReferenceEntryPrice } from "./snowballReferenceEma20_1h";
 
 function snowballQualitySignalLongEnabled(row: TradingViewMexcUserSettings): boolean {
   return (
@@ -242,8 +243,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   qualityTier?: SnowballAutoTradeAlertGradeInput["qualityTier"];
   momentumFailGradeF?: boolean | null;
   momentumDowngrade?: boolean | null;
-  /** จุดเข้าซื้อที่บอทแนะนำ (จาก Snowball signal) */
+  /** จุดเข้าซื้อที่บอทแนะนำ (close แท่งสัญญาณ/confirm หรือ 1h breakout) */
   referenceEntryPrice: number;
+  /** EMA20 @1h ปิดล่าสุด — ใช้เมื่อ user เปิดตัวเลือกจุดอ้างอิง EMA20 */
+  referenceEntryPriceEma20_1h?: number | null;
   signalBarOpenSec: number;
   signalBarTf: "15m" | "1h" | "4h";
   signalBarLow: number | null;
@@ -340,21 +343,36 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     typeof input.marginScale === "number" && Number.isFinite(input.marginScale) && input.marginScale > 0
       ? Math.min(1, input.marginScale)
       : 1;
-  const referenceEntryPrice = input.referenceEntryPrice;
-  const logSignal: SnowballAutoOpenLogSignal = {
-    contractSymbol: sym,
-    binanceSymbol,
-    alertSide: input.alertSide,
-    gradeKey,
-    signalBarOpenSec: input.signalBarOpenSec,
-    signalBarTf: input.signalBarTf,
-    marginScale,
-    referenceEntryPrice,
-  };
+  const defaultReferenceEntryPrice = input.referenceEntryPrice;
+  const ema20_1hRef = input.referenceEntryPriceEma20_1h ?? null;
 
   for (const [userId, rowRaw] of Object.entries(map)) {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
+    const { price: referenceEntryPrice, source: referenceSource } =
+      resolveSnowballAutoTradeReferenceEntryPrice({
+        defaultPrice: defaultReferenceEntryPrice,
+        ema20_1h: ema20_1hRef,
+        useEma20_1h: row.snowballAutoTradeReferenceEma20_1hEnabled === true,
+      });
+    const logSignal: SnowballAutoOpenLogSignal = {
+      contractSymbol: sym,
+      binanceSymbol,
+      alertSide: input.alertSide,
+      gradeKey,
+      signalBarOpenSec: input.signalBarOpenSec,
+      signalBarTf: input.signalBarTf,
+      marginScale,
+      referenceEntryPrice,
+    };
+    const refPriceLine = (() => {
+      const p = fmtSnowballPriceUsdt(referenceEntryPrice);
+      if (referenceSource === "ema20_1h") {
+        return `จุดเข้าอ้างอิง (EMA20 @1h): ${p} USDT · close สัญญาณ ~ ${fmtSnowballPriceUsdt(defaultReferenceEntryPrice)}`;
+      }
+      return `จุดเข้าอ้างอิง (บอท / Binance): ${p} USDT`;
+    })();
+
     if (!row.snowballAutoTradeEnabled) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "user_disabled");
       continue;
@@ -604,7 +622,8 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
               : "",
         gradeKey ? `Grade ${gradeKey}` : "",
         `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
-        `จุดเข้าอ้างอิง (บอท / Binance): ${fmtSnowballPriceUsdt(referenceEntryPrice)} USDT`,
+        refPriceLine,
+        "เปิดออเดอร์: market ที่ MEXC (ไม่รอราคาแตะ EMA)",
         mexcAvgEntry != null && Number.isFinite(mexcAvgEntry) && mexcAvgEntry > 0
           ? `ราคาเข้าเฉลี่ย MEXC: ${fmtSnowballPriceUsdt(mexcAvgEntry)} USDT — ใช้คำนวณ TP/SL`
           : "ราคาเข้าเฉลี่ย MEXC: ยังดึงไม่ได้",
