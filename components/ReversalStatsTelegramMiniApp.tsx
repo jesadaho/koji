@@ -108,6 +108,8 @@ const FOOTNOTE_1H_SHORT =
 const FOOTNOTE_1H_LONG =
   "Binance USDT-M · สัญญาณ Long · วัดผล fade SHORT · 1H follow-up 4h/12h/24h/48h (ปิด 15m) · MFE/Max DD/Adv max ฝั่ง Short · ผลที่ 24h · winrate/กำไรกลยุทธ์ อิงทิศ SHORT · ไม่ส่ง Telegram follow-up";
 
+type ReversalStatsTabId = "1d" | "1h-short" | "1h-long";
+
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
   return u.endsWith("USDT") ? u.slice(0, -4) : u;
@@ -255,6 +257,8 @@ type ReversalStatsSectionProps = {
   qualitySignalProfile?: ReversalQualitySignalProfile;
   /** tooltip คอลัมน์ผล */
   outcomeColumnTitle?: string;
+  /** อยู่ในแท็บย่อย — ไม่เว้น margin ด้านบน */
+  embedded?: boolean;
 };
 
 function ReversalStatsSection({
@@ -275,6 +279,7 @@ function ReversalStatsSection({
   strategyLeverage,
   strategyTpSlPlan,
   outcomeColumnTitle,
+  embedded = false,
 }: ReversalStatsSectionProps) {
   const strategySizing = useMemo(
     () => ({ marginUsdt: strategyMarginUsdt, leverage: strategyLeverage }),
@@ -735,7 +740,10 @@ function ReversalStatsSection({
   );
 
   return (
-    <section className="sparkStatsMatrixSection" style={{ marginTop: "1.5rem" }}>
+    <section
+      className="sparkStatsMatrixSection"
+      style={{ marginTop: embedded ? 0 : "1.5rem" }}
+    >
       <h2 className="sparkStatsMatrixSectionTitle" style={{ marginTop: 0 }}>
         {title}
         <span
@@ -952,6 +960,7 @@ export default function ReversalStatsTelegramMiniApp() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<ReversalStatsTabId>("1d");
 
   const allRows = payload?.rows ?? [];
 
@@ -1135,7 +1144,7 @@ export default function ReversalStatsTelegramMiniApp() {
       <h1 className="sparkStatsMatrixSectionTitle">
         สถิติ Reversal
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-          1D + 1H Short/Long · โดจิ · ทุบ · แดงยาว · เขียวยาว
+          แท็บ 1D · 1H Short · Long 1H (fade SHORT) · โดจิ · ทุบ · แดงยาว · เขียวยาว
         </span>
       </h1>
 
@@ -1184,49 +1193,123 @@ export default function ReversalStatsTelegramMiniApp() {
         </p>
       ) : null}
 
-      <ReversalStatsSection
-        tf="1d"
-        title="สถิติ Reversal · 1D"
-        subtitle="Day candle · follow-up 1d / 3d / 7d (ผลที่ 7d)"
-        emptyHint="ยังไม่มีแถว 1D — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1D_ALERTS_ENABLED)"
-        footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1D}`}
-        csvPrefix="reversal-stats-1d"
-        rows={dayRows}
-      />
+      <div
+        className="tmaTabList"
+        role="tablist"
+        aria-label="ตารางสถิติ Reversal"
+        style={{ marginTop: "1rem" }}
+      >
+        <button
+          type="button"
+          className="tmaTab"
+          id="reversal-tab-1d"
+          role="tab"
+          aria-selected={activeTab === "1d"}
+          aria-controls="reversal-panel-1d"
+          tabIndex={activeTab === "1d" ? 0 : -1}
+          onClick={() => setActiveTab("1d")}
+        >
+          <span>1D</span>
+          <span className="tmaTabEn">{dayRows.length} แถว</span>
+        </button>
+        <button
+          type="button"
+          className="tmaTab"
+          id="reversal-tab-1h-short"
+          role="tab"
+          aria-selected={activeTab === "1h-short"}
+          aria-controls="reversal-panel-1h-short"
+          tabIndex={activeTab === "1h-short" ? 0 : -1}
+          onClick={() => setActiveTab("1h-short")}
+        >
+          <span>1H Short</span>
+          <span className="tmaTabEn">{hourShortRows.length} แถว</span>
+        </button>
+        <button
+          type="button"
+          className="tmaTab"
+          id="reversal-tab-1h-long"
+          role="tab"
+          aria-selected={activeTab === "1h-long"}
+          aria-controls="reversal-panel-1h-long"
+          tabIndex={activeTab === "1h-long" ? 0 : -1}
+          onClick={() => setActiveTab("1h-long")}
+        >
+          <span>Long 1H</span>
+          <span className="tmaTabEn">fade SHORT · {hourLongRows.length}</span>
+        </button>
+      </div>
 
-      <ReversalStatsSection
-        tf="1h"
-        title="สถิติ Reversal · 1H Short"
-        subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
-        strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
-        strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
-        strategyLeverage={payload?.viewerStrategyLeverage}
-        strategyTpSlPlan={payload?.viewerTpSlPlan}
-        emptyHint="ยังไม่มีแถว 1H Short — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
-        footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_SHORT}`}
-        csvPrefix="reversal-stats-1h-short"
-        csvQuery="&side=short"
-        rows={hourShortRows}
-      />
+      <div
+        className="tmaTabPanel"
+        id="reversal-panel-1d"
+        role="tabpanel"
+        aria-labelledby="reversal-tab-1d"
+        hidden={activeTab !== "1d"}
+      >
+        <ReversalStatsSection
+          embedded
+          tf="1d"
+          title="สถิติ Reversal · 1D"
+          subtitle="Day candle · follow-up 1d / 3d / 7d (ผลที่ 7d)"
+          emptyHint="ยังไม่มีแถว 1D — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1D_ALERTS_ENABLED)"
+          footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1D}`}
+          csvPrefix="reversal-stats-1d"
+          rows={dayRows}
+        />
+      </div>
 
-      <ReversalStatsSection
-        tf="1h"
-        title="สถิติ Reversal · Long 1H (fade SHORT)"
-        subtitle="สัญญาณ Long · วัดผลฝั่ง Short (fade) · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
-        strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
-        strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
-        strategyLeverage={payload?.viewerStrategyLeverage}
-        strategyTpSlPlan={payload?.viewerTpSlPlan}
-        emptyHint="ยังไม่มีแถว Long 1H — รอสัญญาณ Reversal Long ส่งสำเร็จ (CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED)"
-        footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_LONG}`}
-        csvPrefix="reversal-stats-1h-long"
-        csvQuery="&side=long"
-        qualitySignalProfile="long1h"
-        outcomeColumnTitle="ผล fade SHORT @24h (ปิดเร็ว) · winrate/กำไรกลยุทธ์ ฝั่ง Short"
-        rows={hourLongRows}
-        showHighRank={false}
-        showLowRank
-      />
+      <div
+        className="tmaTabPanel"
+        id="reversal-panel-1h-short"
+        role="tabpanel"
+        aria-labelledby="reversal-tab-1h-short"
+        hidden={activeTab !== "1h-short"}
+      >
+        <ReversalStatsSection
+          embedded
+          tf="1h"
+          title="สถิติ Reversal · 1H Short"
+          subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
+          strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
+          strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
+          strategyLeverage={payload?.viewerStrategyLeverage}
+          strategyTpSlPlan={payload?.viewerTpSlPlan}
+          emptyHint="ยังไม่มีแถว 1H Short — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
+          footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_SHORT}`}
+          csvPrefix="reversal-stats-1h-short"
+          csvQuery="&side=short"
+          rows={hourShortRows}
+        />
+      </div>
+
+      <div
+        className="tmaTabPanel"
+        id="reversal-panel-1h-long"
+        role="tabpanel"
+        aria-labelledby="reversal-tab-1h-long"
+        hidden={activeTab !== "1h-long"}
+      >
+        <ReversalStatsSection
+          embedded
+          tf="1h"
+          title="สถิติ Reversal · Long 1H (fade SHORT)"
+          subtitle="สัญญาณ Long · วัดผลฝั่ง Short (fade) · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
+          strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
+          strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
+          strategyLeverage={payload?.viewerStrategyLeverage}
+          strategyTpSlPlan={payload?.viewerTpSlPlan}
+          emptyHint="ยังไม่มีแถว Long 1H — รอสัญญาณ Reversal Long ส่งสำเร็จ (CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED)"
+          footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_LONG}`}
+          csvPrefix="reversal-stats-1h-long"
+          csvQuery="&side=long"
+          qualitySignalProfile="long1h"
+          outcomeColumnTitle="ผล fade SHORT @24h (ปิดเร็ว) · winrate/กำไรกลยุทธ์ ฝั่ง Short"
+          rows={hourLongRows}
+          showHighRank={false}
+          showLowRank
+        />
+      </div>
     </div>
   );
 }
