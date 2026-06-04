@@ -100,6 +100,10 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeTp1PartialPct?: number;
   snowballAutoTradeTp2PricePct?: number;
   snowballAutoTradeMaxHoldHours?: number;
+  /** ROI % ถึงค่านี้ → ตั้ง SL บังทุน (default 10) */
+  snowballAutoTradeSlArmRoiPct?: number;
+  /** SL ห่างจาก entry เป็น % ราคาสวน — LONG ลง / SHORT ขึ้น (0 = @entry) */
+  snowballAutoTradeSlEntryOffsetPct?: number;
 
   /** แจ้งเตือน trailing % ของเหรียญใน open positions (cron ~5 นาที) */
   portfolioTrailingAlertEnabled?: boolean;
@@ -122,6 +126,8 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeTp1PartialPct?: number;
   reversalAutoTradeTp2PricePct?: number;
   reversalAutoTradeMaxHoldHours?: number;
+  reversalAutoTradeSlArmRoiPct?: number;
+  reversalAutoTradeSlEntryOffsetPct?: number;
   /** @deprecated ใช้ gateQualitySignal */
   reversalAutoTradeGateBodyWick80?: boolean;
   /** @deprecated ใช้ gateQualitySignal */
@@ -273,6 +279,8 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeTp1PartialPct?: number | null;
   snowballAutoTradeTp2PricePct?: number | null;
   snowballAutoTradeMaxHoldHours?: number | null;
+  snowballAutoTradeSlArmRoiPct?: number | null;
+  snowballAutoTradeSlEntryOffsetPct?: number | null;
 
   portfolioTrailingAlertEnabled?: boolean;
   portfolioTrailingStepPct?: number | null;
@@ -285,6 +293,8 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeTp1PartialPct?: number | null;
   reversalAutoTradeTp2PricePct?: number | null;
   reversalAutoTradeMaxHoldHours?: number | null;
+  reversalAutoTradeSlArmRoiPct?: number | null;
+  reversalAutoTradeSlEntryOffsetPct?: number | null;
   reversalAutoTradeGateBodyWick80?: boolean;
   reversalAutoTradeGateLenRank315?: boolean;
   reversalAutoTradeGateQualitySignal?: boolean;
@@ -345,7 +355,9 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeTp1PricePct !== undefined ||
     input.snowballAutoTradeTp1PartialPct !== undefined ||
     input.snowballAutoTradeTp2PricePct !== undefined ||
-    input.snowballAutoTradeMaxHoldHours !== undefined;
+    input.snowballAutoTradeMaxHoldHours !== undefined ||
+    input.snowballAutoTradeSlArmRoiPct !== undefined ||
+    input.snowballAutoTradeSlEntryOffsetPct !== undefined;
 
   const touchedPortfolioTrailingPatch =
     input.portfolioTrailingAlertEnabled !== undefined ||
@@ -360,6 +372,8 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeTp1PartialPct !== undefined ||
     input.reversalAutoTradeTp2PricePct !== undefined ||
     input.reversalAutoTradeMaxHoldHours !== undefined ||
+    input.reversalAutoTradeSlArmRoiPct !== undefined ||
+    input.reversalAutoTradeSlEntryOffsetPct !== undefined ||
     input.reversalAutoTradeGateBodyWick80 !== undefined ||
     input.reversalAutoTradeGateLenRank315 !== undefined ||
     input.reversalAutoTradeGateQualitySignal !== undefined ||
@@ -549,6 +563,20 @@ export async function saveTradingViewMexcSettings(
           ? input.snowballAutoTradeMaxHoldHours
           : prev?.snowballAutoTradeMaxHoldHours,
 
+    snowballAutoTradeSlArmRoiPct:
+      input.snowballAutoTradeSlArmRoiPct === null
+        ? undefined
+        : input.snowballAutoTradeSlArmRoiPct !== undefined
+          ? input.snowballAutoTradeSlArmRoiPct
+          : prev?.snowballAutoTradeSlArmRoiPct,
+
+    snowballAutoTradeSlEntryOffsetPct:
+      input.snowballAutoTradeSlEntryOffsetPct === null
+        ? undefined
+        : input.snowballAutoTradeSlEntryOffsetPct !== undefined
+          ? input.snowballAutoTradeSlEntryOffsetPct
+          : prev?.snowballAutoTradeSlEntryOffsetPct,
+
     portfolioTrailingAlertEnabled:
       input.portfolioTrailingAlertEnabled !== undefined
         ? input.portfolioTrailingAlertEnabled
@@ -612,6 +640,20 @@ export async function saveTradingViewMexcSettings(
         : input.reversalAutoTradeMaxHoldHours !== undefined
           ? input.reversalAutoTradeMaxHoldHours
           : prev?.reversalAutoTradeMaxHoldHours,
+
+    reversalAutoTradeSlArmRoiPct:
+      input.reversalAutoTradeSlArmRoiPct === null
+        ? undefined
+        : input.reversalAutoTradeSlArmRoiPct !== undefined
+          ? input.reversalAutoTradeSlArmRoiPct
+          : prev?.reversalAutoTradeSlArmRoiPct,
+
+    reversalAutoTradeSlEntryOffsetPct:
+      input.reversalAutoTradeSlEntryOffsetPct === null
+        ? undefined
+        : input.reversalAutoTradeSlEntryOffsetPct !== undefined
+          ? input.reversalAutoTradeSlEntryOffsetPct
+          : prev?.reversalAutoTradeSlEntryOffsetPct,
 
     reversalAutoTradeGateBodyWick80:
       input.reversalAutoTradeGateBodyWick80 !== undefined

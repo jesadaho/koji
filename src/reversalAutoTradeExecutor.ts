@@ -29,6 +29,12 @@ import { shouldSkipAutoOpenForPendingConflict } from "./signalPendingConflictSer
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import { reversalMatchesQualitySignalForAlert } from "@/lib/reversalMatrixFilters";
 import { placeTpPlanOrdersAfterOpen } from "./autoTradeTpSlPlanOrders";
+import {
+  DEFAULT_SL_ARM_ROI_PCT,
+  DEFAULT_SL_ENTRY_OFFSET_PCT,
+  parseSlArmRoiPct,
+  parseSlEntryOffsetPct,
+} from "@/lib/tpSlBreakevenPlan";
 import { bkkIsSaturdayNow } from "./snowballAutoTradeStateStore";
 
 /** ค่าเริ่มต้นกลยุทธ์ TP/SL เมื่อ user ยังไม่ตั้งค่า (อ่านจาก settings ของ user) */
@@ -125,6 +131,8 @@ function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings): {
   tp1PartialPct: number;
   tp2PricePct: number;
   maxHoldHours: number;
+  slArmRoiPct: number;
+  slEntryOffsetPct: number;
 } {
   const en = row.reversalAutoTradeTpSlEnabled !== false;
   const t1 =
@@ -733,6 +741,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
               tp1PartialPct: plan.tp1PartialPct,
               tp2PricePct: plan.tp2PricePct,
               maxHoldHours: plan.maxHoldHours,
+              slArmRoiPct: plan.slArmRoiPct,
+              slEntryOffsetPct: plan.slEntryOffsetPct,
               tp1PlanOrderId,
               tp2PlanOrderId,
               initialHoldVol,

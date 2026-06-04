@@ -1,5 +1,12 @@
-import { STATS_SL_AT_ENTRY_ARM_ROI_PCT } from "@/lib/tpSlStrategySimulate";
+import {
+  DEFAULT_SL_ARM_ROI_PCT,
+  DEFAULT_SL_ENTRY_OFFSET_PCT,
+  formatSlBreakevenTriggerLabel,
+  parseSlArmRoiPct,
+  parseSlEntryOffsetPct,
+} from "@/lib/tpSlBreakevenPlan";
 import { cancelActiveTpSlPlanOrders, tp1PlanLikelyFilled } from "./autoTradeTpSlPlanOrders";
+import { mexcSlBreakevenTriggerPrice } from "./autoTradeSlBreakeven";
 import {
   closeAllOpenForSymbol,
   createPartialCloseOrder,
@@ -135,15 +142,25 @@ async function handleSlAtEntryOnRoi(ctx: TpSlContext): Promise<{ ok: boolean; sl
   const { userId, creds, active, position, markPrice, positionMode } = ctx;
   const drop = pricePctDrop(active.side, active.mexcAvgEntryPrice, markPrice);
   const entry = active.mexcAvgEntryPrice;
+  const slArm = parseSlArmRoiPct(active.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT);
+  const slOffset = parseSlEntryOffsetPct(active.slEntryOffsetPct, DEFAULT_SL_ENTRY_OFFSET_PCT);
 
   if (!(position.holdVol > 0)) {
     return { ok: false };
   }
 
+  const trigger = await mexcSlBreakevenTriggerPrice(
+    active.contractSymbol,
+    active.side,
+    entry,
+    slOffset,
+  );
+  if (!(trigger > 0)) return { ok: false };
+
   const slRes = await placePlanOrderStopLoss(creds, {
     contractSymbol: active.contractSymbol,
     position,
-    triggerPrice: entry,
+    triggerPrice: trigger,
     positionMode,
   });
   const slOrderId =
@@ -153,7 +170,7 @@ async function handleSlAtEntryOnRoi(ctx: TpSlContext): Promise<{ ok: boolean; sl
 
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
-    `🛡️ ROI ≥ ${STATS_SL_AT_ENTRY_ARM_ROI_PCT}% — ตั้ง SL บังทุน @ ${fmtPrice(entry)} (ไม่รอ partial TP1)`,
+    `🛡️ ROI ≥ ${slArm}% — ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)} (ไม่รอ partial TP1)`,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${drop.toFixed(2)}%`,
     slRes.success
@@ -172,12 +189,23 @@ async function handleTp1BreakevenSlOnly(ctx: TpSlContext): Promise<{ tp1Done: bo
     return { tp1Done: true };
   }
 
-  const slRes = await placePlanOrderStopLoss(creds, {
-    contractSymbol: active.contractSymbol,
-    position,
-    triggerPrice: active.mexcAvgEntryPrice,
-    positionMode,
-  });
+  const entry = active.mexcAvgEntryPrice;
+  const slOffset = parseSlEntryOffsetPct(active.slEntryOffsetPct, DEFAULT_SL_ENTRY_OFFSET_PCT);
+  const trigger = await mexcSlBreakevenTriggerPrice(
+    active.contractSymbol,
+    active.side,
+    entry,
+    slOffset,
+  );
+  const slRes =
+    trigger > 0
+      ? await placePlanOrderStopLoss(creds, {
+          contractSymbol: active.contractSymbol,
+          position,
+          triggerPrice: trigger,
+          positionMode,
+        })
+      : { success: false as const, code: -1, message: "trigger ไม่ถูกต้อง" };
   const slOrderId =
     slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
       ? String((slRes.data as { orderId: unknown }).orderId)
@@ -189,7 +217,7 @@ async function handleTp1BreakevenSlOnly(ctx: TpSlContext): Promise<{ tp1Done: bo
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry MEXC: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)} · holdVol คงเหลือ: ${position.holdVol}`,
     slRes.success
-      ? `🛡️ ตั้ง SL บังทุน @ ${fmtPrice(active.mexcAvgEntryPrice)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
+      ? `🛡️ ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
       : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — กรุณาตั้งเองที่ MEXC`,
   ]);
 
@@ -262,18 +290,29 @@ async function handleTp1Hit(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrd
   let slOrderId = active.slPlanOrderId?.trim();
   let slLine = slOrderId ? `🛡️ SL@entry ตั้งแล้ว (#${slOrderId})` : "";
   if (!slOrderId) {
-    const slRes = await placePlanOrderStopLoss(creds, {
-      contractSymbol: active.contractSymbol,
-      position: remaining,
-      triggerPrice: active.mexcAvgEntryPrice,
-      positionMode,
-    });
+    const entry = active.mexcAvgEntryPrice;
+    const slOffset = parseSlEntryOffsetPct(active.slEntryOffsetPct, DEFAULT_SL_ENTRY_OFFSET_PCT);
+    const trigger = await mexcSlBreakevenTriggerPrice(
+      active.contractSymbol,
+      active.side,
+      entry,
+      slOffset,
+    );
+    const slRes =
+      trigger > 0
+        ? await placePlanOrderStopLoss(creds, {
+            contractSymbol: active.contractSymbol,
+            position: remaining,
+            triggerPrice: trigger,
+            positionMode,
+          })
+        : { success: false as const, code: -1, message: "trigger ไม่ถูกต้อง" };
     slOrderId =
       slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
         ? String((slRes.data as { orderId: unknown }).orderId)
         : undefined;
     slLine = slRes.success
-      ? `🛡️ ตั้ง SL บังทุน @ ${fmtPrice(active.mexcAvgEntryPrice)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
+      ? `🛡️ ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
       : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — ตั้งเองที่ MEXC`;
   }
 
@@ -370,7 +409,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
         if (
           !a.slPlanOrderId?.trim() &&
           Number.isFinite(drop) &&
-          drop >= STATS_SL_AT_ENTRY_ARM_ROI_PCT
+          drop >= parseSlArmRoiPct(a.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT)
         ) {
           const r = await handleSlAtEntryOnRoi(ctx);
           if (r.ok) {

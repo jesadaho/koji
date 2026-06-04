@@ -482,9 +482,13 @@ function AutoOpenWeekSection({
   rows: AutoOpenOrderLogRow[];
   markPrices: Record<string, number>;
 }) {
-  const orderSummary = useMemo(() => summarizeAutoOpenOrderLogs(rows), [rows]);
-  const closed = useMemo(() => summarizeAutoOpenStrategy48h(rows), [rows]);
-  const unrealised = useMemo(() => summarizeAutoOpenUnrealizedPnl(rows, markPrices), [rows, markPrices]);
+  const summaryRows = useMemo(() => excludePendingConflictRows(rows), [rows]);
+  const orderSummary = useMemo(() => summarizeAutoOpenOrderLogs(summaryRows), [summaryRows]);
+  const closed = useMemo(() => summarizeAutoOpenStrategy48h(summaryRows), [summaryRows]);
+  const unrealised = useMemo(
+    () => summarizeAutoOpenUnrealizedPnl(summaryRows, markPrices),
+    [summaryRows, markPrices],
+  );
   const summaryNode = useMemo(
     () => renderAutoOpenStrategy48hSummary(closed, unrealised),
     [closed, unrealised],
@@ -723,19 +727,21 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     };
   }, [phase, contractSymbols, apiGet]);
 
-  const displayRows = useMemo(() => {
-    const scoped = excludePendingConflictRows(rows);
-    if (dayFilter === "all") return scoped;
-    return filterAutoOpenLogsByDays(scoped, Number(dayFilter));
+  const tableRows = useMemo(() => {
+    if (dayFilter === "all") return rows;
+    return filterAutoOpenLogsByDays(rows, Number(dayFilter));
   }, [rows, dayFilter]);
 
+  /** สรุป WR/P/L — ไม่รวมแถว conflict (สอดคล้องสถิติ Snowball/Reversal) */
+  const summaryRows = useMemo(() => excludePendingConflictRows(tableRows), [tableRows]);
+
   const strategy48hSummary = useMemo(
-    () => summarizeAutoOpenStrategy48h(displayRows),
-    [displayRows],
+    () => summarizeAutoOpenStrategy48h(summaryRows),
+    [summaryRows],
   );
   const unrealisedPnlSummary = useMemo(
-    () => summarizeAutoOpenUnrealizedPnl(displayRows, markPrices),
-    [displayRows, markPrices],
+    () => summarizeAutoOpenUnrealizedPnl(summaryRows, markPrices),
+    [summaryRows, markPrices],
   );
   const strategy48hSummaryNode = useMemo(
     () => renderAutoOpenStrategy48hSummary(strategy48hSummary, unrealisedPnlSummary),
@@ -746,10 +752,9 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     [strategy48hSummary, unrealisedPnlSummary],
   );
 
-  const weekGroups = useMemo(
-    () => groupAutoOpenLogsByBkkWeek(displayRows),
-    [displayRows],
-  );
+  const weekGroups = useMemo(() => groupAutoOpenLogsByBkkWeek(tableRows), [tableRows]);
+
+  const conflictHiddenFromSummary = tableRows.length - summaryRows.length;
 
   const successRate =
     summary && summary.total > 0
@@ -757,7 +762,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       : "—";
 
   const exportCsv = useCallback(async () => {
-    if (displayRows.length === 0) {
+    if (tableRows.length === 0) {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
@@ -765,10 +770,10 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     if (dayFilter !== "all") q.set("days", dayFilter);
     if (sourceFilter !== "all") q.set("source", sourceFilter);
     const qs = q.toString();
-    await downloadCsv(statsCsvFilename("auto-open-history"), autoOpenOrderLogToCsv(displayRows), {
+    await downloadCsv(statsCsvFilename("auto-open-history"), autoOpenOrderLogToCsv(tableRows), {
       telegramExportPath: `/api/tma/auto-open-history.csv${qs ? `?${qs}` : ""}`,
     });
-  }, [displayRows, dayFilter, sourceFilter]);
+  }, [tableRows, dayFilter, sourceFilter]);
 
   if (phase === "loading") {
     return (
@@ -909,6 +914,13 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             {strategy48hSummaryNode}
           </div>
         ) : null}
+        {conflictHiddenFromSummary > 0 ? (
+          <p className="sub" style={{ marginTop: 0, marginBottom: "0.65rem", opacity: 0.9 }}>
+            แสดงในตาราง {tableRows.length} รายการ (รวม conflict {conflictHiddenFromSummary} ไม้ที่เปิดจริงแล้ว) ·
+            สรุป WR/P/L ด้านบนไม่รวมไม้ที่มี{" "}
+            <code>conflict w/</code>
+          </p>
+        ) : null}
 
         {splitByWeek ? (
           weekGroups.length === 0 ? (
@@ -925,7 +937,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
           )
         ) : (
           <AutoOpenHistoryTable
-            rows={displayRows}
+            rows={tableRows}
             markPrices={markPrices}
             emptyMessage={AUTO_OPEN_HISTORY_EMPTY_MSG}
           />

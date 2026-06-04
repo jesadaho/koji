@@ -1,6 +1,11 @@
 import {
+  DEFAULT_SL_ARM_ROI_PCT,
+  DEFAULT_SL_ENTRY_OFFSET_PCT,
+  parseSlArmRoiPct,
+  parseSlEntryOffsetPct,
+} from "@/lib/tpSlBreakevenPlan";
+import {
   DEFAULT_STATS_TPSL_PLAN,
-  STATS_SL_AT_ENTRY_ARM_ROI_PCT,
   statsTpSlPlanSummary,
   type StatsTpSlPlan,
 } from "@/lib/tpSlStrategySimulate";
@@ -14,8 +19,9 @@ export type ViewerStatsTpSlPlan = StatsTpSlPlan & {
 };
 
 export function statsTpSlPlanCacheKey(plan: StatsTpSlPlan): string {
-  const slArm = plan.slAtEntryArmRoiPct ?? STATS_SL_AT_ENTRY_ARM_ROI_PCT;
-  return `${plan.tp1PricePct}-${plan.tp1PartialPct}-${plan.tp2PricePct}-${plan.maxHoldHours}-${slArm}`;
+  const slArm = plan.slAtEntryArmRoiPct ?? DEFAULT_SL_ARM_ROI_PCT;
+  const slOff = plan.slAtEntryOffsetPct ?? DEFAULT_SL_ENTRY_OFFSET_PCT;
+  return `${plan.tp1PricePct}-${plan.tp1PartialPct}-${plan.tp2PricePct}-${plan.maxHoldHours}-${slArm}-${slOff}`;
 }
 
 function reversalTpSlPlanFromSettings(
@@ -52,7 +58,11 @@ function reversalTpSlPlanFromSettings(
     tp1PartialPct: Math.min(100, t1p),
     tp2PricePct: t2,
     maxHoldHours: mh,
-    slAtEntryArmRoiPct: STATS_SL_AT_ENTRY_ARM_ROI_PCT,
+    slAtEntryArmRoiPct: parseSlArmRoiPct(row.reversalAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
+    slAtEntryOffsetPct: parseSlEntryOffsetPct(
+      row.reversalAutoTradeSlEntryOffsetPct,
+      DEFAULT_SL_ENTRY_OFFSET_PCT,
+    ),
   };
 }
 
@@ -66,7 +76,8 @@ function snowballTpSlPlanFromSettings(
     tp1PartialPct: p.tp1PartialPct,
     tp2PricePct: p.tp2PricePct,
     maxHoldHours: p.maxHoldHours,
-    slAtEntryArmRoiPct: STATS_SL_AT_ENTRY_ARM_ROI_PCT,
+    slAtEntryArmRoiPct: p.slArmRoiPct,
+    slAtEntryOffsetPct: p.slEntryOffsetPct,
   };
 }
 
@@ -81,7 +92,8 @@ export async function resolveViewerStatsTpSlPlan(
     return {
       tpSlEnabled: true,
       ...DEFAULT_STATS_TPSL_PLAN,
-      slAtEntryArmRoiPct: STATS_SL_AT_ENTRY_ARM_ROI_PCT,
+      slAtEntryArmRoiPct: DEFAULT_SL_ARM_ROI_PCT,
+      slAtEntryOffsetPct: DEFAULT_SL_ENTRY_OFFSET_PCT,
     };
   }
   return source === "reversal"
@@ -95,7 +107,8 @@ export function viewerStatsTpSlPlanPayload(plan: ViewerStatsTpSlPlan): StatsTpSl
     tp1PartialPct: plan.tp1PartialPct,
     tp2PricePct: plan.tp2PricePct,
     maxHoldHours: plan.maxHoldHours,
-    slAtEntryArmRoiPct: plan.slAtEntryArmRoiPct ?? STATS_SL_AT_ENTRY_ARM_ROI_PCT,
+    slAtEntryArmRoiPct: plan.slAtEntryArmRoiPct ?? DEFAULT_SL_ARM_ROI_PCT,
+    slAtEntryOffsetPct: plan.slAtEntryOffsetPct ?? DEFAULT_SL_ENTRY_OFFSET_PCT,
   };
 }
 

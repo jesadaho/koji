@@ -42,6 +42,8 @@ export type ReversalAutoTradeActive = {
   tp2PricePct: number;
   /** ครบกี่ ชม. แล้วบังคับปิดทั้งหมด */
   maxHoldHours: number;
+  slArmRoiPct?: number;
+  slEntryOffsetPct?: number;
   /** orderId ของ plan SL ที่ตั้งหลัง TP1 — ใช้ cancel ตอน TP2/48h */
   slPlanOrderId?: string;
   tp1PlanOrderId?: string;
@@ -116,6 +118,14 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
       typeof o.maxHoldHours === "number" && Number.isFinite(o.maxHoldHours) && o.maxHoldHours > 0
         ? o.maxHoldHours
         : 48;
+    const slArm =
+      typeof o.slArmRoiPct === "number" && Number.isFinite(o.slArmRoiPct) && o.slArmRoiPct > 0
+        ? o.slArmRoiPct
+        : undefined;
+    const slOff =
+      typeof o.slEntryOffsetPct === "number" && Number.isFinite(o.slEntryOffsetPct) && o.slEntryOffsetPct >= 0
+        ? o.slEntryOffsetPct
+        : undefined;
     const slId =
       typeof o.slPlanOrderId === "string" && o.slPlanOrderId.trim() ? o.slPlanOrderId.trim() : undefined;
     const tp1Plan =
@@ -157,6 +167,8 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
       tp2PricePct: tp2Pct,
       maxHoldHours: maxH,
     };
+    if (slArm != null) row.slArmRoiPct = slArm;
+    if (slOff != null) row.slEntryOffsetPct = slOff;
     if (slId) row.slPlanOrderId = slId;
     if (tp1Plan) row.tp1PlanOrderId = tp1Plan;
     if (tp2Plan) row.tp2PlanOrderId = tp2Plan;
@@ -301,6 +313,8 @@ export function withReversalActiveOpen(
     tp1PartialPct: number;
     tp2PricePct: number;
     maxHoldHours: number;
+    slArmRoiPct: number;
+    slEntryOffsetPct: number;
     tp1PlanOrderId?: string;
     tp2PlanOrderId?: string;
     initialHoldVol?: number;
@@ -327,6 +341,11 @@ export function withReversalActiveOpen(
     tp1PartialPct: p.tp1PartialPct > 0 ? p.tp1PartialPct : 50,
     tp2PricePct: p.tp2PricePct > 0 ? p.tp2PricePct : 25,
     maxHoldHours: p.maxHoldHours > 0 ? p.maxHoldHours : 48,
+    slArmRoiPct: p.slArmRoiPct > 0 ? p.slArmRoiPct : 10,
+    slEntryOffsetPct:
+      typeof p.slEntryOffsetPct === "number" && Number.isFinite(p.slEntryOffsetPct) && p.slEntryOffsetPct >= 0
+        ? p.slEntryOffsetPct
+        : 0,
   };
   if (p.tp1PlanOrderId?.trim()) row.tp1PlanOrderId = p.tp1PlanOrderId.trim();
   if (p.tp2PlanOrderId?.trim()) row.tp2PlanOrderId = p.tp2PlanOrderId.trim();

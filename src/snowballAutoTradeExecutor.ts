@@ -510,6 +510,8 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         tp1PartialPct: number;
         tp2PricePct: number;
         maxHoldHours: number;
+        slArmRoiPct: number;
+        slEntryOffsetPct: number;
         tp1PlanOrderId?: string;
         tp2PlanOrderId?: string;
         initialHoldVol?: number;
@@ -523,6 +525,8 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           tp1PartialPct: tpPlan.tp1PartialPct,
           tp2PricePct: tpPlan.tp2PricePct,
           maxHoldHours: tpPlan.maxHoldHours,
+          slArmRoiPct: tpPlan.slArmRoiPct,
+          slEntryOffsetPct: tpPlan.slEntryOffsetPct,
         };
         if (posAfterOpen) {
           try {

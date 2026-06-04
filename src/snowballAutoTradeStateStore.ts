@@ -67,6 +67,8 @@ export type SnowballAutoTradeActive = {
   tp1PartialPct?: number;
   tp2PricePct?: number;
   maxHoldHours?: number;
+  slArmRoiPct?: number;
+  slEntryOffsetPct?: number;
   slPlanOrderId?: string;
   /** plan TP บน MEXC — วางทันทีหลัง open */
   tp1PlanOrderId?: string;
@@ -138,6 +140,14 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
     const tp1Part = typeof o.tp1PartialPct === "number" && Number.isFinite(o.tp1PartialPct) ? o.tp1PartialPct : NaN;
     const tp2Pct = typeof o.tp2PricePct === "number" && Number.isFinite(o.tp2PricePct) ? o.tp2PricePct : NaN;
     const maxH = typeof o.maxHoldHours === "number" && Number.isFinite(o.maxHoldHours) ? o.maxHoldHours : NaN;
+    const slArm =
+      typeof o.slArmRoiPct === "number" && Number.isFinite(o.slArmRoiPct) && o.slArmRoiPct > 0
+        ? o.slArmRoiPct
+        : undefined;
+    const slOff =
+      typeof o.slEntryOffsetPct === "number" && Number.isFinite(o.slEntryOffsetPct) && o.slEntryOffsetPct >= 0
+        ? o.slEntryOffsetPct
+        : undefined;
     const slPlan =
       typeof o.slPlanOrderId === "string" && o.slPlanOrderId.trim() ? o.slPlanOrderId.trim() : undefined;
     const tp1Plan =
@@ -189,6 +199,8 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
       row.tp1PartialPct = Number.isFinite(tp1Part) && tp1Part > 0 ? Math.min(100, tp1Part) : 50;
       row.tp2PricePct = Number.isFinite(tp2Pct) && tp2Pct > 0 ? tp2Pct : 25;
       row.maxHoldHours = Number.isFinite(maxH) && maxH > 0 ? maxH : 48;
+      if (slArm != null) row.slArmRoiPct = slArm;
+      if (slOff != null) row.slEntryOffsetPct = slOff;
       if (slPlan) row.slPlanOrderId = slPlan;
       if (tp1Plan) row.tp1PlanOrderId = tp1Plan;
       if (tp2Plan) row.tp2PlanOrderId = tp2Plan;
@@ -322,6 +334,8 @@ export function withRecordedSnowballSuccessfulOpen(
       tp1PartialPct: number;
       tp2PricePct: number;
       maxHoldHours: number;
+      slArmRoiPct: number;
+      slEntryOffsetPct: number;
       tp1PlanOrderId?: string;
       tp2PlanOrderId?: string;
       initialHoldVol?: number;
@@ -367,6 +381,8 @@ export function withRecordedSnowballSuccessfulOpen(
     activeRow.tp1PartialPct = plan.tp1PartialPct;
     activeRow.tp2PricePct = plan.tp2PricePct;
     activeRow.maxHoldHours = plan.maxHoldHours;
+    activeRow.slArmRoiPct = plan.slArmRoiPct;
+    activeRow.slEntryOffsetPct = plan.slEntryOffsetPct;
     if (plan.tp1PlanOrderId?.trim()) activeRow.tp1PlanOrderId = plan.tp1PlanOrderId.trim();
     if (plan.tp2PlanOrderId?.trim()) activeRow.tp2PlanOrderId = plan.tp2PlanOrderId.trim();
     if (typeof plan.initialHoldVol === "number" && plan.initialHoldVol > 0) {

@@ -18,7 +18,7 @@ export function PendingConflictBadge({
         marginTop: "0.12rem",
         whiteSpace: "nowrap",
       }}
-      title={`เหรียญนี้มี ${conflictWith} pending อยู่ด้วย — ไม่ auto-open · ไม่รวมใน WR/กำไรกลยุทธ์`}
+      title={`เหรียญนี้มี ${conflictWith} pending อยู่ด้วย — ไม่ auto-open ฝั่งใหม่ · ไม่รวมใน WR/สรุป P/L (ยังแสดงในประวัติ Auto-open ถ้าเปิดแล้ว)`}
     >
       {text}
     </span>

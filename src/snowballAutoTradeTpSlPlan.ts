@@ -1,3 +1,9 @@
+import {
+  DEFAULT_SL_ARM_ROI_PCT,
+  DEFAULT_SL_ENTRY_OFFSET_PCT,
+  parseSlArmRoiPct,
+  parseSlEntryOffsetPct,
+} from "@/lib/tpSlBreakevenPlan";
 import type { TradingViewMexcUserSettings } from "./tradingViewCloseSettingsStore";
 
 export const SNOWBALL_TPSL_DEFAULT_TP1_PCT = 10;
@@ -11,6 +17,8 @@ export type SnowballTpSlPlan = {
   tp1PartialPct: number;
   tp2PricePct: number;
   maxHoldHours: number;
+  slArmRoiPct: number;
+  slEntryOffsetPct: number;
 };
 
 export function resolveSnowballTpSlPlanFromRow(row: TradingViewMexcUserSettings): SnowballTpSlPlan {
@@ -39,5 +47,16 @@ export function resolveSnowballTpSlPlanFromRow(row: TradingViewMexcUserSettings)
     row.snowballAutoTradeMaxHoldHours > 0
       ? row.snowballAutoTradeMaxHoldHours
       : SNOWBALL_TPSL_DEFAULT_MAX_HOURS;
-  return { enabled: en, tp1PricePct: t1, tp1PartialPct: Math.min(100, t1p), tp2PricePct: t2, maxHoldHours: mh };
+  return {
+    enabled: en,
+    tp1PricePct: t1,
+    tp1PartialPct: Math.min(100, t1p),
+    tp2PricePct: t2,
+    maxHoldHours: mh,
+    slArmRoiPct: parseSlArmRoiPct(row.snowballAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
+    slEntryOffsetPct: parseSlEntryOffsetPct(
+      row.snowballAutoTradeSlEntryOffsetPct,
+      DEFAULT_SL_ENTRY_OFFSET_PCT,
+    ),
+  };
 }

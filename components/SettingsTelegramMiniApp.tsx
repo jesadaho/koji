@@ -109,6 +109,8 @@ type SnowballAutoTradeApiBundle = {
   tp1PartialPct?: number | null;
   tp2PricePct?: number | null;
   maxHoldHours?: number | null;
+  slArmRoiPct?: number | null;
+  slEntryOffsetPct?: number | null;
 };
 
 type ReversalAutoTradeApiBundle = {
@@ -120,6 +122,8 @@ type ReversalAutoTradeApiBundle = {
   tp1PartialPct?: number | null;
   tp2PricePct?: number | null;
   maxHoldHours?: number | null;
+  slArmRoiPct?: number | null;
+  slEntryOffsetPct?: number | null;
   gateQualitySignal?: boolean;
   saturdayAllSignalsEnabled?: boolean;
   longSignalShortEnabled?: boolean;
@@ -172,6 +176,8 @@ export default function SettingsTelegramMiniApp() {
   const [snowTp1PartialPct, setSnowTp1PartialPct] = useState("");
   const [snowTp2PricePct, setSnowTp2PricePct] = useState("");
   const [snowMaxHoldHours, setSnowMaxHoldHours] = useState("");
+  const [snowSlArmRoiPct, setSnowSlArmRoiPct] = useState("");
+  const [snowSlEntryOffsetPct, setSnowSlEntryOffsetPct] = useState("");
   const [snowSaveErr, setSnowSaveErr] = useState("");
   const [snowSaveOk, setSnowSaveOk] = useState("");
   const [snowSaving, setSnowSaving] = useState(false);
@@ -190,6 +196,8 @@ export default function SettingsTelegramMiniApp() {
   const [revTp1PartialPct, setRevTp1PartialPct] = useState("");
   const [revTp2PricePct, setRevTp2PricePct] = useState("");
   const [revMaxHoldHours, setRevMaxHoldHours] = useState("");
+  const [revSlArmRoiPct, setRevSlArmRoiPct] = useState("");
+  const [revSlEntryOffsetPct, setRevSlEntryOffsetPct] = useState("");
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revLongSignalShort, setRevLongSignalShort] = useState(false);
@@ -234,6 +242,12 @@ export default function SettingsTelegramMiniApp() {
     setSnowMaxHoldHours(
       st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
     );
+    setSnowSlArmRoiPct(
+      st.slArmRoiPct != null && Number.isFinite(st.slArmRoiPct) ? String(st.slArmRoiPct) : ""
+    );
+    setSnowSlEntryOffsetPct(
+      st.slEntryOffsetPct != null && Number.isFinite(st.slEntryOffsetPct) ? String(st.slEntryOffsetPct) : ""
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.snowballAutoTrade]);
 
@@ -268,6 +282,12 @@ export default function SettingsTelegramMiniApp() {
     );
     setRevMaxHoldHours(
       st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
+    );
+    setRevSlArmRoiPct(
+      st.slArmRoiPct != null && Number.isFinite(st.slArmRoiPct) ? String(st.slArmRoiPct) : ""
+    );
+    setRevSlEntryOffsetPct(
+      st.slEntryOffsetPct != null && Number.isFinite(st.slEntryOffsetPct) ? String(st.slEntryOffsetPct) : ""
     );
     setRevGateQualitySignal(st.gateQualitySignal !== false);
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
@@ -535,6 +555,8 @@ export default function SettingsTelegramMiniApp() {
     const tp1PartialParsed = snowTp1PartialPct.trim() ? parseNumRaw(snowTp1PartialPct) : null;
     const tp2Parsed = snowTp2PricePct.trim() ? parseNumRaw(snowTp2PricePct) : null;
     const maxHoldParsed = snowMaxHoldHours.trim() ? parseNumRaw(snowMaxHoldHours) : null;
+    const slArmParsed = snowSlArmRoiPct.trim() ? parseNumRaw(snowSlArmRoiPct) : null;
+    const slOffParsed = snowSlEntryOffsetPct.trim() ? parseNumRaw(snowSlEntryOffsetPct) : null;
 
     if (snowMarginDefault.trim() && marginDefaultParsed == null) {
       setSnowSaveErr("Margin default ไม่ใช่ตัวเลข");
@@ -558,6 +580,14 @@ export default function SettingsTelegramMiniApp() {
     }
     if (snowMaxHoldHours.trim() && maxHoldParsed == null) {
       setSnowSaveErr("ครบกี่ชม. ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowSlArmRoiPct.trim() && slArmParsed == null) {
+      setSnowSaveErr("ROI ย้าย SL % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowSlEntryOffsetPct.trim() && slOffParsed == null) {
+      setSnowSaveErr("SL ห่าง entry % ไม่ใช่ตัวเลข");
       return;
     }
     if (snowMarginDefault.trim() && marginDefaultParsed != null && marginDefaultParsed <= 0) {
@@ -584,6 +614,14 @@ export default function SettingsTelegramMiniApp() {
       setSnowSaveErr("TP2 % ต้องมากกว่า TP1 %");
       return;
     }
+    if (snowSlArmRoiPct.trim() && (slArmParsed == null || !(slArmParsed > 0 && slArmParsed < 100))) {
+      setSnowSaveErr("ROI ย้าย SL % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (snowSlEntryOffsetPct.trim() && (slOffParsed == null || !(slOffParsed >= 0 && slOffParsed < 50))) {
+      setSnowSaveErr("SL ห่าง entry % ต้องอยู่ระหว่าง 0–50");
+      return;
+    }
 
     setSnowSaving(true);
     try {
@@ -599,6 +637,8 @@ export default function SettingsTelegramMiniApp() {
         tp1PartialPct: snowTp1PartialPct.trim() ? tp1PartialParsed : null,
         tp2PricePct: snowTp2PricePct.trim() ? tp2Parsed : null,
         maxHoldHours: snowMaxHoldHours.trim() ? maxHoldParsed : null,
+        slArmRoiPct: snowSlArmRoiPct.trim() ? slArmParsed : null,
+        slEntryOffsetPct: snowSlEntryOffsetPct.trim() ? slOffParsed : null,
       };
       const body: Record<string, unknown> = {
         rotateWebhookToken: false,
@@ -644,6 +684,8 @@ export default function SettingsTelegramMiniApp() {
     const tp1PartialParsed = revTp1PartialPct.trim() ? parseNumRaw(revTp1PartialPct) : null;
     const tp2Parsed = revTp2PricePct.trim() ? parseNumRaw(revTp2PricePct) : null;
     const maxHoldParsed = revMaxHoldHours.trim() ? parseNumRaw(revMaxHoldHours) : null;
+    const slArmParsed = revSlArmRoiPct.trim() ? parseNumRaw(revSlArmRoiPct) : null;
+    const slOffParsed = revSlEntryOffsetPct.trim() ? parseNumRaw(revSlEntryOffsetPct) : null;
 
     if (revMargin.trim() && marginParsed == null) {
       setRevSaveErr("Margin ไม่ใช่ตัวเลข");
@@ -695,6 +737,22 @@ export default function SettingsTelegramMiniApp() {
       setRevSaveErr("TP2 ต้องมากกว่า TP1");
       return;
     }
+    if (revSlArmRoiPct.trim() && slArmParsed == null) {
+      setRevSaveErr("ROI ย้าย SL % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (revSlEntryOffsetPct.trim() && slOffParsed == null) {
+      setRevSaveErr("SL ห่าง entry % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (revSlArmRoiPct.trim() && (slArmParsed == null || !(slArmParsed > 0 && slArmParsed < 100))) {
+      setRevSaveErr("ROI ย้าย SL % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (revSlEntryOffsetPct.trim() && (slOffParsed == null || !(slOffParsed >= 0 && slOffParsed < 50))) {
+      setRevSaveErr("SL ห่าง entry % ต้องอยู่ระหว่าง 0–50");
+      return;
+    }
 
     setRevSaving(true);
     try {
@@ -710,6 +768,8 @@ export default function SettingsTelegramMiniApp() {
         tp1PartialPct: revTp1PartialPct.trim() ? tp1PartialParsed : null,
         tp2PricePct: revTp2PricePct.trim() ? tp2Parsed : null,
         maxHoldHours: revMaxHoldHours.trim() ? maxHoldParsed : null,
+        slArmRoiPct: revSlArmRoiPct.trim() ? slArmParsed : null,
+        slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
       };
       const body: Record<string, unknown> = {
         rotateWebhookToken: false,
@@ -1147,7 +1207,10 @@ export default function SettingsTelegramMiniApp() {
             <strong>TP1 / TP2</strong>: วาง plan order บน MEXC ทันทีหลังเปิด (TP1 ปิด <code>TP1 ปิด %</code> @ <code>TP1 %</code> · TP2 ปิดที่เหลือ @ <code>TP2 %</code>)
           </li>
           <li>
-            <strong>หลัง TP1 execute</strong>: tick ตั้ง MEXC SL บังทุน @ entry (LONG/SHORT)
+            <strong>แผนบังทุน</strong>: เมื่อ ROI ≥ <code>{snowSlArmRoiPct.trim() || "10"}%</code> ตั้ง SL บังทุน (LONG ต่ำกว่า entry · SHORT สูงกว่า entry ตาม <code>SL ห่าง entry %</code> · 0 = @entry)
+          </li>
+          <li>
+            <strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุนที่เหลือด้วย offset เดียวกัน
           </li>
           <li>
             <strong>ครบ {snowMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force market) + ยกเลิก SL plan
@@ -1219,6 +1282,38 @@ export default function SettingsTelegramMiniApp() {
               placeholder="เช่น 48"
               value={snowMaxHoldHours}
               onChange={(e) => setSnowMaxHoldHours(e.target.value)}
+              disabled={!snowTpSlEnabled}
+            />
+          </label>
+        </div>
+
+        <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
+          แผนบังทุน (SL หลัง ROI ถึงเกณฑ์)
+        </p>
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            ROI ถึงกี่ % → ย้าย SL บังทุน (default 10)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 10"
+              value={snowSlArmRoiPct}
+              onChange={(e) => setSnowSlArmRoiPct(e.target.value)}
+              disabled={!snowTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            SL ห่าง entry กี่ % สวนทาง (0 = @entry, default 0)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 0"
+              value={snowSlEntryOffsetPct}
+              onChange={(e) => setSnowSlEntryOffsetPct(e.target.value)}
               disabled={!snowTpSlEnabled}
             />
           </label>
@@ -1372,7 +1467,10 @@ export default function SettingsTelegramMiniApp() {
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
           <li><strong>TP1 / TP2</strong>: วาง plan order ทันทีหลังเปิด (TP1 @ <code>TP1 %</code> · TP2 @ <code>TP2 %</code>)</li>
-          <li><strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุน @ entry</li>
+          <li>
+            <strong>แผนบังทุน</strong>: ROI ≥ <code>{revSlArmRoiPct.trim() || "10"}%</code> → SL บังทุน (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code> จาก entry)
+          </li>
+          <li><strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุนที่เหลือด้วย offset เดียวกัน</li>
           <li><strong>ครบ {revMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force market) + ยกเลิก SL plan</li>
           <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
         </ul>
@@ -1441,6 +1539,38 @@ export default function SettingsTelegramMiniApp() {
               placeholder="เช่น 48"
               value={revMaxHoldHours}
               onChange={(e) => setRevMaxHoldHours(e.target.value)}
+              disabled={!revTpSlEnabled}
+            />
+          </label>
+        </div>
+
+        <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
+          แผนบังทุน (SL หลัง ROI ถึงเกณฑ์)
+        </p>
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            ROI ถึงกี่ % → ย้าย SL บังทุน (default 10)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 10"
+              value={revSlArmRoiPct}
+              onChange={(e) => setRevSlArmRoiPct(e.target.value)}
+              disabled={!revTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            SL ห่าง entry กี่ % สวนทาง (0 = @entry, default 0)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 0"
+              value={revSlEntryOffsetPct}
+              onChange={(e) => setRevSlEntryOffsetPct(e.target.value)}
               disabled={!revTpSlEnabled}
             />
           </label>

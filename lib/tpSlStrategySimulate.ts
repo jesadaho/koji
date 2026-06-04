@@ -1,19 +1,32 @@
 /**
  * จำลองกำไร % (เทียบ entry เต็มโน้ต) ตามกลยุทธ์ auto-open TP/SL บนแท่ง 15m
- * ROI ≥ slAtEntryArmRoiPct → SL@entry · TP1 partial ที่ tp1PricePct · TP2 · ปิดที่ maxHold
+ * ROI ≥ slAtEntryArmRoiPct → SL บังทุน (offset จาก entry) · TP1 partial · TP2 · maxHold
  */
+
+import {
+  breakevenSlTriggered,
+  DEFAULT_SL_ARM_ROI_PCT,
+  DEFAULT_SL_ENTRY_OFFSET_PCT,
+  slBreakevenRemainderLossPct,
+  slAtEntryArmPctFromPlan,
+  slEntryOffsetPctFromPlan,
+} from "@/lib/tpSlBreakevenPlan";
 
 export type StatsTpSlPlan = {
   tp1PricePct: number;
   tp1PartialPct: number;
   tp2PricePct: number;
   maxHoldHours: number;
-  /** ROI ถึงค่านี้แล้วตั้ง SL@entry (แยกจาก TP1 partial) */
+  /** ROI ถึงค่านี้แล้วตั้ง SL บังทุน (แยกจาก TP1 partial) */
   slAtEntryArmRoiPct?: number;
+  /** % ราคาสวนจาก entry ที่วาง SL (0 = @entry) */
+  slAtEntryOffsetPct?: number;
 };
 
-/** ROI บังทุนที่ entry — ไม่ผูกกับ TP1% ใน Settings */
-export const STATS_SL_AT_ENTRY_ARM_ROI_PCT = 10;
+/** @deprecated ใช้ DEFAULT_SL_ARM_ROI_PCT จาก tpSlBreakevenPlan */
+export const STATS_SL_AT_ENTRY_ARM_ROI_PCT = DEFAULT_SL_ARM_ROI_PCT;
+
+export { DEFAULT_SL_ARM_ROI_PCT, DEFAULT_SL_ENTRY_OFFSET_PCT };
 
 /** ค่า default ตรง Settings / auto-open (Reversal + Snowball) */
 export const DEFAULT_STATS_TPSL_PLAN: StatsTpSlPlan = {
@@ -21,7 +34,8 @@ export const DEFAULT_STATS_TPSL_PLAN: StatsTpSlPlan = {
   tp1PartialPct: 50,
   tp2PricePct: 25,
   maxHoldHours: 48,
-  slAtEntryArmRoiPct: STATS_SL_AT_ENTRY_ARM_ROI_PCT,
+  slAtEntryArmRoiPct: DEFAULT_SL_ARM_ROI_PCT,
+  slAtEntryOffsetPct: DEFAULT_SL_ENTRY_OFFSET_PCT,
 };
 
 export type StatsTpSlExitReason =
@@ -40,13 +54,12 @@ function holdTimeExitReason(plan: StatsTpSlPlan, afterTp1: boolean): StatsTpSlEx
   return plan.maxHoldHours <= 24 ? "time_24h" : "time_48h";
 }
 
-function slAtEntryArmPct(plan: StatsTpSlPlan): number {
-  const v = plan.slAtEntryArmRoiPct ?? STATS_SL_AT_ENTRY_ARM_ROI_PCT;
-  return Number.isFinite(v) && v > 0 ? v : STATS_SL_AT_ENTRY_ARM_ROI_PCT;
-}
-
 export function statsTpSlPlanSummary(plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN): string {
-  return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · ROI≥${slAtEntryArmPct(plan)}%→SL@entry · TP2 ${plan.tp2PricePct}% · ${plan.maxHoldHours}h`;
+  const arm = slAtEntryArmPctFromPlan(plan);
+  const off = slEntryOffsetPctFromPlan(plan);
+  const slTag =
+    off > 0 ? `ROI≥${arm}%→SL±${off}%` : `ROI≥${arm}%→SL@entry`;
+  return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · ${slTag} · TP2 ${plan.tp2PricePct}% · ${plan.maxHoldHours}h`;
 }
 
 function tp1PartialFraction(plan: StatsTpSlPlan): number {
@@ -107,16 +120,6 @@ function isolatedLiquidationPricePct(leverage: number): number {
   return 100 / leverage;
 }
 
-function breakevenSlHit(
-  side: "long" | "short",
-  entry: number,
-  high: number,
-  low: number,
-): boolean {
-  if (side === "long") return low <= entry;
-  return high >= entry;
-}
-
 export function simulateStatsTpSlProfit(input: {
   side: "long" | "short";
   entry: number;
@@ -135,7 +138,8 @@ export function simulateStatsTpSlProfit(input: {
   if (!Number.isFinite(input.pctAt48h)) return null;
 
   const tp1 = plan.tp1PricePct;
-  const slArm = slAtEntryArmPct(plan);
+  const slArm = slAtEntryArmPctFromPlan(plan);
+  const slOffset = slEntryOffsetPctFromPlan(plan);
   const tp2 = plan.tp2PricePct;
   const partialFrac = Math.min(0.99, Math.max(0.01, plan.tp1PartialPct / 100));
   const liqPct =
@@ -187,7 +191,8 @@ export function simulateStatsTpSlProfit(input: {
     }
 
     if (slAtEntryArmed && rem > 0) {
-      if (breakevenSlHit(input.side, entry, hi, lo)) {
+      if (breakevenSlTriggered(input.side, entry, slOffset, hi, lo)) {
+        profit += rem * slBreakevenRemainderLossPct(slOffset);
         rem = 0;
         exitReason = "tp1_be";
         break;

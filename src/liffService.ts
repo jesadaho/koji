@@ -1146,6 +1146,8 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     tp1PartialPct: row.snowballAutoTradeTp1PartialPct ?? null,
     tp2PricePct: row.snowballAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.snowballAutoTradeMaxHoldHours ?? null,
+    slArmRoiPct: row.snowballAutoTradeSlArmRoiPct ?? null,
+    slEntryOffsetPct: row.snowballAutoTradeSlEntryOffsetPct ?? null,
     qualitySignalLongEnabled:
       row.snowballAutoTradeQualitySignalLongEnabled ??
       row.snowballAutoTradeQualitySignalGateEnabled ??
@@ -1176,6 +1178,8 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     tp1PartialPct: row.reversalAutoTradeTp1PartialPct ?? null,
     tp2PricePct: row.reversalAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.reversalAutoTradeMaxHoldHours ?? null,
+    slArmRoiPct: row.reversalAutoTradeSlArmRoiPct ?? null,
+    slEntryOffsetPct: row.reversalAutoTradeSlEntryOffsetPct ?? null,
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
     longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
@@ -1435,13 +1439,17 @@ function parseSnowballAutoTradeNested(
   const mTp1Partial = numOrEmpty("tp1PartialPct");
   const mTp2 = numOrEmpty("tp2PricePct");
   const mMaxH = numOrEmpty("maxHoldHours");
+  const mSlArm = numOrEmpty("slArmRoiPct");
+  const mSlOff = numOrEmpty("slEntryOffsetPct");
   if (
     mMargin.err ||
     mLev.err ||
     mTp1.err ||
     mTp1Partial.err ||
     mTp2.err ||
-    mMaxH.err
+    mMaxH.err ||
+    mSlArm.err ||
+    mSlOff.err
   ) {
     return { ok: false, error: "snowball_numeric_invalid" };
   }
@@ -1460,6 +1468,12 @@ function parseSnowballAutoTradeNested(
   }
   if (typeof mTp1.v === "number" && typeof mTp2.v === "number" && !(mTp2.v > mTp1.v)) {
     return { ok: false, error: "snowball_tp2_must_gt_tp1" };
+  }
+  if (typeof mSlArm.v === "number" && !(mSlArm.v > 0 && mSlArm.v < 100)) {
+    return { ok: false, error: "snowball_sl_arm_roi_pct_out_of_range" };
+  }
+  if (typeof mSlOff.v === "number" && !(mSlOff.v >= 0 && mSlOff.v < 50)) {
+    return { ok: false, error: "snowball_sl_entry_offset_pct_out_of_range" };
   }
 
   let tpSlEnabled: boolean | undefined;
@@ -1516,6 +1530,8 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeTp2PricePct: mTp2.v as number | null | undefined,
     snowballAutoTradeMaxHoldHours:
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
+    snowballAutoTradeSlArmRoiPct: mSlArm.v as number | null | undefined,
+    snowballAutoTradeSlEntryOffsetPct: mSlOff.v as number | null | undefined,
   };
   if (tpSlEnabled !== undefined) patchPart.snowballAutoTradeTpSlEnabled = tpSlEnabled;
   return { ok: true, patch: patchPart };
@@ -1562,13 +1578,17 @@ function parseReversalAutoTradeNested(
   const mTp1Partial = numOrEmpty("tp1PartialPct");
   const mTp2 = numOrEmpty("tp2PricePct");
   const mMaxH = numOrEmpty("maxHoldHours");
+  const mSlArm = numOrEmpty("slArmRoiPct");
+  const mSlOff = numOrEmpty("slEntryOffsetPct");
   if (
     mMargin.err ||
     mLev.err ||
     mTp1.err ||
     mTp1Partial.err ||
     mTp2.err ||
-    mMaxH.err
+    mMaxH.err ||
+    mSlArm.err ||
+    mSlOff.err
   ) {
     return { ok: false, error: "reversal_numeric_invalid" };
   }
@@ -1602,6 +1622,12 @@ function parseReversalAutoTradeNested(
     !(mTp2.v > mTp1.v)
   ) {
     return { ok: false, error: "reversal_tp2_must_gt_tp1" };
+  }
+  if (typeof mSlArm.v === "number" && !(mSlArm.v > 0 && mSlArm.v < 100)) {
+    return { ok: false, error: "reversal_sl_arm_roi_pct_out_of_range" };
+  }
+  if (typeof mSlOff.v === "number" && !(mSlOff.v >= 0 && mSlOff.v < 50)) {
+    return { ok: false, error: "reversal_sl_entry_offset_pct_out_of_range" };
   }
 
   let tpSlEnabled: boolean | undefined;
@@ -1651,6 +1677,8 @@ function parseReversalAutoTradeNested(
     reversalAutoTradeTp2PricePct: mTp2.v as number | null | undefined,
     reversalAutoTradeMaxHoldHours:
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
+    reversalAutoTradeSlArmRoiPct: mSlArm.v as number | null | undefined,
+    reversalAutoTradeSlEntryOffsetPct: mSlOff.v as number | null | undefined,
     reversalAutoTradeGateQualitySignal: gateQualitySignal,
     reversalAutoTradeSaturdayAllSignalsEnabled: saturdayAllSignalsEnabled,
     reversalAutoTradeLongSignalShortEnabled: longSignalShortEnabled,

@@ -171,6 +171,7 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
         tp2PricePct: opts.plan.tp2PricePct,
         maxHoldHours: holdHours,
         slAtEntryArmRoiPct: opts.plan.slAtEntryArmRoiPct,
+        slAtEntryOffsetPct: opts.plan.slAtEntryOffsetPct,
       },
       holdHours,
     );
@@ -267,6 +268,7 @@ export function withViewerStrategyProfitDisplayFields<
         tp2PricePct: plan.tp2PricePct,
         maxHoldHours: holdHours,
         slAtEntryArmRoiPct: plan.slAtEntryArmRoiPct,
+        slAtEntryOffsetPct: plan.slAtEntryOffsetPct,
       },
       holdHours,
     );
