@@ -97,6 +97,20 @@ export function isolatedLiquidationStrategyProfitPct(leverage: number): number {
   return -maxAdversePricePctForLeverage(leverage);
 }
 
+/** หลัง TP1 (SL@entry) หรือ TP2 — ไม่ทับผลด้วย Adv max ทั้งแถว */
+export function statsStrategyProfitExemptFromRowLiquidationOverride(
+  exitReason: StatsTpSlExitReason | null | undefined,
+): boolean {
+  return (
+    exitReason === "tp1_be" ||
+    exitReason === "tp1_tp2" ||
+    exitReason === "tp1_24h" ||
+    exitReason === "tp1_48h" ||
+    exitReason === "tp1_only" ||
+    exitReason === "tp2_full"
+  );
+}
+
 export function resolveStatsStrategyProfitOutcome(input: {
   profitPct: number;
   exitReason?: StatsTpSlExitReason | null;
@@ -105,6 +119,7 @@ export function resolveStatsStrategyProfitOutcome(input: {
 }): { profitPct: number; exitReason: StatsTpSlExitReason | null | undefined } {
   const lev = input.leverage;
   if (
+    !statsStrategyProfitExemptFromRowLiquidationOverride(input.exitReason) &&
     input.liquidationMetrics &&
     lev != null &&
     Number.isFinite(lev) &&
@@ -213,7 +228,7 @@ export function statsStrategyExitReasonDetail(
   if (reason === "time_24h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   if (reason === "time_48h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   if (reason === "liquidated") {
-    return "Max DD หลังหรือ Adv max เกินเกณฑ์ isolated (≈ 100% ÷ leverage) — ถือว่าโดน liquidate สูญ margin";
+    return "Max DD หลังหรือ Adv max เกินเกณฑ์ isolated (≈ 100% ÷ leverage) — ถือว่าโดน liquidate สูญ margin (ไม่ใช้กับไม้ที่ปิด TP1 แล้ว SL@entry)";
   }
   return "";
 }
@@ -242,11 +257,13 @@ export function resolveStatsStrategyDisplayPct(
   profitPct: number,
   leverage: number | null | undefined,
   liquidationMetrics?: StatsStrategyLiquidationMetrics,
+  exitReason?: StatsTpSlExitReason | null,
 ): number {
   return resolveStatsStrategyProfitOutcome({
     profitPct,
     leverage,
     liquidationMetrics,
+    exitReason,
   }).profitPct;
 }
 
@@ -334,7 +351,18 @@ export type StatsStrategyProfitRowSlice = StatsStrategyLiquidationMetrics & {
   pct48h?: number | null;
   strategyProfitPct?: number | null;
   strategyProfitPct24h?: number | null;
+  strategyExitReason?: StatsTpSlExitReason | null;
+  strategyExitReason24h?: StatsTpSlExitReason | null;
 };
+
+export function statsStrategyExitReasonForHorizon(
+  row: Pick<StatsStrategyProfitRowSlice, "strategyExitReason" | "strategyExitReason24h">,
+  holdHours: StatsStrategyProfitHorizon,
+): StatsTpSlExitReason | null | undefined {
+  return holdHours === STATS_STRATEGY_PROFIT_HOLD_24H
+    ? row.strategyExitReason24h
+    : row.strategyExitReason;
+}
 
 export function statsStrategyProfitPctForHorizon(
   row: Pick<StatsStrategyProfitRowSlice, "strategyProfitPct" | "strategyProfitPct24h">,
@@ -413,7 +441,12 @@ export function summarizeStatsStrategyProfit(
       pending += 1;
       continue;
     }
-    const displayPct = resolveStatsStrategyDisplayPct(raw, leverage, row);
+    const displayPct = resolveStatsStrategyDisplayPct(
+      raw,
+      leverage,
+      row,
+      statsStrategyExitReasonForHorizon(row, holdHours),
+    );
     trades += 1;
     sumPct += displayPct;
     const cls = classifyStatsStrategyProfitPct(displayPct, band);

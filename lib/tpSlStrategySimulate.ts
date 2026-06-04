@@ -140,7 +140,8 @@ export function simulateStatsTpSlProfit(input: {
     if (rem <= 0) break;
     const hi = input.high[i]!;
     const lo = input.low[i]!;
-    if (liqPct != null) {
+    // ก่อน TP1 เท่านั้น — หลัง TP1 มี SL@entry ส่วนที่เหลือไม่โดน LQ ทั้งโน้ตจาก wick ภายหลัง
+    if (liqPct != null && !tp1Done) {
       const adv = adversePctInBar(input.side, entry, hi, lo);
       if (Number.isFinite(adv) && adv > liqPct) {
         return { profitPct: -liqPct, exitReason: "liquidated" };
