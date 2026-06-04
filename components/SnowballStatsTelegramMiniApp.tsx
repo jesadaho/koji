@@ -864,6 +864,9 @@ export default function SnowballStatsTelegramMiniApp() {
                     marginUsdt={payload?.viewerStrategyMarginUsdt}
                     leverage={payload?.viewerStrategyLeverage}
                     tpSlPlan={payload?.viewerTpSlPlan}
+                    maxDrawdownPct={r.maxDrawdownPct}
+                    followUpMaxAdversePct={r.followUpMaxAdversePct}
+                    signalMaxDdPct={r.signalMaxDdPct}
                   />
                 </td>
                 <td>
@@ -876,6 +879,9 @@ export default function SnowballStatsTelegramMiniApp() {
                     marginUsdt={payload?.viewerStrategyMarginUsdt}
                     leverage={payload?.viewerStrategyLeverage}
                     tpSlPlan={payload?.viewerTpSlPlan}
+                    maxDrawdownPct={r.maxDrawdownPct}
+                    followUpMaxAdversePct={r.followUpMaxAdversePct}
+                    signalMaxDdPct={r.signalMaxDdPct}
                   />
                 </td>
                 <td>{outcomeLabel(r.outcome)}</td>

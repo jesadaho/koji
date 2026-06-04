@@ -26,7 +26,8 @@ export type StatsTpSlExitReason =
   | "tp1_48h"
   | "tp1_only"
   | "time_24h"
-  | "time_48h";
+  | "time_48h"
+  | "liquidated";
 
 function holdTimeExitReason(plan: StatsTpSlPlan, afterTp1: boolean): StatsTpSlExitReason {
   if (afterTp1) return plan.maxHoldHours <= 24 ? "tp1_24h" : "tp1_48h";
@@ -79,6 +80,22 @@ function favorablePctInBar(
   return ((entry - low) / entry) * 100;
 }
 
+/** การเคลื่อนไหวสวนทางจาก entry ในแท่งเดียว (%) */
+function adversePctInBar(
+  side: "long" | "short",
+  entry: number,
+  high: number,
+  low: number,
+): number {
+  if (!(entry > 0)) return NaN;
+  if (side === "long") return ((entry - low) / entry) * 100;
+  return ((high - entry) / entry) * 100;
+}
+
+function isolatedLiquidationPricePct(leverage: number): number {
+  return 100 / leverage;
+}
+
 function breakevenSlHit(
   side: "long" | "short",
   entry: number,
@@ -98,6 +115,8 @@ export function simulateStatsTpSlProfit(input: {
   iLast: number;
   pctAt48h: number;
   plan?: StatsTpSlPlan;
+  /** isolated margin — แตะสวน > 100/leverage% ในแท่งใดแท่งหนึ่ง = liquidate */
+  leverage?: number | null;
 }): { profitPct: number; exitReason: StatsTpSlExitReason } | null {
   const plan = input.plan ?? DEFAULT_STATS_TPSL_PLAN;
   const entry = input.entry;
@@ -107,6 +126,10 @@ export function simulateStatsTpSlProfit(input: {
   const tp1 = plan.tp1PricePct;
   const tp2 = plan.tp2PricePct;
   const partialFrac = Math.min(0.99, Math.max(0.01, plan.tp1PartialPct / 100));
+  const liqPct =
+    input.leverage != null && Number.isFinite(input.leverage) && input.leverage > 0
+      ? isolatedLiquidationPricePct(input.leverage)
+      : null;
 
   let rem = 1;
   let profit = 0;
@@ -117,6 +140,12 @@ export function simulateStatsTpSlProfit(input: {
     if (rem <= 0) break;
     const hi = input.high[i]!;
     const lo = input.low[i]!;
+    if (liqPct != null) {
+      const adv = adversePctInBar(input.side, entry, hi, lo);
+      if (Number.isFinite(adv) && adv > liqPct) {
+        return { profitPct: -liqPct, exitReason: "liquidated" };
+      }
+    }
     const fav = favorablePctInBar(input.side, entry, hi, lo);
     if (!Number.isFinite(fav)) continue;
 

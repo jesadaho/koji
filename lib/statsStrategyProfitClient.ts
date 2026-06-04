@@ -64,6 +64,67 @@ export function statsStrategyProfitColumnTitle(
   return statsTpSlPlanSummary(statsStrategyPlanAtHoldHours(plan, holdHours));
 }
 
+/** ค่า max DD / สวน max จากแถวสถิติ — ใช้เช็ค liquidate แบบ isolated */
+export type StatsStrategyLiquidationMetrics = {
+  maxDrawdownPct?: number | null;
+  followUpMaxAdversePct?: number | null;
+  signalMaxDdPct?: number | null;
+};
+
+export function maxRowAdversePctForLiquidation(
+  metrics: StatsStrategyLiquidationMetrics,
+): number | null {
+  const vals: number[] = [];
+  for (const v of [
+    metrics.followUpMaxAdversePct,
+    metrics.maxDrawdownPct,
+    metrics.signalMaxDdPct,
+  ]) {
+    if (v != null && Number.isFinite(v) && v >= 0) vals.push(v);
+  }
+  if (vals.length === 0) return null;
+  return Math.max(...vals);
+}
+
+export function rowExceedsIsolatedLiquidationThreshold(
+  metrics: StatsStrategyLiquidationMetrics,
+  leverage: number | null | undefined,
+): boolean {
+  if (leverage == null || !Number.isFinite(leverage) || leverage <= 0) return false;
+  const adv = maxRowAdversePctForLiquidation(metrics);
+  if (adv == null) return false;
+  return adv > maxAdversePricePctForLeverage(leverage);
+}
+
+export function isolatedLiquidationStrategyProfitPct(leverage: number): number {
+  return -maxAdversePricePctForLeverage(leverage);
+}
+
+export function resolveStatsStrategyProfitOutcome(input: {
+  profitPct: number;
+  exitReason?: StatsTpSlExitReason | null;
+  leverage?: number | null;
+  liquidationMetrics?: StatsStrategyLiquidationMetrics;
+}): { profitPct: number; exitReason: StatsTpSlExitReason | null | undefined } {
+  const lev = input.leverage;
+  if (
+    input.liquidationMetrics &&
+    lev != null &&
+    Number.isFinite(lev) &&
+    lev > 0 &&
+    rowExceedsIsolatedLiquidationThreshold(input.liquidationMetrics, lev)
+  ) {
+    return {
+      profitPct: isolatedLiquidationStrategyProfitPct(lev),
+      exitReason: "liquidated",
+    };
+  }
+  return {
+    profitPct: capStrategyProfitPctForLeverage(input.profitPct, lev),
+    exitReason: input.exitReason,
+  };
+}
+
 export function computeStatsStrategyProfitFromBars(input: {
   side: "long" | "short";
   entry: number;
@@ -74,6 +135,8 @@ export function computeStatsStrategyProfitFromBars(input: {
   holdHours: StatsStrategyProfitHorizon;
   pctAtHorizon: number;
   plan?: StatsTpSlPlan;
+  leverage?: number | null;
+  liquidationMetrics?: StatsStrategyLiquidationMetrics;
 }): StrategyProfitByPlanEntry | null {
   const plan = statsStrategyPlanAtHoldHours(input.plan ?? DEFAULT_STATS_TPSL_PLAN, input.holdHours);
   const sim = simulateStatsTpSlProfit({
@@ -85,9 +148,16 @@ export function computeStatsStrategyProfitFromBars(input: {
     iLast: input.iLast,
     pctAt48h: input.pctAtHorizon,
     plan,
+    leverage: input.leverage,
   });
   if (!sim) return null;
-  return { profitPct: sim.profitPct, exitReason: sim.exitReason };
+  const resolved = resolveStatsStrategyProfitOutcome({
+    profitPct: sim.profitPct,
+    exitReason: sim.exitReason,
+    leverage: input.leverage,
+    liquidationMetrics: input.liquidationMetrics,
+  });
+  return { profitPct: resolved.profitPct, exitReason: resolved.exitReason ?? sim.exitReason };
 }
 
 export function statsStrategyProfitPnlStyle(pct: number): CSSProperties {
@@ -105,6 +175,7 @@ export function statsStrategyExitReasonShort(reason: StatsTpSlExitReason | null 
   if (reason === "tp1_only") return "TP1";
   if (reason === "time_24h") return "24h";
   if (reason === "time_48h") return "48h";
+  if (reason === "liquidated") return "Liquidate";
   return "";
 }
 
@@ -144,6 +215,9 @@ export function statsStrategyExitReasonDetail(
   if (reason === "tp1_only") return `แตะ TP1 แล้วปิดครบ ${plan.tp1PartialPct}% ที่ ${plan.tp1PricePct}%`;
   if (reason === "time_24h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   if (reason === "time_48h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
+  if (reason === "liquidated") {
+    return "สวนราคาเกินเกณฑ์ isolated (≈ 100% ÷ leverage) — ถือว่าโดน liquidate สูญ margin";
+  }
   return "";
 }
 
@@ -170,8 +244,13 @@ export function capStrategyProfitPctForLeverage(
 export function resolveStatsStrategyDisplayPct(
   profitPct: number,
   leverage: number | null | undefined,
+  liquidationMetrics?: StatsStrategyLiquidationMetrics,
 ): number {
-  return capStrategyProfitPctForLeverage(profitPct, leverage);
+  return resolveStatsStrategyProfitOutcome({
+    profitPct,
+    leverage,
+    liquidationMetrics,
+  }).profitPct;
 }
 
 export function statsStrategyProfitCellTitle(
@@ -179,22 +258,34 @@ export function statsStrategyProfitCellTitle(
   exitReason: StatsTpSlExitReason | null | undefined,
   sizing?: { marginUsdt?: number | null; leverage?: number | null },
   plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
+  liquidationMetrics?: StatsStrategyLiquidationMetrics,
 ): string {
   const base = STATS_STRATEGY_PROFIT_COLUMN_TITLE;
   if (profitPct == null || !Number.isFinite(profitPct)) return base;
-  const tag = statsStrategyExitReasonShort(exitReason);
-  const displayPct = resolveStatsStrategyDisplayPct(profitPct, sizing?.leverage);
+  const resolved = resolveStatsStrategyProfitOutcome({
+    profitPct,
+    exitReason,
+    leverage: sizing?.leverage,
+    liquidationMetrics,
+  });
+  const tag = statsStrategyExitReasonShort(resolved.exitReason);
+  const displayPct = resolved.profitPct;
   const usdt = formatStatsStrategyProfitUsdt(sizing?.marginUsdt, sizing?.leverage, displayPct);
   const marginNote =
     sizing?.marginUsdt != null && sizing.marginUsdt > 0 && sizing?.leverage != null && sizing.leverage > 0
       ? ` · margin ${sizing.marginUsdt}×${Math.floor(sizing.leverage)}`
       : "";
   const cappedNote =
-    displayPct !== profitPct && sizing?.leverage != null && sizing.leverage > 0
+    resolved.exitReason !== "liquidated" &&
+    displayPct !== profitPct &&
+    sizing?.leverage != null &&
+    sizing.leverage > 0
       ? ` (จำกัดที่ ${formatStatsStrategyProfitPct(displayPct)} @${Math.floor(sizing.leverage)}x)`
       : "";
-  const exitDetail = exitReason ? statsStrategyExitReasonDetail(exitReason, plan) : "";
-  const breakdown = statsStrategyExitReasonBreakdownLine(exitReason, plan);
+  const exitDetail = resolved.exitReason
+    ? statsStrategyExitReasonDetail(resolved.exitReason, plan)
+    : "";
+  const breakdown = statsStrategyExitReasonBreakdownLine(resolved.exitReason, plan);
   const parts = [
     base + marginNote,
     tag ? `ออก: ${tag}` : "",
@@ -241,7 +332,7 @@ export function formatStatsStrategyProfitUsdt(
   return formatStatsStrategyProfitDollarAmount(usdt);
 }
 
-export type StatsStrategyProfitRowSlice = {
+export type StatsStrategyProfitRowSlice = StatsStrategyLiquidationMetrics & {
   pct24h?: number | null;
   pct48h?: number | null;
   strategyProfitPct?: number | null;
@@ -325,7 +416,7 @@ export function summarizeStatsStrategyProfit(
       pending += 1;
       continue;
     }
-    const displayPct = resolveStatsStrategyDisplayPct(raw, leverage);
+    const displayPct = resolveStatsStrategyDisplayPct(raw, leverage, row);
     trades += 1;
     sumPct += displayPct;
     const cls = classifyStatsStrategyProfitPct(displayPct, band);
@@ -333,7 +424,7 @@ export function summarizeStatsStrategyProfit(
     else if (cls === "loss") losses += 1;
     else flats += 1;
     if (canUsdt) {
-      const usd = strategyProfitUsdtFromMargin(margin!, leverage!, raw);
+      const usd = strategyProfitUsdtFromMargin(margin!, leverage!, displayPct);
       sumUsdt += usd;
       if (cls === "win") sumWinUsd += usd;
       else if (cls === "loss") sumLossUsd += usd;
@@ -405,6 +496,7 @@ export function statsStrategyProfitCsvCell(
   strategyExitReason?: StatsTpSlExitReason | null,
   sizing?: { marginUsdt?: number | null; leverage?: number | null },
   holdHours: StatsStrategyProfitHorizon = STATS_STRATEGY_PROFIT_HOLD_48H,
+  liquidationMetrics?: StatsStrategyLiquidationMetrics,
 ): string {
   if (!statsStrategyProfitFinalizedAtHorizon(
     holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? { pct24h: pctHorizon } : { pct48h: pctHorizon },
@@ -413,8 +505,14 @@ export function statsStrategyProfitCsvCell(
     return "";
   }
   if (strategyProfitPct == null || !Number.isFinite(strategyProfitPct)) return "";
-  const tag = statsStrategyExitReasonShort(strategyExitReason);
-  const displayPct = resolveStatsStrategyDisplayPct(strategyProfitPct, sizing?.leverage);
+  const resolved = resolveStatsStrategyProfitOutcome({
+    profitPct: strategyProfitPct,
+    exitReason: strategyExitReason,
+    leverage: sizing?.leverage,
+    liquidationMetrics,
+  });
+  const tag = statsStrategyExitReasonShort(resolved.exitReason);
+  const displayPct = resolved.profitPct;
   const pctPart = formatStatsStrategyProfitPct(displayPct);
   const usdtPart = formatStatsStrategyProfitUsdt(
     sizing?.marginUsdt,

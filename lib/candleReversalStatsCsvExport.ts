@@ -150,6 +150,7 @@ function candleReversalStatsRowToCsvCells(
       r.strategyExitReason24h,
       sizing,
       STATS_STRATEGY_PROFIT_HOLD_24H,
+      { maxDrawdownPct: r.maxDrawdownPct, followUpMaxAdversePct: r.followUpMaxAdversePct },
     ),
     statsStrategyProfitCsvCell(
       r.pct48h,
@@ -157,6 +158,7 @@ function candleReversalStatsRowToCsvCells(
       r.strategyExitReason,
       sizing,
       STATS_STRATEGY_PROFIT_HOLD_48H,
+      { maxDrawdownPct: r.maxDrawdownPct, followUpMaxAdversePct: r.followUpMaxAdversePct },
     ),
     candleReversalOutcomeLabel(r.outcome),
   ];

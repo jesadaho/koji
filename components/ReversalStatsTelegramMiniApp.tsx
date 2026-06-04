@@ -696,6 +696,8 @@ function ReversalStatsSection({
                           marginUsdt={strategyMarginUsdt}
                           leverage={strategyLeverage}
                           tpSlPlan={strategyTpSlPlan}
+                          maxDrawdownPct={r.maxDrawdownPct}
+                          followUpMaxAdversePct={r.followUpMaxAdversePct}
                         />
                       </td>
                       <td>
@@ -708,6 +710,8 @@ function ReversalStatsSection({
                           marginUsdt={strategyMarginUsdt}
                           leverage={strategyLeverage}
                           tpSlPlan={strategyTpSlPlan}
+                          maxDrawdownPct={r.maxDrawdownPct}
+                          followUpMaxAdversePct={r.followUpMaxAdversePct}
                         />
                       </td>
                     </>

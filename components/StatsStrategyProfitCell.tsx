@@ -3,7 +3,7 @@
 import {
   formatStatsStrategyProfitPct,
   formatStatsStrategyProfitUsdt,
-  resolveStatsStrategyDisplayPct,
+  resolveStatsStrategyProfitOutcome,
   statsStrategyExitReasonBreakdownLine,
   statsStrategyExitReasonShort,
   statsStrategyPlanAtHoldHours,
@@ -26,6 +26,9 @@ export function StatsStrategyProfitCell(props: {
   marginUsdt?: number | null;
   leverage?: number | null;
   tpSlPlan?: StatsTpSlPlan;
+  maxDrawdownPct?: number | null;
+  followUpMaxAdversePct?: number | null;
+  signalMaxDdPct?: number | null;
 }) {
   const holdHours = props.holdHours ?? STATS_STRATEGY_PROFIT_HOLD_48H;
   const plan = statsStrategyPlanAtHoldHours(props.tpSlPlan ?? DEFAULT_STATS_TPSL_PLAN, holdHours);
@@ -55,15 +58,27 @@ export function StatsStrategyProfitCell(props: {
       </span>
     );
   }
-  const displayPct = resolveStatsStrategyDisplayPct(pct, props.leverage);
-  const tag = statsStrategyExitReasonShort(exitReason);
-  const breakdownLine = statsStrategyExitReasonBreakdownLine(exitReason, plan);
+  const liquidationMetrics = {
+    maxDrawdownPct: props.maxDrawdownPct,
+    followUpMaxAdversePct: props.followUpMaxAdversePct,
+    signalMaxDdPct: props.signalMaxDdPct,
+  };
+  const resolved = resolveStatsStrategyProfitOutcome({
+    profitPct: pct,
+    exitReason,
+    leverage: props.leverage,
+    liquidationMetrics,
+  });
+  const displayPct = resolved.profitPct;
+  const displayReason = resolved.exitReason;
+  const tag = statsStrategyExitReasonShort(displayReason);
+  const breakdownLine = statsStrategyExitReasonBreakdownLine(displayReason, plan);
   const usdtLine = formatStatsStrategyProfitUsdt(props.marginUsdt, props.leverage, displayPct);
   const sizing = { marginUsdt: props.marginUsdt, leverage: props.leverage };
   return (
     <span
       style={statsStrategyProfitPnlStyle(displayPct)}
-      title={statsStrategyProfitCellTitle(pct, exitReason, sizing, plan)}
+      title={statsStrategyProfitCellTitle(pct, exitReason, sizing, plan, liquidationMetrics)}
     >
       {formatStatsStrategyProfitPct(displayPct)}
       {usdtLine ? (
