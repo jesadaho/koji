@@ -70,7 +70,7 @@ export function StatsStrategyProfitCell(props: {
   const displayPct = resolved.profitPct;
   const displayReason = resolved.exitReason;
   const tag = statsStrategyExitReasonShort(displayReason);
-  const breakdownLine = statsStrategyExitReasonBreakdownLine(displayReason, plan);
+  const breakdownLine = statsStrategyExitReasonBreakdownLine(displayReason, plan, displayPct);
   const usdtLine = formatStatsStrategyProfitUsdt(props.marginUsdt, props.leverage, displayPct);
   const sizing = { marginUsdt: props.marginUsdt, leverage: props.leverage };
   return (

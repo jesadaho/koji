@@ -270,8 +270,26 @@ export function withViewerStrategyProfitDisplayFields<
       },
       holdHours,
     );
-    const cached = row.strategyProfitByPlan?.[statsTpSlPlanCacheKey(planH)];
-    if (!cached) continue;
+    const cacheKey = statsTpSlPlanCacheKey(planH);
+    const cached = row.strategyProfitByPlan?.[cacheKey];
+    if (!cached) {
+      if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+        if (out.strategyProfitPct24h != null || out.strategyExitReason24h != null) {
+          out = {
+            ...out,
+            strategyProfitPct24h: null,
+            strategyExitReason24h: null,
+          };
+        }
+      } else if (out.strategyProfitPct != null || out.strategyExitReason != null) {
+        out = {
+          ...out,
+          strategyProfitPct: null,
+          strategyExitReason: null,
+        };
+      }
+      continue;
+    }
     if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
       if (
         out.strategyProfitPct24h === cached.profitPct &&

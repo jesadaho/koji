@@ -191,10 +191,36 @@ export function statsStrategyExitReasonShort(reason: StatsTpSlExitReason | null 
   return "";
 }
 
+/** กำไรที่บันทึกตรงกับแผน TP/SL ที่แสดง (กัน breakdown คนละแผนกับตัวเลขหัวการ์ด) */
+export function statsStrategyProfitConsistentWithPlan(
+  exitReason: StatsTpSlExitReason | null | undefined,
+  plan: StatsTpSlPlan,
+  profitPct: number,
+): boolean {
+  if (exitReason == null || !Number.isFinite(profitPct)) return false;
+  const tol = 0.11;
+  const max = statsTpSlTheoreticalMaxProfitPct(exitReason, plan);
+  if (max != null) return Math.abs(profitPct - max) <= tol;
+  if (exitReason === "tp1_be") {
+    const tp1Only = statsTpSlTheoreticalMaxProfitPct("tp1_only", plan);
+    if (tp1Only != null && Math.abs(profitPct - tp1Only) <= tol) return true;
+    return Math.abs(profitPct) <= tol;
+  }
+  return true;
+}
+
 export function statsStrategyExitReasonBreakdownLine(
   reason: StatsTpSlExitReason | null | undefined,
   plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
+  profitPct?: number | null,
 ): string | null {
+  if (
+    profitPct != null &&
+    Number.isFinite(profitPct) &&
+    !statsStrategyProfitConsistentWithPlan(reason, plan, profitPct)
+  ) {
+    return null;
+  }
   const legs = reason ? statsTpSlProfitLegBreakdown(reason, plan) : null;
   if (!legs) return null;
   if (reason === "tp1_tp2") {
@@ -301,7 +327,7 @@ export function statsStrategyProfitCellTitle(
   const exitDetail = resolved.exitReason
     ? statsStrategyExitReasonDetail(resolved.exitReason, plan)
     : "";
-  const breakdown = statsStrategyExitReasonBreakdownLine(resolved.exitReason, plan);
+  const breakdown = statsStrategyExitReasonBreakdownLine(resolved.exitReason, plan, displayPct);
   const parts = [
     base + marginNote,
     tag ? `ออก: ${tag}` : "",
