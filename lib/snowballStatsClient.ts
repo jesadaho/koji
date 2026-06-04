@@ -30,7 +30,7 @@ import {
 
 export type { SnowballLongStructureTier };
 
-export type SnowballStatsOutcome = "pending" | "win_trend" | "win_quick_tp30" | "loss" | "flat";
+export type SnowballStatsOutcome = "pending" | "win_trend" | "loss" | "flat";
 
 export type SnowballStatsQualityTier = SnowballLongBreakoutGrade;
 

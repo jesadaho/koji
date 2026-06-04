@@ -1,3 +1,4 @@
+import { STATS_SL_AT_ENTRY_ARM_ROI_PCT } from "@/lib/tpSlStrategySimulate";
 import { cancelActiveTpSlPlanOrders, tp1PlanLikelyFilled } from "./autoTradeTpSlPlanOrders";
 import {
   closeAllOpenForSymbol,
@@ -166,11 +167,11 @@ async function handleTp2Hit(ctx: TpSlContext): Promise<{ closed: boolean }> {
   return { closed: true };
 }
 
-/** ROI ถึง TP1% — ตั้ง SL@entry ทันที (ไม่ต้องรอ partial TP1) */
+/** ROI ถึง slArm% — ตั้ง SL@entry ทันที (ไม่ต้องรอ partial TP1) */
 async function handleSlAtEntryOnRoi(ctx: TpSlContext): Promise<{ ok: boolean; slOrderId?: string }> {
   const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
   const move = pricePctFavorable(active.side, entry, markPrice);
-  const tp1 = active.tp1PricePct ?? 10;
+  const slArm = STATS_SL_AT_ENTRY_ARM_ROI_PCT;
 
   if (!(position.holdVol > 0)) {
     return { ok: false };
@@ -189,7 +190,7 @@ async function handleSlAtEntryOnRoi(ctx: TpSlContext): Promise<{ ok: boolean; sl
 
   await notifyLines(userId, [
     "Koji — Snowball TP/SL (MEXC)",
-    `🛡️ ROI ≥ ${tp1}% — ตั้ง SL บังทุน @ ${fmtPrice(entry)} (ไม่รอ partial TP1)`,
+    `🛡️ ROI ≥ ${slArm}% — ตั้ง SL บังทุน @ ${fmtPrice(entry)} (ไม่รอ partial TP1)`,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry MEXC: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${move.toFixed(2)}%`,
     slRes.success
@@ -413,8 +414,11 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
           continue;
         }
 
-        const tp1 = a.tp1PricePct ?? 10;
-        if (!a.slPlanOrderId?.trim() && Number.isFinite(move) && move >= tp1) {
+        if (
+          !a.slPlanOrderId?.trim() &&
+          Number.isFinite(move) &&
+          move >= STATS_SL_AT_ENTRY_ARM_ROI_PCT
+        ) {
           const r = await handleSlAtEntryOnRoi(ctx);
           if (r.ok) {
             state = withSnowballSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
@@ -422,6 +426,7 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
           }
         }
 
+        const tp1 = a.tp1PricePct ?? 10;
         if (!exchangeTp1 && !a.tp1Done && Number.isFinite(move) && move >= tp1) {
           const r = await handleTp1Hit(ctx);
           if (r.tp1Done) {

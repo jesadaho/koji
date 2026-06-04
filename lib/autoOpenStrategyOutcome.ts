@@ -17,12 +17,7 @@ import {
 export type { AutoOpenPnlUsdtBucket };
 
 /** ผลตามกติกา stats / strategy หลังครบ 48h (ไม่ใช่ success/skipped ของการสั่ง) */
-export type AutoOpenStrategyOutcome =
-  | "win_quick_tp30"
-  | "win_trend"
-  | "win"
-  | "loss"
-  | "flat";
+export type AutoOpenStrategyOutcome = "win_trend" | "win" | "loss" | "flat";
 
 export type AutoOpenMfe48h = {
   maxRoiPct: number;
@@ -34,12 +29,6 @@ function snowballOutcomeWinMinPct(): number {
   const v = Number(process.env.SNOWBALL_STATS_OUTCOME_WIN_MIN_PCT);
   if (Number.isFinite(v) && v > 0 && v < 100) return v;
   return 3;
-}
-
-function snowballOutcomeQuickTp30MinPct(): number {
-  const v = Number(process.env.SNOWBALL_STATS_OUTCOME_QUICK_TP30_MIN_PCT);
-  if (Number.isFinite(v) && v > 0 && v < 200) return v;
-  return 30;
 }
 
 function reversalOutcomeWinMinPct(): number {
@@ -124,11 +113,7 @@ export function resolveAutoOpenStrategyAt48h(
   pct48h: number,
 ): Pick<AutoOpenStrategyResolved, "strategyOutcome" | "strategyPct"> {
   if (source === "snowball") {
-    const quickTp = snowballOutcomeQuickTp30MinPct();
     const winMin = snowballOutcomeWinMinPct();
-    if (maxRoiPct >= quickTp) {
-      return { strategyOutcome: "win_quick_tp30", strategyPct: quickTp };
-    }
     if (pct48h >= winMin) {
       return { strategyOutcome: "win_trend", strategyPct: pct48h };
     }
@@ -149,9 +134,10 @@ export function resolveAutoOpenStrategyAt48h(
   return { strategyOutcome: "flat", strategyPct: pct48h };
 }
 
-export function autoOpenStrategyOutcomeLabel(o: AutoOpenStrategyOutcome | null | undefined): string {
-  if (o === "win_quick_tp30") return "Win (Quick TP30%)";
-  if (o === "win_trend") return "Win (Trend)";
+export function autoOpenStrategyOutcomeLabel(
+  o: AutoOpenStrategyOutcome | "win_quick_tp30" | null | undefined,
+): string {
+  if (o === "win_quick_tp30" || o === "win_trend") return "Win (Trend)";
   if (o === "win") return "Win";
   if (o === "loss") return "Loss";
   if (o === "flat") return "Flat";
@@ -176,11 +162,7 @@ export function autoOpenStrategyFinalized(
 export function isAutoOpenStrategyWinOutcome(
   outcome: string | null | undefined,
 ): boolean {
-  return (
-    outcome === "win" ||
-    outcome === "win_trend" ||
-    outcome === "win_quick_tp30"
-  );
+  return outcome === "win" || outcome === "win_trend" || outcome === "win_quick_tp30";
 }
 
 export type AutoOpenStrategy48hSummary = {

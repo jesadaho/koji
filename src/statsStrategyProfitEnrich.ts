@@ -170,6 +170,7 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
         tp1PartialPct: opts.plan.tp1PartialPct,
         tp2PricePct: opts.plan.tp2PricePct,
         maxHoldHours: holdHours,
+        slAtEntryArmRoiPct: opts.plan.slAtEntryArmRoiPct,
       },
       holdHours,
     );
@@ -245,4 +246,54 @@ export async function enrichSnowballStatsWithViewerStrategyProfit(
     sideForRow: (row) => row.side,
     includeRow: () => true,
   });
+}
+
+/** ใส่กำไรกลยุทธ์จาก cache ตามแผนผู้ชม (ไม่ดึง Binance) — ใช้บน GET */
+export function withViewerStrategyProfitDisplayFields<
+  T extends {
+    strategyProfitByPlan?: StrategyProfitByPlanMap | null;
+    strategyProfitPct?: number | null;
+    strategyExitReason?: StrategyProfitByPlanEntry["exitReason"] | null;
+    strategyProfitPct24h?: number | null;
+    strategyExitReason24h?: StrategyProfitByPlanEntry["exitReason"] | null;
+  },
+>(row: T, plan: ViewerStatsTpSlPlan): T {
+  let out = row;
+  for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
+    const planH = statsStrategyPlanAtHoldHours(
+      {
+        tp1PricePct: plan.tp1PricePct,
+        tp1PartialPct: plan.tp1PartialPct,
+        tp2PricePct: plan.tp2PricePct,
+        maxHoldHours: holdHours,
+        slAtEntryArmRoiPct: plan.slAtEntryArmRoiPct,
+      },
+      holdHours,
+    );
+    const cached = row.strategyProfitByPlan?.[statsTpSlPlanCacheKey(planH)];
+    if (!cached) continue;
+    if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+      if (
+        out.strategyProfitPct24h === cached.profitPct &&
+        out.strategyExitReason24h === cached.exitReason
+      ) {
+        continue;
+      }
+      out = {
+        ...out,
+        strategyProfitPct24h: cached.profitPct,
+        strategyExitReason24h: cached.exitReason,
+      };
+    } else if (
+      out.strategyProfitPct !== cached.profitPct ||
+      out.strategyExitReason !== cached.exitReason
+    ) {
+      out = {
+        ...out,
+        strategyProfitPct: cached.profitPct,
+        strategyExitReason: cached.exitReason,
+      };
+    }
+  }
+  return out;
 }

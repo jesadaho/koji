@@ -84,6 +84,7 @@ import {
 import {
   enrichCandleReversalStatsWithViewerStrategyProfit,
   enrichSnowballStatsWithViewerStrategyProfit,
+  withViewerStrategyProfitDisplayFields,
 } from "./statsStrategyProfitEnrich";
 import {
   correctCandleReversalStatsOutcome,
@@ -772,18 +773,24 @@ async function buildSnowballStatsPayload(
   let viewerTpSlPlan: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
   let viewerStrategyMarginUsdt: number | null | undefined;
   let viewerStrategyLeverage: number | null | undefined;
+  let planForDisplay: Awaited<ReturnType<typeof resolveViewerStatsTpSlPlan>> | undefined;
   if (telegramUserId != null) {
     const [plan, sizing] = await Promise.all([
       resolveViewerStatsTpSlPlan(telegramUserId, "snowball"),
       resolveViewerStatsTradeSizing(telegramUserId, "snowball"),
     ]);
+    planForDisplay = plan;
     viewerTpSlPlanSummary = viewerStatsTpSlPlanSummary(plan);
     viewerTpSlPlan = viewerStatsTpSlPlanPayload(plan);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
   }
+  const displayRows =
+    planForDisplay != null
+      ? rowsWithConflict.map((r) => withViewerStrategyProfitDisplayFields(r, planForDisplay!))
+      : rowsWithConflict;
   return {
-    rows: rowsWithConflict,
+    rows: displayRows,
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
     ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
     ...(viewerTpSlPlan ? { viewerTpSlPlan } : {}),

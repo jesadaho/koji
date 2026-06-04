@@ -167,25 +167,7 @@ function applySnowballStrategyProfitAtHorizon(
     };
     touched = true;
   }
-  if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
-    if (row.strategyProfitPct24h !== sim.profitPct) {
-      row.strategyProfitPct24h = sim.profitPct;
-      touched = true;
-    }
-    if (row.strategyExitReason24h !== sim.exitReason) {
-      row.strategyExitReason24h = sim.exitReason;
-      touched = true;
-    }
-    return touched;
-  }
-  if (row.strategyProfitPct !== sim.profitPct) {
-    row.strategyProfitPct = sim.profitPct;
-    touched = true;
-  }
-  if (row.strategyExitReason !== sim.exitReason) {
-    row.strategyExitReason = sim.exitReason;
-    touched = true;
-  }
+  /* ไม่เขียน strategyProfitPct* ระดับแถว — ใช้ enrich / cache ตามแผนผู้ชม (GET แสดงจาก cache) */
   return touched;
 }
 
@@ -206,26 +188,13 @@ function outcomeWinMinPct(): number {
   return 3;
 }
 
-function outcomeQuickTp30MinPct(): number {
-  const v = Number(process.env.SNOWBALL_STATS_OUTCOME_QUICK_TP30_MIN_PCT);
-  if (Number.isFinite(v) && v > 0 && v < 200) return v;
-  return 30;
-}
-
 function applySnowballOutcomeFromPct48h(row: SnowballStatsRow): boolean {
   const pct48 = row.pct48h;
   if (pct48 == null || !Number.isFinite(pct48)) return false;
 
   const winMin = outcomeWinMinPct();
-  const quickTp30 = outcomeQuickTp30MinPct();
   let nextOutcome: SnowballStatsOutcome;
-  if (
-    row.maxRoiPct != null &&
-    Number.isFinite(row.maxRoiPct) &&
-    row.maxRoiPct >= quickTp30
-  ) {
-    nextOutcome = "win_quick_tp30";
-  } else if (pct48 >= winMin) {
+  if (pct48 >= winMin) {
     nextOutcome = "win_trend";
   } else if (pct48 <= -winMin) {
     nextOutcome = "loss";
@@ -755,7 +724,7 @@ export async function runSnowballStatsFollowUpTick(
 
 /**
  * Admin — ปรับ `outcome` + `resultRr` ของทุกแถวที่มี `pct48h` แล้ว
- * โดยข้าม pending guard (จะ overwrite แม้ outcome เดิมจะเป็น loss/win_trend/win_quick_tp30/flat)
+ * โดยข้าม pending guard (จะ overwrite แม้ outcome เดิมจะเป็น loss/win_trend/flat)
  *
  * ใช้สำหรับกรณีกฎ outcome เปลี่ยน / เคยถูก finalize ที่ 24h / ต้องการ recalc ให้ตรงกับ pct48h ที่บันทึกอยู่
  *

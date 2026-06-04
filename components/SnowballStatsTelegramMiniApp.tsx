@@ -288,10 +288,9 @@ function fmtSnowballHorizonCell(
   return fmtPctCell(price, pct);
 }
 
-function outcomeLabel(o: SnowballStatsRow["outcome"]): string {
+function outcomeLabel(o: SnowballStatsRow["outcome"] | "win_quick_tp30"): string {
   if (o === "pending") return "Pending";
-  if (o === "win_quick_tp30") return "Win (Quick TP30%)";
-  if (o === "win_trend") return "Win (Trend)";
+  if (o === "win_trend" || o === "win_quick_tp30") return "Win (Trend)";
   if (o === "loss") return "Loss";
   return "Flat";
 }
@@ -804,7 +803,7 @@ export default function SnowballStatsTelegramMiniApp() {
             <th scope="col" title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}>
               กำไรกลยุทธ์ 48h
             </th>
-            <th scope="col" title="ปิดผลที่ 48h จาก pct48h · win_quick_tp30 จาก MFE 48h">
+            <th scope="col" title="ปิดผลที่ 48h จาก pct48h (Win ≥ +3% · Loss ≤ -3%)">
               ผล @48h
             </th>
             {isAdmin ? <th scope="col" className="snowStatsDelCol" aria-label="ลบ" /> : null}

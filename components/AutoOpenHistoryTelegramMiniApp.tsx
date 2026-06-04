@@ -453,7 +453,7 @@ function AutoOpenHistoryTable({
             <th>Entry</th>
             <th>ปัจจุบัน</th>
             <th>P/L</th>
-            <th title="หลังครบ 48h — Quick TP30 / Trend หรือ Win-Loss ตามแหล่งสัญญาณ">
+            <th title="หลังครบ 48h — Win/Loss/Flat ตาม pct48h (Snowball: Trend)">
               ผล@48h
             </th>
             <th>เกรด/โมเดล</th>

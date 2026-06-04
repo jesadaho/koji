@@ -344,13 +344,7 @@ function applyReversal1hStrategyProfitAtHorizon(
     ...row.strategyProfitByPlan,
     [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
   };
-  if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
-    row.strategyProfitPct24h = sim.profitPct;
-    row.strategyExitReason24h = sim.exitReason;
-    return;
-  }
-  row.strategyProfitPct = sim.profitPct;
-  row.strategyExitReason = sim.exitReason;
+  /* ไม่เขียน strategyProfitPct* ระดับแถว — enrich ตามแผนผู้ชม */
 }
 
 async function followUpCandleReversal1hRow(

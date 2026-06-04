@@ -80,8 +80,7 @@ const HEADERS = [
 
 function snowballOutcomeLabel(o: SnowballStatsRow["outcome"]): string {
   if (o === "pending") return "Pending";
-  if (o === "win_quick_tp30") return "Win (Quick TP30%)";
-  if (o === "win_trend") return "Win (Trend)";
+  if (o === "win_trend" || o === "win_quick_tp30") return "Win (Trend)";
   if (o === "loss") return "Loss";
   return "Flat";
 }

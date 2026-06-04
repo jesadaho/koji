@@ -1,5 +1,6 @@
 import {
   DEFAULT_STATS_TPSL_PLAN,
+  STATS_SL_AT_ENTRY_ARM_ROI_PCT,
   statsTpSlPlanSummary,
   type StatsTpSlPlan,
 } from "@/lib/tpSlStrategySimulate";
@@ -13,7 +14,8 @@ export type ViewerStatsTpSlPlan = StatsTpSlPlan & {
 };
 
 export function statsTpSlPlanCacheKey(plan: StatsTpSlPlan): string {
-  return `${plan.tp1PricePct}-${plan.tp1PartialPct}-${plan.tp2PricePct}-${plan.maxHoldHours}`;
+  const slArm = plan.slAtEntryArmRoiPct ?? STATS_SL_AT_ENTRY_ARM_ROI_PCT;
+  return `${plan.tp1PricePct}-${plan.tp1PartialPct}-${plan.tp2PricePct}-${plan.maxHoldHours}-${slArm}`;
 }
 
 function reversalTpSlPlanFromSettings(
@@ -50,6 +52,7 @@ function reversalTpSlPlanFromSettings(
     tp1PartialPct: Math.min(100, t1p),
     tp2PricePct: t2,
     maxHoldHours: mh,
+    slAtEntryArmRoiPct: STATS_SL_AT_ENTRY_ARM_ROI_PCT,
   };
 }
 
@@ -63,6 +66,7 @@ function snowballTpSlPlanFromSettings(
     tp1PartialPct: p.tp1PartialPct,
     tp2PricePct: p.tp2PricePct,
     maxHoldHours: p.maxHoldHours,
+    slAtEntryArmRoiPct: STATS_SL_AT_ENTRY_ARM_ROI_PCT,
   };
 }
 
@@ -74,7 +78,11 @@ export async function resolveViewerStatsTpSlPlan(
   const map = await loadTradingViewMexcSettingsFullMap();
   const row = map[userId];
   if (!row) {
-    return { tpSlEnabled: true, ...DEFAULT_STATS_TPSL_PLAN };
+    return {
+      tpSlEnabled: true,
+      ...DEFAULT_STATS_TPSL_PLAN,
+      slAtEntryArmRoiPct: STATS_SL_AT_ENTRY_ARM_ROI_PCT,
+    };
   }
   return source === "reversal"
     ? reversalTpSlPlanFromSettings(row)
@@ -87,6 +95,7 @@ export function viewerStatsTpSlPlanPayload(plan: ViewerStatsTpSlPlan): StatsTpSl
     tp1PartialPct: plan.tp1PartialPct,
     tp2PricePct: plan.tp2PricePct,
     maxHoldHours: plan.maxHoldHours,
+    slAtEntryArmRoiPct: plan.slAtEntryArmRoiPct ?? STATS_SL_AT_ENTRY_ARM_ROI_PCT,
   };
 }
 

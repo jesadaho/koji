@@ -1,6 +1,6 @@
 /**
  * จำลองกำไร % (เทียบ entry เต็มโน้ต) ตามกลยุทธ์ auto-open TP/SL บนแท่ง 15m
- * ROI ≥ TP1% → SL@entry (ไม่ต้องรอ partial TP1) · TP1 partial · TP2 · ปิดที่ maxHold
+ * ROI ≥ slAtEntryArmRoiPct → SL@entry · TP1 partial ที่ tp1PricePct · TP2 · ปิดที่ maxHold
  */
 
 export type StatsTpSlPlan = {
@@ -8,7 +8,12 @@ export type StatsTpSlPlan = {
   tp1PartialPct: number;
   tp2PricePct: number;
   maxHoldHours: number;
+  /** ROI ถึงค่านี้แล้วตั้ง SL@entry (แยกจาก TP1 partial) */
+  slAtEntryArmRoiPct?: number;
 };
+
+/** ROI บังทุนที่ entry — ไม่ผูกกับ TP1% ใน Settings */
+export const STATS_SL_AT_ENTRY_ARM_ROI_PCT = 10;
 
 /** ค่า default ตรง Settings / auto-open (Reversal + Snowball) */
 export const DEFAULT_STATS_TPSL_PLAN: StatsTpSlPlan = {
@@ -16,6 +21,7 @@ export const DEFAULT_STATS_TPSL_PLAN: StatsTpSlPlan = {
   tp1PartialPct: 50,
   tp2PricePct: 25,
   maxHoldHours: 48,
+  slAtEntryArmRoiPct: STATS_SL_AT_ENTRY_ARM_ROI_PCT,
 };
 
 export type StatsTpSlExitReason =
@@ -34,8 +40,13 @@ function holdTimeExitReason(plan: StatsTpSlPlan, afterTp1: boolean): StatsTpSlEx
   return plan.maxHoldHours <= 24 ? "time_24h" : "time_48h";
 }
 
+function slAtEntryArmPct(plan: StatsTpSlPlan): number {
+  const v = plan.slAtEntryArmRoiPct ?? STATS_SL_AT_ENTRY_ARM_ROI_PCT;
+  return Number.isFinite(v) && v > 0 ? v : STATS_SL_AT_ENTRY_ARM_ROI_PCT;
+}
+
 export function statsTpSlPlanSummary(plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN): string {
-  return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · ROI≥${plan.tp1PricePct}%→SL@entry · TP2 ${plan.tp2PricePct}% · ${plan.maxHoldHours}h`;
+  return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · ROI≥${slAtEntryArmPct(plan)}%→SL@entry · TP2 ${plan.tp2PricePct}% · ${plan.maxHoldHours}h`;
 }
 
 function tp1PartialFraction(plan: StatsTpSlPlan): number {
@@ -124,6 +135,7 @@ export function simulateStatsTpSlProfit(input: {
   if (!Number.isFinite(input.pctAt48h)) return null;
 
   const tp1 = plan.tp1PricePct;
+  const slArm = slAtEntryArmPct(plan);
   const tp2 = plan.tp2PricePct;
   const partialFrac = Math.min(0.99, Math.max(0.01, plan.tp1PartialPct / 100));
   const liqPct =
@@ -134,7 +146,7 @@ export function simulateStatsTpSlProfit(input: {
   let rem = 1;
   let profit = 0;
   let tp1Done = false;
-  /** ROI ถึง TP1% แล้ว — SL บังทุนที่ entry (ไม่ต้องรอ partial TP1) */
+  /** ROI ถึง slArm% แล้ว — SL บังทุนที่ entry (ไม่ต้องรอ partial TP1) */
   let slAtEntryArmed = false;
   let exitReason: StatsTpSlExitReason = holdTimeExitReason(plan, false);
 
@@ -159,7 +171,7 @@ export function simulateStatsTpSlProfit(input: {
       break;
     }
 
-    if (fav >= tp1) {
+    if (fav >= slArm) {
       slAtEntryArmed = true;
     }
 

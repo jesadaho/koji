@@ -1,3 +1,4 @@
+import { STATS_SL_AT_ENTRY_ARM_ROI_PCT } from "@/lib/tpSlStrategySimulate";
 import { cancelActiveTpSlPlanOrders, tp1PlanLikelyFilled } from "./autoTradeTpSlPlanOrders";
 import {
   closeAllOpenForSymbol,
@@ -152,7 +153,7 @@ async function handleSlAtEntryOnRoi(ctx: TpSlContext): Promise<{ ok: boolean; sl
 
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
-    `🛡️ ROI ≥ ${active.tp1PricePct}% — ตั้ง SL บังทุน @ ${fmtPrice(entry)} (ไม่รอ partial TP1)`,
+    `🛡️ ROI ≥ ${STATS_SL_AT_ENTRY_ARM_ROI_PCT}% — ตั้ง SL บังทุน @ ${fmtPrice(entry)} (ไม่รอ partial TP1)`,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${drop.toFixed(2)}%`,
     slRes.success
@@ -366,7 +367,11 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           continue;
         }
 
-        if (!a.slPlanOrderId?.trim() && Number.isFinite(drop) && drop >= a.tp1PricePct) {
+        if (
+          !a.slPlanOrderId?.trim() &&
+          Number.isFinite(drop) &&
+          drop >= STATS_SL_AT_ENTRY_ARM_ROI_PCT
+        ) {
           const r = await handleSlAtEntryOnRoi(ctx);
           if (r.ok) {
             state = withReversalSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);

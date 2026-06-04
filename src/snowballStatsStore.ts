@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
+  SNOWBALL_STATS_WIN_MIN_PCT_DEFAULT,
   type SnowballStatsAlertSide,
   type SnowballStatsApiPayload,
   type SnowballStatsQualityTier,
@@ -316,13 +317,30 @@ export function migrateSnowballStats4hHorizonAnchorV2(rows: SnowballStatsRow[]):
 }
 
 /** รัน migration แถวสถิติ (เรียกตอนโหลด API + tick follow-up) */
+/** แถวเก่า outcome win_quick_tp30 → ตาม pct48h (Win/Loss/Flat) */
+export function migrateSnowballStatsLegacyQuickTpOutcome(rows: SnowballStatsRow[]): number {
+  const winMin = SNOWBALL_STATS_WIN_MIN_PCT_DEFAULT;
+  let updated = 0;
+  for (const row of rows) {
+    if ((row.outcome as string) !== "win_quick_tp30") continue;
+    const pct48 = row.pct48h;
+    if (pct48 == null || !Number.isFinite(pct48)) continue;
+    if (pct48 >= winMin) row.outcome = "win_trend";
+    else if (pct48 <= -winMin) row.outcome = "loss";
+    else row.outcome = "flat";
+    updated += 1;
+  }
+  return updated;
+}
+
 export function applySnowballStatsRowMigrations(rows: SnowballStatsRow[]): number {
   return (
     migrateSnowballStatsLegacyGradeD(rows) +
     migrateSnowballStatsClearSupersededBreakout1hConfirmFail(rows) +
     migrateSnowballStatsLongAlertTradeSideToLong(rows) +
     migrateSnowballStatsStructureTier(rows) +
-    migrateSnowballStats4hHorizonAnchorV2(rows)
+    migrateSnowballStats4hHorizonAnchorV2(rows) +
+    migrateSnowballStatsLegacyQuickTpOutcome(rows)
   );
 }
 
