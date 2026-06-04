@@ -152,6 +152,9 @@ function parseReversalEma4hFilterParam(raw: string | null): ReversalEma4hFilter 
   if (k === "gt20" || k === "gt+20") return "gt20";
   if (k === "gt30" || k === "gt+30") return "gt30";
   if (k === "gt50" || k === "gt+50") return "gt50";
+  if (k === "gt100" || k === "gt+100") return "gt100";
+  if (k === "gt150" || k === "gt+150") return "gt150";
+  if (k === "gt200" || k === "gt+200") return "gt200";
   return "all";
 }
 

@@ -12,7 +12,10 @@ export type ReversalEma4hFilter =
   | "gt0lt30"
   | "gt20"
   | "gt30"
-  | "gt50";
+  | "gt50"
+  | "gt100"
+  | "gt150"
+  | "gt200";
 
 export const REVERSAL_EMA4H_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalEma4hFilter;
@@ -28,6 +31,9 @@ export const REVERSAL_EMA4H_FILTER_OPTIONS: ReadonlyArray<{
   { value: "gt20", label: "> 20" },
   { value: "gt30", label: "> 30" },
   { value: "gt50", label: "> 50" },
+  { value: "gt100", label: "> 100" },
+  { value: "gt150", label: "> 150" },
+  { value: "gt200", label: "> 200" },
 ];
 
 const EMA4H_SLOPE_THRESHOLD: Record<
@@ -42,6 +48,9 @@ const EMA4H_SLOPE_THRESHOLD: Record<
   gt20: 20,
   gt30: 30,
   gt50: 50,
+  gt100: 100,
+  gt150: 150,
+  gt200: 200,
 };
 
 export function reversalEma4hFilterLabel(filter: ReversalEma4hFilter): string {
