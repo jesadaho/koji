@@ -14,8 +14,9 @@ export type SnowballMatrixFilter =
   | "highWinrate";
 
 export const SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT = 30;
+export const SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS = 3;
 
-export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}`;
+export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}% · เขียว ≤ ${SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS} วัน`;
 
 export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA =
   "เขียว 1 วัน · Vol×SMA > 3× · R% สัญญาณ > 8%";
@@ -131,12 +132,25 @@ function greenDaysBeforeSignalIsOneOf(
   return days.some((d) => greenDaysBeforeSignalIs(row, d));
 }
 
-/** ✨ Quality Signal — EMA(12) 4h slope 7 วัน > 30% */
+function greenDaysBeforeSignalAtMost(
+  row: Pick<SnowballStatsRow, "greenDaysBeforeSignal">,
+  maxDays: number,
+): boolean {
+  const n = row.greenDaysBeforeSignal;
+  return n != null && Number.isFinite(n) && n >= 0 && Math.floor(n) <= maxDays;
+}
+
+/** ✨ Quality Signal — EMA(12) 4h slope 7 วัน > 30% · Day1 เขียวติดก่อนสัญญาณ ≤ 3 วัน */
 export function snowballMatchesQualitySignal(
-  row: Pick<SnowballStatsRow, "ema4hSlopePct7d">,
+  row: Pick<SnowballStatsRow, "ema4hSlopePct7d" | "greenDaysBeforeSignal">,
 ): boolean {
   const pct = row.ema4hSlopePct7d;
-  return pct != null && Number.isFinite(pct) && pct > SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT;
+  return (
+    pct != null &&
+    Number.isFinite(pct) &&
+    pct > SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT &&
+    greenDaysBeforeSignalAtMost(row, SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS)
+  );
 }
 
 export function snowballRowMatchesQualitySignalMatrix(row: SnowballStatsRow): boolean {
