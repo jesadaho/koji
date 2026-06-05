@@ -22,6 +22,7 @@ import {
   autoOpenFailedShowsRejectedMarker,
   autoOpenLimitPendingFillTitle,
   autoOpenLimitPriceNotTouchedYet,
+  filterAutoOpenLogsExcludingLimitPending,
   resolveAutoOpenEntryPrice,
   pctVsEntrySide,
 } from "@/lib/autoOpenFollowUp";
@@ -576,6 +577,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [dayFilter, setDayFilter] = useState<DayFilter>("30");
   const [splitByWeek, setSplitByWeek] = useState(false);
+  const [hideLimitPending, setHideLimitPending] = useState(false);
   const [clearingSkipped, setClearingSkipped] = useState(false);
 
   const apiGet = useCallback(async (path: string) => {
@@ -781,8 +783,18 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     return filterAutoOpenLogsByDays(rows, Number(dayFilter));
   }, [rows, dayFilter]);
 
+  const limitPendingHiddenCount = useMemo(() => {
+    if (!hideLimitPending) return 0;
+    return tableRows.length - filterAutoOpenLogsExcludingLimitPending(tableRows, markPrices).length;
+  }, [tableRows, markPrices, hideLimitPending]);
+
+  const displayRows = useMemo(() => {
+    if (!hideLimitPending) return tableRows;
+    return filterAutoOpenLogsExcludingLimitPending(tableRows, markPrices);
+  }, [tableRows, markPrices, hideLimitPending]);
+
   /** สรุป WR/P/L — ไม่รวมแถว conflict (สอดคล้องสถิติ Snowball/Reversal) */
-  const summaryRows = useMemo(() => excludePendingConflictRows(tableRows), [tableRows]);
+  const summaryRows = useMemo(() => excludePendingConflictRows(displayRows), [displayRows]);
 
   const strategy48hSummary = useMemo(
     () => summarizeAutoOpenStrategy48h(summaryRows, markPrices),
@@ -801,9 +813,9 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     [strategy48hSummary, unrealisedPnlSummary],
   );
 
-  const weekGroups = useMemo(() => groupAutoOpenLogsByBkkWeek(tableRows), [tableRows]);
+  const weekGroups = useMemo(() => groupAutoOpenLogsByBkkWeek(displayRows), [displayRows]);
 
-  const conflictHiddenFromSummary = tableRows.length - summaryRows.length;
+  const conflictHiddenFromSummary = displayRows.length - summaryRows.length;
 
   const successRate =
     summary && summary.total > 0
@@ -811,7 +823,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       : "—";
 
   const exportCsv = useCallback(async () => {
-    if (tableRows.length === 0) {
+    if (displayRows.length === 0) {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
@@ -819,10 +831,10 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     if (dayFilter !== "all") q.set("days", dayFilter);
     if (sourceFilter !== "all") q.set("source", sourceFilter);
     const qs = q.toString();
-    await downloadCsv(statsCsvFilename("auto-open-history"), autoOpenOrderLogToCsv(tableRows), {
+    await downloadCsv(statsCsvFilename("auto-open-history"), autoOpenOrderLogToCsv(displayRows), {
       telegramExportPath: `/api/tma/auto-open-history.csv${qs ? `?${qs}` : ""}`,
     });
-  }, [tableRows, dayFilter, sourceFilter]);
+  }, [displayRows, dayFilter, sourceFilter]);
 
   if (phase === "loading") {
     return (
@@ -920,6 +932,18 @@ export default function AutoOpenHistoryTelegramMiniApp() {
           />
           แยกรายสัปดาห์
         </label>
+        <label
+          className="sub"
+          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+          title="ซ่อนไม้ Limit ⏳ ที่ราคายังไม่แตะ entry (รวมสั่งไม่สำเร็จที่จำลองรอ fill)"
+        >
+          <input
+            type="checkbox"
+            checked={hideLimitPending}
+            onChange={(e) => setHideLimitPending(e.target.checked)}
+          />
+          ซ่อน Limit รอแตะ ⏳
+        </label>
         <button type="button" className="btn" onClick={() => void loadHistory()}>
           รีเฟรช
         </button>
@@ -963,11 +987,19 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             {strategy48hSummaryNode}
           </div>
         ) : null}
-        {conflictHiddenFromSummary > 0 ? (
+        {limitPendingHiddenCount > 0 || conflictHiddenFromSummary > 0 ? (
           <p className="sub" style={{ marginTop: 0, marginBottom: "0.65rem", opacity: 0.9 }}>
-            แสดงในตาราง {tableRows.length} รายการ (รวม conflict {conflictHiddenFromSummary} ไม้ที่เปิดจริงแล้ว) ·
-            สรุป WR/P/L ด้านบนไม่รวมไม้ที่มี{" "}
-            <code>conflict w/</code>
+            แสดงในตาราง {displayRows.length} รายการ
+            {limitPendingHiddenCount > 0 ? (
+              <> (ซ่อน Limit รอแตะ ⏳ {limitPendingHiddenCount})</>
+            ) : null}
+            {conflictHiddenFromSummary > 0 ? (
+              <>
+                {" "}
+                · สรุป WR/P/L ไม่รวม conflict {conflictHiddenFromSummary} ไม้ (
+                <code>conflict w/</code>)
+              </>
+            ) : null}
           </p>
         ) : null}
 
@@ -986,9 +1018,13 @@ export default function AutoOpenHistoryTelegramMiniApp() {
           )
         ) : (
           <AutoOpenHistoryTable
-            rows={tableRows}
+            rows={displayRows}
             markPrices={markPrices}
-            emptyMessage={AUTO_OPEN_HISTORY_EMPTY_MSG}
+            emptyMessage={
+              hideLimitPending && tableRows.length > 0
+                ? "ทุกรายการในช่วงนี้เป็น Limit รอแตะ ⏳ — ปิดตัวกรองเพื่อดู"
+                : AUTO_OPEN_HISTORY_EMPTY_MSG
+            }
           />
         )}
       </section>

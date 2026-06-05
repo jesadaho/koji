@@ -165,6 +165,17 @@ export function autoOpenFailedShowsRejectedMarker(
   return true;
 }
 
+/** กรองออกแถว Limit ⏳ ที่ราคายังไม่แตะ entry */
+export function filterAutoOpenLogsExcludingLimitPending(
+  rows: AutoOpenOrderLogRow[],
+  markPrices: Record<string, number>,
+): AutoOpenOrderLogRow[] {
+  return rows.filter((row) => {
+    const mark = markPrices[autoOpenContractSymbolKey(row.contractSymbol)];
+    return !autoOpenLimitPriceNotTouchedYet(row, mark);
+  });
+}
+
 /** คืน entry ที่ใช้แสดง/follow-up — รองรับแถวเก่าที่มีแค่ mark/ema */
 export function resolveAutoOpenEntryPrice(row: AutoOpenOrderLogRow): number | undefined {
   if (typeof row.entryPrice === "number" && Number.isFinite(row.entryPrice) && row.entryPrice > 0) {
