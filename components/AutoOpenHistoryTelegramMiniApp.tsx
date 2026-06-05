@@ -16,7 +16,12 @@ import {
 } from "@/lib/autoOpenOrderLogClient";
 import { groupAutoOpenLogsByBkkWeek } from "@/lib/autoOpenWeekGroup";
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
-import { autoOpenHorizonDue, resolveAutoOpenEntryPrice, pctVsEntrySide } from "@/lib/autoOpenFollowUp";
+import {
+  autoOpenHorizonDue,
+  autoOpenLimitPriceNotTouchedYet,
+  resolveAutoOpenEntryPrice,
+  pctVsEntrySide,
+} from "@/lib/autoOpenFollowUp";
 import {
   autoOpenStrategyFinalized,
   autoOpenStrategyOutcomeLabel,
@@ -269,6 +274,24 @@ function fmtLeverage(leverage: number | null | undefined): string {
   return `${Math.floor(leverage)}x`;
 }
 
+function fmtEntryCell(row: AutoOpenOrderLogRow, markPrice: number | undefined): ReactNode {
+  const entry = resolveAutoOpenEntryPrice(row);
+  const priceStr = fmtPrice(entry);
+  if (priceStr === "—") return priceStr;
+  if (!autoOpenLimitPriceNotTouchedYet(row, markPrice)) return priceStr;
+  return (
+    <span
+      style={{ whiteSpace: "nowrap" }}
+      title="Limit ยังไม่แตะราคา order — รอรีเทสต์"
+    >
+      {priceStr}
+      <span style={{ marginLeft: "0.2em", opacity: 0.9 }} aria-hidden>
+        ⏳
+      </span>
+    </span>
+  );
+}
+
 function fmtMarginCell(row: AutoOpenOrderLogRow): ReactNode {
   const main = fmtMarginUsdt(row.marginUsdt);
   if (main === "—") return main;
@@ -402,7 +425,7 @@ function renderAutoOpenHistoryTableBody(
         <td>{r.side ? r.side.toUpperCase() : "—"}</td>
         <td>{fmtMarginCell(r)}</td>
         <td>{fmtLeverage(r.leverage)}</td>
-        <td>{fmtPrice(resolveAutoOpenEntryPrice(r))}</td>
+        <td>{fmtEntryCell(r, nowPx)}</td>
         <td>{fmtPrice(nowPx)}</td>
         <td>{fmtPnlCell(r, nowPx)}</td>
         <td>{fmtStrategyPnlCell(r)}</td>
@@ -451,7 +474,7 @@ function AutoOpenHistoryTable({
             <th>ทิศ</th>
             <th>Margin</th>
             <th>Lev</th>
-            <th>Entry</th>
+            <th title="⏳ = Limit วางแล้ว แต่ราคายังไม่แตะราคา order">Entry</th>
             <th>ปัจจุบัน</th>
             <th>P/L</th>
             <th title="หลังครบ 48h — Win/Loss/Flat ตาม pct48h (Snowball: Trend)">
@@ -945,7 +968,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </section>
 
       <p className="sub" style={{ marginTop: "0.5rem" }}>
-        ราคาปัจจุบัน = MEXC perp last · Max DD = drawdown สูงสุดถึง MFE ใน 48h · แยกรายสัปดาห์ = จันทร์–อาทิตย์ (BKK) · cron อัปเดต follow-up
+        ราคาปัจจุบัน = MEXC perp last · Entry ⏳ = Limit วางแล้วแต่ราคายังไม่แตะ order · Max DD = drawdown สูงสุดถึง MFE ใน 48h · แยกรายสัปดาห์ = จันทร์–อาทิตย์ (BKK) · cron อัปเดต follow-up
       </p>
 
       <p className="sub" style={{ marginTop: "1rem" }}>

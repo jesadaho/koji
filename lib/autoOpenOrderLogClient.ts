@@ -27,6 +27,9 @@ export type AutoOpenOrderLogRow = {
   wickRatio?: number;
   rangeRankInLookback?: number | null;
   orderKind?: "market" | "limit";
+  /** EMA20 15m สำหรับ Reversal limit retest */
+  ema20_15m?: number;
+  /** @deprecated แถวเก่า — ใช้ ema20_15m แทน */
   ema50_15m?: number;
   markPrice?: number;
   /** ราคาเข้าอ้างอิง (สัญญาณ / ตั้งใจเปิด) — ใช้ follow-up แม้เปิดล้มเหลว */
@@ -80,7 +83,7 @@ const REASON_LABELS: Record<string, string> = {
   position_check_failed: "เช็คโพซิชัน MEXC ไม่สำเร็จ",
   existing_position: "มีโพซิชันอยู่แล้ว",
   mexc_order_rejected: "MEXC ปฏิเสธคำสั่ง",
-  ema_or_price_unavailable: "ดึง EMA50/mark ไม่ได้",
+  ema_or_price_unavailable: "ดึง EMA20/mark ไม่ได้",
   mark_unavailable: "ดึงราคาตลาดไม่ได้",
   entry_gate: "สัญญาณไม่ผ่าน gate (legacy)",
   quality_signal_gate: `สัญญาณไม่ผ่าน Quality Signal (${SNOWBALL_QUALITY_SIGNAL_CRITERIA})`,

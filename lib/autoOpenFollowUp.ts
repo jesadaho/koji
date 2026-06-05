@@ -91,6 +91,19 @@ export function finalizeAutoOpenPnlUsdtBucket(
   };
 }
 
+/** Limit วางสำเร็จแล้ว แต่ราคาปัจจุบันยังไม่แตะราคา order (รอ fill / รีเทสต์) */
+export function autoOpenLimitPriceNotTouchedYet(
+  row: AutoOpenOrderLogRow,
+  markPrice: number | undefined,
+): boolean {
+  if (row.orderKind !== "limit" || row.outcome !== "success") return false;
+  const entry = resolveAutoOpenEntryPrice(row);
+  if (entry == null || markPrice == null || !Number.isFinite(markPrice)) return false;
+  if (row.side === "short") return markPrice < entry;
+  if (row.side === "long") return markPrice > entry;
+  return false;
+}
+
 /** คืน entry ที่ใช้แสดง/follow-up — รองรับแถวเก่าที่มีแค่ mark/ema */
 export function resolveAutoOpenEntryPrice(row: AutoOpenOrderLogRow): number | undefined {
   if (typeof row.entryPrice === "number" && Number.isFinite(row.entryPrice) && row.entryPrice > 0) {
@@ -98,8 +111,11 @@ export function resolveAutoOpenEntryPrice(row: AutoOpenOrderLogRow): number | un
   }
   if (row.outcome !== "success" && row.outcome !== "failed") return undefined;
   if (row.source === "reversal") {
-    if (row.orderKind === "limit" && typeof row.ema50_15m === "number" && row.ema50_15m > 0) {
-      return row.ema50_15m;
+    if (row.orderKind === "limit") {
+      const ema =
+        (typeof row.ema20_15m === "number" && row.ema20_15m > 0 ? row.ema20_15m : undefined) ??
+        (typeof row.ema50_15m === "number" && row.ema50_15m > 0 ? row.ema50_15m : undefined);
+      if (ema != null) return ema;
     }
     if (typeof row.markPrice === "number" && row.markPrice > 0) return row.markPrice;
   }

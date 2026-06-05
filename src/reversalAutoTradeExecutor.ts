@@ -71,7 +71,9 @@ export function reversalAutotradePassesEntryGate(input: {
   });
 }
 
-/** จำนวนแท่ง 15m ที่ดึงเพื่อคำนวณ EMA50 (ต้องพอครอบ warmup) */
+/** EMA บน 15m สำหรับ hybrid entry (Market vs Limit retest) */
+const REVERSAL_AUTOTRADE_EMA_PERIOD = 20;
+/** จำนวนแท่ง 15m ที่ดึงเพื่อคำนวณ EMA (ต้องพอครอบ warmup) */
 const REVERSAL_AUTOTRADE_15M_FETCH_BARS = 200;
 
 function shortContractLabel(contractSymbol: string): string {
@@ -228,18 +230,18 @@ function resolveReversalLogEntryPrice(
   extra: {
     entryPrice?: number;
     orderKind?: "market" | "limit";
-    ema50_15m?: number;
+    ema20_15m?: number;
     markPrice?: number;
   } | undefined,
   signalClosePrice: number | undefined,
 ): number | undefined {
   if (outcome !== "success" && outcome !== "failed") return undefined;
   if (typeof extra?.entryPrice === "number" && extra.entryPrice > 0) return extra.entryPrice;
-  if (extra?.orderKind === "limit" && typeof extra.ema50_15m === "number" && extra.ema50_15m > 0) {
-    return extra.ema50_15m;
+  if (extra?.orderKind === "limit" && typeof extra.ema20_15m === "number" && extra.ema20_15m > 0) {
+    return extra.ema20_15m;
   }
   if (typeof extra?.markPrice === "number" && extra.markPrice > 0) return extra.markPrice;
-  if (typeof extra?.ema50_15m === "number" && extra.ema50_15m > 0) return extra.ema50_15m;
+  if (typeof extra.ema20_15m === "number" && extra.ema20_15m > 0) return extra.ema20_15m;
   if (typeof signalClosePrice === "number" && signalClosePrice > 0) return signalClosePrice;
   return undefined;
 }
@@ -254,7 +256,7 @@ function logReversalAutoOpen(
     marginUsdt?: number;
     leverage?: number;
     orderKind?: "market" | "limit";
-    ema50_15m?: number;
+    ema20_15m?: number;
     markPrice?: number;
     entryPrice?: number;
   },
@@ -287,9 +289,9 @@ function logReversalAutoOpen(
  * - สัญญาณ Short: `reversalAutoTradeEnabled` · สัญญาณ Long (fade): `reversalAutoTradeLongSignalShortEnabled`
  * - มี MEXC creds
  * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — EMA4H <−3%
- * - entry แบบ hybrid ตาม EMA50 บน TF 15m:
- *   - ราคาตลาด > EMA50 → Market SHORT ทันที
- *   - ราคาตลาด <= EMA50 → Limit SHORT ที่ราคา EMA50 (ดักรีเทสต์)
+ * - entry แบบ hybrid ตาม EMA20 บน TF 15m:
+ *   - ราคาตลาด > EMA20 → Market SHORT ทันที
+ *   - ราคาตลาด <= EMA20 → Limit SHORT ที่ราคา EMA20 (ดักรีเทสต์)
  * - 1 order/เหรียญ/วัน (BKK) — กันสั่งซ้ำหลังวางทั้ง market และ limit
  */
 export async function runReversalAutoTradeAfterReversalAlert(
@@ -351,7 +353,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
   type EntryResolve =
     | {
         ok: true;
-        ema50: number | null;
+        ema20: number | null;
         mark: number;
         aboveEma: boolean;
         emaFallbackMarket: boolean;
@@ -364,8 +366,9 @@ export async function runReversalAutoTradeAfterReversalAlert(
   async function resolveReversalEntry(): Promise<EntryResolve> {
     if (entryCache) return entryCache;
 
-    let ema50: number | null = null;
+    let ema20: number | null = null;
     let klineLastClose: number | null = null;
+    const emaMinBars = REVERSAL_AUTOTRADE_EMA_PERIOD + 2;
 
     try {
       const pack = await fetchBinanceUsdmKlines(
@@ -373,12 +376,12 @@ export async function runReversalAutoTradeAfterReversalAlert(
         "15m",
         REVERSAL_AUTOTRADE_15M_FETCH_BARS,
       );
-      if (pack && pack.close.length >= 52) {
-        const ema = emaLine(pack.close, 50);
+      if (pack && pack.close.length >= emaMinBars) {
+        const ema = emaLine(pack.close, REVERSAL_AUTOTRADE_EMA_PERIOD);
         const i = pack.close.length - 2;
         const v = ema[i];
         if (typeof v === "number" && Number.isFinite(v) && v > 0) {
-          ema50 = v;
+          ema20 = v;
         }
         const lc = pack.close[pack.close.length - 1];
         if (typeof lc === "number" && Number.isFinite(lc) && lc > 0) {
@@ -441,12 +444,12 @@ export async function runReversalAutoTradeAfterReversalAlert(
       return entryCache;
     }
 
-    const emaFallbackMarket = ema50 == null;
-    const aboveEma = emaFallbackMarket ? true : mark > (ema50 as number);
+    const emaFallbackMarket = ema20 == null;
+    const aboveEma = emaFallbackMarket ? true : mark > (ema20 as number);
 
     entryCache = {
       ok: true,
-      ema50,
+      ema20,
       mark,
       aboveEma,
       emaFallbackMarket,
@@ -524,7 +527,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
     const entryRes = await resolveReversalEntry();
     const emaLogExtra = entryRes.ok
       ? {
-          ema50_15m: entryRes.ema50 ?? undefined,
+          ema20_15m: entryRes.ema20 ?? undefined,
           markPrice: entryRes.mark,
           orderKind: (entryRes.aboveEma ? "market" : "limit") as "market" | "limit",
         }
@@ -592,14 +595,14 @@ export async function runReversalAutoTradeAfterReversalAlert(
       ]);
       continue;
     }
-    const ema50 = entryRes.ema50;
+    const ema20 = entryRes.ema20;
     const markPrice = entryRes.mark;
     const aboveEma = entryRes.aboveEma;
     const emaFallbackMarket = entryRes.emaFallbackMarket;
     const markSource = entryRes.markSource;
     usersAttempted += 1;
 
-    const intendedEntry = reversalIntendedEntry(aboveEma, markPrice, ema50 ?? markPrice);
+    const intendedEntry = reversalIntendedEntry(aboveEma, markPrice, ema20 ?? markPrice);
     const lev = Math.floor(leverage);
 
     try {
@@ -616,7 +619,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             long: false,
             marginUsdt,
             leverage: lev,
-            limitPrice: ema50!,
+            limitPrice: ema20!,
             openType: 1,
           });
 
@@ -632,7 +635,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             marginUsdt,
             leverage: lev,
             orderKind: aboveEma ? "market" : "limit",
-            ema50_15m: ema50 ?? undefined,
+            ema20_15m: ema20 ?? undefined,
             markPrice,
             entryPrice: intendedEntry,
           },
@@ -641,15 +644,15 @@ export async function runReversalAutoTradeAfterReversalAlert(
         await notifyLines(userId, [
           tgTitle,
           emaFallbackMarket
-            ? "❌ สั่งเปิดไม่สำเร็จ (Market SHORT · ไม่มี EMA50)"
-            : `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น SHORT${aboveEma ? " · Market (เหนือ EMA50 15m)" : " · Limit retest EMA50 15m"})`,
+            ? "❌ สั่งเปิดไม่สำเร็จ (Market SHORT · ไม่มี EMA20)"
+            : `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น SHORT${aboveEma ? " · Market (เหนือ EMA20 15m)" : " · Limit retest EMA20 15m"})`,
           `[${shortContractLabel(contractSymbol)}]/USDT`,
           `Margin ~${marginUsdt} USDT · ${lev}x`,
           emaFallbackMarket
             ? `ราคาอ้างอิง ~${fmtReversalAutoTradePrice(markPrice)} (${markSource})`
             : aboveEma
-              ? `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} > EMA50 15m ~${fmtReversalAutoTradePrice(ema50!)}`
-              : `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} ≤ EMA50 15m ~${fmtReversalAutoTradePrice(ema50!)}`,
+              ? `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} > EMA20 15m ~${fmtReversalAutoTradePrice(ema20!)}`
+              : `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} ≤ EMA20 15m ~${fmtReversalAutoTradePrice(ema20!)}`,
           `MEXC: ${msg}`,
         ]);
         continue;
@@ -667,7 +670,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           marginUsdt,
           leverage: lev,
           orderKind: aboveEma ? "market" : "limit",
-          ema50_15m: ema50 ?? undefined,
+          ema20_15m: ema20 ?? undefined,
           markPrice,
           entryPrice: intendedEntry,
         },
@@ -793,10 +796,10 @@ export async function runReversalAutoTradeAfterReversalAlert(
       await notifyLines(userId, [
         tgTitle,
         emaFallbackMarket
-          ? "✅ เปิด Market SHORT (ไม่มี EMA50 → Market โดยตรง)"
+          ? "✅ เปิด Market SHORT (ไม่มี EMA20 → Market โดยตรง)"
           : aboveEma
-            ? "✅ เปิด Market SHORT (ราคาเหนือ EMA50 15m)"
-            : "✅ ตั้ง Limit SHORT รอรีเทสต์ที่ EMA50 15m",
+            ? "✅ เปิด Market SHORT (ราคาเหนือ EMA20 15m)"
+            : "✅ ตั้ง Limit SHORT รอรีเทสต์ที่ EMA20 15m",
         `[${shortContractLabel(contractSymbol)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${lev}x`,
         `สัญญาณ Reversal: ${input.model} · TF ${input.signalBarTf.toUpperCase()}`,
@@ -806,8 +809,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
         emaFallbackMarket
           ? `ราคาอ้างอิง ~${fmtReversalAutoTradePrice(markPrice)} (${markSource})`
           : aboveEma
-            ? `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} > EMA50 15m ~${fmtReversalAutoTradePrice(ema50!)}`
-            : `Limit ~${fmtReversalAutoTradePrice(ema50!)} (EMA50 15m) · ราคาปัจจุบัน ~${fmtReversalAutoTradePrice(markPrice)}`,
+            ? `ราคาตลาด ~${fmtReversalAutoTradePrice(markPrice)} > EMA20 15m ~${fmtReversalAutoTradePrice(ema20!)}`
+            : `Limit ~${fmtReversalAutoTradePrice(ema20!)} (EMA20 15m) · ราคาปัจจุบัน ~${fmtReversalAutoTradePrice(markPrice)}`,
         ...tpSlLines,
         "1 order/เหรียญ/วัน (BKK) — จะไม่สั่งซ้ำในเหรียญนี้วันนี้",
       ]);
@@ -823,7 +826,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           marginUsdt,
           leverage: lev,
           orderKind: aboveEma ? "market" : "limit",
-          ema50_15m: ema50 ?? undefined,
+          ema20_15m: ema20 ?? undefined,
           markPrice,
           entryPrice: intendedEntry,
         },
