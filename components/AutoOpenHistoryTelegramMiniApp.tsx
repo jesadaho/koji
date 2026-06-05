@@ -763,8 +763,8 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   const summaryRows = useMemo(() => excludePendingConflictRows(tableRows), [tableRows]);
 
   const strategy48hSummary = useMemo(
-    () => summarizeAutoOpenStrategy48h(summaryRows),
-    [summaryRows],
+    () => summarizeAutoOpenStrategy48h(summaryRows, markPrices),
+    [summaryRows, markPrices],
   );
   const unrealisedPnlSummary = useMemo(
     () => summarizeAutoOpenUnrealizedPnl(summaryRows, markPrices),
@@ -934,7 +934,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             className="sub"
             title={
               strategy48hSummaryTitle ??
-              "ชนะ/แพ้@48h = ไม้ครบ 48h · Realised = P/L ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่มี entry อ้างอิง"
+              "ชนะ/แพ้@48h = ไม้ครบ 48h · Realised = P/L ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h (ไม่รวม Limit ⏳ ที่ยังไม่แตะ order) · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่มี entry อ้างอิง"
             }
             style={{ marginTop: 0, marginBottom: "0.65rem", lineHeight: 1.45 }}
           >
@@ -972,7 +972,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </section>
 
       <p className="sub" style={{ marginTop: "0.5rem" }}>
-        ราคาปัจจุบัน = MEXC perp last · Entry ⏳ = Limit วางแล้วแต่ราคายังไม่แตะ order · Max DD = drawdown สูงสุดถึง MFE ใน 48h · แยกรายสัปดาห์ = จันทร์–อาทิตย์ (BKK) · cron อัปเดต follow-up
+        ราคาปัจจุบัน = MEXC perp last · Entry ⏳ = Limit วางแล้วแต่ราคายังไม่แตะ order (ไม่นับ P/L รวม / คอลัมน์ P/L) · Max DD = drawdown สูงสุดถึง MFE ใน 48h · แยกรายสัปดาห์ = จันทร์–อาทิตย์ (BKK) · cron อัปเดต follow-up
       </p>
 
       <p className="sub" style={{ marginTop: "1rem" }}>
