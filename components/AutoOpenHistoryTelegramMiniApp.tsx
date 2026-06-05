@@ -19,6 +19,8 @@ import { groupAutoOpenLogsByBkkWeek } from "@/lib/autoOpenWeekGroup";
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import {
   autoOpenHorizonDue,
+  autoOpenFailedShowsRejectedMarker,
+  autoOpenLimitPendingFillTitle,
   autoOpenLimitPriceNotTouchedYet,
   resolveAutoOpenEntryPrice,
   pctVsEntrySide,
@@ -279,18 +281,33 @@ function fmtEntryCell(row: AutoOpenOrderLogRow, markPrice: number | undefined): 
   const entry = resolveAutoOpenEntryPrice(row);
   const priceStr = fmtPrice(entry);
   if (priceStr === "—") return priceStr;
-  if (!autoOpenLimitPriceNotTouchedYet(row, markPrice)) return priceStr;
-  return (
-    <span
-      style={{ whiteSpace: "nowrap" }}
-      title="Limit ยังไม่แตะราคา order — รอรีเทสต์"
-    >
-      {priceStr}
-      <span style={{ marginLeft: "0.2em", opacity: 0.9 }} aria-hidden>
-        ⏳
+  if (autoOpenLimitPriceNotTouchedYet(row, markPrice)) {
+    return (
+      <span style={{ whiteSpace: "nowrap" }} title={autoOpenLimitPendingFillTitle(row)}>
+        {priceStr}
+        <span style={{ marginLeft: "0.2em", opacity: 0.9 }} aria-hidden>
+          ⏳
+        </span>
       </span>
-    </span>
-  );
+    );
+  }
+  if (autoOpenFailedShowsRejectedMarker(row, markPrice)) {
+    return (
+      <span
+        style={{ whiteSpace: "nowrap" }}
+        title="สั่งไม่สำเร็จ — ไม่มี order บน MEXC"
+      >
+        {priceStr}
+        <span
+          style={{ marginLeft: "0.2em", color: "var(--danger, #c44)", opacity: 0.9 }}
+          aria-hidden
+        >
+          ✕
+        </span>
+      </span>
+    );
+  }
+  return priceStr;
 }
 
 function fmtMarginCell(row: AutoOpenOrderLogRow): ReactNode {
@@ -480,7 +497,7 @@ function AutoOpenHistoryTable({
             </th>
             <th>Margin</th>
             <th>Lev</th>
-            <th title="⏳ = Limit วางแล้ว แต่ราคายังไม่แตะราคา order">Entry</th>
+            <th title="⏳ = Limit รอแตะ (รวมสั่งไม่สำเร็จแต่จำลองรอ fill) · ✕ = ล้มเหลวอื่น">Entry</th>
             <th>ปัจจุบัน</th>
             <th>P/L</th>
             <th title="หลังครบ 48h — Win/Loss/Flat ตาม pct48h (Snowball: Trend)">
@@ -939,7 +956,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             className="sub"
             title={
               strategy48hSummaryTitle ??
-              "ชนะ/แพ้@48h = ไม้ครบ 48h · Realised = P/L ตามกติกาสถิติ · Unrealised = mark สดไม้ที่ยังไม่ครบ 48h (ไม่รวม Limit ⏳ ที่ยังไม่แตะ order) · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่มี entry อ้างอิง"
+              "ชนะ/แพ้@48h = ไม้ครบ 48h · Realised = P/L ตามกติกาสถิติ · Unrealised = mark สด (ไม่รวม Limit ⏳ รอแตะ · รวมล้มเหลว Limit ที่แตะแล้วจำลอง fill) · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่ราคาแตะ entry แล้ว"
             }
             style={{ marginTop: 0, marginBottom: "0.65rem", lineHeight: 1.45 }}
           >
@@ -977,7 +994,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       </section>
 
       <p className="sub" style={{ marginTop: "0.5rem" }}>
-        ราคาปัจจุบัน = MEXC perp last · Entry ⏳ = Limit วางแล้วแต่ราคายังไม่แตะ order (ไม่นับ P/L รวม / คอลัมน์ P/L) · Max DD = drawdown สูงสุดถึง MFE ใน 48h · แยกรายสัปดาห์ = จันทร์–อาทิตย์ (BKK) · cron อัปเดต follow-up
+        ราคาปัจจุบัน = MEXC perp last · Entry ⏳ = Limit รอแตะ (รวมล้มเหลวที่จำลองรอ fill) · Entry ✕ = ล้มเหลว Market / Limit แตะแล้ว · P/L สดนับเมื่อราคาแตะ entry แล้ว · cron อัปเดต follow-up
       </p>
 
       <p className="sub" style={{ marginTop: "1rem" }}>

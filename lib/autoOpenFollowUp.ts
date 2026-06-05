@@ -91,17 +91,78 @@ export function finalizeAutoOpenPnlUsdtBucket(
   };
 }
 
-/** Limit วางสำเร็จแล้ว แต่ราคาปัจจุบันยังไม่แตะราคา order (รอ fill / รีเทสต์) */
+function reversalEma15mRef(row: AutoOpenOrderLogRow): number | undefined {
+  const ema20 =
+    typeof row.ema20_15m === "number" && row.ema20_15m > 0 ? row.ema20_15m : undefined;
+  const ema50 =
+    typeof row.ema50_15m === "number" && row.ema50_15m > 0 ? row.ema50_15m : undefined;
+  return ema20 ?? ema50;
+}
+
+/** ประเภท order — รองรับแถวเก่าที่ไม่มี orderKind */
+export function resolveAutoOpenOrderKind(
+  row: AutoOpenOrderLogRow,
+): "market" | "limit" | undefined {
+  if (row.orderKind === "market" || row.orderKind === "limit") return row.orderKind;
+  if (row.reasonCode === "open_success_limit") return "limit";
+  if (row.reasonCode === "open_success_market") return "market";
+  if (row.source !== "reversal") return undefined;
+
+  const ema = reversalEma15mRef(row);
+  if (ema == null) return undefined;
+  const entry =
+    typeof row.entryPrice === "number" && Number.isFinite(row.entryPrice) && row.entryPrice > 0
+      ? row.entryPrice
+      : undefined;
+  const mark =
+    typeof row.markPrice === "number" && Number.isFinite(row.markPrice) && row.markPrice > 0
+      ? row.markPrice
+      : undefined;
+  if (entry != null) {
+    if (Math.abs(entry - ema) / ema < 0.002) return "limit";
+    if (row.side === "short" && mark != null && entry > mark) return "limit";
+    if (row.side === "long" && mark != null && entry < mark) return "limit";
+  }
+  if (mark != null && row.side === "short" && mark <= ema) return "limit";
+  if (mark != null && row.side === "long" && mark >= ema) return "limit";
+  return undefined;
+}
+
+/** สั่งไม่สำเร็จ — ไม่มี order จริงบน MEXC */
+export function autoOpenOrderNeverPlacedOnExchange(row: AutoOpenOrderLogRow): boolean {
+  return row.outcome === "failed";
+}
+
+/** Limit (สำเร็จหรือล้มเหลว) — ราคายังไม่แตะ entry → รอ fill / จำลองรอ fill */
 export function autoOpenLimitPriceNotTouchedYet(
   row: AutoOpenOrderLogRow,
   markPrice: number | undefined,
 ): boolean {
-  if (row.orderKind !== "limit" || row.outcome !== "success") return false;
+  if (resolveAutoOpenOrderKind(row) !== "limit") return false;
+  if (row.outcome !== "success" && row.outcome !== "failed") return false;
   const entry = resolveAutoOpenEntryPrice(row);
   if (entry == null || markPrice == null || !Number.isFinite(markPrice)) return false;
   if (row.side === "short") return markPrice < entry;
   if (row.side === "long") return markPrice > entry;
   return false;
+}
+
+export function autoOpenLimitPendingFillTitle(row: AutoOpenOrderLogRow): string {
+  if (row.outcome === "failed") {
+    return "สั่ง Limit ไม่สำเร็จ — ราคายังไม่แตะ (จำลองรอ fill)";
+  }
+  return "Limit วางบน MEXC แล้ว — รอราคาแตะ order";
+}
+
+/** ล้มเหลว Market — แสดง ✕ (Limit รอแตะ = ⏳ · Limit แตะแล้ว = จำลอง fill ไม่ขึ้น ✕) */
+export function autoOpenFailedShowsRejectedMarker(
+  row: AutoOpenOrderLogRow,
+  markPrice: number | undefined,
+): boolean {
+  if (row.outcome !== "failed") return false;
+  if (autoOpenLimitPriceNotTouchedYet(row, markPrice)) return false;
+  if (resolveAutoOpenOrderKind(row) === "limit") return false;
+  return true;
 }
 
 /** คืน entry ที่ใช้แสดง/follow-up — รองรับแถวเก่าที่มีแค่ mark/ema */
@@ -111,10 +172,8 @@ export function resolveAutoOpenEntryPrice(row: AutoOpenOrderLogRow): number | un
   }
   if (row.outcome !== "success" && row.outcome !== "failed") return undefined;
   if (row.source === "reversal") {
-    if (row.orderKind === "limit") {
-      const ema =
-        (typeof row.ema20_15m === "number" && row.ema20_15m > 0 ? row.ema20_15m : undefined) ??
-        (typeof row.ema50_15m === "number" && row.ema50_15m > 0 ? row.ema50_15m : undefined);
+    if (resolveAutoOpenOrderKind(row) === "limit") {
+      const ema = reversalEma15mRef(row);
       if (ema != null) return ema;
     }
     if (typeof row.markPrice === "number" && row.markPrice > 0) return row.markPrice;
