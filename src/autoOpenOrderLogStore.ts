@@ -80,6 +80,9 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   }
   if (o.side === "long" || o.side === "short") row.side = o.side;
   if (o.alertSide === "long" || o.alertSide === "bear") row.alertSide = o.alertSide;
+  if (o.reversalAlertSide === "short" || o.reversalAlertSide === "long") {
+    row.reversalAlertSide = o.reversalAlertSide;
+  }
   if (typeof o.gradeKey === "string") row.gradeKey = o.gradeKey;
   else if (o.gradeKey === null) row.gradeKey = null;
   if (typeof o.signalBarTf === "string") row.signalBarTf = o.signalBarTf;

@@ -237,11 +237,15 @@ function resolveReversalLogEntryPrice(
 ): number | undefined {
   if (outcome !== "success" && outcome !== "failed") return undefined;
   if (typeof extra?.entryPrice === "number" && extra.entryPrice > 0) return extra.entryPrice;
-  if (extra?.orderKind === "limit" && typeof extra.ema20_15m === "number" && extra.ema20_15m > 0) {
+  if (
+    extra?.orderKind === "limit" &&
+    typeof extra.ema20_15m === "number" &&
+    extra.ema20_15m > 0
+  ) {
     return extra.ema20_15m;
   }
   if (typeof extra?.markPrice === "number" && extra.markPrice > 0) return extra.markPrice;
-  if (typeof extra.ema20_15m === "number" && extra.ema20_15m > 0) return extra.ema20_15m;
+  if (typeof extra?.ema20_15m === "number" && extra.ema20_15m > 0) return extra.ema20_15m;
   if (typeof signalClosePrice === "number" && signalClosePrice > 0) return signalClosePrice;
   return undefined;
 }
@@ -273,6 +277,7 @@ function logReversalAutoOpen(
     contractSymbol: signal.contractSymbol,
     binanceSymbol: signal.binanceSymbol,
     side: "short",
+    reversalAlertSide: signal.alertTradeSide,
     signalBarTf: signal.signalBarTf,
     model: signal.model,
     signalBarOpenSec: signal.signalBarOpenSec,

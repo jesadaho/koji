@@ -6,6 +6,7 @@ import {
 import {
   autoOpenOutcomeLabel,
   autoOpenReasonLabel,
+  autoOpenSignalSideLabel,
   autoOpenSourceLabel,
   type AutoOpenOrderLogRow,
 } from "@/lib/autoOpenOrderLogClient";
@@ -20,6 +21,7 @@ const HEADERS = [
   "รายละเอียด",
   "เหรียญ",
   "ทิศ",
+  "สัญญาณ",
   "entryPrice",
   "เกรด",
   "TF",
@@ -44,7 +46,9 @@ function fmtPctCsv(p: number | null | undefined): string {
 }
 
 export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
-  const body = rows.map((r) => [
+  const body = rows.map((r) => {
+    const signalLabel = autoOpenSignalSideLabel(r);
+    return [
     String(r.atMs),
     statsFmtBkk(new Date(r.atMs).toISOString()),
     autoOpenSourceLabel(r.source),
@@ -53,6 +57,7 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
     r.reasonDetail ?? "",
     statsCoinLabel(r.binanceSymbol || r.contractSymbol),
     r.side?.toUpperCase() ?? "",
+    signalLabel === "—" ? "" : signalLabel,
     (() => {
       const e = resolveAutoOpenEntryPrice(r);
       return e != null ? String(e) : "";
@@ -75,6 +80,7 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
       ? autoOpenStrategyOutcomeLabel(r.strategyOutcome as AutoOpenStrategyOutcome)
       : "",
     fmtPctCsv(r.strategyPct),
-  ]);
+  ];
+  });
   return buildCsv(HEADERS, body);
 }

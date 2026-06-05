@@ -7,6 +7,7 @@ import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import {
   autoOpenOutcomeLabel,
   autoOpenReasonLabel,
+  autoOpenSignalSideLabel,
   autoOpenSourceLabel,
   filterAutoOpenLogsByDays,
   summarizeAutoOpenOrderLogs,
@@ -405,7 +406,7 @@ function renderAutoOpenHistoryTableBody(
   if (rows.length === 0) {
     return (
       <tr>
-        <td colSpan={18} className="sub">
+        <td colSpan={19} className="sub">
           {emptyMessage}
         </td>
       </tr>
@@ -424,6 +425,7 @@ function renderAutoOpenHistoryTableBody(
           <PendingConflictBadge conflictWith={r.conflictWith} />
         </td>
         <td>{r.side ? r.side.toUpperCase() : "—"}</td>
+        <td>{autoOpenSignalSideLabel(r)}</td>
         <td>{fmtMarginCell(r)}</td>
         <td>{fmtLeverage(r.leverage)}</td>
         <td>{fmtEntryCell(r, nowPx)}</td>
@@ -473,6 +475,9 @@ function AutoOpenHistoryTable({
             <th>แหล่ง</th>
             <th>เหรียญ</th>
             <th>ทิศ</th>
+            <th title="ทิศสัญญาณที่ยิง alert — Reversal: Short / Long (fade) · Snowball: Long / Bear">
+              สัญญาณ
+            </th>
             <th>Margin</th>
             <th>Lev</th>
             <th title="⏳ = Limit วางแล้ว แต่ราคายังไม่แตะราคา order">Entry</th>

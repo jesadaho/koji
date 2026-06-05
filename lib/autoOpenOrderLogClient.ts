@@ -3,6 +3,8 @@ import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 
 export type AutoOpenSource = "snowball" | "reversal";
 export type AutoOpenOutcome = "success" | "skipped" | "failed";
+/** ทิศสัญญาณ Reversal ที่ยิง alert — long = fade เปิด SHORT */
+export type ReversalAutoOpenAlertSide = "short" | "long";
 
 export type AutoOpenOrderLogRow = {
   id: string;
@@ -15,7 +17,10 @@ export type AutoOpenOrderLogRow = {
   contractSymbol: string;
   binanceSymbol: string;
   side?: "long" | "short";
+  /** Snowball — ทิศสัญญาณ long / bear */
   alertSide?: "long" | "bear";
+  /** Reversal — ทิศสัญญาณ short หรือ long (fade SHORT) */
+  reversalAlertSide?: ReversalAutoOpenAlertSide;
   gradeKey?: string | null;
   signalBarTf?: string;
   signalBarOpenSec?: number;
@@ -105,6 +110,21 @@ export function autoOpenOutcomeLabel(outcome: AutoOpenOutcome): string {
 
 export function autoOpenSourceLabel(source: AutoOpenSource): string {
   return source === "snowball" ? "Snowball" : "Reversal";
+}
+
+export function reversalAutoOpenAlertSideLabel(side: ReversalAutoOpenAlertSide): string {
+  return side === "long" ? "Long (fade)" : "Short";
+}
+
+/** ทิศสัญญาณที่ยิง alert — แยกตามแหล่ง */
+export function autoOpenSignalSideLabel(row: AutoOpenOrderLogRow): string {
+  if (row.source === "reversal" && row.reversalAlertSide) {
+    return reversalAutoOpenAlertSideLabel(row.reversalAlertSide);
+  }
+  if (row.source === "snowball" && row.alertSide) {
+    return row.alertSide === "bear" ? "Bear" : "Long";
+  }
+  return "—";
 }
 
 function emptyBySource(): AutoOpenOrderLogSummary["bySource"] {
