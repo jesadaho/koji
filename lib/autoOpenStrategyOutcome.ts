@@ -4,6 +4,7 @@ import {
   accumulateAutoOpenPnlUsdt,
   autoOpenContractSymbolKey,
   autoOpenFollowUpEligible,
+  autoOpenLimitPriceNotTouchedYet,
   emptyAutoOpenPnlUsdtAccumulator,
   finalizeAutoOpenPnlUsdtBucket,
   pctVsEntrySide,
@@ -194,6 +195,7 @@ function autoOpenStrategy48hEligible(row: AutoOpenOrderLogRow): boolean {
 /** สรุป Win/Loss ตามคอลัมน์ ผล@48h — ไม้สำเร็จ + ล้มเหลวที่ติดตามราคาได้ */
 export function summarizeAutoOpenStrategy48h(
   rows: AutoOpenOrderLogRow[],
+  markPrices?: Record<string, number>,
 ): AutoOpenStrategy48hSummary {
   rows = excludePendingConflictRows(rows);
   let trades = 0;
@@ -214,7 +216,13 @@ export function summarizeAutoOpenStrategy48h(
     if (!autoOpenStrategy48hEligible(r)) continue;
 
     if (!autoOpenStrategyFinalized(r)) {
-      pending += 1;
+      const mark =
+        markPrices != null
+          ? markPrices[autoOpenContractSymbolKey(r.contractSymbol)]
+          : undefined;
+      if (!autoOpenLimitPriceNotTouchedYet(r, mark)) {
+        pending += 1;
+      }
       continue;
     }
 
@@ -319,6 +327,7 @@ export function summarizeAutoOpenUnrealizedPnl(
     if (entry == null) continue;
     const mark = markPrices[autoOpenContractSymbolKey(r.contractSymbol)];
     if (mark == null || !Number.isFinite(mark)) continue;
+    if (autoOpenLimitPriceNotTouchedYet(r, mark)) continue;
 
     const pct = pctVsEntrySide(r.side, entry, mark);
     accumulateAutoOpenPnlUsdt(acc, r, pct);

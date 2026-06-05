@@ -349,7 +349,8 @@ function fmtPnlCell(
     entry == null ||
     (row.side !== "long" && row.side !== "short") ||
     markPrice == null ||
-    !Number.isFinite(markPrice)
+    !Number.isFinite(markPrice) ||
+    autoOpenLimitPriceNotTouchedYet(row, markPrice)
   ) {
     return "—";
   }
@@ -507,7 +508,10 @@ function AutoOpenWeekSection({
 }) {
   const summaryRows = useMemo(() => excludePendingConflictRows(rows), [rows]);
   const orderSummary = useMemo(() => summarizeAutoOpenOrderLogs(summaryRows), [summaryRows]);
-  const closed = useMemo(() => summarizeAutoOpenStrategy48h(summaryRows), [summaryRows]);
+  const closed = useMemo(
+    () => summarizeAutoOpenStrategy48h(summaryRows, markPrices),
+    [summaryRows, markPrices],
+  );
   const unrealised = useMemo(
     () => summarizeAutoOpenUnrealizedPnl(summaryRows, markPrices),
     [summaryRows, markPrices],
