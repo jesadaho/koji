@@ -113,6 +113,8 @@ type SnowballAutoTradeApiBundle = {
   slEntryOffsetPct?: number | null;
   /** จุดอ้างอิง = EMA20 @1h (ยังเปิด market) */
   referenceEma20_1hEnabled?: boolean;
+  entryMode?: "hybrid_ema" | "market";
+  entryEmaPeriod?: number | null;
 };
 
 type ReversalAutoTradeApiBundle = {
@@ -174,6 +176,8 @@ export default function SettingsTelegramMiniApp() {
   const [snowQualityShortShort, setSnowQualityShortShort] = useState(false);
   const [snowSundayAllShort, setSnowSundayAllShort] = useState(false);
   const [snowReferenceEma20_1h, setSnowReferenceEma20_1h] = useState(false);
+  const [snowEntryMode, setSnowEntryMode] = useState<"hybrid_ema" | "market">("market");
+  const [snowEntryEmaPeriod, setSnowEntryEmaPeriod] = useState("20");
   const [snowMarginDefault, setSnowMarginDefault] = useState("");
   const [snowLevDefault, setSnowLevDefault] = useState("");
   const [snowTpSlEnabled, setSnowTpSlEnabled] = useState(true);
@@ -239,6 +243,10 @@ export default function SettingsTelegramMiniApp() {
     setSnowQualityShortShort(Boolean(st.qualityShortSignalShortEnabled));
     setSnowSundayAllShort(Boolean(st.sundayAllShortEnabled));
     setSnowReferenceEma20_1h(Boolean(st.referenceEma20_1hEnabled));
+    setSnowEntryMode(st.entryMode === "hybrid_ema" ? "hybrid_ema" : "market");
+    setSnowEntryEmaPeriod(
+      st.entryEmaPeriod != null && Number.isFinite(st.entryEmaPeriod) ? String(st.entryEmaPeriod) : "20",
+    );
     setSnowMarginDefault(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
     setSnowLevDefault(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
     setSnowTpSlEnabled(st.tpSlEnabled !== false);
@@ -635,6 +643,18 @@ export default function SettingsTelegramMiniApp() {
       return;
     }
 
+    const snowEntryEmaPeriodParsed = snowEntryEmaPeriod.trim() ? Number(snowEntryEmaPeriod.trim()) : NaN;
+    if (
+      snowEntryMode === "hybrid_ema" &&
+      (!Number.isFinite(snowEntryEmaPeriodParsed) ||
+        snowEntryEmaPeriodParsed < 5 ||
+        snowEntryEmaPeriodParsed > 200 ||
+        Math.floor(snowEntryEmaPeriodParsed) !== snowEntryEmaPeriodParsed)
+    ) {
+      setSnowSaveErr("EMA period ต้องเป็นจำนวนเต็ม 5–200");
+      return;
+    }
+
     setSnowSaving(true);
     try {
       const snowballAutoTrade: Record<string, unknown> = {
@@ -643,6 +663,8 @@ export default function SettingsTelegramMiniApp() {
         qualityShortSignalShortEnabled: snowQualityShortShort,
         sundayAllShortEnabled: snowSundayAllShort,
         referenceEma20_1hEnabled: snowReferenceEma20_1h,
+        entryMode: snowEntryMode,
+        entryEmaPeriod: snowEntryMode === "hybrid_ema" ? Math.floor(snowEntryEmaPeriodParsed) : null,
         marginUsdt: snowMarginDefault.trim() ? marginDefaultParsed : null,
         leverage: snowLevDefault.trim() ? levDefaultParsed : null,
         tpSlEnabled: snowTpSlEnabled,
@@ -1193,6 +1215,42 @@ export default function SettingsTelegramMiniApp() {
           </span>
         </label>
 
+        <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
+          Entry (เปิด LONG/SHORT)
+        </p>
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            โหมด entry
+            <select
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              value={snowEntryMode}
+              onChange={(e) => setSnowEntryMode(e.target.value === "hybrid_ema" ? "hybrid_ema" : "market")}
+            >
+              <option value="market">Market ตลอด (ค่าเริ่มต้น)</option>
+              <option value="hybrid_ema">Hybrid (EMA retest บน 1h)</option>
+            </select>
+          </label>
+          {snowEntryMode === "hybrid_ema" ? (
+            <label className="sub" style={{ display: "block" }}>
+              EMA period (TF 1h, default 20)
+              <input
+                type="text"
+                inputMode="numeric"
+                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+                autoComplete="off"
+                placeholder="20"
+                value={snowEntryEmaPeriod}
+                onChange={(e) => setSnowEntryEmaPeriod(e.target.value)}
+              />
+            </label>
+          ) : null}
+        </div>
+        {snowEntryMode === "hybrid_ema" ? (
+          <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.9 }}>
+            ราคา &gt; EMA → Market · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม. · ปลดล็อกวันถ้าไม่ fill)
+          </p>
+        ) : null}
+
         <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
           <input
             type="checkbox"
@@ -1202,7 +1260,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>จุดอ้างอิง = EMA20 @1h</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              ใช้ค่า EMA20 แท่ง 1h ปิดล่าสุดเป็นจุดอ้างอิงใน Telegram / ประวัติ auto-open / Quick TP (เมื่อดึงราคา MEXC ไม่ได้) — ยัง<strong>เปิด market</strong> ที่ MEXC ทันที ไม่รอราคาแตะ EMA · TP/SL บน exchange ยังอิงราคาเข้าเฉลี่ย MEXC
+              ใช้ค่า EMA20 แท่ง 1h ปิดล่าสุดเป็นจุดอ้างอิงใน Telegram / ประวัติ / 24h guard (เมื่อดึงราคา MEXC ไม่ได้) — แยกจากโหมด entry ด้านบน · TP/SL ยังอิงราคาเข้าเฉลี่ย MEXC
             </span>
           </span>
         </label>
@@ -1211,7 +1269,7 @@ export default function SettingsTelegramMiniApp() {
           Margin / เลเวเรจ (default)
         </p>
         <p className="sub" style={{ marginTop: 0 }}>
-          ใช้กับทุกสัญญาณที่เข้ากรอง • เปิด market บน MEXC
+          ใช้กับทุกสัญญาณที่เข้ากรอง · entry ตามโหมดด้านบน
         </p>
         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
           <label className="sub" style={{ display: "block" }}>

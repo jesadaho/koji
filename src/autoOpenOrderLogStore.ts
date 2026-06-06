@@ -105,6 +105,7 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
     row.entryEmaPeriod = o.entryEmaPeriod;
   }
   if (typeof o.entryEma15m === "number" && Number.isFinite(o.entryEma15m)) row.entryEma15m = o.entryEma15m;
+  if (typeof o.entryEma1h === "number" && Number.isFinite(o.entryEma1h)) row.entryEma1h = o.entryEma1h;
   if (typeof o.ema25_15m === "number" && Number.isFinite(o.ema25_15m)) row.ema25_15m = o.ema25_15m;
   if (typeof o.ema20_15m === "number" && Number.isFinite(o.ema20_15m)) row.ema20_15m = o.ema20_15m;
   if (typeof o.ema50_15m === "number" && Number.isFinite(o.ema50_15m)) row.ema50_15m = o.ema50_15m;

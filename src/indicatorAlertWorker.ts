@@ -14,6 +14,7 @@ import { runSnowballStatsFollowUpTick } from "./snowballStatsTick";
 import { runAutoOpenOrderLogFollowUpTick } from "./autoOpenOrderLogFollowUpTick";
 import { runSnowballAutoTradeQuickTpTick } from "./snowballAutoTradeQuickTpTick";
 import { runSnowballAutoTradeTpSlTick } from "./snowballAutoTradeTpSlTick";
+import { runSnowballAutoTradeLimitTick } from "./snowballAutoTradeLimitTick";
 import { runSnowballAutoTrade24hGuardTick } from "./snowballAutoTrade24hGuardTick";
 import { runReversalAutoTradeTpSlTick } from "./reversalAutoTradeTpSlTick";
 import { runReversalAutoTradeLimitTick } from "./reversalAutoTradeLimitTick";
@@ -375,9 +376,11 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const publicN = publicRes.notified;
   const snowballStatsRes = await runSnowballStatsFollowUpTick(now);
   const snowballStatsN = snowballStatsRes.dirty;
+  const snowballLimitActions = await runSnowballAutoTradeLimitTick(now);
   const snowballTpSlActions = await runSnowballAutoTradeTpSlTick(now);
   const snowballQuickTpClosed = await runSnowballAutoTradeQuickTpTick(now);
   const snowball24hClosed = await runSnowballAutoTrade24hGuardTick(now);
+  const reversalLimitActions = await runReversalAutoTradeLimitTick(now);
   const reversalTpSlActions = await runReversalAutoTradeTpSlTick(now);
   const watch612 = await runEma612ContractWatchAlertTick(client);
   const downsideN = await runDownsideReversalAlertTick();
@@ -393,6 +396,7 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   else if (publicRes.skippedReason) parts.push(`public Binance ข้าม (${publicRes.skippedReason})`);
   if (snowballConfirmN > 0) parts.push(`snowball confirm ${snowballConfirmN}`);
   if (snowballStatsN > 0) parts.push(`snowball stats ${snowballStatsN}`);
+  if (snowballLimitActions > 0) parts.push(`snowball limit ${snowballLimitActions}`);
   if (snowballTpSlActions > 0) parts.push(`snowball TP/SL ${snowballTpSlActions}`);
   if (snowballQuickTpClosed > 0) parts.push(`snowball quickTP close ${snowballQuickTpClosed}`);
   if (snowball24hClosed > 0) parts.push(`snowball 24h close ${snowball24hClosed}`);

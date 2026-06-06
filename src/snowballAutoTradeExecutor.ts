@@ -1,9 +1,14 @@
 import {
+  createOpenLimitOrder,
   createOpenMarketOrder,
+  getContractLastPricePublic,
+  getContractTickerPublic,
   getOpenPositions,
   type MexcCredentials,
   type OpenPositionRow,
 } from "./mexcFuturesClient";
+import { fetchBinanceUsdmKlines, fetchBinanceUsdmLastPrice } from "./binanceIndicatorKline";
+import { emaLine } from "./indicatorMath";
 import {
   loadTradingViewMexcSettingsFullMap,
   type TradingViewMexcUserSettings,
@@ -23,7 +28,9 @@ import {
   hasOpenedSnowballContractToday,
   loadSnowballAutoTradeState,
   saveSnowballAutoTradeState,
+  withRecordedSnowballPlaced,
   withRecordedSnowballSuccessfulOpen,
+  withSnowballPendingLimitAdded,
   type SnowballAutoTradeSide,
 } from "./snowballAutoTradeStateStore";
 import { computeSvpHoleYn } from "./snowballStatsStore";
@@ -37,6 +44,15 @@ import {
   snowballMatchesQualitySignal,
 } from "@/lib/snowballMatrixFilters";
 import { resolveSnowballAutoTradeReferenceEntryPrice } from "./snowballReferenceEma20_1h";
+import {
+  SNOWBALL_LIMIT_EXPIRE_MS,
+  snowballEma1hLabel,
+  snowballEntrySettingsFromRow,
+  snowballEntryUseMarket,
+  type SnowballAutoTradeEntryMode,
+} from "@/lib/snowballAutoTradeEntry";
+
+const SNOWBALL_AUTOTRADE_1H_FETCH_BARS = 200;
 
 function snowballQualitySignalLongEnabled(row: TradingViewMexcUserSettings): boolean {
   return (
@@ -207,15 +223,25 @@ function logSnowballAutoOpen(
     side?: SnowballAutoTradeSide;
     marginUsdt?: number;
     leverage?: number;
+    orderKind?: "market" | "limit";
+    entryMode?: SnowballAutoTradeEntryMode;
+    entryEmaPeriod?: number;
+    entryEma1h?: number;
+    markPrice?: number;
+    entryPrice?: number;
   },
 ): void {
   // ข้าม (ปิด auto-open / monitor / มีโพซิชันแล้ว ฯลฯ) — ไม่ลงประวัติ auto-open
   if (outcome === "skipped") return;
 
+  const resolvedEntry =
+    typeof extra?.entryPrice === "number" && extra.entryPrice > 0
+      ? extra.entryPrice
+      : signal.referenceEntryPrice > 0
+        ? signal.referenceEntryPrice
+        : undefined;
   const shouldLogEntry =
-    (outcome === "success" || outcome === "failed") &&
-    extra?.side != null &&
-    signal.referenceEntryPrice > 0;
+    (outcome === "success" || outcome === "failed") && extra?.side != null && resolvedEntry != null;
 
   appendAutoOpenOrderLogSafe({
     userId,
@@ -231,7 +257,7 @@ function logSnowballAutoOpen(
     marginScale: signal.marginScale,
     ...extra,
     side: extra?.side,
-    ...(shouldLogEntry ? { entryPrice: signal.referenceEntryPrice } : {}),
+    ...(shouldLogEntry ? { entryPrice: resolvedEntry } : {}),
   });
 }
 
@@ -338,6 +364,149 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
 
   let usersAttempted = 0;
   let usersSucceeded = 0;
+
+  type EntryResolve =
+    | {
+        ok: true;
+        mode: SnowballAutoTradeEntryMode;
+        emaPeriod: number;
+        entryEma: number | null;
+        mark: number;
+        useMarket: boolean;
+        aboveEma: boolean;
+        emaFallbackMarket: boolean;
+        markSource: "mexc" | "binance" | "signal" | "kline";
+        emaLabel: string;
+      }
+    | { ok: false; error: string };
+
+  type KlinePack = Awaited<ReturnType<typeof fetchBinanceUsdmKlines>>;
+  let klinePack: KlinePack | null | undefined;
+  let markCache:
+    | {
+        mark: number;
+        markSource: "mexc" | "binance" | "signal" | "kline";
+      }
+    | { failed: true; error: string }
+    | undefined;
+  const emaByPeriod = new Map<number, number | null>();
+
+  async function ensureKlinePack(): Promise<KlinePack | null> {
+    if (klinePack !== undefined) return klinePack;
+    try {
+      klinePack = await fetchBinanceUsdmKlines(binanceSymbol, "1h", SNOWBALL_AUTOTRADE_1H_FETCH_BARS);
+    } catch (e) {
+      console.error("[snowballAutoTrade] fetchBinanceUsdmKlines 1h", binanceSymbol, e);
+      klinePack = null;
+    }
+    return klinePack;
+  }
+
+  async function ensureMarkPrice(): Promise<
+    | { ok: true; mark: number; markSource: "mexc" | "binance" | "signal" | "kline" }
+    | { ok: false; error: string }
+  > {
+    if (markCache && "failed" in markCache) return { ok: false, error: markCache.error };
+    if (markCache && "mark" in markCache) return { ok: true, ...markCache };
+
+    let mark: number | null = null;
+    let markSource: "mexc" | "binance" | "signal" | "kline" | null = null;
+    try {
+      const t = await getContractTickerPublic(sym);
+      if (t && t.lastPrice > 0) {
+        mark = t.lastPrice;
+        markSource = "mexc";
+      }
+    } catch (e) {
+      console.error("[snowballAutoTrade] getContractTickerPublic", sym, e);
+    }
+    if (mark == null) {
+      try {
+        const lp = await getContractLastPricePublic(sym);
+        if (lp != null && lp > 0) {
+          mark = lp;
+          markSource = "mexc";
+        }
+      } catch (e) {
+        console.error("[snowballAutoTrade] getContractLastPricePublic", sym, e);
+      }
+    }
+    if (mark == null) {
+      const bp = await fetchBinanceUsdmLastPrice(binanceSymbol);
+      if (bp != null && bp > 0) {
+        mark = bp;
+        markSource = "binance";
+      }
+    }
+    if (mark == null && input.referenceEntryPrice > 0) {
+      mark = input.referenceEntryPrice;
+      markSource = "signal";
+    }
+    if (mark == null) {
+      const pack = await ensureKlinePack();
+      const lc = pack?.close?.[pack.close.length - 1];
+      if (typeof lc === "number" && Number.isFinite(lc) && lc > 0) {
+        mark = lc;
+        markSource = "kline";
+      }
+    }
+    if (mark == null) {
+      const err = `ดึงราคาตลาดไม่ได้ (${sym} · MEXC/Binance/สัญญาณ)`;
+      markCache = { failed: true, error: err };
+      return { ok: false, error: err };
+    }
+    markCache = { mark, markSource: markSource ?? "binance" };
+    return { ok: true, mark, markSource: markSource ?? "binance" };
+  }
+
+  async function emaForPeriod(period: number): Promise<number | null> {
+    if (emaByPeriod.has(period)) return emaByPeriod.get(period) ?? null;
+    const pack = await ensureKlinePack();
+    const emaMinBars = period + 2;
+    let entryEma: number | null = null;
+    if (pack && pack.close.length >= emaMinBars) {
+      const ema = emaLine(pack.close, period);
+      const i = pack.close.length - 2;
+      const v = ema[i];
+      if (typeof v === "number" && Number.isFinite(v) && v > 0) entryEma = v;
+    }
+    emaByPeriod.set(period, entryEma);
+    return entryEma;
+  }
+
+  async function resolveSnowballEntryForUser(
+    settingsRow: TradingViewMexcUserSettings,
+  ): Promise<EntryResolve> {
+    const { mode, emaPeriod } = snowballEntrySettingsFromRow(settingsRow);
+    const markRes = await ensureMarkPrice();
+    if (!markRes.ok) return { ok: false, error: markRes.error };
+    const entryEma = mode === "hybrid_ema" ? await emaForPeriod(emaPeriod) : null;
+    const entryPick = snowballEntryUseMarket({ mode, mark: markRes.mark, entryEma });
+    return {
+      ok: true,
+      mode,
+      emaPeriod,
+      entryEma,
+      mark: markRes.mark,
+      useMarket: entryPick.useMarket,
+      aboveEma: entryPick.aboveEma,
+      emaFallbackMarket: entryPick.emaFallbackMarket,
+      markSource: markRes.markSource,
+      emaLabel: snowballEma1hLabel(emaPeriod),
+    };
+  }
+
+  function fmtExpireBkk(ms: number): string {
+    try {
+      return new Date(ms).toLocaleString("th-TH", {
+        timeZone: "Asia/Bangkok",
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+    } catch {
+      return new Date(ms).toISOString();
+    }
+  }
 
   const marginScale =
     typeof input.marginScale === "number" && Number.isFinite(input.marginScale) && input.marginScale > 0
@@ -473,32 +642,160 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       continue;
     }
 
+    const entryRes = await resolveSnowballEntryForUser(row);
+    if (!entryRes.ok) {
+      logSnowballAutoOpen(userId, logSignal, "failed", "mark_unavailable", {
+        side,
+        reasonDetail: entryRes.error.slice(0, 400),
+        marginUsdt,
+        leverage: Math.floor(leverage),
+      });
+      await notifyLines(userId, [
+        "Koji — Snowball auto-open (MEXC)",
+        `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น ${side.toUpperCase()})`,
+        `[${shortContractLabel(sym)}]/USDT`,
+        entryRes.error,
+      ]);
+      continue;
+    }
+
+    const useMarket = entryRes.useMarket;
+    const entryEma = entryRes.entryEma;
+    const markPrice = entryRes.mark;
+    const entryMode = entryRes.mode;
+    const emaPeriod = entryRes.emaPeriod;
+    const emaLabel = entryRes.emaLabel;
+    const emaFallbackMarket = entryRes.emaFallbackMarket;
+    const markSource = entryRes.markSource;
+    const lev = Math.floor(leverage);
+    const intendedEntry = useMarket
+      ? markPrice
+      : entryEma != null
+        ? entryEma
+        : markPrice;
+
     usersAttempted += 1;
 
     const long = side === "long";
+    const tpPlan = resolveSnowballTpSlPlanFromRow(row);
+    const placedAtMs = Date.now();
 
     try {
-      const om = await createOpenMarketOrder(creds, {
-        contractSymbol: sym,
-        long,
-        marginUsdt,
-        leverage: Math.floor(leverage),
-        openType: 1,
-      });
+      const om = useMarket
+        ? await createOpenMarketOrder(creds, {
+            contractSymbol: sym,
+            long,
+            marginUsdt,
+            leverage: lev,
+            openType: 1,
+          })
+        : await createOpenLimitOrder(creds, {
+            contractSymbol: sym,
+            long,
+            marginUsdt,
+            leverage: lev,
+            limitPrice: entryEma!,
+            openType: 1,
+          });
       if (!om.success) {
         const msg = om.message ?? `code ${om.code}`;
         logSnowballAutoOpen(userId, logSignal, "failed", "mexc_order_rejected", {
           side,
           reasonDetail: msg.slice(0, 400),
           marginUsdt,
-          leverage: Math.floor(leverage),
+          leverage: lev,
+          orderKind: useMarket ? "market" : "limit",
+          entryMode,
+          entryEmaPeriod: emaPeriod,
+          entryEma1h: entryEma ?? undefined,
+          markPrice,
+          entryPrice: intendedEntry,
         });
         await notifyLines(userId, [
           "Koji — Snowball auto-open (MEXC)",
-          `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น ${long ? "LONG" : "SHORT"})`,
+          entryMode === "market"
+            ? `❌ สั่งเปิดไม่สำเร็จ (Market ${long ? "LONG" : "SHORT"} · โหมด Market ตลอด)`
+            : emaFallbackMarket
+              ? `❌ สั่งเปิดไม่สำเร็จ (Market ${long ? "LONG" : "SHORT"} · ไม่มี ${emaLabel})`
+              : `❌ สั่งเปิดไม่สำเร็จ (${useMarket ? "Market" : "Limit"} ${long ? "LONG" : "SHORT"})`,
           `[${shortContractLabel(sym)}]/USDT`,
-          `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
+          `Margin ~${marginUsdt} USDT · ${lev}x`,
           `MEXC: ${msg}`,
+        ]);
+        continue;
+      }
+
+      const orderData = om.data;
+      const limitOrderId =
+        orderData && typeof orderData === "object" && orderData !== null && "orderId" in orderData
+          ? String((orderData as { orderId: unknown }).orderId)
+          : undefined;
+
+      if (!useMarket) {
+        state = withRecordedSnowballPlaced(state, userId, sym, dayKey);
+        usersSucceeded += 1;
+        if (limitOrderId) {
+          state = withSnowballPendingLimitAdded(
+            state,
+            userId,
+            {
+              contractSymbol: sym,
+              binanceSymbol,
+              side,
+              orderId: limitOrderId,
+              placedAtMs,
+              expireAtMs: placedAtMs + SNOWBALL_LIMIT_EXPIRE_MS,
+              limitPrice: entryEma!,
+              leverage: lev,
+              referenceEntryPrice,
+              signalBarOpenSec: input.signalBarOpenSec,
+              signalBarTf: input.signalBarTf,
+              signalBarLow: input.signalBarLow,
+              svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
+              tpSlEnabled: tpPlan.enabled,
+              tp1PricePct: tpPlan.tp1PricePct,
+              tp1PartialPct: tpPlan.tp1PartialPct,
+              tp2PricePct: tpPlan.tp2PricePct,
+              maxHoldHours: tpPlan.maxHoldHours,
+              slArmRoiPct: tpPlan.slArmRoiPct,
+              slEntryOffsetPct: tpPlan.slEntryOffsetPct,
+            },
+            dayKey,
+          );
+        }
+        logSnowballAutoOpen(userId, logSignal, "success", "open_success_limit", {
+          side,
+          marginUsdt,
+          leverage: lev,
+          orderKind: "limit",
+          entryMode,
+          entryEmaPeriod: emaPeriod,
+          entryEma1h: entryEma ?? undefined,
+          markPrice,
+          entryPrice: intendedEntry,
+        });
+        const successTitle = sundayShortOverride
+          ? "✅ ตั้ง Limit SHORT (วันอาทิตย์ — สัญญาณ LONG)"
+          : qualityShortOverride
+            ? "✅ ตั้ง Limit SHORT (✨ Quality Short Signal)"
+            : qualitySignalLongOverride
+              ? "✅ ตั้ง Limit LONG (✨ Quality Signal)"
+              : long
+                ? "✅ ตั้ง Limit LONG จาก Snowball"
+                : "✅ ตั้ง Limit SHORT จาก Snowball";
+        await notifyLines(userId, [
+          "Koji — Snowball auto-open (MEXC)",
+          successTitle,
+          `[${shortContractLabel(sym)}]/USDT`,
+          gradeKey ? `Grade ${gradeKey}` : "",
+          `Margin ~${marginUsdt} USDT · ${lev}x`,
+          refPriceLine,
+          `Limit ~${fmtSnowballPriceUsdt(entryEma!)} (${emaLabel}) · ราคาปัจจุบัน ~${fmtSnowballPriceUsdt(markPrice)}`,
+          `หมดอายุ Limit: ~${fmtExpireBkk(placedAtMs + SNOWBALL_LIMIT_EXPIRE_MS)} (8 ชม.)`,
+          tpPlan.enabled
+            ? `กลยุทธ์ TP/SL: รอ Limit fill ก่อน (TP1 ${tpPlan.tp1PricePct}% · TP2 ${tpPlan.tp2PricePct}%)`
+            : "กลยุทธ์ TP/SL: ปิด (ตั้งใน Mini App)",
+          "1 order/เหรียญ/วัน (BKK) — ถ้า Limit หมดอายุจะปลดล็อกให้เปิดซ้ำได้",
         ]);
         continue;
       }
@@ -513,7 +810,6 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         console.error("[snowballAutoTrade] getOpenPositions after open", sym, userId, e);
       }
 
-      const tpPlan = resolveSnowballTpSlPlanFromRow(row);
       const trackedTpSl =
         tpPlan.enabled &&
         mexcAvgEntry != null &&
@@ -588,7 +884,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           signalBarTf: input.signalBarTf,
           signalBarLow: input.signalBarLow,
           svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
-          leverage: Math.floor(leverage),
+          leverage: lev,
           tpSlPlan: tpSlPlanForState,
         },
         dayKey,
@@ -598,7 +894,13 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       logSnowballAutoOpen(userId, logSignal, "success", "open_success_market", {
         side,
         marginUsdt,
-        leverage: Math.floor(leverage),
+        leverage: lev,
+        orderKind: "market",
+        entryMode,
+        entryEmaPeriod: emaPeriod,
+        entryEma1h: entryEma ?? undefined,
+        markPrice,
+        entryPrice: intendedEntry,
       });
 
       await notifyLines(userId, [
@@ -621,9 +923,16 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
               ? `เกณฑ์: ${SNOWBALL_QUALITY_SIGNAL_CRITERIA}`
               : "",
         gradeKey ? `Grade ${gradeKey}` : "",
-        `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
+        `Margin ~${marginUsdt} USDT · ${lev}x`,
         refPriceLine,
-        "เปิดออเดอร์: market ที่ MEXC (ไม่รอราคาแตะ EMA)",
+        entryMode === "market"
+          ? "เปิดออเดอร์: Market ที่ MEXC (โหมด Market ตลอด)"
+          : emaFallbackMarket
+            ? `เปิดออเดอร์: Market ที่ MEXC (ไม่มี ${emaLabel})`
+            : `เปิดออเดอร์: Market ที่ MEXC (ราคาเหนือ ${emaLabel})`,
+        entryMode === "hybrid_ema" && !emaFallbackMarket
+          ? `ราคาตลาด ~${fmtSnowballPriceUsdt(markPrice)} > ${emaLabel} ~${fmtSnowballPriceUsdt(entryEma!)} (${markSource})`
+          : "",
         mexcAvgEntry != null && Number.isFinite(mexcAvgEntry) && mexcAvgEntry > 0
           ? `ราคาเข้าเฉลี่ย MEXC: ${fmtSnowballPriceUsdt(mexcAvgEntry)} USDT — ใช้คำนวณ TP/SL`
           : "ราคาเข้าเฉลี่ย MEXC: ยังดึงไม่ได้",
@@ -649,13 +958,19 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         side,
         reasonDetail: detail.slice(0, 400),
         marginUsdt,
-        leverage: Math.floor(leverage),
+        leverage: lev,
+        orderKind: useMarket ? "market" : "limit",
+        entryMode,
+        entryEmaPeriod: emaPeriod,
+        entryEma1h: entryEma ?? undefined,
+        markPrice,
+        entryPrice: intendedEntry,
       });
       await notifyLines(userId, [
         "Koji — Snowball auto-open (MEXC)",
         `❌ สั่งเปิดล้มเหลวจากข้อผิดพลาดระหว่างเรียก MEXC / เครือข่าย (ตั้งใจเป็น ${long ? "LONG" : "SHORT"})`,
         `[${shortContractLabel(sym)}]/USDT`,
-        `Margin ~${marginUsdt} USDT · ${Math.floor(leverage)}x`,
+        `Margin ~${marginUsdt} USDT · ${lev}x`,
         `รายละเอียด: ${detail.slice(0, 400)}`,
       ]);
     }

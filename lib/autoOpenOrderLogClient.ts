@@ -36,8 +36,10 @@ export type AutoOpenOrderLogRow = {
   entryMode?: "hybrid_ema" | "market";
   /** EMA period บน TF 15m ตอนเปิด (Reversal hybrid) */
   entryEmaPeriod?: number;
-  /** ค่า EMA บน TF 15m ตอนเปิด */
+  /** ค่า EMA บน TF 15m ตอนเปิด (Reversal) */
   entryEma15m?: number;
+  /** ค่า EMA บน TF 1h ตอนเปิด (Snowball) */
+  entryEma1h?: number;
   /** @deprecated แถวเก่า — ใช้ entryEma15m แทน */
   ema25_15m?: number;
   /** @deprecated แถวเก่า — ใช้ entryEma15m แทน */

@@ -3,8 +3,9 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { dirname, join } from "node:path";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import type { ReversalAutoTradeEntryMode } from "../lib/reversalAutoTradeEntry.js";
+import type { SnowballAutoTradeEntryMode } from "../lib/snowballAutoTradeEntry.js";
 
-export type { ReversalAutoTradeEntryMode };
+export type { ReversalAutoTradeEntryMode, SnowballAutoTradeEntryMode };
 
 const KV_KEY = "koji:trading_view_mexc_settings";
 const filePath = join(process.cwd(), "data", "trading_view_mexc_settings.json");
@@ -93,6 +94,10 @@ export type TradingViewMexcUserSettings = {
    * — ยังเปิด market ที่ MEXC ทันที (ไม่รอราคาแตะ EMA)
    */
   snowballAutoTradeReferenceEma20_1hEnabled?: boolean;
+  /** hybrid_ema = ราคา > EMA 1h → Market, ≤ EMA → Limit · market = Market ตลอด (default) */
+  snowballAutoTradeEntryMode?: SnowballAutoTradeEntryMode;
+  /** EMA period บน TF 1h สำหรับ hybrid entry (default 20) */
+  snowballAutoTradeEntryEmaPeriod?: number;
   snowballAutoTradeMarginUsdt?: number;
   snowballAutoTradeLeverage?: number;
   /** @deprecated ใช้ TP/SL strategy — เก็บไว้สำหรับ active เก่า */
@@ -362,6 +367,8 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined ||
     input.snowballAutoTradeSundayAllShortEnabled !== undefined ||
     input.snowballAutoTradeReferenceEma20_1hEnabled !== undefined ||
+    input.snowballAutoTradeEntryMode !== undefined ||
+    input.snowballAutoTradeEntryEmaPeriod !== undefined ||
     input.snowballAutoTradeMarginUsdt !== undefined ||
     input.snowballAutoTradeLeverage !== undefined ||
     input.snowballAutoTradeQuickTpEnabled !== undefined ||
@@ -519,6 +526,20 @@ export async function saveTradingViewMexcSettings(
       input.snowballAutoTradeReferenceEma20_1hEnabled !== undefined
         ? input.snowballAutoTradeReferenceEma20_1hEnabled
         : prev?.snowballAutoTradeReferenceEma20_1hEnabled ?? false,
+
+    snowballAutoTradeEntryMode:
+      input.snowballAutoTradeEntryMode === null
+        ? undefined
+        : input.snowballAutoTradeEntryMode !== undefined
+          ? input.snowballAutoTradeEntryMode
+          : prev?.snowballAutoTradeEntryMode ?? "market",
+
+    snowballAutoTradeEntryEmaPeriod:
+      input.snowballAutoTradeEntryEmaPeriod === null
+        ? undefined
+        : input.snowballAutoTradeEntryEmaPeriod !== undefined
+          ? input.snowballAutoTradeEntryEmaPeriod
+          : prev?.snowballAutoTradeEntryEmaPeriod ?? 20,
 
     snowballAutoTradeMarginUsdt:
       input.snowballAutoTradeMarginUsdt === null

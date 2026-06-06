@@ -77,10 +77,34 @@ export type SnowballAutoTradeActive = {
   tp1PlanVol?: number;
 };
 
+export type SnowballAutoTradePendingLimit = {
+  contractSymbol: string;
+  binanceSymbol: string;
+  side: SnowballAutoTradeSide;
+  orderId: string;
+  placedAtMs: number;
+  expireAtMs: number;
+  limitPrice: number;
+  leverage: number;
+  referenceEntryPrice: number;
+  signalBarOpenSec: number;
+  signalBarTf: "15m" | "1h" | "4h";
+  signalBarLow: number | null;
+  svpHoleYn: "Y" | "N";
+  tpSlEnabled: boolean;
+  tp1PricePct: number;
+  tp1PartialPct: number;
+  tp2PricePct: number;
+  maxHoldHours: number;
+  slArmRoiPct: number;
+  slEntryOffsetPct: number;
+};
+
 export type SnowballAutoTradePerUserState = {
   dailyKeyBkk: string;
   openedContractSymbolsToday: string[];
   active?: SnowballAutoTradeActive[];
+  pendingLimits?: SnowballAutoTradePendingLimit[];
 };
 
 export type SnowballAutoTradeState = Record<string, SnowballAutoTradePerUserState>;
@@ -102,6 +126,115 @@ async function ensureJsonFile(): Promise<void> {
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, "{}", "utf-8");
   }
+}
+
+function normalizePendingLimits(raw: unknown): SnowballAutoTradePendingLimit[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SnowballAutoTradePendingLimit[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object" || Array.isArray(x)) continue;
+    const o = x as Record<string, unknown>;
+    const sym = typeof o.contractSymbol === "string" ? o.contractSymbol.trim().toUpperCase() : "";
+    const binanceSymbol =
+      typeof o.binanceSymbol === "string" ? o.binanceSymbol.trim().toUpperCase() : "";
+    const side = o.side === "long" || o.side === "short" ? (o.side as SnowballAutoTradeSide) : null;
+    const orderId = typeof o.orderId === "string" ? o.orderId.trim() : "";
+    const placedAtMs =
+      typeof o.placedAtMs === "number" && Number.isFinite(o.placedAtMs) ? o.placedAtMs : NaN;
+    const expireAtMs =
+      typeof o.expireAtMs === "number" && Number.isFinite(o.expireAtMs) ? o.expireAtMs : NaN;
+    const limitPrice =
+      typeof o.limitPrice === "number" && Number.isFinite(o.limitPrice) && o.limitPrice > 0
+        ? o.limitPrice
+        : NaN;
+    const lev =
+      typeof o.leverage === "number" && Number.isFinite(o.leverage) ? Math.floor(o.leverage) : NaN;
+    const refEntry =
+      typeof o.referenceEntryPrice === "number" && Number.isFinite(o.referenceEntryPrice) && o.referenceEntryPrice > 0
+        ? o.referenceEntryPrice
+        : NaN;
+    const signalBarOpenSec =
+      typeof o.signalBarOpenSec === "number" && Number.isFinite(o.signalBarOpenSec)
+        ? o.signalBarOpenSec
+        : NaN;
+    const signalBarTf =
+      o.signalBarTf === "15m" || o.signalBarTf === "1h" || o.signalBarTf === "4h"
+        ? o.signalBarTf
+        : null;
+    const signalBarLow =
+      o.signalBarLow === null
+        ? null
+        : typeof o.signalBarLow === "number" && Number.isFinite(o.signalBarLow)
+          ? o.signalBarLow
+          : null;
+    const svpHoleYn = o.svpHoleYn === "Y" || o.svpHoleYn === "N" ? o.svpHoleYn : "N";
+    const tpSlEnabled = o.tpSlEnabled === true;
+    const tp1Pct =
+      typeof o.tp1PricePct === "number" && Number.isFinite(o.tp1PricePct) && o.tp1PricePct > 0
+        ? o.tp1PricePct
+        : 10;
+    const tp1Partial =
+      typeof o.tp1PartialPct === "number" && Number.isFinite(o.tp1PartialPct) && o.tp1PartialPct > 0
+        ? o.tp1PartialPct
+        : 50;
+    const tp2Pct =
+      typeof o.tp2PricePct === "number" && Number.isFinite(o.tp2PricePct) && o.tp2PricePct > 0
+        ? o.tp2PricePct
+        : 25;
+    const maxH =
+      typeof o.maxHoldHours === "number" && Number.isFinite(o.maxHoldHours) && o.maxHoldHours > 0
+        ? o.maxHoldHours
+        : 48;
+    const slArm =
+      typeof o.slArmRoiPct === "number" && Number.isFinite(o.slArmRoiPct) && o.slArmRoiPct > 0
+        ? o.slArmRoiPct
+        : 10;
+    const slOff =
+      typeof o.slEntryOffsetPct === "number" && Number.isFinite(o.slEntryOffsetPct) && o.slEntryOffsetPct >= 0
+        ? o.slEntryOffsetPct
+        : 0;
+    if (
+      !sym ||
+      !binanceSymbol ||
+      !side ||
+      !orderId ||
+      !Number.isFinite(placedAtMs) ||
+      !Number.isFinite(expireAtMs) ||
+      !Number.isFinite(limitPrice) ||
+      !Number.isFinite(lev) ||
+      lev < 1 ||
+      !Number.isFinite(refEntry) ||
+      !Number.isFinite(signalBarOpenSec) ||
+      !signalBarTf
+    ) {
+      continue;
+    }
+    out.push({
+      contractSymbol: sym,
+      binanceSymbol,
+      side,
+      orderId,
+      placedAtMs,
+      expireAtMs,
+      limitPrice,
+      leverage: lev,
+      referenceEntryPrice: refEntry,
+      signalBarOpenSec,
+      signalBarTf,
+      signalBarLow,
+      svpHoleYn,
+      tpSlEnabled,
+      tp1PricePct: tp1Pct,
+      tp1PartialPct: tp1Partial,
+      tp2PricePct: tp2Pct,
+      maxHoldHours: maxH,
+      slArmRoiPct: slArm,
+      slEntryOffsetPct: slOff,
+    });
+  }
+  const byKey = new Map<string, SnowballAutoTradePendingLimit>();
+  for (const e of out) byKey.set(`${e.contractSymbol}|${e.side}|${e.orderId}`, e);
+  return Array.from(byKey.values());
 }
 
 function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
@@ -230,6 +363,7 @@ function normalizeState(raw: unknown): SnowballAutoTradeState {
       dailyKeyBkk?: unknown;
       openedContractSymbolsToday?: unknown;
       active?: unknown;
+      pendingLimits?: unknown;
     };
     const dk = typeof o.dailyKeyBkk === "string" && o.dailyKeyBkk.trim() ? o.dailyKeyBkk.trim() : "";
     let syms: string[] = [];
@@ -240,11 +374,13 @@ function normalizeState(raw: unknown): SnowballAutoTradeState {
     }
     if (!dk) continue;
     const active = normalizeActive(o.active);
+    const pendingLimits = normalizePendingLimits(o.pendingLimits);
     const entry: SnowballAutoTradePerUserState = {
       dailyKeyBkk: dk,
       openedContractSymbolsToday: dedupeStringsInOrder(syms),
     };
     if (active.length) entry.active = active;
+    if (pendingLimits.length) entry.pendingLimits = pendingLimits;
     out[k.trim()] = entry;
   }
   return out;
@@ -256,19 +392,23 @@ function userStateFresh(
 ): SnowballAutoTradePerUserState {
   if (!u || u.dailyKeyBkk !== dayKey) {
     const active = normalizeActive(u?.active);
+    const pendingLimits = normalizePendingLimits(u?.pendingLimits);
     const base: SnowballAutoTradePerUserState = {
       dailyKeyBkk: dayKey,
       openedContractSymbolsToday: [],
     };
     if (active.length) base.active = active;
+    if (pendingLimits.length) base.pendingLimits = pendingLimits;
     return base;
   }
   const activeIn = normalizeActive(u.active);
+  const pendingIn = normalizePendingLimits(u.pendingLimits);
   const next: SnowballAutoTradePerUserState = {
     dailyKeyBkk: dayKey,
     openedContractSymbolsToday: dedupeStringsInOrder(u.openedContractSymbolsToday.map((s) => s.toUpperCase())),
   };
   if (activeIn.length) next.active = activeIn;
+  if (pendingIn.length) next.pendingLimits = pendingIn;
   return next;
 }
 
@@ -301,6 +441,103 @@ export async function saveSnowballAutoTradeState(state: SnowballAutoTradeState):
   assertWritableStorage();
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify(state, null, 2), "utf-8");
+}
+
+export function withRecordedSnowballPlaced(
+  state: SnowballAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  dayKey: string,
+): SnowballAutoTradeState {
+  const uid = userId.trim();
+  const sym = contractSymbol.trim().toUpperCase();
+  const prev = state[uid];
+  const fresh = userStateFresh(prev, dayKey);
+  const opened = fresh.openedContractSymbolsToday.includes(sym)
+    ? fresh.openedContractSymbolsToday
+    : [...fresh.openedContractSymbolsToday, sym];
+  const next: SnowballAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    openedContractSymbolsToday: opened,
+  };
+  if (fresh.active && fresh.active.length) next.active = fresh.active;
+  if (fresh.pendingLimits && fresh.pendingLimits.length) next.pendingLimits = fresh.pendingLimits;
+  return { ...state, [uid]: next };
+}
+
+export function withSnowballOpenedUnlocked(
+  state: SnowballAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  dayKey: string,
+): SnowballAutoTradeState {
+  const uid = userId.trim();
+  const sym = contractSymbol.trim().toUpperCase();
+  const prev = state[uid];
+  const fresh = userStateFresh(prev, dayKey);
+  const opened = fresh.openedContractSymbolsToday.filter((s) => s !== sym);
+  const next: SnowballAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    openedContractSymbolsToday: opened,
+  };
+  if (fresh.active && fresh.active.length) next.active = fresh.active;
+  if (fresh.pendingLimits && fresh.pendingLimits.length) next.pendingLimits = fresh.pendingLimits;
+  return { ...state, [uid]: next };
+}
+
+export function withSnowballPendingLimitAdded(
+  state: SnowballAutoTradeState,
+  userId: string,
+  pending: SnowballAutoTradePendingLimit,
+  dayKey: string,
+): SnowballAutoTradeState {
+  const uid = userId.trim();
+  const sym = pending.contractSymbol.trim().toUpperCase();
+  const prev = state[uid];
+  const fresh = userStateFresh(prev, dayKey);
+  const pendingPrev = normalizePendingLimits(fresh.pendingLimits);
+  const pendingNext = pendingPrev.filter(
+    (x) => !(x.contractSymbol === sym && x.side === pending.side && x.orderId === pending.orderId),
+  );
+  pendingNext.push({
+    ...pending,
+    contractSymbol: sym,
+    binanceSymbol: pending.binanceSymbol.trim().toUpperCase(),
+    orderId: pending.orderId.trim(),
+  });
+  const next: SnowballAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    openedContractSymbolsToday: fresh.openedContractSymbolsToday,
+    pendingLimits: pendingNext,
+  };
+  if (fresh.active && fresh.active.length) next.active = fresh.active;
+  return { ...state, [uid]: next };
+}
+
+export function withSnowballPendingLimitRemoved(
+  state: SnowballAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: SnowballAutoTradeSide,
+  orderId: string,
+  dayKey: string,
+): SnowballAutoTradeState {
+  const uid = userId.trim();
+  const sym = contractSymbol.trim().toUpperCase();
+  const oid = orderId.trim();
+  const prev = state[uid];
+  if (!prev?.pendingLimits?.length) return state;
+  const fresh = userStateFresh(prev, dayKey);
+  const pendingNext = normalizePendingLimits(fresh.pendingLimits).filter(
+    (x) => !(x.contractSymbol === sym && x.side === side && x.orderId === oid),
+  );
+  const next: SnowballAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    openedContractSymbolsToday: fresh.openedContractSymbolsToday,
+  };
+  if (fresh.active && fresh.active.length) next.active = fresh.active;
+  if (pendingNext.length) next.pendingLimits = pendingNext;
+  return { ...state, [uid]: next };
 }
 
 export function hasOpenedSnowballContractToday(
@@ -397,14 +634,13 @@ export function withRecordedSnowballSuccessfulOpen(
     activeRow.quickTpMaxHours = (p.quickTpMaxHours ?? 0) > 0 ? (p.quickTpMaxHours as number) : 4;
   }
   activeNext.push(activeRow);
-  return {
-    ...state,
-    [uid]: {
-      dailyKeyBkk: dayKey,
-      openedContractSymbolsToday: opened,
-      active: activeNext,
-    },
+  const next: SnowballAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    openedContractSymbolsToday: opened,
+    active: activeNext,
   };
+  if (fresh.pendingLimits && fresh.pendingLimits.length) next.pendingLimits = fresh.pendingLimits;
+  return { ...state, [uid]: next };
 }
 
 /** ROI ถึง TP1% — ตั้ง SL@entry โดยยังไม่ปิด partial TP1 */
@@ -469,12 +705,14 @@ export function withSnowballActiveRemoved(
   if (!prev?.active?.length) return state;
   const sym = contractSymbol.trim().toUpperCase();
   const nextActive = normalizeActive(prev.active).filter((x) => !(x.contractSymbol === sym && x.side === side));
-  return {
-    ...state,
-    [uid]: {
-      ...prev,
-      active: nextActive.length ? nextActive : undefined,
-    },
+  const nextEntry: SnowballAutoTradePerUserState = {
+    dailyKeyBkk: prev.dailyKeyBkk,
+    openedContractSymbolsToday: prev.openedContractSymbolsToday,
   };
+  if (nextActive.length) nextEntry.active = nextActive;
+  if (prev.pendingLimits && prev.pendingLimits.length) {
+    nextEntry.pendingLimits = normalizePendingLimits(prev.pendingLimits);
+  }
+  return { ...state, [uid]: nextEntry };
 }
 
