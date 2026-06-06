@@ -35,6 +35,8 @@ const HEADERS = [
   "pct48h",
   "maxRoiPct",
   "maxDrawdownPct",
+  "strategyOutcome24h",
+  "strategyPct24h",
   "strategyOutcome",
   "strategyPct",
   "mexcRealisedPnlUsdt",
@@ -78,6 +80,10 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
     r.maxDrawdownPct != null && Number.isFinite(r.maxDrawdownPct)
       ? `${r.maxDrawdownPct.toFixed(2)}%`
       : "",
+    r.strategyOutcome24h
+      ? autoOpenStrategyOutcomeLabel(r.strategyOutcome24h as AutoOpenStrategyOutcome)
+      : "",
+    fmtPctCsv(r.strategyPct24h),
     r.strategyOutcome
       ? autoOpenStrategyOutcomeLabel(r.strategyOutcome as AutoOpenStrategyOutcome)
       : "",

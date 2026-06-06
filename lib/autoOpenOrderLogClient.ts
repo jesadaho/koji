@@ -61,6 +61,10 @@ export type AutoOpenOrderLogRow = {
   maxRoiPct?: number | null;
   maxDrawdownPct?: number | null;
   durationToMfeHours?: number | null;
+  /** ผล strategy หลังครบ 24h — ดู AutoOpenStrategyOutcome */
+  strategyOutcome24h?: string | null;
+  /** P/L % ราคาตามกติกา strategy (ใช้แสดงผลจริง @24h) */
+  strategyPct24h?: number | null;
   /** ผล strategy หลังครบ 48h — ดู AutoOpenStrategyOutcome */
   strategyOutcome?: string | null;
   /** P/L % ราคาตามกติกา strategy (ใช้แสดงผลจริง @48h) */

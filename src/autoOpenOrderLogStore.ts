@@ -140,6 +140,13 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   if (maxDd !== undefined) row.maxDrawdownPct = maxDd;
   const durMfe = nullNum(o.durationToMfeHours);
   if (durMfe !== undefined) row.durationToMfeHours = durMfe;
+  const stratPct24 = nullNum(o.strategyPct24h);
+  if (stratPct24 !== undefined) row.strategyPct24h = stratPct24;
+  if (typeof o.strategyOutcome24h === "string" && o.strategyOutcome24h.trim()) {
+    row.strategyOutcome24h = o.strategyOutcome24h.trim();
+  } else if (o.strategyOutcome24h === null) {
+    row.strategyOutcome24h = null;
+  }
   const stratPct = nullNum(o.strategyPct);
   if (stratPct !== undefined) row.strategyPct = stratPct;
   if (typeof o.strategyOutcome === "string" && o.strategyOutcome.trim()) {

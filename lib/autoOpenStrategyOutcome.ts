@@ -109,31 +109,46 @@ export type AutoOpenStrategyResolved = {
   durationToMfeHours: number;
 };
 
+export function resolveAutoOpenStrategyAtHorizon(
+  source: AutoOpenSource,
+  pct: number,
+): Pick<AutoOpenStrategyResolved, "strategyOutcome" | "strategyPct"> {
+  if (source === "snowball") {
+    const winMin = snowballOutcomeWinMinPct();
+    if (pct >= winMin) {
+      return { strategyOutcome: "win_trend", strategyPct: pct };
+    }
+    if (pct <= -winMin) {
+      return { strategyOutcome: "loss", strategyPct: pct };
+    }
+    return { strategyOutcome: "flat", strategyPct: pct };
+  }
+
+  const winMin = reversalOutcomeWinMinPct();
+  const lossMax = reversalOutcomeLossMaxPct();
+  if (pct >= winMin) {
+    return { strategyOutcome: "win", strategyPct: pct };
+  }
+  if (pct <= lossMax) {
+    return { strategyOutcome: "loss", strategyPct: pct };
+  }
+  return { strategyOutcome: "flat", strategyPct: pct };
+}
+
+export function resolveAutoOpenStrategyAt24h(
+  source: AutoOpenSource,
+  pct24h: number,
+): Pick<AutoOpenStrategyResolved, "strategyOutcome" | "strategyPct"> {
+  return resolveAutoOpenStrategyAtHorizon(source, pct24h);
+}
+
 export function resolveAutoOpenStrategyAt48h(
   source: AutoOpenSource,
   maxRoiPct: number,
   pct48h: number,
 ): Pick<AutoOpenStrategyResolved, "strategyOutcome" | "strategyPct"> {
-  if (source === "snowball") {
-    const winMin = snowballOutcomeWinMinPct();
-    if (pct48h >= winMin) {
-      return { strategyOutcome: "win_trend", strategyPct: pct48h };
-    }
-    if (pct48h <= -winMin) {
-      return { strategyOutcome: "loss", strategyPct: pct48h };
-    }
-    return { strategyOutcome: "flat", strategyPct: pct48h };
-  }
-
-  const winMin = reversalOutcomeWinMinPct();
-  const lossMax = reversalOutcomeLossMaxPct();
-  if (pct48h >= winMin) {
-    return { strategyOutcome: "win", strategyPct: pct48h };
-  }
-  if (pct48h <= lossMax) {
-    return { strategyOutcome: "loss", strategyPct: pct48h };
-  }
-  return { strategyOutcome: "flat", strategyPct: pct48h };
+  void maxRoiPct;
+  return resolveAutoOpenStrategyAtHorizon(source, pct48h);
 }
 
 export function autoOpenStrategyOutcomeLabel(
@@ -144,6 +159,21 @@ export function autoOpenStrategyOutcomeLabel(
   if (o === "loss") return "Loss";
   if (o === "flat") return "Flat";
   return "—";
+}
+
+export function autoOpenStrategyFinalized24h(
+  row: Pick<
+    AutoOpenOrderLogRow,
+    "strategyOutcome24h" | "strategyPct24h" | "pct24h"
+  >,
+): boolean {
+  return (
+    row.strategyOutcome24h != null &&
+    row.strategyPct24h != null &&
+    Number.isFinite(row.strategyPct24h) &&
+    row.pct24h != null &&
+    Number.isFinite(row.pct24h)
+  );
 }
 
 export function autoOpenStrategyFinalized(
@@ -167,36 +197,35 @@ export function isAutoOpenStrategyWinOutcome(
   return outcome === "win" || outcome === "win_trend" || outcome === "win_quick_tp30";
 }
 
-export type AutoOpenStrategy48hSummary = {
-  /** ครบผล@48h (เปิดสำเร็จ + ล้มเหลวที่มี entry สมมติ) */
+export type AutoOpenStrategyHorizonSummary = {
+  /** ครบผล@horizon (เปิดสำเร็จ + ล้มเหลวที่มี entry สมมติ) */
   trades: number;
-  /** ใน trades — outcome สำเร็จ */
   successTrades: number;
-  /** ใน trades — outcome ล้มเหลว (P/L สมมติ ไม่ได้เปิดจริง) */
   failedTrades: number;
   wins: number;
   losses: number;
   flats: number;
-  /** ยังไม่ครบ 48h */
+  /** ยังไม่ครบ horizon */
   pending: number;
   decisive: number;
   winratePct: number | null;
   sumUsdt: number | null;
-  /** สุทธิ USDT เฉพาะ outcome สำเร็จ */
   sumUsdtSuccess: number | null;
-  /** สุทธิ USDT เฉพาะ outcome ล้มเหลว (สมมติ) */
   sumUsdtFailed: number | null;
+};
+
+export type AutoOpenStrategy48hSummary = AutoOpenStrategyHorizonSummary & {
 };
 
 function autoOpenStrategy48hEligible(row: AutoOpenOrderLogRow): boolean {
   return row.outcome === "success" || row.outcome === "failed";
 }
 
-/** สรุป Win/Loss ตามคอลัมน์ ผล@48h — ไม้สำเร็จ + ล้มเหลวที่ติดตามราคาได้ */
-export function summarizeAutoOpenStrategy48h(
+function summarizeAutoOpenStrategyAtHorizon(
   rows: AutoOpenOrderLogRow[],
+  horizonHours: 24 | 48,
   markPrices?: Record<string, number>,
-): AutoOpenStrategy48hSummary {
+): AutoOpenStrategyHorizonSummary {
   rows = excludePendingConflictRows(rows);
   let trades = 0;
   let successTrades = 0;
@@ -215,7 +244,9 @@ export function summarizeAutoOpenStrategy48h(
   for (const r of rows) {
     if (!autoOpenStrategy48hEligible(r)) continue;
 
-    if (!autoOpenStrategyFinalized(r)) {
+    const finalized =
+      horizonHours === 24 ? autoOpenStrategyFinalized24h(r) : autoOpenStrategyFinalized(r);
+    if (!finalized) {
       const mark =
         markPrices != null
           ? markPrices[autoOpenContractSymbolKey(r.contractSymbol)]
@@ -229,7 +260,7 @@ export function summarizeAutoOpenStrategy48h(
     trades += 1;
     if (r.outcome === "failed") failedTrades += 1;
     else successTrades += 1;
-    const o = r.strategyOutcome;
+    const o = horizonHours === 24 ? r.strategyOutcome24h : r.strategyOutcome;
     if (isAutoOpenStrategyWinOutcome(o)) wins += 1;
     else if (o === "loss") losses += 1;
     else flats += 1;
@@ -244,7 +275,7 @@ export function summarizeAutoOpenStrategy48h(
         ? marginBase * scale
         : null;
     const lev = r.leverage;
-    const pct = r.strategyPct;
+    const pct = horizonHours === 24 ? r.strategyPct24h : r.strategyPct;
     if (
       margin != null &&
       lev != null &&
@@ -285,6 +316,22 @@ export function summarizeAutoOpenStrategy48h(
     sumUsdtSuccess: hasUsdtSuccess ? sumUsdtSuccess : null,
     sumUsdtFailed: hasUsdtFailed ? sumUsdtFailed : null,
   };
+}
+
+/** สรุป Win/Loss ตามคอลัมน์ ผล@24h */
+export function summarizeAutoOpenStrategy24h(
+  rows: AutoOpenOrderLogRow[],
+  markPrices?: Record<string, number>,
+): AutoOpenStrategyHorizonSummary {
+  return summarizeAutoOpenStrategyAtHorizon(rows, 24, markPrices);
+}
+
+/** สรุป Win/Loss ตามคอลัมน์ ผล@48h — ไม้สำเร็จ + ล้มเหลวที่ติดตามราคาได้ */
+export function summarizeAutoOpenStrategy48h(
+  rows: AutoOpenOrderLogRow[],
+  markPrices?: Record<string, number>,
+): AutoOpenStrategy48hSummary {
+  return summarizeAutoOpenStrategyAtHorizon(rows, 48, markPrices);
 }
 
 export function formatAutoOpenPnlBucketParts(
@@ -368,6 +415,36 @@ function formatAutoOpenUnrealisedNetUsdtLine(bucket: AutoOpenPnlUsdtBucket): str
     bucket.failedTrades,
     bucket.trades,
   );
+}
+
+export function formatAutoOpenStrategyHorizonSummaryText(
+  label: string,
+  summary: AutoOpenStrategyHorizonSummary,
+  pendingLabel: string,
+): string | null {
+  if (summary.trades === 0 && summary.pending === 0) return null;
+
+  if (summary.trades === 0) {
+    return summary.pending > 0 ? `${label}: รอผล ${summary.pending} ไม้ (${pendingLabel})` : null;
+  }
+
+  const flatPart = summary.flats > 0 ? ` · เสมอ ${summary.flats}` : "";
+  const pendingPart =
+    summary.pending > 0 ? ` · รอผล ${summary.pending}` : "";
+  const wrPart =
+    summary.decisive > 0 && summary.winratePct != null
+      ? ` · WR ${summary.winratePct.toFixed(1)}% (${summary.wins}/${summary.decisive})`
+      : "";
+  const failedPart =
+    summary.failedTrades > 0 ? ` · ล้มเหลว(สมมติ) ${summary.failedTrades}` : "";
+  const pnlPart = formatAutoOpenPnlBucketParts(
+    "Realised",
+    summary,
+    summary.successTrades,
+    summary.failedTrades,
+  );
+
+  return `${label}: ชนะ ${summary.wins} ไม้ · แพ้ ${summary.losses} ไม้${flatPart} · รวม ${summary.trades} ไม้ (สำเร็จ ${summary.successTrades}${failedPart})${wrPart}${pendingPart}${pnlPart}`;
 }
 
 export function formatAutoOpenStrategy48hSummaryText(

@@ -6,7 +6,11 @@ import {
   pickAutoOpenHorizonClose,
   resolveAutoOpenEntryPrice,
 } from "@/lib/autoOpenFollowUp";
-import { computeAutoOpenMfe48h, resolveAutoOpenStrategyAt48h } from "@/lib/autoOpenStrategyOutcome";
+import {
+  computeAutoOpenMfe48h,
+  resolveAutoOpenStrategyAt24h,
+  resolveAutoOpenStrategyAt48h,
+} from "@/lib/autoOpenStrategyOutcome";
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
 import {
   fetchBinanceUsdmKlinesRange,
@@ -175,6 +179,18 @@ async function followUpRow(
         ),
         48,
       ) || touched;
+  }
+
+  if (nowSec >= ac + SEC_24H && row.pct24h != null && Number.isFinite(row.pct24h)) {
+    const resolved24 = resolveAutoOpenStrategyAt24h(row.source, row.pct24h);
+    if (row.strategyOutcome24h !== resolved24.strategyOutcome) {
+      row.strategyOutcome24h = resolved24.strategyOutcome;
+      touched = true;
+    }
+    if (row.strategyPct24h !== resolved24.strategyPct) {
+      row.strategyPct24h = resolved24.strategyPct;
+      touched = true;
+    }
   }
 
   if (nowSec >= ac + SEC_48H && row.pct48h != null && Number.isFinite(row.pct48h)) {
