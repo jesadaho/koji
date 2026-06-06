@@ -7,6 +7,7 @@ import {
   resolveAutoOpenEntryPrice,
 } from "@/lib/autoOpenFollowUp";
 import {
+  backfillAutoOpenStrategyHorizonFromPct,
   computeAutoOpenMfe48h,
   resolveAutoOpenStrategyAt24h,
   resolveAutoOpenStrategyAt48h,
@@ -95,11 +96,15 @@ async function followUpRow(
     endTimeMs: nowMs,
     limit: 500,
   });
-  if (!pack || pack.timeSec.length === 0) return false;
+  if (!pack || pack.timeSec.length === 0) {
+    return backfillAutoOpenStrategyHorizonFromPct(row, nowSec);
+  }
 
   const { timeSec, close, high, low } = pack;
   const iFirst = timeSec.findIndex((t) => t + KLINE_15M_SEC >= ac);
-  if (iFirst < 0) return false;
+  if (iFirst < 0) {
+    return backfillAutoOpenStrategyHorizonFromPct(row, nowSec);
+  }
 
   let iLastHorizon = iFirst;
   for (let i = iFirst; i < timeSec.length; i++) {
@@ -246,6 +251,7 @@ export async function runAutoOpenOrderLogFollowUpTick(
 
   for (const row of state.rows) {
     if (backfillAutoOpenEntryPrice(row)) dirty += 1;
+    if (backfillAutoOpenStrategyHorizonFromPct(row, nowSec)) dirty += 1;
   }
 
   const pending = state.rows.filter((row) => autoOpenNeedsFollowUp(row, nowSec));

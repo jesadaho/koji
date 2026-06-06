@@ -75,6 +75,8 @@ export type SnowballAutoTradeActive = {
   tp2PlanOrderId?: string;
   initialHoldVol?: number;
   tp1PlanVol?: number;
+  /** ประเมินกติกา 24h แล้ว — ไม่รันซ้ำ (ยังคง track TP/SL ต่อ) */
+  guard24hEvaluated?: boolean;
 };
 
 export type SnowballAutoTradePendingLimit = {
@@ -325,6 +327,7 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
       leverage: lev,
     };
     if (mexcAvgEntryPrice != null) row.mexcAvgEntryPrice = mexcAvgEntryPrice;
+    if (o.guard24hEvaluated === true) row.guard24hEvaluated = true;
     if (hasTpSlPlan) {
       row.tpSlEnabled = tpSlEn !== false;
       row.tp1Done = tp1Done;
@@ -692,6 +695,25 @@ export function withSnowballTp1Done(
       active: nextActive,
     },
   };
+}
+
+export function withSnowballGuard24hEvaluated(
+  state: SnowballAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: SnowballAutoTradeSide,
+): SnowballAutoTradeState {
+  const uid = userId.trim();
+  const prev = state[uid];
+  if (!prev?.active?.length) return state;
+  const sym = contractSymbol.trim().toUpperCase();
+  const nextActive = normalizeActive(prev.active).map((x) => {
+    if (x.contractSymbol === sym && x.side === side) {
+      return { ...x, guard24hEvaluated: true };
+    }
+    return x;
+  });
+  return { ...state, [uid]: { ...prev, active: nextActive } };
 }
 
 export function withSnowballActiveRemoved(

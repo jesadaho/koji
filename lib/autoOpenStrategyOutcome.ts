@@ -3,7 +3,9 @@ import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import {
   accumulateAutoOpenPnlUsdt,
   autoOpenContractSymbolKey,
+  autoOpenFollowUpAnchorSec,
   autoOpenFollowUpEligible,
+  autoOpenHorizonDue,
   autoOpenLimitPriceNotTouchedYet,
   emptyAutoOpenPnlUsdtAccumulator,
   finalizeAutoOpenPnlUsdtBucket,
@@ -176,6 +178,71 @@ export function autoOpenStrategyFinalized24h(
   );
 }
 
+/** คำนวณผล@horizon จาก pct ที่มีอยู่ — ใช้แสดงผล/backfill แม้ยังไม่ได้ persist strategy fields */
+export function resolveAutoOpenStrategyHorizonForRow(
+  row: AutoOpenOrderLogRow,
+  horizonHours: 24 | 48,
+  nowMs = Date.now(),
+): { outcome: AutoOpenStrategyOutcome; pct: number } | null {
+  if (!autoOpenHorizonDue(row, horizonHours, nowMs)) return null;
+  const pctHorizon = horizonHours === 24 ? row.pct24h : row.pct48h;
+  if (pctHorizon == null || !Number.isFinite(pctHorizon)) return null;
+
+  const storedOutcome = horizonHours === 24 ? row.strategyOutcome24h : row.strategyOutcome;
+  const storedPct = horizonHours === 24 ? row.strategyPct24h : row.strategyPct;
+  if (
+    storedOutcome != null &&
+    storedPct != null &&
+    Number.isFinite(storedPct)
+  ) {
+    return { outcome: storedOutcome as AutoOpenStrategyOutcome, pct: storedPct };
+  }
+
+  const resolved =
+    horizonHours === 24
+      ? resolveAutoOpenStrategyAt24h(row.source, pctHorizon)
+      : resolveAutoOpenStrategyAt48h(row.source, row.maxRoiPct ?? 0, pctHorizon);
+  return { outcome: resolved.strategyOutcome, pct: resolved.strategyPct };
+}
+
+/** เติม strategyOutcome/Pct จาก pct24h/pct48h ที่มีอยู่แล้ว */
+export function backfillAutoOpenStrategyHorizonFromPct(
+  row: AutoOpenOrderLogRow,
+  nowSec = Math.floor(Date.now() / 1000),
+): boolean {
+  if (!autoOpenFollowUpEligible(row)) return false;
+  const ac = autoOpenFollowUpAnchorSec(row);
+  let touched = false;
+
+  if (nowSec >= ac + 24 * 3600 && row.pct24h != null && Number.isFinite(row.pct24h)) {
+    const resolved = resolveAutoOpenStrategyAt24h(row.source, row.pct24h);
+    if (row.strategyOutcome24h !== resolved.strategyOutcome) {
+      row.strategyOutcome24h = resolved.strategyOutcome;
+      touched = true;
+    }
+    if (row.strategyPct24h !== resolved.strategyPct) {
+      row.strategyPct24h = resolved.strategyPct;
+      touched = true;
+    }
+  }
+
+  if (nowSec >= ac + 48 * 3600 && row.pct48h != null && Number.isFinite(row.pct48h)) {
+    if (row.strategyOutcome == null || row.strategyPct == null) {
+      const resolved = resolveAutoOpenStrategyAt48h(row.source, row.maxRoiPct ?? 0, row.pct48h);
+      if (row.strategyOutcome !== resolved.strategyOutcome) {
+        row.strategyOutcome = resolved.strategyOutcome;
+        touched = true;
+      }
+      if (row.strategyPct !== resolved.strategyPct) {
+        row.strategyPct = resolved.strategyPct;
+        touched = true;
+      }
+    }
+  }
+
+  return touched;
+}
+
 export function autoOpenStrategyFinalized(
   row: Pick<
     AutoOpenOrderLogRow,
@@ -244,9 +311,8 @@ function summarizeAutoOpenStrategyAtHorizon(
   for (const r of rows) {
     if (!autoOpenStrategy48hEligible(r)) continue;
 
-    const finalized =
-      horizonHours === 24 ? autoOpenStrategyFinalized24h(r) : autoOpenStrategyFinalized(r);
-    if (!finalized) {
+    const resolved = resolveAutoOpenStrategyHorizonForRow(r, horizonHours);
+    if (!resolved) {
       const mark =
         markPrices != null
           ? markPrices[autoOpenContractSymbolKey(r.contractSymbol)]
@@ -260,7 +326,7 @@ function summarizeAutoOpenStrategyAtHorizon(
     trades += 1;
     if (r.outcome === "failed") failedTrades += 1;
     else successTrades += 1;
-    const o = horizonHours === 24 ? r.strategyOutcome24h : r.strategyOutcome;
+    const o = resolved.outcome;
     if (isAutoOpenStrategyWinOutcome(o)) wins += 1;
     else if (o === "loss") losses += 1;
     else flats += 1;
@@ -275,7 +341,7 @@ function summarizeAutoOpenStrategyAtHorizon(
         ? marginBase * scale
         : null;
     const lev = r.leverage;
-    const pct = horizonHours === 24 ? r.strategyPct24h : r.strategyPct;
+    const pct = resolved.pct;
     if (
       margin != null &&
       lev != null &&

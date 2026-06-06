@@ -32,11 +32,10 @@ import {
   type AutoOpenMexcRealisedSummary,
 } from "@/lib/autoOpenMexcRealPnl";
 import {
-  autoOpenStrategyFinalized,
-  autoOpenStrategyFinalized24h,
   autoOpenStrategyOutcomeLabel,
   formatAutoOpenStrategy48hSummaryText,
   formatAutoOpenStrategyHorizonSummaryText,
+  resolveAutoOpenStrategyHorizonForRow,
   summarizeAutoOpenStrategy24h,
   summarizeAutoOpenStrategy48h,
   summarizeAutoOpenUnrealizedPnl,
@@ -454,10 +453,10 @@ function fmtStrategyHorizonPnlCell(
   row: AutoOpenOrderLogRow,
   hours: 24 | 48,
 ): ReactNode {
-  const finalized = hours === 24 ? autoOpenStrategyFinalized24h(row) : autoOpenStrategyFinalized(row);
-  if (!autoOpenHorizonDue(row, hours) || !finalized) return "—";
-  const pct = (hours === 24 ? row.strategyPct24h : row.strategyPct)!;
-  const outcome = hours === 24 ? row.strategyOutcome24h : row.strategyOutcome;
+  const resolved = resolveAutoOpenStrategyHorizonForRow(row, hours);
+  if (!resolved) return "—";
+  const pct = resolved.pct;
+  const outcome = resolved.outcome;
   const displayPct = resolveStatsStrategyDisplayPct(pct, row.leverage);
   const usdtLine =
     row.marginUsdt != null &&

@@ -1,15 +1,22 @@
-import { closeAllOpenForSymbol, getContractLastPricePublic, type MexcCredentials } from "./mexcFuturesClient";
+import {
+  closeAllOpenForSymbol,
+  getContractLastPricePublic,
+  getOpenPositions,
+  type MexcCredentials,
+} from "./mexcFuturesClient";
 import { fetchBinanceUsdmKlinesRange, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { loadTradingViewMexcSettingsFullMap } from "./tradingViewCloseSettingsStore";
 import {
   loadSnowballAutoTradeState,
   saveSnowballAutoTradeState,
   withSnowballActiveRemoved,
+  withSnowballGuard24hEvaluated,
   type SnowballAutoTradeActive,
 } from "./snowballAutoTradeStateStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 
 const KLINE_GRAN_SEC = 900;
+const SEC_24H = 24 * 3600;
 
 function shortContractLabel(contractSymbol: string): string {
   const s = contractSymbol.replace(/_USDT$/i, "").trim();
@@ -20,10 +27,10 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
   await notifyTradingViewWebhookTelegram(userId, lines.filter(Boolean).join("\n"));
 }
 
-function signalBarDurationSec(tf: "15m" | "1h" | "4h"): number {
-  if (tf === "4h") return 4 * 3600;
-  if (tf === "1h") return 3600;
-  return 900;
+function entryRefPrice(a: SnowballAutoTradeActive): number {
+  const m = a.mexcAvgEntryPrice;
+  if (typeof m === "number" && Number.isFinite(m) && m > 0) return m;
+  return a.referenceEntryPrice;
 }
 
 function passesRunTrendGuardLikeStats(p: {
@@ -47,12 +54,52 @@ function passesRunTrendGuardLikeStats(p: {
   return true;
 }
 
+async function tryCloseUnderwater24h(args: {
+  userId: string;
+  creds: MexcCredentials;
+  active: SnowballAutoTradeActive;
+  reason: string;
+}): Promise<boolean> {
+  const { userId, creds, active, reason } = args;
+  const positions = await getOpenPositions(creds, active.contractSymbol);
+  const wantType = active.side === "long" ? 1 : 2;
+  const stillOpen = positions.some(
+    (p) =>
+      p.symbol === active.contractSymbol.trim().toUpperCase() &&
+      p.state === 1 &&
+      Number(p.holdVol) > 0 &&
+      p.positionType === wantType,
+  );
+  if (!stillOpen) return true;
+
+  const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
+  if (!r.success) {
+    await notifyLines(userId, [
+      "Koji — Snowball auto-open (MEXC)",
+      "❌ 24h rule: ปิดไม่สำเร็จ",
+      `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+      reason,
+      r.message ? `MEXC: ${r.message}` : "",
+    ]);
+    return false;
+  }
+
+  await notifyLines(userId, [
+    "Koji — Snowball auto-open (MEXC)",
+    "✅ 24h rule: ปิดโพซิชันแล้ว",
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    reason,
+  ]);
+  return true;
+}
+
 export async function runSnowballAutoTrade24hGuardTick(nowMs: number): Promise<number> {
   if (!isBinanceIndicatorFapiEnabled()) return 0;
 
   const [map, state0] = await Promise.all([loadTradingViewMexcSettingsFullMap(), loadSnowballAutoTradeState()]);
   let state = state0;
   let closed = 0;
+  let stateDirty = false;
 
   for (const [userId, perUser] of Object.entries(state)) {
     const actives = perUser.active ?? [];
@@ -63,65 +110,81 @@ export async function runSnowballAutoTrade24hGuardTick(nowMs: number): Promise<n
     const creds: MexcCredentials = { apiKey: row.mexcApiKey.trim(), secret: row.mexcSecret.trim() };
 
     for (const a of actives as SnowballAutoTradeActive[]) {
-      const ageMs = nowMs - a.openedAtMs;
-      if (!(ageMs >= 24 * 3600 * 1000)) continue;
+      if (a.guard24hEvaluated) continue;
 
-      // ใช้ราคา mark ล่าสุดของ MEXC เทียบกับ entry reference
+      const ageMs = nowMs - a.openedAtMs;
+      if (!(ageMs >= SEC_24H * 1000)) continue;
+
+      if (a.side !== "long") {
+        state = withSnowballGuard24hEvaluated(state, userId, a.contractSymbol, a.side);
+        stateDirty = true;
+        continue;
+      }
+
       const mark = await getContractLastPricePublic(a.contractSymbol);
       if (mark == null || !(mark > 0)) continue;
 
-      // เงื่อนไข: ราคา < จุดซื้อ (สำหรับ long) เท่านั้นตาม requirement
-      if (a.side !== "long") {
-        // ยังไม่รองรับนิยาม run-trend ฝั่ง short ในสถิติเดิม
-        continue;
-      }
-      if (!(mark < a.referenceEntryPrice)) {
-        // ถ้าไม่ติดลบจาก reference entry ไม่ต้องใช้ guard-close
-        state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
+      const entry = entryRefPrice(a);
+      if (!(mark < entry)) {
+        state = withSnowballGuard24hEvaluated(state, userId, a.contractSymbol, a.side);
+        stateDirty = true;
         continue;
       }
 
-      // ประเมิน run-trend guard ด้วยวิธีเดียวกับ Snowball stats: ใช้ Binance 15m klines ช่วง 24h
-      const ac = a.signalBarOpenSec + signalBarDurationSec(a.signalBarTf);
+      const openAcSec = Math.floor(a.openedAtMs / 1000);
+      const windowEndSec = openAcSec + SEC_24H;
       const pack = await fetchBinanceUsdmKlinesRange(a.binanceSymbol, "15m", {
-        startTimeMs: a.signalBarOpenSec * 1000,
+        startTimeMs: (openAcSec - KLINE_GRAN_SEC) * 1000,
         endTimeMs: nowMs,
         limit: 500,
       });
+
+      const failCloseReason = "เหตุผล: ครบ 24 ชม. หลังเปิดแล้วยังต่ำกว่าจุดซื้อ และไม่เข้าเกณฑ์รันเทรน";
+
       if (!pack || pack.timeSec.length === 0) {
-        // ถ้า fetch ไม่ได้ ให้ “fail closed” ตาม requirement: ไม่เข้าเกณฑ์รันเทรน -> ปิด
-        const r = await closeAllOpenForSymbol(creds, a.contractSymbol);
-        if (r.success) {
+        if (await tryCloseUnderwater24h({ userId, creds, active: a, reason: `${failCloseReason} (ดึง kline ไม่สำเร็จ)` })) {
           closed += 1;
           state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
-          await notifyLines(userId, [
-            "Koji — Snowball auto-open (MEXC)",
-            "✅ 24h rule: ปิดโพซิชันแล้ว (ดึงข้อมูลรันเทรนไม่สำเร็จ)",
-            `[${shortContractLabel(a.contractSymbol)}]/USDT (LONG)`,
-          ]);
+        } else {
+          state = withSnowballGuard24hEvaluated(state, userId, a.contractSymbol, a.side);
         }
+        stateDirty = true;
         continue;
       }
 
       const { timeSec, low, close } = pack;
-      const nowSec = Math.floor(nowMs / 1000);
-      const windowEndSec = Math.min(nowSec, ac + 24 * 3600);
-      const iFirst = timeSec.findIndex((t) => t + KLINE_GRAN_SEC >= ac);
-      if (iFirst < 0) continue;
+      const iFirst = timeSec.findIndex((t) => t + KLINE_GRAN_SEC >= openAcSec);
+      if (iFirst < 0) {
+        if (await tryCloseUnderwater24h({ userId, creds, active: a, reason: `${failCloseReason} (ไม่มี kline ครอบคลุมช่วงเปิด)` })) {
+          closed += 1;
+          state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
+        } else {
+          state = withSnowballGuard24hEvaluated(state, userId, a.contractSymbol, a.side);
+        }
+        stateDirty = true;
+        continue;
+      }
+
       let iLast = iFirst;
       for (let i = iFirst; i < timeSec.length; i++) {
         if (timeSec[i]! + KLINE_GRAN_SEC <= windowEndSec) iLast = i;
       }
-      while (iLast >= iFirst && timeSec[iLast]! + KLINE_GRAN_SEC > windowEndSec) iLast--;
-      if (iLast < iFirst) continue;
+      if (iLast < iFirst) {
+        if (await tryCloseUnderwater24h({ userId, creds, active: a, reason: `${failCloseReason} (ช่วง 24h ไม่ครบแท่ง)` })) {
+          closed += 1;
+          state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
+        } else {
+          state = withSnowballGuard24hEvaluated(state, userId, a.contractSymbol, a.side);
+        }
+        stateDirty = true;
+        continue;
+      }
 
       let minLow = Infinity;
       for (let i = iFirst; i <= iLast; i++) {
         minLow = Math.min(minLow, low[i]!);
       }
-      const maxDdPct = ((a.referenceEntryPrice - minLow) / a.referenceEntryPrice) * 100;
-
-      // price24h = close of last bar inside 24h window
+      const maxDdPct = ((entry - minLow) / entry) * 100;
       const p24 = close[iLast]!;
 
       const runTrendOk = passesRunTrendGuardLikeStats({
@@ -133,36 +196,23 @@ export async function runSnowballAutoTrade24hGuardTick(nowMs: number): Promise<n
       });
 
       if (runTrendOk) {
-        // ถือว่าเข้าเกณฑ์รันเทรน -> ไม่ปิดด้วยกติกานี้ แต่เลิก track
+        state = withSnowballGuard24hEvaluated(state, userId, a.contractSymbol, a.side);
+        stateDirty = true;
+        continue;
+      }
+
+      if (await tryCloseUnderwater24h({ userId, creds, active: a, reason: failCloseReason })) {
+        closed += 1;
         state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
-        continue;
+      } else {
+        state = withSnowballGuard24hEvaluated(state, userId, a.contractSymbol, a.side);
       }
-
-      const r = await closeAllOpenForSymbol(creds, a.contractSymbol);
-      if (!r.success) {
-        await notifyLines(userId, [
-          "Koji — Snowball auto-open (MEXC)",
-          "❌ 24h rule: ปิดไม่สำเร็จ",
-          `[${shortContractLabel(a.contractSymbol)}]/USDT (LONG)`,
-          r.message ? `MEXC: ${r.message}` : "",
-        ]);
-        continue;
-      }
-
-      closed += 1;
-      state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
-      await notifyLines(userId, [
-        "Koji — Snowball auto-open (MEXC)",
-        "✅ 24h rule: ปิดโพซิชันแล้ว",
-        `[${shortContractLabel(a.contractSymbol)}]/USDT (LONG)`,
-        "เหตุผล: ครบ 24 ชม. แล้วยังต่ำกว่าจุดซื้อ และไม่เข้าเกณฑ์รันเทรน",
-      ]);
+      stateDirty = true;
     }
   }
 
-  if (closed > 0) {
+  if (stateDirty) {
     await saveSnowballAutoTradeState(state);
   }
   return closed;
 }
-
