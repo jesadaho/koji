@@ -77,6 +77,8 @@ export type AutoOpenOrderLogRow = {
   mexcClosedAtMs?: number | null;
   /** positionId จาก MEXC history — กันจับคู่ซ้ำ */
   mexcPositionId?: number | null;
+  /** ยังมี position เปิดอยู่บน MEXC (แถว success ล่าสุดของเหรียญ+ทิศ) */
+  mexcActive?: boolean;
 };
 
 export type AutoOpenOrderLogApiPayload = {

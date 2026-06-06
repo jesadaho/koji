@@ -113,6 +113,7 @@ import {
   loadAutoOpenOrderLogState,
   saveAutoOpenOrderLogState,
 } from "./autoOpenOrderLogStore";
+import { attachAutoOpenMexcActiveFlags } from "./autoOpenMexcActiveForUser";
 import { collectAutoOpenContractSymbols, fetchAutoOpenMarkPrices } from "./autoOpenMarkPrices";
 import { conflictWithForSymbol, loadPendingConflictSets } from "./signalPendingConflictServer";
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
@@ -878,7 +879,7 @@ export async function liffGetAutoOpenOrderHistory(
 
   const rawRows = await listAutoOpenOrderLogsForUser(userId, opts);
   const conflictSets = await loadPendingConflictSets();
-  const rows: AutoOpenOrderLogRow[] = rawRows.map((r) => ({
+  const rowsWithConflict: AutoOpenOrderLogRow[] = rawRows.map((r) => ({
     ...r,
     conflictWith: conflictWithForSymbol(
       conflictSets,
@@ -886,6 +887,7 @@ export async function liffGetAutoOpenOrderHistory(
       r.source,
     ),
   }));
+  const rows = await attachAutoOpenMexcActiveFlags(userId, rowsWithConflict);
   const skippedTotal = await countSkippedAutoOpenOrderLogsForUser(userId, {
     source: opts?.source,
   });

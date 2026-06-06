@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
+import { AutoOpenMexcActiveBadge } from "@/components/AutoOpenMexcActiveBadge";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import {
   autoOpenOutcomeLabel,
@@ -571,7 +572,10 @@ function renderAutoOpenHistoryTableBody(
         </td>
         <td>{autoOpenSourceLabel(r.source)}</td>
         <td>
-          {coinLabel(r.binanceSymbol || r.contractSymbol)}
+          <span style={{ whiteSpace: "nowrap" }}>
+            {coinLabel(r.binanceSymbol || r.contractSymbol)}
+            <AutoOpenMexcActiveBadge active={r.mexcActive} />
+          </span>
           <PendingConflictBadge conflictWith={r.conflictWith} />
         </td>
         <td>{r.side ? r.side.toUpperCase() : "—"}</td>
@@ -1153,6 +1157,10 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             {strategy48hSummaryNode}
           </div>
         ) : null}
+        <p className="sub" style={{ marginTop: 0, marginBottom: "0.65rem", opacity: 0.9 }}>
+          <span style={{ color: "var(--ok, #3a8)", fontWeight: 600 }}>● MEXC</span> = ยังมี position
+          เปิดบน MEXC (แถวเปิดสำเร็จล่าสุดของเหรียญ+ทิศ)
+        </p>
         {limitPendingHiddenCount > 0 || conflictHiddenFromSummary > 0 ? (
           <p className="sub" style={{ marginTop: 0, marginBottom: "0.65rem", opacity: 0.9 }}>
             แสดงในตาราง {displayRows.length} รายการ
