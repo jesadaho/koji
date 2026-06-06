@@ -614,8 +614,7 @@ export function withRecordedSnowballSuccessfulOpen(
     activeRow.mexcAvgEntryPrice = mexcE;
   }
   const plan = p.tpSlPlan;
-  if (plan?.enabled && typeof mexcE === "number" && Number.isFinite(mexcE) && mexcE > 0) {
-    activeRow.tpSlEnabled = true;
+  if (plan?.enabled) {
     activeRow.tp1Done = false;
     activeRow.tp1PricePct = plan.tp1PricePct;
     activeRow.tp1PartialPct = plan.tp1PartialPct;
@@ -623,13 +622,16 @@ export function withRecordedSnowballSuccessfulOpen(
     activeRow.maxHoldHours = plan.maxHoldHours;
     activeRow.slArmRoiPct = plan.slArmRoiPct;
     activeRow.slEntryOffsetPct = plan.slEntryOffsetPct;
-    if (plan.tp1PlanOrderId?.trim()) activeRow.tp1PlanOrderId = plan.tp1PlanOrderId.trim();
-    if (plan.tp2PlanOrderId?.trim()) activeRow.tp2PlanOrderId = plan.tp2PlanOrderId.trim();
-    if (typeof plan.initialHoldVol === "number" && plan.initialHoldVol > 0) {
-      activeRow.initialHoldVol = plan.initialHoldVol;
-    }
-    if (typeof plan.tp1PlanVol === "number" && plan.tp1PlanVol > 0) {
-      activeRow.tp1PlanVol = plan.tp1PlanVol;
+    if (typeof mexcE === "number" && Number.isFinite(mexcE) && mexcE > 0) {
+      activeRow.tpSlEnabled = true;
+      if (plan.tp1PlanOrderId?.trim()) activeRow.tp1PlanOrderId = plan.tp1PlanOrderId.trim();
+      if (plan.tp2PlanOrderId?.trim()) activeRow.tp2PlanOrderId = plan.tp2PlanOrderId.trim();
+      if (typeof plan.initialHoldVol === "number" && plan.initialHoldVol > 0) {
+        activeRow.initialHoldVol = plan.initialHoldVol;
+      }
+      if (typeof plan.tp1PlanVol === "number" && plan.tp1PlanVol > 0) {
+        activeRow.tp1PlanVol = plan.tp1PlanVol;
+      }
     }
   } else if (p.quickTpEnabled) {
     activeRow.quickTpEnabled = true;

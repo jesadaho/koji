@@ -832,7 +832,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         tp1PlanVol?: number;
       } | null = null;
 
-      if (trackedTpSl) {
+      if (tpPlan.enabled) {
         tpSlPlanForState = {
           enabled: true,
           tp1PricePct: tpPlan.tp1PricePct,
@@ -842,7 +842,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           slArmRoiPct: tpPlan.slArmRoiPct,
           slEntryOffsetPct: tpPlan.slEntryOffsetPct,
         };
-        if (posAfterOpen) {
+        if (trackedTpSl && posAfterOpen) {
           try {
             const placed = await placeTpPlanOrdersAfterOpen(creds, {
               contractSymbol: sym,

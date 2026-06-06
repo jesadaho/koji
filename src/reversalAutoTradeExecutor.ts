@@ -132,7 +132,7 @@ function readMexcAvgEntryPriceShort(
   return null;
 }
 
-function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings): {
+export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings): {
   enabled: boolean;
   tp1PricePct: number;
   tp1PartialPct: number;
@@ -871,7 +871,9 @@ export async function runReversalAutoTradeAfterReversalAlert(
         } catch (e) {
           console.error("[reversalAutoTrade] getOpenPositions after open", contractSymbol, userId, e);
         }
-        if (typeof mexcAvgEntry === "number" && mexcAvgEntry > 0) {
+        const entryForTrack =
+          typeof mexcAvgEntry === "number" && mexcAvgEntry > 0 ? mexcAvgEntry : markPrice;
+        if (entryForTrack > 0) {
           state = withReversalActiveOpen(
             state,
             userId,
@@ -881,7 +883,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
               side: "short",
               openedAtMs: placedAtMs,
               referenceEntryPrice: markPrice,
-              mexcAvgEntryPrice: mexcAvgEntry,
+              mexcAvgEntryPrice: entryForTrack,
               leverage: lev,
               tp1PricePct: plan.tp1PricePct,
               tp1PartialPct: plan.tp1PartialPct,
@@ -892,7 +894,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             },
             dayKey,
           );
-          trackedTpSl = true;
+          trackedTpSl = typeof mexcAvgEntry === "number" && mexcAvgEntry > 0;
         }
       }
 

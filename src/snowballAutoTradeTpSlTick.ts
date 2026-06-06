@@ -1,3 +1,4 @@
+import { autoTradeMaxHoldDue, resolveAutoTradeMaxHoldHours } from "@/lib/autoTradeMaxHold";
 import {
   DEFAULT_SL_ARM_ROI_PCT,
   DEFAULT_SL_ENTRY_OFFSET_PCT,
@@ -19,6 +20,7 @@ import {
   type MexcCredentials,
   type OpenPositionRow,
 } from "./mexcFuturesClient";
+import { resolveSnowballTpSlPlanFromRow } from "./snowballAutoTradeTpSlPlan";
 import { loadTradingViewMexcSettingsFullMap } from "./tradingViewCloseSettingsStore";
 import {
   loadSnowballAutoTradeState,
@@ -123,11 +125,14 @@ async function handlePositionDisappeared(args: {
   ]);
 }
 
-async function handleMaxHoldForceClose(ctx: TpSlContext): Promise<{ closed: boolean }> {
+async function handleMaxHoldForceClose(
+  ctx: TpSlContext,
+  maxHoldHours: number,
+): Promise<{ closed: boolean }> {
   const { userId, creds, active, markPrice, entry } = ctx;
   await cancelActiveTpSlPlanOrders(creds, active);
   const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
-  const maxH = active.maxHoldHours ?? 48;
+  const maxH = maxHoldHours;
   if (!r.success) {
     await notifyLines(userId, [
       "Koji — Snowball TP/SL (MEXC)",
@@ -386,46 +391,64 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
       continue;
     }
 
+    const tpPlan = resolveSnowballTpSlPlanFromRow(row);
+
     for (const a of actives as SnowballAutoTradeActive[]) {
-      if (!snowballActiveTracksTpSl(a)) continue;
+      const tracksTpStrategy =
+        tpPlan.enabled || a.tpSlEnabled === true || (a.maxHoldHours ?? 0) > 0;
+      if (!tracksTpStrategy) continue;
+
       try {
-        const entry = await resolveTpSlEntry(creds, a);
-        if (entry == null || !(entry > 0)) continue;
+        const maxH = resolveAutoTradeMaxHoldHours({
+          activeMaxHoldHours: a.maxHoldHours,
+          liveMaxHoldHours: tpPlan.maxHoldHours,
+          tpSlEnabled: tpPlan.enabled,
+        });
 
         const positions = await getOpenPositions(creds, a.contractSymbol);
         const pos = findActivePosition(positions, a.contractSymbol, a.side);
 
         if (!pos) {
-          await handlePositionDisappeared({ userId, creds, active: a });
-          state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
-          actionsCount += 1;
+          if (snowballActiveTracksTpSl(a) || autoTradeMaxHoldDue(a.openedAtMs, maxH, nowMs)) {
+            await handlePositionDisappeared({ userId, creds, active: a });
+            state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
+            actionsCount += 1;
+          }
           continue;
         }
 
         const mark = await getContractLastPricePublic(a.contractSymbol);
         if (mark == null || !(mark > 0)) continue;
 
+        const entry =
+          (await resolveTpSlEntry(creds, a)) ??
+          (a.mexcAvgEntryPrice && a.mexcAvgEntryPrice > 0
+            ? a.mexcAvgEntryPrice
+            : a.referenceEntryPrice > 0
+              ? a.referenceEntryPrice
+              : null);
+
         const ctx: TpSlContext = {
           userId,
           creds,
           active: a,
-          entry,
+          entry: entry ?? a.referenceEntryPrice,
           position: pos,
           markPrice: mark,
           positionMode,
         };
 
-        const maxH = a.maxHoldHours ?? 48;
-        const ageMs = nowMs - a.openedAtMs;
-        const maxAgeMs = maxH * 3600 * 1000;
-        if (ageMs >= maxAgeMs) {
-          const r = await handleMaxHoldForceClose(ctx);
+        if (autoTradeMaxHoldDue(a.openedAtMs, maxH, nowMs)) {
+          const r = await handleMaxHoldForceClose(ctx, maxH);
           if (r.closed) {
             state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
             actionsCount += 1;
           }
           continue;
         }
+
+        if (!snowballActiveTracksTpSl(a)) continue;
+        if (entry == null || !(entry > 0)) continue;
 
         const exchangeTp1 = Boolean(a.tp1PlanOrderId?.trim());
         const exchangeTp2 = Boolean(a.tp2PlanOrderId?.trim());
