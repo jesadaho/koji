@@ -37,6 +37,8 @@ const HEADERS = [
   "maxDrawdownPct",
   "strategyOutcome",
   "strategyPct",
+  "mexcRealisedPnlUsdt",
+  "mexcClosedAtMs",
 ];
 
 function fmtPctCsv(p: number | null | undefined): string {
@@ -80,6 +82,10 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
       ? autoOpenStrategyOutcomeLabel(r.strategyOutcome as AutoOpenStrategyOutcome)
       : "",
     fmtPctCsv(r.strategyPct),
+    r.mexcRealisedPnlUsdt != null && Number.isFinite(r.mexcRealisedPnlUsdt)
+      ? String(r.mexcRealisedPnlUsdt)
+      : "",
+    r.mexcClosedAtMs != null && Number.isFinite(r.mexcClosedAtMs) ? String(r.mexcClosedAtMs) : "",
   ];
   });
   return buildCsv(HEADERS, body);

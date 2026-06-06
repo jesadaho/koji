@@ -1009,3 +1009,139 @@ export async function closeAllOpenForSymbol(
     message: allOk ? undefined : "some_orders_failed",
   };
 }
+
+export type MexcHistoricalPositionRow = {
+  positionId: number;
+  symbol: string;
+  /** 1 = long, 2 = short */
+  positionType: number;
+  /** 1 holding, 2 system-held, 3 closed */
+  state: number;
+  holdVol?: number;
+  closeVol?: number;
+  openAvgPrice?: number;
+  closeAvgPrice?: number;
+  realised?: number;
+  closeProfitLoss?: number;
+  leverage?: number;
+  createTime?: number | string;
+  updateTime?: number | string;
+};
+
+type MexcHistoryPositionsPage = {
+  resultList?: unknown[];
+  pageSize?: number;
+  totalCount?: number;
+  totalPage?: number;
+  currentPage?: number;
+};
+
+function parseMexcHistoricalPositionRow(raw: unknown): MexcHistoricalPositionRow | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const positionId =
+    typeof o.positionId === "number" && Number.isFinite(o.positionId)
+      ? o.positionId
+      : typeof o.positionId === "string" && /^\d+$/.test(o.positionId)
+        ? Number(o.positionId)
+        : NaN;
+  const symbol = typeof o.symbol === "string" ? o.symbol.trim().toUpperCase() : "";
+  const positionType =
+    typeof o.positionType === "number" && Number.isFinite(o.positionType) ? o.positionType : NaN;
+  const state = typeof o.state === "number" && Number.isFinite(o.state) ? o.state : NaN;
+  if (!Number.isFinite(positionId) || !symbol || !Number.isFinite(positionType) || !Number.isFinite(state)) {
+    return null;
+  }
+  const row: MexcHistoricalPositionRow = { positionId, symbol, positionType, state };
+  const num = (v: unknown): number | undefined =>
+    typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  row.holdVol = num(o.holdVol);
+  row.closeVol = num(o.closeVol);
+  row.openAvgPrice = num(o.openAvgPrice);
+  row.closeAvgPrice = num(o.closeAvgPrice);
+  row.realised = num(o.realised);
+  row.closeProfitLoss = num(o.closeProfitLoss);
+  row.leverage = num(o.leverage);
+  if (typeof o.createTime === "number" || typeof o.createTime === "string") row.createTime = o.createTime;
+  if (typeof o.updateTime === "number" || typeof o.updateTime === "string") row.updateTime = o.updateTime;
+  return row;
+}
+
+function parseMexcHistoryPositionsPayload(data: unknown): MexcHistoricalPositionRow[] {
+  if (!data) return [];
+  if (Array.isArray(data)) {
+    const out: MexcHistoricalPositionRow[] = [];
+    for (const x of data) {
+      const row = parseMexcHistoricalPositionRow(x);
+      if (row) out.push(row);
+    }
+    return out;
+  }
+  if (typeof data === "object" && data !== null && "resultList" in data) {
+    const list = (data as MexcHistoryPositionsPage).resultList;
+    if (!Array.isArray(list)) return [];
+    const out: MexcHistoricalPositionRow[] = [];
+    for (const x of list) {
+      const row = parseMexcHistoricalPositionRow(x);
+      if (row) out.push(row);
+    }
+    return out;
+  }
+  return [];
+}
+
+/** ดึงประวัติ position ที่ปิดแล้ว — paginate จนครบหรือถึง maxPages */
+export async function fetchHistoricalPositions(
+  creds: MexcCredentials,
+  opts?: {
+    symbol?: string;
+    positionType?: 1 | 2;
+    startTimeMs?: number;
+    endTimeMs?: number;
+    pageSize?: number;
+    maxPages?: number;
+  },
+): Promise<{ ok: true; rows: MexcHistoricalPositionRow[] } | { ok: false; code?: number; message: string }> {
+  const pageSize = Math.min(Math.max(opts?.pageSize ?? 100, 1), 100);
+  const maxPages = Math.min(Math.max(opts?.maxPages ?? 5, 1), 20);
+  const out: MexcHistoricalPositionRow[] = [];
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const query: Record<string, string | number | undefined> = {
+      page_num: page,
+      page_size: pageSize,
+    };
+    if (opts?.symbol?.trim()) query.symbol = opts.symbol.trim().toUpperCase();
+    if (opts?.positionType === 1 || opts?.positionType === 2) query.position_type = opts.positionType;
+    if (opts?.startTimeMs != null && Number.isFinite(opts.startTimeMs)) query.start_time = Math.floor(opts.startTimeMs);
+    if (opts?.endTimeMs != null && Number.isFinite(opts.endTimeMs)) query.end_time = Math.floor(opts.endTimeMs);
+
+    const res = await mexcPrivateGet<unknown>(
+      creds,
+      "/api/v1/private/position/list/history_positions",
+      query,
+    );
+    if (!res.success) {
+      return {
+        ok: false,
+        code: res.code,
+        message:
+          typeof res.message === "string" && res.message.trim() ? res.message.trim() : `code ${res.code}`,
+      };
+    }
+
+    const pageRows = parseMexcHistoryPositionsPayload(res.data);
+    out.push(...pageRows);
+
+    if (pageRows.length < pageSize) break;
+    if (typeof res.data === "object" && res.data !== null && !Array.isArray(res.data)) {
+      const p = res.data as MexcHistoryPositionsPage;
+      if (typeof p.totalPage === "number" && page >= p.totalPage) break;
+      if (typeof p.currentPage === "number" && typeof p.totalPage === "number" && p.currentPage >= p.totalPage) {
+        break;
+      }
+    }
+  }
+
+  return { ok: true, rows: out };
+}

@@ -27,6 +27,11 @@ import {
   pctVsEntrySide,
 } from "@/lib/autoOpenFollowUp";
 import {
+  formatAutoOpenMexcRealisedSummaryText,
+  summarizeAutoOpenMexcRealisedPnl,
+  type AutoOpenMexcRealisedSummary,
+} from "@/lib/autoOpenMexcRealPnl";
+import {
   autoOpenStrategyFinalized,
   autoOpenStrategyOutcomeLabel,
   formatAutoOpenStrategy48hSummaryText,
@@ -164,6 +169,19 @@ function renderPnlBucketRow(
   );
 }
 
+function renderMexcRealisedSummaryRow(summary: AutoOpenMexcRealisedSummary): ReactNode | null {
+  if (summary.trades === 0 || summary.sumUsdt == null) return null;
+  return (
+    <div style={{ marginTop: "0.35rem" }}>
+      <span>MEXC Realised </span>
+      <span style={pnlAmountStyle(summary.sumUsdt)}>
+        {formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}
+      </span>
+      <span style={{ color: PNL_MUTED }}> ({summary.trades} ไม้)</span>
+    </div>
+  );
+}
+
 function shouldShowAutoOpenPnlSummary(
   closed: AutoOpenStrategy48hSummary,
   unrealised: AutoOpenPnlUsdtBucket,
@@ -179,8 +197,10 @@ function shouldShowAutoOpenPnlSummary(
 function renderAutoOpenStrategy48hSummary(
   closed: AutoOpenStrategy48hSummary,
   unrealised: AutoOpenPnlUsdtBucket,
+  mexcRealised?: AutoOpenMexcRealisedSummary,
 ): ReactNode | null {
-  if (!shouldShowAutoOpenPnlSummary(closed, unrealised)) return null;
+  const mexcNode = mexcRealised ? renderMexcRealisedSummaryRow(mexcRealised) : null;
+  if (!shouldShowAutoOpenPnlSummary(closed, unrealised) && !mexcNode) return null;
 
   const closedBucket: AutoOpenPnlUsdtBucket = {
     trades: closed.trades,
@@ -203,6 +223,7 @@ function renderAutoOpenStrategy48hSummary(
           ) : null}
         </div>
         {renderPnlBucketRow("Unrealised", unrealised, { showTradeCount: true })}
+        {mexcNode}
       </div>
     );
   }
@@ -254,6 +275,7 @@ function renderAutoOpenStrategy48hSummary(
       </div>
       {renderPnlBucketRow("Realised", closedBucket)}
       {renderPnlBucketRow("Unrealised", unrealised, { showTradeCount: true })}
+      {mexcNode}
     </div>
   );
 }
@@ -329,6 +351,25 @@ function fmtMarginCell(row: AutoOpenOrderLogRow): ReactNode {
       <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
         {scale}
       </span>
+    </span>
+  );
+}
+
+function fmtMexcRealPnlCell(row: AutoOpenOrderLogRow): ReactNode {
+  if (row.outcome !== "success") return "—";
+  const pnl = row.mexcRealisedPnlUsdt;
+  if (pnl == null || !Number.isFinite(pnl)) return "—";
+  return (
+    <span
+      style={{ whiteSpace: "nowrap", ...pnlAmountStyle(pnl) }}
+      title="Realised P/L จาก MEXC เมื่อปิด position (รวม funding)"
+    >
+      {formatStatsStrategyProfitDollarAmount(pnl)}
+      {row.mexcClosedAtMs != null && Number.isFinite(row.mexcClosedAtMs) ? (
+        <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
+          {formatBkk(row.mexcClosedAtMs)}
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -424,7 +465,7 @@ function renderAutoOpenHistoryTableBody(
   if (rows.length === 0) {
     return (
       <tr>
-        <td colSpan={19} className="sub">
+        <td colSpan={20} className="sub">
           {emptyMessage}
         </td>
       </tr>
@@ -449,6 +490,7 @@ function renderAutoOpenHistoryTableBody(
         <td>{fmtEntryCell(r, nowPx)}</td>
         <td>{fmtPrice(nowPx)}</td>
         <td>{fmtPnlCell(r, nowPx)}</td>
+        <td title="Realised P/L จาก MEXC เมื่อปิด position">{fmtMexcRealPnlCell(r)}</td>
         <td>{fmtStrategyPnlCell(r)}</td>
         <td>{r.gradeKey ?? r.model ?? "—"}</td>
         <td>
@@ -501,6 +543,9 @@ function AutoOpenHistoryTable({
             <th title="⏳ = Limit รอแตะ (รวมสั่งไม่สำเร็จแต่จำลองรอ fill) · ✕ = ล้มเหลวอื่น">Entry</th>
             <th>ปัจจุบัน</th>
             <th>P/L</th>
+            <th title="Realised P/L จาก MEXC เมื่อปิด position (อัปเดตทุก ~15 นาที)">
+              MEXC P/L
+            </th>
             <th title="หลังครบ 48h — Win/Loss/Flat ตาม pct48h (Snowball: Trend)">
               ผล@48h
             </th>
@@ -539,9 +584,13 @@ function AutoOpenWeekSection({
     () => summarizeAutoOpenUnrealizedPnl(summaryRows, markPrices),
     [summaryRows, markPrices],
   );
+  const mexcRealised = useMemo(
+    () => summarizeAutoOpenMexcRealisedPnl(summaryRows),
+    [summaryRows],
+  );
   const summaryNode = useMemo(
-    () => renderAutoOpenStrategy48hSummary(closed, unrealised),
-    [closed, unrealised],
+    () => renderAutoOpenStrategy48hSummary(closed, unrealised, mexcRealised),
+    [closed, unrealised, mexcRealised],
   );
   const successRate =
     orderSummary.total > 0
@@ -804,14 +853,20 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     () => summarizeAutoOpenUnrealizedPnl(summaryRows, markPrices),
     [summaryRows, markPrices],
   );
+  const mexcRealisedSummary = useMemo(
+    () => summarizeAutoOpenMexcRealisedPnl(summaryRows),
+    [summaryRows],
+  );
   const strategy48hSummaryNode = useMemo(
-    () => renderAutoOpenStrategy48hSummary(strategy48hSummary, unrealisedPnlSummary),
-    [strategy48hSummary, unrealisedPnlSummary],
+    () => renderAutoOpenStrategy48hSummary(strategy48hSummary, unrealisedPnlSummary, mexcRealisedSummary),
+    [strategy48hSummary, unrealisedPnlSummary, mexcRealisedSummary],
   );
-  const strategy48hSummaryTitle = useMemo(
-    () => formatAutoOpenStrategy48hSummaryText(strategy48hSummary, unrealisedPnlSummary),
-    [strategy48hSummary, unrealisedPnlSummary],
-  );
+  const strategy48hSummaryTitle = useMemo(() => {
+    const base = formatAutoOpenStrategy48hSummaryText(strategy48hSummary, unrealisedPnlSummary);
+    const mexcLine = formatAutoOpenMexcRealisedSummaryText(mexcRealisedSummary);
+    if (base && mexcLine) return `${base}\n${mexcLine}`;
+    return base ?? mexcLine;
+  }, [strategy48hSummary, unrealisedPnlSummary, mexcRealisedSummary]);
 
   const weekGroups = useMemo(() => groupAutoOpenLogsByBkkWeek(displayRows), [displayRows]);
 
@@ -980,7 +1035,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             className="sub"
             title={
               strategy48hSummaryTitle ??
-              "ชนะ/แพ้@48h = ไม้ครบ 48h · Realised = P/L ตามกติกาสถิติ · Unrealised = mark สด (ไม่รวม Limit ⏳ รอแตะ · รวมล้มเหลว Limit ที่แตะแล้วจำลอง fill) · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่ราคาแตะ entry แล้ว"
+              "ชนะ/แพ้@48h = ไม้ครบ 48h · Realised = P/L ตามกติกาสถิติ · MEXC Realised = P/L จริงเมื่อปิดบน MEXC · Unrealised = mark สด (ไม่รวม Limit ⏳ รอแตะ · รวมล้มเหลว Limit ที่แตะแล้วจำลอง fill) · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่ราคาแตะ entry แล้ว"
             }
             style={{ marginTop: 0, marginBottom: "0.65rem", lineHeight: 1.45 }}
           >

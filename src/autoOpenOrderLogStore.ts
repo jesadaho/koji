@@ -147,6 +147,18 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   } else if (o.strategyOutcome === null) {
     row.strategyOutcome = null;
   }
+  const mexcPnl = nullNum(o.mexcRealisedPnlUsdt);
+  if (mexcPnl !== undefined) row.mexcRealisedPnlUsdt = mexcPnl;
+  if (typeof o.mexcClosedAtMs === "number" && Number.isFinite(o.mexcClosedAtMs)) {
+    row.mexcClosedAtMs = o.mexcClosedAtMs;
+  } else if (o.mexcClosedAtMs === null) {
+    row.mexcClosedAtMs = null;
+  }
+  if (typeof o.mexcPositionId === "number" && Number.isFinite(o.mexcPositionId)) {
+    row.mexcPositionId = o.mexcPositionId;
+  } else if (o.mexcPositionId === null) {
+    row.mexcPositionId = null;
+  }
 
   return row;
 }
@@ -253,6 +265,30 @@ export async function deleteSkippedAutoOpenOrderLogsForUser(
   const removed = before - state.rows.length;
   if (removed > 0) await saveAutoOpenOrderLogState(state);
   return { removed };
+}
+
+export async function patchAutoOpenOrderLogMexcPnl(
+  updates: {
+    id: string;
+    mexcRealisedPnlUsdt: number;
+    mexcClosedAtMs: number;
+    mexcPositionId?: number;
+  }[],
+): Promise<number> {
+  if (updates.length === 0) return 0;
+  const state = await loadAutoOpenOrderLogState();
+  const byId = new Map(updates.map((u) => [u.id, u]));
+  let dirty = 0;
+  for (const row of state.rows) {
+    const u = byId.get(row.id);
+    if (!u) continue;
+    row.mexcRealisedPnlUsdt = u.mexcRealisedPnlUsdt;
+    row.mexcClosedAtMs = u.mexcClosedAtMs;
+    if (u.mexcPositionId != null) row.mexcPositionId = u.mexcPositionId;
+    dirty += 1;
+  }
+  if (dirty > 0) await saveAutoOpenOrderLogState(state);
+  return dirty;
 }
 
 export async function countSkippedAutoOpenOrderLogsForUser(

@@ -67,6 +67,12 @@ export type AutoOpenOrderLogRow = {
   strategyPct?: number | null;
   /** มีสัญญาณอีกฝั่ง pending คู่กัน — แสดงในตาราง */
   conflictWith?: string | null;
+  /** Realised P/L จาก MEXC เมื่อปิด position (รวม funding) */
+  mexcRealisedPnlUsdt?: number | null;
+  /** เวลาปิด position บน MEXC */
+  mexcClosedAtMs?: number | null;
+  /** positionId จาก MEXC history — กันจับคู่ซ้ำ */
+  mexcPositionId?: number | null;
 };
 
 export type AutoOpenOrderLogApiPayload = {
