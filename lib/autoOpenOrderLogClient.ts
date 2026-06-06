@@ -32,11 +32,17 @@ export type AutoOpenOrderLogRow = {
   wickRatio?: number;
   rangeRankInLookback?: number | null;
   orderKind?: "market" | "limit";
-  /** EMA25 15m สำหรับ Reversal limit retest */
+  /** Reversal entry mode ตอนเปิด */
+  entryMode?: "hybrid_ema" | "market";
+  /** EMA period บน TF 15m ตอนเปิด (Reversal hybrid) */
+  entryEmaPeriod?: number;
+  /** ค่า EMA บน TF 15m ตอนเปิด */
+  entryEma15m?: number;
+  /** @deprecated แถวเก่า — ใช้ entryEma15m แทน */
   ema25_15m?: number;
-  /** @deprecated แถวเก่า — ใช้ ema25_15m แทน */
+  /** @deprecated แถวเก่า — ใช้ entryEma15m แทน */
   ema20_15m?: number;
-  /** @deprecated แถวเก่า — ใช้ ema25_15m แทน */
+  /** @deprecated แถวเก่า — ใช้ entryEma15m แทน */
   ema50_15m?: number;
   markPrice?: number;
   /** ราคาเข้าอ้างอิง (สัญญาณ / ตั้งใจเปิด) — ใช้ follow-up แม้เปิดล้มเหลว */

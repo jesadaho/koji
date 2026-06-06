@@ -129,6 +129,8 @@ type ReversalAutoTradeApiBundle = {
   gateQualitySignal?: boolean;
   saturdayAllSignalsEnabled?: boolean;
   longSignalShortEnabled?: boolean;
+  entryMode?: "hybrid_ema" | "market";
+  entryEmaPeriod?: number | null;
 };
 
 type TradingViewMexcResponse = {
@@ -204,6 +206,8 @@ export default function SettingsTelegramMiniApp() {
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revLongSignalShort, setRevLongSignalShort] = useState(false);
+  const [revEntryMode, setRevEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
+  const [revEntryEmaPeriod, setRevEntryEmaPeriod] = useState("20");
   const [revSaveErr, setRevSaveErr] = useState("");
   const [revSaveOk, setRevSaveOk] = useState("");
   const [revSaving, setRevSaving] = useState(false);
@@ -296,6 +300,10 @@ export default function SettingsTelegramMiniApp() {
     setRevGateQualitySignal(st.gateQualitySignal !== false);
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
     setRevLongSignalShort(Boolean(st.longSignalShortEnabled));
+    setRevEntryMode(st.entryMode === "market" ? "market" : "hybrid_ema");
+    setRevEntryEmaPeriod(
+      st.entryEmaPeriod != null && Number.isFinite(st.entryEmaPeriod) ? String(st.entryEmaPeriod) : "20",
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.reversalAutoTrade]);
 
@@ -759,6 +767,18 @@ export default function SettingsTelegramMiniApp() {
       return;
     }
 
+    const entryEmaPeriodParsed = revEntryEmaPeriod.trim() ? Number(revEntryEmaPeriod.trim()) : NaN;
+    if (
+      revEntryMode === "hybrid_ema" &&
+      (!Number.isFinite(entryEmaPeriodParsed) ||
+        entryEmaPeriodParsed < 5 ||
+        entryEmaPeriodParsed > 200 ||
+        Math.floor(entryEmaPeriodParsed) !== entryEmaPeriodParsed)
+    ) {
+      setRevSaveErr("EMA period ต้องเป็นจำนวนเต็ม 5–200");
+      return;
+    }
+
     setRevSaving(true);
     try {
       const reversalAutoTrade: Record<string, unknown> = {
@@ -775,6 +795,8 @@ export default function SettingsTelegramMiniApp() {
         maxHoldHours: revMaxHoldHours.trim() ? maxHoldParsed : null,
         slArmRoiPct: revSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
+        entryMode: revEntryMode,
+        entryEmaPeriod: revEntryMode === "hybrid_ema" ? Math.floor(entryEmaPeriodParsed) : null,
       };
       const body: Record<string, unknown> = {
         rotateWebhookToken: false,
@@ -1369,12 +1391,11 @@ export default function SettingsTelegramMiniApp() {
         <h2>Reversal auto-open (MEXC) — SHORT</h2>
         <p className="sub" style={{ marginTop: 0 }}>
           เมื่อ <strong>Reversal alert ส่งสำเร็จในกลุ่ม</strong> ระบบจะสั่ง MEXC เปิด <strong>SHORT</strong> ตามตัวเลือกด้านล่าง
-          (สัญญาณ Short ตามแผน · หรือสัญญาณ Long แบบ fade) เมื่อผ่าน <strong>Quality Signal</strong> (ถ้าเปิด gate) · entry แบบ hybrid ตาม{" "}
-          <strong>EMA25 บน TF 15m</strong>:
+          (สัญญาณ Short ตามแผน · หรือสัญญาณ Long แบบ fade) เมื่อผ่าน <strong>Quality Signal</strong> (ถ้าเปิด gate) · entry ตั้งค่าได้ด้านล่าง (default Hybrid EMA20 บน TF 15m):
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
-          <li>ราคาตลาดอยู่<strong>เหนือ</strong> EMA25 15m → เปิด <strong>Market SHORT</strong> ทันที</li>
-          <li>ราคาตลาดอยู่<strong>ใต้/เท่ากับ</strong> EMA25 15m → ตั้ง <strong>Limit SHORT</strong> ที่ราคา EMA25 (ดักรีเทสต์)</li>
+          <li><strong>Hybrid (EMA retest)</strong>: ราคาเหนือ EMA → <strong>Market SHORT</strong> · ราคา ≤ EMA → <strong>Limit SHORT</strong> ที่ EMA (หมดอายุ 8 ชม.)</li>
+          <li><strong>Market ตลอด</strong>: เปิด Market SHORT ทุกสัญญาณ ไม่ใช้ EMA/Limit</li>
         </ul>
         <p className="sub" style={{ marginTop: "0.5rem" }}>
           <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
@@ -1448,6 +1469,42 @@ export default function SettingsTelegramMiniApp() {
           </span>
         </label>
 
+        <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
+          Entry (เปิด SHORT)
+        </p>
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            โหมด entry
+            <select
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              value={revEntryMode}
+              onChange={(e) => setRevEntryMode(e.target.value === "market" ? "market" : "hybrid_ema")}
+            >
+              <option value="hybrid_ema">Hybrid (EMA retest บน 15m)</option>
+              <option value="market">Market ตลอด</option>
+            </select>
+          </label>
+          {revEntryMode === "hybrid_ema" ? (
+            <label className="sub" style={{ display: "block" }}>
+              EMA period (TF 15m, default 20)
+              <input
+                type="text"
+                inputMode="numeric"
+                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+                autoComplete="off"
+                placeholder="20"
+                value={revEntryEmaPeriod}
+                onChange={(e) => setRevEntryEmaPeriod(e.target.value)}
+              />
+            </label>
+          ) : null}
+        </div>
+        {revEntryMode === "hybrid_ema" ? (
+          <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.9 }}>
+            Limit ที่ยังไม่ fill จะถูกยกเลิกอัตโนมัติหลัง 8 ชม. และปลดล็อก 1 order/วันเพื่อเปิดซ้ำได้
+          </p>
+        ) : null}
+
         <p className="sub" style={{ marginTop: "0.85rem", fontWeight: 600 }}>
           Margin / เลเวเรจ
         </p>
@@ -1482,10 +1539,10 @@ export default function SettingsTelegramMiniApp() {
         </div>
 
         <p className="sub" style={{ marginTop: "1.1rem", fontWeight: 600 }}>
-          กลยุทธ์ TP/SL (วาง plan TP บน MEXC ทันทีหลัง Market SHORT + tick สำหรับ SL/max hold)
+          กลยุทธ์ TP/SL (tick ปิด market สำหรับ TP1/TP2 + plan SL บังทุน)
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
-          <li><strong>TP1 / TP2</strong>: วาง plan order ทันทีหลังเปิด (TP1 @ <code>TP1 %</code> · TP2 @ <code>TP2 %</code>)</li>
+          <li><strong>TP1 / TP2</strong>: cron tick ปิด market ตาม <code>TP1 %</code> / <code>TP2 %</code> (ไม่วาง plan TP บน MEXC)</li>
           <li>
             <strong>แผนบังทุน</strong>: ROI ≥ <code>{revSlArmRoiPct.trim() || "10"}%</code> → SL บังทุน (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code> จาก entry)
           </li>

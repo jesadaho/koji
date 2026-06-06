@@ -16,6 +16,7 @@ import { runSnowballAutoTradeQuickTpTick } from "./snowballAutoTradeQuickTpTick"
 import { runSnowballAutoTradeTpSlTick } from "./snowballAutoTradeTpSlTick";
 import { runSnowballAutoTrade24hGuardTick } from "./snowballAutoTrade24hGuardTick";
 import { runReversalAutoTradeTpSlTick } from "./reversalAutoTradeTpSlTick";
+import { runReversalAutoTradeLimitTick } from "./reversalAutoTradeLimitTick";
 import { runDownsideReversalAlertTick } from "./downsideReversalAlertTick";
 import { runCandleReversalAlertTick } from "./candleReversal1dAlertTick";
 import { runCandleReversalStatsFollowUpTick } from "./candleReversalStatsTick";
@@ -395,6 +396,7 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   if (snowballTpSlActions > 0) parts.push(`snowball TP/SL ${snowballTpSlActions}`);
   if (snowballQuickTpClosed > 0) parts.push(`snowball quickTP close ${snowballQuickTpClosed}`);
   if (snowball24hClosed > 0) parts.push(`snowball 24h close ${snowball24hClosed}`);
+  if (reversalLimitActions > 0) parts.push(`reversal limit ${reversalLimitActions}`);
   if (reversalTpSlActions > 0) parts.push(`reversal TP/SL ${reversalTpSlActions}`);
   if (watch612 > 0) parts.push(`EMA6/12·15m ติดตาม ${watch612}`);
   if (downsideN > 0) parts.push(`downside reversal (Binance) ${downsideN}`);

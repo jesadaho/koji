@@ -2,6 +2,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { dirname, join } from "node:path";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
+import type { ReversalAutoTradeEntryMode } from "../lib/reversalAutoTradeEntry.js";
+
+export type { ReversalAutoTradeEntryMode };
 
 const KV_KEY = "koji:trading_view_mexc_settings";
 const filePath = join(process.cwd(), "data", "trading_view_mexc_settings.json");
@@ -143,6 +146,10 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;
   /** สัญญาณ Reversal Long → เปิด SHORT บน MEXC (fade) */
   reversalAutoTradeLongSignalShortEnabled?: boolean;
+  /** hybrid_ema = ราคา > EMA → Market, ≤ EMA → Limit · market = Market ตลอด */
+  reversalAutoTradeEntryMode?: ReversalAutoTradeEntryMode;
+  /** EMA period บน TF 15m สำหรับ hybrid entry (default 20) */
+  reversalAutoTradeEntryEmaPeriod?: number;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -306,6 +313,8 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeGateQualitySignal?: boolean;
   reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;
   reversalAutoTradeLongSignalShortEnabled?: boolean;
+  reversalAutoTradeEntryMode?: ReversalAutoTradeEntryMode | null;
+  reversalAutoTradeEntryEmaPeriod?: number | null;
 };
 
 /**
@@ -385,7 +394,9 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeGateLenRank315 !== undefined ||
     input.reversalAutoTradeGateQualitySignal !== undefined ||
     input.reversalAutoTradeSaturdayAllSignalsEnabled !== undefined ||
-    input.reversalAutoTradeLongSignalShortEnabled !== undefined;
+    input.reversalAutoTradeLongSignalShortEnabled !== undefined ||
+    input.reversalAutoTradeEntryMode !== undefined ||
+    input.reversalAutoTradeEntryEmaPeriod !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -693,6 +704,20 @@ export async function saveTradingViewMexcSettings(
       input.reversalAutoTradeLongSignalShortEnabled !== undefined
         ? input.reversalAutoTradeLongSignalShortEnabled
         : prev?.reversalAutoTradeLongSignalShortEnabled ?? false,
+
+    reversalAutoTradeEntryMode:
+      input.reversalAutoTradeEntryMode === null
+        ? undefined
+        : input.reversalAutoTradeEntryMode !== undefined
+          ? input.reversalAutoTradeEntryMode
+          : prev?.reversalAutoTradeEntryMode ?? "hybrid_ema",
+
+    reversalAutoTradeEntryEmaPeriod:
+      input.reversalAutoTradeEntryEmaPeriod === null
+        ? undefined
+        : input.reversalAutoTradeEntryEmaPeriod !== undefined
+          ? input.reversalAutoTradeEntryEmaPeriod
+          : prev?.reversalAutoTradeEntryEmaPeriod ?? 20,
   };
 
   void touchedSnowballPatch;

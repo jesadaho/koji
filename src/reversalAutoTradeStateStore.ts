@@ -52,10 +52,28 @@ export type ReversalAutoTradeActive = {
   tp1PlanVol?: number;
 };
 
+export type ReversalAutoTradePendingLimit = {
+  contractSymbol: string;
+  binanceSymbol: string;
+  orderId: string;
+  placedAtMs: number;
+  expireAtMs: number;
+  limitPrice: number;
+  leverage: number;
+  referenceEntryPrice: number;
+  tp1PricePct: number;
+  tp1PartialPct: number;
+  tp2PricePct: number;
+  maxHoldHours: number;
+  slArmRoiPct: number;
+  slEntryOffsetPct: number;
+};
+
 export type ReversalAutoTradePerUserState = {
   dailyKeyBkk: string;
   placedContractSymbolsToday: string[];
   active?: ReversalAutoTradeActive[];
+  pendingLimits?: ReversalAutoTradePendingLimit[];
 };
 
 export type ReversalAutoTradeState = Record<string, ReversalAutoTradePerUserState>;
@@ -77,6 +95,89 @@ async function ensureJsonFile(): Promise<void> {
     await mkdir(dirname(filePath), { recursive: true });
     await writeFile(filePath, "{}", "utf-8");
   }
+}
+
+function normalizePendingLimits(raw: unknown): ReversalAutoTradePendingLimit[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ReversalAutoTradePendingLimit[] = [];
+  for (const x of raw) {
+    if (!x || typeof x !== "object" || Array.isArray(x)) continue;
+    const o = x as Record<string, unknown>;
+    const sym = typeof o.contractSymbol === "string" ? o.contractSymbol.trim().toUpperCase() : "";
+    const binanceSymbol =
+      typeof o.binanceSymbol === "string" ? o.binanceSymbol.trim().toUpperCase() : "";
+    const orderId = typeof o.orderId === "string" ? o.orderId.trim() : "";
+    const placedAtMs =
+      typeof o.placedAtMs === "number" && Number.isFinite(o.placedAtMs) ? o.placedAtMs : NaN;
+    const expireAtMs =
+      typeof o.expireAtMs === "number" && Number.isFinite(o.expireAtMs) ? o.expireAtMs : NaN;
+    const limitPrice =
+      typeof o.limitPrice === "number" && Number.isFinite(o.limitPrice) && o.limitPrice > 0
+        ? o.limitPrice
+        : NaN;
+    const lev =
+      typeof o.leverage === "number" && Number.isFinite(o.leverage) ? Math.floor(o.leverage) : NaN;
+    const refEntry =
+      typeof o.referenceEntryPrice === "number" && Number.isFinite(o.referenceEntryPrice) && o.referenceEntryPrice > 0
+        ? o.referenceEntryPrice
+        : NaN;
+    const tp1Pct =
+      typeof o.tp1PricePct === "number" && Number.isFinite(o.tp1PricePct) && o.tp1PricePct > 0
+        ? o.tp1PricePct
+        : 10;
+    const tp1Partial =
+      typeof o.tp1PartialPct === "number" && Number.isFinite(o.tp1PartialPct) && o.tp1PartialPct > 0
+        ? o.tp1PartialPct
+        : 50;
+    const tp2Pct =
+      typeof o.tp2PricePct === "number" && Number.isFinite(o.tp2PricePct) && o.tp2PricePct > 0
+        ? o.tp2PricePct
+        : 25;
+    const maxH =
+      typeof o.maxHoldHours === "number" && Number.isFinite(o.maxHoldHours) && o.maxHoldHours > 0
+        ? o.maxHoldHours
+        : 48;
+    const slArm =
+      typeof o.slArmRoiPct === "number" && Number.isFinite(o.slArmRoiPct) && o.slArmRoiPct > 0
+        ? o.slArmRoiPct
+        : 10;
+    const slOff =
+      typeof o.slEntryOffsetPct === "number" && Number.isFinite(o.slEntryOffsetPct) && o.slEntryOffsetPct >= 0
+        ? o.slEntryOffsetPct
+        : 0;
+    if (
+      !sym ||
+      !binanceSymbol ||
+      !orderId ||
+      !Number.isFinite(placedAtMs) ||
+      !Number.isFinite(expireAtMs) ||
+      !Number.isFinite(limitPrice) ||
+      !Number.isFinite(lev) ||
+      lev < 1 ||
+      !Number.isFinite(refEntry)
+    ) {
+      continue;
+    }
+    out.push({
+      contractSymbol: sym,
+      binanceSymbol,
+      orderId,
+      placedAtMs,
+      expireAtMs,
+      limitPrice,
+      leverage: lev,
+      referenceEntryPrice: refEntry,
+      tp1PricePct: tp1Pct,
+      tp1PartialPct: tp1Partial,
+      tp2PricePct: tp2Pct,
+      maxHoldHours: maxH,
+      slArmRoiPct: slArm,
+      slEntryOffsetPct: slOff,
+    });
+  }
+  const byKey = new Map<string, ReversalAutoTradePendingLimit>();
+  for (const e of out) byKey.set(`${e.contractSymbol}|${e.orderId}`, e);
+  return Array.from(byKey.values());
 }
 
 function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
@@ -189,7 +290,12 @@ function normalizeState(raw: unknown): ReversalAutoTradeState {
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     if (!k?.trim()) continue;
     if (!v || typeof v !== "object" || Array.isArray(v)) continue;
-    const o = v as { dailyKeyBkk?: unknown; placedContractSymbolsToday?: unknown; active?: unknown };
+    const o = v as {
+      dailyKeyBkk?: unknown;
+      placedContractSymbolsToday?: unknown;
+      active?: unknown;
+      pendingLimits?: unknown;
+    };
     const dk = typeof o.dailyKeyBkk === "string" && o.dailyKeyBkk.trim() ? o.dailyKeyBkk.trim() : "";
     if (!dk) continue;
     let syms: string[] = [];
@@ -199,11 +305,13 @@ function normalizeState(raw: unknown): ReversalAutoTradeState {
         .map((x) => (x as string).trim().toUpperCase());
     }
     const active = normalizeActive(o.active);
+    const pendingLimits = normalizePendingLimits(o.pendingLimits);
     const entry: ReversalAutoTradePerUserState = {
       dailyKeyBkk: dk,
       placedContractSymbolsToday: dedupeStringsInOrder(syms),
     };
     if (active.length) entry.active = active;
+    if (pendingLimits.length) entry.pendingLimits = pendingLimits;
     out[k.trim()] = entry;
   }
   return out;
@@ -215,14 +323,17 @@ function userStateFresh(
 ): ReversalAutoTradePerUserState {
   if (!u || u.dailyKeyBkk !== dayKey) {
     const active = normalizeActive(u?.active);
+    const pendingLimits = normalizePendingLimits(u?.pendingLimits);
     const base: ReversalAutoTradePerUserState = {
       dailyKeyBkk: dayKey,
       placedContractSymbolsToday: [],
     };
     if (active.length) base.active = active;
+    if (pendingLimits.length) base.pendingLimits = pendingLimits;
     return base;
   }
   const activeIn = normalizeActive(u.active);
+  const pendingIn = normalizePendingLimits(u.pendingLimits);
   const next: ReversalAutoTradePerUserState = {
     dailyKeyBkk: dayKey,
     placedContractSymbolsToday: dedupeStringsInOrder(
@@ -230,6 +341,7 @@ function userStateFresh(
     ),
   };
   if (activeIn.length) next.active = activeIn;
+  if (pendingIn.length) next.pendingLimits = pendingIn;
   return next;
 }
 
@@ -292,10 +404,83 @@ export function withRecordedReversalPlaced(
     placedContractSymbolsToday: placed,
   };
   if (fresh.active && fresh.active.length) next.active = fresh.active;
+  if (fresh.pendingLimits && fresh.pendingLimits.length) next.pendingLimits = fresh.pendingLimits;
   return {
     ...state,
     [uid]: next,
   };
+}
+
+export function withReversalPlacedUnlocked(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  dayKey: string,
+): ReversalAutoTradeState {
+  const uid = userId.trim();
+  const sym = contractSymbol.trim().toUpperCase();
+  const prev = state[uid];
+  const fresh = userStateFresh(prev, dayKey);
+  const placed = fresh.placedContractSymbolsToday.filter((s) => s !== sym);
+  const next: ReversalAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    placedContractSymbolsToday: placed,
+  };
+  if (fresh.active && fresh.active.length) next.active = fresh.active;
+  if (fresh.pendingLimits && fresh.pendingLimits.length) next.pendingLimits = fresh.pendingLimits;
+  return { ...state, [uid]: next };
+}
+
+export function withReversalPendingLimitAdded(
+  state: ReversalAutoTradeState,
+  userId: string,
+  pending: ReversalAutoTradePendingLimit,
+  dayKey: string,
+): ReversalAutoTradeState {
+  const uid = userId.trim();
+  const sym = pending.contractSymbol.trim().toUpperCase();
+  const prev = state[uid];
+  const fresh = userStateFresh(prev, dayKey);
+  const pendingPrev = normalizePendingLimits(fresh.pendingLimits);
+  const pendingNext = pendingPrev.filter((x) => !(x.contractSymbol === sym && x.orderId === pending.orderId));
+  pendingNext.push({
+    ...pending,
+    contractSymbol: sym,
+    binanceSymbol: pending.binanceSymbol.trim().toUpperCase(),
+    orderId: pending.orderId.trim(),
+  });
+  const next: ReversalAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    placedContractSymbolsToday: fresh.placedContractSymbolsToday,
+    pendingLimits: pendingNext,
+  };
+  if (fresh.active && fresh.active.length) next.active = fresh.active;
+  return { ...state, [uid]: next };
+}
+
+export function withReversalPendingLimitRemoved(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  orderId: string,
+  dayKey: string,
+): ReversalAutoTradeState {
+  const uid = userId.trim();
+  const sym = contractSymbol.trim().toUpperCase();
+  const oid = orderId.trim();
+  const prev = state[uid];
+  if (!prev?.pendingLimits?.length) return state;
+  const fresh = userStateFresh(prev, dayKey);
+  const pendingNext = normalizePendingLimits(fresh.pendingLimits).filter(
+    (x) => !(x.contractSymbol === sym && x.orderId === oid),
+  );
+  const next: ReversalAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    placedContractSymbolsToday: fresh.placedContractSymbolsToday,
+  };
+  if (fresh.active && fresh.active.length) next.active = fresh.active;
+  if (pendingNext.length) next.pendingLimits = pendingNext;
+  return { ...state, [uid]: next };
 }
 
 export function withReversalActiveOpen(
@@ -352,13 +537,15 @@ export function withReversalActiveOpen(
   if (typeof p.initialHoldVol === "number" && p.initialHoldVol > 0) row.initialHoldVol = p.initialHoldVol;
   if (typeof p.tp1PlanVol === "number" && p.tp1PlanVol > 0) row.tp1PlanVol = p.tp1PlanVol;
   activeNext.push(row);
+  const next: ReversalAutoTradePerUserState = {
+    dailyKeyBkk: dayKey,
+    placedContractSymbolsToday: fresh.placedContractSymbolsToday,
+    active: activeNext,
+  };
+  if (fresh.pendingLimits && fresh.pendingLimits.length) next.pendingLimits = fresh.pendingLimits;
   return {
     ...state,
-    [uid]: {
-      dailyKeyBkk: dayKey,
-      placedContractSymbolsToday: fresh.placedContractSymbolsToday,
-      active: activeNext,
-    },
+    [uid]: next,
   };
 }
 
@@ -380,6 +567,7 @@ export function withReversalActiveRemoved(
     placedContractSymbolsToday: prev.placedContractSymbolsToday,
   };
   if (nextActive.length) nextEntry.active = nextActive;
+  if (prev.pendingLimits && prev.pendingLimits.length) nextEntry.pendingLimits = normalizePendingLimits(prev.pendingLimits);
   return {
     ...state,
     [uid]: nextEntry,

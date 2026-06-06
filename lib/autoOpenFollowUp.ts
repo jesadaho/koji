@@ -92,13 +92,15 @@ export function finalizeAutoOpenPnlUsdtBucket(
 }
 
 function reversalEma15mRef(row: AutoOpenOrderLogRow): number | undefined {
+  const generic =
+    typeof row.entryEma15m === "number" && row.entryEma15m > 0 ? row.entryEma15m : undefined;
   const ema25 =
     typeof row.ema25_15m === "number" && row.ema25_15m > 0 ? row.ema25_15m : undefined;
   const ema20 =
     typeof row.ema20_15m === "number" && row.ema20_15m > 0 ? row.ema20_15m : undefined;
   const ema50 =
     typeof row.ema50_15m === "number" && row.ema50_15m > 0 ? row.ema50_15m : undefined;
-  return ema25 ?? ema20 ?? ema50;
+  return generic ?? ema25 ?? ema20 ?? ema50;
 }
 
 function reversalShortMarkPrice(row: AutoOpenOrderLogRow): number | undefined {
@@ -107,9 +109,13 @@ function reversalShortMarkPrice(row: AutoOpenOrderLogRow): number | undefined {
     : undefined;
 }
 
-/** Reversal SHORT: ราคาตลาด > EMA25 บน 15m → ใช้ Market entry (ไม่ใช่ Limit ที่ EMA) */
+/** Reversal SHORT: ราคาตลาด > EMA 15m → ใช้ Market entry (ไม่ใช่ Limit ที่ EMA) */
 export function reversalShortMarketAboveEma15m(row: AutoOpenOrderLogRow): boolean {
   if (row.source !== "reversal" || row.side !== "short") return false;
+  if (row.orderKind === "market") return true;
+  if (row.orderKind === "limit") return false;
+  if (row.reasonCode === "open_success_market") return true;
+  if (row.reasonCode === "open_success_limit") return false;
   const ema = reversalEma15mRef(row);
   const mark = reversalShortMarkPrice(row);
   return ema != null && mark != null && mark > ema;
@@ -119,6 +125,7 @@ export function reversalShortMarketAboveEma15m(row: AutoOpenOrderLogRow): boolea
 export function resolveAutoOpenOrderKind(
   row: AutoOpenOrderLogRow,
 ): "market" | "limit" | undefined {
+  if (row.entryMode === "market") return "market";
   if (row.orderKind === "market" || row.orderKind === "limit") return row.orderKind;
   if (row.reasonCode === "open_success_limit") return "limit";
   if (row.reasonCode === "open_success_market") return "market";

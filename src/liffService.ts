@@ -129,13 +129,17 @@ import type { SparkVolBand } from "./sparkTierContext";
 import { newTvWebhookNonce } from "./tradingViewWebhookNonceStore";
 import { isSnowballAutotradeEnabled } from "./snowballAutoTradeExecutor";
 import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
+import {
+  parseReversalAutoTradeEntryEmaPeriod,
+  parseReversalAutoTradeEntryMode,
+} from "@/lib/reversalAutoTradeEntry";
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
   `Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ค่าเริ่มต้น LONG → Long · BEAR → Short · ถ้าเปิด ✨ Quality Signal: สัญญาณที่ตรง (${SNOWBALL_QUALITY_SIGNAL_CRITERIA}) → Long · ถ้าเปิด ✨ Quality Short Signal: สัญญาณที่ตรง (เขียว 1 วัน · Vol×SMA > 3 · R% > 8%) → Short (ชนะ Quality Signal) · เปิดอย่างใดอย่างหนึ่งแล้วไม่ตรงเกณฑ์ → ข้าม · วันอาทิตย์ (ไทย) → Short ทุกสัญญาณ · Action Plan = Monitor ไม่เปิด · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)`;
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
-  `Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — สัญญาณ Short ตามแผน Short · ตัวเลือก Long → SHORT (fade) สำหรับ Reversal Long 1H — gate Quality Signal: Short — ${REVERSAL_QUALITY_SIGNAL_CRITERIA} · Long 1H — ${REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA} — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry EMA25 บน 15m: เหนือ → Market SHORT, ต่ำกว่า → Limit ที่ EMA25 — 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0`;
+  `Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — สัญญาณ Short ตามแผน Short · ตัวเลือก Long → SHORT (fade) สำหรับ Reversal Long 1H — gate Quality Signal: Short — ${REVERSAL_QUALITY_SIGNAL_CRITERIA} · Long 1H — ${REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA} — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry: Hybrid (EMA retest บน 15m, default EMA20) ราคา > EMA → Market, ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม. แล้วยกเลิก+ปลดล็อกวัน) · หรือ Market ตลอด — TP ใช้ tick ปิด market (ไม่วาง plan TP) · 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0`;
 
 export function getLiffConfig() {
   return {
@@ -1184,6 +1188,8 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
     longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
+    entryMode: row.reversalAutoTradeEntryMode ?? "hybrid_ema",
+    entryEmaPeriod: row.reversalAutoTradeEntryEmaPeriod ?? 20,
   };
 }
 
@@ -1694,6 +1700,24 @@ function parseReversalAutoTradeNested(
     reversalAutoTradeLongSignalShortEnabled: longSignalShortEnabled,
   };
   if (tpSlEnabled !== undefined) patchPart.reversalAutoTradeTpSlEnabled = tpSlEnabled;
+
+  if ("entryMode" in o) {
+    patchPart.reversalAutoTradeEntryMode = parseReversalAutoTradeEntryMode(o.entryMode);
+  }
+  if ("entryEmaPeriod" in o) {
+    const rawPeriod = o.entryEmaPeriod;
+    if (rawPeriod === null || rawPeriod === "" || rawPeriod === undefined) {
+      patchPart.reversalAutoTradeEntryEmaPeriod = null;
+    } else {
+      const p = parseReversalAutoTradeEntryEmaPeriod(rawPeriod);
+      const n = typeof rawPeriod === "number" ? rawPeriod : Number(String(rawPeriod).replace(/,/g, "").trim());
+      if (!Number.isFinite(n)) {
+        return { ok: false, error: "reversal_entry_ema_period_invalid" };
+      }
+      patchPart.reversalAutoTradeEntryEmaPeriod = p;
+    }
+  }
+
   return { ok: true, patch: patchPart };
 }
 

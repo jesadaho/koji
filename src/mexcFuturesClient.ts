@@ -872,6 +872,81 @@ export async function placePlanOrderTakeProfit(
   return mexcPrivatePost<PlanOrderCreateData>(creds, "/api/v1/private/planorder/place", body);
 }
 
+export type OpenOrderRow = {
+  orderId: string;
+  symbol: string;
+  price: number;
+  vol: number;
+  leverage?: number;
+  /** 1 open long, 2 close short, 3 open short, 4 close long */
+  side: number;
+  /** 1 pending, 2 unfilled, 3 filled, 4 canceled, 5 invalid */
+  state: number;
+  createTime?: number;
+};
+
+function parseOpenOrderRow(raw: unknown): OpenOrderRow | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const orderId =
+    typeof o.orderId === "string"
+      ? o.orderId.trim()
+      : typeof o.orderId === "number" && Number.isFinite(o.orderId)
+        ? String(o.orderId)
+        : "";
+  const symbol = typeof o.symbol === "string" ? o.symbol.trim().toUpperCase() : "";
+  const price = typeof o.price === "number" && Number.isFinite(o.price) ? o.price : NaN;
+  const vol = typeof o.vol === "number" && Number.isFinite(o.vol) ? o.vol : NaN;
+  const side = typeof o.side === "number" && Number.isFinite(o.side) ? o.side : NaN;
+  const state = typeof o.state === "number" && Number.isFinite(o.state) ? o.state : NaN;
+  if (!orderId || !symbol || !Number.isFinite(price) || !Number.isFinite(vol) || !Number.isFinite(side)) {
+    return null;
+  }
+  const row: OpenOrderRow = { orderId, symbol, price, vol, side, state: Number.isFinite(state) ? state : 0 };
+  if (typeof o.leverage === "number" && Number.isFinite(o.leverage)) row.leverage = o.leverage;
+  if (typeof o.createTime === "number" && Number.isFinite(o.createTime)) row.createTime = o.createTime;
+  return row;
+}
+
+/** ดึง open orders (limit ที่ยังไม่ fill) — filter symbol ฝั่ง client */
+export async function getOpenOrders(
+  creds: MexcCredentials,
+  symbol?: string,
+): Promise<OpenOrderRow[]> {
+  const res = await mexcPrivateGet<unknown>(creds, "/api/v1/private/order/list/open_orders", {
+    page_num: 1,
+    page_size: 100,
+  });
+  if (!res.success || !Array.isArray(res.data)) return [];
+  const sym = symbol?.trim().toUpperCase();
+  const out: OpenOrderRow[] = [];
+  for (const x of res.data) {
+    const row = parseOpenOrderRow(x);
+    if (!row) continue;
+    if (sym && row.symbol !== sym) continue;
+    out.push(row);
+  }
+  return out;
+}
+
+/**
+ * ยกเลิก open limit orders ตาม orderId (MEXC `/api/v1/private/order/cancel`, สูงสุด 50 ต่อครั้ง)
+ */
+export async function cancelOpenOrders(
+  creds: MexcCredentials,
+  orderIds: string[],
+): Promise<{ success: boolean; code?: number; message?: string }> {
+  const ids = (orderIds ?? []).filter((s) => typeof s === "string" && s.trim()).map((s) => s.trim());
+  if (ids.length === 0) return { success: true };
+  const body = ids.map((id) => ({ orderId: id }));
+  const res = await mexcPrivatePost<unknown>(
+    creds,
+    "/api/v1/private/order/cancel",
+    body as unknown as Record<string, unknown>,
+  );
+  return { success: res.success, code: res.code, message: res.message };
+}
+
 /**
  * ยกเลิก plan/trigger order ตาม orderId list (MEXC `/api/v1/private/planorder/cancel`)
  * ไม่ throw — fail แบบ silent (เก็บผลใน return)
