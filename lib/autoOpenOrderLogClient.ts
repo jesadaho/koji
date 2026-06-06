@@ -32,9 +32,11 @@ export type AutoOpenOrderLogRow = {
   wickRatio?: number;
   rangeRankInLookback?: number | null;
   orderKind?: "market" | "limit";
-  /** EMA20 15m สำหรับ Reversal limit retest */
+  /** EMA25 15m สำหรับ Reversal limit retest */
+  ema25_15m?: number;
+  /** @deprecated แถวเก่า — ใช้ ema25_15m แทน */
   ema20_15m?: number;
-  /** @deprecated แถวเก่า — ใช้ ema20_15m แทน */
+  /** @deprecated แถวเก่า — ใช้ ema25_15m แทน */
   ema50_15m?: number;
   markPrice?: number;
   /** ราคาเข้าอ้างอิง (สัญญาณ / ตั้งใจเปิด) — ใช้ follow-up แม้เปิดล้มเหลว */

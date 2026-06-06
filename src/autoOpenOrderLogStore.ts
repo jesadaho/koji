@@ -100,6 +100,7 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
     row.rangeRankInLookback = o.rangeRankInLookback;
   }
   if (o.orderKind === "market" || o.orderKind === "limit") row.orderKind = o.orderKind;
+  if (typeof o.ema25_15m === "number" && Number.isFinite(o.ema25_15m)) row.ema25_15m = o.ema25_15m;
   if (typeof o.ema20_15m === "number" && Number.isFinite(o.ema20_15m)) row.ema20_15m = o.ema20_15m;
   if (typeof o.ema50_15m === "number" && Number.isFinite(o.ema50_15m)) row.ema50_15m = o.ema50_15m;
   if (typeof o.markPrice === "number" && Number.isFinite(o.markPrice)) row.markPrice = o.markPrice;

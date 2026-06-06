@@ -1370,11 +1370,11 @@ export default function SettingsTelegramMiniApp() {
         <p className="sub" style={{ marginTop: 0 }}>
           เมื่อ <strong>Reversal alert ส่งสำเร็จในกลุ่ม</strong> ระบบจะสั่ง MEXC เปิด <strong>SHORT</strong> ตามตัวเลือกด้านล่าง
           (สัญญาณ Short ตามแผน · หรือสัญญาณ Long แบบ fade) เมื่อผ่าน <strong>Quality Signal</strong> (ถ้าเปิด gate) · entry แบบ hybrid ตาม{" "}
-          <strong>EMA20 บน TF 15m</strong>:
+          <strong>EMA25 บน TF 15m</strong>:
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
-          <li>ราคาตลาดอยู่<strong>เหนือ</strong> EMA20 15m → เปิด <strong>Market SHORT</strong> ทันที</li>
-          <li>ราคาตลาดอยู่<strong>ใต้/เท่ากับ</strong> EMA20 15m → ตั้ง <strong>Limit SHORT</strong> ที่ราคา EMA20 (ดักรีเทสต์)</li>
+          <li>ราคาตลาดอยู่<strong>เหนือ</strong> EMA25 15m → เปิด <strong>Market SHORT</strong> ทันที</li>
+          <li>ราคาตลาดอยู่<strong>ใต้/เท่ากับ</strong> EMA25 15m → ตั้ง <strong>Limit SHORT</strong> ที่ราคา EMA25 (ดักรีเทสต์)</li>
         </ul>
         <p className="sub" style={{ marginTop: "0.5rem" }}>
           <Link href="/auto-open-history">ดูประวัติ auto-open</Link>

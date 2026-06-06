@@ -92,11 +92,27 @@ export function finalizeAutoOpenPnlUsdtBucket(
 }
 
 function reversalEma15mRef(row: AutoOpenOrderLogRow): number | undefined {
+  const ema25 =
+    typeof row.ema25_15m === "number" && row.ema25_15m > 0 ? row.ema25_15m : undefined;
   const ema20 =
     typeof row.ema20_15m === "number" && row.ema20_15m > 0 ? row.ema20_15m : undefined;
   const ema50 =
     typeof row.ema50_15m === "number" && row.ema50_15m > 0 ? row.ema50_15m : undefined;
-  return ema20 ?? ema50;
+  return ema25 ?? ema20 ?? ema50;
+}
+
+function reversalShortMarkPrice(row: AutoOpenOrderLogRow): number | undefined {
+  return typeof row.markPrice === "number" && Number.isFinite(row.markPrice) && row.markPrice > 0
+    ? row.markPrice
+    : undefined;
+}
+
+/** Reversal SHORT: ราคาตลาด > EMA25 บน 15m → ใช้ Market entry (ไม่ใช่ Limit ที่ EMA) */
+export function reversalShortMarketAboveEma15m(row: AutoOpenOrderLogRow): boolean {
+  if (row.source !== "reversal" || row.side !== "short") return false;
+  const ema = reversalEma15mRef(row);
+  const mark = reversalShortMarkPrice(row);
+  return ema != null && mark != null && mark > ema;
 }
 
 /** ประเภท order — รองรับแถวเก่าที่ไม่มี orderKind */
@@ -106,6 +122,7 @@ export function resolveAutoOpenOrderKind(
   if (row.orderKind === "market" || row.orderKind === "limit") return row.orderKind;
   if (row.reasonCode === "open_success_limit") return "limit";
   if (row.reasonCode === "open_success_market") return "market";
+  if (reversalShortMarketAboveEma15m(row)) return "market";
   if (row.source !== "reversal") return undefined;
 
   const ema = reversalEma15mRef(row);
@@ -178,18 +195,26 @@ export function filterAutoOpenLogsExcludingLimitPending(
 
 /** คืน entry ที่ใช้แสดง/follow-up — รองรับแถวเก่าที่มีแค่ mark/ema */
 export function resolveAutoOpenEntryPrice(row: AutoOpenOrderLogRow): number | undefined {
+  const mark = reversalShortMarkPrice(row);
+  const ema = row.source === "reversal" ? reversalEma15mRef(row) : undefined;
+  const marketAboveEma = reversalShortMarketAboveEma15m(row);
+
   if (typeof row.entryPrice === "number" && Number.isFinite(row.entryPrice) && row.entryPrice > 0) {
+    // แถวเก่าที่บันทึก entry ≈ EMA ทั้งที่ตอนเปิดเป็น Market (mark > EMA)
+    if (marketAboveEma && mark != null && ema != null && Math.abs(row.entryPrice - ema) / ema < 0.003) {
+      return mark;
+    }
     return row.entryPrice;
   }
   if (row.outcome !== "success" && row.outcome !== "failed") return undefined;
   if (row.source === "reversal") {
+    if (marketAboveEma && mark != null) return mark;
     if (resolveAutoOpenOrderKind(row) === "limit") {
-      const ema = reversalEma15mRef(row);
       if (ema != null) return ema;
     }
-    if (typeof row.markPrice === "number" && row.markPrice > 0) return row.markPrice;
+    if (mark != null) return mark;
   }
-  if (typeof row.markPrice === "number" && row.markPrice > 0) return row.markPrice;
+  if (mark != null) return mark;
   return undefined;
 }
 
