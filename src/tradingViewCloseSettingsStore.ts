@@ -287,6 +287,8 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   snowballAutoTradeSundayAllShortEnabled?: boolean;
   snowballAutoTradeReferenceEma20_1hEnabled?: boolean;
+  snowballAutoTradeEntryMode?: SnowballAutoTradeEntryMode | null;
+  snowballAutoTradeEntryEmaPeriod?: number | null;
   snowballAutoTradeMarginUsdt?: number | null;
   snowballAutoTradeLeverage?: number | null;
   snowballAutoTradeQuickTpEnabled?: boolean;
