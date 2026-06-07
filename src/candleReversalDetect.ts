@@ -9,6 +9,7 @@ export type CandleReversalAlertQualityContext = {
   greenDaysBeforeSignal?: number | null;
   rangeScore?: number | null;
   ema4hSlopePct7d?: number | null;
+  btcEma1dSlopePct7d?: number | null;
 };
 
 export type CandleReversalTf = "1d" | "1h";
@@ -948,6 +949,7 @@ export function buildCandleReversalAlertMessage(
       wickRatio: sig.wickRatio,
       rangeScore: qualityCtx.rangeScore,
       ema4hSlopePct7d: qualityCtx.ema4hSlopePct7d,
+      btcEma1dSlopePct7d: qualityCtx.btcEma1dSlopePct7d,
     });
 
   if (sig.model === "longest_green_body") {
