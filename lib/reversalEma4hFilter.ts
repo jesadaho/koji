@@ -12,6 +12,7 @@ export type ReversalEmaSlopeFilter =
   | "gt3"
   | "gt5"
   | "gt0lt30"
+  | "gt15"
   | "gt20"
   | "gt30"
   | "gt50"
@@ -36,6 +37,7 @@ export const REVERSAL_EMA_SLOPE_FILTER_OPTIONS: ReadonlyArray<{
   { value: "gt3", label: "> 3" },
   { value: "gt5", label: "> 5" },
   { value: "gt0lt30", label: "> 0 < 30" },
+  { value: "gt15", label: "> 15" },
   { value: "gt20", label: "> 20" },
   { value: "gt30", label: "> 30" },
   { value: "gt50", label: "> 50" },
@@ -58,6 +60,7 @@ const EMA_SLOPE_THRESHOLD: Record<
   lt10: -10,
   gt3: 3,
   gt5: 5,
+  gt15: 15,
   gt20: 20,
   gt30: 30,
   gt50: 50,

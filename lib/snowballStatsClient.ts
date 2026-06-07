@@ -570,6 +570,7 @@ export type SnowballGreenDaysFilter =
   | "d1"
   | "d2"
   | "d3"
+  | "le3"
   | "gt3"
   | "ge2"
   | "has"
@@ -584,6 +585,7 @@ export const SNOWBALL_GREEN_DAYS_FILTER_OPTIONS: ReadonlyArray<{
   { value: "d1", label: "1 วัน" },
   { value: "d2", label: "2 วัน" },
   { value: "d3", label: "3 วัน" },
+  { value: "le3", label: "≤ 3 วัน" },
   { value: "gt3", label: "> 3 วัน" },
   { value: "ge2", label: "≥ 2 วัน" },
   { value: "has", label: "มีข้อมูล" },
@@ -609,6 +611,7 @@ export function snowballStatsRowMatchesGreenDaysFilter(
   if (filter === "d1") return n === 1;
   if (filter === "d2") return n === 2;
   if (filter === "d3") return n === 3;
+  if (filter === "le3") return n <= 3;
   if (filter === "gt3") return n > 3;
   return n >= 2;
 }
