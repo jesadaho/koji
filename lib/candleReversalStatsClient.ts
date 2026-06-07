@@ -38,6 +38,10 @@ export type CandleReversalStatsRow = {
   ema4hSlopePct7d?: number | null;
   /** EMA(12) 1d — slope % ย้อนหลัง 7 แท่ง */
   ema1dSlopePct7d?: number | null;
+  /** BTC — EMA(12) 4h slope % ย้อนหลัง 7 วัน */
+  btcEma4hSlopePct7d?: number | null;
+  /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
+  btcEma1dSlopePct7d?: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d?: number | null;
   /** Short: ไส้บน ÷ ช่วงแท่ง (%) · Long: ไส้ล่าง */
@@ -228,6 +232,8 @@ export type CandleReversalStatsSortKey =
   | "mcap"
   | "ema4h"
   | "ema1d"
+  | "btcEma4h"
+  | "btcEma1d"
   | "atr14d"
   | "retest"
   | "sl"
@@ -337,6 +343,10 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.ema4hSlopePct7d, b.ema4hSlopePct7d);
     case "ema1d":
       return cmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
+    case "btcEma4h":
+      return cmpNumNullLast(a.btcEma4hSlopePct7d, b.btcEma4hSlopePct7d);
+    case "btcEma1d":
+      return cmpNumNullLast(a.btcEma1dSlopePct7d, b.btcEma1dSlopePct7d);
     case "atr14d":
       return cmpNumNullLast(a.atrPct14d, b.atrPct14d);
     case "retest":

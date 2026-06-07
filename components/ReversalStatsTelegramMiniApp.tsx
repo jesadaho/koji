@@ -75,17 +75,22 @@ import {
   REVERSAL_LEN_RANK_FILTER_OPTIONS,
   reversalDayFilterLabel,
   REVERSAL_EMA4H_FILTER_OPTIONS,
+  REVERSAL_EMA1D_FILTER_OPTIONS,
   reversalEma4hFilterLabel,
   reversalEma4hFilterTitle,
+  reversalEma1dFilterLabel,
+  reversalEma1dFilterTitle,
   reversalLenRankFilterLabel,
   reversalRowMatchesDayFilter,
   reversalRowMatchesEma4hFilter,
+  reversalRowMatchesEma1dFilter,
   reversalRowMatchesLenRankFilter,
   reversalRowMatchesShapeFilter,
   reversalRowMatchesVolVsSmaFilter,
   reversalShapeFilterLabel,
   type ReversalDayFilter,
   type ReversalEma4hFilter,
+  type ReversalEma1dFilter,
   type ReversalLenRankFilter,
   type ReversalShapeFilter,
   type ReversalStatsFilterQuery,
@@ -294,6 +299,7 @@ function ReversalStatsSection({
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<ReversalVolVsSmaFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<ReversalMatrixFilter>("all");
   const [ema4hFilter, setEma4hFilter] = useState<ReversalEma4hFilter>("all");
+  const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -312,9 +318,10 @@ function ReversalStatsSection({
           reversalRowMatchesLenRankFilter(r, lenRankFilter) &&
           reversalRowMatchesVolVsSmaFilter(r, volVsSmaFilter) &&
           reversalRowMatchesEma4hFilter(r, ema4hFilter) &&
+          reversalRowMatchesEma1dFilter(r, ema1dFilter) &&
           reversalStatsRowMatchesMatrixFilter(r, matrixFilter),
       ),
-    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, matrixFilter],
+    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, matrixFilter],
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
   const [splitByWeek, setSplitByWeek] = useState(false);
@@ -373,7 +380,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 6;
+  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 8;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -390,9 +397,10 @@ function ReversalStatsSection({
       lenRank: lenRankFilter,
       vol: volVsSmaFilter,
       ema4h: ema4hFilter,
+      ema1d: ema1dFilter,
       matrix: matrixFilter,
     };
-  }, [csvQuery, dayFilter, ema4hFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, ema4hFilter, ema1dFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -469,6 +477,20 @@ function ReversalStatsSection({
               label="EMA1d∠7d"
               sortKey="ema1d"
               title="EMA(12) 1d slope % ย้อนหลัง 7 แท่ง — (EMAวันนี้−EMA7แท่งก่อน)/EMA7แท่งก่อน×100"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="BTC∠4h"
+              sortKey="btcEma4h"
+              title="BTC EMA(12) 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="BTC∠1d"
+              sortKey="btcEma1d"
+              title="BTC EMA(12) 1d slope % ย้อนหลัง 7 แท่ง"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -631,7 +653,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -662,6 +684,8 @@ function ReversalStatsSection({
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                   <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
                   <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
+                  <td title="BTC EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma4hSlopePct7d)}</td>
+                  <td title="BTC EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.btcEma1dSlopePct7d)}</td>
                   <td title="ATR(14) 1d ÷ close">{statsAtrPct14dLabel(r.atrPct14d)}</td>
                   <td>{fmtPrice(r.retestPrice)}</td>
                   <td>{fmtPrice(r.slPrice)}</td>
@@ -830,6 +854,22 @@ function ReversalStatsSection({
             title={reversalEma4hFilterTitle(ema4hFilter)}
           >
             {REVERSAL_EMA4H_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          EMA1d∠7d
+          <select
+            value={ema1dFilter}
+            onChange={(e) => setEma1dFilter(e.currentTarget.value as ReversalEma1dFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "5.5rem" }}
+            title={reversalEma1dFilterTitle(ema1dFilter)}
+          >
+            {REVERSAL_EMA1D_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>

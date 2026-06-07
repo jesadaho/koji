@@ -59,3 +59,71 @@ export async function fetchSymbolEmaSlopePctTf(
   if (!pack) return null;
   return computeEmaSlopePctFromPack(pack, lookbackBars);
 }
+
+const BTC_USDT = "BTCUSDT";
+const BTC_EMA_SLOPES_CACHE_MS = 5 * 60 * 1000;
+
+let btcEmaSlopesCache: {
+  atMs: number;
+  ema4h: number | null;
+  ema1d: number | null;
+} | null = null;
+
+export function resetBtcEmaSlopesCache(): void {
+  btcEmaSlopesCache = null;
+}
+
+export type BtcEmaSlopesPct7d = {
+  btcEma4hSlopePct7d: number | null;
+  btcEma1dSlopePct7d: number | null;
+};
+
+/** BTC EMA(12) slope 7d บน 4h / 1d — cache สั้น ใช้ร่วมทุกแถวในรอบสแกน */
+export async function fetchBtcEmaSlopesPct7d(): Promise<BtcEmaSlopesPct7d> {
+  const now = Date.now();
+  if (btcEmaSlopesCache && now - btcEmaSlopesCache.atMs < BTC_EMA_SLOPES_CACHE_MS) {
+    return {
+      btcEma4hSlopePct7d: btcEmaSlopesCache.ema4h,
+      btcEma1dSlopePct7d: btcEmaSlopesCache.ema1d,
+    };
+  }
+  const [ema4h, ema1d] = await Promise.all([
+    fetchSymbolEmaSlopePctTf(BTC_USDT, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
+    fetchSymbolEmaSlopePctTf(BTC_USDT, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
+  ]);
+  btcEmaSlopesCache = { atMs: now, ema4h, ema1d };
+  return { btcEma4hSlopePct7d: ema4h, btcEma1dSlopePct7d: ema1d };
+}
+
+export async function backfillStatsRowsBtcEmaSlopes<
+  T extends { btcEma4hSlopePct7d?: number | null; btcEma1dSlopePct7d?: number | null },
+>(rows: T[]): Promise<number> {
+  const needs = rows.some(
+    (r) => r.btcEma4hSlopePct7d == null || !Number.isFinite(r.btcEma4hSlopePct7d) ||
+      r.btcEma1dSlopePct7d == null || !Number.isFinite(r.btcEma1dSlopePct7d),
+  );
+  if (!needs) return 0;
+  const btc = await fetchBtcEmaSlopesPct7d();
+  let updated = 0;
+  for (const row of rows) {
+    let touched = false;
+    if (
+      (row.btcEma4hSlopePct7d == null || !Number.isFinite(row.btcEma4hSlopePct7d)) &&
+      btc.btcEma4hSlopePct7d != null &&
+      Number.isFinite(btc.btcEma4hSlopePct7d)
+    ) {
+      row.btcEma4hSlopePct7d = btc.btcEma4hSlopePct7d;
+      touched = true;
+    }
+    if (
+      (row.btcEma1dSlopePct7d == null || !Number.isFinite(row.btcEma1dSlopePct7d)) &&
+      btc.btcEma1dSlopePct7d != null &&
+      Number.isFinite(btc.btcEma1dSlopePct7d)
+    ) {
+      row.btcEma1dSlopePct7d = btc.btcEma1dSlopePct7d;
+      touched = true;
+    }
+    if (touched) updated += 1;
+  }
+  return updated;
+}

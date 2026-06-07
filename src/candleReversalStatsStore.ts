@@ -132,6 +132,8 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     marketCapUsd: nullNum(r.marketCapUsd),
     ema4hSlopePct7d: nullNum(r.ema4hSlopePct7d),
     ema1dSlopePct7d: nullNum(r.ema1dSlopePct7d),
+    btcEma4hSlopePct7d: nullNum(r.btcEma4hSlopePct7d),
+    btcEma1dSlopePct7d: nullNum(r.btcEma1dSlopePct7d),
     atrPct14d: nullNum(r.atrPct14d),
     lenPercentilePct: nullNum(r.lenPercentilePct),
   };
@@ -313,6 +315,8 @@ export async function appendCandleReversalStatsRow(
   let marketCapUsd: number | null = null;
   let ema4hSlopePct7d: CandleReversalStatsRow["ema4hSlopePct7d"] = null;
   let ema1dSlopePct7d: CandleReversalStatsRow["ema1dSlopePct7d"] = null;
+  let btcEma4hSlopePct7d: CandleReversalStatsRow["btcEma4hSlopePct7d"] = null;
+  let btcEma1dSlopePct7d: CandleReversalStatsRow["btcEma1dSlopePct7d"] = null;
   let atrPct14d: number | null = null;
   try {
     const snap = await fetchReversalAlertMarketSnapshot(input.symbol);
@@ -328,6 +332,14 @@ export async function appendCandleReversalStatsRow(
       snap.ema4hSlopePct7d != null && Number.isFinite(snap.ema4hSlopePct7d) ? snap.ema4hSlopePct7d : null;
     ema1dSlopePct7d =
       snap.ema1dSlopePct7d != null && Number.isFinite(snap.ema1dSlopePct7d) ? snap.ema1dSlopePct7d : null;
+    btcEma4hSlopePct7d =
+      snap.btcEma4hSlopePct7d != null && Number.isFinite(snap.btcEma4hSlopePct7d)
+        ? snap.btcEma4hSlopePct7d
+        : null;
+    btcEma1dSlopePct7d =
+      snap.btcEma1dSlopePct7d != null && Number.isFinite(snap.btcEma1dSlopePct7d)
+        ? snap.btcEma1dSlopePct7d
+        : null;
     atrPct14d =
       snap.atrPct14d != null && Number.isFinite(snap.atrPct14d) && snap.atrPct14d > 0
         ? snap.atrPct14d
@@ -361,6 +373,8 @@ export async function appendCandleReversalStatsRow(
     marketCapUsd,
     ema4hSlopePct7d,
     ema1dSlopePct7d,
+    btcEma4hSlopePct7d,
+    btcEma1dSlopePct7d,
     atrPct14d,
     wickRatioPct:
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,

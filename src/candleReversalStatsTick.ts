@@ -24,8 +24,9 @@ import {
   candleReversalSignalVolVsSmaAt,
   candleReversalVolSmaPeriod,
 } from "./candleReversalSignalVolVsSma";
+import { backfillStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
-import { backfillStatsMarketSentiment } from "./marketSentimentSnapshotStore";
+import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import {
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
@@ -727,10 +728,11 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillRangeRankInLookback(state.rows);
   dirty += backfillLenPercentilePct(state.rows);
   dirty += await backfillReversalEmaSlopes(state.rows);
+  dirty += await backfillStatsRowsBtcEmaSlopes(state.rows);
   dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += backfill1hOutcomeTo24h(state.rows);
-  dirty += await backfillStatsMarketSentiment(state.rows);
+  dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
   if (opts?.forceLong1hFadeShort) {
     dirty += await refreshLong1hFadeShortFollowUp(state.rows, nowMs, nowSec);
   }

@@ -6,6 +6,7 @@ import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 import {
+  fetchBtcEmaSlopesPct7d,
   fetchSymbolEmaSlopePctTf,
   STATS_EMA1D_SLOPE_LOOKBACK_BARS,
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
@@ -38,6 +39,10 @@ export type ReversalAlertMarketSnapshot = {
   ema4hSlopePct7d: number | null;
   /** EMA(12) 1d — slope % ย้อนหลัง 7 แท่ง */
   ema1dSlopePct7d: number | null;
+  /** BTC — EMA(12) 4h slope % ย้อนหลัง 7 วัน */
+  btcEma4hSlopePct7d: number | null;
+  /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
+  btcEma1dSlopePct7d: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d: number | null;
 };
@@ -48,12 +53,21 @@ export async function fetchReversalAlertMarketSnapshot(
 ): Promise<ReversalAlertMarketSnapshot> {
   const sym = binanceSymbol.trim().toUpperCase();
   const base = binanceUsdtPerpBase(sym);
-  const [quoteVol24hUsdt, marketCapUsd, ema4hSlopePct7d, ema1dSlopePct7d, atrPct14d] = await Promise.all([
+  const [quoteVol24hUsdt, marketCapUsd, ema4hSlopePct7d, ema1dSlopePct7d, atrPct14d, btcEma] = await Promise.all([
     isBinanceIndicatorFapiEnabled() ? fetchBinanceUsdmQuoteVol24h(sym) : Promise.resolve(null),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
     fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
     fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
     fetchSymbolAtrPct14d(sym),
+    fetchBtcEmaSlopesPct7d(),
   ]);
-  return { quoteVol24hUsdt, marketCapUsd, ema4hSlopePct7d, ema1dSlopePct7d, atrPct14d };
+  return {
+    quoteVol24hUsdt,
+    marketCapUsd,
+    ema4hSlopePct7d,
+    ema1dSlopePct7d,
+    btcEma4hSlopePct7d: btcEma.btcEma4hSlopePct7d,
+    btcEma1dSlopePct7d: btcEma.btcEma1dSlopePct7d,
+    atrPct14d,
+  };
 }

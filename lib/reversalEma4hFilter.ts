@@ -1,8 +1,8 @@
-/** ตัวกรอง EMA4h slope — Reversal / Snowball stats Mini App + CSV export */
+/** ตัวกรอง EMA slope — Reversal / Snowball stats Mini App + CSV export */
 
 import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 
-export type ReversalEma4hFilter =
+export type ReversalEmaSlopeFilter =
   | "all"
   | "lt0"
   | "lt3"
@@ -19,8 +19,12 @@ export type ReversalEma4hFilter =
   | "gt150"
   | "gt200";
 
-export const REVERSAL_EMA4H_FILTER_OPTIONS: ReadonlyArray<{
-  value: ReversalEma4hFilter;
+/** @deprecated alias — ใช้ ReversalEmaSlopeFilter */
+export type ReversalEma4hFilter = ReversalEmaSlopeFilter;
+export type ReversalEma1dFilter = ReversalEmaSlopeFilter;
+
+export const REVERSAL_EMA_SLOPE_FILTER_OPTIONS: ReadonlyArray<{
+  value: ReversalEmaSlopeFilter;
   label: string;
 }> = [
   { value: "all", label: "ทั้งหมด" },
@@ -40,8 +44,12 @@ export const REVERSAL_EMA4H_FILTER_OPTIONS: ReadonlyArray<{
   { value: "gt200", label: "> 200" },
 ];
 
-const EMA4H_SLOPE_THRESHOLD: Record<
-  Exclude<ReversalEma4hFilter, "all" | "gt0lt30" | "gtm10lt0">,
+/** @deprecated alias */
+export const REVERSAL_EMA4H_FILTER_OPTIONS = REVERSAL_EMA_SLOPE_FILTER_OPTIONS;
+export const REVERSAL_EMA1D_FILTER_OPTIONS = REVERSAL_EMA_SLOPE_FILTER_OPTIONS;
+
+const EMA_SLOPE_THRESHOLD: Record<
+  Exclude<ReversalEmaSlopeFilter, "all" | "gt0lt30" | "gtm10lt0">,
   number
 > = {
   lt0: 0,
@@ -58,8 +66,26 @@ const EMA4H_SLOPE_THRESHOLD: Record<
   gt200: 200,
 };
 
+function emaSlopePctMatchesFilter(pct: number | null | undefined, filter: ReversalEmaSlopeFilter): boolean {
+  if (filter === "all") return true;
+  if (pct == null || !Number.isFinite(pct)) return false;
+  if (filter === "gt0lt30") return pct > 0 && pct < 30;
+  if (filter === "gtm10lt0") return pct > -10 && pct < 0;
+  const th = EMA_SLOPE_THRESHOLD[filter];
+  if (filter === "lt0" || filter === "lt3" || filter === "lt5" || filter === "lt10") return pct < th;
+  return pct > th;
+}
+
+export function reversalEmaSlopeFilterLabel(filter: ReversalEmaSlopeFilter): string {
+  return REVERSAL_EMA_SLOPE_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
 export function reversalEma4hFilterLabel(filter: ReversalEma4hFilter): string {
-  return REVERSAL_EMA4H_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+  return reversalEmaSlopeFilterLabel(filter);
+}
+
+export function reversalEma1dFilterLabel(filter: ReversalEma1dFilter): string {
+  return reversalEmaSlopeFilterLabel(filter);
 }
 
 export function reversalEma4hFilterTitle(filter: ReversalEma4hFilter): string {
@@ -70,16 +96,24 @@ export function reversalEma4hFilterTitle(filter: ReversalEma4hFilter): string {
   return `EMA(12) 4h slope 7 วัน ${label}%`;
 }
 
+export function reversalEma1dFilterTitle(filter: ReversalEma1dFilter): string {
+  if (filter === "all") return "ไม่กรอง EMA1d slope 7 วัน";
+  if (filter === "gt0lt30") return "EMA(12) 1d slope 7 แท่ง > 0% และ < 30%";
+  if (filter === "gtm10lt0") return "EMA(12) 1d slope 7 แท่ง > -10% และ < 0%";
+  const label = reversalEma1dFilterLabel(filter);
+  return `EMA(12) 1d slope 7 แท่ง ${label}%`;
+}
+
 export function reversalRowMatchesEma4hFilter(
   row: Pick<CandleReversalStatsRow, "ema4hSlopePct7d">,
   filter: ReversalEma4hFilter,
 ): boolean {
-  if (filter === "all") return true;
-  const pct = row.ema4hSlopePct7d;
-  if (pct == null || !Number.isFinite(pct)) return false;
-  if (filter === "gt0lt30") return pct > 0 && pct < 30;
-  if (filter === "gtm10lt0") return pct > -10 && pct < 0;
-  const th = EMA4H_SLOPE_THRESHOLD[filter];
-  if (filter === "lt0" || filter === "lt3" || filter === "lt5" || filter === "lt10") return pct < th;
-  return pct > th;
+  return emaSlopePctMatchesFilter(row.ema4hSlopePct7d, filter);
+}
+
+export function reversalRowMatchesEma1dFilter(
+  row: Pick<CandleReversalStatsRow, "ema1dSlopePct7d">,
+  filter: ReversalEma1dFilter,
+): boolean {
+  return emaSlopePctMatchesFilter(row.ema1dSlopePct7d, filter);
 }

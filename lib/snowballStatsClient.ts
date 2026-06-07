@@ -106,6 +106,10 @@ export type SnowballStatsRow = {
   ema4hSlopePct7d?: number | null;
   /** EMA(12) 1d — slope % ย้อนหลัง 7 แท่ง */
   ema1dSlopePct7d?: number | null;
+  /** BTC — EMA(12) 4h slope % ย้อนหลัง 7 วัน */
+  btcEma4hSlopePct7d?: number | null;
+  /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
+  btcEma1dSlopePct7d?: number | null;
   volumeCascadeYn?: "Y" | "N" | null;
   /** Max DD% (stats-style 15m, lookback 32 แท่ง) ณ เวลาแจ้ง — undefined = แถวเก่าก่อนเพิ่ม field */
   signalMaxDdPct?: number | null;
@@ -851,6 +855,8 @@ export type SnowballStatsSortKey =
   | "atr14d"
   | "ema4h"
   | "ema1d"
+  | "btcEma4h"
+  | "btcEma1d"
   | "funding"
   | "volCascade"
   | "greenDays"
@@ -1002,6 +1008,10 @@ function compareSnowballStatsRows(
       return statsCmpNumNullLast(a.ema4hSlopePct7d, b.ema4hSlopePct7d);
     case "ema1d":
       return statsCmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
+    case "btcEma4h":
+      return statsCmpNumNullLast(a.btcEma4hSlopePct7d, b.btcEma4hSlopePct7d);
+    case "btcEma1d":
+      return statsCmpNumNullLast(a.btcEma1dSlopePct7d, b.btcEma1dSlopePct7d);
     case "funding":
       return statsCmpNumNullLast(a.fundingRate, b.fundingRate);
     case "volCascade":

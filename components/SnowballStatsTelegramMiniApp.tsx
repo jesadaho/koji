@@ -35,10 +35,15 @@ import {
 } from "@/lib/kojiTelegramWebApp";
 import {
   REVERSAL_EMA4H_FILTER_OPTIONS,
+  REVERSAL_EMA1D_FILTER_OPTIONS,
   reversalEma4hFilterLabel,
   reversalEma4hFilterTitle,
+  reversalEma1dFilterLabel,
+  reversalEma1dFilterTitle,
   reversalRowMatchesEma4hFilter,
+  reversalRowMatchesEma1dFilter,
   type ReversalEma4hFilter,
+  type ReversalEma1dFilter,
 } from "@/lib/reversalEma4hFilter";
 import {
   SNOWBALL_MATRIX_FILTER_OPTIONS,
@@ -366,6 +371,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
   const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
   const [ema4hFilter, setEma4hFilter] = useState<ReversalEma4hFilter>("all");
+  const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<SnowballMatrixFilter>("all");
   const [fundingFilter, setFundingFilter] = useState<SnowballFundingFilter>("all");
   const [greenDaysFilter, setGreenDaysFilter] = useState<SnowballGreenDaysFilter>("all");
@@ -659,6 +665,10 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => reversalRowMatchesEma4hFilter(r, ema4hFilter));
     }
 
+    if (ema1dFilter !== "all") {
+      result = result.filter((r) => reversalRowMatchesEma1dFilter(r, ema1dFilter));
+    }
+
     if (matrixFilter !== "all") {
       result = result.filter((r) => snowballStatsRowMatchesMatrixFilter(r, matrixFilter));
     }
@@ -680,6 +690,7 @@ export default function SnowballStatsTelegramMiniApp() {
     volVsSmaFilter,
     volRankFilter,
     ema4hFilter,
+    ema1dFilter,
     matrixFilter,
     fundingFilter,
     greenDaysFilter,
@@ -833,6 +844,20 @@ export default function SnowballStatsTelegramMiniApp() {
               onSort={onSortColumn}
             />
             <SortTh
+              label="BTC∠4h"
+              sortKey="btcEma4h"
+              title="BTC EMA(12) 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="BTC∠1d"
+              sortKey="btcEma1d"
+              title="BTC EMA(12) 1d slope % ย้อนหลัง 7 แท่ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
               label="Funding"
               sortKey="funding"
               title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)"
@@ -972,7 +997,7 @@ export default function SnowballStatsTelegramMiniApp() {
               <td colSpan={isAdmin ? 44 : 43} className="sub">
                 {allRows.length === 0
                   ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
+                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
               </td>
             </tr>
           ) : (
@@ -1015,6 +1040,8 @@ export default function SnowballStatsTelegramMiniApp() {
                 <td>{statsAtrPct14dLabel(r.atrPct14d)}</td>
                 <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
                 <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
+                <td title="BTC EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma4hSlopePct7d)}</td>
+                <td title="BTC EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.btcEma1dSlopePct7d)}</td>
                 <td
                   className={
                     r.fundingRate != null && Number.isFinite(r.fundingRate)
@@ -1266,6 +1293,25 @@ export default function SnowballStatsTelegramMiniApp() {
               title={reversalEma4hFilterTitle(ema4hFilter)}
             >
               {REVERSAL_EMA4H_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            EMA1d∠7d
+            <select
+              value={ema1dFilter}
+              onChange={(e) => setEma1dFilter(e.currentTarget.value as ReversalEma1dFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "5.5rem" }}
+              title={reversalEma1dFilterTitle(ema1dFilter)}
+            >
+              {REVERSAL_EMA1D_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

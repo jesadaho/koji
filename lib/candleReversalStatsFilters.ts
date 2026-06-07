@@ -9,7 +9,9 @@ import {
 } from "@/lib/reversalMatrixFilters";
 import {
   reversalRowMatchesEma4hFilter,
+  reversalRowMatchesEma1dFilter,
   type ReversalEma4hFilter,
+  type ReversalEma1dFilter,
 } from "@/lib/reversalEma4hFilter";
 import {
   statsRowMatchesVolVsSmaFilter,
@@ -17,12 +19,16 @@ import {
   type StatsVolVsSmaFilter,
 } from "@/lib/statsVolVsSmaFilter";
 
-export type { ReversalEma4hFilter } from "@/lib/reversalEma4hFilter";
+export type { ReversalEma4hFilter, ReversalEma1dFilter, ReversalEmaSlopeFilter } from "@/lib/reversalEma4hFilter";
 export {
   REVERSAL_EMA4H_FILTER_OPTIONS,
+  REVERSAL_EMA1D_FILTER_OPTIONS,
   reversalEma4hFilterLabel,
   reversalEma4hFilterTitle,
+  reversalEma1dFilterLabel,
+  reversalEma1dFilterTitle,
   reversalRowMatchesEma4hFilter,
+  reversalRowMatchesEma1dFilter,
 } from "@/lib/reversalEma4hFilter";
 
 export type ReversalShapeFilter = "all" | "wick80" | "body80" | "wickOrBody80";
@@ -53,6 +59,7 @@ export type ReversalStatsFilterQuery = {
   lenRank?: ReversalLenRankFilter;
   vol?: StatsVolVsSmaFilter;
   ema4h?: ReversalEma4hFilter;
+  ema1d?: ReversalEma1dFilter;
   matrix?: ReversalMatrixFilter;
 };
 
@@ -130,6 +137,7 @@ export function filterCandleReversalStatsRows(
     if (q.lenRank && q.lenRank !== "all" && !reversalRowMatchesLenRankFilter(r, q.lenRank)) return false;
     if (q.vol && q.vol !== "all" && !reversalRowMatchesVolVsSmaFilter(r, q.vol)) return false;
     if (q.ema4h && q.ema4h !== "all" && !reversalRowMatchesEma4hFilter(r, q.ema4h)) return false;
+    if (q.ema1d && q.ema1d !== "all" && !reversalRowMatchesEma1dFilter(r, q.ema1d)) return false;
     if (q.matrix && q.matrix !== "all" && !reversalStatsRowMatchesMatrixFilter(r, q.matrix)) return false;
     return true;
   });
@@ -141,7 +149,7 @@ const LEN_SET = new Set<string>(["all", "rank3to15"]);
 const VOL_SET = new Set(STATS_VOL_VS_SMA_FILTER_OPTIONS.map((o) => o.value));
 const MATRIX_SET = new Set<string>(["all", "qualitySignal"]);
 
-function parseReversalEma4hFilterParam(raw: string | null): ReversalEma4hFilter {
+function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
   const k = raw?.trim().toLowerCase() ?? "";
   if (k === "lt0" || k === "slopedown") return "lt0";
   if (k === "lt3" || k === "lt-3") return "lt3";
@@ -185,7 +193,8 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.shape = pickEnum(sp.get("shape"), SHAPE_SET, "all");
   q.lenRank = pickEnum(sp.get("lenRank"), LEN_SET, "all");
   q.vol = pickEnum(sp.get("vol"), VOL_SET, "all");
-  q.ema4h = parseReversalEma4hFilterParam(sp.get("ema4h"));
+  q.ema4h = parseReversalEmaSlopeFilterParam(sp.get("ema4h"));
+  q.ema1d = parseReversalEmaSlopeFilterParam(sp.get("ema1d"));
   q.matrix = pickEnum(sp.get("matrix"), MATRIX_SET, "all");
   return q;
 }
@@ -199,6 +208,7 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.lenRank && q.lenRank !== "all") p.set("lenRank", q.lenRank);
   if (q.vol && q.vol !== "all") p.set("vol", q.vol);
   if (q.ema4h && q.ema4h !== "all") p.set("ema4h", q.ema4h);
+  if (q.ema1d && q.ema1d !== "all") p.set("ema1d", q.ema1d);
   if (q.matrix && q.matrix !== "all") p.set("matrix", q.matrix);
   const s = p.toString();
   return s ? `?${s}` : "";

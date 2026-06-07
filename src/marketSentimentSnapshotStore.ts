@@ -167,15 +167,15 @@ export function statsRowNeedsMarketSentimentBackfill(row: StatsRowWithMarketSent
   return Math.abs(asOf - row.alertedAtMs) > ALERT_SNAPSHOT_MAX_SKEW_MS;
 }
 
-/** Backfill F&G ตาม alertedAtMs — ใช้ cache Alternative.me ร่วมกัน · จำกัด maxRows ต่อรอบ */
+/** Backfill F&G ตาม alertedAtMs — ใช้ cache Alternative.me ร่วมกัน · จำกัด maxRows ต่อรอบ (ไม่ตั้ง = ไม่จำกัด) */
 export async function backfillStatsMarketSentiment<T extends StatsRowWithMarketSentiment>(
   rows: T[],
   opts?: { maxRows?: number },
 ): Promise<number> {
-  const maxRows = opts?.maxRows ?? 80;
+  const maxRows = opts?.maxRows;
   let updated = 0;
   for (const row of rows) {
-    if (updated >= maxRows) break;
+    if (maxRows != null && updated >= maxRows) break;
     if (!statsRowNeedsMarketSentimentBackfill(row)) continue;
     try {
       row.marketSentiment = await buildMarketSentimentAtAlertTime(row.alertedAtMs);
@@ -185,6 +185,22 @@ export async function backfillStatsMarketSentiment<T extends StatsRowWithMarketS
     }
   }
   return updated;
+}
+
+/** รันหลายรอบจนไม่มีแถวค้าง (เปิดหน้าสถิติ / admin backfill) */
+export async function backfillAllStatsMarketSentiment<T extends StatsRowWithMarketSentiment>(
+  rows: T[],
+  opts?: { maxRowsPerPass?: number; maxPasses?: number },
+): Promise<number> {
+  const maxPasses = opts?.maxPasses ?? 10;
+  const maxRowsPerPass = opts?.maxRowsPerPass ?? 150;
+  let total = 0;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    const n = await backfillStatsMarketSentiment(rows, { maxRows: maxRowsPerPass });
+    total += n;
+    if (n === 0) break;
+  }
+  return total;
 }
 
 /**
