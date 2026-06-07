@@ -18,6 +18,7 @@ import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
 import { STATS_BTC_EMA_SLOPES_VERSION } from "./statsEmaSlope";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
+import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import {
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
@@ -514,6 +515,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       input.quoteVol24hUsdt != null && Number.isFinite(input.quoteVol24hUsdt) && input.quoteVol24hUsdt > 0
         ? input.quoteVol24hUsdt
         : null,
+    quoteVol24hV: STATS_QUOTE_VOL_24H_VERSION,
     marketCapUsd:
       input.marketCapUsd != null && Number.isFinite(input.marketCapUsd) && input.marketCapUsd > 0
         ? input.marketCapUsd

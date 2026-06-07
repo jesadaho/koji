@@ -1,7 +1,6 @@
 import type { Client } from "@line/bot-sdk";
 import {
   fetchBinanceUsdmKlines,
-  fetchBinanceUsdmQuoteVol24h,
   fetchTopUsdmUsdtSymbolsByQuoteVolume,
   isBinanceIndicatorFapiEnabled,
   resetBinanceIndicatorFapi451LogDedupe,
@@ -82,6 +81,7 @@ import {
 import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
 import { computeSnowballSignalLenPercentile } from "./statsLenPercentile";
+import { fetchStatsQuoteVol24hUsdt } from "./statsQuoteVol24h";
 import { snowballVolatilityLookbackBars, snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import {
   calculateTrendMomentumMetrics,
@@ -2948,7 +2948,7 @@ export async function runPublicIndicatorFeedInternal(
                         ? symbol.slice(0, -4)
                         : null;
                       const [quoteVol24hUsdt, marketCapUsd] = await Promise.all([
-                        fetchBinanceUsdmQuoteVol24h(symbol).catch(() => null),
+                        fetchStatsQuoteVol24hUsdt(symbol).catch(() => null),
                         base ? fetchCoinGeckoMarketCapUsd(base).catch(() => null) : Promise.resolve(null),
                       ]);
                       await appendRsiDivergenceStatsRow({

@@ -3,8 +3,8 @@
  */
 
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
-import { fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
+import { fetchStatsQuoteVol24hUsdt } from "./statsQuoteVol24h";
 import {
   fetchBtcEmaSlopesAtMs,
   fetchSymbolEmaSlopePctTf,
@@ -61,7 +61,7 @@ export async function fetchReversalAlertMarketSnapshot(
   const base = binanceUsdtPerpBase(sym);
   const [quoteVol24hUsdt, marketCapUsd, ema4hSlopePct7d, ema1dSlopePct7d, atrPct14d, btcEma, psar4h] =
     await Promise.all([
-    isBinanceIndicatorFapiEnabled() ? fetchBinanceUsdmQuoteVol24h(sym) : Promise.resolve(null),
+    fetchStatsQuoteVol24hUsdt(sym),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
     fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
     fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),

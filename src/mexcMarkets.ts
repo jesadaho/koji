@@ -206,7 +206,7 @@ export async function fetchContractTickerMetrics(contractSymbol: string): Promis
     });
     if (!data.success || data.data === undefined) return null;
     const rows = asArray(data.data);
-    const t = rows.find((r) => r.symbol?.trim() === sym) ?? rows[0];
+    const t = rows.find((r) => r.symbol?.trim() === sym);
     if (!t) return null;
     const lp = t.lastPrice;
     const amt = t.amount24;
@@ -1443,8 +1443,8 @@ export async function fetchContractTickerSingle(contractSymbol: string): Promise
     });
     if (!data.success || data.data === undefined) return null;
     const rows = asArray(data.data);
-    const row = rows[0];
-    if (!row?.symbol) return null;
+    const row = rows.find((r) => r.symbol?.trim() === sym) ?? (rows.length === 1 ? rows[0] : null);
+    if (!row?.symbol || row.symbol.trim() !== sym) return null;
     return row;
   } catch {
     return null;

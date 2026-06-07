@@ -459,7 +459,7 @@ function ReversalStatsSection({
             <SortTh
               label="Vol 24h"
               sortKey="vol24"
-              title="Quote volume 24h USDT (Binance perp) ณ เวลาแจ้ง"
+              title="Quote volume 24h USDT (Binance perp · fallback MEXC amount24) ณ เวลาแจ้ง"
               activeSort={sort}
               onSort={onSortColumn}
             />

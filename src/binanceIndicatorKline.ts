@@ -262,18 +262,43 @@ export async function fetchBinanceUsdmLastPrice(symbol: string): Promise<number 
   }
 }
 
-/** quoteVolume USDT จาก ticker 24hr (Futures USDT-M) */
+function parseBinanceUsdmTicker24hQuoteVol(data: unknown, sym: string): number | null {
+  if (data == null || typeof data !== "object") return null;
+  if ("code" in data && "msg" in data) return null;
+
+  const pick = (row: unknown): number | null => {
+    if (!row || typeof row !== "object") return null;
+    const r = row as Ticker24hRow;
+    const rowSym = r.symbol?.trim().toUpperCase();
+    if (rowSym && rowSym !== sym) return null;
+    const qv = Number(r.quoteVolume ?? NaN);
+    return Number.isFinite(qv) && qv > 0 ? qv : null;
+  };
+
+  if (Array.isArray(data)) {
+    const hit = data.find(
+      (r) =>
+        r &&
+        typeof r === "object" &&
+        (r as Ticker24hRow).symbol?.trim().toUpperCase() === sym,
+    );
+    return pick(hit);
+  }
+  return pick(data);
+}
+
+/** quoteVolume USDT จาก ticker 24hr (Futures USDT-M) — ต้องตรง symbol (ไม่ fallback volume/base หรือแถวแรกของ array) */
 export async function fetchBinanceUsdmQuoteVol24h(symbol: string): Promise<number | null> {
   if (!isBinanceIndicatorFapiEnabled()) return null;
   const sym = symbol.trim().toUpperCase();
   if (!sym) return null;
   try {
-    const { data } = await axios.get<Ticker24hRow>(`${FAPI}/fapi/v1/ticker/24hr`, {
-      params: { symbol: sym },
+    const { data } = await axios.get<Ticker24hRow | Ticker24hRow[]>(`${FAPI}/fapi/v1/ticker/24hr`, {
+      params: { symbol: sym, timestamp: Date.now() },
       timeout: 20_000,
+      headers: { "Cache-Control": "no-cache" },
     });
-    const qv = Number(data?.quoteVolume ?? data?.volume ?? NaN);
-    return Number.isFinite(qv) && qv > 0 ? qv : null;
+    return parseBinanceUsdmTicker24hQuoteVol(data, sym);
   } catch (e) {
     if (isBinance451Geo(e)) {
       logBinance451Once("ticker/24hr symbol", sym);

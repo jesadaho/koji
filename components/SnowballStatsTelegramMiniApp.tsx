@@ -57,6 +57,13 @@ import {
   type SnowballMatrixFilter,
 } from "@/lib/snowballMatrixFilters";
 import {
+  SNOWBALL_BTC_PSAR_FILTER_OPTIONS,
+  snowballBtcPsarFilterLabel,
+  snowballBtcPsarFilterTitle,
+  snowballStatsRowMatchesBtcPsarFilter,
+  type SnowballBtcPsarFilter,
+} from "@/lib/snowballBtcPsarFilter";
+import {
   snowballHorizonWinrateSummary,
   snowballStatsBarRangePctLabel,
   snowballStatsConfirmVolRankLabel,
@@ -378,6 +385,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<SnowballMatrixFilter>("all");
   const [fundingFilter, setFundingFilter] = useState<SnowballFundingFilter>("all");
+  const [btcPsarFilter, setBtcPsarFilter] = useState<SnowballBtcPsarFilter>("all");
   const [greenDaysFilter, setGreenDaysFilter] = useState<SnowballGreenDaysFilter>("all");
   const [sort, setSort] = useState<SnowballStatsSort>(SNOWBALL_STATS_DEFAULT_SORT);
 
@@ -681,6 +689,10 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => snowballStatsRowMatchesFundingFilter(r, fundingFilter));
     }
 
+    if (btcPsarFilter !== "all") {
+      result = result.filter((r) => snowballStatsRowMatchesBtcPsarFilter(r, btcPsarFilter));
+    }
+
     if (greenDaysFilter !== "all") {
       result = result.filter((r) => snowballStatsRowMatchesGreenDaysFilter(r, greenDaysFilter));
     }
@@ -697,6 +709,7 @@ export default function SnowballStatsTelegramMiniApp() {
     ema1dFilter,
     matrixFilter,
     fundingFilter,
+    btcPsarFilter,
     greenDaysFilter,
   ]);
 
@@ -818,7 +831,13 @@ export default function SnowballStatsTelegramMiniApp() {
               activeSort={sort}
               onSort={onSortColumn}
             />
-            <SortTh label="Vol 24h" sortKey="vol24" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="Vol 24h"
+              sortKey="vol24"
+              title="Quote volume 24h USDT (Binance perp · fallback MEXC amount24) ณ เวลาแจ้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
             <SortTh
               label="Mcap"
               sortKey="mcap"
@@ -1015,7 +1034,7 @@ export default function SnowballStatsTelegramMiniApp() {
               <td colSpan={isAdmin ? 44 : 43} className="sub">
                 {allRows.length === 0
                   ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
+                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / BTC SAR ${snowballBtcPsarFilterLabel(btcPsarFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
               </td>
             </tr>
           ) : (
@@ -1370,6 +1389,25 @@ export default function SnowballStatsTelegramMiniApp() {
               title="แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ — ไม่นับแท่งสัญญาณ"
             >
               {SNOWBALL_GREEN_DAYS_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            BTC SAR
+            <select
+              value={btcPsarFilter}
+              onChange={(e) => setBtcPsarFilter(e.currentTarget.value as SnowballBtcPsarFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7.5rem" }}
+              title={snowballBtcPsarFilterTitle(btcPsarFilter)}
+            >
+              {SNOWBALL_BTC_PSAR_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

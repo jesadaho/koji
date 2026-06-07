@@ -11,6 +11,7 @@ import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
 import { STATS_BTC_EMA_SLOPES_VERSION } from "./statsEmaSlope";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
+import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 
@@ -381,6 +382,7 @@ export async function appendCandleReversalStatsRow(
     retestPrice: input.retestPrice,
     slPrice: input.slPrice,
     quoteVol24hUsdt,
+    quoteVol24hV: STATS_QUOTE_VOL_24H_VERSION,
     marketCapUsd,
     ema4hSlopePct7d,
     ema1dSlopePct7d,

@@ -32,6 +32,8 @@ export type CandleReversalStatsRow = {
   slPrice: number;
   /** Quote volume 24h USDT (Binance perp) ณ เวลาแจ้ง */
   quoteVol24hUsdt?: number | null;
+  /** version 1 = ดึงต่อ symbol (Binance quoteVolume · fallback MEXC amount24) */
+  quoteVol24hV?: number;
   /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
   marketCapUsd?: number | null;
   /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */

@@ -96,6 +96,8 @@ export type SnowballStatsRow = {
   btcPsar1hTrend?: "up" | "down" | null;
   btcPsar1hClose?: number | null;
   quoteVol24hUsdt?: number | null;
+  /** version 1 = ดึงต่อ symbol (Binance quoteVolume · fallback MEXC amount24) */
+  quoteVol24hV?: number;
   /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
   marketCapUsd?: number | null;
   /** Funding rate MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม) */
@@ -690,8 +692,8 @@ export function snowballStatsConfirmVolRankLabel(
 export function snowballStatsQuoteVol24hLabel(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value) || value <= 0) return "—";
   if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
-  if (value >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
-  if (value >= 1e3) return `${(value / 1e3).toFixed(0)}K`;
+  if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+  if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
   return value.toFixed(0);
 }
 

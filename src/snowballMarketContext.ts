@@ -4,10 +4,11 @@
 
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { resolveMexcContractFromBinanceSymbol } from "./coinMap";
-import { fetchBinanceUsdmKlines, fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
+import { fetchBinanceUsdmKlines, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { computeParabolicSarLast } from "./indicatorMath";
 import { fetchContractTickerSingle } from "./mexcMarkets";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
+import { fetchStatsQuoteVol24hUsdt } from "./statsQuoteVol24h";
 import {
   fetchBtcEmaSlopesAtMs,
   fetchSymbolEmaSlopePctTf,
@@ -157,11 +158,10 @@ export async function fetchSnowballAlertMarketContext(
   const sym = binanceSymbol.trim().toUpperCase();
   const mexcContract = binanceUsdtPerpToMexcContract(sym);
   const base = binanceUsdtPerpBase(sym);
-  const [btc4h, btc1h, quoteVol24hUsdt, marketCapUsd, mexcTicker, atrPct14d, ema4hSlopePct7d, ema1dSlopePct7d, btcEma, psar4h] =
+  const [btc4h, btc1h, marketCapUsd, mexcTicker, atrPct14d, ema4hSlopePct7d, ema1dSlopePct7d, btcEma, psar4h] =
     await Promise.all([
       fetchBtcPsar4hSnapshot(),
       fetchBtcPsar1hSnapshot(),
-      fetchBinanceUsdmQuoteVol24h(sym),
       base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
       mexcContract ? fetchContractTickerSingle(mexcContract) : Promise.resolve(null),
       fetchSymbolAtrPct14d(sym),
@@ -170,6 +170,7 @@ export async function fetchSnowballAlertMarketContext(
       fetchBtcEmaSlopesAtMs(atMs),
       fetchSymbolPsar4hAtMs(sym, atMs),
     ]);
+  const quoteVol24hUsdt = await fetchStatsQuoteVol24hUsdt(sym, mexcTicker);
   const fr = mexcTicker?.fundingRate;
   const fundingRate = typeof fr === "number" && Number.isFinite(fr) ? fr : null;
   return {
