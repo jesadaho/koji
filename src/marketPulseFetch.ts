@@ -17,6 +17,21 @@ export type FearGreedSnapshot = {
   valueClassification: string;
 };
 
+export type FearGreedAtTime = FearGreedSnapshot & {
+  /** ms ของ reading ที่ใช้ (อาจก่อน alertedAt เล็กน้อย — F&G อัปเดตรายวัน) */
+  asOfMs: number;
+};
+
+type FngHistoricalRow = {
+  tsSec: number;
+  value: number;
+  valueClassification: string;
+};
+
+let altMeFngHistoricalCache: { fetchedAtMs: number; rows: FngHistoricalRow[] } | null = null;
+
+const ALT_ME_FNG_CACHE_TTL_MS = 60 * 60_000;
+
 export type GlobalMarketSnapshot = {
   btcDominancePct: number;
   totalVolumeUsd: number;
@@ -153,6 +168,108 @@ export async function fetchFearGreedLatest(): Promise<FearGreedSnapshot> {
     const msg = e instanceof Error ? e.message : String(e);
     throw new MarketPulseFetchError(`F&G: ${msg}`, "fng");
   }
+}
+
+async function loadAltMeFngHistoricalRows(): Promise<FngHistoricalRow[]> {
+  const now = Date.now();
+  if (altMeFngHistoricalCache && now - altMeFngHistoricalCache.fetchedAtMs < ALT_ME_FNG_CACHE_TTL_MS) {
+    return altMeFngHistoricalCache.rows;
+  }
+  const { data } = await axios.get<{
+    data?: Array<{ value?: string; value_classification?: string; timestamp?: string }>;
+  }>(FNG_URL, {
+    timeout: TIMEOUT_MS,
+    params: { limit: 0 },
+  });
+  const rows: FngHistoricalRow[] = [];
+  for (const row of data?.data ?? []) {
+    const tsSec = row.timestamp != null ? Number(row.timestamp) : Number.NaN;
+    const v = row.value != null ? Number(row.value) : Number.NaN;
+    const cls = row.value_classification?.trim() || "";
+    if (!Number.isFinite(tsSec) || tsSec <= 0) continue;
+    if (!Number.isFinite(v) || v < 0 || v > 100 || !cls) continue;
+    rows.push({ tsSec: Math.floor(tsSec), value: v, valueClassification: cls });
+  }
+  if (rows.length === 0) {
+    throw new MarketPulseFetchError("ไม่มีข้อมูล F&G historical (Alternative.me)", "fng");
+  }
+  altMeFngHistoricalCache = { fetchedAtMs: now, rows };
+  return rows;
+}
+
+function pickAltMeFngAtSec(rows: FngHistoricalRow[], atSec: number): FngHistoricalRow | null {
+  if (rows.length === 0) return null;
+  for (const row of rows) {
+    if (row.tsSec <= atSec) return row;
+  }
+  return rows[rows.length - 1] ?? null;
+}
+
+async function fetchCmcFearGreedAtTime(atMs: number): Promise<FearGreedAtTime> {
+  const key = cmcProApiKey();
+  if (!key) {
+    throw new MarketPulseFetchError("ไม่มี CMC_PRO_API_KEY", "cmc");
+  }
+  const daysAgo = Math.ceil((Date.now() - atMs) / (24 * 3600_000)) + 3;
+  const limit = Math.min(500, Math.max(30, daysAgo + 5));
+  const { data } = await axios.get<{
+    data?: Array<{ timestamp?: string; value?: number | string; value_classification?: string }>;
+    status?: CmcStatus;
+  }>(`${CMC_PRO_BASE}/v3/fear-and-greed/historical`, {
+    timeout: TIMEOUT_MS,
+    headers: { "X-CMC_PRO_API_KEY": key },
+    params: { limit },
+  });
+  throwIfCmcStatusBad(data?.status, "CMC F&G historical");
+  const atSec = Math.floor(atMs / 1000);
+  let best: { tsSec: number; value: number; valueClassification: string } | null = null;
+  for (const row of data?.data ?? []) {
+    const tsMs = row.timestamp ? Date.parse(row.timestamp) : Number.NaN;
+    if (!Number.isFinite(tsMs)) continue;
+    const tsSec = Math.floor(tsMs / 1000);
+    const v = row.value != null ? Number(row.value) : Number.NaN;
+    const clsRaw = String(row.value_classification ?? "").trim();
+    const cls = clsRaw || (Number.isFinite(v) ? fallbackCmcFngClassification(v) : "");
+    if (!Number.isFinite(v) || v < 0 || v > 100 || !cls) continue;
+    if (tsSec > atSec) continue;
+    if (!best || tsSec > best.tsSec) {
+      best = { tsSec, value: v, valueClassification: cls };
+    }
+  }
+  if (!best) {
+    throw new MarketPulseFetchError("ไม่พบ CMC F&G ณ เวลาที่ขอ", "cmc");
+  }
+  return { value: best.value, valueClassification: best.valueClassification, asOfMs: best.tsSec * 1000 };
+}
+
+async function fetchAltMeFearGreedAtTime(atMs: number): Promise<FearGreedAtTime> {
+  const rows = await loadAltMeFngHistoricalRows();
+  const picked = pickAltMeFngAtSec(rows, Math.floor(atMs / 1000));
+  if (!picked) {
+    throw new MarketPulseFetchError("ไม่พบ F&G ณ เวลาที่ขอ", "fng");
+  }
+  return {
+    value: picked.value,
+    valueClassification: picked.valueClassification,
+    asOfMs: picked.tsSec * 1000,
+  };
+}
+
+/**
+ * F&G ณ เวลาแจ้ง (ย้อนหลังได้) — CMC historical ถ้ามี key · ไม่งั้น Alternative.me
+ */
+export async function fetchFearGreedAtTime(atMs: number): Promise<FearGreedAtTime> {
+  if (!Number.isFinite(atMs) || atMs <= 0) {
+    throw new MarketPulseFetchError("เวลาไม่ถูกต้อง", "fng");
+  }
+  if (marketPulseUsesCoinMarketCap()) {
+    try {
+      return await fetchCmcFearGreedAtTime(atMs);
+    } catch (e) {
+      console.warn("[marketPulseFetch] CMC historical F&G failed, fallback Alternative.me", e);
+    }
+  }
+  return fetchAltMeFearGreedAtTime(atMs);
 }
 
 /**

@@ -171,7 +171,7 @@ export async function appendRsiDivergenceStatsRow(
 
   let marketSentiment: RsiDivergenceStatsRow["marketSentiment"] = null;
   try {
-    marketSentiment = await resolveMarketSentimentForStats();
+    marketSentiment = await resolveMarketSentimentForStats(input.alertedAtMs);
   } catch {
     /* ignore */
   }

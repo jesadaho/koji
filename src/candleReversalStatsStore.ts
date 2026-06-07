@@ -304,7 +304,7 @@ export async function appendCandleReversalStatsRow(
 
   let marketSentiment: CandleReversalStatsRow["marketSentiment"] = null;
   try {
-    marketSentiment = await resolveMarketSentimentForStats();
+    marketSentiment = await resolveMarketSentimentForStats(input.alertedAtMs);
   } catch {
     /* ignore */
   }

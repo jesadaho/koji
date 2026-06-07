@@ -69,6 +69,7 @@ import {
   type SnowballStatsAdminBackfillResult,
 } from "./snowballStatsTick";
 import { isAdminTelegramUserId } from "./adminIds";
+import { backfillStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import {
   resolveViewerStatsTpSlPlan,
   resolveViewerStatsTradeSizing,
@@ -98,6 +99,7 @@ import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsCli
 import {
   loadRsiDivergenceStatsState,
   resetRsiDivergenceStatsState,
+  saveRsiDivergenceStatsState,
 } from "./rsiDivergenceStatsStore";
 import type { RsiDivergenceStatsApiPayload } from "@/lib/rsiDivergenceStatsClient";
 import {
@@ -821,6 +823,9 @@ export async function liffGetSnowballStats(telegramUserId?: number): Promise<Sno
   const migrated = applySnowballStatsRowMigrations(st.rows);
   if (migrated > 0) await saveSnowballStatsState(st);
 
+  const msDirty = await backfillStatsMarketSentiment(st.rows, { maxRows: 120 });
+  if (msDirty > 0) await saveSnowballStatsState(st);
+
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
   return buildSnowballStatsPayload(rows, telegramUserId);
 }
@@ -966,6 +971,9 @@ export async function liffGetCandleReversalStats(
   telegramUserId?: number,
 ): Promise<CandleReversalStatsApiPayload> {
   const st = await loadCandleReversalStatsState();
+  const msDirty = await backfillStatsMarketSentiment(st.rows, { maxRows: 120 });
+  if (msDirty > 0) await saveCandleReversalStatsState(st);
+
   const conflictSets = await loadPendingConflictSets();
   const rows = [...st.rows]
     .sort((a, b) => b.alertedAtMs - a.alertedAtMs)
@@ -1041,6 +1049,9 @@ export async function liffGetRsiDivergenceStats(
   telegramUserId?: number,
 ): Promise<RsiDivergenceStatsApiPayload> {
   const st = await loadRsiDivergenceStatsState();
+  const msDirty = await backfillStatsMarketSentiment(st.rows, { maxRows: 120 });
+  if (msDirty > 0) await saveRsiDivergenceStatsState(st);
+
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
   return {
     rows,

@@ -25,6 +25,7 @@ import {
   candleReversalVolSmaPeriod,
 } from "./candleReversalSignalVolVsSma";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
+import { backfillStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import {
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
@@ -729,6 +730,7 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += backfill1hOutcomeTo24h(state.rows);
+  dirty += await backfillStatsMarketSentiment(state.rows);
   if (opts?.forceLong1hFadeShort) {
     dirty += await refreshLong1hFadeShortFollowUp(state.rows, nowMs, nowSec);
   }

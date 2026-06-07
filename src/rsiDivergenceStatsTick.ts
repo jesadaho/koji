@@ -13,6 +13,7 @@ import {
   saveRsiDivergenceStatsState,
   type RsiDivergenceStatsRow,
 } from "./rsiDivergenceStatsStore";
+import { backfillStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 
 const DAY_SEC = 24 * 3600;
 const HOUR_SEC = 3600;
@@ -256,6 +257,7 @@ export async function runRsiDivergenceStatsFollowUpTick(nowMs: number): Promise<
   const state = await loadRsiDivergenceStatsState();
   const nowSec = Math.floor(nowMs / 1000);
   let dirty = 0;
+  dirty += await backfillStatsMarketSentiment(state.rows);
 
   for (const row of state.rows) {
     const entry = row.entryPrice;

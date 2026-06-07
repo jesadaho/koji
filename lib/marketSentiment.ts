@@ -11,8 +11,8 @@ export type MarketSentimentSnapshot = {
   fngClassification: string;
   /** Derived coarse sentiment label */
   sentiment: MarketSentimentLabel;
-  /** BTC dominance percentage */
-  btcDominancePct: number;
+  /** BTC dominance percentage — null เมื่อ backfill ย้อนหลัง (มีแค่ F&G) */
+  btcDominancePct: number | null;
   /** % change vs ~24h volume snapshot (approx); null if insufficient history */
   volumeChangePct24hApprox: number | null;
   /** Which backend source was used */
@@ -38,8 +38,9 @@ export function marketSentimentSentimentLabel(ms: MarketSentimentSnapshot | null
 }
 
 export function marketSentimentBtcDominanceLabel(ms: MarketSentimentSnapshot | null | undefined): string {
-  if (!ms || !Number.isFinite(ms.btcDominancePct)) return MS_DASH;
-  return `${ms.btcDominancePct.toFixed(1)}%`;
+  const v = ms?.btcDominancePct;
+  if (v == null || !Number.isFinite(v) || v <= 0) return MS_DASH;
+  return `${v.toFixed(1)}%`;
 }
 
 export function marketSentimentVolChange24hLabel(ms: MarketSentimentSnapshot | null | undefined): string {

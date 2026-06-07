@@ -378,7 +378,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
 
   let marketSentiment: SnowballStatsRow["marketSentiment"] = null;
   try {
-    marketSentiment = await resolveMarketSentimentForStats();
+    marketSentiment = await resolveMarketSentimentForStats(input.alertedAtMs);
   } catch {
     /* ignore */
   }
