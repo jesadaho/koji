@@ -422,17 +422,18 @@ export function formatAutoOpenPnlBucketParts(
   return ` · ${head} (${sub.join(" · ")})`;
 }
 
-/** P/L mark สด — ไม้ที่ยังไม่ครบผล@48h */
+/** P/L mark สด — ไม้ที่ยังไม่ครบ 24h */
 export function summarizeAutoOpenUnrealizedPnl(
   rows: AutoOpenOrderLogRow[],
   markPrices: Record<string, number>,
+  nowMs = Date.now(),
 ): AutoOpenPnlUsdtBucket {
   rows = excludePendingConflictRows(rows);
   const acc = emptyAutoOpenPnlUsdtAccumulator();
 
   for (const r of rows) {
     if (!autoOpenStrategy48hEligible(r)) continue;
-    if (autoOpenStrategyFinalized(r)) continue;
+    if (autoOpenHorizonDue(r, 24, nowMs)) continue;
     if (!autoOpenFollowUpEligible(r)) continue;
     if (r.side !== "long" && r.side !== "short") continue;
 
@@ -475,7 +476,7 @@ function formatAutoOpenClosedNetUsdtLine(summary: AutoOpenStrategy48hSummary): s
 
 function formatAutoOpenUnrealisedNetUsdtLine(bucket: AutoOpenPnlUsdtBucket): string {
   return formatAutoOpenPnlBucketLine(
-    "Unrealised",
+    "Unrealised (<24h)",
     bucket,
     bucket.successTrades,
     bucket.failedTrades,

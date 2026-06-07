@@ -297,7 +297,7 @@ function renderAutoOpenStrategy48hSummary(
             </span>
           ) : null}
         </div>
-        {renderPnlBucketRow("Unrealised", unrealised, { showTradeCount: true })}
+        {renderPnlBucketRow("Unrealised (<24h)", unrealised, { showTradeCount: true })}
         {mexcNode}
       </div>
     );
@@ -350,7 +350,7 @@ function renderAutoOpenStrategy48hSummary(
         {pendingNode}
       </div>
       {renderPnlBucketRow("Realised", closedBucket)}
-      {renderPnlBucketRow("Unrealised", unrealised, { showTradeCount: true })}
+      {renderPnlBucketRow("Unrealised (<24h)", unrealised, { showTradeCount: true })}
       {mexcNode}
     </div>
   );
@@ -1150,7 +1150,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             className="sub"
             title={
               strategy48hSummaryTitle ??
-              "ชนะ/แพ้@24h/@48h = ไม้ครบ horizon · Realised = P/L ตามกติกาสถิติ · MEXC Realised = P/L จริงเมื่อปิดบน MEXC · Unrealised = mark สด (ไม่รวม Limit ⏳ รอแตะ · รวมล้มเหลว Limit ที่แตะแล้วจำลอง fill) · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่ราคาแตะ entry แล้ว"
+              "ชนะ/แพ้@24h/@48h = ไม้ครบ horizon · Realised = P/L ตามกติกาสถิติ · MEXC Realised = P/L จริงเมื่อปิดบน MEXC · Unrealised (<24h) = mark สดเฉพาะไม้ที่ยังไม่ครบ 24h (ไม่รวม Limit ⏳ รอแตะ · รวมล้มเหลว Limit ที่แตะแล้วจำลอง fill) · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่ราคาแตะ entry แล้ว"
             }
             style={{ marginTop: 0, marginBottom: "0.65rem", lineHeight: 1.45 }}
           >
