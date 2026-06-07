@@ -7,6 +7,8 @@ export type ReversalEma4hFilter =
   | "lt0"
   | "lt3"
   | "lt5"
+  | "lt10"
+  | "gtm10lt0"
   | "gt3"
   | "gt5"
   | "gt0lt30"
@@ -25,6 +27,8 @@ export const REVERSAL_EMA4H_FILTER_OPTIONS: ReadonlyArray<{
   { value: "lt0", label: "< 0" },
   { value: "lt3", label: "< -3" },
   { value: "lt5", label: "< -5" },
+  { value: "lt10", label: "< -10" },
+  { value: "gtm10lt0", label: "> -10 < 0" },
   { value: "gt3", label: "> 3" },
   { value: "gt5", label: "> 5" },
   { value: "gt0lt30", label: "> 0 < 30" },
@@ -37,12 +41,13 @@ export const REVERSAL_EMA4H_FILTER_OPTIONS: ReadonlyArray<{
 ];
 
 const EMA4H_SLOPE_THRESHOLD: Record<
-  Exclude<ReversalEma4hFilter, "all" | "gt0lt30">,
+  Exclude<ReversalEma4hFilter, "all" | "gt0lt30" | "gtm10lt0">,
   number
 > = {
   lt0: 0,
   lt3: -3,
   lt5: -5,
+  lt10: -10,
   gt3: 3,
   gt5: 5,
   gt20: 20,
@@ -60,6 +65,7 @@ export function reversalEma4hFilterLabel(filter: ReversalEma4hFilter): string {
 export function reversalEma4hFilterTitle(filter: ReversalEma4hFilter): string {
   if (filter === "all") return "ไม่กรอง EMA4h slope 7 วัน";
   if (filter === "gt0lt30") return "EMA(12) 4h slope 7 วัน > 0% และ < 30%";
+  if (filter === "gtm10lt0") return "EMA(12) 4h slope 7 วัน > -10% และ < 0%";
   const label = reversalEma4hFilterLabel(filter);
   return `EMA(12) 4h slope 7 วัน ${label}%`;
 }
@@ -72,7 +78,8 @@ export function reversalRowMatchesEma4hFilter(
   const pct = row.ema4hSlopePct7d;
   if (pct == null || !Number.isFinite(pct)) return false;
   if (filter === "gt0lt30") return pct > 0 && pct < 30;
+  if (filter === "gtm10lt0") return pct > -10 && pct < 0;
   const th = EMA4H_SLOPE_THRESHOLD[filter];
-  if (filter === "lt0" || filter === "lt3" || filter === "lt5") return pct < th;
+  if (filter === "lt0" || filter === "lt3" || filter === "lt5" || filter === "lt10") return pct < th;
   return pct > th;
 }
