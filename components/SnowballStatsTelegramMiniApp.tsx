@@ -64,6 +64,20 @@ import {
   type SnowballBtcPsarFilter,
 } from "@/lib/snowballBtcPsarFilter";
 import {
+  SNOWBALL_EFFICIENCY_SCORE_FILTER_OPTIONS,
+  snowballEfficiencyScoreFilterLabel,
+  snowballEfficiencyScoreFilterTitle,
+  snowballStatsRowMatchesEfficiencyScoreFilter,
+  type SnowballEfficiencyScoreFilter,
+} from "@/lib/snowballEfficiencyScoreFilter";
+import {
+  SNOWBALL_SIGNAL_MAX_DD_FILTER_OPTIONS,
+  snowballSignalMaxDdFilterLabel,
+  snowballSignalMaxDdFilterTitle,
+  snowballStatsRowMatchesSignalMaxDdFilter,
+  type SnowballSignalMaxDdFilter,
+} from "@/lib/snowballSignalMaxDdFilter";
+import {
   snowballHorizonWinrateSummary,
   snowballStatsBarRangePctLabel,
   snowballStatsConfirmVolRankLabel,
@@ -380,6 +394,8 @@ export default function SnowballStatsTelegramMiniApp() {
   const [gradeFilter, setGradeFilter] = useState<SnowballGradeFilter>("all");
   const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
+  const [efficiencyFilter, setEfficiencyFilter] = useState<SnowballEfficiencyScoreFilter>("all");
+  const [signalMaxDdFilter, setSignalMaxDdFilter] = useState<SnowballSignalMaxDdFilter>("all");
   const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
   const [ema4hFilter, setEma4hFilter] = useState<ReversalEma4hFilter>("all");
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
@@ -669,6 +685,14 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => snowballStatsRowMatchesVolVsSmaFilter(r, volVsSmaFilter));
     }
 
+    if (efficiencyFilter !== "all") {
+      result = result.filter((r) => snowballStatsRowMatchesEfficiencyScoreFilter(r, efficiencyFilter));
+    }
+
+    if (signalMaxDdFilter !== "all") {
+      result = result.filter((r) => snowballStatsRowMatchesSignalMaxDdFilter(r, signalMaxDdFilter));
+    }
+
     if (volRankFilter !== "all") {
       result = result.filter((r) => snowballStatsRowMatchesVolRankFilter(r, volRankFilter));
     }
@@ -704,6 +728,8 @@ export default function SnowballStatsTelegramMiniApp() {
     gradeFilter,
     dowFilter,
     volVsSmaFilter,
+    efficiencyFilter,
+    signalMaxDdFilter,
     volRankFilter,
     ema4hFilter,
     ema1dFilter,
@@ -1034,7 +1060,7 @@ export default function SnowballStatsTelegramMiniApp() {
               <td colSpan={isAdmin ? 44 : 43} className="sub">
                 {allRows.length === 0
                   ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / BTC SAR ${snowballBtcPsarFilterLabel(btcPsarFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
+                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / BTC SAR ${snowballBtcPsarFilterLabel(btcPsarFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Efficiency ${snowballEfficiencyScoreFilterLabel(efficiencyFilter)} / Max DD ก่อน ${snowballSignalMaxDdFilterLabel(signalMaxDdFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
               </td>
             </tr>
           ) : (
@@ -1294,6 +1320,48 @@ export default function SnowballStatsTelegramMiniApp() {
               title="4h = Vol แท่งสัญญาณ ÷ SMA(4H) · อื่นๆ = 1H confirm หรือ signal"
             >
               {SNOWBALL_VOL_VS_SMA_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            Efficiency
+            <select
+              value={efficiencyFilter}
+              onChange={(e) =>
+                setEfficiencyFilter(e.currentTarget.value as SnowballEfficiencyScoreFilter)
+              }
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7rem" }}
+              title={snowballEfficiencyScoreFilterTitle(efficiencyFilter)}
+            >
+              {SNOWBALL_EFFICIENCY_SCORE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            Max DD ก่อน
+            <select
+              value={signalMaxDdFilter}
+              onChange={(e) =>
+                setSignalMaxDdFilter(e.currentTarget.value as SnowballSignalMaxDdFilter)
+              }
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7.5rem" }}
+              title={snowballSignalMaxDdFilterTitle(signalMaxDdFilter)}
+            >
+              {SNOWBALL_SIGNAL_MAX_DD_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

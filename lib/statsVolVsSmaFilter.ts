@@ -6,6 +6,7 @@ export type StatsVolVsSmaFilter =
   | "ge15"
   | "ge2"
   | "ge25"
+  | "ge3"
   | "ge4"
   | "ge5"
   | "ge6"
@@ -17,6 +18,7 @@ const VOL_VS_SMA_MIN: Record<Exclude<StatsVolVsSmaFilter, "all">, number> = {
   ge15: 1.5,
   ge2: 2,
   ge25: 2.5,
+  ge3: 3,
   ge4: 4,
   ge5: 5,
   ge6: 6,
@@ -33,6 +35,7 @@ export const STATS_VOL_VS_SMA_FILTER_OPTIONS: ReadonlyArray<{
   { value: "ge15", label: "≥ 1.5×" },
   { value: "ge2", label: "≥ 2.0×" },
   { value: "ge25", label: "≥ 2.5×" },
+  { value: "ge3", label: "≥ 3×" },
   { value: "ge4", label: "≥ 4×" },
   { value: "ge5", label: "≥ 5×" },
   { value: "ge6", label: "≥ 6×" },
