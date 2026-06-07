@@ -10,7 +10,6 @@ import {
 } from "@/lib/statsTpSlPlanForUser";
 import type { StrategyProfitByPlanEntry, StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import {
-  statsStrategyPlanAtHoldHours,
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
   type StatsStrategyProfitHorizon,
@@ -65,6 +64,7 @@ function simulateFromPack(input: {
   ac: number;
   windowEndSec: number;
   pctAtClose: number;
+  pctAtPhase1: number | null;
   plan: ViewerStatsTpSlPlan;
 }): StrategyProfitByPlanEntry | null {
   if (!input.plan.tpSlEnabled) {
@@ -79,6 +79,12 @@ function simulateFromPack(input: {
   if (iFirst < 0) return null;
   const iLast = indexRangeThrough(timeSec, KLINE_15M_SEC, iFirst, input.windowEndSec);
   if (iLast < iFirst) return null;
+  const phase1EndSec = input.ac + input.plan.maxHoldHours * HOUR_SEC;
+  const iPhase1Last = indexRangeThrough(timeSec, KLINE_15M_SEC, iFirst, phase1EndSec);
+  const pctPhase1 =
+    input.pctAtPhase1 != null && Number.isFinite(input.pctAtPhase1)
+      ? input.pctAtPhase1
+      : input.pctAtClose;
 
   const sim = simulateStatsTpSlProfit({
     side: input.side,
@@ -87,6 +93,8 @@ function simulateFromPack(input: {
     low,
     iFirst,
     iLast,
+    iPhase1Last,
+    pctAtPhase1: pctPhase1,
     pctAt48h: input.pctAtClose,
     plan: input.plan,
   });
@@ -164,19 +172,17 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
   let dirty = 0;
 
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
-    const planH = statsStrategyPlanAtHoldHours(
-      {
-        tp1PricePct: opts.plan.tp1PricePct,
-        tp1PartialPct: opts.plan.tp1PartialPct,
-        tp2PricePct: opts.plan.tp2PricePct,
-        maxHoldHours: holdHours,
-        slAtEntryArmRoiPct: opts.plan.slAtEntryArmRoiPct,
-        slAtEntryOffsetPct: opts.plan.slAtEntryOffsetPct,
-      },
-      holdHours,
-    );
-    const viewerPlan: ViewerStatsTpSlPlan = { ...opts.plan, ...planH };
-    const cacheKey = statsTpSlPlanCacheKey(planH);
+    const planH: ViewerStatsTpSlPlan = {
+      tp1PricePct: opts.plan.tp1PricePct,
+      tp1PartialPct: opts.plan.tp1PartialPct,
+      tp2PricePct: opts.plan.tp2PricePct,
+      maxHoldHours: opts.plan.maxHoldHours,
+      holdExtendIfRedEnabled: opts.plan.holdExtendIfRedEnabled,
+      slAtEntryArmRoiPct: opts.plan.slAtEntryArmRoiPct,
+      slAtEntryOffsetPct: opts.plan.slAtEntryOffsetPct,
+      tpSlEnabled: opts.plan.tpSlEnabled,
+    };
+    const cacheKey = statsTpSlPlanCacheKey(planH, holdHours);
 
     for (const row of opts.rows) {
       if (!opts.includeRow(row)) continue;
@@ -193,9 +199,12 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
         continue;
       }
 
-      const pctClose = pctAtPlanMaxHold(viewerPlan, row) ??
+      const pctClose = pctAtPlanMaxHold({ ...planH, maxHoldHours: holdHours }, row) ??
         (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? row.pct24h : row.pct48h);
       if (pctClose == null) continue;
+
+      const pctPhase1 = pctAtPlanMaxHold(planH, row) ??
+        (planH.maxHoldHours <= 24 ? row.pct24h : row.pct48h);
 
       const ac = opts.anchorCloseSec(row);
       const windowEndSec = ac + holdHours * HOUR_SEC;
@@ -214,7 +223,8 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
         ac,
         windowEndSec,
         pctAtClose: pctClose,
-        plan: viewerPlan,
+        pctAtPhase1: pctPhase1,
+        plan: planH,
       });
       if (applyHorizonFields(row, holdHours, cacheKey, computed)) dirty += 1;
     }
@@ -261,18 +271,16 @@ export function withViewerStrategyProfitDisplayFields<
 >(row: T, plan: ViewerStatsTpSlPlan): T {
   let out = row;
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
-    const planH = statsStrategyPlanAtHoldHours(
-      {
-        tp1PricePct: plan.tp1PricePct,
-        tp1PartialPct: plan.tp1PartialPct,
-        tp2PricePct: plan.tp2PricePct,
-        maxHoldHours: holdHours,
-        slAtEntryArmRoiPct: plan.slAtEntryArmRoiPct,
-        slAtEntryOffsetPct: plan.slAtEntryOffsetPct,
-      },
-      holdHours,
-    );
-    const cacheKey = statsTpSlPlanCacheKey(planH);
+    const planH: StatsTpSlPlan = {
+      tp1PricePct: plan.tp1PricePct,
+      tp1PartialPct: plan.tp1PartialPct,
+      tp2PricePct: plan.tp2PricePct,
+      maxHoldHours: plan.maxHoldHours,
+      holdExtendIfRedEnabled: plan.holdExtendIfRedEnabled,
+      slAtEntryArmRoiPct: plan.slAtEntryArmRoiPct,
+      slAtEntryOffsetPct: plan.slAtEntryOffsetPct,
+    };
+    const cacheKey = statsTpSlPlanCacheKey(planH, holdHours);
     const cached = row.strategyProfitByPlan?.[cacheKey];
     if (!cached) {
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {

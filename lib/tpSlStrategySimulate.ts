@@ -16,7 +16,10 @@ export type StatsTpSlPlan = {
   tp1PricePct: number;
   tp1PartialPct: number;
   tp2PricePct: number;
+  /** จังหวะ 1 — ถือ x ชม. แล้วเช็คปิด/ขยาย */
   maxHoldHours: number;
+  /** ถ้าเปิด: ครบจังหวะ 1 แล้วยังแดง → ถือต่ออีก maxHoldHours ชม. */
+  holdExtendIfRedEnabled?: boolean;
   /** ROI ถึงค่านี้แล้วตั้ง SL บังทุน (แยกจาก TP1 partial) */
   slAtEntryArmRoiPct?: number;
   /** % ราคาสวนจาก entry ที่วาง SL (0 = @entry) */
@@ -59,7 +62,10 @@ export function statsTpSlPlanSummary(plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PL
   const off = slEntryOffsetPctFromPlan(plan);
   const slTag =
     off > 0 ? `ROI≥${arm}%→SL±${off}%` : `ROI≥${arm}%→SL@entry`;
-  return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · ${slTag} · TP2 ${plan.tp2PricePct}% · ${plan.maxHoldHours}h`;
+  const holdTag = plan.holdExtendIfRedEnabled
+    ? `${plan.maxHoldHours}h+${plan.maxHoldHours}hถ้าแดง`
+    : `${plan.maxHoldHours}h`;
+  return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · ${slTag} · TP2 ${plan.tp2PricePct}% · ${holdTag}`;
 }
 
 function tp1PartialFraction(plan: StatsTpSlPlan): number {
@@ -128,6 +134,10 @@ export function simulateStatsTpSlProfit(input: {
   iFirst: number;
   iLast: number;
   pctAt48h: number;
+  /** % ที่จังหวะ 1 (ก่อนขยาย) — default = pctAt48h */
+  pctAtPhase1?: number | null;
+  /** index สุดท้ายของจังหวะ 1 บนแท่ง 15m */
+  iPhase1Last?: number;
   plan?: StatsTpSlPlan;
   /** isolated margin — แตะสวน > 100/leverage% ในแท่งใดแท่งหนึ่ง = liquidate */
   leverage?: number | null;
@@ -136,6 +146,20 @@ export function simulateStatsTpSlProfit(input: {
   const entry = input.entry;
   if (!(entry > 0) || input.iFirst < 0 || input.iLast < input.iFirst) return null;
   if (!Number.isFinite(input.pctAt48h)) return null;
+
+  const phase1Hours = plan.maxHoldHours > 0 ? plan.maxHoldHours : 48;
+  const iPhase1Last =
+    typeof input.iPhase1Last === "number" && input.iPhase1Last >= input.iFirst
+      ? Math.min(input.iPhase1Last, input.iLast)
+      : input.iLast;
+  const pctPhase1 =
+    input.pctAtPhase1 != null && Number.isFinite(input.pctAtPhase1)
+      ? input.pctAtPhase1
+      : input.pctAt48h;
+  const extendRed =
+    plan.holdExtendIfRedEnabled === true &&
+    iPhase1Last < input.iLast &&
+    pctPhase1 < 0;
 
   const tp1 = plan.tp1PricePct;
   const slArm = slAtEntryArmPctFromPlan(plan);
@@ -153,6 +177,7 @@ export function simulateStatsTpSlProfit(input: {
   /** ROI ถึง slArm% แล้ว — SL บังทุนที่ entry (ไม่ต้องรอ partial TP1) */
   let slAtEntryArmed = false;
   let exitReason: StatsTpSlExitReason = holdTimeExitReason(plan, false);
+  let holdExtendedForRed = false;
 
   for (let i = input.iFirst; i <= input.iLast; i++) {
     if (rem <= 0) break;
@@ -204,11 +229,29 @@ export function simulateStatsTpSlProfit(input: {
         break;
       }
     }
+
+    if (rem > 0 && i === iPhase1Last) {
+      if (extendRed && !holdExtendedForRed) {
+        holdExtendedForRed = true;
+        continue;
+      }
+      const pctExit = holdExtendedForRed || iPhase1Last === input.iLast ? input.pctAt48h : pctPhase1;
+      profit += rem * pctExit;
+      rem = 0;
+      exitReason = holdTimeExitReason(
+        { ...plan, maxHoldHours: holdExtendedForRed ? phase1Hours * 2 : phase1Hours },
+        tp1Done,
+      );
+      break;
+    }
   }
 
   if (rem > 0) {
     profit += rem * input.pctAt48h;
-    exitReason = holdTimeExitReason(plan, tp1Done);
+    exitReason = holdTimeExitReason(
+      { ...plan, maxHoldHours: holdExtendedForRed ? phase1Hours * 2 : phase1Hours },
+      tp1Done,
+    );
   }
 
   if (!Number.isFinite(profit)) return null;

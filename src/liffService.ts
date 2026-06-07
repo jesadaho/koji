@@ -1189,6 +1189,7 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     tp1PartialPct: row.snowballAutoTradeTp1PartialPct ?? null,
     tp2PricePct: row.snowballAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.snowballAutoTradeMaxHoldHours ?? null,
+    holdExtendIfRedEnabled: row.snowballAutoTradeHoldExtendIfRedEnabled === true,
     slArmRoiPct: row.snowballAutoTradeSlArmRoiPct ?? null,
     slEntryOffsetPct: row.snowballAutoTradeSlEntryOffsetPct ?? null,
     qualitySignalLongEnabled:
@@ -1224,6 +1225,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     tp1PartialPct: row.reversalAutoTradeTp1PartialPct ?? null,
     tp2PricePct: row.reversalAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.reversalAutoTradeMaxHoldHours ?? null,
+    holdExtendIfRedEnabled: row.reversalAutoTradeHoldExtendIfRedEnabled === true,
     slArmRoiPct: row.reversalAutoTradeSlArmRoiPct ?? null,
     slEntryOffsetPct: row.reversalAutoTradeSlEntryOffsetPct ?? null,
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
@@ -1529,6 +1531,14 @@ function parseSnowballAutoTradeNested(
   else if (o.tpSlEnabled === "1" || o.tpSlEnabled === 1 || o.tpSlEnabled === "true") tpSlEnabled = true;
   else if (o.tpSlEnabled === "0" || o.tpSlEnabled === 0 || o.tpSlEnabled === "false") tpSlEnabled = false;
 
+  let holdExtendIfRedEnabled: boolean | undefined;
+  if (typeof o.holdExtendIfRedEnabled === "boolean") holdExtendIfRedEnabled = o.holdExtendIfRedEnabled;
+  else if (o.holdExtendIfRedEnabled === "1" || o.holdExtendIfRedEnabled === 1 || o.holdExtendIfRedEnabled === "true") {
+    holdExtendIfRedEnabled = true;
+  } else if (o.holdExtendIfRedEnabled === "0" || o.holdExtendIfRedEnabled === 0 || o.holdExtendIfRedEnabled === "false") {
+    holdExtendIfRedEnabled = false;
+  }
+
   let qualitySignalLongEnabled = false;
   const qsRaw = o.qualitySignalLongEnabled ?? o.qualitySignalGateEnabled;
   if (typeof qsRaw === "boolean") {
@@ -1591,6 +1601,9 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeSlEntryOffsetPct: mSlOff.v as number | null | undefined,
   };
   if (tpSlEnabled !== undefined) patchPart.snowballAutoTradeTpSlEnabled = tpSlEnabled;
+  if (holdExtendIfRedEnabled !== undefined) {
+    patchPart.snowballAutoTradeHoldExtendIfRedEnabled = holdExtendIfRedEnabled;
+  }
 
   if ("entryMode" in o) {
     patchPart.snowballAutoTradeEntryMode = parseSnowballAutoTradeEntryMode(o.entryMode);
@@ -1709,6 +1722,14 @@ function parseReversalAutoTradeNested(
   else if (o.tpSlEnabled === "1" || o.tpSlEnabled === 1 || o.tpSlEnabled === "true") tpSlEnabled = true;
   else if (o.tpSlEnabled === "0" || o.tpSlEnabled === 0 || o.tpSlEnabled === "false") tpSlEnabled = false;
 
+  let holdExtendIfRedEnabled: boolean | undefined;
+  if (typeof o.holdExtendIfRedEnabled === "boolean") holdExtendIfRedEnabled = o.holdExtendIfRedEnabled;
+  else if (o.holdExtendIfRedEnabled === "1" || o.holdExtendIfRedEnabled === 1 || o.holdExtendIfRedEnabled === "true") {
+    holdExtendIfRedEnabled = true;
+  } else if (o.holdExtendIfRedEnabled === "0" || o.holdExtendIfRedEnabled === 0 || o.holdExtendIfRedEnabled === "false") {
+    holdExtendIfRedEnabled = false;
+  }
+
   const parseGateBool = (key: string, defaultOn: boolean): boolean => {
     if (!(key in o)) return defaultOn;
     const x = o[key];
@@ -1758,6 +1779,9 @@ function parseReversalAutoTradeNested(
     reversalAutoTradeLongSignalShortEnabled: longSignalShortEnabled,
   };
   if (tpSlEnabled !== undefined) patchPart.reversalAutoTradeTpSlEnabled = tpSlEnabled;
+  if (holdExtendIfRedEnabled !== undefined) {
+    patchPart.reversalAutoTradeHoldExtendIfRedEnabled = holdExtendIfRedEnabled;
+  }
 
   if ("entryMode" in o) {
     patchPart.reversalAutoTradeEntryMode = parseReversalAutoTradeEntryMode(o.entryMode);

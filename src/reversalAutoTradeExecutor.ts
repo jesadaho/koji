@@ -140,6 +140,7 @@ export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings)
   tp1PartialPct: number;
   tp2PricePct: number;
   maxHoldHours: number;
+  holdExtendIfRedEnabled: boolean;
   slArmRoiPct: number;
   slEntryOffsetPct: number;
 } {
@@ -166,6 +167,7 @@ export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings)
     tp1PartialPct: Math.min(100, t1p),
     tp2PricePct: t2,
     maxHoldHours: mh,
+    holdExtendIfRedEnabled: row.reversalAutoTradeHoldExtendIfRedEnabled === true,
     slArmRoiPct: parseSlArmRoiPct(row.reversalAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
     slEntryOffsetPct: parseSlEntryOffsetPct(
       row.reversalAutoTradeSlEntryOffsetPct,

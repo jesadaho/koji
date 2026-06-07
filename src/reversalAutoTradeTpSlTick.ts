@@ -1,4 +1,8 @@
-import { autoTradeMaxHoldDue, resolveAutoTradeMaxHoldHours } from "@/lib/autoTradeMaxHold";
+import {
+  resolveAutoTradeHoldCheckpoint,
+  resolveAutoTradeHoldExtendIfRed,
+  resolveAutoTradeMaxHoldHours,
+} from "@/lib/autoTradeMaxHold";
 import {
   DEFAULT_SL_ARM_ROI_PCT,
   DEFAULT_SL_ENTRY_OFFSET_PCT,
@@ -26,6 +30,7 @@ import {
   loadReversalAutoTradeState,
   saveReversalAutoTradeState,
   withReversalActiveRemoved,
+  withReversalHoldExtendedForRed,
   withReversalSlAtEntryArmed,
   withReversalTp1Done,
   type ReversalAutoTradeActive,
@@ -93,7 +98,8 @@ async function handlePositionDisappeared(args: {
 
 async function handleMaxHoldForceClose(
   ctx: TpSlContext,
-  maxHoldHours: number,
+  holdHours: number,
+  phase: 1 | 2 = 1,
 ): Promise<{ closed: boolean }> {
   const { userId, creds, active, markPrice } = ctx;
   await cancelActiveTpSlPlanOrders(creds, active);
@@ -101,7 +107,7 @@ async function handleMaxHoldForceClose(
   if (!r.success) {
     await notifyLines(userId, [
       "Koji — Reversal TP/SL (MEXC)",
-      `❌ ครบ ${maxHoldHours} ชม. แต่ปิดไม่สำเร็จ`,
+      `❌ ครบ ${holdHours} ชม. แต่ปิดไม่สำเร็จ`,
       `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
       `Entry MEXC: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)}`,
       r.message ? `MEXC: ${r.message}` : "",
@@ -109,9 +115,13 @@ async function handleMaxHoldForceClose(
     return { closed: false };
   }
   const drop = pricePctDrop(active.side, active.mexcAvgEntryPrice, markPrice);
+  const phaseLabel =
+    phase === 2
+      ? `⏰ ครบจังหวะ 2 (${holdHours} ชม. รวม) → ปิดทั้งหมด (force)`
+      : `⏰ ครบจังหวะ 1 (${holdHours} ชม.) → ปิดทั้งหมด (force)`;
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
-    `⏰ ครบ ${maxHoldHours} ชม. → ปิดทั้งหมด (force)`,
+    phaseLabel,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry MEXC: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)}`,
     Number.isFinite(drop) ? `ราคาเคลื่อน: ${drop >= 0 ? "+" : ""}${drop.toFixed(2)}% จาก entry` : "",
@@ -358,9 +368,13 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
 
     for (const a of actives) {
       try {
-        const maxH = resolveAutoTradeMaxHoldHours({
+        const phase1H = resolveAutoTradeMaxHoldHours({
           activeMaxHoldHours: a.maxHoldHours,
           liveMaxHoldHours: tpPlan.maxHoldHours,
+          tpSlEnabled: tpPlan.enabled,
+        });
+        const extendIfRed = resolveAutoTradeHoldExtendIfRed({
+          liveHoldExtendIfRed: tpPlan.holdExtendIfRedEnabled,
           tpSlEnabled: tpPlan.enabled,
         });
 
@@ -386,8 +400,28 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           positionMode,
         };
 
-        if (autoTradeMaxHoldDue(a.openedAtMs, maxH, nowMs)) {
-          const r = await handleMaxHoldForceClose(ctx, maxH);
+        const drop = pricePctDrop(a.side, a.mexcAvgEntryPrice, mark);
+        const holdCheckpoint = resolveAutoTradeHoldCheckpoint({
+          openedAtMs: a.openedAtMs,
+          phase1Hours: phase1H,
+          extendIfRedEnabled: extendIfRed,
+          holdExtendedForRed: a.holdExtendedForRed === true,
+          markPnlPct: drop,
+          nowMs,
+        });
+        if (holdCheckpoint.action === "extend_red") {
+          state = withReversalHoldExtendedForRed(state, userId, a.contractSymbol, a.side);
+          await notifyLines(userId, [
+            "Koji — Reversal TP/SL (MEXC)",
+            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) ยังปิดแดง → ขยายอีก ${holdCheckpoint.phase1Hours} ชม.`,
+            `[${shortContractLabel(a.contractSymbol)}]/USDT (${a.side.toUpperCase()})`,
+            `Entry: ${fmtPrice(a.mexcAvgEntryPrice)} · Mark: ${fmtPrice(mark)} · เคลื่อน ${drop.toFixed(2)}%`,
+          ]);
+          actionsCount += 1;
+          continue;
+        }
+        if (holdCheckpoint.action === "force_close") {
+          const r = await handleMaxHoldForceClose(ctx, holdCheckpoint.holdHours, holdCheckpoint.phase);
           if (r.closed) {
             state = withReversalActiveRemoved(state, userId, a.contractSymbol, a.side);
             actionsCount += 1;
@@ -407,8 +441,8 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           continue;
         }
 
-        const drop = pricePctDrop(a.side, a.mexcAvgEntryPrice, mark);
-        if (!exchangeTp2 && Number.isFinite(drop) && drop >= a.tp2PricePct) {
+        const dropForTp = pricePctDrop(a.side, a.mexcAvgEntryPrice, mark);
+        if (!exchangeTp2 && Number.isFinite(dropForTp) && dropForTp >= a.tp2PricePct) {
           const r = await handleTp2Hit(ctx);
           if (r.closed) {
             state = withReversalActiveRemoved(state, userId, a.contractSymbol, a.side);
@@ -419,8 +453,8 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
 
         if (
           !a.slPlanOrderId?.trim() &&
-          Number.isFinite(drop) &&
-          drop >= parseSlArmRoiPct(a.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT)
+          Number.isFinite(dropForTp) &&
+          dropForTp >= parseSlArmRoiPct(a.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT)
         ) {
           const r = await handleSlAtEntryOnRoi(ctx);
           if (r.ok) {
@@ -429,7 +463,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           }
         }
 
-        if (!exchangeTp1 && !a.tp1Done && Number.isFinite(drop) && drop >= a.tp1PricePct) {
+        if (!exchangeTp1 && !a.tp1Done && Number.isFinite(dropForTp) && dropForTp >= a.tp1PricePct) {
           const r = await handleTp1Hit(ctx);
           if (r.tp1Done) {
             state = withReversalTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);

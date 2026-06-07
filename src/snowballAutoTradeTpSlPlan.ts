@@ -17,6 +17,7 @@ export type SnowballTpSlPlan = {
   tp1PartialPct: number;
   tp2PricePct: number;
   maxHoldHours: number;
+  holdExtendIfRedEnabled: boolean;
   slArmRoiPct: number;
   slEntryOffsetPct: number;
 };
@@ -53,6 +54,7 @@ export function resolveSnowballTpSlPlanFromRow(row: TradingViewMexcUserSettings)
     tp1PartialPct: Math.min(100, t1p),
     tp2PricePct: t2,
     maxHoldHours: mh,
+    holdExtendIfRedEnabled: row.snowballAutoTradeHoldExtendIfRedEnabled === true,
     slArmRoiPct: parseSlArmRoiPct(row.snowballAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
     slEntryOffsetPct: parseSlEntryOffsetPct(
       row.snowballAutoTradeSlEntryOffsetPct,

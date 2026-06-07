@@ -40,8 +40,10 @@ export type ReversalAutoTradeActive = {
   tp1PartialPct: number;
   /** % drop จาก entry ที่จะปิดทั้งหมด */
   tp2PricePct: number;
-  /** ครบกี่ ชม. แล้วบังคับปิดทั้งหมด */
+  /** ครบกี่ ชม. แล้วบังคับปิดทั้งหมด (จังหวะ 1) */
   maxHoldHours: number;
+  /** ขยายจังหวะ 2 แล้ว — ครบจังหวะ 1 แต่ยังแดง */
+  holdExtendedForRed?: boolean;
   slArmRoiPct?: number;
   slEntryOffsetPct?: number;
   /** orderId ของ plan SL ที่ตั้งหลัง TP1 — ใช้ cancel ตอน TP2/48h */
@@ -242,6 +244,7 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
       typeof tp1PlanVolRaw === "number" && Number.isFinite(tp1PlanVolRaw) && tp1PlanVolRaw > 0
         ? tp1PlanVolRaw
         : undefined;
+    const holdExtendedForRed = o.holdExtendedForRed === true;
     if (
       !sym ||
       !binanceSymbol ||
@@ -275,6 +278,7 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
     if (tp2Plan) row.tp2PlanOrderId = tp2Plan;
     if (initHold != null) row.initialHoldVol = initHold;
     if (tp1PlanVol != null) row.tp1PlanVol = tp1PlanVol;
+    if (holdExtendedForRed) row.holdExtendedForRed = true;
     out.push(row);
   }
   const bySym = new Map<string, ReversalAutoTradeActive>();
@@ -612,6 +616,31 @@ export function withReversalTp1Done(
       const updated: ReversalAutoTradeActive = { ...x, tp1Done: true };
       if (slPlanOrderId && slPlanOrderId.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
       return updated;
+    }
+    return x;
+  });
+  return {
+    ...state,
+    [uid]: {
+      ...prev,
+      active: nextActive,
+    },
+  };
+}
+
+export function withReversalHoldExtendedForRed(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: "short" | "long",
+): ReversalAutoTradeState {
+  const uid = userId.trim();
+  const prev = state[uid];
+  if (!prev?.active?.length) return state;
+  const sym = contractSymbol.trim().toUpperCase();
+  const nextActive = normalizeActive(prev.active).map((x) => {
+    if (x.contractSymbol === sym && x.side === side) {
+      return { ...x, holdExtendedForRed: true };
     }
     return x;
   });

@@ -109,6 +109,7 @@ type SnowballAutoTradeApiBundle = {
   tp1PartialPct?: number | null;
   tp2PricePct?: number | null;
   maxHoldHours?: number | null;
+  holdExtendIfRedEnabled?: boolean;
   slArmRoiPct?: number | null;
   slEntryOffsetPct?: number | null;
   /** จุดอ้างอิง = EMA20 @1h (ยังเปิด market) */
@@ -126,6 +127,7 @@ type ReversalAutoTradeApiBundle = {
   tp1PartialPct?: number | null;
   tp2PricePct?: number | null;
   maxHoldHours?: number | null;
+  holdExtendIfRedEnabled?: boolean;
   slArmRoiPct?: number | null;
   slEntryOffsetPct?: number | null;
   gateQualitySignal?: boolean;
@@ -185,6 +187,7 @@ export default function SettingsTelegramMiniApp() {
   const [snowTp1PartialPct, setSnowTp1PartialPct] = useState("");
   const [snowTp2PricePct, setSnowTp2PricePct] = useState("");
   const [snowMaxHoldHours, setSnowMaxHoldHours] = useState("");
+  const [snowHoldExtendIfRed, setSnowHoldExtendIfRed] = useState(false);
   const [snowSlArmRoiPct, setSnowSlArmRoiPct] = useState("");
   const [snowSlEntryOffsetPct, setSnowSlEntryOffsetPct] = useState("");
   const [snowSaveErr, setSnowSaveErr] = useState("");
@@ -205,6 +208,7 @@ export default function SettingsTelegramMiniApp() {
   const [revTp1PartialPct, setRevTp1PartialPct] = useState("");
   const [revTp2PricePct, setRevTp2PricePct] = useState("");
   const [revMaxHoldHours, setRevMaxHoldHours] = useState("");
+  const [revHoldExtendIfRed, setRevHoldExtendIfRed] = useState(false);
   const [revSlArmRoiPct, setRevSlArmRoiPct] = useState("");
   const [revSlEntryOffsetPct, setRevSlEntryOffsetPct] = useState("");
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
@@ -258,6 +262,7 @@ export default function SettingsTelegramMiniApp() {
     setSnowMaxHoldHours(
       st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
     );
+    setSnowHoldExtendIfRed(Boolean(st.holdExtendIfRedEnabled));
     setSnowSlArmRoiPct(
       st.slArmRoiPct != null && Number.isFinite(st.slArmRoiPct) ? String(st.slArmRoiPct) : ""
     );
@@ -299,6 +304,7 @@ export default function SettingsTelegramMiniApp() {
     setRevMaxHoldHours(
       st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
     );
+    setRevHoldExtendIfRed(Boolean(st.holdExtendIfRedEnabled));
     setRevSlArmRoiPct(
       st.slArmRoiPct != null && Number.isFinite(st.slArmRoiPct) ? String(st.slArmRoiPct) : ""
     );
@@ -672,6 +678,7 @@ export default function SettingsTelegramMiniApp() {
         tp1PartialPct: snowTp1PartialPct.trim() ? tp1PartialParsed : null,
         tp2PricePct: snowTp2PricePct.trim() ? tp2Parsed : null,
         maxHoldHours: snowMaxHoldHours.trim() ? maxHoldParsed : null,
+        holdExtendIfRedEnabled: snowHoldExtendIfRed,
         slArmRoiPct: snowSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: snowSlEntryOffsetPct.trim() ? slOffParsed : null,
       };
@@ -815,6 +822,7 @@ export default function SettingsTelegramMiniApp() {
         tp1PartialPct: revTp1PartialPct.trim() ? tp1PartialParsed : null,
         tp2PricePct: revTp2PricePct.trim() ? tp2Parsed : null,
         maxHoldHours: revMaxHoldHours.trim() ? maxHoldParsed : null,
+        holdExtendIfRedEnabled: revHoldExtendIfRed,
         slArmRoiPct: revSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
         entryMode: revEntryMode,
@@ -1312,7 +1320,10 @@ export default function SettingsTelegramMiniApp() {
             <strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุนที่เหลือด้วย offset เดียวกัน
           </li>
           <li>
-            <strong>ครบ {snowMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force market) + ยกเลิก SL plan
+            <strong>จังหวะ 1</strong>: ครบ <strong>{snowMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force) ถ้าเขียวหรือปิด option ขยาย
+          </li>
+          <li>
+            <strong>จังหวะ 2 (option)</strong>: ถ้าเปิดขยายเมื่อแดง — ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {snowMaxHoldHours.trim() || "48"} ชม. แล้วปิด force
           </li>
           <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
         </ul>
@@ -1372,17 +1383,28 @@ export default function SettingsTelegramMiniApp() {
             />
           </label>
           <label className="sub" style={{ display: "block" }}>
-            ครบกี่ ชม. → ปิดทั้งหมด (default 48)
+            จังหวะ 1 — ครบกี่ ชม. (default 48)
             <input
               type="text"
               inputMode="numeric"
               style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
               autoComplete="off"
-              placeholder="เช่น 48"
+              placeholder="เช่น 24"
               value={snowMaxHoldHours}
               onChange={(e) => setSnowMaxHoldHours(e.target.value)}
               disabled={!snowTpSlEnabled}
             />
+          </label>
+          <label className="sub tmaCheckboxField" style={{ display: "block" }}>
+            <input
+              type="checkbox"
+              checked={snowHoldExtendIfRed}
+              onChange={(e) => setSnowHoldExtendIfRed(e.target.checked)}
+              disabled={!snowTpSlEnabled}
+            />
+            <span className="tmaCheckboxField__text">
+              ครบจังหวะ 1 แล้วยังปิดแดง → รออีก {snowMaxHoldHours.trim() || "48"} ชม. (จังหวะ 2)
+            </span>
           </label>
         </div>
 
@@ -1605,7 +1627,8 @@ export default function SettingsTelegramMiniApp() {
             <strong>แผนบังทุน</strong>: ROI ≥ <code>{revSlArmRoiPct.trim() || "10"}%</code> → SL บังทุน (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code> จาก entry)
           </li>
           <li><strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุนที่เหลือด้วย offset เดียวกัน</li>
-          <li><strong>ครบ {revMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force market) + ยกเลิก SL plan</li>
+          <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ปิดทั้งหมด (force) ถ้าเขียวหรือปิด option ขยาย</li>
+          <li><strong>จังหวะ 2 (option)</strong>: ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
           <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
         </ul>
 
@@ -1664,17 +1687,28 @@ export default function SettingsTelegramMiniApp() {
             />
           </label>
           <label className="sub" style={{ display: "block" }}>
-            ครบกี่ ชม. → ปิดทั้งหมด (default 48)
+            จังหวะ 1 — ครบกี่ ชม. (default 48)
             <input
               type="text"
               inputMode="numeric"
               style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
               autoComplete="off"
-              placeholder="เช่น 48"
+              placeholder="เช่น 24"
               value={revMaxHoldHours}
               onChange={(e) => setRevMaxHoldHours(e.target.value)}
               disabled={!revTpSlEnabled}
             />
+          </label>
+          <label className="sub tmaCheckboxField" style={{ display: "block" }}>
+            <input
+              type="checkbox"
+              checked={revHoldExtendIfRed}
+              onChange={(e) => setRevHoldExtendIfRed(e.target.checked)}
+              disabled={!revTpSlEnabled}
+            />
+            <span className="tmaCheckboxField__text">
+              ครบจังหวะ 1 แล้วยังปิดแดง → รออีก {revMaxHoldHours.trim() || "48"} ชม. (จังหวะ 2)
+            </span>
           </label>
         </div>
 

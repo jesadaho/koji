@@ -67,6 +67,7 @@ export type SnowballAutoTradeActive = {
   tp1PartialPct?: number;
   tp2PricePct?: number;
   maxHoldHours?: number;
+  holdExtendedForRed?: boolean;
   slArmRoiPct?: number;
   slEntryOffsetPct?: number;
   slPlanOrderId?: string;
@@ -298,6 +299,7 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
       typeof tp1PlanVolRaw === "number" && Number.isFinite(tp1PlanVolRaw) && tp1PlanVolRaw > 0
         ? tp1PlanVolRaw
         : undefined;
+    const holdExtendedForRed = o.holdExtendedForRed === true;
     if (
       !sym ||
       !binanceSymbol ||
@@ -342,6 +344,7 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
       if (tp2Plan) row.tp2PlanOrderId = tp2Plan;
       if (initHold != null) row.initialHoldVol = initHold;
       if (tp1PlanVol != null) row.tp1PlanVol = tp1PlanVol;
+      if (holdExtendedForRed) row.holdExtendedForRed = true;
     } else if (qEn) {
       row.quickTpEnabled = true;
       row.quickTpRoiPct = Number.isFinite(qRoi) && qRoi > 0 ? qRoi : 30;
@@ -687,6 +690,31 @@ export function withSnowballTp1Done(
       const updated: SnowballAutoTradeActive = { ...x, tp1Done: true };
       if (slPlanOrderId?.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
       return updated;
+    }
+    return x;
+  });
+  return {
+    ...state,
+    [uid]: {
+      ...prev,
+      active: nextActive,
+    },
+  };
+}
+
+export function withSnowballHoldExtendedForRed(
+  state: SnowballAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: SnowballAutoTradeSide,
+): SnowballAutoTradeState {
+  const uid = userId.trim();
+  const prev = state[uid];
+  if (!prev?.active?.length) return state;
+  const sym = contractSymbol.trim().toUpperCase();
+  const nextActive = normalizeActive(prev.active).map((x) => {
+    if (x.contractSymbol === sym && x.side === side) {
+      return { ...x, holdExtendedForRed: true };
     }
     return x;
   });

@@ -31,9 +31,9 @@ export const STATS_STRATEGY_PROFIT_HOLD_48H = 48 as const;
 
 export function statsStrategyPlanAtHoldHours(
   plan: StatsTpSlPlan,
-  holdHours: StatsStrategyProfitHorizon,
+  _holdHours: StatsStrategyProfitHorizon,
 ): StatsTpSlPlan {
-  return { ...plan, maxHoldHours: holdHours };
+  return { ...plan };
 }
 
 export const STATS_STRATEGY_PROFIT_COLUMN_TITLE = statsTpSlPlanSummary(DEFAULT_STATS_TPSL_PLAN);

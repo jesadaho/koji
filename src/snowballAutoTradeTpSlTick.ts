@@ -1,4 +1,8 @@
-import { autoTradeMaxHoldDue, resolveAutoTradeMaxHoldHours } from "@/lib/autoTradeMaxHold";
+import {
+  resolveAutoTradeHoldCheckpoint,
+  resolveAutoTradeHoldExtendIfRed,
+  resolveAutoTradeMaxHoldHours,
+} from "@/lib/autoTradeMaxHold";
 import {
   DEFAULT_SL_ARM_ROI_PCT,
   DEFAULT_SL_ENTRY_OFFSET_PCT,
@@ -26,6 +30,7 @@ import {
   loadSnowballAutoTradeState,
   saveSnowballAutoTradeState,
   withSnowballActiveRemoved,
+  withSnowballHoldExtendedForRed,
   withSnowballSlAtEntryArmed,
   withSnowballTp1Done,
   type SnowballAutoTradeActive,
@@ -127,16 +132,16 @@ async function handlePositionDisappeared(args: {
 
 async function handleMaxHoldForceClose(
   ctx: TpSlContext,
-  maxHoldHours: number,
+  holdHours: number,
+  phase: 1 | 2 = 1,
 ): Promise<{ closed: boolean }> {
   const { userId, creds, active, markPrice, entry } = ctx;
   await cancelActiveTpSlPlanOrders(creds, active);
   const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
-  const maxH = maxHoldHours;
   if (!r.success) {
     await notifyLines(userId, [
       "Koji — Snowball TP/SL (MEXC)",
-      `❌ ครบ ${maxH} ชม. แต่ปิดไม่สำเร็จ`,
+      `❌ ครบ ${holdHours} ชม. แต่ปิดไม่สำเร็จ`,
       `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
       `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)}`,
       r.message ? `MEXC: ${r.message}` : "",
@@ -144,9 +149,13 @@ async function handleMaxHoldForceClose(
     return { closed: false };
   }
   const move = pricePctFavorable(active.side, entry, markPrice);
+  const phaseLabel =
+    phase === 2
+      ? `⏰ ครบจังหวะ 2 (${holdHours} ชม. รวม) → ปิดทั้งหมด (force)`
+      : `⏰ ครบจังหวะ 1 (${holdHours} ชม.) → ปิดทั้งหมด (force)`;
   await notifyLines(userId, [
     "Koji — Snowball TP/SL (MEXC)",
-    `⏰ ครบ ${maxH} ชม. → ปิดทั้งหมด (force)`,
+    phaseLabel,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)}`,
     Number.isFinite(move) ? `ราคาเคลื่อนในทิศกำไร: ${move >= 0 ? "+" : ""}${move.toFixed(2)}%` : "",
@@ -399,17 +408,25 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
       if (!tracksTpStrategy) continue;
 
       try {
-        const maxH = resolveAutoTradeMaxHoldHours({
+        const phase1H = resolveAutoTradeMaxHoldHours({
           activeMaxHoldHours: a.maxHoldHours,
           liveMaxHoldHours: tpPlan.maxHoldHours,
           tpSlEnabled: tpPlan.enabled,
         });
+        const extendIfRed = resolveAutoTradeHoldExtendIfRed({
+          liveHoldExtendIfRed: tpPlan.holdExtendIfRedEnabled,
+          tpSlEnabled: tpPlan.enabled,
+        });
+        const maxHoldDueMs =
+          extendIfRed || a.holdExtendedForRed
+            ? phase1H * 2 * 3600 * 1000
+            : phase1H * 3600 * 1000;
 
         const positions = await getOpenPositions(creds, a.contractSymbol);
         const pos = findActivePosition(positions, a.contractSymbol, a.side);
 
         if (!pos) {
-          if (snowballActiveTracksTpSl(a) || autoTradeMaxHoldDue(a.openedAtMs, maxH, nowMs)) {
+          if (snowballActiveTracksTpSl(a) || nowMs - a.openedAtMs >= maxHoldDueMs) {
             await handlePositionDisappeared({ userId, creds, active: a });
             state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
             actionsCount += 1;
@@ -438,8 +455,28 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
           positionMode,
         };
 
-        if (autoTradeMaxHoldDue(a.openedAtMs, maxH, nowMs)) {
-          const r = await handleMaxHoldForceClose(ctx, maxH);
+        const moveForHold = pricePctFavorable(a.side, ctx.entry, mark);
+        const holdCheckpoint = resolveAutoTradeHoldCheckpoint({
+          openedAtMs: a.openedAtMs,
+          phase1Hours: phase1H,
+          extendIfRedEnabled: extendIfRed,
+          holdExtendedForRed: a.holdExtendedForRed === true,
+          markPnlPct: moveForHold,
+          nowMs,
+        });
+        if (holdCheckpoint.action === "extend_red") {
+          state = withSnowballHoldExtendedForRed(state, userId, a.contractSymbol, a.side);
+          await notifyLines(userId, [
+            "Koji — Snowball TP/SL (MEXC)",
+            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) ยังปิดแดง → ขยายอีก ${holdCheckpoint.phase1Hours} ชม.`,
+            `[${shortContractLabel(a.contractSymbol)}]/USDT (${a.side.toUpperCase()})`,
+            `Entry: ${fmtPrice(ctx.entry)} · Mark: ${fmtPrice(mark)} · เคลื่อน ${moveForHold.toFixed(2)}%`,
+          ]);
+          actionsCount += 1;
+          continue;
+        }
+        if (holdCheckpoint.action === "force_close") {
+          const r = await handleMaxHoldForceClose(ctx, holdCheckpoint.holdHours, holdCheckpoint.phase);
           if (r.closed) {
             state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
             actionsCount += 1;

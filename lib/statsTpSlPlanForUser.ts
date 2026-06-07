@@ -18,10 +18,12 @@ export type ViewerStatsTpSlPlan = StatsTpSlPlan & {
   tpSlEnabled: boolean;
 };
 
-export function statsTpSlPlanCacheKey(plan: StatsTpSlPlan): string {
+export function statsTpSlPlanCacheKey(plan: StatsTpSlPlan, holdHorizonHours?: number): string {
   const slArm = plan.slAtEntryArmRoiPct ?? DEFAULT_SL_ARM_ROI_PCT;
   const slOff = plan.slAtEntryOffsetPct ?? DEFAULT_SL_ENTRY_OFFSET_PCT;
-  return `${plan.tp1PricePct}-${plan.tp1PartialPct}-${plan.tp2PricePct}-${plan.maxHoldHours}-${slArm}-${slOff}`;
+  const ext = plan.holdExtendIfRedEnabled ? 1 : 0;
+  const horizon = holdHorizonHours ?? 0;
+  return `${plan.tp1PricePct}-${plan.tp1PartialPct}-${plan.tp2PricePct}-${plan.maxHoldHours}-${ext}-${horizon}-${slArm}-${slOff}`;
 }
 
 function reversalTpSlPlanFromSettings(
@@ -58,6 +60,7 @@ function reversalTpSlPlanFromSettings(
     tp1PartialPct: Math.min(100, t1p),
     tp2PricePct: t2,
     maxHoldHours: mh,
+    holdExtendIfRedEnabled: row.reversalAutoTradeHoldExtendIfRedEnabled === true,
     slAtEntryArmRoiPct: parseSlArmRoiPct(row.reversalAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
     slAtEntryOffsetPct: parseSlEntryOffsetPct(
       row.reversalAutoTradeSlEntryOffsetPct,
@@ -76,6 +79,7 @@ function snowballTpSlPlanFromSettings(
     tp1PartialPct: p.tp1PartialPct,
     tp2PricePct: p.tp2PricePct,
     maxHoldHours: p.maxHoldHours,
+    holdExtendIfRedEnabled: p.holdExtendIfRedEnabled,
     slAtEntryArmRoiPct: p.slArmRoiPct,
     slAtEntryOffsetPct: p.slEntryOffsetPct,
   };
@@ -107,6 +111,7 @@ export function viewerStatsTpSlPlanPayload(plan: ViewerStatsTpSlPlan): StatsTpSl
     tp1PartialPct: plan.tp1PartialPct,
     tp2PricePct: plan.tp2PricePct,
     maxHoldHours: plan.maxHoldHours,
+    holdExtendIfRedEnabled: plan.holdExtendIfRedEnabled,
     slAtEntryArmRoiPct: plan.slAtEntryArmRoiPct ?? DEFAULT_SL_ARM_ROI_PCT,
     slAtEntryOffsetPct: plan.slAtEntryOffsetPct ?? DEFAULT_SL_ENTRY_OFFSET_PCT,
   };
