@@ -110,6 +110,8 @@ export type SnowballStatsRow = {
   btcEma4hSlopePct7d?: number | null;
   /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
   btcEma1dSlopePct7d?: number | null;
+  /** 2 = BTC EMA คำนวณ ณ alertedAtMs */
+  btcEmaSlopesV?: number;
   volumeCascadeYn?: "Y" | "N" | null;
   /** Max DD% (stats-style 15m, lookback 32 แท่ง) ณ เวลาแจ้ง — undefined = แถวเก่าก่อนเพิ่ม field */
   signalMaxDdPct?: number | null;

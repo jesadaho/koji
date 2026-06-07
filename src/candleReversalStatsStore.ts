@@ -9,6 +9,7 @@ import {
 } from "@/lib/candleReversalStatsClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
+import { STATS_BTC_EMA_SLOPES_VERSION } from "./statsEmaSlope";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 
@@ -375,6 +376,7 @@ export async function appendCandleReversalStatsRow(
     ema1dSlopePct7d,
     btcEma4hSlopePct7d,
     btcEma1dSlopePct7d,
+    btcEmaSlopesV: STATS_BTC_EMA_SLOPES_VERSION,
     atrPct14d,
     wickRatioPct:
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,

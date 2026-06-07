@@ -42,6 +42,8 @@ export type CandleReversalStatsRow = {
   btcEma4hSlopePct7d?: number | null;
   /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
   btcEma1dSlopePct7d?: number | null;
+  /** 2 = BTC EMA คำนวณ ณ alertedAtMs */
+  btcEmaSlopesV?: number;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d?: number | null;
   /** Short: ไส้บน ÷ ช่วงแท่ง (%) · Long: ไส้ล่าง */

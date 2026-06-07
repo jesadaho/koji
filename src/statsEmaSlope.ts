@@ -2,6 +2,7 @@ import { computeEmaLast } from "./emaUtils";
 import { emaSlopePctFromValues } from "@/lib/statsEmaSlope";
 import {
   fetchBinanceUsdmKlines,
+  fetchBinanceUsdmKlinesRange,
   isBinanceIndicatorFapiEnabled,
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
@@ -14,6 +15,13 @@ export const STATS_EMA1D_SLOPE_LOOKBACK_BARS = 7;
 
 /** 7 วันบน 4h = 42 แท่ง */
 export const STATS_EMA4H_SLOPE_LOOKBACK_BARS = 42;
+
+/** แถวที่คำนวณ BTC EMA slope ณ alertedAtMs แล้ว (ไม่ใช่ backfill ค่าเดียวทั้งตาราง) */
+export const STATS_BTC_EMA_SLOPES_VERSION = 2;
+
+const BTC_USDT = "BTCUSDT";
+const BTC_EMA_SLOPES_CACHE_MS = 5 * 60 * 1000;
+const LIVE_ALERT_MAX_AGE_MS = 10 * 60_000;
 
 /** แท่งปิดล่าสุด + lookback + EMA warm-up */
 export function statsEmaSlopeMinKlineBars(lookbackBars: number): number {
@@ -33,6 +41,34 @@ export function computeEmaSlopePctFromCloses(
   const emaAgo = computeEmaLast(closes.slice(0, iAgo + 1), emaPeriod);
   if (emaToday == null || emaAgo == null) return null;
   return emaSlopePctFromValues(emaToday, emaAgo);
+}
+
+function tfBarDurSec(tf: "4h" | "1d"): number {
+  return tf === "4h" ? 4 * 3600 : 24 * 3600;
+}
+
+function lastClosedBarIndexAt(pack: BinanceKlinePack, barDurSec: number, atSec: number): number {
+  let iClosed = -1;
+  for (let i = 0; i < pack.timeSec.length; i++) {
+    if (pack.timeSec[i]! + barDurSec <= atSec) iClosed = i;
+  }
+  return iClosed;
+}
+
+/** EMA slope ณ เวลา atMs — ใช้แท่งปิดล่าสุดที่ปิดแล้วก่อน atMs */
+export function computeEmaSlopePctFromPackAt(
+  pack: BinanceKlinePack,
+  tf: "4h" | "1d",
+  lookbackBars: number,
+  atMs: number,
+  emaPeriod: number = STATS_EMA_SLOPE_PERIOD,
+): number | null {
+  const barDur = tfBarDurSec(tf);
+  const atSec = Math.floor(atMs / 1000);
+  const iClosed = lastClosedBarIndexAt(pack, barDur, atSec);
+  if (iClosed < 0) return null;
+  const closes = pack.close.slice(0, iClosed + 1);
+  return computeEmaSlopePctFromCloses(closes, emaPeriod, lookbackBars);
 }
 
 /** ใช้แท่งปิดล่าสุด (index length−2) เหมือน snapshot อื่น ๆ */
@@ -60,8 +96,22 @@ export async function fetchSymbolEmaSlopePctTf(
   return computeEmaSlopePctFromPack(pack, lookbackBars);
 }
 
-const BTC_USDT = "BTCUSDT";
-const BTC_EMA_SLOPES_CACHE_MS = 5 * 60 * 1000;
+async function fetchBtcKlinePackThrough(
+  tf: "4h" | "1d",
+  atMs: number,
+  lookbackBars: number,
+): Promise<BinanceKlinePack | null> {
+  const barDur = tfBarDurSec(tf);
+  const minBars = statsEmaSlopeMinKlineBars(lookbackBars);
+  const atSec = Math.floor(atMs / 1000);
+  const endMs = atMs;
+  const startMs = (atSec - minBars * barDur) * 1000;
+  return fetchBinanceUsdmKlinesRange(BTC_USDT, tf, {
+    startTimeMs: startMs,
+    endTimeMs: endMs,
+    limit: Math.min(1500, minBars + 20),
+  });
+}
 
 let btcEmaSlopesCache: {
   atMs: number;
@@ -78,52 +128,96 @@ export type BtcEmaSlopesPct7d = {
   btcEma1dSlopePct7d: number | null;
 };
 
-/** BTC EMA(12) slope 7d บน 4h / 1d — cache สั้น ใช้ร่วมทุกแถวในรอบสแกน */
+/** BTC EMA(12) slope ล่าสุด — cache สั้น ใช้ร่วมทุกแถวในรอบสแกนสด */
 export async function fetchBtcEmaSlopesPct7d(): Promise<BtcEmaSlopesPct7d> {
-  const now = Date.now();
-  if (btcEmaSlopesCache && now - btcEmaSlopesCache.atMs < BTC_EMA_SLOPES_CACHE_MS) {
-    return {
-      btcEma4hSlopePct7d: btcEmaSlopesCache.ema4h,
-      btcEma1dSlopePct7d: btcEmaSlopesCache.ema1d,
-    };
-  }
-  const [ema4h, ema1d] = await Promise.all([
-    fetchSymbolEmaSlopePctTf(BTC_USDT, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
-    fetchSymbolEmaSlopePctTf(BTC_USDT, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
-  ]);
-  btcEmaSlopesCache = { atMs: now, ema4h, ema1d };
-  return { btcEma4hSlopePct7d: ema4h, btcEma1dSlopePct7d: ema1d };
+  return fetchBtcEmaSlopesAtMs(Date.now());
 }
 
-export async function backfillStatsRowsBtcEmaSlopes<
-  T extends { btcEma4hSlopePct7d?: number | null; btcEma1dSlopePct7d?: number | null },
->(rows: T[]): Promise<number> {
-  const needs = rows.some(
-    (r) => r.btcEma4hSlopePct7d == null || !Number.isFinite(r.btcEma4hSlopePct7d) ||
-      r.btcEma1dSlopePct7d == null || !Number.isFinite(r.btcEma1dSlopePct7d),
-  );
-  if (!needs) return 0;
-  const btc = await fetchBtcEmaSlopesPct7d();
+/** BTC EMA slope ณ alertedAtMs — ย้อนหลังจาก Binance klines */
+export async function fetchBtcEmaSlopesAtMs(atMs: number): Promise<BtcEmaSlopesPct7d> {
+  if (!isBinanceIndicatorFapiEnabled()) {
+    return { btcEma4hSlopePct7d: null, btcEma1dSlopePct7d: null };
+  }
+  if (!Number.isFinite(atMs) || atMs <= 0) {
+    return { btcEma4hSlopePct7d: null, btcEma1dSlopePct7d: null };
+  }
+
+  const ageMs = Date.now() - atMs;
+  if (ageMs >= 0 && ageMs < LIVE_ALERT_MAX_AGE_MS) {
+    const now = Date.now();
+    if (btcEmaSlopesCache && now - btcEmaSlopesCache.atMs < BTC_EMA_SLOPES_CACHE_MS) {
+      return {
+        btcEma4hSlopePct7d: btcEmaSlopesCache.ema4h,
+        btcEma1dSlopePct7d: btcEmaSlopesCache.ema1d,
+      };
+    }
+    const [ema4h, ema1d] = await Promise.all([
+      fetchSymbolEmaSlopePctTf(BTC_USDT, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
+      fetchSymbolEmaSlopePctTf(BTC_USDT, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
+    ]);
+    btcEmaSlopesCache = { atMs: now, ema4h, ema1d };
+    return { btcEma4hSlopePct7d: ema4h, btcEma1dSlopePct7d: ema1d };
+  }
+
+  const [pack4h, pack1d] = await Promise.all([
+    fetchBtcKlinePackThrough("4h", atMs, STATS_EMA4H_SLOPE_LOOKBACK_BARS),
+    fetchBtcKlinePackThrough("1d", atMs, STATS_EMA1D_SLOPE_LOOKBACK_BARS),
+  ]);
+  return {
+    btcEma4hSlopePct7d: pack4h
+      ? computeEmaSlopePctFromPackAt(pack4h, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS, atMs)
+      : null,
+    btcEma1dSlopePct7d: pack1d
+      ? computeEmaSlopePctFromPackAt(pack1d, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS, atMs)
+      : null,
+  };
+}
+
+export type StatsRowWithBtcEmaSlopes = {
+  alertedAtMs: number;
+  btcEma4hSlopePct7d?: number | null;
+  btcEma1dSlopePct7d?: number | null;
+  btcEmaSlopesV?: number;
+};
+
+/** แถว v1 — backfill ด้วยค่า BTC ปัจจุบันครั้งเดียว (ผิด) · v2 — คำนวณ ณ alertedAtMs */
+export function statsRowNeedsBtcEmaSlopesBackfill(row: StatsRowWithBtcEmaSlopes): boolean {
+  return row.btcEmaSlopesV !== STATS_BTC_EMA_SLOPES_VERSION;
+}
+
+export async function backfillStatsRowsBtcEmaSlopes<T extends StatsRowWithBtcEmaSlopes>(
+  rows: T[],
+  opts?: { maxRows?: number },
+): Promise<number> {
+  const maxRows = opts?.maxRows;
   let updated = 0;
   for (const row of rows) {
-    let touched = false;
-    if (
-      (row.btcEma4hSlopePct7d == null || !Number.isFinite(row.btcEma4hSlopePct7d)) &&
-      btc.btcEma4hSlopePct7d != null &&
-      Number.isFinite(btc.btcEma4hSlopePct7d)
-    ) {
+    if (maxRows != null && updated >= maxRows) break;
+    if (!statsRowNeedsBtcEmaSlopesBackfill(row)) continue;
+    try {
+      const btc = await fetchBtcEmaSlopesAtMs(row.alertedAtMs);
       row.btcEma4hSlopePct7d = btc.btcEma4hSlopePct7d;
-      touched = true;
-    }
-    if (
-      (row.btcEma1dSlopePct7d == null || !Number.isFinite(row.btcEma1dSlopePct7d)) &&
-      btc.btcEma1dSlopePct7d != null &&
-      Number.isFinite(btc.btcEma1dSlopePct7d)
-    ) {
       row.btcEma1dSlopePct7d = btc.btcEma1dSlopePct7d;
-      touched = true;
+      row.btcEmaSlopesV = STATS_BTC_EMA_SLOPES_VERSION;
+      updated += 1;
+    } catch (e) {
+      console.error("[statsEmaSlope] btc ema backfill", row.alertedAtMs, e);
     }
-    if (touched) updated += 1;
   }
   return updated;
+}
+
+export async function backfillAllStatsRowsBtcEmaSlopes<T extends StatsRowWithBtcEmaSlopes>(
+  rows: T[],
+  opts?: { maxRowsPerPass?: number; maxPasses?: number },
+): Promise<number> {
+  const maxPasses = opts?.maxPasses ?? 10;
+  const maxRowsPerPass = opts?.maxRowsPerPass ?? 40;
+  let total = 0;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    const n = await backfillStatsRowsBtcEmaSlopes(rows, { maxRows: maxRowsPerPass });
+    total += n;
+    if (n === 0) break;
+  }
+  return total;
 }

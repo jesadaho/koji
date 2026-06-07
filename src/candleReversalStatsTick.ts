@@ -24,7 +24,7 @@ import {
   candleReversalSignalVolVsSmaAt,
   candleReversalVolSmaPeriod,
 } from "./candleReversalSignalVolVsSma";
-import { backfillStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
+import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import {
@@ -728,7 +728,7 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillRangeRankInLookback(state.rows);
   dirty += backfillLenPercentilePct(state.rows);
   dirty += await backfillReversalEmaSlopes(state.rows);
-  dirty += await backfillStatsRowsBtcEmaSlopes(state.rows);
+  dirty += await backfillAllStatsRowsBtcEmaSlopes(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += backfill1hOutcomeTo24h(state.rows);

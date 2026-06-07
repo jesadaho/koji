@@ -28,7 +28,7 @@ import {
   type SnowballStatsOutcome,
   type SnowballStatsRow,
 } from "./snowballStatsStore";
-import { backfillStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
+import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import {
   calculateTrendMomentumVolumeCascadeYn,
@@ -442,7 +442,7 @@ export async function runSnowballStatsFollowUpTick(
   const greenDays = await backfillSnowballGreenDaysBeforeSignal(state.rows);
   dirty += greenDays;
   dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
-  dirty += await backfillStatsRowsBtcEmaSlopes(state.rows);
+  dirty += await backfillAllStatsRowsBtcEmaSlopes(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
 
   let grade4h = 0;
   const pack1hGradeCache = new Map<string, BinanceKlinePack | null>();

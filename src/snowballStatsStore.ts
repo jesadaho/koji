@@ -16,6 +16,7 @@ import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
+import { STATS_BTC_EMA_SLOPES_VERSION } from "./statsEmaSlope";
 import {
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
@@ -536,6 +537,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       input.btcEma1dSlopePct7d != null && Number.isFinite(input.btcEma1dSlopePct7d)
         ? input.btcEma1dSlopePct7d
         : null,
+    btcEmaSlopesV: STATS_BTC_EMA_SLOPES_VERSION,
     signalVolVsSma:
       input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0
         ? input.signalVolVsSma

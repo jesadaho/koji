@@ -6,7 +6,7 @@ import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 import {
-  fetchBtcEmaSlopesPct7d,
+  fetchBtcEmaSlopesAtMs,
   fetchSymbolEmaSlopePctTf,
   STATS_EMA1D_SLOPE_LOOKBACK_BARS,
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
@@ -59,7 +59,7 @@ export async function fetchReversalAlertMarketSnapshot(
     fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
     fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
     fetchSymbolAtrPct14d(sym),
-    fetchBtcEmaSlopesPct7d(),
+    fetchBtcEmaSlopesAtMs(Date.now()),
   ]);
   return {
     quoteVol24hUsdt,

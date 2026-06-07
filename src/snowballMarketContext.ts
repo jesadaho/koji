@@ -9,7 +9,7 @@ import { computeParabolicSarLast } from "./indicatorMath";
 import { fetchContractTickerSingle } from "./mexcMarkets";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 import {
-  fetchBtcEmaSlopesPct7d,
+  fetchBtcEmaSlopesAtMs,
   fetchSymbolEmaSlopePctTf,
   resetBtcEmaSlopesCache,
   STATS_EMA1D_SLOPE_LOOKBACK_BARS,
@@ -159,7 +159,7 @@ export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Pr
       fetchSymbolAtrPct14d(sym),
       fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
       fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
-      fetchBtcEmaSlopesPct7d(),
+      fetchBtcEmaSlopesAtMs(Date.now()),
     ]);
   const fr = mexcTicker?.fundingRate;
   const fundingRate = typeof fr === "number" && Number.isFinite(fr) ? fr : null;
