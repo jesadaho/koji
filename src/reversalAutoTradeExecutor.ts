@@ -335,7 +335,7 @@ function logReversalAutoOpen(
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
  * - สัญญาณ Short: `reversalAutoTradeEnabled` · สัญญาณ Long (fade): `reversalAutoTradeLongSignalShortEnabled`
  * - มี MEXC creds
- * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — EMA4H <−3% · BTC∠1d <−8%
+ * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — EMA4H <−3% · BTC∠1d >−8%
  * - entry ตั้งค่าต่อ user: Hybrid (EMA period บน 15m, default 20) หรือ Market ตลอด
  *   - Hybrid: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.)
  * - TP ใช้ cron tick ปิด market (ไม่วาง plan TP บน MEXC)

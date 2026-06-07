@@ -19,7 +19,7 @@ export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
-  "EMA4H < −3% · BTC∠1d < −8% (fade SHORT)";
+  "EMA4H < −3% · BTC∠1d > −8% (fade SHORT)";
 
 export const REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO = 0.2;
 export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
@@ -31,8 +31,8 @@ export const REVERSAL_QUALITY_SIGNAL_EMA4H_MIN_PCT = -30;
 export const REVERSAL_QUALITY_SIGNAL_EMA4H_MAX_PCT = 0;
 /** Long 1H stats — EMA4h slope ต้องต่ำกว่า (exclusive) */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_EMA4H_MAX_PCT = -3;
-/** Long 1H stats — BTC EMA(12) 1d slope ต้องต่ำกว่า (exclusive) */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MAX_PCT = -8;
+/** Long 1H stats — BTC EMA(12) 1d slope ต้องสูงกว่า (exclusive) */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MIN_PCT = -8;
 
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
@@ -97,6 +97,11 @@ function ema4hSlopeBelow(maxExclusive: number, ema4hSlopePct7d?: number | null):
   return pct != null && Number.isFinite(pct) && pct < maxExclusive;
 }
 
+function emaSlopeAbove(minExclusive: number, slopePct?: number | null): boolean {
+  const pct = slopePct;
+  return pct != null && Number.isFinite(pct) && pct > minExclusive;
+}
+
 /** เขียว ≥ 1 · Wick ≤ 0.20 · Range < 4.5 · EMA4H < 30% */
 function reversalMatchesQualitySignalClassic(input: {
   greenDaysBeforeSignal?: number | null;
@@ -136,8 +141,8 @@ export function reversalMatchesQualitySignalLong1h(input: {
   ) {
     return false;
   }
-  return ema4hSlopeBelow(
-    REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MAX_PCT,
+  return emaSlopeAbove(
+    REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MIN_PCT,
     input.btcEma1dSlopePct7d,
   );
 }
