@@ -12,10 +12,14 @@ export type SnowballEfficiencyScoreFilter =
   | "ge3"
   | "ge5"
   | "ge8"
+  | "lt10"
   | "has"
   | "none";
 
-const EFFICIENCY_MIN: Record<Exclude<SnowballEfficiencyScoreFilter, "all" | "has" | "none">, number> = {
+const EFFICIENCY_MIN: Record<
+  Exclude<SnowballEfficiencyScoreFilter, "all" | "has" | "none" | "lt10">,
+  number
+> = {
   ge1: 1,
   ge2: 2,
   ge3: 3,
@@ -33,6 +37,7 @@ export const SNOWBALL_EFFICIENCY_SCORE_FILTER_OPTIONS: ReadonlyArray<{
   { value: "ge3", label: "≥ 3" },
   { value: "ge5", label: "≥ 5" },
   { value: "ge8", label: "≥ 8" },
+  { value: "lt10", label: "< 10" },
   { value: "has", label: "มีข้อมูล" },
   { value: "none", label: "ไม่มีข้อมูล" },
 ];
@@ -45,6 +50,7 @@ export function snowballEfficiencyScoreFilterTitle(filter: SnowballEfficiencySco
   if (filter === "all") return "ไม่กรอง Efficiency Score";
   if (filter === "has") return "มีค่า Efficiency Score (R% 2แท่ง ÷ Vol×SMA)";
   if (filter === "none") return "ไม่มีค่า Efficiency Score";
+  if (filter === "lt10") return "Efficiency Score < 10 (R% 2แท่ง ÷ Vol×SMA)";
   return `Efficiency Score ${snowballEfficiencyScoreFilterLabel(filter)}`;
 }
 
@@ -58,5 +64,6 @@ export function snowballStatsRowMatchesEfficiencyScoreFilter(
   if (filter === "none") return !has;
   if (filter === "has") return has;
   if (!has) return false;
+  if (filter === "lt10") return score < 10;
   return score >= EFFICIENCY_MIN[filter];
 }
