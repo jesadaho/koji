@@ -32,6 +32,10 @@ import {
 } from "@/lib/snowballStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
+import {
+  statsPsar4hDistPctCsv,
+  statsPsar4hTrendLabel,
+} from "@/lib/statsPsar4h";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -51,6 +55,8 @@ const HEADERS = [
   "EMA1d slope 7d %",
   "BTC EMA4h slope 7d %",
   "BTC EMA1d slope 7d %",
+  "SAR 4h",
+  "SAR dist 4h %",
   "ATR% 14D",
   "Retest",
   "SL",
@@ -119,6 +125,8 @@ function candleReversalStatsRowToCsvCells(
     candleReversalEmaSlopeCsvLabel(r.ema1dSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.btcEma4hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.btcEma1dSlopePct7d),
+    statsPsar4hTrendLabel(r.psar4hTrend),
+    statsPsar4hDistPctCsv(r.psar4hDistPct),
     statsAtrPct14dLabel(r.atrPct14d),
     statsFmtPrice(r.retestPrice),
     statsFmtPrice(r.slPrice),

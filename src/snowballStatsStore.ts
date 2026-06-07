@@ -17,6 +17,7 @@ import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
 import { STATS_BTC_EMA_SLOPES_VERSION } from "./statsEmaSlope";
+import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import {
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
@@ -153,6 +154,8 @@ export type AppendSnowballStatsInput = {
   ema1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;
   btcEma1dSlopePct7d?: number | null;
+  psar4hTrend?: "up" | "down" | null;
+  psar4hDistPct?: number | null;
   signalVolVsSma?: number | null;
   volStrictOk?: boolean | null;
   volNearMissOnly?: boolean | null;
@@ -537,6 +540,13 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       input.btcEma1dSlopePct7d != null && Number.isFinite(input.btcEma1dSlopePct7d)
         ? input.btcEma1dSlopePct7d
         : null,
+    psar4hTrend:
+      input.psar4hTrend === "up" || input.psar4hTrend === "down" ? input.psar4hTrend : null,
+    psar4hDistPct:
+      input.psar4hDistPct != null && Number.isFinite(input.psar4hDistPct)
+        ? input.psar4hDistPct
+        : null,
+    psar4hV: STATS_PSAR_4H_VERSION,
     btcEmaSlopesV: STATS_BTC_EMA_SLOPES_VERSION,
     signalVolVsSma:
       input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0

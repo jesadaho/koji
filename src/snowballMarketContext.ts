@@ -15,6 +15,7 @@ import {
   STATS_EMA1D_SLOPE_LOOKBACK_BARS,
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
 } from "./statsEmaSlope";
+import { fetchSymbolPsar4hAtMs } from "./statsPsar4h";
 
 const BTC_SYMBOL = "BTCUSDT";
 
@@ -49,6 +50,10 @@ export type SnowballAlertMarketContext = {
   btcEma4hSlopePct7d: number | null;
   /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
   btcEma1dSlopePct7d: number | null;
+  /** PSAR 4h ของคู่สัญญาณ — ทิศ SAR */
+  psar4hTrend: "up" | "down" | null;
+  /** PSAR 4h — (close − SAR) / close × 100 */
+  psar4hDistPct: number | null;
 };
 
 function binanceUsdtPerpToMexcContract(binanceSymbol: string): string | null {
@@ -145,11 +150,14 @@ export async function fetchBtcPsar1hSnapshot(): Promise<BtcPsarSnapshot | null> 
 }
 
 /** BTC PSAR 4h + 1h + vol 24h (Binance) + mcap (CoinGecko) + funding (MEXC) */
-export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Promise<SnowballAlertMarketContext> {
+export async function fetchSnowballAlertMarketContext(
+  binanceSymbol: string,
+  atMs: number = Date.now(),
+): Promise<SnowballAlertMarketContext> {
   const sym = binanceSymbol.trim().toUpperCase();
   const mexcContract = binanceUsdtPerpToMexcContract(sym);
   const base = binanceUsdtPerpBase(sym);
-  const [btc4h, btc1h, quoteVol24hUsdt, marketCapUsd, mexcTicker, atrPct14d, ema4hSlopePct7d, ema1dSlopePct7d, btcEma] =
+  const [btc4h, btc1h, quoteVol24hUsdt, marketCapUsd, mexcTicker, atrPct14d, ema4hSlopePct7d, ema1dSlopePct7d, btcEma, psar4h] =
     await Promise.all([
       fetchBtcPsar4hSnapshot(),
       fetchBtcPsar1hSnapshot(),
@@ -159,7 +167,8 @@ export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Pr
       fetchSymbolAtrPct14d(sym),
       fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
       fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
-      fetchBtcEmaSlopesAtMs(Date.now()),
+      fetchBtcEmaSlopesAtMs(atMs),
+      fetchSymbolPsar4hAtMs(sym, atMs),
     ]);
   const fr = mexcTicker?.fundingRate;
   const fundingRate = typeof fr === "number" && Number.isFinite(fr) ? fr : null;
@@ -176,5 +185,7 @@ export async function fetchSnowballAlertMarketContext(binanceSymbol: string): Pr
     ema1dSlopePct7d,
     btcEma4hSlopePct7d: btcEma.btcEma4hSlopePct7d,
     btcEma1dSlopePct7d: btcEma.btcEma1dSlopePct7d,
+    psar4hTrend: psar4h?.trend ?? null,
+    psar4hDistPct: psar4h?.distPct ?? null,
   };
 }

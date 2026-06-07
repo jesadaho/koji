@@ -71,6 +71,7 @@ import {
 import { isAdminTelegramUserId } from "./adminIds";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
+import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
 import {
   resolveViewerStatsTpSlPlan,
   resolveViewerStatsTradeSizing,
@@ -826,7 +827,8 @@ export async function liffGetSnowballStats(telegramUserId?: number): Promise<Sno
 
   const msDirty = await backfillAllStatsMarketSentiment(st.rows);
   const btcEmaDirty = await backfillAllStatsRowsBtcEmaSlopes(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
-  if (msDirty > 0 || btcEmaDirty > 0) await saveSnowballStatsState(st);
+  const psar4hDirty = await backfillAllStatsRowsPsar4h(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
+  if (msDirty > 0 || btcEmaDirty > 0 || psar4hDirty > 0) await saveSnowballStatsState(st);
 
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
   return buildSnowballStatsPayload(rows, telegramUserId);
@@ -975,7 +977,8 @@ export async function liffGetCandleReversalStats(
   const st = await loadCandleReversalStatsState();
   const msDirty = await backfillAllStatsMarketSentiment(st.rows);
   const btcEmaDirty = await backfillAllStatsRowsBtcEmaSlopes(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
-  if (msDirty > 0 || btcEmaDirty > 0) await saveCandleReversalStatsState(st);
+  const psar4hDirty = await backfillAllStatsRowsPsar4h(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
+  if (msDirty > 0 || btcEmaDirty > 0 || psar4hDirty > 0) await saveCandleReversalStatsState(st);
 
   const conflictSets = await loadPendingConflictSets();
   const rows = [...st.rows]

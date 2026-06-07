@@ -20,6 +20,10 @@ import {
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
+  statsPsar4hDistPctLabel,
+  statsPsar4hTrendLabel,
+} from "@/lib/statsPsar4h";
+import {
   STATS_STRATEGY_PROFIT_COLUMN_TITLE,
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
@@ -858,6 +862,20 @@ export default function SnowballStatsTelegramMiniApp() {
               onSort={onSortColumn}
             />
             <SortTh
+              label="SAR 4h"
+              sortKey="psar4h"
+              title="Parabolic SAR 4h ของคู่สัญญาณ — ↑ = bullish · ↓ = bearish (ไม่ใช่ BTC SAR)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="SAR dist%"
+              sortKey="psar4hDist"
+              title="(close − SAR) / close × 100 บน 4h — บวก = ราคาเหนือ SAR"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
               label="Funding"
               sortKey="funding"
               title="Funding rate สัญญา MEXC USDT-M ณ เวลาแจ้ง (ทศนิยม ×100 = %)"
@@ -1042,6 +1060,8 @@ export default function SnowballStatsTelegramMiniApp() {
                 <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
                 <td title="BTC EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma4hSlopePct7d)}</td>
                 <td title="BTC EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.btcEma1dSlopePct7d)}</td>
+                <td title="PSAR 4h trend">{statsPsar4hTrendLabel(r.psar4hTrend)}</td>
+                <td title="PSAR 4h distance">{statsPsar4hDistPctLabel(r.psar4hDistPct)}</td>
                 <td
                   className={
                     r.fundingRate != null && Number.isFinite(r.fundingRate)

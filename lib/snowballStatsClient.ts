@@ -110,6 +110,12 @@ export type SnowballStatsRow = {
   btcEma4hSlopePct7d?: number | null;
   /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
   btcEma1dSlopePct7d?: number | null;
+  /** PSAR 4h ของคู่ — ทิศ SAR */
+  psar4hTrend?: "up" | "down" | null;
+  /** PSAR 4h — (close − SAR) / close × 100 */
+  psar4hDistPct?: number | null;
+  /** 1 = PSAR คำนวณ ณ alertedAtMs */
+  psar4hV?: number;
   /** 2 = BTC EMA คำนวณ ณ alertedAtMs */
   btcEmaSlopesV?: number;
   volumeCascadeYn?: "Y" | "N" | null;
@@ -859,6 +865,8 @@ export type SnowballStatsSortKey =
   | "ema1d"
   | "btcEma4h"
   | "btcEma1d"
+  | "psar4h"
+  | "psar4hDist"
   | "funding"
   | "volCascade"
   | "greenDays"
@@ -1014,6 +1022,13 @@ function compareSnowballStatsRows(
       return statsCmpNumNullLast(a.btcEma4hSlopePct7d, b.btcEma4hSlopePct7d);
     case "btcEma1d":
       return statsCmpNumNullLast(a.btcEma1dSlopePct7d, b.btcEma1dSlopePct7d);
+    case "psar4h": {
+      const order = (t: SnowballStatsRow["psar4hTrend"]) =>
+        t === "up" ? 0 : t === "down" ? 1 : 2;
+      return order(a.psar4hTrend) - order(b.psar4hTrend);
+    }
+    case "psar4hDist":
+      return statsCmpNumNullLast(a.psar4hDistPct, b.psar4hDistPct);
     case "funding":
       return statsCmpNumNullLast(a.fundingRate, b.fundingRate);
     case "volCascade":

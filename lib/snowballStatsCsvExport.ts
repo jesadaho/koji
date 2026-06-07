@@ -34,6 +34,10 @@ import { candleReversalLookbackRankCell } from "@/lib/candleReversalStatsClient"
 import { candleReversalEmaSlopeCsvLabel } from "@/lib/candleReversalStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
+import {
+  statsPsar4hDistPctCsv,
+  statsPsar4hTrendLabel,
+} from "@/lib/statsPsar4h";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -58,6 +62,8 @@ const HEADERS = [
   "EMA1d slope 7d %",
   "BTC EMA4h slope 7d %",
   "BTC EMA1d slope 7d %",
+  "SAR 4h",
+  "SAR dist 4h %",
   "Funding",
   "Vol↗",
   "เขียว",
@@ -116,6 +122,8 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyC
     candleReversalEmaSlopeCsvLabel(r.ema1dSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.btcEma4hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.btcEma1dSlopePct7d),
+    statsPsar4hTrendLabel(r.psar4hTrend),
+    statsPsar4hDistPctCsv(r.psar4hDistPct),
     snowballStatsFundingRateLabel(r.fundingRate),
     snowballStatsVolumeCascadeLabel(r.volumeCascadeYn),
     snowballStatsGreenDaysLabel(r.greenDaysBeforeSignal),

@@ -42,6 +42,12 @@ export type CandleReversalStatsRow = {
   btcEma4hSlopePct7d?: number | null;
   /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
   btcEma1dSlopePct7d?: number | null;
+  /** PSAR 4h — ทิศ SAR (up/down) */
+  psar4hTrend?: "up" | "down" | null;
+  /** PSAR 4h — (close − SAR) / close × 100 */
+  psar4hDistPct?: number | null;
+  /** 1 = PSAR คำนวณ ณ alertedAtMs */
+  psar4hV?: number;
   /** 2 = BTC EMA คำนวณ ณ alertedAtMs */
   btcEmaSlopesV?: number;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
@@ -236,6 +242,8 @@ export type CandleReversalStatsSortKey =
   | "ema1d"
   | "btcEma4h"
   | "btcEma1d"
+  | "psar4h"
+  | "psar4hDist"
   | "atr14d"
   | "retest"
   | "sl"
@@ -349,6 +357,13 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.btcEma4hSlopePct7d, b.btcEma4hSlopePct7d);
     case "btcEma1d":
       return cmpNumNullLast(a.btcEma1dSlopePct7d, b.btcEma1dSlopePct7d);
+    case "psar4h": {
+      const order = (t: CandleReversalStatsRow["psar4hTrend"]) =>
+        t === "up" ? 0 : t === "down" ? 1 : 2;
+      return order(a.psar4hTrend) - order(b.psar4hTrend);
+    }
+    case "psar4hDist":
+      return cmpNumNullLast(a.psar4hDistPct, b.psar4hDistPct);
     case "atr14d":
       return cmpNumNullLast(a.atrPct14d, b.atrPct14d);
     case "retest":

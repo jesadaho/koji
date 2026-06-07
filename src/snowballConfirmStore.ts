@@ -81,6 +81,8 @@ export type SnowballPendingConfirm = {
   statsEma1dSlopePct7d?: number | null;
   statsBtcEma4hSlopePct7d?: number | null;
   statsBtcEma1dSlopePct7d?: number | null;
+  statsPsar4hTrend?: "up" | "down" | null;
+  statsPsar4hDistPct?: number | null;
   statsRangeRankInLookback?: number | null;
   statsLenLookbackBars?: number | null;
   statsLenPercentilePct?: number | null;
@@ -193,6 +195,10 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsBtcEma4hSlopePct7dOk = Number.isFinite(statsBtcEma4hSlopePct7d);
   const statsBtcEma1dSlopePct7d = Number(o.statsBtcEma1dSlopePct7d);
   const statsBtcEma1dSlopePct7dOk = Number.isFinite(statsBtcEma1dSlopePct7d);
+  const statsPsar4hTrend =
+    o.statsPsar4hTrend === "up" || o.statsPsar4hTrend === "down" ? o.statsPsar4hTrend : null;
+  const statsPsar4hDistPct = Number(o.statsPsar4hDistPct);
+  const statsPsar4hDistPctOk = Number.isFinite(statsPsar4hDistPct);
   const statsRangeRankInLookback = Number(o.statsRangeRankInLookback);
   const statsRangeRankInLookbackOk =
     Number.isFinite(statsRangeRankInLookback) && statsRangeRankInLookback >= 1;
@@ -292,6 +298,8 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
     ...(statsEma1dSlopePct7dOk ? { statsEma1dSlopePct7d } : {}),
     ...(statsBtcEma4hSlopePct7dOk ? { statsBtcEma4hSlopePct7d } : {}),
     ...(statsBtcEma1dSlopePct7dOk ? { statsBtcEma1dSlopePct7d } : {}),
+    ...(statsPsar4hTrend ? { statsPsar4hTrend } : {}),
+    ...(statsPsar4hDistPctOk ? { statsPsar4hDistPct } : {}),
     ...(statsRangeRankInLookbackOk ? { statsRangeRankInLookback } : {}),
     ...(statsLenLookbackBarsOk ? { statsLenLookbackBars } : {}),
     ...(statsLenPercentilePctOk ? { statsLenPercentilePct } : {}),

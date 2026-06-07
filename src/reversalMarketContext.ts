@@ -11,6 +11,7 @@ import {
   STATS_EMA1D_SLOPE_LOOKBACK_BARS,
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
 } from "./statsEmaSlope";
+import { fetchSymbolPsar4hAtMs } from "./statsPsar4h";
 
 const mcapCache = new Map<string, { atMs: number; mcap: number | null }>();
 const MCAP_CACHE_MS = 15 * 60 * 1000;
@@ -45,21 +46,28 @@ export type ReversalAlertMarketSnapshot = {
   btcEma1dSlopePct7d: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d: number | null;
+  /** PSAR 4h — ทิศ SAR (up/down) */
+  psar4hTrend: "up" | "down" | null;
+  /** PSAR 4h — (close − SAR) / close × 100 */
+  psar4hDistPct: number | null;
 };
 
 /** Vol 24h + Mcap + EMA slope 4h/1d ณ เวลาแจ้ง */
 export async function fetchReversalAlertMarketSnapshot(
   binanceSymbol: string,
+  atMs: number = Date.now(),
 ): Promise<ReversalAlertMarketSnapshot> {
   const sym = binanceSymbol.trim().toUpperCase();
   const base = binanceUsdtPerpBase(sym);
-  const [quoteVol24hUsdt, marketCapUsd, ema4hSlopePct7d, ema1dSlopePct7d, atrPct14d, btcEma] = await Promise.all([
+  const [quoteVol24hUsdt, marketCapUsd, ema4hSlopePct7d, ema1dSlopePct7d, atrPct14d, btcEma, psar4h] =
+    await Promise.all([
     isBinanceIndicatorFapiEnabled() ? fetchBinanceUsdmQuoteVol24h(sym) : Promise.resolve(null),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
     fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
     fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
     fetchSymbolAtrPct14d(sym),
-    fetchBtcEmaSlopesAtMs(Date.now()),
+    fetchBtcEmaSlopesAtMs(atMs),
+    fetchSymbolPsar4hAtMs(sym, atMs),
   ]);
   return {
     quoteVol24hUsdt,
@@ -69,5 +77,7 @@ export async function fetchReversalAlertMarketSnapshot(
     btcEma4hSlopePct7d: btcEma.btcEma4hSlopePct7d,
     btcEma1dSlopePct7d: btcEma.btcEma1dSlopePct7d,
     atrPct14d,
+    psar4hTrend: psar4h?.trend ?? null,
+    psar4hDistPct: psar4h?.distPct ?? null,
   };
 }
