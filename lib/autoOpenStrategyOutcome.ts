@@ -206,9 +206,12 @@ export function resolveAutoOpenStrategyHorizonForRow(
   const pctHorizon = horizonHours === 24 ? row.pct24h : row.pct48h;
   if (pctHorizon == null || !Number.isFinite(pctHorizon)) return null;
 
+  const exitReason =
+    horizonHours === 24 ? row.strategyExitReason24h : row.strategyExitReason;
   const storedOutcome = horizonHours === 24 ? row.strategyOutcome24h : row.strategyOutcome;
   const storedPct = horizonHours === 24 ? row.strategyPct24h : row.strategyPct;
   if (
+    exitReason != null &&
     storedOutcome != null &&
     storedPct != null &&
     Number.isFinite(storedPct)

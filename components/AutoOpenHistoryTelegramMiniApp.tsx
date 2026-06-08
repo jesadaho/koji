@@ -593,8 +593,12 @@ function renderAutoOpenHistoryTableBody(
         <td>{fmtPrice(nowPx)}</td>
         <td>{fmtPnlCell(r, nowPx)}</td>
         <td title="Realised P/L จาก MEXC เมื่อปิด position">{fmtMexcRealPnlCell(r)}</td>
-        <td title="หลังครบ 24h — Win/Loss/Flat ตาม pct24h">{fmtStrategy24hPnlCell(r)}</td>
-        <td>{fmtStrategyPnlCell(r)}</td>
+        <td title="หลังครบ 24h — กำไรจำลอง TP/SL (ไม่ใช่คอลัมน์ 24h ดิบ)">
+          {fmtStrategy24hPnlCell(r)}
+        </td>
+        <td title="หลังครบ 48h — กำไรจำลอง TP/SL (ไม่ใช่คอลัมน์ 48h ดิบ)">
+          {fmtStrategyPnlCell(r)}
+        </td>
         <td>{r.gradeKey ?? r.model ?? "—"}</td>
         <td>
           <span style={outcomeStyle(r.outcome)}>{autoOpenOutcomeLabel(r.outcome)}</span>

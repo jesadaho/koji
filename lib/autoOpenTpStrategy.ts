@@ -231,23 +231,63 @@ export function withAutoOpenTpStrategyDisplayFields(
   return out;
 }
 
+function horizonNeedsTpRecompute(
+  row: AutoOpenOrderLogRow,
+  plan: ViewerStatsTpSlPlan,
+  holdHours: StatsStrategyProfitHorizon,
+  pctHorizon: number | null | undefined,
+  exitReason: string | null | undefined,
+  strategyPct: number | null | undefined,
+): boolean {
+  if (pctHorizon == null || !Number.isFinite(pctHorizon)) return false;
+  const cacheKey = autoOpenTpStrategyCacheKey(plan, holdHours);
+  if (exitReason == null || row.strategyProfitByPlan?.[cacheKey] == null) {
+    return true;
+  }
+  if (
+    strategyPct != null &&
+    Number.isFinite(strategyPct) &&
+    Math.abs(strategyPct - pctHorizon) < 1e-6
+  ) {
+    const cached = row.strategyProfitByPlan?.[cacheKey];
+    if (cached && Math.abs(cached.profitPct - pctHorizon) < 1e-6) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function autoOpenNeedsTpStrategyRecompute(
   row: AutoOpenOrderLogRow,
   plan: ViewerStatsTpSlPlan,
   nowSec: number,
   ac: number,
 ): boolean {
-  if (nowSec >= ac + 24 * HOUR_SEC && row.pct24h != null) {
-    const key24 = autoOpenTpStrategyCacheKey(plan, STATS_STRATEGY_PROFIT_HOLD_24H);
-    if (row.strategyExitReason24h == null || row.strategyProfitByPlan?.[key24] == null) {
-      return true;
-    }
+  if (
+    nowSec >= ac + 24 * HOUR_SEC &&
+    horizonNeedsTpRecompute(
+      row,
+      plan,
+      STATS_STRATEGY_PROFIT_HOLD_24H,
+      row.pct24h,
+      row.strategyExitReason24h,
+      row.strategyPct24h,
+    )
+  ) {
+    return true;
   }
-  if (nowSec >= ac + 48 * HOUR_SEC && row.pct48h != null) {
-    const key48 = autoOpenTpStrategyCacheKey(plan, STATS_STRATEGY_PROFIT_HOLD_48H);
-    if (row.strategyExitReason == null || row.strategyProfitByPlan?.[key48] == null) {
-      return true;
-    }
+  if (
+    nowSec >= ac + 48 * HOUR_SEC &&
+    horizonNeedsTpRecompute(
+      row,
+      plan,
+      STATS_STRATEGY_PROFIT_HOLD_48H,
+      row.pct48h,
+      row.strategyExitReason,
+      row.strategyPct,
+    )
+  ) {
+    return true;
   }
   return false;
 }

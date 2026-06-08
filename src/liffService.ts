@@ -879,6 +879,10 @@ export async function liffGetAutoOpenOrderHistory(
   opts?: { days?: number; source?: AutoOpenSource },
 ): Promise<AutoOpenOrderLogApiPayload> {
   const settingsMap = await loadTradingViewMexcSettingsFullMap();
+  const { enrichAutoOpenOrderLogsTpStrategyForUser } = await import(
+    "./autoOpenOrderLogTpStrategyEnrich"
+  );
+  await enrichAutoOpenOrderLogsTpStrategyForUser(userId, settingsMap, opts);
   const rawRows = await listAutoOpenOrderLogsForUser(userId, opts);
   const conflictSets = await loadPendingConflictSets();
   const rowsWithConflict: AutoOpenOrderLogRow[] = rawRows.map((r) => ({
