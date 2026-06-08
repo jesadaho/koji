@@ -210,6 +210,7 @@ export function resolveSnowballLongFinalGrade(
         pullbackOk: input.twoBarInlinePassed,
         volRatioOk: input.twoBarInlinePassed,
         minLow1hOk: input.twoBarInlinePassed,
+        confirmNotInvertedDojiOk: input.twoBarInlinePassed,
         detail: input.twoBarInlinePassed ? "two-bar inline ผ่าน" : "two-bar inline ไม่ผ่าน",
       } satisfies SnowballTwoBarInlineEval);
     return resolveSnowballLong4hPipeline({
