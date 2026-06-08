@@ -57,10 +57,6 @@ export type SnowballAlertMarketContext = {
   psar4hDistPct: number | null;
 };
 
-function binanceUsdtPerpToMexcContract(binanceSymbol: string): string | null {
-  return resolveMexcContractFromBinanceSymbol(binanceSymbol);
-}
-
 function snowballBtcPsarBars(tf: "4h" | "1h"): number {
   const raw =
     tf === "4h"
