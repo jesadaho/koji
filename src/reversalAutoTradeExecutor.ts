@@ -361,6 +361,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
     console.error("[reversalAutoTrade] no MEXC contract for", binanceSymbol);
     return { usersAttempted: 0, usersSucceeded: 0 };
   }
+  const sym = contractSymbol;
 
   try {
     if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "reversal")) {
@@ -462,24 +463,24 @@ export async function runReversalAutoTradeAfterReversalAlert(
     let markSource: "mexc" | "binance" | "signal" | "kline" | null = null;
 
     try {
-      const t = await getContractTickerPublic(contractSymbol);
+      const t = await getContractTickerPublic(sym);
       if (t && t.lastPrice > 0) {
         mark = t.lastPrice;
         markSource = "mexc";
       }
     } catch (e) {
-      console.error("[reversalAutoTrade] getContractTickerPublic", contractSymbol, e);
+      console.error("[reversalAutoTrade] getContractTickerPublic", sym, e);
     }
 
     if (mark == null) {
       try {
-        const lp = await getContractLastPricePublic(contractSymbol);
+        const lp = await getContractLastPricePublic(sym);
         if (lp != null && lp > 0) {
           mark = lp;
           markSource = "mexc";
         }
       } catch (e) {
-        console.error("[reversalAutoTrade] getContractLastPricePublic", contractSymbol, e);
+        console.error("[reversalAutoTrade] getContractLastPricePublic", sym, e);
       }
     }
 
@@ -502,7 +503,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
     }
 
     if (mark == null) {
-      const err = `ดึงราคาตลาดไม่ได้ (${contractSymbol} · MEXC/Binance/สัญญาณ)`;
+      const err = `ดึงราคาตลาดไม่ได้ (${sym} · MEXC/Binance/สัญญาณ)`;
       markCache = { failed: true, error: err };
       return { ok: false, error: err };
     }
