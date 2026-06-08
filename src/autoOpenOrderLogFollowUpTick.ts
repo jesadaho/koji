@@ -261,7 +261,7 @@ async function followUpRow(
     }
   }
 
-  if (applyTpStrategyHorizons(row, pack, ac, entry, side, nowSec, followUpSettingsMap)) {
+  if (applyTpStrategyHorizons(row, pack, ac, entry, side, nowSec, settingsMap)) {
     touched = true;
   }
 
