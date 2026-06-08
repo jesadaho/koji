@@ -17,6 +17,7 @@ import { runSnowballAutoTradeQuickTpTick } from "./snowballAutoTradeQuickTpTick"
 import { runSnowballAutoTradeTpSlTick } from "./snowballAutoTradeTpSlTick";
 import { runSnowballAutoTradeLimitTick } from "./snowballAutoTradeLimitTick";
 import { runSnowballAutoTrade24hGuardTick } from "./snowballAutoTrade24hGuardTick";
+import { runAutoTradeConflictCloseTick } from "./autoTradeConflictCloseTick";
 import { runReversalAutoTradeTpSlTick } from "./reversalAutoTradeTpSlTick";
 import { runReversalAutoTradeLimitTick } from "./reversalAutoTradeLimitTick";
 import { runDownsideReversalAlertTick } from "./downsideReversalAlertTick";
@@ -377,6 +378,7 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const publicN = publicRes.notified;
   const snowballStatsRes = await runSnowballStatsFollowUpTick(now);
   const snowballStatsN = snowballStatsRes.dirty;
+  const conflictCloseActions = await runAutoTradeConflictCloseTick(now);
   const snowballLimitActions = await runSnowballAutoTradeLimitTick(now);
   const snowballTpSlActions = await runSnowballAutoTradeTpSlTick(now);
   const snowballQuickTpClosed = await runSnowballAutoTradeQuickTpTick(now);
@@ -398,6 +400,7 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   else if (publicRes.skippedReason) parts.push(`public Binance ข้าม (${publicRes.skippedReason})`);
   if (snowballConfirmN > 0) parts.push(`snowball confirm ${snowballConfirmN}`);
   if (snowballStatsN > 0) parts.push(`snowball stats ${snowballStatsN}`);
+  if (conflictCloseActions > 0) parts.push(`conflict close ${conflictCloseActions}`);
   if (snowballLimitActions > 0) parts.push(`snowball limit ${snowballLimitActions}`);
   if (snowballTpSlActions > 0) parts.push(`snowball TP/SL ${snowballTpSlActions}`);
   if (snowballQuickTpClosed > 0) parts.push(`snowball quickTP close ${snowballQuickTpClosed}`);
