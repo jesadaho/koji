@@ -131,9 +131,11 @@ export function computeAutoOpenTpStrategyAtHorizon(input: {
     (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? row.pct24h : row.pct48h);
   if (pctClose == null || !Number.isFinite(pctClose)) return null;
 
-  const pctPhase1 =
+  const pctPhase1Raw =
     pctAtPlanMaxHold(input.plan, row) ??
     (input.plan.maxHoldHours <= 24 ? row.pct24h : row.pct48h);
+  const pctPhase1 =
+    pctPhase1Raw != null && Number.isFinite(pctPhase1Raw) ? pctPhase1Raw : null;
 
   return simulateAutoOpenTpFromPack({
     side: input.side,
