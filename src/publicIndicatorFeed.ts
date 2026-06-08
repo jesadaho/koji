@@ -27,6 +27,7 @@ import {
   releaseIndicatorPublicFeedLock,
   useCloudStorage,
 } from "./remoteJsonStore";
+import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import { snowballEma20_1hReferencePrice } from "./snowballReferenceEma20_1h";
 import {
@@ -603,17 +604,6 @@ export function snowballSignalBarBodyRangePassed(
   }
   const prevL = low[iEval - 1];
   return Number.isFinite(prevL) && c < prevL;
-}
-
-function mexcContractSymbolFromBinanceSymbol(sym: string): string {
-  const s = sym.trim().toUpperCase();
-  if (!s) return "";
-  if (s.includes("_")) return s;
-  if (s.endsWith("USDT") && s.length > 4) {
-    const base = s.slice(0, -4);
-    return `${base}_USDT`;
-  }
-  return s;
 }
 
 export function snowballWickHistoryLookback(): number {
@@ -3640,6 +3630,8 @@ export async function runPublicIndicatorFeedInternal(
               (!skipSnowballTgForPending || longQualitySignal || longQualityShortSignal);
             if (runLongAutoOpenNow) {
               try {
+                const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(symbol);
+                if (mexcContract) {
                 const longActionPlan =
                   gradeResolution.kind === "grade" ? gradeResolution.actionPlan ?? null : null;
                 let marginScale: number | undefined;
@@ -3650,7 +3642,7 @@ export async function runPublicIndicatorFeedInternal(
                   marginScale = snowballGradeBSustainedMarginScale();
                 }
                 await runSnowballAutoTradeAfterSnowballAlert({
-                  contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
+                  contractSymbol: mexcContract,
                   binanceSymbol: symbol,
                   alertSide: "long",
                   displayGrade:
@@ -3684,6 +3676,7 @@ export async function runPublicIndicatorFeedInternal(
                   console.info(
                     `[indicatorPublicFeed] Snowball LONG auto-open at alert (${longQualitySignal ? "✨ Quality Signal" : "✨ Quality Short Signal"}, pending confirm) ${symbol} ${snowTf}`,
                   );
+                }
                 }
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open", symbol, e);
@@ -4248,8 +4241,10 @@ export async function runPublicIndicatorFeedInternal(
             const runBearAutoOpenNow = !intrabar && (!skipBearTgForPending || bearQualityShortSignal);
             if (runBearAutoOpenNow) {
               try {
+                const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(symbol);
+                if (mexcContract) {
                 await runSnowballAutoTradeAfterSnowballAlert({
-                  contractSymbol: mexcContractSymbolFromBinanceSymbol(symbol),
+                  contractSymbol: mexcContract,
                   binanceSymbol: symbol,
                   alertSide: "bear",
                   displayGrade: dbOn && shortTier === "a_plus" ? "A+" : undefined,
@@ -4274,6 +4269,7 @@ export async function runPublicIndicatorFeedInternal(
                   console.info(
                     `[indicatorPublicFeed] Snowball BEAR auto-open at alert (✨ Quality Short Signal, pending confirm) ${symbol} ${snowTf}`,
                   );
+                }
                 }
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open SHORT", symbol, e);

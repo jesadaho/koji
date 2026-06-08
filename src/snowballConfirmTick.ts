@@ -9,6 +9,7 @@ import { snowballMatchesQualitySignal } from "@/lib/snowballMatrixFilters";
 import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
 import { BKK_DAY_TZ_OFFSET_SEC, fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
+import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import { snowballEma20_1hReferencePrice } from "./snowballReferenceEma20_1h";
 import {
@@ -463,8 +464,10 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               item.snowTf,
             );
             const confirmVolVsSma = volSmaUse > 0 ? vo / volSmaUse : null;
+            const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(item.symbol);
+            if (!mexcContract) continue;
             await runSnowballAutoTradeAfterSnowballAlert({
-              contractSymbol: mexcContractSymbolFromBinanceSymbol(item.symbol),
+              contractSymbol: mexcContract,
               binanceSymbol: item.symbol,
               alertSide: item.side,
               displayGrade: item.statsDisplayGrade,

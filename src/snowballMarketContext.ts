@@ -3,7 +3,7 @@
  */
 
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
-import { resolveMexcContractFromBinanceSymbol } from "./coinMap";
+import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
 import { fetchBinanceUsdmKlines, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { computeParabolicSarLast } from "./indicatorMath";
 import { fetchContractTickerSingle } from "./mexcMarkets";
@@ -156,7 +156,7 @@ export async function fetchSnowballAlertMarketContext(
   atMs: number = Date.now(),
 ): Promise<SnowballAlertMarketContext> {
   const sym = binanceSymbol.trim().toUpperCase();
-  const mexcContract = binanceUsdtPerpToMexcContract(sym);
+  const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(sym);
   const base = binanceUsdtPerpBase(sym);
   const [btc4h, btc1h, marketCapUsd, mexcTicker, atrPct14d, ema4hSlopePct7d, ema1dSlopePct7d, btcEma, psar4h] =
     await Promise.all([

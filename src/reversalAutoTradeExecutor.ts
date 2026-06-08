@@ -9,7 +9,7 @@ import {
 } from "./mexcFuturesClient";
 import { fetchBinanceUsdmKlines, fetchBinanceUsdmLastPrice } from "./binanceIndicatorKline";
 import { emaLine } from "./indicatorMath";
-import { resolveMexcContractFromBinanceSymbol } from "./coinMap";
+import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
 import {
   loadTradingViewMexcSettingsFullMap,
   type TradingViewMexcUserSettings,
@@ -93,10 +93,6 @@ function fmtReversalAutoTradePrice(p: number): string {
   if (p >= 1000) return p.toFixed(2);
   if (p >= 1) return p.toFixed(4);
   return p.toFixed(6);
-}
-
-function binanceUsdtPerpToMexcContract(binanceSymbol: string): string | null {
-  return resolveMexcContractFromBinanceSymbol(binanceSymbol);
 }
 
 async function notifyLines(userId: string, lines: string[]): Promise<void> {
@@ -360,9 +356,11 @@ export async function runReversalAutoTradeAfterReversalAlert(
       ? input.signalClosePrice
       : undefined;
 
-  const contractSymbolEarly = binanceUsdtPerpToMexcContract(binanceSymbol);
-  if (!contractSymbolEarly) return { usersAttempted: 0, usersSucceeded: 0 };
-  const contractSymbol: string = contractSymbolEarly;
+  const contractSymbol = await resolveMexcContractFromBinanceSymbolAsync(binanceSymbol);
+  if (!contractSymbol) {
+    console.error("[reversalAutoTrade] no MEXC contract for", binanceSymbol);
+    return { usersAttempted: 0, usersSucceeded: 0 };
+  }
 
   try {
     if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "reversal")) {

@@ -1,4 +1,4 @@
-import { resolveMexcContractFromBinanceSymbol } from "./coinMap";
+import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
 import { fetchBinanceUsdmQuoteVol24h, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
 import { fetchContractTickerMetrics, type MexcTickerRow } from "./mexcMarkets";
 
@@ -26,7 +26,7 @@ export async function fetchStatsQuoteVol24hUsdt(
   const fromTicker = quoteVol24hFromMexcTicker(mexcTicker);
   if (fromTicker != null) return fromTicker;
 
-  const mexc = resolveMexcContractFromBinanceSymbol(sym);
+  const mexc = await resolveMexcContractFromBinanceSymbolAsync(sym);
   if (mexc) {
     const metrics = await fetchContractTickerMetrics(mexc);
     if (metrics && metrics.amount24Usdt > 0) return metrics.amount24Usdt;
