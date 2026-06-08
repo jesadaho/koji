@@ -12,6 +12,7 @@ import {
   finalizeAutoOpenPnlUsdtBucket,
   pctVsEntrySide,
   resolveAutoOpenEntryPrice,
+  type AutoOpenPnlBucketFormatSlice,
   type AutoOpenPnlUsdtBucket,
 } from "@/lib/autoOpenFollowUp";
 import {
@@ -23,7 +24,7 @@ import {
   strategyProfitUsdtFromMargin,
 } from "@/lib/statsStrategyProfitClient";
 
-export type { AutoOpenPnlUsdtBucket };
+export type { AutoOpenPnlBucketFormatSlice, AutoOpenPnlUsdtBucket };
 
 /** ผลตามกติกา stats / strategy หลังครบ 48h (ไม่ใช่ success/skipped ของการสั่ง) */
 export type AutoOpenStrategyOutcome = "win_trend" | "win" | "loss" | "flat";
@@ -254,7 +255,7 @@ export function isAutoOpenStrategyWinOutcome(
   return outcome === "win" || outcome === "win_trend" || outcome === "win_quick_tp30";
 }
 
-export type AutoOpenStrategyHorizonSummary = {
+export type AutoOpenStrategyHorizonSummary = AutoOpenPnlBucketFormatSlice & {
   /** ครบผล@horizon (เปิดสำเร็จ + ล้มเหลวที่มี entry สมมติ) */
   trades: number;
   successTrades: number;
@@ -266,15 +267,6 @@ export type AutoOpenStrategyHorizonSummary = {
   pending: number;
   decisive: number;
   winratePct: number | null;
-  sumUsdt: number | null;
-  sumUsdtSuccess: number | null;
-  sumUsdtFailed: number | null;
-  sumWinUsdt: number | null;
-  sumLossUsdt: number | null;
-  sumWinUsdtSuccess: number | null;
-  sumLossUsdtSuccess: number | null;
-  sumWinUsdtFailed: number | null;
-  sumLossUsdtFailed: number | null;
 };
 
 export type AutoOpenStrategy48hSummary = AutoOpenStrategyHorizonSummary & {
@@ -435,7 +427,7 @@ export function summarizeAutoOpenStrategy48h(
 
 /** ตัวเลขหลัก = ไม้สำเร็จเท่านั้นเมื่อมีไม้ล้มเหลว(สมมติ) — ไม่สับสนกับ MEXC Realised */
 export function autoOpenPnlBucketHeadlineUsdt(
-  bucket: Pick<AutoOpenPnlUsdtBucket, "sumUsdt" | "sumUsdtSuccess">,
+  bucket: Pick<AutoOpenPnlBucketFormatSlice, "sumUsdt" | "sumUsdtSuccess">,
   failedTrades: number,
 ): number | null {
   if (failedTrades > 0 && bucket.sumUsdtSuccess != null) return bucket.sumUsdtSuccess;
@@ -444,7 +436,7 @@ export function autoOpenPnlBucketHeadlineUsdt(
 
 export function autoOpenPnlBucketHeadlineWinLoss(
   bucket: Pick<
-    AutoOpenPnlUsdtBucket,
+    AutoOpenPnlBucketFormatSlice,
     | "sumWinUsdt"
     | "sumLossUsdt"
     | "sumWinUsdtSuccess"
@@ -485,7 +477,7 @@ export function formatAutoOpenPnlWinLossParts(
 
 function formatAutoOpenPnlBucketSubSplit(
   bucket: Pick<
-    AutoOpenPnlUsdtBucket,
+    AutoOpenPnlBucketFormatSlice,
     | "sumUsdtSuccess"
     | "sumUsdtFailed"
     | "sumWinUsdtSuccess"
@@ -517,19 +509,6 @@ function formatAutoOpenPnlBucketSubSplit(
   }
   return sub.join(" · ");
 }
-
-type AutoOpenPnlBucketFormatSlice = Pick<
-  AutoOpenPnlUsdtBucket,
-  | "sumUsdt"
-  | "sumUsdtSuccess"
-  | "sumUsdtFailed"
-  | "sumWinUsdt"
-  | "sumLossUsdt"
-  | "sumWinUsdtSuccess"
-  | "sumLossUsdtSuccess"
-  | "sumWinUsdtFailed"
-  | "sumLossUsdtFailed"
->;
 
 export function formatAutoOpenPnlBucketParts(
   label: string,

@@ -3,10 +3,8 @@ import { strategyProfitUsdtFromMargin } from "@/lib/statsStrategyProfitClient";
 
 const HOUR_SEC = 3600;
 
-export type AutoOpenPnlUsdtBucket = {
-  trades: number;
-  successTrades: number;
-  failedTrades: number;
+/** ชุดตัวเลข P/L USDT ที่ใช้ format สรุป — ใช้ร่วมกับ AutoOpenPnlUsdtBucket และ strategy summary */
+export type AutoOpenPnlBucketFormatSlice = {
   sumUsdt: number | null;
   sumUsdtSuccess: number | null;
   sumUsdtFailed: number | null;
@@ -16,6 +14,12 @@ export type AutoOpenPnlUsdtBucket = {
   sumLossUsdtSuccess: number | null;
   sumWinUsdtFailed: number | null;
   sumLossUsdtFailed: number | null;
+};
+
+export type AutoOpenPnlUsdtBucket = AutoOpenPnlBucketFormatSlice & {
+  trades: number;
+  successTrades: number;
+  failedTrades: number;
 };
 
 function accumulateSignedPnlWinLoss(
