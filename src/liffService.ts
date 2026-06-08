@@ -146,6 +146,7 @@ import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
 import {
   parseReversalAutoTradeEntryEmaPeriod,
   parseReversalAutoTradeEntryMode,
+  reversalEntrySettingsFromRow,
 } from "@/lib/reversalAutoTradeEntry";
 import {
   parseSnowballAutoTradeEntryEmaPeriod,
@@ -1231,8 +1232,18 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
     longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
-    entryMode: row.reversalAutoTradeEntryMode ?? "hybrid_ema",
-    entryEmaPeriod: row.reversalAutoTradeEntryEmaPeriod ?? 20,
+    ...(() => {
+      const shortEntry = reversalEntrySettingsFromRow(row, "short");
+      const longEntry = reversalEntrySettingsFromRow(row, "long");
+      return {
+        entryMode: shortEntry.mode,
+        entryEmaPeriod: shortEntry.emaPeriod,
+        shortEntryMode: shortEntry.mode,
+        shortEntryEmaPeriod: shortEntry.emaPeriod,
+        longEntryMode: longEntry.mode,
+        longEntryEmaPeriod: longEntry.emaPeriod,
+      };
+    })(),
   };
 }
 
@@ -1783,21 +1794,47 @@ function parseReversalAutoTradeNested(
     patchPart.reversalAutoTradeHoldExtendIfRedEnabled = holdExtendIfRedEnabled;
   }
 
-  if ("entryMode" in o) {
-    patchPart.reversalAutoTradeEntryMode = parseReversalAutoTradeEntryMode(o.entryMode);
-  }
-  if ("entryEmaPeriod" in o) {
-    const rawPeriod = o.entryEmaPeriod;
+  const parseReversalEntryEmaPatch = (
+    rawPeriod: unknown,
+    field: "reversalAutoTradeShortEntryEmaPeriod" | "reversalAutoTradeLongEntryEmaPeriod" | "reversalAutoTradeEntryEmaPeriod",
+  ): { ok: true } | { ok: false; error: string } => {
     if (rawPeriod === null || rawPeriod === "" || rawPeriod === undefined) {
-      patchPart.reversalAutoTradeEntryEmaPeriod = null;
-    } else {
-      const p = parseReversalAutoTradeEntryEmaPeriod(rawPeriod);
-      const n = typeof rawPeriod === "number" ? rawPeriod : Number(String(rawPeriod).replace(/,/g, "").trim());
-      if (!Number.isFinite(n)) {
-        return { ok: false, error: "reversal_entry_ema_period_invalid" };
-      }
-      patchPart.reversalAutoTradeEntryEmaPeriod = p;
+      patchPart[field] = null;
+      return { ok: true };
     }
+    const n = typeof rawPeriod === "number" ? rawPeriod : Number(String(rawPeriod).replace(/,/g, "").trim());
+    if (!Number.isFinite(n)) {
+      return { ok: false, error: "reversal_entry_ema_period_invalid" };
+    }
+    patchPart[field] = parseReversalAutoTradeEntryEmaPeriod(rawPeriod);
+    return { ok: true };
+  };
+
+  if ("shortEntryMode" in o) {
+    patchPart.reversalAutoTradeShortEntryMode = parseReversalAutoTradeEntryMode(o.shortEntryMode);
+    patchPart.reversalAutoTradeEntryMode = patchPart.reversalAutoTradeShortEntryMode;
+  }
+  if ("longEntryMode" in o) {
+    patchPart.reversalAutoTradeLongEntryMode = parseReversalAutoTradeEntryMode(o.longEntryMode);
+  }
+  if ("shortEntryEmaPeriod" in o) {
+    const r = parseReversalEntryEmaPatch(o.shortEntryEmaPeriod, "reversalAutoTradeShortEntryEmaPeriod");
+    if (!r.ok) return r;
+    patchPart.reversalAutoTradeEntryEmaPeriod = patchPart.reversalAutoTradeShortEntryEmaPeriod;
+  }
+  if ("longEntryEmaPeriod" in o) {
+    const r = parseReversalEntryEmaPatch(o.longEntryEmaPeriod, "reversalAutoTradeLongEntryEmaPeriod");
+    if (!r.ok) return r;
+  }
+
+  if ("entryMode" in o && !("shortEntryMode" in o)) {
+    patchPart.reversalAutoTradeEntryMode = parseReversalAutoTradeEntryMode(o.entryMode);
+    patchPart.reversalAutoTradeShortEntryMode = patchPart.reversalAutoTradeEntryMode;
+  }
+  if ("entryEmaPeriod" in o && !("shortEntryEmaPeriod" in o)) {
+    const r = parseReversalEntryEmaPatch(o.entryEmaPeriod, "reversalAutoTradeEntryEmaPeriod");
+    if (!r.ok) return r;
+    patchPart.reversalAutoTradeShortEntryEmaPeriod = patchPart.reversalAutoTradeEntryEmaPeriod;
   }
 
   return { ok: true, patch: patchPart };

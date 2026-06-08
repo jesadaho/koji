@@ -537,7 +537,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
   async function resolveReversalEntryForUser(
     row: TradingViewMexcUserSettings,
   ): Promise<EntryResolve> {
-    const { mode, emaPeriod } = reversalEntrySettingsFromRow(row);
+    const signalKind = alertTradeSide === "long" ? "long" : "short";
+    const { mode, emaPeriod } = reversalEntrySettingsFromRow(row, signalKind);
     const markRes = await ensureMarkPrice();
     if (!markRes.ok) {
       return {

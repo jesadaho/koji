@@ -155,10 +155,15 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;
   /** สัญญาณ Reversal Long → เปิด SHORT บน MEXC (fade) */
   reversalAutoTradeLongSignalShortEnabled?: boolean;
-  /** hybrid_ema = ราคา > EMA → Market, ≤ EMA → Limit · market = Market ตลอด */
+  /** @deprecated ใช้ shortEntry — เก็บ sync กับ short สำหรับ client เก่า */
   reversalAutoTradeEntryMode?: ReversalAutoTradeEntryMode;
-  /** EMA period บน TF 15m สำหรับ hybrid entry (default 20) */
+  /** @deprecated ใช้ shortEntry */
   reversalAutoTradeEntryEmaPeriod?: number;
+  /** hybrid_ema = ราคา > EMA → Market, ≤ EMA → Limit · market = Market ตลอด */
+  reversalAutoTradeShortEntryMode?: ReversalAutoTradeEntryMode;
+  reversalAutoTradeShortEntryEmaPeriod?: number;
+  reversalAutoTradeLongEntryMode?: ReversalAutoTradeEntryMode;
+  reversalAutoTradeLongEntryEmaPeriod?: number;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -328,6 +333,10 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeLongSignalShortEnabled?: boolean;
   reversalAutoTradeEntryMode?: ReversalAutoTradeEntryMode | null;
   reversalAutoTradeEntryEmaPeriod?: number | null;
+  reversalAutoTradeShortEntryMode?: ReversalAutoTradeEntryMode | null;
+  reversalAutoTradeShortEntryEmaPeriod?: number | null;
+  reversalAutoTradeLongEntryMode?: ReversalAutoTradeEntryMode | null;
+  reversalAutoTradeLongEntryEmaPeriod?: number | null;
 };
 
 /**
@@ -413,7 +422,11 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeSaturdayAllSignalsEnabled !== undefined ||
     input.reversalAutoTradeLongSignalShortEnabled !== undefined ||
     input.reversalAutoTradeEntryMode !== undefined ||
-    input.reversalAutoTradeEntryEmaPeriod !== undefined;
+    input.reversalAutoTradeEntryEmaPeriod !== undefined ||
+    input.reversalAutoTradeShortEntryMode !== undefined ||
+    input.reversalAutoTradeShortEntryEmaPeriod !== undefined ||
+    input.reversalAutoTradeLongEntryMode !== undefined ||
+    input.reversalAutoTradeLongEntryEmaPeriod !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -746,19 +759,83 @@ export async function saveTradingViewMexcSettings(
         ? input.reversalAutoTradeLongSignalShortEnabled
         : prev?.reversalAutoTradeLongSignalShortEnabled ?? false,
 
-    reversalAutoTradeEntryMode:
-      input.reversalAutoTradeEntryMode === null
+    reversalAutoTradeShortEntryMode:
+      input.reversalAutoTradeShortEntryMode === null
         ? undefined
-        : input.reversalAutoTradeEntryMode !== undefined
-          ? input.reversalAutoTradeEntryMode
-          : prev?.reversalAutoTradeEntryMode ?? "hybrid_ema",
+        : input.reversalAutoTradeShortEntryMode !== undefined
+          ? input.reversalAutoTradeShortEntryMode
+          : input.reversalAutoTradeEntryMode === null
+            ? undefined
+            : input.reversalAutoTradeEntryMode !== undefined
+              ? input.reversalAutoTradeEntryMode
+              : prev?.reversalAutoTradeShortEntryMode ??
+                prev?.reversalAutoTradeEntryMode ??
+                "hybrid_ema",
+
+    reversalAutoTradeShortEntryEmaPeriod:
+      input.reversalAutoTradeShortEntryEmaPeriod === null
+        ? undefined
+        : input.reversalAutoTradeShortEntryEmaPeriod !== undefined
+          ? input.reversalAutoTradeShortEntryEmaPeriod
+          : input.reversalAutoTradeEntryEmaPeriod === null
+            ? undefined
+            : input.reversalAutoTradeEntryEmaPeriod !== undefined
+              ? input.reversalAutoTradeEntryEmaPeriod
+              : prev?.reversalAutoTradeShortEntryEmaPeriod ??
+                prev?.reversalAutoTradeEntryEmaPeriod ??
+                20,
+
+    reversalAutoTradeLongEntryMode:
+      input.reversalAutoTradeLongEntryMode === null
+        ? undefined
+        : input.reversalAutoTradeLongEntryMode !== undefined
+          ? input.reversalAutoTradeLongEntryMode
+          : prev?.reversalAutoTradeLongEntryMode ??
+            prev?.reversalAutoTradeEntryMode ??
+            "hybrid_ema",
+
+    reversalAutoTradeLongEntryEmaPeriod:
+      input.reversalAutoTradeLongEntryEmaPeriod === null
+        ? undefined
+        : input.reversalAutoTradeLongEntryEmaPeriod !== undefined
+          ? input.reversalAutoTradeLongEntryEmaPeriod
+          : prev?.reversalAutoTradeLongEntryEmaPeriod ??
+            prev?.reversalAutoTradeEntryEmaPeriod ??
+            20,
+
+    reversalAutoTradeEntryMode:
+      input.reversalAutoTradeShortEntryMode === null
+        ? input.reversalAutoTradeEntryMode === null
+          ? undefined
+          : input.reversalAutoTradeEntryMode !== undefined
+            ? input.reversalAutoTradeEntryMode
+            : prev?.reversalAutoTradeEntryMode ?? "hybrid_ema"
+        : input.reversalAutoTradeShortEntryMode !== undefined
+          ? input.reversalAutoTradeShortEntryMode
+          : input.reversalAutoTradeEntryMode === null
+            ? undefined
+            : input.reversalAutoTradeEntryMode !== undefined
+              ? input.reversalAutoTradeEntryMode
+              : prev?.reversalAutoTradeShortEntryMode ??
+                prev?.reversalAutoTradeEntryMode ??
+                "hybrid_ema",
 
     reversalAutoTradeEntryEmaPeriod:
-      input.reversalAutoTradeEntryEmaPeriod === null
-        ? undefined
-        : input.reversalAutoTradeEntryEmaPeriod !== undefined
-          ? input.reversalAutoTradeEntryEmaPeriod
-          : prev?.reversalAutoTradeEntryEmaPeriod ?? 20,
+      input.reversalAutoTradeShortEntryEmaPeriod === null
+        ? input.reversalAutoTradeEntryEmaPeriod === null
+          ? undefined
+          : input.reversalAutoTradeEntryEmaPeriod !== undefined
+            ? input.reversalAutoTradeEntryEmaPeriod
+            : prev?.reversalAutoTradeEntryEmaPeriod ?? 20
+        : input.reversalAutoTradeShortEntryEmaPeriod !== undefined
+          ? input.reversalAutoTradeShortEntryEmaPeriod
+          : input.reversalAutoTradeEntryEmaPeriod === null
+            ? undefined
+            : input.reversalAutoTradeEntryEmaPeriod !== undefined
+              ? input.reversalAutoTradeEntryEmaPeriod
+              : prev?.reversalAutoTradeShortEntryEmaPeriod ??
+                prev?.reversalAutoTradeEntryEmaPeriod ??
+                20,
   };
 
   void touchedSnowballPatch;

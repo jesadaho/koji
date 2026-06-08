@@ -133,8 +133,13 @@ type ReversalAutoTradeApiBundle = {
   gateQualitySignal?: boolean;
   saturdayAllSignalsEnabled?: boolean;
   longSignalShortEnabled?: boolean;
+  /** legacy = short */
   entryMode?: "hybrid_ema" | "market";
   entryEmaPeriod?: number | null;
+  shortEntryMode?: "hybrid_ema" | "market";
+  shortEntryEmaPeriod?: number | null;
+  longEntryMode?: "hybrid_ema" | "market";
+  longEntryEmaPeriod?: number | null;
 };
 
 type TradingViewMexcResponse = {
@@ -214,8 +219,10 @@ export default function SettingsTelegramMiniApp() {
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revLongSignalShort, setRevLongSignalShort] = useState(false);
-  const [revEntryMode, setRevEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
-  const [revEntryEmaPeriod, setRevEntryEmaPeriod] = useState("20");
+  const [revShortEntryMode, setRevShortEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
+  const [revShortEntryEmaPeriod, setRevShortEntryEmaPeriod] = useState("20");
+  const [revLongEntryMode, setRevLongEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
+  const [revLongEntryEmaPeriod, setRevLongEntryEmaPeriod] = useState("20");
   const [revSaveErr, setRevSaveErr] = useState("");
   const [revSaveOk, setRevSaveOk] = useState("");
   const [revSaving, setRevSaving] = useState(false);
@@ -314,9 +321,21 @@ export default function SettingsTelegramMiniApp() {
     setRevGateQualitySignal(st.gateQualitySignal !== false);
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
     setRevLongSignalShort(Boolean(st.longSignalShortEnabled));
-    setRevEntryMode(st.entryMode === "market" ? "market" : "hybrid_ema");
-    setRevEntryEmaPeriod(
-      st.entryEmaPeriod != null && Number.isFinite(st.entryEmaPeriod) ? String(st.entryEmaPeriod) : "20",
+    const shortMode = st.shortEntryMode ?? st.entryMode;
+    const longMode = st.longEntryMode ?? st.entryMode;
+    setRevShortEntryMode(shortMode === "market" ? "market" : "hybrid_ema");
+    setRevLongEntryMode(longMode === "market" ? "market" : "hybrid_ema");
+    setRevShortEntryEmaPeriod(
+      (st.shortEntryEmaPeriod ?? st.entryEmaPeriod) != null &&
+        Number.isFinite(st.shortEntryEmaPeriod ?? st.entryEmaPeriod)
+        ? String(st.shortEntryEmaPeriod ?? st.entryEmaPeriod)
+        : "20",
+    );
+    setRevLongEntryEmaPeriod(
+      (st.longEntryEmaPeriod ?? st.entryEmaPeriod) != null &&
+        Number.isFinite(st.longEntryEmaPeriod ?? st.entryEmaPeriod)
+        ? String(st.longEntryEmaPeriod ?? st.entryEmaPeriod)
+        : "20",
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.reversalAutoTrade]);
@@ -796,15 +815,20 @@ export default function SettingsTelegramMiniApp() {
       return;
     }
 
-    const entryEmaPeriodParsed = revEntryEmaPeriod.trim() ? Number(revEntryEmaPeriod.trim()) : NaN;
-    if (
-      revEntryMode === "hybrid_ema" &&
-      (!Number.isFinite(entryEmaPeriodParsed) ||
-        entryEmaPeriodParsed < 5 ||
-        entryEmaPeriodParsed > 200 ||
-        Math.floor(entryEmaPeriodParsed) !== entryEmaPeriodParsed)
-    ) {
-      setRevSaveErr("EMA period ต้องเป็นจำนวนเต็ม 5–200");
+    const shortEntryEmaPeriodParsed = revShortEntryEmaPeriod.trim()
+      ? Number(revShortEntryEmaPeriod.trim())
+      : NaN;
+    const longEntryEmaPeriodParsed = revLongEntryEmaPeriod.trim()
+      ? Number(revLongEntryEmaPeriod.trim())
+      : NaN;
+    const validEmaPeriod = (n: number) =>
+      Number.isFinite(n) && n >= 5 && n <= 200 && Math.floor(n) === n;
+    if (revShortEntryMode === "hybrid_ema" && !validEmaPeriod(shortEntryEmaPeriodParsed)) {
+      setRevSaveErr("EMA period (สัญญาณ Short) ต้องเป็นจำนวนเต็ม 5–200");
+      return;
+    }
+    if (revLongEntryMode === "hybrid_ema" && !validEmaPeriod(longEntryEmaPeriodParsed)) {
+      setRevSaveErr("EMA period (สัญญาณ Long) ต้องเป็นจำนวนเต็ม 5–200");
       return;
     }
 
@@ -825,8 +849,15 @@ export default function SettingsTelegramMiniApp() {
         holdExtendIfRedEnabled: revHoldExtendIfRed,
         slArmRoiPct: revSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
-        entryMode: revEntryMode,
-        entryEmaPeriod: revEntryMode === "hybrid_ema" ? Math.floor(entryEmaPeriodParsed) : null,
+        entryMode: revShortEntryMode,
+        entryEmaPeriod:
+          revShortEntryMode === "hybrid_ema" ? Math.floor(shortEntryEmaPeriodParsed) : null,
+        shortEntryMode: revShortEntryMode,
+        shortEntryEmaPeriod:
+          revShortEntryMode === "hybrid_ema" ? Math.floor(shortEntryEmaPeriodParsed) : null,
+        longEntryMode: revLongEntryMode,
+        longEntryEmaPeriod:
+          revLongEntryMode === "hybrid_ema" ? Math.floor(longEntryEmaPeriodParsed) : null,
       };
       const body: Record<string, unknown> = {
         rotateWebhookToken: false,
@@ -1550,21 +1581,23 @@ export default function SettingsTelegramMiniApp() {
         </label>
 
         <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
-          Entry (เปิด SHORT)
+          Entry — สัญญาณ Short
         </p>
         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
           <label className="sub" style={{ display: "block" }}>
-            โหมด entry
+            โหมด entry (Short)
             <select
               style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
-              value={revEntryMode}
-              onChange={(e) => setRevEntryMode(e.target.value === "market" ? "market" : "hybrid_ema")}
+              value={revShortEntryMode}
+              onChange={(e) =>
+                setRevShortEntryMode(e.target.value === "market" ? "market" : "hybrid_ema")
+              }
             >
               <option value="hybrid_ema">Hybrid (EMA retest บน 15m)</option>
               <option value="market">Market ตลอด</option>
             </select>
           </label>
-          {revEntryMode === "hybrid_ema" ? (
+          {revShortEntryMode === "hybrid_ema" ? (
             <label className="sub" style={{ display: "block" }}>
               EMA period (TF 15m, default 20)
               <input
@@ -1573,15 +1606,53 @@ export default function SettingsTelegramMiniApp() {
                 style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
                 autoComplete="off"
                 placeholder="20"
-                value={revEntryEmaPeriod}
-                onChange={(e) => setRevEntryEmaPeriod(e.target.value)}
+                value={revShortEntryEmaPeriod}
+                onChange={(e) => setRevShortEntryEmaPeriod(e.target.value)}
               />
             </label>
           ) : null}
         </div>
-        {revEntryMode === "hybrid_ema" ? (
+        {revShortEntryMode === "hybrid_ema" ? (
           <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.9 }}>
             Limit ที่ยังไม่ fill จะถูกยกเลิกอัตโนมัติหลัง 8 ชม. และปลดล็อก 1 order/วันเพื่อเปิดซ้ำได้
+          </p>
+        ) : null}
+
+        <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
+          Entry — สัญญาณ Long (fade SHORT)
+        </p>
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            โหมด entry (Long)
+            <select
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              value={revLongEntryMode}
+              onChange={(e) =>
+                setRevLongEntryMode(e.target.value === "market" ? "market" : "hybrid_ema")
+              }
+            >
+              <option value="hybrid_ema">Hybrid (EMA retest บน 15m)</option>
+              <option value="market">Market ตลอด</option>
+            </select>
+          </label>
+          {revLongEntryMode === "hybrid_ema" ? (
+            <label className="sub" style={{ display: "block" }}>
+              EMA period (TF 15m, default 20)
+              <input
+                type="text"
+                inputMode="numeric"
+                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+                autoComplete="off"
+                placeholder="20"
+                value={revLongEntryEmaPeriod}
+                onChange={(e) => setRevLongEntryEmaPeriod(e.target.value)}
+              />
+            </label>
+          ) : null}
+        </div>
+        {revLongEntryMode === "hybrid_ema" ? (
+          <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.9 }}>
+            ใช้เฉพาะสัญญาณ Long → SHORT — แยกจาก Short ด้านบน
           </p>
         ) : null}
 

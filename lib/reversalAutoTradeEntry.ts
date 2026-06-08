@@ -31,13 +31,39 @@ export function parseReversalAutoTradeEntryEmaPeriod(
   return p;
 }
 
-export function reversalEntrySettingsFromRow(row: TradingViewMexcUserSettings): {
+export type ReversalEntrySignalKind = "short" | "long";
+
+function reversalLegacyEntrySettings(row: TradingViewMexcUserSettings): {
   mode: ReversalAutoTradeEntryMode;
   emaPeriod: number;
 } {
   return {
     mode: parseReversalAutoTradeEntryMode(row.reversalAutoTradeEntryMode),
     emaPeriod: parseReversalAutoTradeEntryEmaPeriod(row.reversalAutoTradeEntryEmaPeriod),
+  };
+}
+
+/** Entry แยก Short signal vs Long (fade SHORT) — fallback ค่า legacy เดิม */
+export function reversalEntrySettingsFromRow(
+  row: TradingViewMexcUserSettings,
+  signalKind: ReversalEntrySignalKind = "short",
+): { mode: ReversalAutoTradeEntryMode; emaPeriod: number } {
+  const legacy = reversalLegacyEntrySettings(row);
+  if (signalKind === "long") {
+    return {
+      mode: parseReversalAutoTradeEntryMode(row.reversalAutoTradeLongEntryMode, legacy.mode),
+      emaPeriod: parseReversalAutoTradeEntryEmaPeriod(
+        row.reversalAutoTradeLongEntryEmaPeriod,
+        legacy.emaPeriod,
+      ),
+    };
+  }
+  const shortModeRaw = row.reversalAutoTradeShortEntryMode ?? row.reversalAutoTradeEntryMode;
+  const shortPeriodRaw =
+    row.reversalAutoTradeShortEntryEmaPeriod ?? row.reversalAutoTradeEntryEmaPeriod;
+  return {
+    mode: parseReversalAutoTradeEntryMode(shortModeRaw, legacy.mode),
+    emaPeriod: parseReversalAutoTradeEntryEmaPeriod(shortPeriodRaw, legacy.emaPeriod),
   };
 }
 
