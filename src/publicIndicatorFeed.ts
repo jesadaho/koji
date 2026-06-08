@@ -5747,6 +5747,7 @@ export async function evaluateSnowballChecklist(rawSymbol: string): Promise<Snow
       snowTf,
       iSig: iSigSt,
       iConf: iConfSt,
+      open: openArr,
       close,
       high,
       low,

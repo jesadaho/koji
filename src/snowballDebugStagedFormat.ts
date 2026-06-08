@@ -41,6 +41,7 @@ export type Snowball4hStagedDebugInput = {
   snowTf: BinanceIndicatorTf;
   iSig: number;
   iConf: number;
+  open: number[];
   close: number[];
   high: number[];
   low: number[];
