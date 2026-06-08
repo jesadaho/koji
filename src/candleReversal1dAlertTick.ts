@@ -31,6 +31,7 @@ import {
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
 } from "./candleReversalStatsStore";
+import { formatCandleReversalTfDebugBlock } from "./candleReversalDebugFormat";
 import {
   buildCandleReversalAlertMessage,
   reversalShortSkipsLowerWickDominant,
@@ -45,13 +46,7 @@ import {
   evalLongestRedBody1h,
   evalLongestGreenBody1h,
   evalMarubozu1d,
-  candleReversal1dInvertedDojiCheckLines,
-  candleReversal1dMarubozuCheckLines,
-  candleReversal1hInvertedDojiCheckLines,
-  candleReversal1hLongestRedBodyCheckLines,
-  candleReversal1hLongestGreenBodyCheckLines,
   DEFAULT_CANDLE_REVERSAL_1H_LONG_ENV,
-  fmtReversalPrice,
   type CandleReversal1dDetectEnv,
   type CandleReversal1hDetectEnv,
   type CandleReversal1hLongDetectEnv,
@@ -879,18 +874,6 @@ export async function runCandleReversal1dAlertTick(
   return r.notified;
 }
 
-function formatReversalBarTimeBkk(tsSec: number): string {
-  const d = new Date(tsSec * 1000);
-  const datePart = d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
-  const timePart = d.toLocaleTimeString("en-GB", {
-    timeZone: "Asia/Bangkok",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  return `${datePart} ${timePart} BKK`;
-}
-
 function hadInvertedDojiBeforeBarIndex(
   pack: NonNullable<Awaited<ReturnType<typeof fetchBinanceUsdmKlines>>>,
   tf: CandleReversalTf,
@@ -909,39 +892,15 @@ function hadInvertedDojiBeforeBarIndex(
 }
 
 async function formatDebugForTf(sym: string, tf: CandleReversalTf, barsAgo = 0): Promise<string[]> {
-  const lines: string[] = [];
   const pack = await fetchBinanceUsdmKlines(sym, tf, klineFetchLimit(tf));
   if (!pack) {
-    lines.push(`${tf}: klines null`);
-    return lines;
+    return [`🎯 Candle Reversal — Debug [${tf.toUpperCase()}] · ${sym}`, `❌ ดึง klines ไม่ได้`];
   }
   const env1d = detectEnv1d();
   const env1h = detectEnv1h();
-  const n = pack.close.length;
+  const env1hLong = detectEnv1hLong();
   const latestClosed = candleReversalLatestClosedBarIndex(pack);
   const i = candleReversalBarIndexBarsAgo(pack, barsAgo);
-
-  lines.push(`— ${tf} —`);
-  lines.push(`klines: ${n} แท่ง · ปิดล่าสุด index=${latestClosed}`);
-  if (barsAgo > 0) {
-    lines.push(`barsAgo=${barsAgo} → ประเมินที่ index ${i}`);
-  } else {
-    lines.push(`barsAgo=0 → แท่งปิดล่าสุด (index ${i})`);
-  }
-
-  if (i < 0) {
-    lines.push(`❌ ข้อมูลไม่พอ — ลด barsAgo หรือเพิ่ม limit (สูงสุด ~${latestClosed})`);
-    return lines;
-  }
-
-  const o = pack.open[i]!;
-  const h = pack.high[i]!;
-  const l = pack.low[i]!;
-  const c = pack.close[i]!;
-  lines.push(`open ${formatReversalBarTimeBkk(pack.timeSec[i]!)}`);
-  lines.push(
-    `O ${fmtReversalPrice(o)} · H ${fmtReversalPrice(h)} · L ${fmtReversalPrice(l)} · C ${fmtReversalPrice(c)}`,
-  );
 
   const hadDojiHist = hadInvertedDojiBeforeBarIndex(pack, tf, i, env1d, env1h);
   let hadDojiLive = false;
@@ -955,50 +914,41 @@ async function formatDebugForTf(sym: string, tf: CandleReversalTf, barsAgo = 0):
           Date.now() - st.lastInvertedDoji1dAlertedAtMs <= marubozuAfterDojiWindowMs("1d");
   }
   const hadDoji = barsAgo === 0 ? hadDojiLive || hadDojiHist : hadDojiHist;
-  lines.push(
-    `hadRecentInvertedDoji: ${hadDoji ? "yes" : "no"}` +
-      (barsAgo === 0 && hadDojiLive !== hadDojiHist
-        ? ` (state=${hadDojiLive ? "yes" : "no"} · klines=${hadDojiHist ? "yes" : "no"})`
-        : ""),
-  );
 
+  const sig = evalCandleReversalAtBarIndex(tf, pack, i, env1d, env1h, { hadRecentInvertedDoji: hadDoji });
   const inverted = tf === "1h" ? evalInvertedDoji1h(pack, i, env1h) : evalInvertedDoji1d(pack, i, env1d);
   const marubozu = tf === "1d" ? evalMarubozu1d(pack, i, env1d, hadDoji) : null;
   const longest = tf === "1h" ? evalLongestRedBody1h(pack, i, env1h, hadDoji) : null;
-  const longestGreen =
-    tf === "1h" ? evalLongestGreenBody1h(pack, i, detectEnv1hLong()) : null;
-  lines.push(`โมเดล (ผ่านทั้งชุด = ✓):`);
-  lines.push(`  inverted_doji: ${inverted ? "✓" : "—"}`);
-  if (tf === "1d") lines.push(`  marubozu: ${marubozu ? "✓" : "—"}`);
-  if (tf === "1h") lines.push(`  longest_red_body: ${longest ? "✓" : "—"}`);
-  if (tf === "1h") lines.push(`  longest_green_body: ${longestGreen ? "✓" : "—"}`);
-  if (tf === "1d") {
-    lines.push("");
-    lines.push(...candleReversal1dInvertedDojiCheckLines(pack, i, env1d));
-    lines.push("");
-    lines.push(...candleReversal1dMarubozuCheckLines(pack, i, env1d));
-  }
-  if (tf === "1h") {
-    lines.push("");
-    lines.push(...candleReversal1hLongestRedBodyCheckLines(pack, i, env1h));
-    lines.push("");
-    lines.push(...candleReversal1hLongestGreenBodyCheckLines(pack, i, detectEnv1hLong()));
-    lines.push("");
-    lines.push(...candleReversal1hInvertedDojiCheckLines(pack, i, env1h));
+  const longestGreen = tf === "1h" ? evalLongestGreenBody1h(pack, i, env1hLong) : null;
+
+  const lines = formatCandleReversalTfDebugBlock({
+    sym,
+    tf,
+    pack,
+    barIndex: i,
+    barsAgo,
+    latestClosed,
+    hadDoji,
+    env1d,
+    env1h,
+    env1hLong,
+    alerts1dOn: isCandleReversal1dAlertsEnabled(),
+    alerts1hShortOn: isCandleReversal1hAlertsEnabled(),
+    alerts1hLongOn: isCandleReversal1hLongAlertsEnabled(),
+    sig,
+    modelPass: {
+      inverted_doji: Boolean(inverted),
+      marubozu: Boolean(marubozu),
+      longest_red_body: Boolean(longest),
+      longest_green_body: Boolean(longestGreen),
+    },
+  });
+
+  if (sig) {
+    lines.push("📨 ข้อความที่จะส่ง Telegram:");
+    lines.push(buildCandleReversalAlertMessage(sym, sig));
   }
 
-  const sig = evalCandleReversalAtBarIndex(tf, pack, i, env1d, env1h, { hadRecentInvertedDoji: hadDoji });
-  if (!sig) {
-    lines.push("");
-    lines.push("ผลรวม: ไม่ผ่านเงื่อนไขส่งแจ้งเตือน");
-    return lines;
-  }
-  lines.push("");
-  lines.push(`ผลรวม: ${sig.model}`);
-  lines.push(`wick ${(sig.wickRatio * 100).toFixed(1)}% · body ${(sig.bodyRatio * 100).toFixed(1)}%`);
-  lines.push(`retest ${fmtReversalPrice(sig.retestPrice)} · SL ${fmtReversalPrice(sig.slPrice)}`);
-  lines.push("");
-  lines.push(buildCandleReversalAlertMessage(sym, sig));
   return lines;
 }
 
@@ -1015,30 +965,22 @@ export async function formatCandleReversalDebugMessage(
 ): Promise<string> {
   const symbol = rawSymbol.trim().toUpperCase().replace(/^@/, "");
   const sym = symbol.endsWith("USDT") ? symbol : `${symbol}USDT`;
-  const lines: string[] = [];
   const barsAgo = Math.max(0, Math.floor(opts?.barsAgo ?? 0));
-  lines.push("🎯 Candle Reversal — debug (Binance USDM)");
-  lines.push(`UTC: ${new Date().toISOString()}`);
-  lines.push(
-    `1D: ${isCandleReversal1dAlertsEnabled() ? "on" : "off"} · 1H Short: ${isCandleReversal1hAlertsEnabled() ? "on" : "off"} · 1H Long: ${isCandleReversal1hLongAlertsEnabled() ? "on" : "off"}`,
-  );
-  if (barsAgo > 0) lines.push(`barsAgo: ${barsAgo} (ย้อนจากแท่งปิดล่าสุด)`);
-  lines.push("");
 
   if (!sym) {
-    lines.push("สัญลักษณ์ว่าง");
-    return lines.join("\n");
+    return "🎯 Candle Reversal — debug\nสัญลักษณ์ว่าง";
   }
 
   if (tf === "1d" || tf === "1h") {
-    lines.push(...(await formatDebugForTf(sym, tf, barsAgo)));
-    return lines.join("\n");
+    return (await formatDebugForTf(sym, tf, barsAgo)).join("\n");
   }
 
-  lines.push(...(await formatDebugForTf(sym, "1d", barsAgo)));
-  lines.push("");
-  lines.push(...(await formatDebugForTf(sym, "1h", barsAgo)));
-  return lines.join("\n");
+  const parts = [
+    ...(await formatDebugForTf(sym, "1d", barsAgo)),
+    "==================================================",
+    ...(await formatDebugForTf(sym, "1h", barsAgo)),
+  ];
+  return parts.join("\n");
 }
 
 /** @deprecated */
