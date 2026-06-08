@@ -33,6 +33,10 @@ import {
   type AutoOpenMexcRealisedSummary,
 } from "@/lib/autoOpenMexcRealPnl";
 import {
+  statsStrategyExitReasonForHorizon,
+  statsStrategyExitReasonShort,
+} from "@/lib/statsStrategyProfitClient";
+import {
   autoOpenStrategyOutcomeLabel,
   formatAutoOpenStrategy48hSummaryText,
   formatAutoOpenStrategyHorizonSummaryText,
@@ -459,6 +463,9 @@ function fmtStrategyHorizonPnlCell(
   const pct = resolved.pct;
   const outcome = resolved.outcome;
   const displayPct = resolveStatsStrategyDisplayPct(pct, row.leverage);
+  const exitShort = statsStrategyExitReasonShort(
+    statsStrategyExitReasonForHorizon(row, hours),
+  );
   const usdtLine =
     row.marginUsdt != null &&
     row.leverage != null &&
@@ -469,7 +476,7 @@ function fmtStrategyHorizonPnlCell(
   return (
     <span
       style={{ whiteSpace: "nowrap", ...pnlStyle(displayPct) }}
-      title={`ผล @${hours}h ตามกติกา Snowball/Reversal stats`}
+      title={`ผล @${hours}h จำลอง TP/SL ตาม Settings${exitShort ? ` · ${exitShort}` : ""}`}
     >
       <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
         {autoOpenStrategyOutcomeLabel(outcome as AutoOpenStrategyOutcome)}
@@ -642,10 +649,10 @@ function AutoOpenHistoryTable({
             <th title="Realised P/L จาก MEXC เมื่อปิด position (อัปเดตทุก ~15 นาที)">
               MEXC P/L
             </th>
-            <th title="หลังครบ 24h — Win/Loss/Flat ตาม pct24h (Snowball: Trend)">
+            <th title="หลังครบ 24h — Win/Loss/Flat จากกำไรจำลอง TP/SL (ไม่ใช่คอลัมน์ 24h ดิบ)">
               ผล@24h
             </th>
-            <th title="หลังครบ 48h — Win/Loss/Flat ตาม pct48h (Snowball: Trend)">
+            <th title="หลังครบ 48h — Win/Loss/Flat จากกำไรจำลอง TP/SL (ไม่ใช่คอลัมน์ 48h ดิบ)">
               ผล@48h
             </th>
             <th>เกรด/โมเดล</th>

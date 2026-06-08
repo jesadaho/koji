@@ -85,13 +85,12 @@ function snowballTpSlPlanFromSettings(
   };
 }
 
-export async function resolveViewerStatsTpSlPlan(
-  telegramUserId: number,
+export function resolveTpSlPlanForUserId(
+  userId: string,
   source: StatsTpSlPlanSource,
-): Promise<ViewerStatsTpSlPlan> {
-  const userId = `tg:${telegramUserId}`;
-  const map = await loadTradingViewMexcSettingsFullMap();
-  const row = map[userId];
+  map: Awaited<ReturnType<typeof loadTradingViewMexcSettingsFullMap>>,
+): ViewerStatsTpSlPlan {
+  const row = map[userId.trim()];
   if (!row) {
     return {
       tpSlEnabled: true,
@@ -103,6 +102,15 @@ export async function resolveViewerStatsTpSlPlan(
   return source === "reversal"
     ? reversalTpSlPlanFromSettings(row)
     : snowballTpSlPlanFromSettings(row);
+}
+
+export async function resolveViewerStatsTpSlPlan(
+  telegramUserId: number,
+  source: StatsTpSlPlanSource,
+): Promise<ViewerStatsTpSlPlan> {
+  const userId = `tg:${telegramUserId}`;
+  const map = await loadTradingViewMexcSettingsFullMap();
+  return resolveTpSlPlanForUserId(userId, source, map);
 }
 
 export function viewerStatsTpSlPlanPayload(plan: ViewerStatsTpSlPlan): StatsTpSlPlan {

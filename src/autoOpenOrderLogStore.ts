@@ -147,12 +147,27 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   } else if (o.strategyOutcome24h === null) {
     row.strategyOutcome24h = null;
   }
+  if (typeof o.strategyExitReason24h === "string" && o.strategyExitReason24h.trim()) {
+    row.strategyExitReason24h = o.strategyExitReason24h.trim() as AutoOpenOrderLogRow["strategyExitReason24h"];
+  } else if (o.strategyExitReason24h === null) {
+    row.strategyExitReason24h = null;
+  }
   const stratPct = nullNum(o.strategyPct);
   if (stratPct !== undefined) row.strategyPct = stratPct;
   if (typeof o.strategyOutcome === "string" && o.strategyOutcome.trim()) {
     row.strategyOutcome = o.strategyOutcome.trim();
   } else if (o.strategyOutcome === null) {
     row.strategyOutcome = null;
+  }
+  if (typeof o.strategyExitReason === "string" && o.strategyExitReason.trim()) {
+    row.strategyExitReason = o.strategyExitReason.trim() as AutoOpenOrderLogRow["strategyExitReason"];
+  } else if (o.strategyExitReason === null) {
+    row.strategyExitReason = null;
+  }
+  if (o.strategyProfitByPlan && typeof o.strategyProfitByPlan === "object" && !Array.isArray(o.strategyProfitByPlan)) {
+    row.strategyProfitByPlan = o.strategyProfitByPlan as AutoOpenOrderLogRow["strategyProfitByPlan"];
+  } else if (o.strategyProfitByPlan === null) {
+    row.strategyProfitByPlan = null;
   }
   const mexcPnl = nullNum(o.mexcRealisedPnlUsdt);
   if (mexcPnl !== undefined) row.mexcRealisedPnlUsdt = mexcPnl;

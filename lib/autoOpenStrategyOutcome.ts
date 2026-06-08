@@ -14,7 +14,10 @@ import {
   type AutoOpenPnlUsdtBucket,
 } from "@/lib/autoOpenFollowUp";
 import {
+  classifyStatsStrategyProfitPct,
   formatStatsStrategyProfitDollarAmount,
+  STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
+  STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
   strategyProfitUsdtFromMargin,
 } from "@/lib/statsStrategyProfitClient";
 
@@ -146,11 +149,26 @@ export function resolveAutoOpenStrategyAt24h(
 
 export function resolveAutoOpenStrategyAt48h(
   source: AutoOpenSource,
-  maxRoiPct: number,
-  pct48h: number,
+  strategyProfitPct: number,
 ): Pick<AutoOpenStrategyResolved, "strategyOutcome" | "strategyPct"> {
-  void maxRoiPct;
-  return resolveAutoOpenStrategyAtHorizon(source, pct48h);
+  return resolveAutoOpenStrategyFromProfitPct(source, strategyProfitPct);
+}
+
+/** Win/Loss/Flat จากกำไร % จำลอง TP/SL (ไม่ใช่ราคาปิด horizon ดิบ) */
+export function resolveAutoOpenStrategyFromProfitPct(
+  source: AutoOpenSource,
+  profitPct: number,
+): Pick<AutoOpenStrategyResolved, "strategyOutcome" | "strategyPct"> {
+  const band =
+    source === "snowball"
+      ? STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND
+      : STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND;
+  const cls = classifyStatsStrategyProfitPct(profitPct, band);
+  let strategyOutcome: AutoOpenStrategyOutcome;
+  if (cls === "win") strategyOutcome = source === "snowball" ? "win_trend" : "win";
+  else if (cls === "loss") strategyOutcome = "loss";
+  else strategyOutcome = "flat";
+  return { strategyOutcome, strategyPct: profitPct };
 }
 
 export function autoOpenStrategyOutcomeLabel(
@@ -198,49 +216,16 @@ export function resolveAutoOpenStrategyHorizonForRow(
     return { outcome: storedOutcome as AutoOpenStrategyOutcome, pct: storedPct };
   }
 
-  const resolved =
-    horizonHours === 24
-      ? resolveAutoOpenStrategyAt24h(row.source, pctHorizon)
-      : resolveAutoOpenStrategyAt48h(row.source, row.maxRoiPct ?? 0, pctHorizon);
-  return { outcome: resolved.strategyOutcome, pct: resolved.strategyPct };
+  void pctHorizon;
+  return null;
 }
 
-/** เติม strategyOutcome/Pct จาก pct24h/pct48h ที่มีอยู่แล้ว */
+/** @deprecated ใช้ follow-up tick จำลอง TP/SL — ไม่ backfill จาก pct ดิบ */
 export function backfillAutoOpenStrategyHorizonFromPct(
-  row: AutoOpenOrderLogRow,
-  nowSec = Math.floor(Date.now() / 1000),
+  _row: AutoOpenOrderLogRow,
+  _nowSec = Math.floor(Date.now() / 1000),
 ): boolean {
-  if (!autoOpenFollowUpEligible(row)) return false;
-  const ac = autoOpenFollowUpAnchorSec(row);
-  let touched = false;
-
-  if (nowSec >= ac + 24 * 3600 && row.pct24h != null && Number.isFinite(row.pct24h)) {
-    const resolved = resolveAutoOpenStrategyAt24h(row.source, row.pct24h);
-    if (row.strategyOutcome24h !== resolved.strategyOutcome) {
-      row.strategyOutcome24h = resolved.strategyOutcome;
-      touched = true;
-    }
-    if (row.strategyPct24h !== resolved.strategyPct) {
-      row.strategyPct24h = resolved.strategyPct;
-      touched = true;
-    }
-  }
-
-  if (nowSec >= ac + 48 * 3600 && row.pct48h != null && Number.isFinite(row.pct48h)) {
-    if (row.strategyOutcome == null || row.strategyPct == null) {
-      const resolved = resolveAutoOpenStrategyAt48h(row.source, row.maxRoiPct ?? 0, row.pct48h);
-      if (row.strategyOutcome !== resolved.strategyOutcome) {
-        row.strategyOutcome = resolved.strategyOutcome;
-        touched = true;
-      }
-      if (row.strategyPct !== resolved.strategyPct) {
-        row.strategyPct = resolved.strategyPct;
-        touched = true;
-      }
-    }
-  }
-
-  return touched;
+  return false;
 }
 
 export function autoOpenStrategyFinalized(

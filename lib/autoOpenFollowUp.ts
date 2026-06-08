@@ -301,9 +301,15 @@ export function autoOpenNeedsFollowUp(
     (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC);
   const needsStrategy24h =
     nowSec >= ac + 24 * HOUR_SEC &&
-    (row.pct24h == null || row.strategyOutcome24h == null || row.strategyPct24h == null);
+    (row.pct24h == null ||
+      row.strategyOutcome24h == null ||
+      row.strategyPct24h == null ||
+      row.strategyExitReason24h == null);
   const needsStrategy48h =
     nowSec >= ac + 48 * HOUR_SEC &&
-    (row.pct48h == null || row.strategyOutcome == null || row.strategyPct == null);
+    (row.pct48h == null ||
+      row.strategyOutcome == null ||
+      row.strategyPct == null ||
+      row.strategyExitReason == null);
   return needsHorizon || needsStrategy24h || needsStrategy48h;
 }

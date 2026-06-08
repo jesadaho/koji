@@ -63,12 +63,18 @@ export type AutoOpenOrderLogRow = {
   durationToMfeHours?: number | null;
   /** ผล strategy หลังครบ 24h — ดู AutoOpenStrategyOutcome */
   strategyOutcome24h?: string | null;
-  /** P/L % ราคาตามกติกา strategy (ใช้แสดงผลจริง @24h) */
+  /** P/L % จำลอง TP/SL strategy @24h (ไม่ใช่ pct24h ดิบ) */
   strategyPct24h?: number | null;
+  /** เหตุผลปิดจำลอง @24h — tp1_tp2 / time_48h ฯลฯ */
+  strategyExitReason24h?: import("@/lib/tpSlStrategySimulate").StatsTpSlExitReason | null;
   /** ผล strategy หลังครบ 48h — ดู AutoOpenStrategyOutcome */
   strategyOutcome?: string | null;
-  /** P/L % ราคาตามกติกา strategy (ใช้แสดงผลจริง @48h) */
+  /** P/L % จำลอง TP/SL strategy @48h (ไม่ใช่ pct48h ดิบ) */
   strategyPct?: number | null;
+  /** เหตุผลปิดจำลอง @48h */
+  strategyExitReason?: import("@/lib/tpSlStrategySimulate").StatsTpSlExitReason | null;
+  /** cache กำไรกลยุทธ์ตามแผน TP/SL (key = statsTpSlPlanCacheKey) */
+  strategyProfitByPlan?: import("@/lib/statsStrategyProfitClient").StrategyProfitByPlanMap | null;
   /** มีสัญญาณอีกฝั่ง pending คู่กัน — แสดงในตาราง */
   conflictWith?: string | null;
   /** Realised P/L จาก MEXC เมื่อปิด position (รวม funding) */

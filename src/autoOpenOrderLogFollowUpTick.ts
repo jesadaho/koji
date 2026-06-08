@@ -7,11 +7,16 @@ import {
   resolveAutoOpenEntryPrice,
 } from "@/lib/autoOpenFollowUp";
 import {
-  backfillAutoOpenStrategyHorizonFromPct,
-  computeAutoOpenMfe48h,
-  resolveAutoOpenStrategyAt24h,
-  resolveAutoOpenStrategyAt48h,
-} from "@/lib/autoOpenStrategyOutcome";
+  applyAutoOpenTpStrategyHorizon,
+  autoOpenNeedsTpStrategyRecompute,
+  computeAutoOpenTpStrategyAtHorizon,
+  resolveAutoOpenTpSlPlanForRow,
+} from "@/lib/autoOpenTpStrategy";
+import {
+  STATS_STRATEGY_PROFIT_HOLD_24H,
+  STATS_STRATEGY_PROFIT_HOLD_48H,
+} from "@/lib/statsStrategyProfitClient";
+import { computeAutoOpenMfe48h } from "@/lib/autoOpenStrategyOutcome";
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
 import {
   fetchBinanceUsdmKlinesRange,
@@ -21,6 +26,7 @@ import {
   loadAutoOpenOrderLogState,
   saveAutoOpenOrderLogState,
 } from "./autoOpenOrderLogStore";
+import { loadTradingViewMexcSettingsFullMap } from "./tradingViewCloseSettingsStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 
 const KLINE_15M_SEC = 900;
@@ -79,10 +85,56 @@ function applyHorizon(
   return touched;
 }
 
+function applyTpStrategyHorizons(
+  row: AutoOpenOrderLogRow,
+  pack: { timeSec: number[]; high: number[]; low: number[] },
+  ac: number,
+  entry: number,
+  side: "long" | "short",
+  nowSec: number,
+  settingsMap: Awaited<ReturnType<typeof loadTradingViewMexcSettingsFullMap>>,
+): boolean {
+  const plan = resolveAutoOpenTpSlPlanForRow(row, settingsMap);
+  let touched = false;
+
+  if (nowSec >= ac + SEC_24H && row.pct24h != null && Number.isFinite(row.pct24h)) {
+    const computed24 = computeAutoOpenTpStrategyAtHorizon({
+      row,
+      side,
+      entry,
+      pack,
+      ac,
+      holdHours: STATS_STRATEGY_PROFIT_HOLD_24H,
+      plan,
+    });
+    if (applyAutoOpenTpStrategyHorizon(row, STATS_STRATEGY_PROFIT_HOLD_24H, computed24, plan)) {
+      touched = true;
+    }
+  }
+
+  if (nowSec >= ac + SEC_48H && row.pct48h != null && Number.isFinite(row.pct48h)) {
+    const computed48 = computeAutoOpenTpStrategyAtHorizon({
+      row,
+      side,
+      entry,
+      pack,
+      ac,
+      holdHours: STATS_STRATEGY_PROFIT_HOLD_48H,
+      plan,
+    });
+    if (applyAutoOpenTpStrategyHorizon(row, STATS_STRATEGY_PROFIT_HOLD_48H, computed48, plan)) {
+      touched = true;
+    }
+  }
+
+  return touched;
+}
+
 async function followUpRow(
   row: AutoOpenOrderLogRow,
   nowMs: number,
   nowSec: number,
+  settingsMap: Awaited<ReturnType<typeof loadTradingViewMexcSettingsFullMap>>,
 ): Promise<boolean> {
   const entry = resolveAutoOpenEntryPrice(row)!;
   const side = row.side!;
@@ -96,15 +148,11 @@ async function followUpRow(
     endTimeMs: nowMs,
     limit: 500,
   });
-  if (!pack || pack.timeSec.length === 0) {
-    return backfillAutoOpenStrategyHorizonFromPct(row, nowSec);
-  }
+  if (!pack || pack.timeSec.length === 0) return false;
 
   const { timeSec, close, high, low } = pack;
   const iFirst = timeSec.findIndex((t) => t + KLINE_15M_SEC >= ac);
-  if (iFirst < 0) {
-    return backfillAutoOpenStrategyHorizonFromPct(row, nowSec);
-  }
+  if (iFirst < 0) return false;
 
   let iLastHorizon = iFirst;
   for (let i = iFirst; i < timeSec.length; i++) {
@@ -186,18 +234,6 @@ async function followUpRow(
       ) || touched;
   }
 
-  if (nowSec >= ac + SEC_24H && row.pct24h != null && Number.isFinite(row.pct24h)) {
-    const resolved24 = resolveAutoOpenStrategyAt24h(row.source, row.pct24h);
-    if (row.strategyOutcome24h !== resolved24.strategyOutcome) {
-      row.strategyOutcome24h = resolved24.strategyOutcome;
-      touched = true;
-    }
-    if (row.strategyPct24h !== resolved24.strategyPct) {
-      row.strategyPct24h = resolved24.strategyPct;
-      touched = true;
-    }
-  }
-
   if (nowSec >= ac + SEC_48H && row.pct48h != null && Number.isFinite(row.pct48h)) {
     const mfe = computeAutoOpenMfe48h(
       side,
@@ -222,16 +258,11 @@ async function followUpRow(
         row.durationToMfeHours = mfe.durationToMfeHours;
         touched = true;
       }
-      const resolved = resolveAutoOpenStrategyAt48h(row.source, mfe.maxRoiPct, row.pct48h);
-      if (row.strategyOutcome !== resolved.strategyOutcome) {
-        row.strategyOutcome = resolved.strategyOutcome;
-        touched = true;
-      }
-      if (row.strategyPct !== resolved.strategyPct) {
-        row.strategyPct = resolved.strategyPct;
-        touched = true;
-      }
     }
+  }
+
+  if (applyTpStrategyHorizons(row, pack, ac, entry, side, nowSec, followUpSettingsMap)) {
+    touched = true;
   }
 
   return touched;
@@ -244,6 +275,7 @@ export async function runAutoOpenOrderLogFollowUpTick(
     return { dirty: 0, rowsChecked: 0 };
   }
 
+  const settingsMap = await loadTradingViewMexcSettingsFullMap();
   const state = await loadAutoOpenOrderLogState();
   const nowSec = Math.floor(nowMs / 1000);
   let dirty = 0;
@@ -251,15 +283,21 @@ export async function runAutoOpenOrderLogFollowUpTick(
 
   for (const row of state.rows) {
     if (backfillAutoOpenEntryPrice(row)) dirty += 1;
-    if (backfillAutoOpenStrategyHorizonFromPct(row, nowSec)) dirty += 1;
   }
 
-  const pending = state.rows.filter((row) => autoOpenNeedsFollowUp(row, nowSec));
+  const pending = state.rows.filter((row) => {
+    if (!autoOpenFollowUpEligible(row)) return false;
+    if (autoOpenNeedsFollowUp(row, nowSec)) return true;
+    const plan = resolveAutoOpenTpSlPlanForRow(row, settingsMap);
+    const ac = autoOpenFollowUpAnchorSec(row);
+    return autoOpenNeedsTpStrategyRecompute(row, plan, nowSec, ac);
+  });
+
   for (const row of pending) {
     if (!autoOpenFollowUpEligible(row)) continue;
     rowsChecked += 1;
     try {
-      if (await followUpRow(row, nowMs, nowSec)) dirty += 1;
+      if (await followUpRow(row, nowMs, nowSec, settingsMap)) dirty += 1;
     } catch (e) {
       console.error("[autoOpenOrderLogFollowUp] row", row.id, row.binanceSymbol, e);
     }

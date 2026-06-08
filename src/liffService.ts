@@ -110,13 +110,13 @@ import {
   type AutoOpenOrderLogApiPayload,
   type AutoOpenSource,
 } from "@/lib/autoOpenOrderLogClient";
-import { backfillAutoOpenStrategyHorizonFromPct } from "@/lib/autoOpenStrategyOutcome";
+import { withAutoOpenTpStrategyDisplayFields } from "@/lib/autoOpenTpStrategy";
+import { resolveTpSlPlanForUserId } from "@/lib/statsTpSlPlanForUser";
 import {
   listAutoOpenOrderLogsForUser,
   deleteSkippedAutoOpenOrderLogsForUser,
   countSkippedAutoOpenOrderLogsForUser,
   loadAutoOpenOrderLogState,
-  saveAutoOpenOrderLogState,
 } from "./autoOpenOrderLogStore";
 import { attachAutoOpenMexcActiveFlags } from "./autoOpenMexcActiveForUser";
 import { collectAutoOpenContractSymbols, fetchAutoOpenMarkPrices } from "./autoOpenMarkPrices";
@@ -126,6 +126,7 @@ import { isPctStepPresetValue, PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets
 import { clearPortfolioTrailingStateForUser } from "./portfolioTrailingAlertStateStore";
 import {
   ensureTradingViewMexcUserRow,
+  loadTradingViewMexcSettingsFullMap,
   orderSideEffective,
   saveTradingViewMexcSettings,
   type SaveTradingViewMexcInput,
@@ -876,18 +877,7 @@ export async function liffGetAutoOpenOrderHistory(
   userId: string,
   opts?: { days?: number; source?: AutoOpenSource },
 ): Promise<AutoOpenOrderLogApiPayload> {
-  const nowSec = Math.floor(Date.now() / 1000);
-  const state = await loadAutoOpenOrderLogState();
-  let strategyBackfillDirty = 0;
-  for (const row of state.rows) {
-    if (row.userId !== userId) continue;
-    if (opts?.source && row.source !== opts.source) continue;
-    if (backfillAutoOpenStrategyHorizonFromPct(row, nowSec)) strategyBackfillDirty += 1;
-  }
-  if (strategyBackfillDirty > 0) {
-    await saveAutoOpenOrderLogState(state);
-  }
-
+  const settingsMap = await loadTradingViewMexcSettingsFullMap();
   const rawRows = await listAutoOpenOrderLogsForUser(userId, opts);
   const conflictSets = await loadPendingConflictSets();
   const rowsWithConflict: AutoOpenOrderLogRow[] = rawRows.map((r) => ({
@@ -898,7 +888,11 @@ export async function liffGetAutoOpenOrderHistory(
       r.source,
     ),
   }));
-  const rows = await attachAutoOpenMexcActiveFlags(userId, rowsWithConflict);
+  const rowsActive = await attachAutoOpenMexcActiveFlags(userId, rowsWithConflict);
+  const rows = rowsActive.map((r) => {
+    const plan = resolveTpSlPlanForUserId(userId, r.source, settingsMap);
+    return withAutoOpenTpStrategyDisplayFields(r, plan);
+  });
   const skippedTotal = await countSkippedAutoOpenOrderLogsForUser(userId, {
     source: opts?.source,
   });
