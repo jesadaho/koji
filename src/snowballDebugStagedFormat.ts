@@ -26,9 +26,13 @@ import {
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
 } from "./snowballTrendMomentumMetrics";
 import {
+  evaluateSnowballConfirmInvertedDojiLong,
   evaluateSnowballTwoBarInlineLong,
   snowballConfirmVolMinRatio,
   snowballMinLow1hBetweenClosedBars,
+  snowballTwoBarConfirmInvertedDojiBodyMax,
+  snowballTwoBarConfirmInvertedDojiCloseLowMax,
+  snowballTwoBarConfirmInvertedDojiUpperWickMin,
   snowballTwoBarInlinePullbackMaxFrac,
 } from "./snowballTwoBarInline";
 
@@ -160,6 +164,7 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
   const stage1Pass = structureMain && emaTrendOk && innerOk;
 
   const twoBar = evaluateSnowballTwoBarInlineLong({
+    open: input.open,
     close,
     high,
     low,
@@ -275,6 +280,18 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     `  [${stageMark(twoBar.pullbackOk)}] Pullback Check  : ${pullbackPct.toFixed(1)}% (Limit <= ${(frac * 100).toFixed(0)}%)`,
     `  [${stageMark(twoBar.volRatioOk)}] Vol Ratio Check : ${Number.isFinite(volRatio) ? fmtNum(volRatio, 2) : "—"}  (Limit >= ${vr})`,
     `  [${stageMark(twoBar.minLow1hOk)}] Min-Low 1H Check: Min ${minL != null ? fmtPx(minL) : "—"} >= Signal Low ${fmtPx(sigL)}`,
+    (() => {
+      const confO = input.open[iConf]!;
+      const confH = high[iConf]!;
+      const confL = low[iConf]!;
+      const confC = close[iConf]!;
+      const inv = evaluateSnowballConfirmInvertedDojiLong(confO, confH, confL, confC);
+      const wickMin = snowballTwoBarConfirmInvertedDojiUpperWickMin();
+      const bodyMax = snowballTwoBarConfirmInvertedDojiBodyMax();
+      const closeLowMax = snowballTwoBarConfirmInvertedDojiCloseLowMax();
+      const blockRule = `block ถ้าไส้บน≥${(wickMin * 100).toFixed(0)}% และเนื้อ≤${(bodyMax * 100).toFixed(0)}% (แดง) หรือปิดต่ำ≤${(closeLowMax * 100).toFixed(0)}% ของแท่ง`;
+      return `  [${stageMark(twoBar.confirmNotInvertedDojiOk)}] Confirm ไม่ใช่โดจิกลับหัว: ไส้บน ${(inv.upperWickRatio * 100).toFixed(1)}% · เนื้อ ${(inv.bodyRatio * 100).toFixed(1)}% · ปิดที่ ${(inv.closePositionRatio * 100).toFixed(1)}% (${blockRule})`;
+    })(),
     "",
     `🟡 [STAGE 3: MOMENTUM & VOL 1H] -> ${stage3Head}`,
     `  [${stageMark(ddOk)}] Max DD 15m (${SNOWBALL_TREND_15M_DD_LOOKBACK} Bars) : ${ddPct != null ? ddPct.toFixed(2) : "—"}% (Limit <= ${ddMax}%)${!ddOk ? " -> [FAILED]" : ""}`,

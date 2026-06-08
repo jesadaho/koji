@@ -3230,6 +3230,7 @@ export async function runPublicIndicatorFeedInternal(
         let twoBarEval: SnowballTwoBarInlineEval | null = null;
         if (twoBarInline) {
           twoBarEval = evaluateSnowballTwoBarInlineLong({
+            open: o15,
             close: c15,
             high: h15,
             low: l15,
@@ -3699,6 +3700,7 @@ export async function runPublicIndicatorFeedInternal(
               pack1hTrend ?? pack1hForTwoBar,
               twoBarInline
                 ? {
+                    open: o15,
                     close: c15,
                     high: h15,
                     low: l15,

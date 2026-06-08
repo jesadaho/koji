@@ -5,9 +5,12 @@
 import type { BinanceIndicatorTf, BinanceKlinePack } from "./binanceIndicatorKline";
 import { snowballTfBarDurationSec } from "./snowballLongBreakoutGrade";
 import {
+  evaluateSnowballConfirmInvertedDojiLong,
   evaluateSnowballTwoBarInlineLong,
   snowballConfirmVolMinRatio,
   snowballMinLow1hBetweenClosedBars,
+  snowballTwoBarConfirmInvertedDojiBodyMax,
+  snowballTwoBarConfirmInvertedDojiUpperWickMin,
   snowballTwoBarInlinePullbackMaxFrac,
 } from "./snowballTwoBarInline";
 
@@ -25,6 +28,7 @@ function fmtNum(n: number, digits = 4): string {
 
 /** Two-bar inline — ขั้น confirm LONG (4h) */
 export function buildSnowballTwoBarLongConfirmGateSteps(input: {
+  open: number[];
   close: number[];
   high: number[];
   low: number[];
@@ -35,8 +39,9 @@ export function buildSnowballTwoBarLongConfirmGateSteps(input: {
   snowTf: BinanceIndicatorTf;
   pack1h: BinanceKlinePack | null;
 }): SnowballStatsGateStep[] {
-  const { close, high, low, volume, timeSec, iSig, iConf, snowTf, pack1h } = input;
+  const { open, close, high, low, volume, timeSec, iSig, iConf, snowTf, pack1h } = input;
   const ev = evaluateSnowballTwoBarInlineLong({
+    open,
     close,
     high,
     low,
@@ -84,6 +89,21 @@ export function buildSnowballTwoBarLongConfirmGateSteps(input: {
       detail: pack1h?.timeSec?.length
         ? `min low 1H = ${minL != null ? fmtNum(minL) : "—"} · low สัญญาณ = ${fmtNum(sigL)}`
         : "ไม่มีข้อมูล 1H",
+    },
+    {
+      label: "Confirm ไม่ใช่โดจิกลับหัว",
+      ok: ev.confirmNotInvertedDojiOk,
+      detail: (() => {
+        const inv = evaluateSnowballConfirmInvertedDojiLong(
+          open[iConf]!,
+          high[iConf]!,
+          low[iConf]!,
+          close[iConf]!,
+        );
+        const wickMin = snowballTwoBarConfirmInvertedDojiUpperWickMin();
+        const bodyMax = snowballTwoBarConfirmInvertedDojiBodyMax();
+        return `ไส้บน ${(inv.upperWickRatio * 100).toFixed(1)}% (block ถ้า ≥${(wickMin * 100).toFixed(0)}% และเนื้อ ≤${(bodyMax * 100).toFixed(0)}%) · เนื้อ ${(inv.bodyRatio * 100).toFixed(1)}%`;
+      })(),
     },
   ];
 }
