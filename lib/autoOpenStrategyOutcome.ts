@@ -269,6 +269,12 @@ export type AutoOpenStrategyHorizonSummary = {
   sumUsdt: number | null;
   sumUsdtSuccess: number | null;
   sumUsdtFailed: number | null;
+  sumWinUsdt: number | null;
+  sumLossUsdt: number | null;
+  sumWinUsdtSuccess: number | null;
+  sumLossUsdtSuccess: number | null;
+  sumWinUsdtFailed: number | null;
+  sumLossUsdtFailed: number | null;
 };
 
 export type AutoOpenStrategy48hSummary = AutoOpenStrategyHorizonSummary & {
@@ -297,6 +303,18 @@ function summarizeAutoOpenStrategyAtHorizon(
   let hasUsdtSuccess = false;
   let sumUsdtFailed = 0;
   let hasUsdtFailed = false;
+  let sumWinUsdt = 0;
+  let hasWin = false;
+  let sumLossUsdt = 0;
+  let hasLoss = false;
+  let sumWinUsdtSuccess = 0;
+  let hasWinSuccess = false;
+  let sumLossUsdtSuccess = 0;
+  let hasLossSuccess = false;
+  let sumWinUsdtFailed = 0;
+  let hasWinFailed = false;
+  let sumLossUsdtFailed = 0;
+  let hasLossFailed = false;
 
   for (const r of rows) {
     if (!autoOpenStrategy48hEligible(r)) continue;
@@ -342,12 +360,33 @@ function summarizeAutoOpenStrategyAtHorizon(
       if (usd != null && Number.isFinite(usd)) {
         sumUsdt += usd;
         hasUsdt = true;
+        if (isAutoOpenStrategyWinOutcome(o)) {
+          sumWinUsdt += usd;
+          hasWin = true;
+        } else if (o === "loss") {
+          sumLossUsdt += usd;
+          hasLoss = true;
+        }
         if (r.outcome === "failed") {
           sumUsdtFailed += usd;
           hasUsdtFailed = true;
+          if (isAutoOpenStrategyWinOutcome(o)) {
+            sumWinUsdtFailed += usd;
+            hasWinFailed = true;
+          } else if (o === "loss") {
+            sumLossUsdtFailed += usd;
+            hasLossFailed = true;
+          }
         } else {
           sumUsdtSuccess += usd;
           hasUsdtSuccess = true;
+          if (isAutoOpenStrategyWinOutcome(o)) {
+            sumWinUsdtSuccess += usd;
+            hasWinSuccess = true;
+          } else if (o === "loss") {
+            sumLossUsdtSuccess += usd;
+            hasLossSuccess = true;
+          }
         }
       }
     }
@@ -369,6 +408,12 @@ function summarizeAutoOpenStrategyAtHorizon(
     sumUsdt: hasUsdt ? sumUsdt : null,
     sumUsdtSuccess: hasUsdtSuccess ? sumUsdtSuccess : null,
     sumUsdtFailed: hasUsdtFailed ? sumUsdtFailed : null,
+    sumWinUsdt: hasWin ? sumWinUsdt : null,
+    sumLossUsdt: hasLoss ? sumLossUsdt : null,
+    sumWinUsdtSuccess: hasWinSuccess ? sumWinUsdtSuccess : null,
+    sumLossUsdtSuccess: hasLossSuccess ? sumLossUsdtSuccess : null,
+    sumWinUsdtFailed: hasWinFailed ? sumWinUsdtFailed : null,
+    sumLossUsdtFailed: hasLossFailed ? sumLossUsdtFailed : null,
   };
 }
 
@@ -397,27 +442,108 @@ export function autoOpenPnlBucketHeadlineUsdt(
   return bucket.sumUsdt;
 }
 
-export function formatAutoOpenPnlBucketParts(
-  label: string,
-  bucket: Pick<AutoOpenPnlUsdtBucket, "sumUsdt" | "sumUsdtSuccess" | "sumUsdtFailed">,
+export function autoOpenPnlBucketHeadlineWinLoss(
+  bucket: Pick<
+    AutoOpenPnlUsdtBucket,
+    | "sumWinUsdt"
+    | "sumLossUsdt"
+    | "sumWinUsdtSuccess"
+    | "sumLossUsdtSuccess"
+    | "sumUsdt"
+    | "sumUsdtSuccess"
+  >,
+  failedTrades: number,
+): { win: number | null; loss: number | null; net: number | null } {
+  const useSuccessOnly = failedTrades > 0;
+  return {
+    win: useSuccessOnly ? bucket.sumWinUsdtSuccess : bucket.sumWinUsdt,
+    loss: useSuccessOnly ? bucket.sumLossUsdtSuccess : bucket.sumLossUsdt,
+    net: autoOpenPnlBucketHeadlineUsdt(bucket, failedTrades),
+  };
+}
+
+export function formatAutoOpenPnlWinLossParts(
+  win: number | null | undefined,
+  loss: number | null | undefined,
+  net: number | null | undefined,
+): string {
+  const parts: string[] = [];
+  if (win != null && win > 0) {
+    parts.push(`P ${formatStatsStrategyProfitDollarAmount(win)}`);
+  }
+  if (loss != null && loss < 0) {
+    parts.push(`L ${formatStatsStrategyProfitDollarAmount(loss)}`);
+  }
+  if (parts.length === 0) {
+    return net != null ? formatStatsStrategyProfitDollarAmount(net) : "";
+  }
+  if (net != null) {
+    parts.push(`สุทธิ ${formatStatsStrategyProfitDollarAmount(net)}`);
+  }
+  return parts.join(" · ");
+}
+
+function formatAutoOpenPnlBucketSubSplit(
+  bucket: Pick<
+    AutoOpenPnlUsdtBucket,
+    | "sumUsdtSuccess"
+    | "sumUsdtFailed"
+    | "sumWinUsdtSuccess"
+    | "sumLossUsdtSuccess"
+    | "sumWinUsdtFailed"
+    | "sumLossUsdtFailed"
+  >,
   successTrades: number,
   failedTrades: number,
 ): string {
-  const headline = autoOpenPnlBucketHeadlineUsdt(bucket, failedTrades);
-  if (headline == null) return "";
-  const head = `${label} ${formatStatsStrategyProfitDollarAmount(headline)}`;
+  const sub: string[] = [];
+  if (successTrades > 0 && bucket.sumUsdtSuccess != null) {
+    sub.push(
+      `สำเร็จ ${formatAutoOpenPnlWinLossParts(
+        bucket.sumWinUsdtSuccess,
+        bucket.sumLossUsdtSuccess,
+        bucket.sumUsdtSuccess,
+      )}`,
+    );
+  }
+  if (failedTrades > 0 && bucket.sumUsdtFailed != null) {
+    sub.push(
+      `ล้มเหลว(สมมติ) ${formatAutoOpenPnlWinLossParts(
+        bucket.sumWinUsdtFailed,
+        bucket.sumLossUsdtFailed,
+        bucket.sumUsdtFailed,
+      )}`,
+    );
+  }
+  return sub.join(" · ");
+}
+
+export function formatAutoOpenPnlBucketParts(
+  label: string,
+  bucket: Pick<
+    AutoOpenPnlUsdtBucket,
+    | "sumUsdt"
+    | "sumUsdtSuccess"
+    | "sumUsdtFailed"
+    | "sumWinUsdt"
+    | "sumLossUsdt"
+    | "sumWinUsdtSuccess"
+    | "sumLossUsdtSuccess"
+    | "sumWinUsdtFailed"
+    | "sumLossUsdtFailed"
+  >,
+  successTrades: number,
+  failedTrades: number,
+): string {
+  const { win, loss, net } = autoOpenPnlBucketHeadlineWinLoss(bucket, failedTrades);
+  if (net == null && win == null && loss == null) return "";
+  const head = `${label} ${formatAutoOpenPnlWinLossParts(win, loss, net)}`;
   const showSplit =
     failedTrades > 0 && (bucket.sumUsdtSuccess != null || bucket.sumUsdtFailed != null);
   if (!showSplit) return ` · ${head}`;
-  const sub: string[] = [];
-  if (successTrades > 0 && bucket.sumUsdtSuccess != null) {
-    sub.push(`สำเร็จ ${formatStatsStrategyProfitDollarAmount(bucket.sumUsdtSuccess)}`);
-  }
-  if (failedTrades > 0 && bucket.sumUsdtFailed != null) {
-    sub.push(`ล้มเหลว(สมมติ) ${formatStatsStrategyProfitDollarAmount(bucket.sumUsdtFailed)}`);
-  }
-  if (sub.length === 0) return ` · ${head}`;
-  return ` · ${head} (${sub.join(" · ")})`;
+  const sub = formatAutoOpenPnlBucketSubSplit(bucket, successTrades, failedTrades);
+  if (!sub) return ` · ${head}`;
+  return ` · ${head} (${sub})`;
 }
 
 /** P/L mark สด — ไม้ที่ยังไม่ครบ 24h */

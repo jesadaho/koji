@@ -38,7 +38,7 @@ import {
   statsStrategyExitReasonShort,
 } from "@/lib/statsStrategyProfitClient";
 import {
-  autoOpenPnlBucketHeadlineUsdt,
+  autoOpenPnlBucketHeadlineWinLoss,
   autoOpenStrategyOutcomeLabel,
   formatAutoOpenStrategy48hSummaryText,
   formatAutoOpenStrategyHorizonSummaryText,
@@ -121,8 +121,63 @@ function pnlAmountStyle(amount: number): { color: string; fontWeight: number } {
   return { color: "inherit", fontWeight: 600 };
 }
 
+function renderPnlWinLossInline(
+  win: number | null | undefined,
+  loss: number | null | undefined,
+  net: number | null | undefined,
+): ReactNode {
+  const nodes: ReactNode[] = [];
+  if (win != null && win > 0) {
+    nodes.push(
+      <span key="p">
+        P{" "}
+        <span style={pnlAmountStyle(win)}>{formatStatsStrategyProfitDollarAmount(win)}</span>
+      </span>,
+    );
+  }
+  if (loss != null && loss < 0) {
+    nodes.push(
+      <span key="l">
+        L{" "}
+        <span style={pnlAmountStyle(loss)}>{formatStatsStrategyProfitDollarAmount(loss)}</span>
+      </span>,
+    );
+  }
+  if (nodes.length === 0) {
+    return net != null ? (
+      <span style={pnlAmountStyle(net)}>{formatStatsStrategyProfitDollarAmount(net)}</span>
+    ) : null;
+  }
+  if (net != null) {
+    nodes.push(
+      <span key="net">
+        สุทธิ{" "}
+        <span style={pnlAmountStyle(net)}>{formatStatsStrategyProfitDollarAmount(net)}</span>
+      </span>,
+    );
+  }
+  return nodes.reduce<ReactNode>((acc, node, i) => {
+    if (i === 0) return node;
+    return (
+      <>
+        {acc}
+        {" · "}
+        {node}
+      </>
+    );
+  }, null);
+}
+
 function renderPnlBucketSplit(
-  bucket: Pick<AutoOpenPnlUsdtBucket, "sumUsdtSuccess" | "sumUsdtFailed">,
+  bucket: Pick<
+    AutoOpenPnlUsdtBucket,
+    | "sumUsdtSuccess"
+    | "sumUsdtFailed"
+    | "sumWinUsdtSuccess"
+    | "sumLossUsdtSuccess"
+    | "sumWinUsdtFailed"
+    | "sumLossUsdtFailed"
+  >,
   successTrades: number,
   failedTrades: number,
 ): ReactNode | null {
@@ -134,10 +189,11 @@ function renderPnlBucketSplit(
       {" ("}
       {successTrades > 0 && bucket.sumUsdtSuccess != null ? (
         <>
-          สำเร็จ{" "}
-          <span style={pnlAmountStyle(bucket.sumUsdtSuccess)}>
-            {formatStatsStrategyProfitDollarAmount(bucket.sumUsdtSuccess)}
-          </span>
+          สำเร็จ {renderPnlWinLossInline(
+            bucket.sumWinUsdtSuccess,
+            bucket.sumLossUsdtSuccess,
+            bucket.sumUsdtSuccess,
+          )}
         </>
       ) : null}
       {successTrades > 0 &&
@@ -149,9 +205,11 @@ function renderPnlBucketSplit(
       {failedTrades > 0 && bucket.sumUsdtFailed != null ? (
         <>
           <span style={{ color: "var(--warn, #b86)" }}>ล้มเหลว(สมมติ)</span>{" "}
-          <span style={pnlAmountStyle(bucket.sumUsdtFailed)}>
-            {formatStatsStrategyProfitDollarAmount(bucket.sumUsdtFailed)}
-          </span>
+          {renderPnlWinLossInline(
+            bucket.sumWinUsdtFailed,
+            bucket.sumLossUsdtFailed,
+            bucket.sumUsdtFailed,
+          )}
         </>
       ) : null}
       {")"}
@@ -164,14 +222,12 @@ function renderPnlBucketRow(
   bucket: AutoOpenPnlUsdtBucket,
   opts?: { showTradeCount?: boolean; title?: string },
 ): ReactNode | null {
-  const headline = autoOpenPnlBucketHeadlineUsdt(bucket, bucket.failedTrades);
-  if (headline == null) return null;
+  const { win, loss, net } = autoOpenPnlBucketHeadlineWinLoss(bucket, bucket.failedTrades);
+  if (net == null && win == null && loss == null) return null;
   return (
     <div style={{ marginTop: "0.35rem" }} title={opts?.title}>
       <span>{label} </span>
-      <span style={pnlAmountStyle(headline)}>
-        {formatStatsStrategyProfitDollarAmount(headline)}
-      </span>
+      {renderPnlWinLossInline(win, loss, net)}
       {renderPnlBucketSplit(bucket, bucket.successTrades, bucket.failedTrades)}
       {opts?.showTradeCount && bucket.trades > 0 ? (
         <span style={{ color: PNL_MUTED }}> ({bucket.trades} ไม้)</span>
@@ -249,6 +305,12 @@ function renderAutoOpenStrategy24hSummaryLine(
     sumUsdt: closed24h.sumUsdt,
     sumUsdtSuccess: closed24h.sumUsdtSuccess,
     sumUsdtFailed: closed24h.sumUsdtFailed,
+    sumWinUsdt: closed24h.sumWinUsdt,
+    sumLossUsdt: closed24h.sumLossUsdt,
+    sumWinUsdtSuccess: closed24h.sumWinUsdtSuccess,
+    sumLossUsdtSuccess: closed24h.sumLossUsdtSuccess,
+    sumWinUsdtFailed: closed24h.sumWinUsdtFailed,
+    sumLossUsdtFailed: closed24h.sumLossUsdtFailed,
   };
 
   return (
@@ -292,6 +354,12 @@ function renderAutoOpenStrategy48hSummary(
     sumUsdt: closed.sumUsdt,
     sumUsdtSuccess: closed.sumUsdtSuccess,
     sumUsdtFailed: closed.sumUsdtFailed,
+    sumWinUsdt: closed.sumWinUsdt,
+    sumLossUsdt: closed.sumLossUsdt,
+    sumWinUsdtSuccess: closed.sumWinUsdtSuccess,
+    sumLossUsdtSuccess: closed.sumLossUsdtSuccess,
+    sumWinUsdtFailed: closed.sumWinUsdtFailed,
+    sumLossUsdtFailed: closed.sumLossUsdtFailed,
   };
 
   if (closed.trades === 0) {

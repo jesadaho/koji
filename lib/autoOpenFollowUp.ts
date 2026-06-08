@@ -10,7 +10,26 @@ export type AutoOpenPnlUsdtBucket = {
   sumUsdt: number | null;
   sumUsdtSuccess: number | null;
   sumUsdtFailed: number | null;
+  sumWinUsdt: number | null;
+  sumLossUsdt: number | null;
+  sumWinUsdtSuccess: number | null;
+  sumLossUsdtSuccess: number | null;
+  sumWinUsdtFailed: number | null;
+  sumLossUsdtFailed: number | null;
 };
+
+function accumulateSignedPnlWinLoss(
+  acc: { sumWinUsdt: number; hasWin: boolean; sumLossUsdt: number; hasLoss: boolean },
+  usd: number,
+): void {
+  if (usd > 0) {
+    acc.sumWinUsdt += usd;
+    acc.hasWin = true;
+  } else if (usd < 0) {
+    acc.sumLossUsdt += usd;
+    acc.hasLoss = true;
+  }
+}
 
 export function autoOpenContractSymbolKey(symbol: string): string {
   return symbol.trim().toUpperCase();
@@ -37,6 +56,18 @@ export function accumulateAutoOpenPnlUsdt(
     hasUsdtSuccess: boolean;
     sumUsdtFailed: number;
     hasUsdtFailed: boolean;
+    sumWinUsdt: number;
+    hasWin: boolean;
+    sumLossUsdt: number;
+    hasLoss: boolean;
+    sumWinUsdtSuccess: number;
+    hasWinSuccess: boolean;
+    sumLossUsdtSuccess: number;
+    hasLossSuccess: boolean;
+    sumWinUsdtFailed: number;
+    hasWinFailed: boolean;
+    sumLossUsdtFailed: number;
+    hasLossFailed: boolean;
   },
   row: AutoOpenOrderLogRow,
   profitPct: number,
@@ -55,12 +86,27 @@ export function accumulateAutoOpenPnlUsdt(
 
   bucket.sumUsdt += usd;
   bucket.hasUsdt = true;
+  accumulateSignedPnlWinLoss(bucket, usd);
   if (row.outcome === "failed") {
     bucket.sumUsdtFailed += usd;
     bucket.hasUsdtFailed = true;
+    if (usd > 0) {
+      bucket.sumWinUsdtFailed += usd;
+      bucket.hasWinFailed = true;
+    } else if (usd < 0) {
+      bucket.sumLossUsdtFailed += usd;
+      bucket.hasLossFailed = true;
+    }
   } else {
     bucket.sumUsdtSuccess += usd;
     bucket.hasUsdtSuccess = true;
+    if (usd > 0) {
+      bucket.sumWinUsdtSuccess += usd;
+      bucket.hasWinSuccess = true;
+    } else if (usd < 0) {
+      bucket.sumLossUsdtSuccess += usd;
+      bucket.hasLossSuccess = true;
+    }
   }
 }
 
@@ -75,6 +121,18 @@ export function emptyAutoOpenPnlUsdtAccumulator() {
     hasUsdtSuccess: false,
     sumUsdtFailed: 0,
     hasUsdtFailed: false,
+    sumWinUsdt: 0,
+    hasWin: false,
+    sumLossUsdt: 0,
+    hasLoss: false,
+    sumWinUsdtSuccess: 0,
+    hasWinSuccess: false,
+    sumLossUsdtSuccess: 0,
+    hasLossSuccess: false,
+    sumWinUsdtFailed: 0,
+    hasWinFailed: false,
+    sumLossUsdtFailed: 0,
+    hasLossFailed: false,
   };
 }
 
@@ -88,6 +146,12 @@ export function finalizeAutoOpenPnlUsdtBucket(
     sumUsdt: acc.hasUsdt ? acc.sumUsdt : null,
     sumUsdtSuccess: acc.hasUsdtSuccess ? acc.sumUsdtSuccess : null,
     sumUsdtFailed: acc.hasUsdtFailed ? acc.sumUsdtFailed : null,
+    sumWinUsdt: acc.hasWin ? acc.sumWinUsdt : null,
+    sumLossUsdt: acc.hasLoss ? acc.sumLossUsdt : null,
+    sumWinUsdtSuccess: acc.hasWinSuccess ? acc.sumWinUsdtSuccess : null,
+    sumLossUsdtSuccess: acc.hasLossSuccess ? acc.sumLossUsdtSuccess : null,
+    sumWinUsdtFailed: acc.hasWinFailed ? acc.sumWinUsdtFailed : null,
+    sumLossUsdtFailed: acc.hasLossFailed ? acc.sumLossUsdtFailed : null,
   };
 }
 
