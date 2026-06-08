@@ -518,20 +518,22 @@ function formatAutoOpenPnlBucketSubSplit(
   return sub.join(" · ");
 }
 
+type AutoOpenPnlBucketFormatSlice = Pick<
+  AutoOpenPnlUsdtBucket,
+  | "sumUsdt"
+  | "sumUsdtSuccess"
+  | "sumUsdtFailed"
+  | "sumWinUsdt"
+  | "sumLossUsdt"
+  | "sumWinUsdtSuccess"
+  | "sumLossUsdtSuccess"
+  | "sumWinUsdtFailed"
+  | "sumLossUsdtFailed"
+>;
+
 export function formatAutoOpenPnlBucketParts(
   label: string,
-  bucket: Pick<
-    AutoOpenPnlUsdtBucket,
-    | "sumUsdt"
-    | "sumUsdtSuccess"
-    | "sumUsdtFailed"
-    | "sumWinUsdt"
-    | "sumLossUsdt"
-    | "sumWinUsdtSuccess"
-    | "sumLossUsdtSuccess"
-    | "sumWinUsdtFailed"
-    | "sumLossUsdtFailed"
-  >,
+  bucket: AutoOpenPnlBucketFormatSlice,
   successTrades: number,
   failedTrades: number,
 ): string {
@@ -576,7 +578,7 @@ export function summarizeAutoOpenUnrealizedPnl(
 
 function formatAutoOpenPnlBucketLine(
   label: string,
-  bucket: Pick<AutoOpenPnlUsdtBucket, "sumUsdt" | "sumUsdtSuccess" | "sumUsdtFailed">,
+  bucket: AutoOpenPnlBucketFormatSlice,
   successTrades: number,
   failedTrades: number,
   tradeCount?: number,
