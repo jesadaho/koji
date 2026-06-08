@@ -267,7 +267,9 @@ function renderAutoOpenStrategy24hSummaryLine(
         {wrNode}
         {pendingNode}
       </div>
-      {renderPnlBucketRow("Realised@24h", closed24Bucket)}
+      {renderPnlBucketRow("จำลอง@24h", closed24Bucket, {
+        title: "P/L จำลอง TP/SL รวมไม้สำเร็จที่ครบ 24h (ไม้ล้มเหลวแยกในวงเล็บ)",
+      })}
     </div>
   );
 }
@@ -468,12 +470,10 @@ function fmtStrategyHorizonPnlCell(
   const exitShort = statsStrategyExitReasonShort(
     statsStrategyExitReasonForHorizon(row, hours),
   );
+  const margin = autoOpenRowMarginUsdt(row);
   const usdtLine =
-    row.marginUsdt != null &&
-    row.leverage != null &&
-    row.marginUsdt > 0 &&
-    row.leverage > 0
-      ? fmtPnlUsdt(row.marginUsdt, row.leverage, pct)
+    margin != null && row.leverage != null && margin > 0 && row.leverage > 0
+      ? fmtPnlUsdt(margin, row.leverage, pct)
       : null;
   return (
     <span
@@ -517,12 +517,10 @@ function fmtPnlCell(
   }
   const pct = pctVsEntrySide(row.side, entry, markPrice);
   const displayPct = resolveStatsStrategyDisplayPct(pct, row.leverage);
+  const margin = autoOpenRowMarginUsdt(row);
   const usdtLine =
-    row.marginUsdt != null &&
-    row.leverage != null &&
-    row.marginUsdt > 0 &&
-    row.leverage > 0
-      ? fmtPnlUsdt(row.marginUsdt, row.leverage, pct)
+    margin != null && row.leverage != null && margin > 0 && row.leverage > 0
+      ? fmtPnlUsdt(margin, row.leverage, pct)
       : null;
   return (
     <span style={{ whiteSpace: "nowrap", ...pnlStyle(displayPct) }}>
@@ -989,7 +987,12 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   );
   const strategy48hSummaryTitle = useMemo(() => {
     const lines = [
-      formatAutoOpenStrategyHorizonSummaryText("ผล@24h", strategy24hSummary, "ยังไม่ครบ 24h"),
+      formatAutoOpenStrategyHorizonSummaryText(
+        "ผล@24h",
+        strategy24hSummary,
+        "ยังไม่ครบ 24h",
+        "จำลอง@24h",
+      ),
       formatAutoOpenStrategy48hSummaryText(strategy48hSummary, unrealisedPnlSummary),
       formatAutoOpenMexcRealisedSummaryText(mexcRealisedSummary),
     ].filter(Boolean);
