@@ -13,7 +13,7 @@ export type SnowballMatrixFilter =
   | "whaleRiders"
   | "highWinrate";
 
-export const SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT = 30;
+export const SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT = 15;
 export const SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS = 3;
 
 export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}% · เขียว ≤ ${SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS} วัน`;
@@ -140,7 +140,7 @@ function greenDaysBeforeSignalAtMost(
   return n != null && Number.isFinite(n) && n >= 0 && Math.floor(n) <= maxDays;
 }
 
-/** ✨ Quality Signal — EMA(12) 4h slope 7 วัน > 30% · Day1 เขียวติดก่อนสัญญาณ ≤ 3 วัน */
+/** ✨ Quality Signal — EMA(12) 4h slope 7 วัน > 15% · Day1 เขียวติดก่อนสัญญาณ ≤ 3 วัน */
 export function snowballMatchesQualitySignal(
   row: Pick<SnowballStatsRow, "ema4hSlopePct7d" | "greenDaysBeforeSignal">,
 ): boolean {
