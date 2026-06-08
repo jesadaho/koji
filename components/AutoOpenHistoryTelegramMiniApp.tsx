@@ -162,14 +162,15 @@ function renderPnlBucketSplit(
 function renderPnlBucketRow(
   label: string,
   bucket: AutoOpenPnlUsdtBucket,
-  opts?: { showTradeCount?: boolean },
+  opts?: { showTradeCount?: boolean; title?: string },
 ): ReactNode | null {
-  if (bucket.sumUsdt == null) return null;
+  const headline = autoOpenPnlBucketHeadlineUsdt(bucket, bucket.failedTrades);
+  if (headline == null) return null;
   return (
-    <div style={{ marginTop: "0.35rem" }}>
+    <div style={{ marginTop: "0.35rem" }} title={opts?.title}>
       <span>{label} </span>
-      <span style={pnlAmountStyle(bucket.sumUsdt)}>
-        {formatStatsStrategyProfitDollarAmount(bucket.sumUsdt)}
+      <span style={pnlAmountStyle(headline)}>
+        {formatStatsStrategyProfitDollarAmount(headline)}
       </span>
       {renderPnlBucketSplit(bucket, bucket.successTrades, bucket.failedTrades)}
       {opts?.showTradeCount && bucket.trades > 0 ? (
@@ -357,7 +358,9 @@ function renderAutoOpenStrategy48hSummary(
         {wrNode}
         {pendingNode}
       </div>
-      {renderPnlBucketRow("Realised", closedBucket)}
+      {renderPnlBucketRow("จำลอง@48h", closedBucket, {
+        title: "P/L จำลอง TP/SL รวมไม้สำเร็จที่ครบ 48h (ไม้ล้มเหลวแยกในวงเล็บ)",
+      })}
       {renderPnlBucketRow("Unrealised (<24h)", unrealised, { showTradeCount: true })}
       {mexcNode}
     </div>
