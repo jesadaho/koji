@@ -15,6 +15,7 @@ import {
   withReversalPlacedUnlocked,
   type ReversalAutoTradePendingLimit,
 } from "./reversalAutoTradeStateStore";
+import { patchAutoOpenOrderLogLimitFillSafe } from "./autoOpenOrderLogStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 
 function shortContractLabel(contractSymbol: string): string {
@@ -102,6 +103,14 @@ async function promotePendingToActive(args: {
     dayKey,
   );
   state = withReversalPendingLimitRemoved(state, userId, pending.contractSymbol, pending.orderId, dayKey);
+  const filledAtMs = Date.now();
+  patchAutoOpenOrderLogLimitFillSafe({
+    userId,
+    contractSymbol: pending.contractSymbol,
+    side: "short",
+    mexcAvgEntry,
+    filledAtMs,
+  });
   await notifyLines(userId, [
     "Koji — Reversal auto-open (MEXC)",
     "✅ Limit SHORT fill แล้ว → เริ่มติดตาม TP/SL (tick ปิด market)",

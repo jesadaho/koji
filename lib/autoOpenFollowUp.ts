@@ -226,6 +226,8 @@ export function autoOpenLimitPriceNotTouchedYet(
   row: AutoOpenOrderLogRow,
   markPrice: number | undefined,
 ): boolean {
+  if (row.limitFilledAtMs != null && Number.isFinite(row.limitFilledAtMs)) return false;
+  if (row.mexcActive) return false;
   if (resolveAutoOpenOrderKind(row) !== "limit") return false;
   if (row.outcome !== "success" && row.outcome !== "failed") return false;
   const entry = resolveAutoOpenEntryPrice(row);
@@ -236,6 +238,12 @@ export function autoOpenLimitPriceNotTouchedYet(
 }
 
 export function autoOpenLimitPendingFillTitle(row: AutoOpenOrderLogRow): string {
+  if (row.limitFilledAtMs != null && Number.isFinite(row.limitFilledAtMs)) {
+    return "Limit fill แล้วบน MEXC — ใช้ราคาเข้าเฉลี่ยใน Entry";
+  }
+  if (row.mexcActive) {
+    return "มี position เปิดบน MEXC แล้ว (Limit fill แล้ว)";
+  }
   if (row.outcome === "failed") {
     return "สั่ง Limit ไม่สำเร็จ — ราคายังไม่แตะ (จำลองรอ fill)";
   }

@@ -85,6 +85,8 @@ export type AutoOpenOrderLogRow = {
   mexcPositionId?: number | null;
   /** ยังมี position เปิดอยู่บน MEXC (แถว success ล่าสุดของเหรียญ+ทิศ) */
   mexcActive?: boolean;
+  /** Limit บน MEXC fill แล้ว (จาก limit tick) — ไม่แสดง ⏳ รอแตะ */
+  limitFilledAtMs?: number | null;
 };
 
 export type AutoOpenOrderLogApiPayload = {
@@ -124,6 +126,7 @@ const REASON_LABELS: Record<string, string> = {
   network_error: "ข้อผิดพลาดเครือข่าย/MEXC",
   open_success_market: "เปิดสำเร็จ (Market)",
   open_success_limit: "ตั้ง Limit สำเร็จ",
+  open_success_limit_filled: "Limit fill แล้ว (MEXC)",
 };
 
 export function autoOpenReasonLabel(code: string): string {

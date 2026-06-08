@@ -17,6 +17,7 @@ import {
   type SnowballAutoTradePendingLimit,
   type SnowballAutoTradeSide,
 } from "./snowballAutoTradeStateStore";
+import { patchAutoOpenOrderLogLimitFillSafe } from "./autoOpenOrderLogStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 
 function shortContractLabel(contractSymbol: string): string {
@@ -159,6 +160,14 @@ async function promotePendingToActive(args: {
     pending.orderId,
     dayKey,
   );
+
+  patchAutoOpenOrderLogLimitFillSafe({
+    userId,
+    contractSymbol: pending.contractSymbol,
+    side: pending.side,
+    mexcAvgEntry,
+    filledAtMs: Date.now(),
+  });
 
   await notifyLines(userId, [
     "Koji — Snowball auto-open (MEXC)",

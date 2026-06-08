@@ -181,6 +181,11 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   } else if (o.mexcPositionId === null) {
     row.mexcPositionId = null;
   }
+  if (typeof o.limitFilledAtMs === "number" && Number.isFinite(o.limitFilledAtMs)) {
+    row.limitFilledAtMs = o.limitFilledAtMs;
+  } else if (o.limitFilledAtMs === null) {
+    row.limitFilledAtMs = null;
+  }
 
   return row;
 }
@@ -287,6 +292,56 @@ export async function deleteSkippedAutoOpenOrderLogsForUser(
   const removed = before - state.rows.length;
   if (removed > 0) await saveAutoOpenOrderLogState(state);
   return { removed };
+}
+
+/** อัปเดตแถว log หลัง Limit fill บน MEXC (reversal/snowball limit tick) */
+export async function patchAutoOpenOrderLogLimitFill(input: {
+  userId: string;
+  contractSymbol: string;
+  side: "long" | "short";
+  mexcAvgEntry: number;
+  filledAtMs: number;
+}): Promise<boolean> {
+  const uid = input.userId.trim();
+  const sym = input.contractSymbol.trim().toUpperCase();
+  if (!uid || !sym || !(input.mexcAvgEntry > 0) || !Number.isFinite(input.filledAtMs)) {
+    return false;
+  }
+
+  const state = await loadAutoOpenOrderLogState();
+  let best: AutoOpenOrderLogRow | null = null;
+  for (const r of state.rows) {
+    if (r.userId !== uid || r.contractSymbol !== sym || r.outcome !== "success") continue;
+    if (r.side !== input.side) continue;
+    if (r.limitFilledAtMs != null) continue;
+    const isLimit =
+      r.orderKind === "limit" ||
+      r.reasonCode === "open_success_limit" ||
+      r.reasonCode === "open_success_limit_filled";
+    if (!isLimit) continue;
+    if (!best || r.atMs > best.atMs) best = r;
+  }
+  if (!best) return false;
+
+  best.entryPrice = input.mexcAvgEntry;
+  best.limitFilledAtMs = input.filledAtMs;
+  if (best.reasonCode === "open_success_limit") {
+    best.reasonCode = "open_success_limit_filled";
+  }
+  await saveAutoOpenOrderLogState(state);
+  return true;
+}
+
+export function patchAutoOpenOrderLogLimitFillSafe(input: {
+  userId: string;
+  contractSymbol: string;
+  side: "long" | "short";
+  mexcAvgEntry: number;
+  filledAtMs: number;
+}): void {
+  void patchAutoOpenOrderLogLimitFill(input).catch((e) => {
+    console.error("[autoOpenOrderLog] patch limit fill failed", input.userId, input.contractSymbol, e);
+  });
 }
 
 export async function patchAutoOpenOrderLogMexcPnl(
