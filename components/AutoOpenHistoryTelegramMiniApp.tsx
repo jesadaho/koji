@@ -23,6 +23,7 @@ import {
   autoOpenFailedShowsRejectedMarker,
   autoOpenLimitPendingFillTitle,
   autoOpenLimitPriceNotTouchedYet,
+  autoOpenRowMarginUsdt,
   filterAutoOpenLogsExcludingLimitPending,
   resolveAutoOpenEntryPrice,
   pctVsEntrySide,
@@ -37,6 +38,7 @@ import {
   statsStrategyExitReasonShort,
 } from "@/lib/statsStrategyProfitClient";
 import {
+  autoOpenPnlBucketHeadlineUsdt,
   autoOpenStrategyOutcomeLabel,
   formatAutoOpenStrategy48hSummaryText,
   formatAutoOpenStrategyHorizonSummaryText,

@@ -7,6 +7,7 @@ import {
   autoOpenFollowUpEligible,
   autoOpenHorizonDue,
   autoOpenLimitPriceNotTouchedYet,
+  autoOpenRowMarginUsdt,
   emptyAutoOpenPnlUsdtAccumulator,
   finalizeAutoOpenPnlUsdtBucket,
   pctVsEntrySide,
@@ -16,6 +17,7 @@ import {
 import {
   classifyStatsStrategyProfitPct,
   formatStatsStrategyProfitDollarAmount,
+  resolveStatsStrategyDisplayPct,
   STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
   STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
   strategyProfitUsdtFromMargin,
@@ -319,26 +321,24 @@ function summarizeAutoOpenStrategyAtHorizon(
     else if (o === "loss") losses += 1;
     else flats += 1;
 
-    const marginBase = r.marginUsdt;
-    const scale =
-      r.marginScale != null && Number.isFinite(r.marginScale) && r.marginScale > 0
-        ? r.marginScale
-        : 1;
-    const margin =
-      marginBase != null && Number.isFinite(marginBase) && marginBase > 0
-        ? marginBase * scale
-        : null;
+    const margin = autoOpenRowMarginUsdt(r);
     const lev = r.leverage;
-    const pct = resolved.pct;
+    const exitReason =
+      horizonHours === 24 ? r.strategyExitReason24h : r.strategyExitReason;
+    const displayPct = resolveStatsStrategyDisplayPct(
+      resolved.pct,
+      lev,
+      undefined,
+      exitReason,
+    );
     if (
       margin != null &&
       lev != null &&
       Number.isFinite(lev) &&
       lev > 0 &&
-      pct != null &&
-      Number.isFinite(pct)
+      Number.isFinite(displayPct)
     ) {
-      const usd = strategyProfitUsdtFromMargin(margin, lev, pct);
+      const usd = strategyProfitUsdtFromMargin(margin, lev, displayPct);
       if (usd != null && Number.isFinite(usd)) {
         sumUsdt += usd;
         hasUsdt = true;
@@ -388,14 +388,24 @@ export function summarizeAutoOpenStrategy48h(
   return summarizeAutoOpenStrategyAtHorizon(rows, 48, markPrices);
 }
 
+/** ตัวเลขหลัก = ไม้สำเร็จเท่านั้นเมื่อมีไม้ล้มเหลว(สมมติ) — ไม่สับสนกับ MEXC Realised */
+export function autoOpenPnlBucketHeadlineUsdt(
+  bucket: Pick<AutoOpenPnlUsdtBucket, "sumUsdt" | "sumUsdtSuccess">,
+  failedTrades: number,
+): number | null {
+  if (failedTrades > 0 && bucket.sumUsdtSuccess != null) return bucket.sumUsdtSuccess;
+  return bucket.sumUsdt;
+}
+
 export function formatAutoOpenPnlBucketParts(
   label: string,
   bucket: Pick<AutoOpenPnlUsdtBucket, "sumUsdt" | "sumUsdtSuccess" | "sumUsdtFailed">,
   successTrades: number,
   failedTrades: number,
 ): string {
-  if (bucket.sumUsdt == null) return "";
-  const head = `${label} ${formatStatsStrategyProfitDollarAmount(bucket.sumUsdt)}`;
+  const headline = autoOpenPnlBucketHeadlineUsdt(bucket, failedTrades);
+  if (headline == null) return "";
+  const head = `${label} ${formatStatsStrategyProfitDollarAmount(headline)}`;
   const showSplit =
     failedTrades > 0 && (bucket.sumUsdtSuccess != null || bucket.sumUsdtFailed != null);
   if (!showSplit) return ` · ${head}`;
@@ -455,7 +465,7 @@ function formatAutoOpenPnlBucketLine(
 
 function formatAutoOpenClosedNetUsdtLine(summary: AutoOpenStrategy48hSummary): string {
   return formatAutoOpenPnlBucketLine(
-    "Realised",
+    "จำลอง@48h",
     summary,
     summary.successTrades,
     summary.failedTrades,
@@ -476,6 +486,7 @@ export function formatAutoOpenStrategyHorizonSummaryText(
   label: string,
   summary: AutoOpenStrategyHorizonSummary,
   pendingLabel: string,
+  pnlBucketLabel = "จำลอง",
 ): string | null {
   if (summary.trades === 0 && summary.pending === 0) return null;
 
@@ -493,7 +504,7 @@ export function formatAutoOpenStrategyHorizonSummaryText(
   const failedPart =
     summary.failedTrades > 0 ? ` · ล้มเหลว(สมมติ) ${summary.failedTrades}` : "";
   const pnlPart = formatAutoOpenPnlBucketParts(
-    "Realised",
+    pnlBucketLabel,
     summary,
     summary.successTrades,
     summary.failedTrades,
