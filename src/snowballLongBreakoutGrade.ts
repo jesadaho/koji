@@ -130,6 +130,18 @@ export function snowballLongStructurePassesMain(swing48: boolean, vahOk: boolean
   return swing48 || vahOk;
 }
 
+/** ceiling Stage 1 สำหรับ debug — A/B/C จากโครงสร้าง (ไม่ใช่ trend grade) */
+export function classifySnowballStructureCeiling(input: {
+  swing48: boolean;
+  swing200: boolean;
+  vahOk: boolean;
+}): "A" | "B" | "C" {
+  const { swing48, swing200, vahOk } = input;
+  if (swing48 && swing200 && vahOk) return "A";
+  if ((swing48 && vahOk) || (swing200 && vahOk) || (swing48 && swing200)) return "B";
+  return "C";
+}
+
 export function snowballLongBreakout1hEvalPasses(
   ev: SnowballLongBreakout1hConfirmEval | null | undefined,
 ): boolean {

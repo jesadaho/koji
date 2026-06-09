@@ -1,5 +1,6 @@
 import type { BinanceIndicatorTf, BinanceKlinePack } from "./binanceIndicatorKline";
 import {
+  classifySnowballStructureCeiling,
   resolveSnowballLongFinalGrade,
   snowballLongGradeDisplayLabel,
   snowballLongStructurePassesMain,
@@ -9,10 +10,10 @@ import {
 } from "./snowballLongBreakoutGrade";
 import { countSnowball4hMomentumFails } from "./snowballLongGrade4hPipeline";
 import {
-  classifySnowballStructureCeiling,
-  resolveSnowballLong4hGradeMatrix,
-  snowballActionPlanLabel,
-} from "./snowballLongGradeMatrix";
+  snowballTrendActionPlanLabel,
+  snowballTrendGradeActionPlan,
+  snowballTrendGradeToDisplay,
+} from "./snowballTrendGrade";
 import {
   calculateTrendMomentumMetrics,
   snowballGradeBRequiresSustainedMomentum,
@@ -134,7 +135,6 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     innerHvnCleared,
     innerHvnHigh,
     volMult,
-    volNearMult,
     volStrictOk,
     signalVolVsSma,
   } = input;
@@ -198,14 +198,6 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     swing200: input.swing200,
     vahOk: input.vahOk,
   });
-  const matrixResult = resolveSnowballLong4hGradeMatrix({
-    swing48: input.swing48,
-    swing200: input.swing200,
-    vahOk: input.vahOk,
-    ddOk,
-    volCascadeOk,
-    volStrictOk,
-  });
 
   const gradeRes = resolveSnowballLongFinalGrade({
     snowTf,
@@ -228,18 +220,17 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
   });
 
   const structureTier = gradeRes.structureTier;
+  const trendDisplay = snowballTrendGradeToDisplay(gradeRes.grade);
+  const actionPlan = gradeRes.actionPlan ?? snowballTrendGradeActionPlan(gradeRes.grade);
+  const actionPlanLabel = snowballTrendActionPlanLabel(actionPlan);
 
   let stage3Head: string;
   if (!stage2Pass) {
     stage3Head = "— (ไม่ถึง — Stage 2 ไม่ผ่าน)";
   } else if (failCount === 0) {
-    stage3Head = `PASS (Status: ${stage1Ceiling}+ · Full)`;
-  } else if (failCount === 1) {
-    stage3Head = `FAIL 1 ITEM (Status: ${matrixResult.displayGrade} · ${snowballActionPlanLabel(matrixResult.actionPlan)})`;
-  } else if (failCount === 2) {
-    stage3Head = `FAIL 2 ITEMS (Status: ${matrixResult.displayGrade} · ${snowballActionPlanLabel(matrixResult.actionPlan)})`;
+    stage3Head = `PASS (Trend ${trendDisplay} · ${actionPlanLabel})`;
   } else {
-    stage3Head = "FAIL 3 ITEMS (Status: D · Monitor — no auto-open)";
+    stage3Head = `FAIL ${failCount}/3 momentum (Trend ${trendDisplay} · ${actionPlanLabel})`;
   }
 
   const ddMax = snowballTrendMomentumMaxDrawbackPct();
@@ -293,11 +284,11 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     "",
     "--------------------------------------------------",
     "🎯 FINAL GRADE DETERMINATION:",
-    `- Stage 1 (Ceiling)   : ${stage1Ceiling}  (${stage1Pass ? "PASS" : "FAIL"})`,
+    `- Stage 1 (Structure) : ${stage1Ceiling} ceiling (${stage1Pass ? "PASS" : "FAIL"})`,
     `- Stage 2 (Gatekeeper): ${stage2Pass ? "PASS" : "FAIL (BLOCK)"}`,
-    `- Stage 3 (Adjuster)  : ${!stage2Pass ? "—" : `พลาด ${failCount}/3 · notch ${matrixResult.notch >= 0 ? "+" : ""}${matrixResult.notch}`}`,
-    `- Decision Matrix     : ${stage1Ceiling} × พลาด ${failCount} → ${matrixResult.displayGrade}`,
-    `- Action Plan         : ${snowballActionPlanLabel(matrixResult.actionPlan)}`,
+    `- Stage 3 (Momentum)  : ${!stage2Pass ? "—" : `พลาด ${failCount}/3`}`,
+    `- Trend Grade (S/A/B/C/F): ${trendDisplay}`,
+    `- Action Plan         : ${actionPlanLabel}`,
     `- Result              : [ ${finalGradeLine(gradeRes)} ]`,
     `  โครงสร้าง: ${snowballLongStructureTierShortLabel(structureTier)} · two-bar: ${twoBar.detail}`,
     "==================================================",
