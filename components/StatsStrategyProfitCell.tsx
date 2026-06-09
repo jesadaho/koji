@@ -76,7 +76,7 @@ export function StatsStrategyProfitCell(props: {
   return (
     <span
       style={statsStrategyProfitPnlStyle(displayPct)}
-      title={statsStrategyProfitCellTitle(pct, exitReason, sizing, plan, liquidationMetrics)}
+      title={statsStrategyProfitCellTitle(pct, exitReason, sizing, plan, liquidationMetrics, holdHours)}
     >
       {formatStatsStrategyProfitPct(displayPct)}
       {usdtLine ? (

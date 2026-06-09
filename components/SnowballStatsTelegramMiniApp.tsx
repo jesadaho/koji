@@ -1063,7 +1063,11 @@ export default function SnowballStatsTelegramMiniApp() {
             <SortTh
               label="กำไรกลยุทธ์ 48h"
               sortKey="strategyProfit48h"
-              title={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
+              title={
+                payload?.viewerTpSlPlan
+                  ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H, payload.viewerTpSlPlan)
+                  : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H)
+              }
               activeSort={sort}
               onSort={onSortColumn}
             />

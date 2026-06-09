@@ -5,7 +5,6 @@ import {
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
 } from "./statsEmaSlope";
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
-import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
 import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
 import {
   computeStatsStrategyProfitFromBars,
@@ -162,7 +161,7 @@ function applySnowballStrategyProfitAtHorizon(
   });
   if (!sim) return false;
   let touched = false;
-  const key = statsTpSlPlanCacheKey(statsStrategyPlanAtHoldHours(DEFAULT_STATS_TPSL_PLAN, holdHours));
+  const key = statsStrategyProfitCacheKey(DEFAULT_STATS_TPSL_PLAN, holdHours);
   const prev = row.strategyProfitByPlan?.[key];
   if (!prev || prev.profitPct !== sim.profitPct || prev.exitReason !== sim.exitReason) {
     row.strategyProfitByPlan = {

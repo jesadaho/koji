@@ -9,6 +9,7 @@ import {
   type StatsTpSlExitReason,
   type StatsTpSlPlan,
 } from "@/lib/tpSlStrategySimulate";
+import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
 
 export type StrategyProfitByPlanEntry = {
   profitPct: number;
@@ -29,11 +30,29 @@ export type StatsStrategyProfitHorizon = 24 | 48;
 export const STATS_STRATEGY_PROFIT_HOLD_24H = 24 as const;
 export const STATS_STRATEGY_PROFIT_HOLD_48H = 48 as const;
 
+/** ชั่วคราว: คอลัมน์ 48h ใช้ pct48h ถือครบ — ไม่จำลอง TP/SL (ไม่ผูก checkpoint 24h) */
+export const STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL = true;
+
 export function statsStrategyPlanAtHoldHours(
   plan: StatsTpSlPlan,
-  _holdHours: StatsStrategyProfitHorizon,
+  holdHours: StatsStrategyProfitHorizon,
 ): StatsTpSlPlan {
-  return { ...plan };
+  return {
+    ...plan,
+    maxHoldHours: holdHours,
+    holdExtendIfRedEnabled: false,
+  };
+}
+
+export function statsStrategyProfitCacheKey(
+  plan: StatsTpSlPlan,
+  holdHours: StatsStrategyProfitHorizon,
+): string {
+  const base = statsTpSlPlanCacheKey(statsStrategyPlanAtHoldHours(plan, holdHours), holdHours);
+  if (holdHours === STATS_STRATEGY_PROFIT_HOLD_48H && STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL) {
+    return `${base}:hold48bypass`;
+  }
+  return base;
 }
 
 export const STATS_STRATEGY_PROFIT_COLUMN_TITLE = statsTpSlPlanSummary(DEFAULT_STATS_TPSL_PLAN);
@@ -42,7 +61,11 @@ export const STATS_STRATEGY_PROFIT_COLUMN_TITLE_24H = statsTpSlPlanSummary(
   statsStrategyPlanAtHoldHours(DEFAULT_STATS_TPSL_PLAN, STATS_STRATEGY_PROFIT_HOLD_24H),
 );
 
-export const STATS_STRATEGY_PROFIT_COLUMN_TITLE_48H = STATS_STRATEGY_PROFIT_COLUMN_TITLE;
+export const STATS_STRATEGY_PROFIT_COLUMN_TITLE_48H = STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL
+  ? "กำไร @48h ถือครบ (bypass TP)"
+  : statsTpSlPlanSummary(
+      statsStrategyPlanAtHoldHours(DEFAULT_STATS_TPSL_PLAN, STATS_STRATEGY_PROFIT_HOLD_48H),
+    );
 
 export function statsStrategyProfitFinalized(
   pct48h: number | null | undefined,
@@ -62,7 +85,29 @@ export function statsStrategyProfitColumnTitle(
   holdHours: StatsStrategyProfitHorizon,
   plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
 ): string {
+  if (holdHours === STATS_STRATEGY_PROFIT_HOLD_48H && STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL) {
+    return STATS_STRATEGY_PROFIT_COLUMN_TITLE_48H;
+  }
   return statsTpSlPlanSummary(statsStrategyPlanAtHoldHours(plan, holdHours));
+}
+
+export function statsStrategyProfitFromHorizonPct(input: {
+  holdHours: StatsStrategyProfitHorizon;
+  pctAtHorizon: number;
+  leverage?: number | null;
+  liquidationMetrics?: StatsStrategyLiquidationMetrics;
+}): StrategyProfitByPlanEntry {
+  const resolved = resolveStatsStrategyProfitOutcome({
+    profitPct: input.pctAtHorizon,
+    exitReason:
+      input.holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? "time_24h" : "time_48h",
+    leverage: input.leverage,
+    liquidationMetrics: input.liquidationMetrics,
+  });
+  return {
+    profitPct: resolved.profitPct,
+    exitReason: resolved.exitReason ?? "time_48h",
+  };
 }
 
 /** ค่าหลังแจ้งเท่านั้น — Max DD ถึง MFE + Adv max ตลอด follow-up (ไม่รวม Max DD ก่อนสัญญาณ) */
@@ -151,6 +196,17 @@ export function computeStatsStrategyProfitFromBars(input: {
   leverage?: number | null;
   liquidationMetrics?: StatsStrategyLiquidationMetrics;
 }): StrategyProfitByPlanEntry | null {
+  if (
+    input.holdHours === STATS_STRATEGY_PROFIT_HOLD_48H &&
+    STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL
+  ) {
+    return statsStrategyProfitFromHorizonPct({
+      holdHours: input.holdHours,
+      pctAtHorizon: input.pctAtHorizon,
+      leverage: input.leverage,
+      liquidationMetrics: input.liquidationMetrics,
+    });
+  }
   const plan = statsStrategyPlanAtHoldHours(input.plan ?? DEFAULT_STATS_TPSL_PLAN, input.holdHours);
   const sim = simulateStatsTpSlProfit({
     side: input.side,
@@ -305,8 +361,9 @@ export function statsStrategyProfitCellTitle(
   sizing?: { marginUsdt?: number | null; leverage?: number | null },
   plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
   liquidationMetrics?: StatsStrategyLiquidationMetrics,
+  holdHours: StatsStrategyProfitHorizon = STATS_STRATEGY_PROFIT_HOLD_48H,
 ): string {
-  const base = STATS_STRATEGY_PROFIT_COLUMN_TITLE;
+  const base = statsStrategyProfitColumnTitle(holdHours, plan);
   if (profitPct == null || !Number.isFinite(profitPct)) return base;
   const resolved = resolveStatsStrategyProfitOutcome({
     profitPct,

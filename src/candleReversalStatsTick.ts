@@ -4,11 +4,10 @@ import {
 } from "@/lib/candleReversalStatsClient";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
-import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
 import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
 import {
   computeStatsStrategyProfitFromBars,
-  statsStrategyPlanAtHoldHours,
+  statsStrategyProfitCacheKey,
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
 } from "@/lib/statsStrategyProfitClient";
@@ -343,7 +342,7 @@ function applyReversal1hStrategyProfitAtHorizon(
     plan: DEFAULT_STATS_TPSL_PLAN,
   });
   if (!sim) return;
-  const key = statsTpSlPlanCacheKey(statsStrategyPlanAtHoldHours(DEFAULT_STATS_TPSL_PLAN, holdHours));
+  const key = statsStrategyProfitCacheKey(DEFAULT_STATS_TPSL_PLAN, holdHours);
   row.strategyProfitByPlan = {
     ...row.strategyProfitByPlan,
     [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },

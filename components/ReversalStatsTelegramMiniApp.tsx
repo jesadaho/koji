@@ -294,7 +294,7 @@ function ReversalStatsSection({
   showHighRank = true,
   showLowRank = false,
   adverseTitle,
-  strategyPlanTitle = STATS_STRATEGY_PROFIT_COLUMN_TITLE,
+  strategyPlanTitle = statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H),
   strategyMarginUsdt,
   strategyLeverage,
   strategyTpSlPlan,
@@ -1380,7 +1380,11 @@ export default function ReversalStatsTelegramMiniApp() {
           tf="1h"
           title="สถิติ Reversal · 1H Short"
           subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
-          strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
+          strategyPlanTitle={
+            payload?.viewerTpSlPlan
+              ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H, payload.viewerTpSlPlan)
+              : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H)
+          }
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyTpSlPlan={payload?.viewerTpSlPlan}
@@ -1404,7 +1408,11 @@ export default function ReversalStatsTelegramMiniApp() {
           tf="1h"
           title="สถิติ Reversal · Long 1H (fade SHORT)"
           subtitle="สัญญาณ Long · วัดผลฝั่ง Short (fade) · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
-          strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? STATS_STRATEGY_PROFIT_COLUMN_TITLE}
+          strategyPlanTitle={
+            payload?.viewerTpSlPlan
+              ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H, payload.viewerTpSlPlan)
+              : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H)
+          }
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyTpSlPlan={payload?.viewerTpSlPlan}
