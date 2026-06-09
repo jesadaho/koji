@@ -126,9 +126,6 @@ export function snowballLongStructureTierShortLabel(tier: SnowballLongStructureT
   return "C";
 }
 
-  return swing48 || vahOk;
-}
-
 export function snowballLongBreakout1hEvalPasses(
   ev: SnowballLongBreakout1hConfirmEval | null | undefined,
 ): boolean {
