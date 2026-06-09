@@ -45,7 +45,7 @@ import {
 function effectiveQualityTier(
   row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier">,
 ): SnowballStatsQualityTier | undefined {
-  const raw = row.qualityTier ?? row.alertQualityTier;
+  const raw = (row.qualityTier ?? row.alertQualityTier) as string | undefined;
   if (raw == null) return undefined;
   if (isSnowballTrendGrade(raw)) return raw;
   if (isLegacySnowballQualityTier(raw)) return normalizeSnowballQualityTier(raw);

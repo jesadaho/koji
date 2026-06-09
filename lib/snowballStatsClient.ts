@@ -207,7 +207,7 @@ export function snowballStatsSideLabel(
 }
 
 function effectiveQualityTier(row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier">): SnowballStatsQualityTier | undefined {
-  const raw = row.qualityTier ?? row.alertQualityTier;
+  const raw = (row.qualityTier ?? row.alertQualityTier) as string | undefined;
   if (raw == null) return undefined;
   if (isSnowballTrendGrade(raw)) return raw;
   if (isLegacySnowballQualityTier(raw)) return normalizeSnowballQualityTier(raw);
@@ -283,7 +283,7 @@ export function snowballStatsDerivedDisplayGrade(
   if (row.displayGrade) return row.displayGrade;
   const tier = effectiveQualityTier(row);
   if (tier) return snowballTrendGradeToDisplay(tier);
-  const raw = row.qualityTier ?? row.alertQualityTier;
+  const raw = (row.qualityTier ?? row.alertQualityTier) as string | undefined;
   if (raw && isLegacySnowballQualityTier(raw)) return legacySnowballQualityTierToDisplay(raw);
   const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
   const derived = normalizeSnowballQualityTier(undefined, {

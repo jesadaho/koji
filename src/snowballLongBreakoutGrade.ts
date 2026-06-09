@@ -45,6 +45,10 @@ export {
 
 export type SnowballLongStructureTier = "a_plus" | "b_plus" | "c_plus";
 
+export function isSnowballLongStructureTier(t: string | undefined): t is SnowballLongStructureTier {
+  return t === "a_plus" || t === "b_plus" || t === "c_plus";
+}
+
 /** @deprecated — ไม่ block alert อีกต่อไป */
 export type SnowballLongGradeBlockReason =
   | "structure_fail"

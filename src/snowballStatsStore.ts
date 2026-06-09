@@ -11,7 +11,15 @@ import {
   type SnowballStatsGateStep,
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
-import type { SnowballLongStructureTier } from "@/src/snowballLongBreakoutGrade";
+import {
+  isSnowballLongStructureTier,
+  type SnowballLongStructureTier,
+} from "@/src/snowballLongBreakoutGrade";
+import {
+  isLegacySnowballQualityTier,
+  normalizeSnowballQualityTier,
+  type ClassifySnowballTrendGradeInput,
+} from "@/src/snowballTrendGrade";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
@@ -224,16 +232,56 @@ export function migrateSnowballStatsConfirmFailSideToLong(rows: SnowballStatsRow
   return migrateSnowballStatsLongAlertTradeSideToLong(rows);
 }
 
-/** แถวเก่า — ถ้า qualityTier เป็น A+/B/C ให้ copy เป็น structureTier */
+function snowballStatsRowTrendGradeInput(row: SnowballStatsRow): ClassifySnowballTrendGradeInput {
+  return {
+    alertSide: row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long"),
+    ema4hSlopePct7d: row.ema4hSlopePct7d,
+    ema1dSlopePct7d: row.ema1dSlopePct7d,
+    btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
+    greenDaysBeforeSignal: row.greenDaysBeforeSignal,
+  };
+}
+
+/** แถวเก่า — ถ้า qualityTier เป็น A+/B/C ให้ copy เป็น structureTier (อ่าน raw จาก JSON) */
 export function migrateSnowballStatsStructureTier(rows: SnowballStatsRow[]): number {
   let updated = 0;
   for (const row of rows) {
     if (row.structureTier) continue;
-    const src = row.alertQualityTier ?? row.qualityTier;
-    if (src === "a_plus" || src === "b_plus" || src === "c_plus") {
+    const src = (row.alertQualityTier ?? row.qualityTier) as string | undefined;
+    if (isSnowballLongStructureTier(src)) {
       row.structureTier = src;
       updated += 1;
     }
+  }
+  return updated;
+}
+
+/** แปลง qualityTier / alertQualityTier เก่า (a_plus … f_plus) → s/a/b/c/f */
+export function migrateSnowballStatsLegacyQualityTiersToTrend(rows: SnowballStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    const input = snowballStatsRowTrendGradeInput(row);
+    let touched = false;
+
+    const qtRaw = row.qualityTier as string | undefined;
+    if (qtRaw && isLegacySnowballQualityTier(qtRaw)) {
+      const next = normalizeSnowballQualityTier(qtRaw, input);
+      if (next) {
+        row.qualityTier = next;
+        touched = true;
+      }
+    }
+
+    const aqRaw = row.alertQualityTier as string | undefined;
+    if (aqRaw && isLegacySnowballQualityTier(aqRaw)) {
+      const next = normalizeSnowballQualityTier(aqRaw, input);
+      if (next) {
+        row.alertQualityTier = next;
+        touched = true;
+      }
+    }
+
+    if (touched) updated += 1;
   }
   return updated;
 }
@@ -346,6 +394,7 @@ export function applySnowballStatsRowMigrations(rows: SnowballStatsRow[]): numbe
     migrateSnowballStatsClearSupersededBreakout1hConfirmFail(rows) +
     migrateSnowballStatsLongAlertTradeSideToLong(rows) +
     migrateSnowballStatsStructureTier(rows) +
+    migrateSnowballStatsLegacyQualityTiersToTrend(rows) +
     migrateSnowballStats4hHorizonAnchorV2(rows) +
     migrateSnowballStatsLegacyQuickTpOutcome(rows)
   );
@@ -373,7 +422,7 @@ export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): numb
       touched = true;
     }
     if (!row.alertQualityTier) {
-      row.alertQualityTier = "d_plus";
+      row.alertQualityTier = "c";
       touched = true;
     }
     if (touched) updated += 1;
