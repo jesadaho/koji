@@ -360,11 +360,12 @@ export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): numb
       row.breakout1hConfirmFail = false;
       touched = true;
     }
-    if (row.qualityTier !== "d_plus") {
+    const tierRaw = row.qualityTier as string | undefined;
+    if (tierRaw !== "d_plus") {
       if (touched) updated += 1;
       continue;
     }
-    const alert = row.alertQualityTier;
+    const alert = row.alertQualityTier as string | undefined;
     const isMomentumDPlus =
       alert === "a_plus" || alert === "b_plus" || alert === "c_plus";
     if (isMomentumDPlus && !row.momentumDowngrade) {

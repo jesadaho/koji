@@ -402,7 +402,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               ...(typeof item.statsSwing200Ok === "boolean"
                 ? { swing200Ok: item.statsSwing200Ok }
                 : {}),
-              momentumDowngrade: item.qualityTier === "d_plus",
+              momentumDowngrade: false,
               momentumFailGradeF: item.qualityTier === "f",
               atr100: item.statsAtr100 ?? null,
               maxUpperWick100: item.statsMaxUpperWick100 ?? null,
@@ -455,7 +455,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
             });
             const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentumConfirm);
             let marginScale: number | undefined;
-            if (item.side === "long" && item.qualityTier === "b_plus" && sustainedBuyingPressure) {
+            if (item.side === "long" && item.qualityTier === "b" && sustainedBuyingPressure) {
               marginScale = snowballGradeBSustainedMarginScale();
             }
             const greenDaysForAutoOpen = await fetchGreenDaysBeforeSignalBar(
@@ -473,7 +473,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               displayGrade: item.statsDisplayGrade,
               qualityTier: item.qualityTier,
               momentumFailGradeF: item.qualityTier === "f",
-              momentumDowngrade: item.qualityTier === "d_plus",
+              momentumDowngrade: false,
               referenceEntryPrice: cl,
               referenceEntryPriceEma20_1h: snowballEma20_1hReferencePrice(
                 pack1hTrend,
