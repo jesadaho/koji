@@ -180,10 +180,21 @@ export type CandleReversal1dDetectEnv = {
   slBufferPct: number;
 };
 
+export type CandleReversalInvertedDojiVolTier = {
+  bodyMaxRatio: number;
+  wickMinRatio: number;
+  volVsSmaMin: number;
+};
+
 export type CandleReversal1hDetectEnv = {
   highestHighLookback: number;
+  /** @deprecated ใช้ invertedDojiVolTiers — คงไว้ให้ env เก่า override tier A */
   wickMinRatio: number;
+  /** @deprecated ใช้ invertedDojiVolTiers */
   bodyMaxRatio: number;
+  /** เกณฑ์ inverted doji 1H — ผ่าน tier ใด tier หนึ่ง (body + ไส้บน + Vol×SMA) */
+  invertedDojiVolTiers: [CandleReversalInvertedDojiVolTier, CandleReversalInvertedDojiVolTier];
+  invertedDojiVolSmaPeriod: number;
   longestRedBodyLookback: number;
   longestRedBodyMinRatio: number;
   /** high ของแท่งต้องอยู่อันดับ 1..N ในรอบ longestRedBodyLookback (ดีฟอลต์ 5) */
@@ -226,6 +237,11 @@ export const DEFAULT_CANDLE_REVERSAL_1H_ENV: CandleReversal1hDetectEnv = {
   highestHighLookback: 200,
   wickMinRatio: 0.65,
   bodyMaxRatio: 0.2,
+  invertedDojiVolTiers: [
+    { bodyMaxRatio: 0.2, wickMinRatio: 0.65, volVsSmaMin: 1.5 },
+    { bodyMaxRatio: 0.3, wickMinRatio: 0.55, volVsSmaMin: 5 },
+  ],
+  invertedDojiVolSmaPeriod: 48,
   longestRedBodyLookback: 200,
   longestRedBodyMinRatio: 0.8,
   longestRedBodyHighRankMax: 5,
@@ -258,6 +274,60 @@ export function candleUpperWickRatio(pack: BinanceKlinePack, i: number): number 
   if (!Number.isFinite(range) || range <= eps) return 0;
   const upperWick = Math.max(0, h[i]! - Math.max(o[i]!, c[i]!));
   return upperWick / range;
+}
+
+function volumeSmaAtPackIndex(pack: BinanceKlinePack, idx: number, period: number): number {
+  const { volume } = pack;
+  const p = Math.max(1, Math.floor(period));
+  const start = Math.max(0, idx - (p - 1));
+  let sum = 0;
+  let n = 0;
+  for (let j = start; j <= idx; j++) {
+    const v = volume[j];
+    if (typeof v === "number" && Number.isFinite(v)) {
+      sum += v;
+      n++;
+    }
+  }
+  return n > 0 ? sum / n : NaN;
+}
+
+/** Vol แท่ง ÷ SMA(volume) — ใช้ gate inverted doji 1H */
+export function candleReversalBarVolVsSma(
+  pack: BinanceKlinePack,
+  idx: number,
+  period: number,
+): number | null {
+  const barVol = pack.volume[idx];
+  if (!Number.isFinite(barVol) || barVol! <= 0) return null;
+  const sma = volumeSmaAtPackIndex(pack, idx, period);
+  if (!Number.isFinite(sma) || sma <= 0) return null;
+  return barVol! / sma;
+}
+
+export function invertedDoji1hTierPasses(
+  bodyRatio: number,
+  wickRatio: number,
+  volVsSma: number | null,
+  tier: CandleReversalInvertedDojiVolTier,
+): boolean {
+  return (
+    Number.isFinite(bodyRatio) &&
+    Number.isFinite(wickRatio) &&
+    bodyRatio <= tier.bodyMaxRatio &&
+    wickRatio >= tier.wickMinRatio &&
+    volVsSma != null &&
+    volVsSma > tier.volVsSmaMin
+  );
+}
+
+export function invertedDoji1hPassesAnyVolTier(
+  bodyRatio: number,
+  wickRatio: number,
+  volVsSma: number | null,
+  env: Pick<CandleReversal1hDetectEnv, "invertedDojiVolTiers">,
+): boolean {
+  return env.invertedDojiVolTiers.some((tier) => invertedDoji1hTierPasses(bodyRatio, wickRatio, volVsSma, tier));
 }
 
 function buildSignal(
@@ -343,7 +413,7 @@ export function evalInvertedDoji1h(
   i: number,
   env: CandleReversal1hDetectEnv,
 ): CandleReversalSignal | null {
-  const { open: o, high: h, low: l, close: c } = pack;
+  const { open: o, high: h, low: l, close: c, volume: vol } = pack;
   /** Reversal ต้องเป็นแท่งแดงปิดจริง — ห้ามยิงจากเขียวที่มีแค่ไส้บนยาว */
   if (c[i]! >= o[i]!) return null;
 
@@ -355,16 +425,23 @@ export function evalInvertedDoji1h(
   const upperWick = h[i]! - Math.max(o[i]!, c[i]!);
   const wickRatio = upperWick / range;
   const bodyRatio = body / range;
-  if (wickRatio < env.wickMinRatio || bodyRatio > env.bodyMaxRatio) return null;
+
+  const volVsSma = candleReversalBarVolVsSma(pack, i, env.invertedDojiVolSmaPeriod);
+  if (!invertedDoji1hPassesAnyVolTier(bodyRatio, wickRatio, volVsSma, env)) return null;
 
   const start = Math.max(0, i - env.highestHighLookback + 1);
   const windowMax = maxHighInWindowInclusive(h, start, i);
   if (!Number.isFinite(windowMax) || h[i]! < windowMax - eps) return null;
 
+  const barVol = vol[i];
+  const volRank =
+    Number.isFinite(barVol) && barVol! > 0 ? volumeRankInWindow(vol, start, i, i) : undefined;
+
   const retestPrice = h[i]! - upperWick * 0.5;
   const slPrice = h[i]! * (1 + env.slBufferPct);
   return buildSignal("1h", "inverted_doji", pack, i, wickRatio, bodyRatio, retestPrice, slPrice, false, {
     highRankInLookback: 1,
+    volRankInLookback: volRank,
     lookbackBars: env.highestHighLookback,
   });
 }
@@ -556,7 +633,13 @@ export function evalCandleReversalAtBarIndex(
   const hadDoji = Boolean(opts?.hadRecentInvertedDoji);
 
   if (tf === "1h") {
-    const min1hBars = Math.max(env1h.highestHighLookback, env1h.longestRedBodyLookback, env1h.emaPeriod) + 2;
+    const min1hBars =
+      Math.max(
+        env1h.highestHighLookback,
+        env1h.longestRedBodyLookback,
+        env1h.emaPeriod,
+        env1h.invertedDojiVolSmaPeriod,
+      ) + 2;
     if (i < min1hBars) return null;
     const longest = evalLongestRedBody1h(pack, i, env1h, hadDoji);
     if (longest) return longest;
@@ -725,8 +808,9 @@ export function candleReversal1hInvertedDojiCheckLines(
   const i = barIndex;
   const { open: o, high: h, low: l, close: c } = pack;
   const lines: string[] = [];
+  const [tierA, tierB] = env.invertedDojiVolTiers;
   lines.push(
-    `เกณฑ์ inverted_doji (แท่งแดง C<O · high สูงสุดใน ${env.highestHighLookback} แท่ง · ไส้≥${(env.wickMinRatio * 100).toFixed(0)}% · เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}%):`,
+    `เกณฑ์ inverted_doji 1H (แท่งแดง · HH${env.highestHighLookback} · tier A: เนื้อ≤${(tierA.bodyMaxRatio * 100).toFixed(0)}% ไส้≥${(tierA.wickMinRatio * 100).toFixed(0)}% Vol×SMA>${tierA.volVsSmaMin} · tier B: เนื้อ≤${(tierB.bodyMaxRatio * 100).toFixed(0)}% ไส้≥${(tierB.wickMinRatio * 100).toFixed(0)}% Vol×SMA>${tierB.volVsSmaMin}):`,
   );
 
   const red = c[i]! < o[i]!;
@@ -741,13 +825,17 @@ export function candleReversal1hInvertedDojiCheckLines(
   const upperWick = h[i]! - Math.max(o[i]!, c[i]!);
   const wickRatio = upperWick / range;
   const bodyRatio = body / range;
-  const wickOk = wickRatio >= env.wickMinRatio;
-  const bodySmallOk = bodyRatio <= env.bodyMaxRatio;
+  const volVsSma = candleReversalBarVolVsSma(pack, i, env.invertedDojiVolSmaPeriod);
+  const volLabel = volVsSma != null ? `${volVsSma.toFixed(2)}×` : "—";
+  lines.push(`  Vol×SMA(${env.invertedDojiVolSmaPeriod}): ${volLabel}`);
+
+  const tierAPass = invertedDoji1hTierPasses(bodyRatio, wickRatio, volVsSma, tierA);
+  const tierBPass = invertedDoji1hTierPasses(bodyRatio, wickRatio, volVsSma, tierB);
   lines.push(
-    `  ไส้บน≥${(env.wickMinRatio * 100).toFixed(0)}%: ${checkMark(wickOk)} (${(wickRatio * 100).toFixed(1)}%)`,
+    `  Tier A (เนื้อ≤${(tierA.bodyMaxRatio * 100).toFixed(0)}% · ไส้≥${(tierA.wickMinRatio * 100).toFixed(0)}% · Vol>${tierA.volVsSmaMin}×): ${checkMark(tierAPass)} (เนื้อ ${(bodyRatio * 100).toFixed(1)}% · ไส้ ${(wickRatio * 100).toFixed(1)}%)`,
   );
   lines.push(
-    `  เนื้อ≤${(env.bodyMaxRatio * 100).toFixed(0)}%: ${checkMark(bodySmallOk)} (${(bodyRatio * 100).toFixed(1)}%)`,
+    `  Tier B (เนื้อ≤${(tierB.bodyMaxRatio * 100).toFixed(0)}% · ไส้≥${(tierB.wickMinRatio * 100).toFixed(0)}% · Vol>${tierB.volVsSmaMin}×): ${checkMark(tierBPass)}`,
   );
 
   const start = Math.max(0, i - env.highestHighLookback + 1);

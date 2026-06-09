@@ -1,8 +1,10 @@
 import { emaLine } from "./indicatorMath";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
 import {
+  candleReversalBarVolVsSma,
   candleReversalModelLabelTh,
   fmtReversalPrice,
+  invertedDoji1hTierPasses,
   isLongestGreenBody1hEmaZoneOk,
   isLongestRedBody1hEmaZoneOk,
   longestGreenBody1hEmaDistancePct,
@@ -10,6 +12,7 @@ import {
   type CandleReversal1dDetectEnv,
   type CandleReversal1hDetectEnv,
   type CandleReversal1hLongDetectEnv,
+  type CandleReversalInvertedDojiVolTier,
   type CandleReversalModel,
   type CandleReversalSignal,
   type CandleReversalTf,
@@ -304,11 +307,22 @@ export function analyzeCandleReversalInvertedDoji1h(
   const upperWick = h[i]! - Math.max(o[i]!, c[i]!);
   const wickRatio = rangeOk ? upperWick / range : NaN;
   const bodyRatio = rangeOk ? body / range : NaN;
-  const wickOk = Number.isFinite(wickRatio) && wickRatio >= env.wickMinRatio;
-  const bodySmallOk = Number.isFinite(bodyRatio) && bodyRatio <= env.bodyMaxRatio;
+  const volVsSma = candleReversalBarVolVsSma(pack, i, env.invertedDojiVolSmaPeriod);
+  const volLabel = volVsSma != null ? `${volVsSma.toFixed(2)}×` : "—";
   const start = Math.max(0, i - env.highestHighLookback + 1);
   const windowMax = maxHighInWindowInclusive(h, start, i);
   const highOk = Number.isFinite(windowMax) && h[i]! >= windowMax - eps;
+
+  const tierItem = (label: string, tier: CandleReversalInvertedDojiVolTier): CandleReversalDebugCheckItem => {
+    const ok = invertedDoji1hTierPasses(bodyRatio, wickRatio, volVsSma, tier);
+    return {
+      ok,
+      label,
+      detail: ok
+        ? `เนื้อ ${((bodyRatio ?? 0) * 100).toFixed(1)}% · ไส้ ${((wickRatio ?? 0) * 100).toFixed(1)}% · Vol×SMA ${volLabel}`
+        : `ต้อง เนื้อ≤${(tier.bodyMaxRatio * 100).toFixed(0)}% · ไส้≥${(tier.wickMinRatio * 100).toFixed(0)}% · Vol×SMA >${tier.volVsSmaMin}× (ได้ เนื้อ ${Number.isFinite(bodyRatio) ? `${(bodyRatio * 100).toFixed(1)}%` : "—"} · ไส้ ${Number.isFinite(wickRatio) ? `${(wickRatio * 100).toFixed(1)}%` : "—"} · Vol ${volLabel})`,
+    };
+  };
 
   const items: CandleReversalDebugCheckItem[] = [
     {
@@ -317,32 +331,22 @@ export function analyzeCandleReversalInvertedDoji1h(
       detail: red ? "แท่งแดง" : "ไม่ใช่แท่งแดง (ต้อง C < O)",
     },
     {
-      ok: bodySmallOk,
-      label: "Body Size",
-      detail: bodySmallOk
-        ? `เนื้อเล็ก ${((bodyRatio ?? 0) * 100).toFixed(1)}% (ผ่านเกณฑ์ ≤ ${(env.bodyMaxRatio * 100).toFixed(0)}%)`
-        : `เนื้อ ${Number.isFinite(bodyRatio) ? `${(bodyRatio * 100).toFixed(1)}%` : "—"} (เกณฑ์ ≤ ${(env.bodyMaxRatio * 100).toFixed(0)}%)`,
-    },
-    {
-      ok: wickOk,
-      label: "Upper Shadow",
-      detail: wickOk
-        ? `ไส้บน ${((wickRatio ?? 0) * 100).toFixed(1)}% (ผ่านเกณฑ์ ≥ ${(env.wickMinRatio * 100).toFixed(0)}%)`
-        : `ไส้บนแค่ ${Number.isFinite(wickRatio) ? `${(wickRatio * 100).toFixed(1)}%` : "—"} (ตกเกณฑ์ ≥ ${(env.wickMinRatio * 100).toFixed(0)}%)`,
-    },
-    {
       ok: highOk,
       label: "Highest High",
       detail: highOk
         ? `High ${fmtReversalPrice(h[i]!)} = จุดสูงสุดในรอบ ${env.highestHighLookback} แท่ง`
         : `ไม่ใช่จุดสูงสุด (High ${fmtReversalPrice(h[i]!)} vs Max ${fmtReversalPrice(windowMax)})`,
     },
+    tierItem("Path A (Body/Shadow/Vol)", env.invertedDojiVolTiers[0]),
+    tierItem("Path B (Body/Shadow/Vol)", env.invertedDojiVolTiers[1]),
   ];
+
+  const shapeVolOk = items.slice(2).some((x) => x.ok);
 
   return {
     emoji: "📍",
     title: `Inverted Doji (Lookback ${env.highestHighLookback})`,
-    pass: allItemsOk(items),
+    pass: red && highOk && shapeVolOk,
     items,
   };
 }

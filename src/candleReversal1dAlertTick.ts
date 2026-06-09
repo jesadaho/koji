@@ -159,10 +159,48 @@ function detectEnv1d(): CandleReversal1dDetectEnv {
 
 function detectEnv1h(): CandleReversal1hDetectEnv {
   const env = { ...DEFAULT_CANDLE_REVERSAL_1H_ENV };
+  env.invertedDojiVolTiers = [
+    { ...DEFAULT_CANDLE_REVERSAL_1H_ENV.invertedDojiVolTiers[0] },
+    { ...DEFAULT_CANDLE_REVERSAL_1H_ENV.invertedDojiVolTiers[1] },
+  ];
   const wick = Number(process.env.CANDLE_REVERSAL_1H_WICK_MIN_RATIO?.trim());
-  if (Number.isFinite(wick) && wick > 0.5 && wick < 0.9) env.wickMinRatio = wick;
+  if (Number.isFinite(wick) && wick > 0.5 && wick < 0.9) {
+    env.wickMinRatio = wick;
+    env.invertedDojiVolTiers[0].wickMinRatio = wick;
+  }
   const bodyMax = Number(process.env.CANDLE_REVERSAL_1H_BODY_MAX_RATIO?.trim());
-  if (Number.isFinite(bodyMax) && bodyMax > 0.05 && bodyMax < 0.35) env.bodyMaxRatio = bodyMax;
+  if (Number.isFinite(bodyMax) && bodyMax > 0.05 && bodyMax < 0.35) {
+    env.bodyMaxRatio = bodyMax;
+    env.invertedDojiVolTiers[0].bodyMaxRatio = bodyMax;
+  }
+  const tierABody = Number(process.env.CANDLE_REVERSAL_1H_INVERTED_DOJI_TIER_A_BODY_MAX?.trim());
+  if (Number.isFinite(tierABody) && tierABody > 0.05 && tierABody < 0.5) {
+    env.invertedDojiVolTiers[0].bodyMaxRatio = tierABody;
+  }
+  const tierAWick = Number(process.env.CANDLE_REVERSAL_1H_INVERTED_DOJI_TIER_A_WICK_MIN?.trim());
+  if (Number.isFinite(tierAWick) && tierAWick > 0.4 && tierAWick < 0.9) {
+    env.invertedDojiVolTiers[0].wickMinRatio = tierAWick;
+  }
+  const tierAVol = Number(process.env.CANDLE_REVERSAL_1H_INVERTED_DOJI_TIER_A_VOL_MIN?.trim());
+  if (Number.isFinite(tierAVol) && tierAVol > 0.5 && tierAVol < 20) {
+    env.invertedDojiVolTiers[0].volVsSmaMin = tierAVol;
+  }
+  const tierBBody = Number(process.env.CANDLE_REVERSAL_1H_INVERTED_DOJI_TIER_B_BODY_MAX?.trim());
+  if (Number.isFinite(tierBBody) && tierBBody > 0.05 && tierBBody < 0.5) {
+    env.invertedDojiVolTiers[1].bodyMaxRatio = tierBBody;
+  }
+  const tierBWick = Number(process.env.CANDLE_REVERSAL_1H_INVERTED_DOJI_TIER_B_WICK_MIN?.trim());
+  if (Number.isFinite(tierBWick) && tierBWick > 0.4 && tierBWick < 0.9) {
+    env.invertedDojiVolTiers[1].wickMinRatio = tierBWick;
+  }
+  const tierBVol = Number(process.env.CANDLE_REVERSAL_1H_INVERTED_DOJI_TIER_B_VOL_MIN?.trim());
+  if (Number.isFinite(tierBVol) && tierBVol > 0.5 && tierBVol < 20) {
+    env.invertedDojiVolTiers[1].volVsSmaMin = tierBVol;
+  }
+  const volSmaPeriod = Number(process.env.CANDLE_REVERSAL_1H_INVERTED_DOJI_VOL_SMA_PERIOD?.trim());
+  if (Number.isFinite(volSmaPeriod) && volSmaPeriod >= 3 && volSmaPeriod <= 200) {
+    env.invertedDojiVolSmaPeriod = Math.floor(volSmaPeriod);
+  }
   const hhLb = Number(process.env.CANDLE_REVERSAL_1H_HIGHEST_HIGH_LOOKBACK?.trim());
   if (Number.isFinite(hhLb) && hhLb >= 8 && hhLb <= 500) env.highestHighLookback = Math.floor(hhLb);
   const redLb = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_LOOKBACK?.trim());
