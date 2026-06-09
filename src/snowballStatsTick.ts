@@ -8,7 +8,7 @@ import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
 import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
 import {
   computeStatsStrategyProfitFromBars,
-  statsStrategyPlanAtHoldHours,
+  statsStrategyProfitCacheKey,
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
 } from "@/lib/statsStrategyProfitClient";
