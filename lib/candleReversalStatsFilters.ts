@@ -8,25 +8,48 @@ import {
   type ReversalMatrixFilter,
 } from "@/lib/reversalMatrixFilters";
 import {
+  reversalRowMatchesBtcEma4hFilter,
   reversalRowMatchesEma4hFilter,
   reversalRowMatchesEma1dFilter,
+  type BtcEma4hFilter,
   type ReversalEma4hFilter,
   type ReversalEma1dFilter,
 } from "@/lib/reversalEma4hFilter";
+import {
+  statsRowMatchesAtrPct14dFilter,
+  STATS_ATR_PCT14D_FILTER_OPTIONS,
+  type StatsAtrPct14dFilter,
+} from "@/lib/statsAtrPct14dFilter";
 import {
   statsRowMatchesVolVsSmaFilter,
   STATS_VOL_VS_SMA_FILTER_OPTIONS,
   type StatsVolVsSmaFilter,
 } from "@/lib/statsVolVsSmaFilter";
 
-export type { ReversalEma4hFilter, ReversalEma1dFilter, ReversalEmaSlopeFilter } from "@/lib/reversalEma4hFilter";
+export type { StatsAtrPct14dFilter } from "@/lib/statsAtrPct14dFilter";
 export {
+  STATS_ATR_PCT14D_FILTER_OPTIONS,
+  statsAtrPct14dFilterLabel,
+  statsAtrPct14dFilterTitle,
+  statsRowMatchesAtrPct14dFilter,
+} from "@/lib/statsAtrPct14dFilter";
+
+export type {
+  BtcEma4hFilter,
+  ReversalEma4hFilter,
+  ReversalEma1dFilter,
+  ReversalEmaSlopeFilter,
+} from "@/lib/reversalEma4hFilter";
+export {
+  BTC_EMA4H_FILTER_OPTIONS,
   REVERSAL_EMA4H_FILTER_OPTIONS,
   REVERSAL_EMA1D_FILTER_OPTIONS,
+  reversalBtcEma4hFilterTitle,
   reversalEma4hFilterLabel,
   reversalEma4hFilterTitle,
   reversalEma1dFilterLabel,
   reversalEma1dFilterTitle,
+  reversalRowMatchesBtcEma4hFilter,
   reversalRowMatchesEma4hFilter,
   reversalRowMatchesEma1dFilter,
 } from "@/lib/reversalEma4hFilter";
@@ -60,6 +83,8 @@ export type ReversalStatsFilterQuery = {
   vol?: StatsVolVsSmaFilter;
   ema4h?: ReversalEma4hFilter;
   ema1d?: ReversalEma1dFilter;
+  btcEma4h?: BtcEma4hFilter;
+  atr?: StatsAtrPct14dFilter;
   matrix?: ReversalMatrixFilter;
 };
 
@@ -125,6 +150,13 @@ export function reversalRowMatchesVolVsSmaFilter(
   return statsRowMatchesVolVsSmaFilter(row.signalVolVsSma, filter);
 }
 
+export function reversalRowMatchesAtrPct14dFilter(
+  row: CandleReversalStatsRow,
+  filter: StatsAtrPct14dFilter,
+): boolean {
+  return statsRowMatchesAtrPct14dFilter(row.atrPct14d, filter);
+}
+
 export function filterCandleReversalStatsRows(
   rows: CandleReversalStatsRow[],
   q: ReversalStatsFilterQuery,
@@ -138,6 +170,8 @@ export function filterCandleReversalStatsRows(
     if (q.vol && q.vol !== "all" && !reversalRowMatchesVolVsSmaFilter(r, q.vol)) return false;
     if (q.ema4h && q.ema4h !== "all" && !reversalRowMatchesEma4hFilter(r, q.ema4h)) return false;
     if (q.ema1d && q.ema1d !== "all" && !reversalRowMatchesEma1dFilter(r, q.ema1d)) return false;
+    if (q.btcEma4h && q.btcEma4h !== "all" && !reversalRowMatchesBtcEma4hFilter(r, q.btcEma4h)) return false;
+    if (q.atr && q.atr !== "all" && !reversalRowMatchesAtrPct14dFilter(r, q.atr)) return false;
     if (q.matrix && q.matrix !== "all" && !reversalStatsRowMatchesMatrixFilter(r, q.matrix)) return false;
     return true;
   });
@@ -147,6 +181,7 @@ const SHAPE_SET = new Set<string>(["all", "wick80", "body80", "wickOrBody80"]);
 const DAY_SET = new Set<string>(["all", "3", "7", "30", "90"]);
 const LEN_SET = new Set<string>(["all", "rank3to15"]);
 const VOL_SET = new Set(STATS_VOL_VS_SMA_FILTER_OPTIONS.map((o) => o.value));
+const ATR_SET = new Set(STATS_ATR_PCT14D_FILTER_OPTIONS.map((o) => o.value));
 const MATRIX_SET = new Set<string>(["all", "qualitySignal"]);
 
 function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
@@ -163,6 +198,7 @@ function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilt
   ) {
     return "gtm10lt0";
   }
+  if (k === "gtm14" || k === "gt-14" || k === "gt+14") return "gtm14";
   if (k === "gt3" || k === "gt+3" || k === "slopeup") return "gt3";
   if (k === "gt5" || k === "gt+5") return "gt5";
   if (k === "gt10" || k === "gt+10") return "gt10";
@@ -197,6 +233,8 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.vol = pickEnum(sp.get("vol"), VOL_SET, "all");
   q.ema4h = parseReversalEmaSlopeFilterParam(sp.get("ema4h"));
   q.ema1d = parseReversalEmaSlopeFilterParam(sp.get("ema1d"));
+  q.btcEma4h = parseReversalEmaSlopeFilterParam(sp.get("btcEma4h"));
+  q.atr = pickEnum(sp.get("atr"), ATR_SET, "all");
   q.matrix = pickEnum(sp.get("matrix"), MATRIX_SET, "all");
   return q;
 }
@@ -211,6 +249,8 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.vol && q.vol !== "all") p.set("vol", q.vol);
   if (q.ema4h && q.ema4h !== "all") p.set("ema4h", q.ema4h);
   if (q.ema1d && q.ema1d !== "all") p.set("ema1d", q.ema1d);
+  if (q.btcEma4h && q.btcEma4h !== "all") p.set("btcEma4h", q.btcEma4h);
+  if (q.atr && q.atr !== "all") p.set("atr", q.atr);
   if (q.matrix && q.matrix !== "all") p.set("matrix", q.matrix);
   const s = p.toString();
   return s ? `?${s}` : "";

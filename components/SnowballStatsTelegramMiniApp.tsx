@@ -18,6 +18,13 @@ import {
   candleReversalEma1dSlopeLabel,
 } from "@/lib/candleReversalStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
+import {
+  STATS_ATR_PCT14D_FILTER_OPTIONS,
+  statsAtrPct14dFilterLabel,
+  statsAtrPct14dFilterTitle,
+  statsRowMatchesAtrPct14dFilter,
+  type StatsAtrPct14dFilter,
+} from "@/lib/statsAtrPct14dFilter";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
   statsPsar4hDistPctLabel,
@@ -38,14 +45,18 @@ import {
   prepareTelegramMiniAppShell,
 } from "@/lib/kojiTelegramWebApp";
 import {
+  BTC_EMA4H_FILTER_OPTIONS,
   REVERSAL_EMA4H_FILTER_OPTIONS,
   REVERSAL_EMA1D_FILTER_OPTIONS,
+  reversalBtcEma4hFilterTitle,
   reversalEma4hFilterLabel,
   reversalEma4hFilterTitle,
   reversalEma1dFilterLabel,
   reversalEma1dFilterTitle,
+  reversalRowMatchesBtcEma4hFilter,
   reversalRowMatchesEma4hFilter,
   reversalRowMatchesEma1dFilter,
+  type BtcEma4hFilter,
   type ReversalEma4hFilter,
   type ReversalEma1dFilter,
 } from "@/lib/reversalEma4hFilter";
@@ -399,6 +410,8 @@ export default function SnowballStatsTelegramMiniApp() {
   const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
   const [ema4hFilter, setEma4hFilter] = useState<ReversalEma4hFilter>("all");
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
+  const [btcEma4hFilter, setBtcEma4hFilter] = useState<BtcEma4hFilter>("all");
+  const [atrFilter, setAtrFilter] = useState<StatsAtrPct14dFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<SnowballMatrixFilter>("all");
   const [fundingFilter, setFundingFilter] = useState<SnowballFundingFilter>("all");
   const [btcPsarFilter, setBtcPsarFilter] = useState<SnowballBtcPsarFilter>("all");
@@ -705,6 +718,14 @@ export default function SnowballStatsTelegramMiniApp() {
       result = result.filter((r) => reversalRowMatchesEma1dFilter(r, ema1dFilter));
     }
 
+    if (btcEma4hFilter !== "all") {
+      result = result.filter((r) => reversalRowMatchesBtcEma4hFilter(r, btcEma4hFilter));
+    }
+
+    if (atrFilter !== "all") {
+      result = result.filter((r) => statsRowMatchesAtrPct14dFilter(r.atrPct14d, atrFilter));
+    }
+
     if (matrixFilter !== "all") {
       result = result.filter((r) => snowballStatsRowMatchesMatrixFilter(r, matrixFilter));
     }
@@ -733,6 +754,8 @@ export default function SnowballStatsTelegramMiniApp() {
     volRankFilter,
     ema4hFilter,
     ema1dFilter,
+    btcEma4hFilter,
+    atrFilter,
     matrixFilter,
     fundingFilter,
     btcPsarFilter,
@@ -1060,7 +1083,7 @@ export default function SnowballStatsTelegramMiniApp() {
               <td colSpan={isAdmin ? 44 : 43} className="sub">
                 {allRows.length === 0
                   ? "ยังไม่มีแถว — รอสัญญาณ Snowball ส่งสำเร็จและ SNOWBALL_STATS_ENABLED"
-                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / BTC SAR ${snowballBtcPsarFilterLabel(btcPsarFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Efficiency ${snowballEfficiencyScoreFilterLabel(efficiencyFilter)} / Max DD ก่อน ${snowballSignalMaxDdFilterLabel(signalMaxDdFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
+                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${snowballStatsGreenDaysFilterLabel(greenDaysFilter)} / Funding ${snowballStatsFundingFilterLabel(fundingFilter)} / BTC SAR ${snowballBtcPsarFilterLabel(btcPsarFilter)} / Matrix ${snowballMatrixFilterLabel(matrixFilter)} / EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} / EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} / BTC∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} / ATR ${statsAtrPct14dFilterLabel(atrFilter)} / Vol×SMA ${snowballStatsVolVsSmaFilterLabel(volVsSmaFilter)} / Efficiency ${snowballEfficiencyScoreFilterLabel(efficiencyFilter)} / Max DD ก่อน ${snowballSignalMaxDdFilterLabel(signalMaxDdFilter)} / Vol rank ${snowballStatsVolRankFilterLabel(volRankFilter)}`}
               </td>
             </tr>
           ) : (
@@ -1419,6 +1442,44 @@ export default function SnowballStatsTelegramMiniApp() {
               title={reversalEma1dFilterTitle(ema1dFilter)}
             >
               {REVERSAL_EMA1D_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            BTC∠4h
+            <select
+              value={btcEma4hFilter}
+              onChange={(e) => setBtcEma4hFilter(e.currentTarget.value as BtcEma4hFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "5.5rem" }}
+              title={reversalBtcEma4hFilterTitle(btcEma4hFilter)}
+            >
+              {BTC_EMA4H_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label
+            className="sub"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            ATR%14D
+            <select
+              value={atrFilter}
+              onChange={(e) => setAtrFilter(e.currentTarget.value as StatsAtrPct14dFilter)}
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "5.5rem" }}
+              title={statsAtrPct14dFilterTitle(atrFilter)}
+            >
+              {STATS_ATR_PCT14D_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

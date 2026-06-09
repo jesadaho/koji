@@ -75,8 +75,10 @@ import {
 import { copyCsvToClipboard, downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
 import {
   buildReversalStatsCsvSearchParams,
+  BTC_EMA4H_FILTER_OPTIONS,
   REVERSAL_DAY_FILTER_OPTIONS,
   REVERSAL_LEN_RANK_FILTER_OPTIONS,
+  reversalBtcEma4hFilterTitle,
   reversalDayFilterLabel,
   REVERSAL_EMA4H_FILTER_OPTIONS,
   REVERSAL_EMA1D_FILTER_OPTIONS,
@@ -85,6 +87,8 @@ import {
   reversalEma1dFilterLabel,
   reversalEma1dFilterTitle,
   reversalLenRankFilterLabel,
+  reversalRowMatchesAtrPct14dFilter,
+  reversalRowMatchesBtcEma4hFilter,
   reversalRowMatchesDayFilter,
   reversalRowMatchesEma4hFilter,
   reversalRowMatchesEma1dFilter,
@@ -92,6 +96,11 @@ import {
   reversalRowMatchesShapeFilter,
   reversalRowMatchesVolVsSmaFilter,
   reversalShapeFilterLabel,
+  STATS_ATR_PCT14D_FILTER_OPTIONS,
+  statsAtrPct14dFilterLabel,
+  statsAtrPct14dFilterTitle,
+  type BtcEma4hFilter,
+  type StatsAtrPct14dFilter,
   type ReversalDayFilter,
   type ReversalEma4hFilter,
   type ReversalEma1dFilter,
@@ -304,6 +313,8 @@ function ReversalStatsSection({
   const [matrixFilter, setMatrixFilter] = useState<ReversalMatrixFilter>("all");
   const [ema4hFilter, setEma4hFilter] = useState<ReversalEma4hFilter>("all");
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
+  const [btcEma4hFilter, setBtcEma4hFilter] = useState<BtcEma4hFilter>("all");
+  const [atrFilter, setAtrFilter] = useState<StatsAtrPct14dFilter>("all");
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -323,9 +334,11 @@ function ReversalStatsSection({
           reversalRowMatchesVolVsSmaFilter(r, volVsSmaFilter) &&
           reversalRowMatchesEma4hFilter(r, ema4hFilter) &&
           reversalRowMatchesEma1dFilter(r, ema1dFilter) &&
+          reversalRowMatchesBtcEma4hFilter(r, btcEma4hFilter) &&
+          reversalRowMatchesAtrPct14dFilter(r, atrFilter) &&
           reversalStatsRowMatchesMatrixFilter(r, matrixFilter),
       ),
-    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, matrixFilter],
+    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter],
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
   const [splitByWeek, setSplitByWeek] = useState(false);
@@ -402,9 +415,11 @@ function ReversalStatsSection({
       vol: volVsSmaFilter,
       ema4h: ema4hFilter,
       ema1d: ema1dFilter,
+      btcEma4h: btcEma4hFilter,
+      atr: atrFilter,
       matrix: matrixFilter,
     };
-  }, [csvQuery, dayFilter, ema4hFilter, ema1dFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -671,7 +686,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -890,6 +905,38 @@ function ReversalStatsSection({
             title={reversalEma1dFilterTitle(ema1dFilter)}
           >
             {REVERSAL_EMA1D_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          BTC∠4h
+          <select
+            value={btcEma4hFilter}
+            onChange={(e) => setBtcEma4hFilter(e.currentTarget.value as BtcEma4hFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "5.5rem" }}
+            title={reversalBtcEma4hFilterTitle(btcEma4hFilter)}
+          >
+            {BTC_EMA4H_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          ATR%14D
+          <select
+            value={atrFilter}
+            onChange={(e) => setAtrFilter(e.currentTarget.value as StatsAtrPct14dFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "5.5rem" }}
+            title={statsAtrPct14dFilterTitle(atrFilter)}
+          >
+            {STATS_ATR_PCT14D_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>
