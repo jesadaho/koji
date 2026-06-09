@@ -372,13 +372,6 @@ function mainTfLabel(tf: SnowballStatsRow["signalBarTf"]): string {
   return "Main TF";
 }
 
-function mainTfLabel(tf: SnowballStatsRow["signalBarTf"]): string {
-  if (tf === "4h") return "4H";
-  if (tf === "1h") return "1H";
-  if (tf === "15m") return "15m";
-  return "Main TF";
-}
-
 function fmtSlope(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
   return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
