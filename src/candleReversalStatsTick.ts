@@ -3,7 +3,10 @@ import {
   type CandleReversalSignalBarTf,
 } from "@/lib/candleReversalStatsClient";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
-import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
+import {
+  computeFollowUpMaxAdversePct,
+  firstFollowUpKlineIndexAfterAnchorClose,
+} from "@/lib/statsFollowUpAdverse";
 import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
 import {
   computeStatsStrategyProfitFromBars,
@@ -401,12 +404,19 @@ async function followUpCandleReversal1hRow(
     if (iHFirst >= 0) {
       const iHLast = indexRangeThrough(hT, HOUR_SEC, iHFirst, windowEndSec);
       if (iHLast >= iHFirst) {
-        const adverse = computeFollowUpMaxAdversePct(hH, hL, iHFirst, iHLast, entry, side);
-        if (adverse != null) row.followUpMaxAdversePct = adverse;
+        const iAdverseFirst = firstFollowUpKlineIndexAfterAnchorClose(hT, ac);
+        if (iAdverseFirst >= 0 && iHLast >= iAdverseFirst) {
+          const adverse = computeFollowUpMaxAdversePct(hH, hL, iAdverseFirst, iHLast, entry, side);
+          if (adverse != null) row.followUpMaxAdversePct = adverse;
+        }
       }
     }
   } else {
-    const adverse = computeFollowUpMaxAdversePct(h15, l15, i15First, i15Last, entry, side);
+    const iAdverseFirst = firstFollowUpKlineIndexAfterAnchorClose(t15, ac);
+    const adverse =
+      iAdverseFirst >= 0 && i15Last >= iAdverseFirst
+        ? computeFollowUpMaxAdversePct(h15, l15, iAdverseFirst, i15Last, entry, side)
+        : null;
     if (adverse != null) row.followUpMaxAdversePct = adverse;
   }
 
@@ -567,14 +577,11 @@ async function followUpCandleReversal1dRow(
   const mfe = computeMfeFromPack(dayT, dayPack.high, dayPack.low, DAY_SEC, iDayFirst, iDayLast, ac, entry);
   if (!mfe) return false;
 
-  const adverse = computeFollowUpMaxAdversePct(
-    dayPack.high,
-    dayPack.low,
-    iDayFirst,
-    iDayLast,
-    entry,
-    "short",
-  );
+  const iAdverseFirst = firstFollowUpKlineIndexAfterAnchorClose(dayT, ac);
+  const adverse =
+    iAdverseFirst >= 0 && iDayLast >= iAdverseFirst
+      ? computeFollowUpMaxAdversePct(dayPack.high, dayPack.low, iAdverseFirst, iDayLast, entry, "short")
+      : null;
   if (adverse != null) row.followUpMaxAdversePct = adverse;
 
   const h1dEnd = ac + DAY_SEC;

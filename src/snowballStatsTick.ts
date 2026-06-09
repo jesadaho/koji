@@ -4,7 +4,10 @@ import {
   STATS_EMA1D_SLOPE_LOOKBACK_BARS,
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
 } from "./statsEmaSlope";
-import { computeFollowUpMaxAdversePct } from "@/lib/statsFollowUpAdverse";
+import {
+  computeFollowUpMaxAdversePct,
+  firstFollowUpKlineIndexAfterAnchorClose,
+} from "@/lib/statsFollowUpAdverse";
 import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
 import {
   computeStatsStrategyProfitFromBars,
@@ -520,14 +523,11 @@ export async function runSnowballStatsFollowUpTick(
 
     let rowTouched = false;
 
-    const adverse = computeFollowUpMaxAdversePct(
-      high,
-      low,
-      iFirst,
-      iLastHorizon,
-      entry,
-      row.side,
-    );
+    const iAdverseFirst = firstFollowUpKlineIndexAfterAnchorClose(timeSec, ac);
+    const adverse =
+      iAdverseFirst >= 0 && iLastHorizon >= iAdverseFirst
+        ? computeFollowUpMaxAdversePct(high, low, iAdverseFirst, iLastHorizon, entry, row.side)
+        : null;
     if (adverse != null && row.followUpMaxAdversePct !== adverse) {
       row.followUpMaxAdversePct = adverse;
       rowTouched = true;

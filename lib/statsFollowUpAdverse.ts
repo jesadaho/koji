@@ -2,8 +2,17 @@
 
 export type StatsFollowUpSide = "long" | "short";
 
+/** First kline whose open is at or after anchor close (excludes the signal bar). */
+export function firstFollowUpKlineIndexAfterAnchorClose(
+  timeSec: number[],
+  anchorCloseSec: number,
+): number {
+  return timeSec.findIndex((t) => t >= anchorCloseSec);
+}
+
 /**
  * Max adverse move against the position from entry through iFirst..iLast (inclusive).
+ * Callers should pass iFirst from {@link firstFollowUpKlineIndexAfterAnchorClose}.
  * Short: (maxHigh - entry) / entry * 100 · Long: (entry - minLow) / entry * 100
  */
 export function computeFollowUpMaxAdversePct(

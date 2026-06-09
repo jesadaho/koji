@@ -1,5 +1,9 @@
 import type { RsiDivergenceKind } from "@/lib/rsiDivergenceStatsClient";
-import { computeFollowUpMaxAdversePct, type StatsFollowUpSide } from "@/lib/statsFollowUpAdverse";
+import {
+  computeFollowUpMaxAdversePct,
+  firstFollowUpKlineIndexAfterAnchorClose,
+  type StatsFollowUpSide,
+} from "@/lib/statsFollowUpAdverse";
 import {
   fetchBinanceUsdmKlinesRange,
   isBinanceIndicatorFapiEnabled,
@@ -193,14 +197,18 @@ async function followUpRow(
   row.maxRoiPct = mfe.maxRoi;
   row.durationToMfeHours = mfe.durationHours;
   row.maxDrawdownPct = mfe.maxDd;
-  const adverse = computeFollowUpMaxAdversePct(
-    dayH,
-    dayL,
-    iDayFirst,
-    iDayLast,
-    entry,
-    rsiDivergenceFollowUpSide(row.kind),
-  );
+  const iAdverseFirst = firstFollowUpKlineIndexAfterAnchorClose(dayT, ac);
+  const adverse =
+    iAdverseFirst >= 0 && iDayLast >= iAdverseFirst
+      ? computeFollowUpMaxAdversePct(
+          dayH,
+          dayL,
+          iAdverseFirst,
+          iDayLast,
+          entry,
+          rsiDivergenceFollowUpSide(row.kind),
+        )
+      : null;
   if (adverse != null) row.followUpMaxAdversePct = adverse;
   if (h1d) {
     row.price1d = h1d.price;
