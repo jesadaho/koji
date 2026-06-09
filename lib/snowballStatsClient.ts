@@ -315,6 +315,12 @@ type SnowballStatsGradeDisplayRow = Pick<
   | "qualityTier4hAdjusted"
   | "momentumDowngrade"
   | "momentumFailGradeF"
+  | "ema4hSlopePct7d"
+  | "ema1dSlopePct7d"
+  | "btcEma4hSlopePct7d"
+  | "greenDaysBeforeSignal"
+  | "alertSide"
+  | "triggerKind"
 >;
 
 /** ป้ายเกรดตอนแจ้ง — ใช้ displayGrade (S/A/B/C/F) ถ้ามี */
