@@ -491,6 +491,8 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               barRangePctSignal: item.statsBarRangePctSignal ?? null,
               signalVolVsSma: item.statsSignalVolVsSma ?? null,
               confirmVolVsSma,
+              btcEma4hSlopePct7d: item.statsBtcEma4hSlopePct7d ?? null,
+              psar4hTrend: item.statsPsar4hTrend ?? null,
               ...(marginScale != null ? { marginScale } : {}),
             });
           } catch (e) {

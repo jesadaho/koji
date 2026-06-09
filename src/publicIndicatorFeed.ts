@@ -3668,6 +3668,8 @@ export async function runPublicIndicatorFeedInternal(
                   ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: longSignalVolVsSma,
+                  btcEma4hSlopePct7d: longMktCtxForAlert?.btcEma4hSlopePct7d ?? null,
+                  psar4hTrend: longMktCtxForAlert?.psar4hTrend ?? null,
                   ...(marginScale != null ? { marginScale } : {}),
                 });
                 if ((longQualitySignal || longQualityShortSignal) && skipSnowballTgForPending) {

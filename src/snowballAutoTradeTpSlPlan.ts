@@ -22,43 +22,77 @@ export type SnowballTpSlPlan = {
   slEntryOffsetPct: number;
 };
 
-export function resolveSnowballTpSlPlanFromRow(row: TradingViewMexcUserSettings): SnowballTpSlPlan {
-  const en = row.snowballAutoTradeTpSlEnabled !== false;
-  const t1 =
-    typeof row.snowballAutoTradeTp1PricePct === "number" &&
-    Number.isFinite(row.snowballAutoTradeTp1PricePct) &&
-    row.snowballAutoTradeTp1PricePct > 0
-      ? row.snowballAutoTradeTp1PricePct
-      : SNOWBALL_TPSL_DEFAULT_TP1_PCT;
-  const t1p =
-    typeof row.snowballAutoTradeTp1PartialPct === "number" &&
-    Number.isFinite(row.snowballAutoTradeTp1PartialPct) &&
-    row.snowballAutoTradeTp1PartialPct > 0
-      ? row.snowballAutoTradeTp1PartialPct
-      : SNOWBALL_TPSL_DEFAULT_TP1_PARTIAL;
-  const t2 =
-    typeof row.snowballAutoTradeTp2PricePct === "number" &&
-    Number.isFinite(row.snowballAutoTradeTp2PricePct) &&
-    row.snowballAutoTradeTp2PricePct > 0
-      ? row.snowballAutoTradeTp2PricePct
-      : SNOWBALL_TPSL_DEFAULT_TP2_PCT;
-  const mh =
-    typeof row.snowballAutoTradeMaxHoldHours === "number" &&
-    Number.isFinite(row.snowballAutoTradeMaxHoldHours) &&
-    row.snowballAutoTradeMaxHoldHours > 0
-      ? row.snowballAutoTradeMaxHoldHours
-      : SNOWBALL_TPSL_DEFAULT_MAX_HOURS;
+type SnowballTpSlPlanFieldKeys = {
+  enabled: keyof TradingViewMexcUserSettings;
+  tp1PricePct: keyof TradingViewMexcUserSettings;
+  tp1PartialPct: keyof TradingViewMexcUserSettings;
+  tp2PricePct: keyof TradingViewMexcUserSettings;
+  maxHoldHours: keyof TradingViewMexcUserSettings;
+  holdExtendIfRedEnabled: keyof TradingViewMexcUserSettings;
+  slArmRoiPct: keyof TradingViewMexcUserSettings;
+  slEntryOffsetPct: keyof TradingViewMexcUserSettings;
+};
+
+const SNOWBALL_DEFAULT_TP_SL_KEYS: SnowballTpSlPlanFieldKeys = {
+  enabled: "snowballAutoTradeTpSlEnabled",
+  tp1PricePct: "snowballAutoTradeTp1PricePct",
+  tp1PartialPct: "snowballAutoTradeTp1PartialPct",
+  tp2PricePct: "snowballAutoTradeTp2PricePct",
+  maxHoldHours: "snowballAutoTradeMaxHoldHours",
+  holdExtendIfRedEnabled: "snowballAutoTradeHoldExtendIfRedEnabled",
+  slArmRoiPct: "snowballAutoTradeSlArmRoiPct",
+  slEntryOffsetPct: "snowballAutoTradeSlEntryOffsetPct",
+};
+
+const SNOWBALL_QUALITY_SHORT_TP_SL_KEYS: SnowballTpSlPlanFieldKeys = {
+  enabled: "snowballAutoTradeQualityShortTpSlEnabled",
+  tp1PricePct: "snowballAutoTradeQualityShortTp1PricePct",
+  tp1PartialPct: "snowballAutoTradeQualityShortTp1PartialPct",
+  tp2PricePct: "snowballAutoTradeQualityShortTp2PricePct",
+  maxHoldHours: "snowballAutoTradeQualityShortMaxHoldHours",
+  holdExtendIfRedEnabled: "snowballAutoTradeQualityShortHoldExtendIfRedEnabled",
+  slArmRoiPct: "snowballAutoTradeQualityShortSlArmRoiPct",
+  slEntryOffsetPct: "snowballAutoTradeQualityShortSlEntryOffsetPct",
+};
+
+function readPositiveNumber(
+  row: TradingViewMexcUserSettings,
+  key: keyof TradingViewMexcUserSettings,
+): number | undefined {
+  const v = row[key];
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined;
+}
+
+function resolveSnowballTpSlPlanFromRowKeys(
+  row: TradingViewMexcUserSettings,
+  keys: SnowballTpSlPlanFieldKeys,
+): SnowballTpSlPlan {
+  const enabled = row[keys.enabled] !== false;
+  const t1 = readPositiveNumber(row, keys.tp1PricePct) ?? SNOWBALL_TPSL_DEFAULT_TP1_PCT;
+  const t1p = readPositiveNumber(row, keys.tp1PartialPct) ?? SNOWBALL_TPSL_DEFAULT_TP1_PARTIAL;
+  const t2 = readPositiveNumber(row, keys.tp2PricePct) ?? SNOWBALL_TPSL_DEFAULT_TP2_PCT;
+  const mh = readPositiveNumber(row, keys.maxHoldHours) ?? SNOWBALL_TPSL_DEFAULT_MAX_HOURS;
   return {
-    enabled: en,
+    enabled,
     tp1PricePct: t1,
     tp1PartialPct: Math.min(100, t1p),
     tp2PricePct: t2,
     maxHoldHours: mh,
-    holdExtendIfRedEnabled: row.snowballAutoTradeHoldExtendIfRedEnabled === true,
-    slArmRoiPct: parseSlArmRoiPct(row.snowballAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
+    holdExtendIfRedEnabled: row[keys.holdExtendIfRedEnabled] === true,
+    slArmRoiPct: parseSlArmRoiPct(row[keys.slArmRoiPct] as number | null | undefined, DEFAULT_SL_ARM_ROI_PCT),
     slEntryOffsetPct: parseSlEntryOffsetPct(
-      row.snowballAutoTradeSlEntryOffsetPct,
+      row[keys.slEntryOffsetPct] as number | null | undefined,
       DEFAULT_SL_ENTRY_OFFSET_PCT,
     ),
   };
+}
+
+/** Snowball auto-open ทั่วไป (Long / Bear / Sunday / Grade C fade ฯลฯ) */
+export function resolveSnowballTpSlPlanFromRow(row: TradingViewMexcUserSettings): SnowballTpSlPlan {
+  return resolveSnowballTpSlPlanFromRowKeys(row, SNOWBALL_DEFAULT_TP_SL_KEYS);
+}
+
+/** ✨ Quality Short Signal → Short — แผน TP/SL แยกจาก default */
+export function resolveSnowballQualityShortTpSlPlanFromRow(row: TradingViewMexcUserSettings): SnowballTpSlPlan {
+  return resolveSnowballTpSlPlanFromRowKeys(row, SNOWBALL_QUALITY_SHORT_TP_SL_KEYS);
 }

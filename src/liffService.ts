@@ -1210,7 +1210,17 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
       row.snowballAutoTradeQualitySignalGateEnabled ??
       false,
     qualityShortSignalShortEnabled: row.snowballAutoTradeQualityShortSignalShortEnabled ?? false,
+    qualityShortTpSlEnabled: row.snowballAutoTradeQualityShortTpSlEnabled ?? true,
+    qualityShortTp1PricePct: row.snowballAutoTradeQualityShortTp1PricePct ?? null,
+    qualityShortTp1PartialPct: row.snowballAutoTradeQualityShortTp1PartialPct ?? null,
+    qualityShortTp2PricePct: row.snowballAutoTradeQualityShortTp2PricePct ?? null,
+    qualityShortMaxHoldHours: row.snowballAutoTradeQualityShortMaxHoldHours ?? null,
+    qualityShortHoldExtendIfRedEnabled:
+      row.snowballAutoTradeQualityShortHoldExtendIfRedEnabled === true,
+    qualityShortSlArmRoiPct: row.snowballAutoTradeQualityShortSlArmRoiPct ?? null,
+    qualityShortSlEntryOffsetPct: row.snowballAutoTradeQualityShortSlEntryOffsetPct ?? null,
     sundayAllShortEnabled: row.snowballAutoTradeSundayAllShortEnabled ?? false,
+    longDynamicBoostEnabled: row.snowballAutoTradeLongDynamicBoostEnabled === true,
     referenceEma20_1hEnabled: row.snowballAutoTradeReferenceEma20_1hEnabled ?? false,
     entryMode: row.snowballAutoTradeEntryMode ?? "market",
     entryEmaPeriod: row.snowballAutoTradeEntryEmaPeriod ?? 20,
@@ -1515,6 +1525,12 @@ function parseSnowballAutoTradeNested(
   const mMaxH = numOrEmpty("maxHoldHours");
   const mSlArm = numOrEmpty("slArmRoiPct");
   const mSlOff = numOrEmpty("slEntryOffsetPct");
+  const mQsTp1 = numOrEmpty("qualityShortTp1PricePct");
+  const mQsTp1Partial = numOrEmpty("qualityShortTp1PartialPct");
+  const mQsTp2 = numOrEmpty("qualityShortTp2PricePct");
+  const mQsMaxH = numOrEmpty("qualityShortMaxHoldHours");
+  const mQsSlArm = numOrEmpty("qualityShortSlArmRoiPct");
+  const mQsSlOff = numOrEmpty("qualityShortSlEntryOffsetPct");
   if (
     mMargin.err ||
     mLev.err ||
@@ -1523,32 +1539,62 @@ function parseSnowballAutoTradeNested(
     mTp2.err ||
     mMaxH.err ||
     mSlArm.err ||
-    mSlOff.err
+    mSlOff.err ||
+    mQsTp1.err ||
+    mQsTp1Partial.err ||
+    mQsTp2.err ||
+    mQsMaxH.err ||
+    mQsSlArm.err ||
+    mQsSlOff.err
   ) {
     return { ok: false, error: "snowball_numeric_invalid" };
   }
 
-  if (typeof mTp1.v === "number" && !(mTp1.v > 0 && mTp1.v < 100)) {
-    return { ok: false, error: "snowball_tp1_price_pct_out_of_range" };
-  }
-  if (typeof mTp1Partial.v === "number" && !(mTp1Partial.v > 0 && mTp1Partial.v < 100)) {
-    return { ok: false, error: "snowball_tp1_partial_pct_out_of_range" };
-  }
-  if (typeof mTp2.v === "number" && !(mTp2.v > 0 && mTp2.v < 100)) {
-    return { ok: false, error: "snowball_tp2_price_pct_out_of_range" };
-  }
-  if (typeof mMaxH.v === "number" && !(mMaxH.v > 0 && mMaxH.v <= 24 * 30)) {
-    return { ok: false, error: "snowball_max_hold_hours_out_of_range" };
-  }
-  if (typeof mTp1.v === "number" && typeof mTp2.v === "number" && !(mTp2.v > mTp1.v)) {
-    return { ok: false, error: "snowball_tp2_must_gt_tp1" };
-  }
-  if (typeof mSlArm.v === "number" && !(mSlArm.v > 0 && mSlArm.v < 100)) {
-    return { ok: false, error: "snowball_sl_arm_roi_pct_out_of_range" };
-  }
-  if (typeof mSlOff.v === "number" && !(mSlOff.v >= 0 && mSlOff.v < 50)) {
-    return { ok: false, error: "snowball_sl_entry_offset_pct_out_of_range" };
-  }
+  const validateTpSlNums = (
+    tp1: { v: number | null | undefined },
+    tp1Partial: { v: number | null | undefined },
+    tp2: { v: number | null | undefined },
+    maxH: { v: number | null | undefined },
+    slArm: { v: number | null | undefined },
+    slOff: { v: number | null | undefined },
+    prefix: string,
+  ): { ok: false; error: string } | null => {
+    if (typeof tp1.v === "number" && !(tp1.v > 0 && tp1.v < 100)) {
+      return { ok: false, error: `${prefix}tp1_price_pct_out_of_range` };
+    }
+    if (typeof tp1Partial.v === "number" && !(tp1Partial.v > 0 && tp1Partial.v < 100)) {
+      return { ok: false, error: `${prefix}tp1_partial_pct_out_of_range` };
+    }
+    if (typeof tp2.v === "number" && !(tp2.v > 0 && tp2.v < 100)) {
+      return { ok: false, error: `${prefix}tp2_price_pct_out_of_range` };
+    }
+    if (typeof maxH.v === "number" && !(maxH.v > 0 && maxH.v <= 24 * 30)) {
+      return { ok: false, error: `${prefix}max_hold_hours_out_of_range` };
+    }
+    if (typeof tp1.v === "number" && typeof tp2.v === "number" && !(tp2.v > tp1.v)) {
+      return { ok: false, error: `${prefix}tp2_must_gt_tp1` };
+    }
+    if (typeof slArm.v === "number" && !(slArm.v > 0 && slArm.v < 100)) {
+      return { ok: false, error: `${prefix}sl_arm_roi_pct_out_of_range` };
+    }
+    if (typeof slOff.v === "number" && !(slOff.v >= 0 && slOff.v < 50)) {
+      return { ok: false, error: `${prefix}sl_entry_offset_pct_out_of_range` };
+    }
+    return null;
+  };
+
+  const mainTpErr = validateTpSlNums(mTp1, mTp1Partial, mTp2, mMaxH, mSlArm, mSlOff, "snowball_");
+  if (mainTpErr) return mainTpErr;
+  const qsTpErr = validateTpSlNums(
+    mQsTp1,
+    mQsTp1Partial,
+    mQsTp2,
+    mQsMaxH,
+    mQsSlArm,
+    mQsSlOff,
+    "snowball_quality_short_",
+  );
+  if (qsTpErr) return qsTpErr;
 
   let tpSlEnabled: boolean | undefined;
   if (typeof o.tpSlEnabled === "boolean") tpSlEnabled = o.tpSlEnabled;
@@ -1561,6 +1607,35 @@ function parseSnowballAutoTradeNested(
     holdExtendIfRedEnabled = true;
   } else if (o.holdExtendIfRedEnabled === "0" || o.holdExtendIfRedEnabled === 0 || o.holdExtendIfRedEnabled === "false") {
     holdExtendIfRedEnabled = false;
+  }
+
+  let qualityShortTpSlEnabled: boolean | undefined;
+  if (typeof o.qualityShortTpSlEnabled === "boolean") qualityShortTpSlEnabled = o.qualityShortTpSlEnabled;
+  else if (o.qualityShortTpSlEnabled === "1" || o.qualityShortTpSlEnabled === 1 || o.qualityShortTpSlEnabled === "true") {
+    qualityShortTpSlEnabled = true;
+  } else if (
+    o.qualityShortTpSlEnabled === "0" ||
+    o.qualityShortTpSlEnabled === 0 ||
+    o.qualityShortTpSlEnabled === "false"
+  ) {
+    qualityShortTpSlEnabled = false;
+  }
+
+  let qualityShortHoldExtendIfRedEnabled: boolean | undefined;
+  if (typeof o.qualityShortHoldExtendIfRedEnabled === "boolean") {
+    qualityShortHoldExtendIfRedEnabled = o.qualityShortHoldExtendIfRedEnabled;
+  } else if (
+    o.qualityShortHoldExtendIfRedEnabled === "1" ||
+    o.qualityShortHoldExtendIfRedEnabled === 1 ||
+    o.qualityShortHoldExtendIfRedEnabled === "true"
+  ) {
+    qualityShortHoldExtendIfRedEnabled = true;
+  } else if (
+    o.qualityShortHoldExtendIfRedEnabled === "0" ||
+    o.qualityShortHoldExtendIfRedEnabled === 0 ||
+    o.qualityShortHoldExtendIfRedEnabled === "false"
+  ) {
+    qualityShortHoldExtendIfRedEnabled = false;
   }
 
   let qualitySignalLongEnabled = false;
@@ -1593,6 +1668,17 @@ function parseSnowballAutoTradeNested(
     sundayAllShortEnabled = true;
   }
 
+  let longDynamicBoostEnabled = false;
+  if (typeof o.longDynamicBoostEnabled === "boolean") {
+    longDynamicBoostEnabled = o.longDynamicBoostEnabled;
+  } else if (
+    o.longDynamicBoostEnabled === "1" ||
+    o.longDynamicBoostEnabled === 1 ||
+    o.longDynamicBoostEnabled === "true"
+  ) {
+    longDynamicBoostEnabled = true;
+  }
+
   let referenceEma20_1hEnabled = false;
   const emaRefRaw = o.referenceEma20_1hEnabled ?? o.referenceEma201hEnabled;
   if (typeof emaRefRaw === "boolean") {
@@ -1612,6 +1698,7 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeQualitySignalLongEnabled: qualitySignalLongEnabled,
     snowballAutoTradeQualityShortSignalShortEnabled: qualityShortSignalShortEnabled,
     snowballAutoTradeSundayAllShortEnabled: sundayAllShortEnabled,
+    snowballAutoTradeLongDynamicBoostEnabled: longDynamicBoostEnabled,
     snowballAutoTradeReferenceEma20_1hEnabled: referenceEma20_1hEnabled,
     snowballAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
     snowballAutoTradeLeverage: mLev.v as number | null | undefined,
@@ -1623,10 +1710,23 @@ function parseSnowballAutoTradeNested(
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
     snowballAutoTradeSlArmRoiPct: mSlArm.v as number | null | undefined,
     snowballAutoTradeSlEntryOffsetPct: mSlOff.v as number | null | undefined,
+    snowballAutoTradeQualityShortTp1PricePct: mQsTp1.v as number | null | undefined,
+    snowballAutoTradeQualityShortTp1PartialPct: mQsTp1Partial.v as number | null | undefined,
+    snowballAutoTradeQualityShortTp2PricePct: mQsTp2.v as number | null | undefined,
+    snowballAutoTradeQualityShortMaxHoldHours:
+      mQsMaxH.v == null ? (mQsMaxH.v as number | null | undefined) : (Math.floor(mQsMaxH.v) as number),
+    snowballAutoTradeQualityShortSlArmRoiPct: mQsSlArm.v as number | null | undefined,
+    snowballAutoTradeQualityShortSlEntryOffsetPct: mQsSlOff.v as number | null | undefined,
   };
   if (tpSlEnabled !== undefined) patchPart.snowballAutoTradeTpSlEnabled = tpSlEnabled;
   if (holdExtendIfRedEnabled !== undefined) {
     patchPart.snowballAutoTradeHoldExtendIfRedEnabled = holdExtendIfRedEnabled;
+  }
+  if (qualityShortTpSlEnabled !== undefined) {
+    patchPart.snowballAutoTradeQualityShortTpSlEnabled = qualityShortTpSlEnabled;
+  }
+  if (qualityShortHoldExtendIfRedEnabled !== undefined) {
+    patchPart.snowballAutoTradeQualityShortHoldExtendIfRedEnabled = qualityShortHoldExtendIfRedEnabled;
   }
 
   if ("entryMode" in o) {

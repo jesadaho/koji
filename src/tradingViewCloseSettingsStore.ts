@@ -89,6 +89,8 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   /** วันอาทิตย์ (เวลาไทย) — Snowball ทุกสัญญาณ → Short */
   snowballAutoTradeSundayAllShortEnabled?: boolean;
+  /** Snowball LONG — ปรับ margin ตาม BTC slope + PSAR 4h คู่สัญญาณ (Perfect x3 / Caution 1x / Penalty 0.5x) */
+  snowballAutoTradeLongDynamicBoostEnabled?: boolean;
   /**
    * จุดอ้างอิง auto-open (log / Quick TP fallback / Telegram) = EMA20 แท่ง 1h ปิดล่าสุด
    * — ยังเปิด market ที่ MEXC ทันที (ไม่รอราคาแตะ EMA)
@@ -119,6 +121,17 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeSlArmRoiPct?: number;
   /** SL ห่างจาก entry เป็น % ราคาสวน — LONG ลง / SHORT ขึ้น (0 = @entry) */
   snowballAutoTradeSlEntryOffsetPct?: number;
+  /**
+   * ✨ Quality Short Signal → Short — TP/SL แยกจากแผน Snowball หลัก (default เหมือนกัน)
+   */
+  snowballAutoTradeQualityShortTpSlEnabled?: boolean;
+  snowballAutoTradeQualityShortTp1PricePct?: number;
+  snowballAutoTradeQualityShortTp1PartialPct?: number;
+  snowballAutoTradeQualityShortTp2PricePct?: number;
+  snowballAutoTradeQualityShortMaxHoldHours?: number;
+  snowballAutoTradeQualityShortHoldExtendIfRedEnabled?: boolean;
+  snowballAutoTradeQualityShortSlArmRoiPct?: number;
+  snowballAutoTradeQualityShortSlEntryOffsetPct?: number;
 
   /** แจ้งเตือน trailing % ของเหรียญใน open positions (cron ~5 นาที) */
   portfolioTrailingAlertEnabled?: boolean;
@@ -297,6 +310,7 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeQualitySignalLongEnabled?: boolean;
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   snowballAutoTradeSundayAllShortEnabled?: boolean;
+  snowballAutoTradeLongDynamicBoostEnabled?: boolean;
   snowballAutoTradeReferenceEma20_1hEnabled?: boolean;
   snowballAutoTradeEntryMode?: SnowballAutoTradeEntryMode | null;
   snowballAutoTradeEntryEmaPeriod?: number | null;
@@ -313,6 +327,14 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeHoldExtendIfRedEnabled?: boolean;
   snowballAutoTradeSlArmRoiPct?: number | null;
   snowballAutoTradeSlEntryOffsetPct?: number | null;
+  snowballAutoTradeQualityShortTpSlEnabled?: boolean;
+  snowballAutoTradeQualityShortTp1PricePct?: number | null;
+  snowballAutoTradeQualityShortTp1PartialPct?: number | null;
+  snowballAutoTradeQualityShortTp2PricePct?: number | null;
+  snowballAutoTradeQualityShortMaxHoldHours?: number | null;
+  snowballAutoTradeQualityShortHoldExtendIfRedEnabled?: boolean;
+  snowballAutoTradeQualityShortSlArmRoiPct?: number | null;
+  snowballAutoTradeQualityShortSlEntryOffsetPct?: number | null;
 
   portfolioTrailingAlertEnabled?: boolean;
   portfolioTrailingStepPct?: number | null;
@@ -386,6 +408,7 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeQualitySignalLongEnabled !== undefined ||
     input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined ||
     input.snowballAutoTradeSundayAllShortEnabled !== undefined ||
+    input.snowballAutoTradeLongDynamicBoostEnabled !== undefined ||
     input.snowballAutoTradeReferenceEma20_1hEnabled !== undefined ||
     input.snowballAutoTradeEntryMode !== undefined ||
     input.snowballAutoTradeEntryEmaPeriod !== undefined ||
@@ -401,7 +424,15 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeMaxHoldHours !== undefined ||
     input.snowballAutoTradeHoldExtendIfRedEnabled !== undefined ||
     input.snowballAutoTradeSlArmRoiPct !== undefined ||
-    input.snowballAutoTradeSlEntryOffsetPct !== undefined;
+    input.snowballAutoTradeSlEntryOffsetPct !== undefined ||
+    input.snowballAutoTradeQualityShortTpSlEnabled !== undefined ||
+    input.snowballAutoTradeQualityShortTp1PricePct !== undefined ||
+    input.snowballAutoTradeQualityShortTp1PartialPct !== undefined ||
+    input.snowballAutoTradeQualityShortTp2PricePct !== undefined ||
+    input.snowballAutoTradeQualityShortMaxHoldHours !== undefined ||
+    input.snowballAutoTradeQualityShortHoldExtendIfRedEnabled !== undefined ||
+    input.snowballAutoTradeQualityShortSlArmRoiPct !== undefined ||
+    input.snowballAutoTradeQualityShortSlEntryOffsetPct !== undefined;
 
   const touchedPortfolioTrailingPatch =
     input.portfolioTrailingAlertEnabled !== undefined ||
@@ -549,6 +580,11 @@ export async function saveTradingViewMexcSettings(
         ? input.snowballAutoTradeSundayAllShortEnabled
         : prev?.snowballAutoTradeSundayAllShortEnabled ?? false,
 
+    snowballAutoTradeLongDynamicBoostEnabled:
+      input.snowballAutoTradeLongDynamicBoostEnabled !== undefined
+        ? input.snowballAutoTradeLongDynamicBoostEnabled
+        : prev?.snowballAutoTradeLongDynamicBoostEnabled ?? false,
+
     snowballAutoTradeReferenceEma20_1hEnabled:
       input.snowballAutoTradeReferenceEma20_1hEnabled !== undefined
         ? input.snowballAutoTradeReferenceEma20_1hEnabled
@@ -652,6 +688,58 @@ export async function saveTradingViewMexcSettings(
         : input.snowballAutoTradeSlEntryOffsetPct !== undefined
           ? input.snowballAutoTradeSlEntryOffsetPct
           : prev?.snowballAutoTradeSlEntryOffsetPct,
+
+    snowballAutoTradeQualityShortTpSlEnabled:
+      input.snowballAutoTradeQualityShortTpSlEnabled !== undefined
+        ? input.snowballAutoTradeQualityShortTpSlEnabled
+        : prev?.snowballAutoTradeQualityShortTpSlEnabled ?? true,
+
+    snowballAutoTradeQualityShortTp1PricePct:
+      input.snowballAutoTradeQualityShortTp1PricePct === null
+        ? undefined
+        : input.snowballAutoTradeQualityShortTp1PricePct !== undefined
+          ? input.snowballAutoTradeQualityShortTp1PricePct
+          : prev?.snowballAutoTradeQualityShortTp1PricePct,
+
+    snowballAutoTradeQualityShortTp1PartialPct:
+      input.snowballAutoTradeQualityShortTp1PartialPct === null
+        ? undefined
+        : input.snowballAutoTradeQualityShortTp1PartialPct !== undefined
+          ? input.snowballAutoTradeQualityShortTp1PartialPct
+          : prev?.snowballAutoTradeQualityShortTp1PartialPct,
+
+    snowballAutoTradeQualityShortTp2PricePct:
+      input.snowballAutoTradeQualityShortTp2PricePct === null
+        ? undefined
+        : input.snowballAutoTradeQualityShortTp2PricePct !== undefined
+          ? input.snowballAutoTradeQualityShortTp2PricePct
+          : prev?.snowballAutoTradeQualityShortTp2PricePct,
+
+    snowballAutoTradeQualityShortMaxHoldHours:
+      input.snowballAutoTradeQualityShortMaxHoldHours === null
+        ? undefined
+        : input.snowballAutoTradeQualityShortMaxHoldHours !== undefined
+          ? input.snowballAutoTradeQualityShortMaxHoldHours
+          : prev?.snowballAutoTradeQualityShortMaxHoldHours,
+
+    snowballAutoTradeQualityShortHoldExtendIfRedEnabled:
+      input.snowballAutoTradeQualityShortHoldExtendIfRedEnabled !== undefined
+        ? input.snowballAutoTradeQualityShortHoldExtendIfRedEnabled
+        : prev?.snowballAutoTradeQualityShortHoldExtendIfRedEnabled ?? false,
+
+    snowballAutoTradeQualityShortSlArmRoiPct:
+      input.snowballAutoTradeQualityShortSlArmRoiPct === null
+        ? undefined
+        : input.snowballAutoTradeQualityShortSlArmRoiPct !== undefined
+          ? input.snowballAutoTradeQualityShortSlArmRoiPct
+          : prev?.snowballAutoTradeQualityShortSlArmRoiPct,
+
+    snowballAutoTradeQualityShortSlEntryOffsetPct:
+      input.snowballAutoTradeQualityShortSlEntryOffsetPct === null
+        ? undefined
+        : input.snowballAutoTradeQualityShortSlEntryOffsetPct !== undefined
+          ? input.snowballAutoTradeQualityShortSlEntryOffsetPct
+          : prev?.snowballAutoTradeQualityShortSlEntryOffsetPct,
 
     portfolioTrailingAlertEnabled:
       input.portfolioTrailingAlertEnabled !== undefined

@@ -20,7 +20,10 @@ import {
 } from "./snowballAutoTradeGradeRules";
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
 import { placeTpPlanOrdersAfterOpen } from "./autoTradeTpSlPlanOrders";
-import { resolveSnowballTpSlPlanFromRow } from "./snowballAutoTradeTpSlPlan";
+import {
+  resolveSnowballQualityShortTpSlPlanFromRow,
+  resolveSnowballTpSlPlanFromRow,
+} from "./snowballAutoTradeTpSlPlan";
 import { shouldSkipAutoOpenForPendingConflict } from "./signalPendingConflictServer";
 import {
   bkkIsSundayNow,
@@ -51,6 +54,10 @@ import {
   snowballEntryUseMarket,
   type SnowballAutoTradeEntryMode,
 } from "@/lib/snowballAutoTradeEntry";
+import {
+  resolveSnowballLongDynamicBoostMarginScale,
+  snowballLongDynamicBoostNote,
+} from "@/lib/snowballLongDynamicBoost";
 
 const SNOWBALL_AUTOTRADE_1H_FETCH_BARS = 200;
 
@@ -275,6 +282,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   barRangePctSignal?: number | null;
   signalVolVsSma?: number | null;
   confirmVolVsSma?: number | null;
+  /** BTC EMA(12) 4h slope % 7d — สำหรับ dynamic boost LONG */
+  btcEma4hSlopePct7d?: number | null;
+  /** PSAR 4h ของคู่สัญญาณ — สำหรับ dynamic boost LONG */
+  psar4hTrend?: "up" | "down" | null;
 }): Promise<{ usersAttempted: number; usersSucceeded: number }> {
   if (!isSnowballAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
 
@@ -489,7 +500,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     }
   }
 
-  const marginScale =
+  const inputMarginScale =
     typeof input.marginScale === "number" && Number.isFinite(input.marginScale) && input.marginScale > 0
       ? Math.min(1, input.marginScale)
       : 1;
@@ -567,7 +578,14 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     }
 
     const marginBase = row.snowballAutoTradeMarginUsdt ?? NaN;
-    const marginUsdt = marginBase * marginScale;
+    const dynamicBoost = resolveSnowballLongDynamicBoostMarginScale({
+      dynamicBoostEnabled: row.snowballAutoTradeLongDynamicBoostEnabled === true,
+      side,
+      btcEma4hSlopePct7d: input.btcEma4hSlopePct7d ?? null,
+      psar4hTrend: input.psar4hTrend ?? null,
+    });
+    const marginUsdt = marginBase * inputMarginScale * dynamicBoost.marginScale;
+    const dynamicBoostLine = snowballLongDynamicBoostNote(dynamicBoost, marginBase);
     const leverage = row.snowballAutoTradeLeverage ?? NaN;
     if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", { side });
@@ -658,7 +676,9 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     usersAttempted += 1;
 
     const long = side === "long";
-    const tpPlan = resolveSnowballTpSlPlanFromRow(row);
+    const tpPlan = qualityShortOverride
+      ? resolveSnowballQualityShortTpSlPlanFromRow(row)
+      : resolveSnowballTpSlPlanFromRow(row);
     const placedAtMs = Date.now();
 
     try {
@@ -770,6 +790,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           `[${shortContractLabel(sym)}]/USDT`,
           gradeKey ? `Grade ${gradeKey}` : "",
           `Margin ~${marginUsdt} USDT · ${lev}x`,
+          dynamicBoostLine ?? "",
           refPriceLine,
           `Limit ~${fmtSnowballPriceUsdt(entryEma!)} (${emaLabel}) · ราคาปัจจุบัน ~${fmtSnowballPriceUsdt(markPrice)}`,
           `หมดอายุ Limit: ~${fmtExpireBkk(placedAtMs + SNOWBALL_LIMIT_EXPIRE_MS)} (8 ชม.)`,
@@ -905,6 +926,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
               : "",
         gradeKey ? `Grade ${gradeKey}` : "",
         `Margin ~${marginUsdt} USDT · ${lev}x`,
+        dynamicBoostLine ?? "",
         refPriceLine,
         entryMode === "market"
           ? "เปิดออเดอร์: Market ที่ MEXC (โหมด Market ตลอด)"
@@ -920,7 +942,9 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         ...(tpPlan.enabled
           ? trackedTpSl
             ? [
-                `กลยุทธ์ TP/SL: TP1 ${tpPlan.tp1PricePct}% ปิด ${tpPlan.tp1PartialPct}% · TP2 ${tpPlan.tp2PricePct}% ปิดทั้งหมด`,
+                qualityShortOverride
+                  ? `กลยุทธ์ TP/SL (✨ Quality Short): TP1 ${tpPlan.tp1PricePct}% ปิด ${tpPlan.tp1PartialPct}% · TP2 ${tpPlan.tp2PricePct}% ปิดทั้งหมด`
+                  : `กลยุทธ์ TP/SL: TP1 ${tpPlan.tp1PricePct}% ปิด ${tpPlan.tp1PartialPct}% · TP2 ${tpPlan.tp2PricePct}% ปิดทั้งหมด`,
                 exchangeTpLines.length
                   ? "Plan TP บน MEXC (วางทันทีหลังเปิด):"
                   : "Plan TP: ใช้ tick ปิด market (วาง plan ไม่สำเร็จหรือยังไม่วาง)",

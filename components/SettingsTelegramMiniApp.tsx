@@ -8,6 +8,7 @@ import {
   SNOWBALL_QUALITY_SIGNAL_CRITERIA,
 } from "@/lib/snowballMatrixFilters";
 import { REVERSAL_LONG_DYNAMIC_LEVERAGE_CRITERIA_TH } from "@/lib/reversalLongDynamicLeverage";
+import { SNOWBALL_LONG_DYNAMIC_BOOST_CRITERIA_TH } from "@/lib/snowballLongDynamicBoost";
 import {
   REVERSAL_QUALITY_SIGNAL_CRITERIA,
   REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA,
@@ -106,6 +107,7 @@ type SnowballAutoTradeApiBundle = {
   qualitySignalLongEnabled?: boolean;
   qualityShortSignalShortEnabled?: boolean;
   sundayAllShortEnabled?: boolean;
+  longDynamicBoostEnabled?: boolean;
   marginUsdt?: number | null;
   leverage?: number | null;
   tpSlEnabled?: boolean;
@@ -116,6 +118,14 @@ type SnowballAutoTradeApiBundle = {
   holdExtendIfRedEnabled?: boolean;
   slArmRoiPct?: number | null;
   slEntryOffsetPct?: number | null;
+  qualityShortTpSlEnabled?: boolean;
+  qualityShortTp1PricePct?: number | null;
+  qualityShortTp1PartialPct?: number | null;
+  qualityShortTp2PricePct?: number | null;
+  qualityShortMaxHoldHours?: number | null;
+  qualityShortHoldExtendIfRedEnabled?: boolean;
+  qualityShortSlArmRoiPct?: number | null;
+  qualityShortSlEntryOffsetPct?: number | null;
   /** จุดอ้างอิง = EMA20 @1h (ยังเปิด market) */
   referenceEma20_1hEnabled?: boolean;
   entryMode?: "hybrid_ema" | "market";
@@ -187,6 +197,7 @@ export default function SettingsTelegramMiniApp() {
   const [snowQualitySignalLong, setSnowQualitySignalLong] = useState(false);
   const [snowQualityShortShort, setSnowQualityShortShort] = useState(false);
   const [snowSundayAllShort, setSnowSundayAllShort] = useState(false);
+  const [snowLongDynamicBoost, setSnowLongDynamicBoost] = useState(false);
   const [snowReferenceEma20_1h, setSnowReferenceEma20_1h] = useState(false);
   const [snowEntryMode, setSnowEntryMode] = useState<"hybrid_ema" | "market">("market");
   const [snowEntryEmaPeriod, setSnowEntryEmaPeriod] = useState("20");
@@ -200,6 +211,14 @@ export default function SettingsTelegramMiniApp() {
   const [snowHoldExtendIfRed, setSnowHoldExtendIfRed] = useState(false);
   const [snowSlArmRoiPct, setSnowSlArmRoiPct] = useState("");
   const [snowSlEntryOffsetPct, setSnowSlEntryOffsetPct] = useState("");
+  const [snowQsTpSlEnabled, setSnowQsTpSlEnabled] = useState(true);
+  const [snowQsTp1PricePct, setSnowQsTp1PricePct] = useState("");
+  const [snowQsTp1PartialPct, setSnowQsTp1PartialPct] = useState("");
+  const [snowQsTp2PricePct, setSnowQsTp2PricePct] = useState("");
+  const [snowQsMaxHoldHours, setSnowQsMaxHoldHours] = useState("");
+  const [snowQsHoldExtendIfRed, setSnowQsHoldExtendIfRed] = useState(false);
+  const [snowQsSlArmRoiPct, setSnowQsSlArmRoiPct] = useState("");
+  const [snowQsSlEntryOffsetPct, setSnowQsSlEntryOffsetPct] = useState("");
   const [snowSaveErr, setSnowSaveErr] = useState("");
   const [snowSaveOk, setSnowSaveOk] = useState("");
   const [snowSaving, setSnowSaving] = useState(false);
@@ -259,6 +278,7 @@ export default function SettingsTelegramMiniApp() {
     setSnowQualitySignalLong(Boolean(st.qualitySignalLongEnabled));
     setSnowQualityShortShort(Boolean(st.qualityShortSignalShortEnabled));
     setSnowSundayAllShort(Boolean(st.sundayAllShortEnabled));
+    setSnowLongDynamicBoost(Boolean(st.longDynamicBoostEnabled));
     setSnowReferenceEma20_1h(Boolean(st.referenceEma20_1hEnabled));
     setSnowEntryMode(st.entryMode === "hybrid_ema" ? "hybrid_ema" : "market");
     setSnowEntryEmaPeriod(
@@ -281,6 +301,38 @@ export default function SettingsTelegramMiniApp() {
     );
     setSnowSlEntryOffsetPct(
       st.slEntryOffsetPct != null && Number.isFinite(st.slEntryOffsetPct) ? String(st.slEntryOffsetPct) : ""
+    );
+    setSnowQsTpSlEnabled(st.qualityShortTpSlEnabled !== false);
+    setSnowQsTp1PricePct(
+      st.qualityShortTp1PricePct != null && Number.isFinite(st.qualityShortTp1PricePct)
+        ? String(st.qualityShortTp1PricePct)
+        : "",
+    );
+    setSnowQsTp1PartialPct(
+      st.qualityShortTp1PartialPct != null && Number.isFinite(st.qualityShortTp1PartialPct)
+        ? String(st.qualityShortTp1PartialPct)
+        : "",
+    );
+    setSnowQsTp2PricePct(
+      st.qualityShortTp2PricePct != null && Number.isFinite(st.qualityShortTp2PricePct)
+        ? String(st.qualityShortTp2PricePct)
+        : "",
+    );
+    setSnowQsMaxHoldHours(
+      st.qualityShortMaxHoldHours != null && Number.isFinite(st.qualityShortMaxHoldHours)
+        ? String(st.qualityShortMaxHoldHours)
+        : "",
+    );
+    setSnowQsHoldExtendIfRed(Boolean(st.qualityShortHoldExtendIfRedEnabled));
+    setSnowQsSlArmRoiPct(
+      st.qualityShortSlArmRoiPct != null && Number.isFinite(st.qualityShortSlArmRoiPct)
+        ? String(st.qualityShortSlArmRoiPct)
+        : "",
+    );
+    setSnowQsSlEntryOffsetPct(
+      st.qualityShortSlEntryOffsetPct != null && Number.isFinite(st.qualityShortSlEntryOffsetPct)
+        ? String(st.qualityShortSlEntryOffsetPct)
+        : "",
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrate เมื่อได้ tvSettings bundle จากเซิร์ฟเวอร์
   }, [tvSettings?.webhookToken, tvSettings?.snowballAutoTrade]);
@@ -609,6 +661,12 @@ export default function SettingsTelegramMiniApp() {
     const maxHoldParsed = snowMaxHoldHours.trim() ? parseNumRaw(snowMaxHoldHours) : null;
     const slArmParsed = snowSlArmRoiPct.trim() ? parseNumRaw(snowSlArmRoiPct) : null;
     const slOffParsed = snowSlEntryOffsetPct.trim() ? parseNumRaw(snowSlEntryOffsetPct) : null;
+    const qsTp1Parsed = snowQsTp1PricePct.trim() ? parseNumRaw(snowQsTp1PricePct) : null;
+    const qsTp1PartialParsed = snowQsTp1PartialPct.trim() ? parseNumRaw(snowQsTp1PartialPct) : null;
+    const qsTp2Parsed = snowQsTp2PricePct.trim() ? parseNumRaw(snowQsTp2PricePct) : null;
+    const qsMaxHoldParsed = snowQsMaxHoldHours.trim() ? parseNumRaw(snowQsMaxHoldHours) : null;
+    const qsSlArmParsed = snowQsSlArmRoiPct.trim() ? parseNumRaw(snowQsSlArmRoiPct) : null;
+    const qsSlOffParsed = snowQsSlEntryOffsetPct.trim() ? parseNumRaw(snowQsSlEntryOffsetPct) : null;
 
     if (snowMarginDefault.trim() && marginDefaultParsed == null) {
       setSnowSaveErr("Margin default ไม่ใช่ตัวเลข");
@@ -640,6 +698,30 @@ export default function SettingsTelegramMiniApp() {
     }
     if (snowSlEntryOffsetPct.trim() && slOffParsed == null) {
       setSnowSaveErr("SL ห่าง entry % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowQsTp1PricePct.trim() && qsTp1Parsed == null) {
+      setSnowSaveErr("Quality Short TP1 % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowQsTp1PartialPct.trim() && qsTp1PartialParsed == null) {
+      setSnowSaveErr("Quality Short TP1 ปิด % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowQsTp2PricePct.trim() && qsTp2Parsed == null) {
+      setSnowSaveErr("Quality Short TP2 % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowQsMaxHoldHours.trim() && qsMaxHoldParsed == null) {
+      setSnowSaveErr("Quality Short ครบกี่ชม. ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowQsSlArmRoiPct.trim() && qsSlArmParsed == null) {
+      setSnowSaveErr("Quality Short ROI ย้าย SL % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowQsSlEntryOffsetPct.trim() && qsSlOffParsed == null) {
+      setSnowSaveErr("Quality Short SL ห่าง entry % ไม่ใช่ตัวเลข");
       return;
     }
     if (snowMarginDefault.trim() && marginDefaultParsed != null && marginDefaultParsed <= 0) {
@@ -674,6 +756,36 @@ export default function SettingsTelegramMiniApp() {
       setSnowSaveErr("SL ห่าง entry % ต้องอยู่ระหว่าง 0–50");
       return;
     }
+    if (snowQsTp1PricePct.trim() && (qsTp1Parsed == null || !(qsTp1Parsed > 0 && qsTp1Parsed < 100))) {
+      setSnowSaveErr("Quality Short TP1 % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (
+      snowQsTp1PartialPct.trim() &&
+      (qsTp1PartialParsed == null || !(qsTp1PartialParsed > 0 && qsTp1PartialParsed < 100))
+    ) {
+      setSnowSaveErr("Quality Short TP1 ปิด % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (snowQsTp2PricePct.trim() && (qsTp2Parsed == null || !(qsTp2Parsed > 0 && qsTp2Parsed < 100))) {
+      setSnowSaveErr("Quality Short TP2 % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (qsTp1Parsed != null && qsTp2Parsed != null && !(qsTp2Parsed > qsTp1Parsed)) {
+      setSnowSaveErr("Quality Short TP2 % ต้องมากกว่า TP1 %");
+      return;
+    }
+    if (snowQsSlArmRoiPct.trim() && (qsSlArmParsed == null || !(qsSlArmParsed > 0 && qsSlArmParsed < 100))) {
+      setSnowSaveErr("Quality Short ROI ย้าย SL % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (
+      snowQsSlEntryOffsetPct.trim() &&
+      (qsSlOffParsed == null || !(qsSlOffParsed >= 0 && qsSlOffParsed < 50))
+    ) {
+      setSnowSaveErr("Quality Short SL ห่าง entry % ต้องอยู่ระหว่าง 0–50");
+      return;
+    }
 
     const snowEntryEmaPeriodParsed = snowEntryEmaPeriod.trim() ? Number(snowEntryEmaPeriod.trim()) : NaN;
     if (
@@ -694,6 +806,7 @@ export default function SettingsTelegramMiniApp() {
         qualitySignalLongEnabled: snowQualitySignalLong,
         qualityShortSignalShortEnabled: snowQualityShortShort,
         sundayAllShortEnabled: snowSundayAllShort,
+        longDynamicBoostEnabled: snowLongDynamicBoost,
         referenceEma20_1hEnabled: snowReferenceEma20_1h,
         entryMode: snowEntryMode,
         entryEmaPeriod: snowEntryMode === "hybrid_ema" ? Math.floor(snowEntryEmaPeriodParsed) : null,
@@ -707,6 +820,14 @@ export default function SettingsTelegramMiniApp() {
         holdExtendIfRedEnabled: snowHoldExtendIfRed,
         slArmRoiPct: snowSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: snowSlEntryOffsetPct.trim() ? slOffParsed : null,
+        qualityShortTpSlEnabled: snowQsTpSlEnabled,
+        qualityShortTp1PricePct: snowQsTp1PricePct.trim() ? qsTp1Parsed : null,
+        qualityShortTp1PartialPct: snowQsTp1PartialPct.trim() ? qsTp1PartialParsed : null,
+        qualityShortTp2PricePct: snowQsTp2PricePct.trim() ? qsTp2Parsed : null,
+        qualityShortMaxHoldHours: snowQsMaxHoldHours.trim() ? qsMaxHoldParsed : null,
+        qualityShortHoldExtendIfRedEnabled: snowQsHoldExtendIfRed,
+        qualityShortSlArmRoiPct: snowQsSlArmRoiPct.trim() ? qsSlArmParsed : null,
+        qualityShortSlEntryOffsetPct: snowQsSlEntryOffsetPct.trim() ? qsSlOffParsed : null,
       };
       const body: Record<string, unknown> = {
         rotateWebhookToken: false,
@@ -1248,6 +1369,114 @@ export default function SettingsTelegramMiniApp() {
           </span>
         </label>
 
+        <p className="sub" style={{ marginTop: "0.65rem", fontWeight: 600 }}>
+          กลยุทธ์ TP/SL — ✨ Quality Short Signal เท่านั้น
+        </p>
+        <p className="sub" style={{ marginTop: "0.25rem", opacity: 0.9 }}>
+          ใช้เมื่อเปิด Short จาก ✨ Quality Short Signal เท่านั้น — Long / Bear / Sunday / Grade C fade ยังใช้แผน TP/SL ด้านล่าง
+        </p>
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.5rem" }}>
+          <input
+            type="checkbox"
+            checked={snowQsTpSlEnabled}
+            onChange={(e) => setSnowQsTpSlEnabled(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>เปิดใช้กลยุทธ์ TP/SL (Quality Short)</strong>
+          </span>
+        </label>
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            TP1 % (default 10)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 10"
+              value={snowQsTp1PricePct}
+              onChange={(e) => setSnowQsTp1PricePct(e.target.value)}
+              disabled={!snowQsTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            TP1 ปิด % (default 50)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 50"
+              value={snowQsTp1PartialPct}
+              onChange={(e) => setSnowQsTp1PartialPct(e.target.value)}
+              disabled={!snowQsTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            TP2 % (default 25)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 25"
+              value={snowQsTp2PricePct}
+              onChange={(e) => setSnowQsTp2PricePct(e.target.value)}
+              disabled={!snowQsTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            ครบกี่ ชม. (default 48)
+            <input
+              type="text"
+              inputMode="numeric"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 48"
+              value={snowQsMaxHoldHours}
+              onChange={(e) => setSnowQsMaxHoldHours(e.target.value)}
+              disabled={!snowQsTpSlEnabled}
+            />
+          </label>
+          <label className="sub tmaCheckboxField" style={{ display: "block" }}>
+            <input
+              type="checkbox"
+              checked={snowQsHoldExtendIfRed}
+              onChange={(e) => setSnowQsHoldExtendIfRed(e.target.checked)}
+              disabled={!snowQsTpSlEnabled}
+            />
+            <span className="tmaCheckboxField__text">
+              ครบจังหวะ 1 แล้วยังปิดแดง → รออีก {snowQsMaxHoldHours.trim() || "48"} ชม.
+            </span>
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            ROI ย้าย SL % (default 10)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 10"
+              value={snowQsSlArmRoiPct}
+              onChange={(e) => setSnowQsSlArmRoiPct(e.target.value)}
+              disabled={!snowQsTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            SL ห่าง entry % (default 0)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 0"
+              value={snowQsSlEntryOffsetPct}
+              onChange={(e) => setSnowQsSlEntryOffsetPct(e.target.value)}
+              disabled={!snowQsTpSlEnabled}
+            />
+          </label>
+        </div>
+
         <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
           <input
             type="checkbox"
@@ -1312,11 +1541,25 @@ export default function SettingsTelegramMiniApp() {
           </span>
         </label>
 
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={snowLongDynamicBoost}
+            onChange={(e) => setSnowLongDynamicBoost(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>Dynamic boost margin (LONG)</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              {SNOWBALL_LONG_DYNAMIC_BOOST_CRITERIA_TH} — ใช้ BTC EMA(12) 4h slope 7d + PSAR 4h ของคู่สัญญาณ ณ เวลาแจ้ง · SHORT / Sunday / Quality Short ไม่ใช้
+            </span>
+          </span>
+        </label>
+
         <p className="sub" style={{ marginTop: "0.85rem", fontWeight: 600 }}>
           Margin / เลเวเรจ (default)
         </p>
         <p className="sub" style={{ marginTop: 0 }}>
-          ใช้กับทุกสัญญาณที่เข้ากรอง · entry ตามโหมดด้านบน
+          ใช้กับทุกสัญญาณที่เข้ากรอง · entry ตามโหมดด้านบน · Dynamic boost คูณกับ margin ฐาน (และ action plan / Grade B ถ้ามี)
         </p>
         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
           <label className="sub" style={{ display: "block" }}>
