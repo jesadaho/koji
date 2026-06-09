@@ -126,6 +126,10 @@ export function snowballLongStructureTierShortLabel(tier: SnowballLongStructureT
   return "C";
 }
 
+export function snowballLongStructurePassesMain(swing48: boolean, vahOk: boolean): boolean {
+  return swing48 || vahOk;
+}
+
 export function snowballLongBreakout1hEvalPasses(
   ev: SnowballLongBreakout1hConfirmEval | null | undefined,
 ): boolean {
