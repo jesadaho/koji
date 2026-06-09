@@ -88,8 +88,6 @@ export type SnowballStatsRow = {
   lenLookbackBars?: number | null;
   /** Len percentile 0–100 (100 = ยาวสุดในรอบ) */
   lenPercentilePct?: number | null;
-  /** Len percentile แท่ง confirm — 0–100 (100 = ยาวสุดในรอบ) */
-  confirmLenPercentilePct?: number | null;
   barRangePctPrev?: number | null;
   barRangePctSignal?: number | null;
   barRangePct2Sum?: number | null;

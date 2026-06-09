@@ -11,7 +11,6 @@ import { sendPublicSnowballFeedToSparkGroup } from "./alertNotify";
 import { BKK_DAY_TZ_OFFSET_SEC, fetchGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
-import { computeSnowballSignalLenPercentile } from "./statsLenPercentile";
 import { snowballEma20_1hReferencePrice } from "./snowballReferenceEma20_1h";
 import {
   isPublicSnowballTripleCheckEnabled,
@@ -297,7 +296,6 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
       const volRatio = item.signalVolume > 0 ? vo / item.signalVolume : 0;
       const volOk = volRatio >= volMinRatio;
       if (priceOk && volOk) {
-        const confirmLenSnap = computeSnowballSignalLenPercentile(pack, idx);
         const volSmaConfirm = volumeSmaConfirmAtPackIndex(pack, idx);
         const volSmaConfirmUse =
           Number.isFinite(volSmaConfirm) && volSmaConfirm > 0 ? volSmaConfirm : null;
@@ -430,7 +428,6 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               rangeRankInLookback: item.statsRangeRankInLookback ?? null,
               lenLookbackBars: item.statsLenLookbackBars ?? null,
               lenPercentilePct: item.statsLenPercentilePct ?? null,
-              confirmLenPercentilePct: confirmLenSnap?.lenPercentilePct ?? null,
               signalVolVsSma: item.statsSignalVolVsSma ?? null,
               volStrictOk: item.statsVolStrictOk ?? null,
               volNearMissOnly: item.statsVolNearMissOnly ?? null,
@@ -491,7 +488,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               fundingRate: item.statsFundingRate ?? null,
               ema4hSlopePct7d: item.statsEma4hSlopePct7d ?? null,
               ema1dSlopePct7d: item.statsEma1dSlopePct7d ?? null,
-              confirmLenPercentilePct: confirmLenSnap?.lenPercentilePct ?? null,
+              barRangePct2Sum: item.statsBarRangePct2Sum ?? null,
               barRangePctSignal: item.statsBarRangePctSignal ?? null,
               signalVolVsSma: item.statsSignalVolVsSma ?? null,
               confirmVolVsSma,

@@ -3619,11 +3619,9 @@ export async function runPublicIndicatorFeedInternal(
               typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
                 ? vE! / vsE
                 : null;
-            const longConfirmLenSnap =
-              twoBarInline && packSb ? computeSnowballSignalLenPercentile(packSb, iConf) : null;
             const longQualityShortSignal = snowballMatchesQualityShortSignal({
               ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
-              confirmLenPercentilePct: longConfirmLenSnap?.lenPercentilePct ?? null,
+              barRangePct2Sum: longVolSnapAuto.barRangePct2Sum,
             });
             const runLongAutoOpenNow =
               !intrabar &&
@@ -3669,7 +3667,7 @@ export async function runPublicIndicatorFeedInternal(
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
                   ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
-                  confirmLenPercentilePct: longConfirmLenSnap?.lenPercentilePct ?? null,
+                  barRangePct2Sum: longVolSnapAuto.barRangePct2Sum,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: longSignalVolVsSma,
                   ...(marginScale != null ? { marginScale } : {}),
@@ -3877,7 +3875,6 @@ export async function runPublicIndicatorFeedInternal(
                   rangeRankInLookback: longLenSnap?.rangeRankInLookback ?? null,
                   lenLookbackBars: longLenSnap?.lookbackBars ?? null,
                   lenPercentilePct: longLenSnap?.lenPercentilePct ?? null,
-                  confirmLenPercentilePct: longConfirmLenSnap?.lenPercentilePct ?? null,
                   signalVolVsSma:
                     typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
                   volStrictOk,
@@ -4166,11 +4163,9 @@ export async function runPublicIndicatorFeedInternal(
           typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
             ? vE! / vsE
             : null;
-        const bearConfirmLenSnap =
-          twoBarInline && packSb ? computeSnowballSignalLenPercentile(packSb, iConf) : null;
         const bearQualityShortSignal = snowballMatchesQualityShortSignal({
           ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
-          confirmLenPercentilePct: bearConfirmLenSnap?.lenPercentilePct ?? null,
+          barRangePct2Sum: bearVolSnapAuto.barRangePct2Sum,
         });
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", signalBarOpenSec, {
@@ -4266,7 +4261,7 @@ export async function runPublicIndicatorFeedInternal(
                   fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
                   ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
-                  confirmLenPercentilePct: bearConfirmLenSnap?.lenPercentilePct ?? null,
+                  barRangePct2Sum: bearVolSnapAuto.barRangePct2Sum,
                   barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: bearSignalVolVsSma,
                 });
@@ -4386,7 +4381,6 @@ export async function runPublicIndicatorFeedInternal(
                   rangeRankInLookback: bearLenSnap?.rangeRankInLookback ?? null,
                   lenLookbackBars: bearLenSnap?.lookbackBars ?? null,
                   lenPercentilePct: bearLenSnap?.lenPercentilePct ?? null,
-                  confirmLenPercentilePct: bearConfirmLenSnap?.lenPercentilePct ?? null,
                   ...trendMomentumStatsFields(trendMomentumBear),
                   greenDaysBeforeSignal: bearGreenDays,
                 });
