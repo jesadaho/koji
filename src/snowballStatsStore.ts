@@ -695,9 +695,9 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     psar4hV: STATS_PSAR_4H_VERSION,
     btcEmaSlopesV: STATS_BTC_EMA_SLOPES_VERSION,
     ...(input.ema4hSlopePct7d != null && Number.isFinite(input.ema4hSlopePct7d)
-      ? { symbolEmaSlopesV: STATS_SYMBOL_EMA_SLOPES_VERSION as const }
+      ? { symbolEmaSlopesV: STATS_SYMBOL_EMA_SLOPES_VERSION }
       : {}),
-    ...(input.qualityTier ? { trendGradeV: STATS_TREND_GRADE_VERSION as const } : {}),
+    ...(input.qualityTier ? { trendGradeV: STATS_TREND_GRADE_VERSION } : {}),
     signalVolVsSma:
       input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0
         ? input.signalVolVsSma
