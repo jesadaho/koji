@@ -140,6 +140,7 @@ export type AppendSnowballStatsInput = {
   rangeRankInLookback?: number | null;
   lenLookbackBars?: number | null;
   lenPercentilePct?: number | null;
+  confirmLenPercentilePct?: number | null;
   barRangePctPrev?: number | null;
   barRangePctSignal?: number | null;
   barRangePct2Sum?: number | null;
@@ -499,6 +500,10 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
               ? Math.floor(input.lenLookbackBars)
               : null,
           ),
+    confirmLenPercentilePct:
+      input.confirmLenPercentilePct != null && Number.isFinite(input.confirmLenPercentilePct)
+        ? input.confirmLenPercentilePct
+        : null,
     btcPsar4hTrend:
       input.btcPsar4hTrend === "up" || input.btcPsar4hTrend === "down" ? input.btcPsar4hTrend : null,
     btcPsar4hClose:

@@ -20,9 +20,10 @@ export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGN
 
 export const SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MIN_PCT = -10;
 export const SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MAX_PCT = 0;
+export const SNOWBALL_QUALITY_SHORT_SIGNAL_CONFIRM_LEN_MAX_PCT = 15;
 
 export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA =
-  "EMA(12) 1d slope 7 แท่ง > -10% และ < 0%";
+  "EMA(12) 1d slope 7 แท่ง > -10% และ < 0% · แท่งคอนเฟิร์ม Len < 15%";
 
 export const SNOWBALL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: SnowballMatrixFilter;
@@ -169,11 +170,22 @@ function ema1dSlopeInQualityShortBand(pct: number | null | undefined): boolean {
   );
 }
 
-/** ✨ Quality Short Signal — EMA(12) 1d slope 7 แท่ง > -10% และ < 0% เท่านั้น */
+function confirmLenBelowQualityShortMax(pct: number | null | undefined): boolean {
+  return (
+    pct != null &&
+    Number.isFinite(pct) &&
+    pct < SNOWBALL_QUALITY_SHORT_SIGNAL_CONFIRM_LEN_MAX_PCT
+  );
+}
+
+/** ✨ Quality Short Signal — EMA(12) 1d slope 7 แท่ง + แท่งคอนเฟิร์ม Len < 15% */
 export function snowballMatchesQualityShortSignal(
-  row: Pick<SnowballStatsRow, "ema1dSlopePct7d">,
+  row: Pick<SnowballStatsRow, "ema1dSlopePct7d" | "confirmLenPercentilePct">,
 ): boolean {
-  return ema1dSlopeInQualityShortBand(row.ema1dSlopePct7d);
+  return (
+    ema1dSlopeInQualityShortBand(row.ema1dSlopePct7d) &&
+    confirmLenBelowQualityShortMax(row.confirmLenPercentilePct)
+  );
 }
 
 export function snowballRowMatchesQualityShortSignalMatrix(row: SnowballStatsRow): boolean {
