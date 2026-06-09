@@ -161,7 +161,7 @@ function isVolCascadePassPartialMomentumC(
   >,
 ): boolean {
   const grade = effectiveQualityTier(row);
-  if (grade !== "c_plus" || row.volumeCascadeYn !== "Y") return false;
+  if (grade !== "c" || row.volumeCascadeYn !== "Y") return false;
   if (!snowballVolSmaMeetsGradeCMin(row.signalVolVsSma)) return false;
   const strictMult =
     row.volMultAtAlert != null && Number.isFinite(row.volMultAtAlert) && row.volMultAtAlert > 0
