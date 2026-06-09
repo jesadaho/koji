@@ -3621,7 +3621,6 @@ export async function runPublicIndicatorFeedInternal(
                 : null;
             const longQualityShortSignal = snowballMatchesQualityShortSignal({
               ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
-              barRangePct2Sum: longVolSnapAuto.barRangePct2Sum,
             });
             const runLongAutoOpenNow =
               !intrabar &&
@@ -3667,7 +3666,6 @@ export async function runPublicIndicatorFeedInternal(
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
                   ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
-                  barRangePct2Sum: longVolSnapAuto.barRangePct2Sum,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: longSignalVolVsSma,
                   ...(marginScale != null ? { marginScale } : {}),
@@ -4165,7 +4163,6 @@ export async function runPublicIndicatorFeedInternal(
             : null;
         const bearQualityShortSignal = snowballMatchesQualityShortSignal({
           ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
-          barRangePct2Sum: bearVolSnapAuto.barRangePct2Sum,
         });
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", signalBarOpenSec, {
@@ -4261,7 +4258,6 @@ export async function runPublicIndicatorFeedInternal(
                   fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
                   ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
-                  barRangePct2Sum: bearVolSnapAuto.barRangePct2Sum,
                   barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: bearSignalVolVsSma,
                 });

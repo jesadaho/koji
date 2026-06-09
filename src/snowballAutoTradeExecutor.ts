@@ -105,11 +105,9 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
 
 function snowballAutoOpenMatchesQualityShortSignal(input: {
   ema1dSlopePct7d?: number | null;
-  barRangePct2Sum?: number | null;
 }): boolean {
   return snowballMatchesQualityShortSignal({
     ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
-    barRangePct2Sum: input.barRangePct2Sum ?? null,
   });
 }
 
@@ -121,7 +119,6 @@ function resolveSnowballAutoOpenSide(
     fundingRate?: number | null;
     ema4hSlopePct7d?: number | null;
     ema1dSlopePct7d?: number | null;
-    barRangePct2Sum?: number | null;
     barRangePctSignal?: number | null;
     signalBarTf: "15m" | "1h" | "4h";
     vol: number;
@@ -275,7 +272,6 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   fundingRate?: number | null;
   ema4hSlopePct7d?: number | null;
   ema1dSlopePct7d?: number | null;
-  barRangePct2Sum?: number | null;
   barRangePctSignal?: number | null;
   signalVolVsSma?: number | null;
   confirmVolVsSma?: number | null;
@@ -288,7 +284,6 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   });
   const qualityShortMatch = snowballAutoOpenMatchesQualityShortSignal({
     ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
-    barRangePct2Sum: input.barRangePct2Sum ?? null,
   });
   const forceMatrixOpen = qualitySignalMatch || qualityShortMatch;
 
@@ -327,7 +322,6 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   const qualityShortInput = {
     greenDaysBeforeSignal: input.greenDaysBeforeSignal,
     ema1dSlopePct7d: input.ema1dSlopePct7d,
-    barRangePct2Sum: input.barRangePct2Sum,
     barRangePctSignal: input.barRangePctSignal,
     signalBarTf: input.signalBarTf,
     vol: input.vol,
