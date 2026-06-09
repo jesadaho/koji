@@ -4,6 +4,11 @@
  */
 
 import { snowballStatsVolVsSmaDisplay, type SnowballStatsRow } from "@/lib/snowballStatsClient";
+import {
+  snowballEma4hSlopeMatchesTrendGradeF,
+  SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE,
+  SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE,
+} from "@/src/snowballTrendGrade";
 
 export type SnowballMatrixFilter =
   | "all"
@@ -18,11 +23,13 @@ export const SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS = 3;
 
 export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}% · เขียว ≤ ${SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS} วัน`;
 
-export const SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MIN_PCT = -10;
-export const SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MAX_PCT = 0;
+export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA = `Grade F — EMA4h slope 7d > ${SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE}% และ < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}%`;
 
-export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA =
-  "EMA(12) 1d slope 7 แท่ง > -10% และ < 0%";
+/** auto-open: Snowball LONG → fade SHORT */
+export const SNOWBALL_GRADE_F_FADE_SHORT_CRITERIA = SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA;
+
+/** auto-open: Snowball SHORT (ทิศ BEAR) */
+export const SNOWBALL_SHORT_SIGNAL_CRITERIA = "สัญญาณ Snowball SHORT (BEAR / swing LL)";
 
 export const SNOWBALL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: SnowballMatrixFilter;
@@ -160,20 +167,11 @@ export function snowballRowMatchesQualitySignalMatrix(row: SnowballStatsRow): bo
   return snowballMatchesQualitySignal(row);
 }
 
-function ema1dSlopeInQualityShortBand(pct: number | null | undefined): boolean {
-  return (
-    pct != null &&
-    Number.isFinite(pct) &&
-    pct > SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MIN_PCT &&
-    pct < SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MAX_PCT
-  );
-}
-
-/** ✨ Quality Short Signal — EMA(12) 1d slope 7 แท่ง > -10% และ < 0% เท่านั้น */
+/** ✨ Quality Short Signal — ตรงเกรด F (EMA4h slope 7d) */
 export function snowballMatchesQualityShortSignal(
-  row: Pick<SnowballStatsRow, "ema1dSlopePct7d">,
+  row: Pick<SnowballStatsRow, "ema4hSlopePct7d">,
 ): boolean {
-  return ema1dSlopeInQualityShortBand(row.ema1dSlopePct7d);
+  return snowballEma4hSlopeMatchesTrendGradeF(row.ema4hSlopePct7d);
 }
 
 export function snowballRowMatchesQualityShortSignalMatrix(row: SnowballStatsRow): boolean {

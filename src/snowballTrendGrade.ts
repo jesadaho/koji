@@ -88,6 +88,11 @@ function matchesGradeF(input: ClassifySnowballTrendGradeInput): boolean {
   );
 }
 
+/** EMA4h slope 7d ตรงช่วงเกรด F — ใช้ Quality Short Signal / matrix filter */
+export function snowballEma4hSlopeMatchesTrendGradeF(ema4hSlopePct7d?: number | null): boolean {
+  return matchesGradeF({ ema4hSlopePct7d });
+}
+
 /** ตัดเกรด F → S → A → B → C */
 export function classifySnowballTrendGrade(input: ClassifySnowballTrendGradeInput): SnowballTrendGrade {
   if (matchesGradeF(input)) return "f";

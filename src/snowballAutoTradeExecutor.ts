@@ -41,7 +41,8 @@ import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNo
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import {
-  SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA,
+  SNOWBALL_GRADE_F_FADE_SHORT_CRITERIA,
+  SNOWBALL_SHORT_SIGNAL_CRITERIA,
   SNOWBALL_QUALITY_SIGNAL_CRITERIA,
   snowballMatchesQualityShortSignal,
   snowballMatchesQualitySignal,
@@ -111,11 +112,22 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
 }
 
 function snowballAutoOpenMatchesQualityShortSignal(input: {
-  ema1dSlopePct7d?: number | null;
+  ema4hSlopePct7d?: number | null;
 }): boolean {
   return snowballMatchesQualityShortSignal({
-    ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
+    ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
   });
+}
+
+function snowballGradeFFadeShortEnabled(row: TradingViewMexcUserSettings): boolean {
+  return (
+    row.snowballAutoTradeGradeFFadeShortEnabled === true ||
+    row.snowballAutoTradeQualityShortSignalShortEnabled === true
+  );
+}
+
+function snowballShortSignalShortEnabled(row: TradingViewMexcUserSettings): boolean {
+  return row.snowballAutoTradeShortSignalShortEnabled === true;
 }
 
 function resolveSnowballAutoOpenSide(
@@ -135,25 +147,34 @@ function resolveSnowballAutoOpenSide(
   },
 ): SnowballAutoTradeSide | null {
   const defaultSide: SnowballAutoTradeSide = alertSide === "bear" ? "short" : "long";
+  const isLongAlert = alertSide !== "bear";
+  const isBearAlert = alertSide === "bear";
   const qsOn = snowballQualitySignalLongEnabled(row);
-  const qssOn = row.snowballAutoTradeQualityShortSignalShortEnabled === true;
+  const gradeFFadeOn = snowballGradeFFadeShortEnabled(row);
+  const shortSignalOn = snowballShortSignalShortEnabled(row);
   const qsMatch = snowballMatchesQualitySignal({
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
   });
-  const qssMatch = snowballAutoOpenMatchesQualityShortSignal(input);
+  const gradeFMatch = snowballAutoOpenMatchesQualityShortSignal(input);
+  const longGateOn = qsOn || gradeFFadeOn;
 
-  /** Quality Signal / Quality Short ชนะ Sunday และ default */
   if (qsOn && qsMatch) {
     return "long";
   }
-  if (qssOn && qssMatch) {
+  if (isLongAlert && gradeFFadeOn && gradeFMatch) {
     return "short";
   }
   if (row.snowballAutoTradeSundayAllShortEnabled === true && bkkIsSundayNow()) {
     return "short";
   }
-  if (qsOn || qssOn) {
+  if (isBearAlert && shortSignalOn) {
+    return "short";
+  }
+  if (isLongAlert && longGateOn && !qsMatch && !(gradeFFadeOn && gradeFMatch)) {
+    return null;
+  }
+  if (isBearAlert && !shortSignalOn && longGateOn) {
     return null;
   }
   return defaultSide;
@@ -293,12 +314,15 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
   });
-  const qualityShortMatch = snowballAutoOpenMatchesQualityShortSignal({
-    ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
-  });
-  const forceMatrixOpen = qualitySignalMatch || qualityShortMatch;
+  const gradeFFadeMatch =
+    input.alertSide !== "bear" &&
+    snowballAutoOpenMatchesQualityShortSignal({
+      ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
+    });
+  const forceMatrixOpenLong = qualitySignalMatch || gradeFFadeMatch;
+  const isBearAlert = input.alertSide === "bear";
 
-  if (input.actionPlan === "monitor" && !forceMatrixOpen) {
+  if (input.actionPlan === "monitor" && !forceMatrixOpenLong && !isBearAlert) {
     return { usersAttempted: 0, usersSucceeded: 0 };
   }
 
@@ -540,6 +564,16 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       continue;
     }
 
+    const shortSignalOn = snowballShortSignalShortEnabled(row);
+    if (
+      input.actionPlan === "monitor" &&
+      !forceMatrixOpenLong &&
+      !(isBearAlert && shortSignalOn)
+    ) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "monitor_action_plan");
+      continue;
+    }
+
     const side = resolveSnowballAutoOpenSide(row, input.alertSide, qualitySideInput);
     if (side === null) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "quality_filter_no_match");
@@ -552,14 +586,20 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       bkkIsSundayNow() &&
       side === "short" &&
       defaultSide === "long";
-    const qualityShortOverride =
+    const gradeFFadeOverride =
       !sundayShortOverride &&
-      row.snowballAutoTradeQualityShortSignalShortEnabled === true &&
+      snowballGradeFFadeShortEnabled(row) &&
       side === "short" &&
       defaultSide === "long";
+    const shortSignalOverride =
+      !sundayShortOverride &&
+      !gradeFFadeOverride &&
+      shortSignalOn &&
+      side === "short" &&
+      defaultSide === "short";
     const qualitySignalLongOverride =
       !sundayShortOverride &&
-      !qualityShortOverride &&
+      !gradeFFadeOverride &&
       snowballQualitySignalLongEnabled(row) &&
       side === "long" &&
       defaultSide !== "long";
@@ -677,7 +717,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     usersAttempted += 1;
 
     const long = side === "long";
-    const tpPlan = qualityShortOverride
+    const tpPlan = gradeFFadeOverride
       ? resolveSnowballQualityShortTpSlPlanFromRow(row)
       : resolveSnowballTpSlPlanFromRow(row);
     const placedAtMs = Date.now();
@@ -778,8 +818,8 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         });
         const successTitle = sundayShortOverride
           ? "✅ ตั้ง Limit SHORT (วันอาทิตย์ — สัญญาณ LONG)"
-          : qualityShortOverride
-            ? "✅ ตั้ง Limit SHORT (✨ Quality Short Signal)"
+          : gradeFFadeOverride
+            ? "✅ ตั้ง Limit SHORT (Long → fade SHORT · เกรด F)"
             : qualitySignalLongOverride
               ? "✅ ตั้ง Limit LONG (✨ Quality Signal)"
               : long
@@ -910,8 +950,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         "Koji — Snowball auto-open (MEXC)",
         sundayShortOverride
           ? "✅ เปิด SHORT จาก Snowball (วันอาทิตย์ — สัญญาณ LONG)"
-          : qualityShortOverride
-            ? "✅ เปิด SHORT จาก Snowball (✨ Quality Short Signal)"
+          : gradeFFadeOverride
+            ? "✅ เปิด SHORT จาก Snowball (Long → fade SHORT · เกรด F)"
+            : shortSignalOverride
+              ? "✅ เปิด SHORT จาก Snowball (ทิศ SHORT)"
             : qualitySignalLongOverride
               ? "✅ เปิด LONG จาก Snowball (✨ Quality Signal)"
               : long
@@ -920,8 +962,10 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         `[${shortContractLabel(sym)}]/USDT`,
         sundayShortOverride
           ? "เกณฑ์: วันอาทิตย์ (เวลาไทย) — Short ทุกสัญญาณ Snowball"
-          : qualityShortOverride
-            ? `เกณฑ์: ${SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA}`
+          : gradeFFadeOverride
+            ? `เกณฑ์: ${SNOWBALL_GRADE_F_FADE_SHORT_CRITERIA}`
+            : shortSignalOverride
+              ? `เกณฑ์: ${SNOWBALL_SHORT_SIGNAL_CRITERIA}`
             : qualitySignalLongOverride
               ? `เกณฑ์: ${SNOWBALL_QUALITY_SIGNAL_CRITERIA}`
               : "",
@@ -943,8 +987,8 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         ...(tpPlan.enabled
           ? trackedTpSl
             ? [
-                qualityShortOverride
-                  ? `กลยุทธ์ TP/SL (✨ Quality Short): TP1 ${tpPlan.tp1PricePct}% ปิด ${tpPlan.tp1PartialPct}% · TP2 ${tpPlan.tp2PricePct}% ปิดทั้งหมด`
+                gradeFFadeOverride
+                  ? `กลยุทธ์ TP/SL (fade SHORT · เกรด F): TP1 ${tpPlan.tp1PricePct}% ปิด ${tpPlan.tp1PartialPct}% · TP2 ${tpPlan.tp2PricePct}% ปิดทั้งหมด`
                   : `กลยุทธ์ TP/SL: TP1 ${tpPlan.tp1PricePct}% ปิด ${tpPlan.tp1PartialPct}% · TP2 ${tpPlan.tp2PricePct}% ปิดทั้งหมด`,
                 exchangeTpLines.length
                   ? "Plan TP บน MEXC (วางทันทีหลังเปิด):"

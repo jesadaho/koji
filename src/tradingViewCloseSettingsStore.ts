@@ -104,8 +104,12 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeQualitySignalLongEnabled?: boolean;
   /** @deprecated ใช้ snowballAutoTradeQualitySignalLongEnabled */
   snowballAutoTradeQualitySignalGateEnabled?: boolean;
-  /** สัญญาณ LONG ที่ตรง ✨ Quality Short Signal → เปิด Short บน MEXC แทน Long */
+  /** @deprecated ใช้ snowballAutoTradeGradeFFadeShortEnabled */
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
+  /** Snowball LONG + เกรด F → fade SHORT */
+  snowballAutoTradeGradeFFadeShortEnabled?: boolean;
+  /** Snowball SHORT (BEAR) → เปิด Short */
+  snowballAutoTradeShortSignalShortEnabled?: boolean;
   /** วันอาทิตย์ (เวลาไทย) — Snowball ทุกสัญญาณ → Short */
   snowballAutoTradeSundayAllShortEnabled?: boolean;
   /** Snowball LONG — ปรับ margin ตาม BTC slope + PSAR 4h คู่สัญญาณ (Perfect x3 / Caution 1x / Penalty 0.5x) */
@@ -328,6 +332,8 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
   snowballAutoTradeQualitySignalLongEnabled?: boolean;
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
+  snowballAutoTradeGradeFFadeShortEnabled?: boolean;
+  snowballAutoTradeShortSignalShortEnabled?: boolean;
   snowballAutoTradeSundayAllShortEnabled?: boolean;
   snowballAutoTradeLongDynamicBoostEnabled?: boolean;
   snowballAutoTradeReferenceEma20_1hEnabled?: boolean;
@@ -426,6 +432,8 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeGreen2DaysLongAllGrades !== undefined ||
     input.snowballAutoTradeQualitySignalLongEnabled !== undefined ||
     input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined ||
+    input.snowballAutoTradeGradeFFadeShortEnabled !== undefined ||
+    input.snowballAutoTradeShortSignalShortEnabled !== undefined ||
     input.snowballAutoTradeSundayAllShortEnabled !== undefined ||
     input.snowballAutoTradeLongDynamicBoostEnabled !== undefined ||
     input.snowballAutoTradeReferenceEma20_1hEnabled !== undefined ||
@@ -592,7 +600,25 @@ export async function saveTradingViewMexcSettings(
     snowballAutoTradeQualityShortSignalShortEnabled:
       input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined
         ? input.snowballAutoTradeQualityShortSignalShortEnabled
-        : prev?.snowballAutoTradeQualityShortSignalShortEnabled ?? false,
+        : input.snowballAutoTradeGradeFFadeShortEnabled !== undefined
+          ? input.snowballAutoTradeGradeFFadeShortEnabled
+          : prev?.snowballAutoTradeGradeFFadeShortEnabled ??
+            prev?.snowballAutoTradeQualityShortSignalShortEnabled ??
+            false,
+
+    snowballAutoTradeGradeFFadeShortEnabled:
+      input.snowballAutoTradeGradeFFadeShortEnabled !== undefined
+        ? input.snowballAutoTradeGradeFFadeShortEnabled
+        : input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined
+          ? input.snowballAutoTradeQualityShortSignalShortEnabled
+          : prev?.snowballAutoTradeGradeFFadeShortEnabled ??
+            prev?.snowballAutoTradeQualityShortSignalShortEnabled ??
+            false,
+
+    snowballAutoTradeShortSignalShortEnabled:
+      input.snowballAutoTradeShortSignalShortEnabled !== undefined
+        ? input.snowballAutoTradeShortSignalShortEnabled
+        : prev?.snowballAutoTradeShortSignalShortEnabled ?? false,
 
     snowballAutoTradeSundayAllShortEnabled:
       input.snowballAutoTradeSundayAllShortEnabled !== undefined

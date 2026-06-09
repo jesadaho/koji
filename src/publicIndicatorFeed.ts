@@ -3546,19 +3546,19 @@ export async function runPublicIndicatorFeedInternal(
               typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
                 ? vE! / vsE
                 : null;
-            const longQualityShortSignal = snowballMatchesQualityShortSignal({
-              ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
+            const longGradeFFade = snowballMatchesQualityShortSignal({
+              ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
             });
             const runLongAutoOpenNow =
               !intrabar &&
-              (!skipSnowballTgForPending || longQualitySignal || longQualityShortSignal);
+              (!skipSnowballTgForPending || longQualitySignal || longGradeFFade);
             if (runLongAutoOpenNow) {
               try {
                 const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(symbol);
                 if (mexcContract) {
                 const longActionPlan = gradeResolution.actionPlan ?? null;
                 let marginScale: number | undefined;
-                if (!longQualitySignal && !longQualityShortSignal && longActionPlan != null) {
+                if (!longQualitySignal && !longGradeFFade && longActionPlan != null) {
                   const apm = snowballTrendActionPlanMarginScale(longActionPlan);
                   if (apm !== 1.0) marginScale = apm;
                 }
@@ -3584,7 +3584,7 @@ export async function runPublicIndicatorFeedInternal(
                   vol: vE!,
                   volSma: vsE!,
                   actionPlan:
-                    longQualitySignal || longQualityShortSignal ? null : longActionPlan,
+                    longQualitySignal || longGradeFFade ? null : longActionPlan,
                   greenDaysBeforeSignal: longGreenDaysForAlert,
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
                   ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
@@ -3595,9 +3595,9 @@ export async function runPublicIndicatorFeedInternal(
                   psar4hTrend: longMktCtxForAlert?.psar4hTrend ?? null,
                   ...(marginScale != null ? { marginScale } : {}),
                 });
-                if ((longQualitySignal || longQualityShortSignal) && skipSnowballTgForPending) {
+                if ((longQualitySignal || longGradeFFade) && skipSnowballTgForPending) {
                   console.info(
-                    `[indicatorPublicFeed] Snowball LONG auto-open at alert (${longQualitySignal ? "✨ Quality Signal" : "✨ Quality Short Signal"}, pending confirm) ${symbol} ${snowTf}`,
+                    `[indicatorPublicFeed] Snowball LONG auto-open at alert (${longQualitySignal ? "✨ Quality Signal" : "Long → fade SHORT · เกรด F"}, pending confirm) ${symbol} ${snowTf}`,
                   );
                 }
                 }
@@ -4070,7 +4070,7 @@ export async function runPublicIndicatorFeedInternal(
             ? vE! / vsE
             : null;
         const bearQualityShortSignal = snowballMatchesQualityShortSignal({
-          ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
+          ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
         });
         const bearTrendGrade = classifySnowballTrendGrade({
           alertSide: "bear",
