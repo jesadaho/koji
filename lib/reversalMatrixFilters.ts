@@ -19,7 +19,7 @@ export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
-  "EMA4H < −3% · BTC∠1d > −8% (fade SHORT) OR BTC∠4h > −13% OR ATR%14D < 8";
+  "EMA4H < −3% AND (BTC∠1d > −8% (fade SHORT) OR BTC∠4h > −13%) OR ATR%14D < 8";
 
 export const REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO = 0.2;
 export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
@@ -140,17 +140,24 @@ function reversalMatchesQualitySignalEma4hBand(ema4hSlopePct7d?: number | null):
   );
 }
 
-/** EMA4H < −3% · BTC∠1d > −8% */
-function reversalMatchesQualitySignalLong1hFadeClassic(input: {
+/** EMA4H < −3% AND (BTC∠1d > −8% OR BTC∠4h > −13%) */
+function reversalMatchesQualitySignalLong1hEmaBtcBranch(input: {
   ema4hSlopePct7d?: number | null;
   btcEma1dSlopePct7d?: number | null;
+  btcEma4hSlopePct7d?: number | null;
 }): boolean {
   if (!ema4hSlopeBelow(REVERSAL_QUALITY_SIGNAL_LONG_1H_EMA4H_MAX_PCT, input.ema4hSlopePct7d)) {
     return false;
   }
-  return emaSlopeAbove(
-    REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MIN_PCT,
-    input.btcEma1dSlopePct7d,
+  return (
+    emaSlopeAbove(
+      REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MIN_PCT,
+      input.btcEma1dSlopePct7d,
+    ) ||
+    emaSlopeAbove(
+      REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MIN_PCT,
+      input.btcEma4hSlopePct7d,
+    )
   );
 }
 
@@ -161,16 +168,10 @@ export function reversalMatchesQualitySignalLong1h(input: {
   btcEma4hSlopePct7d?: number | null;
   atrPct14d?: number | null;
 }): boolean {
-  if (reversalMatchesQualitySignalLong1hFadeClassic(input)) return true;
-  if (
-    emaSlopeAbove(
-      REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MIN_PCT,
-      input.btcEma4hSlopePct7d,
-    )
-  ) {
+  if (atrPct14dBelow(REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_MAX_PCT, input.atrPct14d)) {
     return true;
   }
-  return atrPct14dBelow(REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_MAX_PCT, input.atrPct14d);
+  return reversalMatchesQualitySignalLong1hEmaBtcBranch(input);
 }
 
 /** ✨ Quality Signal — Reversal Short (และ 1D) */
