@@ -2,8 +2,8 @@ import type { BinanceIndicatorTf, BinanceKlinePack } from "./binanceIndicatorKli
 import {
   resolveSnowballLongFinalGrade,
   snowballLongGradeDisplayLabel,
-  snowballLongGradeShortLabel,
   snowballLongStructurePassesMain,
+  snowballLongStructureTierShortLabel,
   snowballTfBarDurationSec,
   type SnowballLongGradeResolution,
 } from "./snowballLongBreakoutGrade";
@@ -299,7 +299,7 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     `- Decision Matrix     : ${stage1Ceiling} × พลาด ${failCount} → ${matrixResult.displayGrade}`,
     `- Action Plan         : ${snowballActionPlanLabel(matrixResult.actionPlan)}`,
     `- Result              : [ ${finalGradeLine(gradeRes)} ]`,
-    `  โครงสร้าง: ${snowballLongGradeShortLabel(structureTier)} · two-bar: ${twoBar.detail}`,
+    `  โครงสร้าง: ${snowballLongStructureTierShortLabel(structureTier)} · two-bar: ${twoBar.detail}`,
     "==================================================",
   );
 
