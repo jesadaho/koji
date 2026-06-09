@@ -104,28 +104,10 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
 }
 
 function snowballAutoOpenMatchesQualityShortSignal(input: {
-  greenDaysBeforeSignal?: number | null;
   ema1dSlopePct7d?: number | null;
-  barRangePctSignal?: number | null;
-  signalBarTf: "15m" | "1h" | "4h";
-  vol: number;
-  volSma: number;
-  signalVolVsSma?: number | null;
-  confirmVolVsSma?: number | null;
 }): boolean {
-  const signalVolVsSma =
-    input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0
-      ? input.signalVolVsSma
-      : input.volSma > 0 && Number.isFinite(input.volSma)
-        ? input.vol / input.volSma
-        : null;
   return snowballMatchesQualityShortSignal({
-    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
     ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
-    barRangePctSignal: input.barRangePctSignal ?? null,
-    signalBarTf: input.signalBarTf,
-    signalVolVsSma,
-    confirmVolVsSma: input.confirmVolVsSma ?? null,
   });
 }
 
