@@ -407,6 +407,21 @@ function snowballTrendGradeChecklistItems(
   };
   const computed = classifySnowballTrendGrade(input);
 
+  const greenDaysItem: SnowballGradeChecklistItem | null =
+    side === "long"
+      ? {
+          id: "momentum",
+          title: "เขียวก่อนสัญญาณ",
+          status:
+            green != null && Number.isFinite(green) && green >= 0
+              ? green <= SNOWBALL_TREND_GRADE_S_GREEN_MAX || green <= SNOWBALL_TREND_GRADE_A_GREEN_MAX
+                ? "pass"
+                : "fail"
+              : "unknown",
+          detail: `${greenStr} วัน · S ต้อง 0–${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ต้อง 0–${SNOWBALL_TREND_GRADE_A_GREEN_MAX}`,
+        }
+      : null;
+
   return [
     {
       id: "structure",
@@ -435,21 +450,7 @@ function snowballTrendGradeChecklistItems(
               : "unknown",
       detail: `${fmtSlope(ema4h)} · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_A_EMA4H_MAX}% · B ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}%`,
     },
-    ...(side === "long"
-      ? [
-          {
-            id: "momentum" as const,
-            title: "เขียวก่อนสัญญาณ",
-            status:
-              green != null && Number.isFinite(green) && green >= 0
-                ? green <= SNOWBALL_TREND_GRADE_S_GREEN_MAX || green <= SNOWBALL_TREND_GRADE_A_GREEN_MAX
-                  ? "pass"
-                  : "fail"
-                : "unknown",
-            detail: `${greenStr} วัน · S ต้อง 0–${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ต้อง 0–${SNOWBALL_TREND_GRADE_A_GREEN_MAX}`,
-          },
-        ]
-      : []),
+    ...(greenDaysItem ? [greenDaysItem] : []),
     {
       id: "vol_strict",
       title: "BTC EMA4h slope 7d",
