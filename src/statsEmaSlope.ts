@@ -19,6 +19,9 @@ export const STATS_EMA4H_SLOPE_LOOKBACK_BARS = 42;
 /** แถวที่คำนวณ BTC EMA slope ณ alertedAtMs แล้ว (ไม่ใช่ backfill ค่าเดียวทั้งตาราง) */
 export const STATS_BTC_EMA_SLOPES_VERSION = 2;
 
+/** แถวที่คำนวณ symbol EMA4h/1d slope ณ alertedAtMs แล้ว */
+export const STATS_SYMBOL_EMA_SLOPES_VERSION = 1;
+
 const BTC_USDT = "BTCUSDT";
 const BTC_EMA_SLOPES_CACHE_MS = 5 * 60 * 1000;
 const LIVE_ALERT_MAX_AGE_MS = 10 * 60_000;
@@ -96,7 +99,8 @@ export async function fetchSymbolEmaSlopePctTf(
   return computeEmaSlopePctFromPack(pack, lookbackBars);
 }
 
-async function fetchBtcKlinePackThrough(
+async function fetchKlinePackThrough(
+  symbol: string,
   tf: "4h" | "1d",
   atMs: number,
   lookbackBars: number,
@@ -104,13 +108,60 @@ async function fetchBtcKlinePackThrough(
   const barDur = tfBarDurSec(tf);
   const minBars = statsEmaSlopeMinKlineBars(lookbackBars);
   const atSec = Math.floor(atMs / 1000);
-  const endMs = atMs;
   const startMs = (atSec - minBars * barDur) * 1000;
-  return fetchBinanceUsdmKlinesRange(BTC_USDT, tf, {
+  return fetchBinanceUsdmKlinesRange(symbol.trim().toUpperCase(), tf, {
     startTimeMs: startMs,
-    endTimeMs: endMs,
+    endTimeMs: atMs,
     limit: Math.min(1500, minBars + 20),
   });
+}
+
+async function fetchBtcKlinePackThrough(
+  tf: "4h" | "1d",
+  atMs: number,
+  lookbackBars: number,
+): Promise<BinanceKlinePack | null> {
+  return fetchKlinePackThrough(BTC_USDT, tf, atMs, lookbackBars);
+}
+
+export type SymbolEmaSlopesPct7d = {
+  ema4hSlopePct7d: number | null;
+  ema1dSlopePct7d: number | null;
+};
+
+/** Symbol EMA(12) slope 4h/1d ณ alertedAtMs */
+export async function fetchSymbolEmaSlopesAtMs(
+  symbol: string,
+  atMs: number,
+): Promise<SymbolEmaSlopesPct7d> {
+  if (!isBinanceIndicatorFapiEnabled()) {
+    return { ema4hSlopePct7d: null, ema1dSlopePct7d: null };
+  }
+  if (!Number.isFinite(atMs) || atMs <= 0) {
+    return { ema4hSlopePct7d: null, ema1dSlopePct7d: null };
+  }
+
+  const ageMs = Date.now() - atMs;
+  if (ageMs >= 0 && ageMs < LIVE_ALERT_MAX_AGE_MS) {
+    const [ema4h, ema1d] = await Promise.all([
+      fetchSymbolEmaSlopePctTf(symbol, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
+      fetchSymbolEmaSlopePctTf(symbol, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
+    ]);
+    return { ema4hSlopePct7d: ema4h, ema1dSlopePct7d: ema1d };
+  }
+
+  const [pack4h, pack1d] = await Promise.all([
+    fetchKlinePackThrough(symbol, "4h", atMs, STATS_EMA4H_SLOPE_LOOKBACK_BARS),
+    fetchKlinePackThrough(symbol, "1d", atMs, STATS_EMA1D_SLOPE_LOOKBACK_BARS),
+  ]);
+  return {
+    ema4hSlopePct7d: pack4h
+      ? computeEmaSlopePctFromPackAt(pack4h, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS, atMs)
+      : null,
+    ema1dSlopePct7d: pack1d
+      ? computeEmaSlopePctFromPackAt(pack1d, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS, atMs)
+      : null,
+  };
 }
 
 let btcEmaSlopesCache: {
@@ -216,6 +267,56 @@ export async function backfillAllStatsRowsBtcEmaSlopes<T extends StatsRowWithBtc
   let total = 0;
   for (let pass = 0; pass < maxPasses; pass++) {
     const n = await backfillStatsRowsBtcEmaSlopes(rows, { maxRows: maxRowsPerPass });
+    total += n;
+    if (n === 0) break;
+  }
+  return total;
+}
+
+export type StatsRowWithSymbolEmaSlopes = {
+  symbol: string;
+  alertedAtMs: number;
+  ema4hSlopePct7d?: number | null;
+  ema1dSlopePct7d?: number | null;
+  symbolEmaSlopesV?: number;
+};
+
+export function statsRowNeedsSymbolEmaSlopesBackfill(row: StatsRowWithSymbolEmaSlopes): boolean {
+  return row.symbolEmaSlopesV !== STATS_SYMBOL_EMA_SLOPES_VERSION;
+}
+
+export async function backfillStatsRowsSymbolEmaSlopes<T extends StatsRowWithSymbolEmaSlopes>(
+  rows: T[],
+  opts?: { maxRows?: number },
+): Promise<number> {
+  const maxRows = opts?.maxRows;
+  let updated = 0;
+  for (const row of rows) {
+    if (maxRows != null && updated >= maxRows) break;
+    if (!statsRowNeedsSymbolEmaSlopesBackfill(row)) continue;
+    if (!Number.isFinite(row.alertedAtMs) || row.alertedAtMs <= 0) continue;
+    try {
+      const slopes = await fetchSymbolEmaSlopesAtMs(row.symbol, row.alertedAtMs);
+      row.ema4hSlopePct7d = slopes.ema4hSlopePct7d;
+      row.ema1dSlopePct7d = slopes.ema1dSlopePct7d;
+      row.symbolEmaSlopesV = STATS_SYMBOL_EMA_SLOPES_VERSION;
+      updated += 1;
+    } catch (e) {
+      console.error("[statsEmaSlope] symbol ema backfill", row.symbol, row.alertedAtMs, e);
+    }
+  }
+  return updated;
+}
+
+export async function backfillAllStatsRowsSymbolEmaSlopes<T extends StatsRowWithSymbolEmaSlopes>(
+  rows: T[],
+  opts?: { maxRowsPerPass?: number; maxPasses?: number },
+): Promise<number> {
+  const maxPasses = opts?.maxPasses ?? 10;
+  const maxRowsPerPass = opts?.maxRowsPerPass ?? 40;
+  let total = 0;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    const n = await backfillStatsRowsSymbolEmaSlopes(rows, { maxRows: maxRowsPerPass });
     total += n;
     if (n === 0) break;
   }

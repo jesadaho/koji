@@ -18,13 +18,19 @@ import {
 import {
   isLegacySnowballQualityTier,
   normalizeSnowballQualityTier,
+  classifySnowballTrendGrade,
+  snowballTrendGradeToDisplay,
+  snowballTrendGradeActionPlan,
   type ClassifySnowballTrendGradeInput,
 } from "@/src/snowballTrendGrade";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
-import { STATS_BTC_EMA_SLOPES_VERSION } from "./statsEmaSlope";
+import {
+  STATS_BTC_EMA_SLOPES_VERSION,
+  STATS_SYMBOL_EMA_SLOPES_VERSION,
+} from "./statsEmaSlope";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import {
@@ -33,6 +39,100 @@ import {
 import {
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
 } from "./snowballTrendMomentumMetrics";
+
+/** แถวที่ recompute trend grade (S/A/B/C/F) จาก snapshot ณ alertedAtMs แล้ว */
+export const STATS_TREND_GRADE_VERSION = 1;
+
+export function snowballStatsRowAlertSide(row: Pick<SnowballStatsRow, "alertSide" | "triggerKind">): SnowballStatsAlertSide {
+  return row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+}
+
+export function snowballStatsRowTrendGradeInput(row: SnowballStatsRow): ClassifySnowballTrendGradeInput {
+  return {
+    alertSide: snowballStatsRowAlertSide(row),
+    ema4hSlopePct7d: row.ema4hSlopePct7d,
+    ema1dSlopePct7d: row.ema1dSlopePct7d,
+    btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
+    greenDaysBeforeSignal: row.greenDaysBeforeSignal,
+  };
+}
+
+function snowballStatsRowHasTrendGradeSlope(row: SnowballStatsRow): boolean {
+  const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
+  return (
+    finite(row.ema4hSlopePct7d) ||
+    finite(row.ema1dSlopePct7d) ||
+    finite(row.btcEma4hSlopePct7d)
+  );
+}
+
+/** พร้อม recompute เกรด — ต้องมี EMA snapshot ณ alertedAtMs + green days (LONG) */
+export function snowballStatsRowReadyForTrendGradeBackfill(row: SnowballStatsRow): boolean {
+  if (row.symbolEmaSlopesV !== STATS_SYMBOL_EMA_SLOPES_VERSION) return false;
+  if (row.btcEmaSlopesV !== STATS_BTC_EMA_SLOPES_VERSION) return false;
+  if (!snowballStatsRowHasTrendGradeSlope(row)) return false;
+  if (snowballStatsRowAlertSide(row) === "long" && row.greenDaysBeforeSignal == null) return false;
+  return true;
+}
+
+export function snowballStatsRowNeedsTrendGradeBackfill(row: SnowballStatsRow): boolean {
+  return row.trendGradeV !== STATS_TREND_GRADE_VERSION;
+}
+
+/** คำนวณและเขียน qualityTier / displayGrade / actionPlan จาก snapshot ในแถว */
+export function applySnowballStatsTrendGradeFromRow(row: SnowballStatsRow): boolean {
+  const grade = classifySnowballTrendGrade(snowballStatsRowTrendGradeInput(row));
+  const display = snowballTrendGradeToDisplay(grade);
+  const plan = snowballTrendGradeActionPlan(grade);
+  let touched = false;
+
+  if (!row.qualityTier4hAdjusted && row.qualityTier !== grade) {
+    row.qualityTier = grade;
+    touched = true;
+  }
+  if (row.alertQualityTier !== grade) {
+    row.alertQualityTier = grade;
+    touched = true;
+  }
+  if (row.displayGrade !== display) {
+    row.displayGrade = display;
+    touched = true;
+  }
+  if (row.actionPlan !== plan) {
+    row.actionPlan = plan;
+    touched = true;
+  }
+  const failF = grade === "f";
+  if (row.momentumFailGradeF !== failF) {
+    row.momentumFailGradeF = failF;
+    touched = true;
+  }
+  if (row.momentumDowngrade === true) {
+    row.momentumDowngrade = false;
+    touched = true;
+  }
+  if (row.trendGradeV !== STATS_TREND_GRADE_VERSION) {
+    row.trendGradeV = STATS_TREND_GRADE_VERSION;
+    touched = true;
+  }
+  return touched;
+}
+
+export function backfillSnowballStatsTrendGrades(
+  rows: SnowballStatsRow[],
+  opts?: { maxRows?: number; symbolFilter?: string },
+): number {
+  const maxRows = opts?.maxRows;
+  let updated = 0;
+  for (const row of rows) {
+    if (maxRows != null && updated >= maxRows) break;
+    if (opts?.symbolFilter && row.symbol.trim().toUpperCase() !== opts.symbolFilter) continue;
+    if (!snowballStatsRowReadyForTrendGradeBackfill(row)) continue;
+    if (!snowballStatsRowNeedsTrendGradeBackfill(row)) continue;
+    if (applySnowballStatsTrendGradeFromRow(row)) updated += 1;
+  }
+  return updated;
+}
 
 export type {
   SnowballStatsApiPayload,
@@ -232,14 +332,8 @@ export function migrateSnowballStatsConfirmFailSideToLong(rows: SnowballStatsRow
   return migrateSnowballStatsLongAlertTradeSideToLong(rows);
 }
 
-function snowballStatsRowTrendGradeInput(row: SnowballStatsRow): ClassifySnowballTrendGradeInput {
-  return {
-    alertSide: row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long"),
-    ema4hSlopePct7d: row.ema4hSlopePct7d,
-    ema1dSlopePct7d: row.ema1dSlopePct7d,
-    btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
-    greenDaysBeforeSignal: row.greenDaysBeforeSignal,
-  };
+function snowballStatsRowTrendGradeInputLegacy(row: SnowballStatsRow): ClassifySnowballTrendGradeInput {
+  return snowballStatsRowTrendGradeInput(row);
 }
 
 /** แถวเก่า — ถ้า qualityTier เป็น A+/B/C ให้ copy เป็น structureTier (อ่าน raw จาก JSON) */
@@ -260,7 +354,7 @@ export function migrateSnowballStatsStructureTier(rows: SnowballStatsRow[]): num
 export function migrateSnowballStatsLegacyQualityTiersToTrend(rows: SnowballStatsRow[]): number {
   let updated = 0;
   for (const row of rows) {
-    const input = snowballStatsRowTrendGradeInput(row);
+    const input = snowballStatsRowTrendGradeInputLegacy(row);
     let touched = false;
 
     const qtRaw = row.qualityTier as string | undefined;
@@ -600,6 +694,10 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
         : null,
     psar4hV: STATS_PSAR_4H_VERSION,
     btcEmaSlopesV: STATS_BTC_EMA_SLOPES_VERSION,
+    ...(input.ema4hSlopePct7d != null && Number.isFinite(input.ema4hSlopePct7d)
+      ? { symbolEmaSlopesV: STATS_SYMBOL_EMA_SLOPES_VERSION as const }
+      : {}),
+    ...(input.qualityTier ? { trendGradeV: STATS_TREND_GRADE_VERSION as const } : {}),
     signalVolVsSma:
       input.signalVolVsSma != null && Number.isFinite(input.signalVolVsSma) && input.signalVolVsSma > 0
         ? input.signalVolVsSma

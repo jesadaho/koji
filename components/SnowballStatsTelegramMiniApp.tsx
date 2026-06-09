@@ -549,6 +549,7 @@ export default function SnowballStatsTelegramMiniApp() {
         followUp?: {
           dirty?: number;
           emaSlopes?: number;
+          trendGrades?: number;
           confirmGateSteps?: number;
           horizonRows?: number;
         };
@@ -559,13 +560,14 @@ export default function SnowballStatsTelegramMiniApp() {
       const sec = ((r?.durationMs ?? 0) / 1000).toFixed(1);
       const dirty = r?.followUp?.dirty ?? 0;
       const ema = r?.followUp?.emaSlopes ?? 0;
+      const grades = r?.followUp?.trendGrades ?? 0;
       const gates = r?.followUp?.confirmGateSteps ?? 0;
       const horizons = r?.followUp?.horizonRows ?? 0;
       const strat = r?.strategyProfitEnriched ?? 0;
       const missBefore = r?.missingHorizon4hBefore ?? 0;
       const missAfter = r?.missingHorizon4hAfter ?? 0;
       setBackfillOk(
-        `Backfill เสร็จ ${sec}s — อัปเดต ${dirty} แถว · EMA ${ema} · gate ${gates} · horizon ${horizons} · กำไรกลยุทธ์ ${strat} · 4h ว่าง ${missBefore}→${missAfter}`,
+        `Backfill เสร็จ ${sec}s — อัปเดต ${dirty} แถว · EMA ${ema} · grade ${grades} · gate ${gates} · horizon ${horizons} · กำไรกลยุทธ์ ${strat} · 4h ว่าง ${missBefore}→${missAfter}`,
       );
       await loadStats();
     } catch (e) {
