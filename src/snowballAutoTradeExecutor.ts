@@ -113,9 +113,11 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
 
 function snowballAutoOpenMatchesQualityShortSignal(input: {
   ema4hSlopePct7d?: number | null;
+  ema1dSlopePct7d?: number | null;
 }): boolean {
   return snowballMatchesQualityShortSignal({
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
+    ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
   });
 }
 
@@ -318,6 +320,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     input.alertSide !== "bear" &&
     snowballAutoOpenMatchesQualityShortSignal({
       ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
+      ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
     });
   const forceMatrixOpenLong = qualitySignalMatch || gradeFFadeMatch;
   const isBearAlert = input.alertSide === "bear";

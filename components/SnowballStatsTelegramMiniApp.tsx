@@ -138,6 +138,10 @@ import {
 } from "@/lib/snowballStatsClient";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
 import {
+  snowballTrendGradeFilterTitle,
+  type SnowballTrendGradeFilter,
+} from "@/src/snowballTrendGrade";
+import {
   marketSentimentBtcDominanceLabel,
   marketSentimentFngLabel,
   marketSentimentSentimentLabel,
@@ -160,7 +164,7 @@ const SNOWBALL_HORIZON_WR = [
 ] as const;
 
 type SnowballDayFilter = "all" | "7" | "30" | "90";
-type SnowballGradeFilter = "all" | "S" | "A" | "B" | "C" | "F";
+type SnowballGradeFilter = SnowballTrendGradeFilter;
 type SnowballDowFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5" | "6";
 
 const SNOWBALL_DAY_FILTER_OPTIONS: ReadonlyArray<{ value: SnowballDayFilter; label: string }> = [
@@ -1309,9 +1313,10 @@ export default function SnowballStatsTelegramMiniApp() {
               onChange={(e) => setGradeFilter(e.currentTarget.value as SnowballGradeFilter)}
               className="tmaInput"
               style={{ width: "auto", minWidth: "7rem" }}
+              title={snowballTrendGradeFilterTitle(gradeFilter)}
             >
               {SNOWBALL_GRADE_FILTER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
+                <option key={opt.value} value={opt.value} title={snowballTrendGradeFilterTitle(opt.value)}>
                   {opt.label}
                 </option>
               ))}
@@ -1573,6 +1578,11 @@ export default function SnowballStatsTelegramMiniApp() {
             แสดง {rows.length}/{allRows.length}
           </span>
         </div>
+        {gradeFilter !== "all" ? (
+          <p className="sub" style={{ marginBottom: "0.5rem" }} title={snowballTrendGradeFilterTitle(gradeFilter)}>
+            {snowballTrendGradeFilterTitle(gradeFilter)}
+          </p>
+        ) : null}
         {matrixFilter !== "all" ? (
           <p className="sub" style={{ marginBottom: "0.5rem" }} title={snowballMatrixFilterTitle(matrixFilter)}>
             {snowballMatrixFilterTitle(matrixFilter)}

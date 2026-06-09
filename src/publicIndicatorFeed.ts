@@ -3548,6 +3548,7 @@ export async function runPublicIndicatorFeedInternal(
                 : null;
             const longGradeFFade = snowballMatchesQualityShortSignal({
               ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
+              ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
             });
             const runLongAutoOpenNow =
               !intrabar &&

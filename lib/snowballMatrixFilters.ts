@@ -6,8 +6,7 @@
 import { snowballStatsVolVsSmaDisplay, type SnowballStatsRow } from "@/lib/snowballStatsClient";
 import {
   snowballEma4hSlopeMatchesTrendGradeF,
-  SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE,
+  SNOWBALL_TREND_GRADE_F_CRITERIA,
 } from "@/src/snowballTrendGrade";
 
 export type SnowballMatrixFilter =
@@ -23,7 +22,7 @@ export const SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS = 3;
 
 export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}% · เขียว ≤ ${SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS} วัน`;
 
-export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA = `Grade F — EMA4h slope 7d > ${SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE}% และ < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}%`;
+export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA = `Grade F — ${SNOWBALL_TREND_GRADE_F_CRITERIA}`;
 
 /** auto-open: Snowball LONG → fade SHORT */
 export const SNOWBALL_GRADE_F_FADE_SHORT_CRITERIA = SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA;
@@ -167,11 +166,11 @@ export function snowballRowMatchesQualitySignalMatrix(row: SnowballStatsRow): bo
   return snowballMatchesQualitySignal(row);
 }
 
-/** ✨ Quality Short Signal — ตรงเกรด F (EMA4h slope 7d) */
+/** ✨ Quality Short Signal — ตรงเกรด F (EMA4h + EMA1d) */
 export function snowballMatchesQualityShortSignal(
-  row: Pick<SnowballStatsRow, "ema4hSlopePct7d">,
+  row: Pick<SnowballStatsRow, "ema4hSlopePct7d" | "ema1dSlopePct7d">,
 ): boolean {
-  return snowballEma4hSlopeMatchesTrendGradeF(row.ema4hSlopePct7d);
+  return snowballEma4hSlopeMatchesTrendGradeF(row.ema4hSlopePct7d, row.ema1dSlopePct7d);
 }
 
 export function snowballRowMatchesQualityShortSignalMatrix(row: SnowballStatsRow): boolean {

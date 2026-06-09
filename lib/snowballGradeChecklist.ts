@@ -453,7 +453,7 @@ function snowballTrendGradeChecklistItems(
                   ema4h <= SNOWBALL_TREND_GRADE_B_EMA4H_MAX
                 ? "pass"
                 : "unknown",
-      detail: `${fmtSlope(ema4h)} · F (ลำดับแรก) > ${SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE}% และ < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_A_EMA4H_MAX}% · B ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}%`,
+      detail: `${fmtSlope(ema4h)} · F (ลำดับแรก) > ${SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE}% และ < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}% · EMA1d < 0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_A_EMA4H_MAX}% · B ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}%`,
     },
     ...(greenDaysItem ? [greenDaysItem] : []),
     {
@@ -467,9 +467,9 @@ function snowballTrendGradeChecklistItems(
     },
     {
       id: "vol_near_miss",
-      title: "EMA1d slope 7d",
-      status: "unknown",
-      detail: fmtSlope(ema1d),
+      title: "EMA1d slope 7d (Grade F)",
+      status: ema1d != null && Number.isFinite(ema1d) && ema1d < 0 ? "pass" : "unknown",
+      detail: `${fmtSlope(ema1d)} · F ต้อง < 0%`,
     },
   ];
 }

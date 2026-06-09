@@ -41,7 +41,7 @@ import {
 } from "./snowballTrendMomentumMetrics";
 
 /** แถวที่ recompute trend grade (S/A/B/C/F) จาก snapshot ณ alertedAtMs แล้ว */
-export const STATS_TREND_GRADE_VERSION = 2;
+export const STATS_TREND_GRADE_VERSION = 3;
 
 export function snowballStatsRowAlertSide(row: Pick<SnowballStatsRow, "alertSide" | "triggerKind">): SnowballStatsAlertSide {
   return row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
