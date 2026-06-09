@@ -5,12 +5,14 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
+import { StatsMonthPager } from "@/components/StatsMonthPager";
 import {
   StatsSplitByWeekCheckbox,
   StatsWeekSectionTitle,
   StatsWeekSplitHint,
   StatsWeekStrategyProfitBlock,
 } from "@/components/StatsWeekGroupUi";
+import { useStatsMonthFilter } from "@/lib/useStatsMonthFilter";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import { candleReversalLookbackRankCell } from "@/lib/candleReversalStatsClient";
@@ -769,17 +771,22 @@ export default function SnowballStatsTelegramMiniApp() {
     greenDaysFilter,
   ]);
 
-  const sortedRows = useMemo(() => sortSnowballStatsRows(rows, sort), [rows, sort]);
+  const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
+    rows,
+    statsRowAlertedAtMs,
+  );
+
+  const sortedRows = useMemo(() => sortSnowballStatsRows(scopedRows, sort), [scopedRows, sort]);
 
   const [splitByWeek, setSplitByWeek] = useState(false);
   const weekGroups = useMemo(
-    () => groupRowsByBkkWeek(rows, statsRowAlertedAtMs),
-    [rows],
+    () => groupRowsByBkkWeek(scopedRows, statsRowAlertedAtMs),
+    [scopedRows],
   );
 
   const horizonWinrateText = useMemo(
-    () => snowballHorizonWinrateSummary(rows, SNOWBALL_HORIZON_WR),
-    [rows],
+    () => snowballHorizonWinrateSummary(scopedRows, SNOWBALL_HORIZON_WR),
+    [scopedRows],
   );
 
   const strategySizing = useMemo(
@@ -794,48 +801,52 @@ export default function SnowballStatsTelegramMiniApp() {
     () =>
       formatStatsStrategyProfitSummaryText(
         summarizeStatsStrategyProfit(
-          rows,
+          scopedRows,
           strategySizing,
           STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
           STATS_STRATEGY_PROFIT_HOLD_48H,
         ),
         STATS_STRATEGY_PROFIT_HOLD_48H,
       ),
-    [rows, strategySizing],
+    [scopedRows, strategySizing],
   );
 
   const strategyProfitSummaryText24h = useMemo(
     () =>
       formatStatsStrategyProfitSummaryText(
         summarizeStatsStrategyProfit(
-          rows,
+          scopedRows,
           strategySizing,
           STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
           STATS_STRATEGY_PROFIT_HOLD_24H,
         ),
         STATS_STRATEGY_PROFIT_HOLD_24H,
       ),
-    [rows, strategySizing],
+    [scopedRows, strategySizing],
   );
 
   const exportCsv = useCallback(async () => {
-    if (rows.length === 0) {
+    if (scopedRows.length === 0) {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
-    await downloadCsv(statsCsvFilename("snowball-stats"), snowballStatsToCsv(rows, strategySizing), {
-      telegramExportPath: "/api/tma/snowball-stats.csv",
-      preferClientCsvInTma: true,
-    });
-  }, [rows, strategySizing]);
+    await downloadCsv(
+      statsCsvFilename("snowball-stats"),
+      snowballStatsToCsv(sortedRows, strategySizing),
+      {
+        telegramExportPath: "/api/tma/snowball-stats.csv",
+        preferClientCsvInTma: true,
+      },
+    );
+  }, [sortedRows, strategySizing]);
 
   const copyCsv = useCallback(async () => {
-    if (rows.length === 0) {
+    if (scopedRows.length === 0) {
       window.alert("ยังไม่มีแถวให้คัดลอก");
       return;
     }
-    await copyCsvToClipboard(snowballStatsToCsv(rows, strategySizing));
-  }, [rows, strategySizing]);
+    await copyCsvToClipboard(snowballStatsToCsv(sortedRows, strategySizing));
+  }, [scopedRows.length, sortedRows, strategySizing]);
 
   const renderTable = (tableRows: SnowballStatsRow[]) => (
     <div className="sparkMatrixScroll">
@@ -1575,9 +1586,15 @@ export default function SnowballStatsTelegramMiniApp() {
               ))}
             </select>
           </label>
+          <StatsMonthPager
+            monthKeys={monthKeys}
+            value={monthFilter}
+            onChange={setMonthFilter}
+          />
           <StatsSplitByWeekCheckbox checked={splitByWeek} onChange={setSplitByWeek} />
           <span className="sub">
-            แสดง {rows.length}/{allRows.length}
+            แสดง {scopedRows.length}/{rows.length}
+            {rows.length !== allRows.length ? ` (รวม ${allRows.length})` : ""}
           </span>
         </div>
         {gradeFilter !== "all" ? (

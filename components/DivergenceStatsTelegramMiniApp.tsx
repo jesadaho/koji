@@ -4,6 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
+import { StatsMonthPager } from "@/components/StatsMonthPager";
+import { statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
+import { useStatsMonthFilter } from "@/lib/useStatsMonthFilter";
 import {
   getTelegramInitData,
   loadTelegramWebApp,
@@ -316,8 +319,13 @@ export default function DivergenceStatsTelegramMiniApp() {
 
   const allRows = payload?.rows ?? [];
 
-  const bullRows = useMemo(() => allRows.filter((r) => r.kind === "bullish"), [allRows]);
-  const bearRows = useMemo(() => allRows.filter((r) => r.kind === "bearish"), [allRows]);
+  const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
+    allRows,
+    statsRowAlertedAtMs,
+  );
+
+  const bullRows = useMemo(() => scopedRows.filter((r) => r.kind === "bullish"), [scopedRows]);
+  const bearRows = useMemo(() => scopedRows.filter((r) => r.kind === "bearish"), [scopedRows]);
 
   const api = useCallback(async (path: string, init?: RequestInit) => {
     const initData = getTelegramInitData();
@@ -530,6 +538,16 @@ export default function DivergenceStatsTelegramMiniApp() {
           {resetError}
         </p>
       ) : null}
+
+      <p
+        className="sparkStatsActionRow"
+        style={{ marginTop: "0.5rem", alignItems: "center", flexWrap: "wrap", rowGap: "0.4rem" }}
+      >
+        <StatsMonthPager monthKeys={monthKeys} value={monthFilter} onChange={setMonthFilter} />
+        <span className="sub">
+          แสดง {scopedRows.length}/{allRows.length}
+        </span>
+      </p>
 
       <DivergenceStatsSection
         kind="bullish"

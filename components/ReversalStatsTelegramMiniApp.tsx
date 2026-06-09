@@ -6,12 +6,14 @@ import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
+import { StatsMonthPager } from "@/components/StatsMonthPager";
 import {
   StatsSplitByWeekCheckbox,
   StatsWeekSectionTitle,
   StatsWeekSplitHint,
   StatsWeekStrategyProfitBlock,
 } from "@/components/StatsWeekGroupUi";
+import { useStatsMonthFilter } from "@/lib/useStatsMonthFilter";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
@@ -361,49 +363,53 @@ function ReversalStatsSection({
       ),
     [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter],
   );
-  const rows = useMemo(() => sortCandleReversalStatsRows(filteredRows, sort), [filteredRows, sort]);
+  const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
+    filteredRows,
+    statsRowAlertedAtMs,
+  );
+  const rows = useMemo(() => sortCandleReversalStatsRows(scopedRows, sort), [scopedRows, sort]);
   const [splitByWeek, setSplitByWeek] = useState(false);
   const weekGroups = useMemo(
-    () => groupRowsByBkkWeek(filteredRows, statsRowAlertedAtMs),
-    [filteredRows],
+    () => groupRowsByBkkWeek(scopedRows, statsRowAlertedAtMs),
+    [scopedRows],
   );
-  const winrateText = useMemo(() => reversalWinrateSummary(filteredRows), [filteredRows]);
+  const winrateText = useMemo(() => reversalWinrateSummary(scopedRows), [scopedRows]);
   const horizonWinrateText = useMemo(
     () =>
       tf === "1h"
-        ? candleReversalHorizonWinrateSummary(filteredRows, [
+        ? candleReversalHorizonWinrateSummary(scopedRows, [
             { label: "12h", pctKey: "pct12h" },
             { label: "24h", pctKey: "pct24h" },
             { label: "48h", pctKey: "pct48h" },
           ])
         : null,
-    [filteredRows, tf],
+    [scopedRows, tf],
   );
   const strategyProfitSummaryText48h = useMemo(() => {
     if (tf !== "1h") return null;
     return formatStatsStrategyProfitSummaryText(
       summarizeStatsStrategyProfit(
-        filteredRows,
+        scopedRows,
         strategySizing,
         STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
         STATS_STRATEGY_PROFIT_HOLD_48H,
       ),
       STATS_STRATEGY_PROFIT_HOLD_48H,
     );
-  }, [filteredRows, strategySizing, tf]);
+  }, [scopedRows, strategySizing, tf]);
 
   const strategyProfitSummaryText24h = useMemo(() => {
     if (tf !== "1h") return null;
     return formatStatsStrategyProfitSummaryText(
       summarizeStatsStrategyProfit(
-        filteredRows,
+        scopedRows,
         strategySizing,
         STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
         STATS_STRATEGY_PROFIT_HOLD_24H,
       ),
       STATS_STRATEGY_PROFIT_HOLD_24H,
     );
-  }, [filteredRows, strategySizing, tf]);
+  }, [scopedRows, strategySizing, tf]);
 
   const horizonLabels = useMemo<[string, string, string, string | null]>(
     () => (tf === "1h" ? ["4h", "12h", "24h", "48h"] : ["1d", "3d", "7d", null]),
@@ -980,6 +986,11 @@ function ReversalStatsSection({
             ))}
           </select>
         </label>
+        <StatsMonthPager
+          monthKeys={monthKeys}
+          value={monthFilter}
+          onChange={setMonthFilter}
+        />
         <StatsSplitByWeekCheckbox checked={splitByWeek} onChange={setSplitByWeek} />
         {matrixFilter !== "all" ? (
           <p
@@ -991,7 +1002,8 @@ function ReversalStatsSection({
           </p>
         ) : null}
         <span className="sub">
-          แสดง {filteredRows.length}/{rawRows.length} · {winrateText}
+          แสดง {scopedRows.length}/{filteredRows.length}
+          {filteredRows.length !== rawRows.length ? ` (รวม ${rawRows.length})` : ""} · {winrateText}
         </span>
         {horizonWinrateText ? (
           <span

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppTradeNav } from "@/components/MiniAppTradeNav";
+import { StatsMonthPager } from "@/components/StatsMonthPager";
+import { useStatsMonthFilter } from "@/lib/useStatsMonthFilter";
 import { AutoOpenMexcActiveBadge } from "@/components/AutoOpenMexcActiveBadge";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import {
@@ -1018,15 +1020,21 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     return filterAutoOpenLogsByDays(rows, Number(dayFilter));
   }, [rows, dayFilter]);
 
+  const { monthFilter, setMonthFilter, monthKeys, scopedRows: monthScopedRows } =
+    useStatsMonthFilter(tableRows, (r) => r.atMs);
+
   const limitPendingHiddenCount = useMemo(() => {
     if (!hideLimitPending) return 0;
-    return tableRows.length - filterAutoOpenLogsExcludingLimitPending(tableRows, markPrices).length;
-  }, [tableRows, markPrices, hideLimitPending]);
+    return (
+      monthScopedRows.length -
+      filterAutoOpenLogsExcludingLimitPending(monthScopedRows, markPrices).length
+    );
+  }, [monthScopedRows, markPrices, hideLimitPending]);
 
   const displayRows = useMemo(() => {
-    if (!hideLimitPending) return tableRows;
-    return filterAutoOpenLogsExcludingLimitPending(tableRows, markPrices);
-  }, [tableRows, markPrices, hideLimitPending]);
+    if (!hideLimitPending) return monthScopedRows;
+    return filterAutoOpenLogsExcludingLimitPending(monthScopedRows, markPrices);
+  }, [monthScopedRows, markPrices, hideLimitPending]);
 
   /** สรุป WR/P/L — ไม่รวมแถว conflict (สอดคล้องสถิติ Snowball/Reversal) */
   const summaryRows = useMemo(() => excludePendingConflictRows(displayRows), [displayRows]);
@@ -1183,6 +1191,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             <option value="all">ทั้งหมด</option>
           </select>
         </label>
+        <StatsMonthPager monthKeys={monthKeys} value={monthFilter} onChange={setMonthFilter} />
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
           <input
             type="checkbox"
@@ -1252,7 +1261,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
         </p>
         {limitPendingHiddenCount > 0 || conflictHiddenFromSummary > 0 ? (
           <p className="sub" style={{ marginTop: 0, marginBottom: "0.65rem", opacity: 0.9 }}>
-            แสดงในตาราง {displayRows.length} รายการ
+            แสดงในตาราง {displayRows.length}/{tableRows.length} รายการ
             {limitPendingHiddenCount > 0 ? (
               <> (ซ่อน Limit รอแตะ ⏳ {limitPendingHiddenCount})</>
             ) : null}
