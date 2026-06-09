@@ -112,6 +112,7 @@ const REASON_LABELS: Record<string, string> = {
   grade_off: "เกรดนี้ตั้งเป็น ปิด (legacy)",
   unknown_grade: "ไม่ระบุเกรดสัญญาณ (legacy)",
   action_plan_monitor: "Action Plan = Monitor",
+  grade_rule_no_match: "เกรดนี้ตั้งเป็น ปิด หรือไม่ตรง rule",
   already_opened_today: "เปิดเหรียญนี้แล้ววันนี้ (BKK)",
   no_mexc_creds: "ยังไม่ใส่ MEXC API",
   invalid_margin_or_leverage: "margin หรือ leverage ไม่ถูกต้อง",

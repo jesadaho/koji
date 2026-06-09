@@ -1694,7 +1694,6 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeEnabled: enabled,
     snowballAutoTradeRulesLong: null,
     snowballAutoTradeRulesBear: null,
-    snowballAutoTradeGreen2DaysLongAllGrades: false,
     snowballAutoTradeQualitySignalLongEnabled: qualitySignalLongEnabled,
     snowballAutoTradeQualityShortSignalShortEnabled: qualityShortSignalShortEnabled,
     snowballAutoTradeSundayAllShortEnabled: sundayAllShortEnabled,

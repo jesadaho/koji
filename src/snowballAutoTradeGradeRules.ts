@@ -1,20 +1,8 @@
-import type { SnowballTrendGradeDisplay } from "./snowballTrendGrade";
+import type { SnowballTrendGrade, SnowballTrendGradeDisplay } from "./snowballTrendGrade";
+import { snowballTrendGradeToDisplay } from "./snowballTrendGrade";
 import type { SnowballAutoTradeGradeKey } from "./tradingViewCloseSettingsStore";
-import {
-  migrateSnowballAutoTradeGradeKey,
-  snowballTrendGradeToDisplay,
-  type SnowballTrendGrade,
-} from "./snowballTrendGrade";
 
-export const SNOWBALL_AUTO_TRADE_GRADE_KEYS: readonly SnowballAutoTradeGradeKey[] = [
-  "S",
-  "A",
-  "B",
-  "C",
-  "F",
-] as const;
-
-const GRADE_KEY_SET = new Set<string>(SNOWBALL_AUTO_TRADE_GRADE_KEYS);
+const GRADE_KEY_SET = new Set<string>(["S", "A", "B", "C", "F"]);
 
 export function isSnowballAutoTradeGradeKey(k: string): k is SnowballAutoTradeGradeKey {
   return GRADE_KEY_SET.has(k);
@@ -27,7 +15,7 @@ export type SnowballAutoTradeAlertGradeInput = {
   momentumDowngrade?: boolean | null;
 };
 
-/** แปลงสัญญาณ → คีย์เกรด (ใช้บันทึกประวัติ auto-open เท่านั้น) */
+/** แปลงสัญญาณ → คีย์เกรด (S/A/B/C/F) — ใช้บันทึกประวัติ auto-open เท่านั้น */
 export function snowballAutoTradeGradeKeyFromAlert(
   input: SnowballAutoTradeAlertGradeInput,
 ): SnowballAutoTradeGradeKey | null {
@@ -36,9 +24,4 @@ export function snowballAutoTradeGradeKeyFromAlert(
   if (input.momentumFailGradeF) return "F";
   if (input.qualityTier) return snowballTrendGradeToDisplay(input.qualityTier);
   return null;
-}
-
-/** migrate legacy grade key จาก settings เก่า */
-export function normalizeSnowballAutoTradeGradeKey(key: string): SnowballAutoTradeGradeKey | null {
-  return migrateSnowballAutoTradeGradeKey(key);
 }

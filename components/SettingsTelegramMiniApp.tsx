@@ -1373,7 +1373,7 @@ export default function SettingsTelegramMiniApp() {
           กลยุทธ์ TP/SL — ✨ Quality Short Signal เท่านั้น
         </p>
         <p className="sub" style={{ marginTop: "0.25rem", opacity: 0.9 }}>
-          ใช้เมื่อเปิด Short จาก ✨ Quality Short Signal เท่านั้น — Long / Bear / Sunday / Grade C fade ยังใช้แผน TP/SL ด้านล่าง
+          ใช้เมื่อเปิด Short จาก ✨ Quality Short Signal เท่านั้น — Long / Bear / Sunday ยังใช้แผน TP/SL ด้านล่าง
         </p>
         <label className="sub tmaCheckboxField" style={{ marginTop: "0.5rem" }}>
           <input
