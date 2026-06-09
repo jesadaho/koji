@@ -338,7 +338,7 @@ export function formatGradeCShortFadeAutotradeLine(
     : `📎 Auto-open Short (fade): ยังไม่ผ่าน — ${fade.detail}`;
 }
 
-/** A+ → long ทันที · B + sustained momentum → long (margin scale แยก) · C → short เมื่อผ่าน fade */
+/** @deprecated — ใช้ executor ใหม่ (LONG→Long / quality signal) แทน matrix เก่า */
 export async function resolveSnowballLongAutotradeSide(
   symbol: string,
   grade: SnowballLongAlertGrade | undefined,
@@ -347,16 +347,16 @@ export async function resolveSnowballLongAutotradeSide(
   pack1hHint?: BinanceKlinePack | null,
   opts?: { sustainedBuyingPressure?: boolean },
 ): Promise<{ side: SnowballAutoTradeSide | null; fade: SnowballGradeCShortFadeResult | null }> {
-  if (doubleBarrierOn && grade === "a_plus") return { side: "long", fade: null };
+  if (doubleBarrierOn && (grade === "s" || grade === "a")) return { side: "long", fade: null };
   if (
     doubleBarrierOn &&
-    grade === "b_plus" &&
+    grade === "b" &&
     opts?.sustainedBuyingPressure &&
     snowballGradeBAutoOpenSustainedEnabled()
   ) {
     return { side: "long", fade: null };
   }
-  if (grade !== "c_plus" || !doubleBarrierOn) return { side: null, fade: null };
+  if (grade !== "c" || !doubleBarrierOn) return { side: null, fade: null };
 
   let pack = pack1hHint ?? null;
   if (!pack) pack = await fetchBinanceUsdmKlines(symbol, "1h", 120);
