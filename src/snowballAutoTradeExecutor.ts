@@ -283,14 +283,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
   });
   const qualityShortMatch = snowballAutoOpenMatchesQualityShortSignal({
-    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
     ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
-    barRangePctSignal: input.barRangePctSignal ?? null,
-    signalBarTf: input.signalBarTf,
-    vol: input.vol,
-    volSma: input.volSma,
-    signalVolVsSma: input.signalVolVsSma ?? null,
-    confirmVolVsSma: input.confirmVolVsSma ?? null,
   });
   const forceMatrixOpen = qualitySignalMatch || qualityShortMatch;
 
