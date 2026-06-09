@@ -2,7 +2,7 @@ import {
   reversalStatsMeasureSide,
   type CandleReversalSignalBarTf,
 } from "@/lib/candleReversalStatsClient";
-import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
+import { lenPercentilePctFromRank, statsRangeRankInWindow, statsValueRankInWindow } from "@/lib/statsLenPercentile";
 import {
   computeFollowUpMaxAdversePct,
   firstFollowUpKlineIndexAfterAnchorClose,
@@ -201,20 +201,79 @@ function signalBarDurationSecByTf(tf: CandleReversalSignalBarTf): number {
   return tf === "1h" ? HOUR_SEC : DAY_SEC;
 }
 
+function resolveReversalLookbackBars(row: CandleReversalStatsRow): number | null {
+  if (row.lookbackBars != null && Number.isFinite(row.lookbackBars) && row.lookbackBars >= 2) {
+    return Math.floor(row.lookbackBars);
+  }
+  if (row.model === "marubozu") return 48;
+  if (row.model === "inverted_doji" || row.model === "longest_red_body") return 200;
+  if (row.model === "longest_green_body") return 24;
+  return null;
+}
+
 function computeRangeRankInLookbackFromPack(pack: BinanceKlinePack, i: number, lookbackBars: number): number | null {
   const lb = Math.floor(lookbackBars);
   if (!(Number.isFinite(lb) && lb >= 2)) return null;
   const start = Math.max(0, i - lb + 1);
-  const end = i;
-  const vi = pack.high[i]! - pack.low[i]!;
-  const eps = Math.max(1e-12, Math.abs(vi) * 1e-10);
-  let strictlyHigher = 0;
-  for (let j = start; j <= end; j++) {
-    if (j === i) continue;
-    const vj = pack.high[j]! - pack.low[j]!;
-    if (vj > vi + eps) strictlyHigher++;
+  return statsRangeRankInWindow(pack.high, pack.low, start, i, i);
+}
+
+function computeVolRankInLookbackFromPack(pack: BinanceKlinePack, i: number, lookbackBars: number): number | null {
+  const lb = Math.floor(lookbackBars);
+  if (!(Number.isFinite(lb) && lb >= 2)) return null;
+  const start = Math.max(0, i - lb + 1);
+  return statsValueRankInWindow(pack.volume, start, i, i);
+}
+
+async function backfillLookbackRanksInWindow(rows: CandleReversalStatsRow[]): Promise<number> {
+  let updated = 0;
+  for (const row of rows) {
+    const needRange = row.rangeRankInLookback == null || !Number.isFinite(row.rangeRankInLookback);
+    const needVol = row.volRankInLookback == null || !Number.isFinite(row.volRankInLookback);
+    if (!needRange && !needVol) continue;
+
+    const lb = resolveReversalLookbackBars(row);
+    if (lb == null) continue;
+
+    const tf = signalBarTf(row);
+    const barDur = signalBarDurationSecByTf(tf);
+    const windowStartSec = row.signalBarOpenSec - (lb + 2) * barDur;
+    const windowEndSec = row.signalBarOpenSec + barDur;
+
+    try {
+      const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
+        startTimeMs: windowStartSec * 1000,
+        endTimeMs: windowEndSec * 1000,
+        limit: 800,
+      });
+      if (!pack || pack.timeSec.length === 0) continue;
+      const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
+      if (iSig < 0) continue;
+
+      let rowTouched = false;
+      if (needRange) {
+        const rank = computeRangeRankInLookbackFromPack(pack, iSig, lb);
+        if (rank != null) {
+          row.rangeRankInLookback = rank;
+          rowTouched = true;
+        }
+      }
+      if (needVol) {
+        const volRank = computeVolRankInLookbackFromPack(pack, iSig, lb);
+        if (volRank != null) {
+          row.volRankInLookback = volRank;
+          rowTouched = true;
+        }
+      }
+      if (row.lookbackBars == null && rowTouched) {
+        row.lookbackBars = lb;
+      }
+      if (rowTouched) updated += 1;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] backfill lookback ranks", row.symbol, tf, e);
+    }
   }
-  return strictlyHigher + 1;
+  return updated;
 }
 
 function backfillLenPercentilePct(rows: CandleReversalStatsRow[]): number {
@@ -261,35 +320,7 @@ async function backfillReversalEmaSlopes(rows: CandleReversalStatsRow[]): Promis
 }
 
 async function backfillRangeRankInLookback(rows: CandleReversalStatsRow[]): Promise<number> {
-  let updated = 0;
-  for (const row of rows) {
-    if (row.rangeRankInLookback != null && Number.isFinite(row.rangeRankInLookback)) continue;
-    const lb = row.lookbackBars;
-    if (!(lb != null && Number.isFinite(lb) && lb >= 2)) continue;
-
-    const tf = signalBarTf(row);
-    const barDur = signalBarDurationSecByTf(tf);
-    const windowStartSec = row.signalBarOpenSec - (Math.floor(lb) + 2) * barDur;
-    const windowEndSec = row.signalBarOpenSec + barDur;
-
-    try {
-      const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
-        startTimeMs: windowStartSec * 1000,
-        endTimeMs: windowEndSec * 1000,
-        limit: 800,
-      });
-      if (!pack || pack.timeSec.length === 0) continue;
-      const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
-      if (iSig < 0) continue;
-      const rank = computeRangeRankInLookbackFromPack(pack, iSig, lb);
-      if (rank == null) continue;
-      row.rangeRankInLookback = rank;
-      updated += 1;
-    } catch (e) {
-      console.error("[candleReversalStatsTick] backfill range rank", row.symbol, tf, e);
-    }
-  }
-  return updated;
+  return backfillLookbackRanksInWindow(rows);
 }
 
 async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<number> {

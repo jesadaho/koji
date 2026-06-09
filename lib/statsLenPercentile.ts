@@ -19,6 +19,25 @@ export function statsRangeRankInWindow(
   return strictlyHigher + 1;
 }
 
+/** อันดับค่าใน [start..end] — 1 = สูงสุด */
+export function statsValueRankInWindow(
+  values: number[],
+  start: number,
+  end: number,
+  i: number,
+): number | null {
+  const vi = values[i];
+  if (vi == null || !Number.isFinite(vi) || vi <= 0) return null;
+  const eps = Math.max(1e-12, Math.abs(vi) * 1e-10);
+  let strictlyHigher = 0;
+  for (let j = start; j <= end; j++) {
+    if (j === i) continue;
+    const vj = values[j];
+    if (vj != null && Number.isFinite(vj) && vj > vi + eps) strictlyHigher++;
+  }
+  return strictlyHigher + 1;
+}
+
 /** rank 1 ใน N แท่ง → 100% (ยาวสุดในรอบ) */
 export function lenPercentilePctFromRank(
   rank: number | null | undefined,
