@@ -155,6 +155,8 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;
   /** สัญญาณ Reversal Long → เปิด SHORT บน MEXC (fade) */
   reversalAutoTradeLongSignalShortEnabled?: boolean;
+  /** Long → SHORT: ปรับ leverage ตาม ATR%14D (ดู REVERSAL_LONG_DYNAMIC_LEVERAGE_CRITERIA_TH) */
+  reversalAutoTradeLongDynamicLeverageEnabled?: boolean;
   /** @deprecated ใช้ shortEntry — เก็บ sync กับ short สำหรับ client เก่า */
   reversalAutoTradeEntryMode?: ReversalAutoTradeEntryMode;
   /** @deprecated ใช้ shortEntry */
@@ -331,6 +333,7 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeGateQualitySignal?: boolean;
   reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;
   reversalAutoTradeLongSignalShortEnabled?: boolean;
+  reversalAutoTradeLongDynamicLeverageEnabled?: boolean;
   reversalAutoTradeEntryMode?: ReversalAutoTradeEntryMode | null;
   reversalAutoTradeEntryEmaPeriod?: number | null;
   reversalAutoTradeShortEntryMode?: ReversalAutoTradeEntryMode | null;
@@ -421,6 +424,7 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeGateQualitySignal !== undefined ||
     input.reversalAutoTradeSaturdayAllSignalsEnabled !== undefined ||
     input.reversalAutoTradeLongSignalShortEnabled !== undefined ||
+    input.reversalAutoTradeLongDynamicLeverageEnabled !== undefined ||
     input.reversalAutoTradeEntryMode !== undefined ||
     input.reversalAutoTradeEntryEmaPeriod !== undefined ||
     input.reversalAutoTradeShortEntryMode !== undefined ||
@@ -758,6 +762,11 @@ export async function saveTradingViewMexcSettings(
       input.reversalAutoTradeLongSignalShortEnabled !== undefined
         ? input.reversalAutoTradeLongSignalShortEnabled
         : prev?.reversalAutoTradeLongSignalShortEnabled ?? false,
+
+    reversalAutoTradeLongDynamicLeverageEnabled:
+      input.reversalAutoTradeLongDynamicLeverageEnabled !== undefined
+        ? input.reversalAutoTradeLongDynamicLeverageEnabled
+        : prev?.reversalAutoTradeLongDynamicLeverageEnabled ?? false,
 
     reversalAutoTradeShortEntryMode:
       input.reversalAutoTradeShortEntryMode === null

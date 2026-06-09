@@ -30,6 +30,10 @@ import { shouldSkipAutoOpenForPendingConflict } from "./signalPendingConflictSer
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import { reversalMatchesQualitySignalForAlert } from "@/lib/reversalMatrixFilters";
 import {
+  resolveReversalLongTradeLeverage,
+  reversalLongDynamicLeverageNote,
+} from "@/lib/reversalLongDynamicLeverage";
+import {
   DEFAULT_SL_ARM_ROI_PCT,
   DEFAULT_SL_ENTRY_OFFSET_PCT,
   parseSlArmRoiPct,
@@ -646,17 +650,37 @@ export async function runReversalAutoTradeAfterReversalAlert(
     }
 
     const marginUsdt = row.reversalAutoTradeMarginUsdt ?? NaN;
-    const leverage = row.reversalAutoTradeLeverage ?? NaN;
+    const baseLeverage = row.reversalAutoTradeLeverage ?? NaN;
     if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) {
       logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage");
       continue;
     }
-    if (!(typeof leverage === "number" && Number.isFinite(leverage) && leverage >= 1)) {
+    if (!(typeof baseLeverage === "number" && Number.isFinite(baseLeverage) && baseLeverage >= 1)) {
       logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", {
         marginUsdt,
       });
       continue;
     }
+
+    const baseLev = Math.floor(baseLeverage);
+    const leveragePick = resolveReversalLongTradeLeverage({
+      alertTradeSide,
+      baseLeverage: baseLev,
+      dynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
+      atrPct14d: input.atrPct14d,
+    });
+    const leverage = leveragePick.leverage;
+    const leverageDynamicNote = reversalLongDynamicLeverageNote(leveragePick, baseLev);
+    const leverageLogExtra = {
+      leverageBase: baseLev,
+      ...(leveragePick.dynamicApplied
+        ? {
+            dynamicLeverageApplied: true,
+            dynamicLeverageTier: leveragePick.tier ?? undefined,
+            atrPct14d: leveragePick.atrPct14d ?? undefined,
+          }
+        : {}),
+    };
 
     const entryRes = await resolveReversalEntryForUser(row);
     const emaLogExtra = entryRes.ok
@@ -684,6 +708,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           reasonDetail: detail.slice(0, 400),
           marginUsdt,
           leverage: Math.floor(leverage),
+          ...leverageLogExtra,
           ...emaLogExtra,
         },
         signalClosePrice,
@@ -700,6 +725,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
       logReversalAutoOpen(userId, logSignal, "skipped", "existing_position", {
         marginUsdt,
         leverage: Math.floor(leverage),
+        ...leverageLogExtra,
       });
       await notifyLines(userId, [
         tgTitle,
@@ -720,6 +746,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           reasonDetail: entryRes.error.slice(0, 400),
           marginUsdt,
           leverage: Math.floor(leverage),
+          ...leverageLogExtra,
         },
         signalClosePrice,
       );
@@ -778,6 +805,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             reasonDetail: msg.slice(0, 400),
             marginUsdt,
             leverage: lev,
+            ...leverageLogExtra,
             orderKind: useMarket ? "market" : "limit",
             entryMode,
             entryEmaPeriod: emaPeriod,
@@ -825,6 +853,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         {
           marginUsdt,
           leverage: lev,
+          ...leverageLogExtra,
           orderKind: useMarket ? "market" : "limit",
           entryMode,
           entryEmaPeriod: emaPeriod,
@@ -950,6 +979,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
               : `✅ ตั้ง Limit SHORT รอรีเทสต์ที่ ${emaLabel}`,
         `[${shortContractLabel(contractSymbol)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${lev}x`,
+        ...(leverageDynamicNote ? [leverageDynamicNote] : []),
         `สัญญาณ Reversal: ${input.model} · TF ${input.signalBarTf.toUpperCase()}`,
         saturdayAllSignals
           ? "เกณฑ์: วันเสาร์ (เวลาไทย) — auto-open ทุกสัญญาณ Reversal"
@@ -977,6 +1007,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           reasonDetail: detail.slice(0, 400),
           marginUsdt,
           leverage: lev,
+          ...leverageLogExtra,
           orderKind: useMarket ? "market" : "limit",
           entryMode,
           entryEmaPeriod: emaPeriod,

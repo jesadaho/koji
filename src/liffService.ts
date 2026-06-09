@@ -1236,6 +1236,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
     longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
+    longDynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
     ...(() => {
       const shortEntry = reversalEntrySettingsFromRow(row, "short");
       const longEntry = reversalEntrySettingsFromRow(row, "long");
@@ -1663,6 +1664,17 @@ function parseReversalAutoTradeNested(
     longSignalShortEnabled = true;
   }
 
+  let longDynamicLeverageEnabled = false;
+  if (typeof o.longDynamicLeverageEnabled === "boolean") {
+    longDynamicLeverageEnabled = o.longDynamicLeverageEnabled;
+  } else if (
+    o.longDynamicLeverageEnabled === "1" ||
+    o.longDynamicLeverageEnabled === 1 ||
+    o.longDynamicLeverageEnabled === "true"
+  ) {
+    longDynamicLeverageEnabled = true;
+  }
+
   const numOrEmpty = (
     key: string
   ): { v: number | null | undefined; err?: string } => {
@@ -1792,6 +1804,7 @@ function parseReversalAutoTradeNested(
     reversalAutoTradeGateQualitySignal: gateQualitySignal,
     reversalAutoTradeSaturdayAllSignalsEnabled: saturdayAllSignalsEnabled,
     reversalAutoTradeLongSignalShortEnabled: longSignalShortEnabled,
+    reversalAutoTradeLongDynamicLeverageEnabled: longDynamicLeverageEnabled,
   };
   if (tpSlEnabled !== undefined) patchPart.reversalAutoTradeTpSlEnabled = tpSlEnabled;
   if (holdExtendIfRedEnabled !== undefined) {

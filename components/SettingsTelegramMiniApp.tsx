@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import { SNOWBALL_QUALITY_SIGNAL_CRITERIA } from "@/lib/snowballMatrixFilters";
+import { REVERSAL_LONG_DYNAMIC_LEVERAGE_CRITERIA_TH } from "@/lib/reversalLongDynamicLeverage";
 import {
   REVERSAL_QUALITY_SIGNAL_CRITERIA,
   REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA,
@@ -133,6 +134,7 @@ type ReversalAutoTradeApiBundle = {
   gateQualitySignal?: boolean;
   saturdayAllSignalsEnabled?: boolean;
   longSignalShortEnabled?: boolean;
+  longDynamicLeverageEnabled?: boolean;
   /** legacy = short */
   entryMode?: "hybrid_ema" | "market";
   entryEmaPeriod?: number | null;
@@ -219,6 +221,7 @@ export default function SettingsTelegramMiniApp() {
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revLongSignalShort, setRevLongSignalShort] = useState(false);
+  const [revLongDynamicLeverage, setRevLongDynamicLeverage] = useState(false);
   const [revShortEntryMode, setRevShortEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
   const [revShortEntryEmaPeriod, setRevShortEntryEmaPeriod] = useState("20");
   const [revLongEntryMode, setRevLongEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
@@ -321,6 +324,7 @@ export default function SettingsTelegramMiniApp() {
     setRevGateQualitySignal(st.gateQualitySignal !== false);
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
     setRevLongSignalShort(Boolean(st.longSignalShortEnabled));
+    setRevLongDynamicLeverage(Boolean(st.longDynamicLeverageEnabled));
     const shortMode = st.shortEntryMode ?? st.entryMode;
     const longMode = st.longEntryMode ?? st.entryMode;
     setRevShortEntryMode(shortMode === "market" ? "market" : "hybrid_ema");
@@ -837,6 +841,7 @@ export default function SettingsTelegramMiniApp() {
       const reversalAutoTrade: Record<string, unknown> = {
         enabled: revEnabled,
         longSignalShortEnabled: revLongSignalShort,
+        longDynamicLeverageEnabled: revLongDynamicLeverage,
         gateQualitySignal: revGateQualitySignal,
         saturdayAllSignalsEnabled: revSaturdayAllSignals,
         marginUsdt: revMargin.trim() ? marginParsed : null,
@@ -1548,6 +1553,21 @@ export default function SettingsTelegramMiniApp() {
             <strong style={{ fontWeight: 600 }}>สัญญาณ Reversal Long → เปิด SHORT (fade)</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
               เมื่อแจ้งเตือน Reversal Long (เช่น longest green body) — สั่ง SHORT บน MEXC แทน · ใช้ gate / margin / TP เดียวกับด้านบน · 1 order/เหรียญ/วัน (BKK)
+            </span>
+          </span>
+        </label>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={revLongDynamicLeverage}
+            onChange={(e) => setRevLongDynamicLeverage(e.target.checked)}
+            disabled={!revLongSignalShort}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>Dynamic leverage (Long → SHORT)</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              {REVERSAL_LONG_DYNAMIC_LEVERAGE_CRITERIA_TH} — ใช้ ATR%14D ณ เวลาแจ้ง · สัญญาณ Short ใช้ Leverage ที่ตั้ง
             </span>
           </span>
         </label>
