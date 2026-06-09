@@ -58,6 +58,28 @@ export function resolveReversalLongTradeLeverage(input: {
   return { leverage: base, dynamicApplied: false, atrPct14d: atr, tier: "base" };
 }
 
+/** Leverage สำหรับคอลัมน์กำไรกลยุทธ์ / P&L $ ใน Reversal stats (ต่อแถว) */
+export function resolveReversalStatsRowLeverage(input: {
+  tradeSide: CandleReversalTradeSide;
+  baseLeverage: number | null | undefined;
+  dynamicLeverageEnabled: boolean;
+  atrPct14d?: number | null;
+}): number | null {
+  const base = positiveLeverage(input.baseLeverage);
+  if (base == null) return null;
+  const pick = resolveReversalLongTradeLeverage({
+    alertTradeSide: input.tradeSide,
+    baseLeverage: base,
+    dynamicLeverageEnabled: input.dynamicLeverageEnabled,
+    atrPct14d: input.atrPct14d,
+  });
+  return pick.leverage;
+}
+
+function positiveLeverage(v: number | null | undefined): number | null {
+  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
+}
+
 export function reversalLongDynamicLeverageNote(
   result: Pick<ReversalLongDynamicLeverageResult, "dynamicApplied" | "atrPct14d" | "tier" | "leverage">,
   baseLeverage: number,

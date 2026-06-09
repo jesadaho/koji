@@ -21,6 +21,8 @@ export type StrategyProfitByPlanMap = Partial<Record<string, StrategyProfitByPla
 export type StatsStrategyCsvSizing = {
   marginUsdt?: number | null;
   leverage?: number | null;
+  /** ถ้ามี — ใช้แทน leverage คงที่ (เช่น Reversal dynamic ต่อแถว) */
+  leverageForRow?: (row: StatsStrategyProfitRowSlice) => number | null | undefined;
 };
 
 export { DEFAULT_STATS_TPSL_PLAN, statsTpSlPlanSummary };
@@ -517,9 +519,8 @@ export function summarizeStatsStrategyProfit(
   let sumLossUsd = 0;
   let hasUsdt = false;
   const margin = sizing?.marginUsdt;
-  const leverage = sizing?.leverage;
-  const canUsdt =
-    margin != null && leverage != null && margin > 0 && leverage > 0;
+  const baseLeverage = sizing?.leverage;
+  const leverageForRow = sizing?.leverageForRow;
 
   for (const row of excludePendingConflictRows(rows)) {
     if (!statsStrategyProfitFinalizedAtHorizon(row, holdHours)) {
@@ -531,9 +532,10 @@ export function summarizeStatsStrategyProfit(
       pending += 1;
       continue;
     }
+    const rowLeverage = leverageForRow?.(row) ?? baseLeverage;
     const displayPct = resolveStatsStrategyDisplayPct(
       raw,
-      leverage,
+      rowLeverage,
       row,
       statsStrategyExitReasonForHorizon(row, holdHours),
     );
@@ -543,8 +545,10 @@ export function summarizeStatsStrategyProfit(
     if (cls === "win") wins += 1;
     else if (cls === "loss") losses += 1;
     else flats += 1;
-    if (canUsdt) {
-      const usd = strategyProfitUsdtFromMargin(margin!, leverage!, displayPct);
+    const canRowUsdt =
+      margin != null && rowLeverage != null && margin > 0 && rowLeverage > 0;
+    if (canRowUsdt) {
+      const usd = strategyProfitUsdtFromMargin(margin!, rowLeverage!, displayPct);
       sumUsdt += usd;
       if (cls === "win") sumWinUsd += usd;
       else if (cls === "loss") sumLossUsd += usd;

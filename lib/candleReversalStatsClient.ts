@@ -125,6 +125,8 @@ export type CandleReversalStatsApiPayload = {
   /** margin USDT จาก Settings — คำนวณ P/L เป็น $ ในตาราง */
   viewerStrategyMarginUsdt?: number | null;
   viewerStrategyLeverage?: number | null;
+  /** เปิดใน Settings → Dynamic leverage (Long → SHORT) */
+  viewerStrategyLongDynamicLeverageEnabled?: boolean;
 };
 
 export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): string {

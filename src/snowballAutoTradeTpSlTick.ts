@@ -10,7 +10,12 @@ import {
   parseSlArmRoiPct,
   parseSlEntryOffsetPct,
 } from "@/lib/tpSlBreakevenPlan";
-import { cancelActiveTpSlPlanOrders, tp1PlanLikelyFilled } from "./autoTradeTpSlPlanOrders";
+import {
+  cancelActiveTpPlanOrders,
+  cancelActiveTpSlPlanOrders,
+  shouldExecuteMarkTp1Fallback,
+  tp1PlanLikelyFilled,
+} from "./autoTradeTpSlPlanOrders";
 import { mexcSlBreakevenTriggerPrice } from "./autoTradeSlBreakeven";
 import {
   closeAllOpenForSymbol,
@@ -275,10 +280,16 @@ async function handleTp1BreakevenSlOnly(ctx: TpSlContext): Promise<{ tp1Done: bo
   return { tp1Done: true, slOrderId };
 }
 
-async function handleTp1Hit(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrderId?: string }> {
+async function handleTp1Hit(
+  ctx: TpSlContext,
+  opts?: { cancelExchangeTpPlans?: boolean },
+): Promise<{ tp1Done: boolean; slOrderId?: string }> {
   const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
   const move = pricePctFavorable(active.side, entry, markPrice);
   const tp1 = active.tp1PricePct ?? 10;
+  if (opts?.cancelExchangeTpPlans) {
+    await cancelActiveTpPlanOrders(creds, active);
+  }
   const detail = await fetchContractDetailPublic(active.contractSymbol);
   if (!detail) {
     await notifyLines(userId, [
@@ -489,8 +500,11 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
 
         const exchangeTp1 = Boolean(a.tp1PlanOrderId?.trim());
         const exchangeTp2 = Boolean(a.tp2PlanOrderId?.trim());
+        const move = pricePctFavorable(a.side, entry, mark);
+        const tp1 = a.tp1PricePct ?? 10;
+        const tp1Filled = tp1PlanLikelyFilled(a.initialHoldVol, a.tp1PlanVol, pos.holdVol);
 
-        if (exchangeTp1 && !a.tp1Done && tp1PlanLikelyFilled(a.initialHoldVol, a.tp1PlanVol, pos.holdVol)) {
+        if (exchangeTp1 && !a.tp1Done && tp1Filled) {
           const r = await handleTp1BreakevenSlOnly(ctx);
           if (r.tp1Done) {
             state = withSnowballTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);
@@ -499,7 +513,6 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
           continue;
         }
 
-        const move = pricePctFavorable(a.side, entry, mark);
         const tp2 = a.tp2PricePct ?? 25;
         if (!exchangeTp2 && Number.isFinite(move) && move >= tp2) {
           const r = await handleTp2Hit(ctx);
@@ -509,27 +522,37 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
           }
           continue;
         }
+        if (
+          shouldExecuteMarkTp1Fallback({
+            tp1Done: a.tp1Done === true,
+            exchangeTp1,
+            movePct: move,
+            tp1PricePct: tp1,
+            initialHoldVol: a.initialHoldVol,
+            tp1PlanVol: a.tp1PlanVol,
+            currentHoldVol: pos.holdVol,
+          })
+        ) {
+          const r = await handleTp1Hit(ctx, { cancelExchangeTpPlans: exchangeTp1 });
+          if (r.tp1Done) {
+            state = withSnowballTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);
+            actionsCount += 1;
+          }
+          continue;
+        }
 
+        const slArm = parseSlArmRoiPct(a.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT);
         if (
           !a.slPlanOrderId?.trim() &&
           Number.isFinite(move) &&
-          move >= parseSlArmRoiPct(a.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT)
+          move >= slArm &&
+          (a.tp1Done === true || tp1Filled || move >= tp1)
         ) {
           const r = await handleSlAtEntryOnRoi(ctx);
           if (r.ok) {
             state = withSnowballSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
             actionsCount += 1;
           }
-        }
-
-        const tp1 = a.tp1PricePct ?? 10;
-        if (!exchangeTp1 && !a.tp1Done && Number.isFinite(move) && move >= tp1) {
-          const r = await handleTp1Hit(ctx);
-          if (r.tp1Done) {
-            state = withSnowballTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);
-            actionsCount += 1;
-          }
-          continue;
         }
       } catch (e) {
         const detail = e instanceof Error ? e.message : String(e);

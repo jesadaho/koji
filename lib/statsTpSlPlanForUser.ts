@@ -130,6 +130,8 @@ export function viewerStatsTpSlPlanSummary(plan: ViewerStatsTpSlPlan): string {
 export type ViewerStatsTradeSizing = {
   marginUsdt: number | null;
   leverage: number | null;
+  /** Reversal Long → SHORT: ปรับ leverage ต่อแถวตาม ATR%14D (เหมือน auto-open) */
+  reversalLongDynamicLeverageEnabled?: boolean;
 };
 
 function positiveNum(v: unknown): number | null {
@@ -150,6 +152,7 @@ export async function resolveViewerStatsTradeSizing(
     return {
       marginUsdt: positiveNum(row.reversalAutoTradeMarginUsdt),
       leverage: positiveNum(row.reversalAutoTradeLeverage),
+      reversalLongDynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
     };
   }
   return {

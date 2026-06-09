@@ -188,6 +188,38 @@ export async function cancelActiveTpSlPlanOrders(
   }
 }
 
+/** ยกเลิกเฉพาะ plan TP (ก่อน partial close ด้วย tick) */
+export async function cancelActiveTpPlanOrders(
+  creds: MexcCredentials,
+  active: { tp1PlanOrderId?: string; tp2PlanOrderId?: string },
+): Promise<void> {
+  const ids = [active.tp1PlanOrderId, active.tp2PlanOrderId].filter(
+    (id): id is string => typeof id === "string" && id.trim().length > 0,
+  );
+  if (ids.length === 0) return;
+  try {
+    await cancelPlanOrders(creds, ids);
+  } catch (e) {
+    console.error("[autoTradeTpSl] cancel TP plan orders", e);
+  }
+}
+
+/** tick ปิด TP1 ด้วย mark เมื่อยังไม่ tp1Done และราคาถึงเกณฑ์ */
+export function shouldExecuteMarkTp1Fallback(input: {
+  tp1Done: boolean;
+  exchangeTp1: boolean;
+  movePct: number;
+  tp1PricePct: number;
+  initialHoldVol?: number;
+  tp1PlanVol?: number;
+  currentHoldVol: number;
+}): boolean {
+  if (input.tp1Done) return false;
+  if (!Number.isFinite(input.movePct) || input.movePct < input.tp1PricePct) return false;
+  if (!input.exchangeTp1) return true;
+  return !tp1PlanLikelyFilled(input.initialHoldVol, input.tp1PlanVol, input.currentHoldVol);
+}
+
 /** TP1 plan น่าจะ execute แล้ว — holdVol ลดลงจากตอนเปิด */
 export function tp1PlanLikelyFilled(
   initialHoldVol: number | undefined,
