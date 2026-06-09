@@ -251,20 +251,34 @@ export function snowballStatsActionPlanLabel(
   return "—";
 }
 
-/** เทียบ qualityTier เก่ากับ schema ใหม่ */
-export function snowballStatsDerivedDisplayGrade(
-  row: Pick<
+type SnowballStatsGradeDerivationFields = Partial<
+  Pick<
     SnowballStatsRow,
-    | "displayGrade"
-    | "qualityTier"
-    | "alertQualityTier"
     | "ema4hSlopePct7d"
     | "ema1dSlopePct7d"
     | "btcEma4hSlopePct7d"
     | "greenDaysBeforeSignal"
     | "alertSide"
     | "triggerKind"
-  >,
+    | "structureTier"
+  >
+>;
+
+type SnowballStatsGradeDisplayRow = Pick<
+  SnowballStatsRow,
+  | "displayGrade"
+  | "qualityTier"
+  | "alertQualityTier"
+  | "qualityTier4hAdjusted"
+  | "momentumDowngrade"
+  | "momentumFailGradeF"
+> &
+  SnowballStatsGradeDerivationFields;
+
+/** เทียบ qualityTier เก่ากับ schema ใหม่ */
+export function snowballStatsDerivedDisplayGrade(
+  row: Pick<SnowballStatsRow, "displayGrade" | "qualityTier" | "alertQualityTier"> &
+    SnowballStatsGradeDerivationFields,
 ): string | null {
   if (row.displayGrade) return row.displayGrade;
   const tier = effectiveQualityTier(row);
@@ -306,22 +320,6 @@ export function snowballStatsStructureTierLabel(
   if (!tier || !snowballStatsIsStructureTier(tier)) return "—";
   return snowballLongStructureTierShortLabel(tier);
 }
-
-type SnowballStatsGradeDisplayRow = Pick<
-  SnowballStatsRow,
-  | "displayGrade"
-  | "qualityTier"
-  | "alertQualityTier"
-  | "qualityTier4hAdjusted"
-  | "momentumDowngrade"
-  | "momentumFailGradeF"
-  | "ema4hSlopePct7d"
-  | "ema1dSlopePct7d"
-  | "btcEma4hSlopePct7d"
-  | "greenDaysBeforeSignal"
-  | "alertSide"
-  | "triggerKind"
->;
 
 /** ป้ายเกรดตอนแจ้ง — ใช้ displayGrade (S/A/B/C/F) ถ้ามี */
 export function snowballStatsGradeAtAlertLabel(row: SnowballStatsGradeDisplayRow): string {
@@ -388,7 +386,7 @@ export function snowballStatsGradeLabel(
   _side: SnowballStatsRow["side"],
   tier: SnowballStatsRow["qualityTier"] | undefined,
   _alertTier?: SnowballStatsRow["alertQualityTier"],
-  _row?: Pick<SnowballStatsRow, "qualityTier4hAdjusted" | "qualityTier" | "structureTier">,
+  _row?: SnowballStatsGradeDisplayRow,
 ): string {
   if (_row) return snowballStatsGradeDisplayLabel(_row);
   return snowballStatsGradeLetter(tier);
