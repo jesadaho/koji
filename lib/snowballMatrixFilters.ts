@@ -19,10 +19,9 @@ export const SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS = 3;
 export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}% · เขียว ≤ ${SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS} วัน`;
 
 export const SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MIN_PCT = -10;
-export const SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MAX_PCT = 0;
 
 export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA =
-  "เขียว 1 วัน · EMA1d > -10% และ < 0% · Vol×SMA > 3× · R% สัญญาณ > 8%";
+  "เขียว 1 วัน · EMA1d > -10% · Vol×SMA > 3× · R% สัญญาณ > 8%";
 
 export const SNOWBALL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: SnowballMatrixFilter;
@@ -160,16 +159,15 @@ export function snowballRowMatchesQualitySignalMatrix(row: SnowballStatsRow): bo
   return snowballMatchesQualitySignal(row);
 }
 
-function ema1dSlopeInQualityShortBand(pct: number | null | undefined): boolean {
+function ema1dSlopeMeetsQualityShortMin(pct: number | null | undefined): boolean {
   return (
     pct != null &&
     Number.isFinite(pct) &&
-    pct > SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MIN_PCT &&
-    pct < SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MAX_PCT
+    pct > SNOWBALL_QUALITY_SHORT_SIGNAL_EMA1D_MIN_PCT
   );
 }
 
-/** ✨ Quality Short Signal — เขียว 1 วัน · EMA1d 0 ถึง -10% · Vol×SMA > 3 · R% สัญญาณ > 8% */
+/** ✨ Quality Short Signal — เขียว 1 วัน · EMA1d > -10% · Vol×SMA > 3 · R% สัญญาณ > 8% */
 export function snowballMatchesQualityShortSignal(
   row: Pick<
     SnowballStatsRow,
@@ -183,7 +181,7 @@ export function snowballMatchesQualityShortSignal(
 ): boolean {
   return (
     greenDaysBeforeSignalIs(row, 1) &&
-    ema1dSlopeInQualityShortBand(row.ema1dSlopePct7d) &&
+    ema1dSlopeMeetsQualityShortMin(row.ema1dSlopePct7d) &&
     volXsmaAbove(row, 3) &&
     barRangePctAbove(row.barRangePctSignal, 8)
   );
