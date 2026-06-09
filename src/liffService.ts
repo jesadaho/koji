@@ -994,6 +994,7 @@ export async function liffGetCandleReversalStats(
   let viewerTpSlPlan: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
   let viewerStrategyMarginUsdt: number | null | undefined;
   let viewerStrategyLeverage: number | null | undefined;
+  let viewerStrategyLongDynamicLeverageEnabled: boolean | undefined;
   if (telegramUserId != null) {
     const [plan, sizing] = await Promise.all([
       resolveViewerStatsTpSlPlan(telegramUserId, "reversal"),
@@ -1003,6 +1004,7 @@ export async function liffGetCandleReversalStats(
     viewerTpSlPlan = viewerStatsTpSlPlanPayload(plan);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
+    viewerStrategyLongDynamicLeverageEnabled = sizing.reversalLongDynamicLeverageEnabled === true;
     const dirty = await enrichCandleReversalStatsWithViewerStrategyProfit(rows, plan);
     if (dirty > 0) {
       await saveCandleReversalStatsState(st);
@@ -1015,6 +1017,9 @@ export async function liffGetCandleReversalStats(
     ...(viewerTpSlPlan ? { viewerTpSlPlan } : {}),
     ...(viewerStrategyMarginUsdt != null ? { viewerStrategyMarginUsdt } : {}),
     ...(viewerStrategyLeverage != null ? { viewerStrategyLeverage } : {}),
+    ...(viewerStrategyLongDynamicLeverageEnabled
+      ? { viewerStrategyLongDynamicLeverageEnabled: true }
+      : {}),
   };
 }
 
