@@ -10,7 +10,6 @@ import {
   STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL,
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
-  statsStrategyPlanAtHoldHours,
   statsStrategyProfitCacheKey,
   statsStrategyProfitFromHorizonPct,
   type StatsStrategyProfitHorizon,
@@ -174,13 +173,9 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
 
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
     const planAtHorizon: ViewerStatsTpSlPlan = {
-      tp1PricePct: opts.plan.tp1PricePct,
-      tp1PartialPct: opts.plan.tp1PartialPct,
-      tp2PricePct: opts.plan.tp2PricePct,
-      ...statsStrategyPlanAtHoldHours(opts.plan, holdHours),
-      slAtEntryArmRoiPct: opts.plan.slAtEntryArmRoiPct,
-      slAtEntryOffsetPct: opts.plan.slAtEntryOffsetPct,
-      tpSlEnabled: opts.plan.tpSlEnabled,
+      ...opts.plan,
+      maxHoldHours: holdHours,
+      holdExtendIfRedEnabled: false,
     };
     const cacheKey = statsStrategyProfitCacheKey(opts.plan, holdHours);
 
