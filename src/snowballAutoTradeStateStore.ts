@@ -70,6 +70,8 @@ export type SnowballAutoTradeActive = {
   holdExtendedForRed?: boolean;
   slArmRoiPct?: number;
   slEntryOffsetPct?: number;
+  /** ตั้ง/แจ้ง SL บังทุนแล้ว — กันยิงซ้ำเมื่อ slPlanOrderId ว่าง */
+  slBreakevenArmed?: boolean;
   slPlanOrderId?: string;
   /** plan TP บน MEXC — วางทันทีหลัง open */
   tp1PlanOrderId?: string;
@@ -340,6 +342,7 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
       if (slArm != null) row.slArmRoiPct = slArm;
       if (slOff != null) row.slEntryOffsetPct = slOff;
       if (slPlan) row.slPlanOrderId = slPlan;
+      if (o.slBreakevenArmed === true || slPlan) row.slBreakevenArmed = true;
       if (tp1Plan) row.tp1PlanOrderId = tp1Plan;
       if (tp2Plan) row.tp2PlanOrderId = tp2Plan;
       if (initHold != null) row.initialHoldVol = initHold;
@@ -665,7 +668,7 @@ export function withSnowballSlAtEntryArmed(
   const sym = contractSymbol.trim().toUpperCase();
   const nextActive = normalizeActive(prev.active).map((x) => {
     if (x.contractSymbol === sym && x.side === side) {
-      const updated: SnowballAutoTradeActive = { ...x };
+      const updated: SnowballAutoTradeActive = { ...x, slBreakevenArmed: true };
       if (slPlanOrderId?.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
       return updated;
     }
@@ -687,7 +690,7 @@ export function withSnowballTp1Done(
   const sym = contractSymbol.trim().toUpperCase();
   const nextActive = normalizeActive(prev.active).map((x) => {
     if (x.contractSymbol === sym && x.side === side) {
-      const updated: SnowballAutoTradeActive = { ...x, tp1Done: true };
+      const updated: SnowballAutoTradeActive = { ...x, tp1Done: true, slBreakevenArmed: true };
       if (slPlanOrderId?.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
       return updated;
     }

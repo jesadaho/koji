@@ -46,6 +46,8 @@ export type ReversalAutoTradeActive = {
   holdExtendedForRed?: boolean;
   slArmRoiPct?: number;
   slEntryOffsetPct?: number;
+  /** ตั้ง/แจ้ง SL บังทุนแล้ว — กันยิงซ้ำเมื่อ slPlanOrderId ว่าง */
+  slBreakevenArmed?: boolean;
   /** orderId ของ plan SL ที่ตั้งหลัง TP1 — ใช้ cancel ตอน TP2/48h */
   slPlanOrderId?: string;
   tp1PlanOrderId?: string;
@@ -274,6 +276,7 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
     if (slArm != null) row.slArmRoiPct = slArm;
     if (slOff != null) row.slEntryOffsetPct = slOff;
     if (slId) row.slPlanOrderId = slId;
+    if (o.slBreakevenArmed === true || slId) row.slBreakevenArmed = true;
     if (tp1Plan) row.tp1PlanOrderId = tp1Plan;
     if (tp2Plan) row.tp2PlanOrderId = tp2Plan;
     if (initHold != null) row.initialHoldVol = initHold;
@@ -591,7 +594,7 @@ export function withReversalSlAtEntryArmed(
   const sym = contractSymbol.trim().toUpperCase();
   const nextActive = normalizeActive(prev.active).map((x) => {
     if (x.contractSymbol === sym && x.side === side) {
-      const updated: ReversalAutoTradeActive = { ...x };
+      const updated: ReversalAutoTradeActive = { ...x, slBreakevenArmed: true };
       if (slPlanOrderId?.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
       return updated;
     }
@@ -613,7 +616,7 @@ export function withReversalTp1Done(
   const sym = contractSymbol.trim().toUpperCase();
   const nextActive = normalizeActive(prev.active).map((x) => {
     if (x.contractSymbol === sym && x.side === side) {
-      const updated: ReversalAutoTradeActive = { ...x, tp1Done: true };
+      const updated: ReversalAutoTradeActive = { ...x, tp1Done: true, slBreakevenArmed: true };
       if (slPlanOrderId && slPlanOrderId.trim()) updated.slPlanOrderId = slPlanOrderId.trim();
       return updated;
     }

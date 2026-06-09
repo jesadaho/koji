@@ -185,7 +185,7 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeGateBodyWick80?: boolean;
   /** @deprecated ใช้ gateQualitySignal */
   reversalAutoTradeGateLenRank315?: boolean;
-  /** Quality Signal: Short — classic/EMA4H band · Long 1H — EMA4H <−3% */
+  /** Quality Signal: Short — classic/EMA4H band · Long 1H — BTC∠ / ATR%14D */
   reversalAutoTradeGateQualitySignal?: boolean;
   /** วันเสาร์ (เวลาไทย) — auto-open ทุกสัญญาณ Reversal (ข้าม Quality Signal gate) */
   reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;

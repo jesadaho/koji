@@ -194,8 +194,13 @@ async function handleTp2Hit(ctx: TpSlContext): Promise<{ closed: boolean }> {
 }
 
 /** ROI ถึง slArm% — ตั้ง SL@entry ทันที (ไม่ต้องรอ partial TP1) */
-async function handleSlAtEntryOnRoi(ctx: TpSlContext): Promise<{ ok: boolean; slOrderId?: string }> {
+async function handleSlAtEntryOnRoi(
+  ctx: TpSlContext,
+): Promise<{ ok: boolean; slOrderId?: string; slBreakevenAttempted?: boolean }> {
   const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
+  if (active.slBreakevenArmed || active.slPlanOrderId?.trim()) {
+    return { ok: true, slOrderId: active.slPlanOrderId };
+  }
   const move = pricePctFavorable(active.side, entry, markPrice);
   const slArm = parseSlArmRoiPct(active.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT);
   const slOffset = parseSlEntryOffsetPct(active.slEntryOffsetPct, DEFAULT_SL_ENTRY_OFFSET_PCT);
@@ -233,12 +238,15 @@ async function handleSlAtEntryOnRoi(ctx: TpSlContext): Promise<{ ok: boolean; sl
       : `⚠️ ไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — ตั้งเองที่ MEXC`,
   ]);
 
-  return { ok: slRes.success, slOrderId };
+  return { ok: slRes.success, slOrderId, slBreakevenAttempted: true };
 }
 
 /** หลัง plan TP1 execute บน MEXC — ตั้ง SL บังทุนที่เหลือ (ไม่ partial close ซ้ำ) */
 async function handleTp1BreakevenSlOnly(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrderId?: string }> {
   const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
+  if (active.slBreakevenArmed || active.slPlanOrderId?.trim()) {
+    return { tp1Done: true, slOrderId: active.slPlanOrderId };
+  }
   const move = pricePctFavorable(active.side, entry, markPrice);
   const tp1 = active.tp1PricePct ?? 10;
 
@@ -505,10 +513,15 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
         const tp1Filled = tp1PlanLikelyFilled(a.initialHoldVol, a.tp1PlanVol, pos.holdVol);
 
         if (exchangeTp1 && !a.tp1Done && tp1Filled) {
-          const r = await handleTp1BreakevenSlOnly(ctx);
-          if (r.tp1Done) {
-            state = withSnowballTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);
+          if (a.slBreakevenArmed || a.slPlanOrderId?.trim()) {
+            state = withSnowballTp1Done(state, userId, a.contractSymbol, a.side, a.slPlanOrderId);
             actionsCount += 1;
+          } else {
+            const r = await handleTp1BreakevenSlOnly(ctx);
+            if (r.tp1Done) {
+              state = withSnowballTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);
+              actionsCount += 1;
+            }
           }
           continue;
         }
@@ -544,12 +557,15 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
         const slArm = parseSlArmRoiPct(a.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT);
         if (
           !a.slPlanOrderId?.trim() &&
+          !a.slBreakevenArmed &&
           Number.isFinite(move) &&
           move >= slArm &&
-          (a.tp1Done === true || tp1Filled || move >= tp1)
+          !a.tp1Done &&
+          !tp1Filled &&
+          move < tp1
         ) {
           const r = await handleSlAtEntryOnRoi(ctx);
-          if (r.ok) {
+          if (r.slBreakevenAttempted) {
             state = withSnowballSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
             actionsCount += 1;
           }
