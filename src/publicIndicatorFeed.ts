@@ -270,8 +270,8 @@ function topAltsCount(): number {
  */
 function snowballUniverseTopAltsCount(): number {
   const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS);
-  if (Number.isFinite(v) && v >= 0 && v <= 150) return Math.floor(v);
-  return 100;
+  if (Number.isFinite(v) && v >= 0 && v <= 200) return Math.floor(v);
+  return 150;
 }
 
 /** Swing HH/LL — ย้อนหลังหา High/Low ก่อนแท่งปิด · ดีฟอลต์ 48 แท่ง (ทริกเกอร์สัญญาณ) */
@@ -2513,7 +2513,7 @@ export type PublicIndicatorFeedRunResult = {
 
 /**
  * Feed สาธารณะ RSI cross + EMA cross + RSI divergence จาก Binance USDT-M (ค่าเริ่ม TF เดียวกันที่ 4h — RSI/EMA: INDICATOR_PUBLIC_RSI_EMA_TF, Div: INDICATOR_PUBLIC_RSI_DIVERGENCE_TFS)
- * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — universe alt ตาม INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS ดีฟอลต์ 100; RSI/EMA/Div ยังใช้ INDICATOR_PUBLIC_TOP_ALTS)
+ * + Snowball Triple-Check (TF จาก INDICATOR_PUBLIC_SNOWBALL_TF — universe alt ตาม INDICATOR_PUBLIC_SNOWBALL_TOP_ALTS ดีฟอลต์ 150; RSI/EMA/Div ยังใช้ INDICATOR_PUBLIC_TOP_ALTS)
  *   Double Barrier: Barrier2 = แนว High/Low ใกล้ราคาในโซน Watchlist % (บรรทัด checklist) — คนละชุดกับ Grade LONG A+/B/C (หัวข้อ TG จาก Swing HH + VAH)
  * @param opts.snowballOnly ถ้า true — รันเฉพาะ Snowball (ใช้ GET /api/cron/snowball-scan / run cron snowball)
  */

@@ -1,11 +1,15 @@
 import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import {
+  buildBinanceUsdmSymbolMetaMap,
   fetchAllBinanceUsdmLinearSymbols,
   fetchBinanceUsdmKlines,
   fetchTopUsdmUsdtSymbolsByQuoteVolume,
   isBinanceIndicatorFapiEnabled,
+  lookupBinanceUsdmSymbolMeta,
   resetBinanceIndicatorFapi451LogDedupe,
 } from "./binanceIndicatorKline";
+import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
+import { reversalShouldSkipAutoOpenForAsset } from "./tradFiSymbolFilter";
 import { sendPublicReversalFeedToSparkGroup } from "./alertNotify";
 import { telegramSparkSystemGroupConfigured } from "./telegramAlert";
 import {
@@ -102,7 +106,7 @@ function maxSymbolsScan(): number {
 function topAltsUniverse(): number {
   const n = Number(process.env.CANDLE_REVERSAL_TOP_ALTS?.trim());
   if (Number.isFinite(n) && n >= 10 && n <= 500) return Math.floor(n);
-  return 120;
+  return 150;
 }
 
 function maxAlertsPerRun(): number {
@@ -636,6 +640,7 @@ async function notifyResults(
   const pendingStatsKeys = isCandleReversalStatsEnabled()
     ? candleReversalPendingStatsKeys((await loadCandleReversalStatsState()).rows)
     : new Set<string>();
+  const assetMetaMap = await buildBinanceUsdmSymbolMetaMap();
 
   for (const row of results) {
     if (!row.evals?.msg || !row.evals.signal) continue;
@@ -687,6 +692,9 @@ async function notifyResults(
         mktSnap.atrPct14d != null && Number.isFinite(mktSnap.atrPct14d) && mktSnap.atrPct14d > 0
           ? mktSnap.atrPct14d
           : null;
+      const binSym = row.symbol.trim().toUpperCase();
+      const assetMeta = assetMetaMap.get(binSym) ?? null;
+      const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(binSym);
       const msg = buildCandleReversalAlertMessage(row.symbol, sig, {
         greenDaysBeforeSignal,
         rangeScore: row.evals.rangeScore,
@@ -694,6 +702,8 @@ async function notifyResults(
         btcEma1dSlopePct7d,
         btcEma4hSlopePct7d,
         atrPct14d,
+        assetMeta,
+        mexcContractSymbol: mexcContract,
       });
       const ok = await sendPublicReversalFeedToSparkGroup(msg);
       if (ok && isCandleReversalStatsEnabled()) {
@@ -737,6 +747,14 @@ async function notifyResults(
         pushReversalScanSymList(scanStats.sentSymbols, row.symbol);
 
         try {
+          if (
+            reversalShouldSkipAutoOpenForAsset({
+              isTradFi: assetMeta?.isTradFi === true,
+              mexcContractSymbol: mexcContract,
+            })
+          ) {
+            continue;
+          }
           await runReversalAutoTradeAfterReversalAlert({
             alertTradeSide: tradeSide,
             binanceSymbol: row.symbol,
@@ -995,8 +1013,17 @@ async function formatDebugForTf(sym: string, tf: CandleReversalTf, barsAgo = 0):
   });
 
   if (sig) {
+    const [assetMeta, mexcContract] = await Promise.all([
+      lookupBinanceUsdmSymbolMeta(sym),
+      resolveMexcContractFromBinanceSymbolAsync(sym),
+    ]);
     lines.push("📨 ข้อความที่จะส่ง Telegram:");
-    lines.push(buildCandleReversalAlertMessage(sym, sig));
+    lines.push(
+      buildCandleReversalAlertMessage(sym, sig, {
+        assetMeta,
+        mexcContractSymbol: mexcContract,
+      }),
+    );
   }
 
   return lines;

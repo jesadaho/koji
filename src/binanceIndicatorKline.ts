@@ -1,5 +1,9 @@
 import axios, { isAxiosError } from "axios";
-import { shouldExcludeBinanceUsdmFromCryptoScan } from "./tradFiSymbolFilter";
+import {
+  isBinanceTradFiUnderlying,
+  shouldExcludeBinanceUsdmFromCryptoScan,
+  type BinanceUsdmSymbolMeta,
+} from "./tradFiSymbolFilter";
 
 /** Binance USDT-M perpetual — เดียวกันทั้ง ticker และ kline */
 const FAPI = "https://fapi.binance.com";
@@ -243,6 +247,49 @@ async function fetchBinanceUsdmExchangeInfoRows(forceRefresh = false): Promise<E
     }
     return exchangeInfoCache?.rows ?? [];
   }
+}
+
+function exchangeRowToSymbolMeta(row: ExchangeInfoSymbolRow): BinanceUsdmSymbolMeta {
+  const rawSub = row.underlyingSubType;
+  const underlyingSubTypes = Array.isArray(rawSub)
+    ? rawSub.map((s) => String(s).trim().toUpperCase()).filter(Boolean)
+    : rawSub != null
+      ? [String(rawSub).trim().toUpperCase()].filter(Boolean)
+      : [];
+  const underlyingType = row.underlyingType?.trim().toUpperCase() ?? null;
+  return {
+    underlyingType,
+    underlyingSubTypes,
+    isTradFi: isBinanceTradFiUnderlying(row),
+  };
+}
+
+/** lookup ประเภทสินทรัพย์ Binance USDT-M perp — ใช้ cache exchangeInfo */
+export async function lookupBinanceUsdmSymbolMeta(
+  binanceSymbol: string,
+): Promise<BinanceUsdmSymbolMeta | null> {
+  const sym = binanceSymbol.trim().toUpperCase();
+  if (!sym) return null;
+  const rows = await fetchBinanceUsdmExchangeInfoRows();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    if (!isEligibleUsdmPerpRow(row)) continue;
+    if (row.symbol?.trim().toUpperCase() === sym) return exchangeRowToSymbolMeta(row);
+  }
+  return null;
+}
+
+/** map symbol → meta สำหรับ batch ในรอบสแกน */
+export async function buildBinanceUsdmSymbolMetaMap(): Promise<Map<string, BinanceUsdmSymbolMeta>> {
+  const rows = await fetchBinanceUsdmExchangeInfoRows();
+  const map = new Map<string, BinanceUsdmSymbolMeta>();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    if (!isEligibleUsdmPerpRow(row)) continue;
+    const sym = row.symbol!.trim().toUpperCase();
+    map.set(sym, exchangeRowToSymbolMeta(row));
+  }
+  return map;
 }
 
 function tradFiBinanceSymbolSet(rows: ExchangeInfoSymbolRow[]): Set<string> {

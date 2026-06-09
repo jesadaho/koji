@@ -2,6 +2,11 @@ import { statsRangeRankInWindow } from "@/lib/statsLenPercentile";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { reversalMatchesQualitySignalForAlert } from "@/lib/reversalMatrixFilters";
 import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
+import {
+  formatBinanceUsdmAssetTypeLine,
+  reversalAutoOpenSkipLineTh,
+  type BinanceUsdmSymbolMeta,
+} from "./tradFiSymbolFilter";
 import { emaLine } from "./indicatorMath";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
 
@@ -12,6 +17,10 @@ export type CandleReversalAlertQualityContext = {
   btcEma1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;
   atrPct14d?: number | null;
+  /** จาก Binance exchangeInfo */
+  assetMeta?: BinanceUsdmSymbolMeta | null;
+  /** สัญญา MEXC ที่ resolve ได้ (ถ้ามี) */
+  mexcContractSymbol?: string | null;
 };
 
 export type CandleReversalTf = "1d" | "1h";
@@ -1019,6 +1028,18 @@ function candleReversalLookbackContextSuffix(sig: CandleReversalSignal): string 
   return parts.length ? ` · ${parts.join(" · ")}` : "";
 }
 
+function candleReversalAlertAssetFooterLines(qualityCtx?: CandleReversalAlertQualityContext): string[] {
+  if (qualityCtx?.assetMeta == null && qualityCtx?.mexcContractSymbol === undefined) return [];
+  const meta = qualityCtx?.assetMeta ?? null;
+  const lines = [formatBinanceUsdmAssetTypeLine(meta)];
+  const skip = reversalAutoOpenSkipLineTh({
+    isTradFi: meta?.isTradFi === true,
+    mexcContractSymbol: qualityCtx?.mexcContractSymbol,
+  });
+  if (skip) lines.push(skip);
+  return lines;
+}
+
 export function buildCandleReversalAlertMessage(
   symbol: string,
   sig: CandleReversalSignal,
@@ -1044,6 +1065,9 @@ export function buildCandleReversalAlertMessage(
       atrPct14d: qualityCtx.atrPct14d,
     });
 
+  const assetFooter = candleReversalAlertAssetFooterLines(qualityCtx);
+  const assetFooterBlock = assetFooter.length ? ["", ...assetFooter, ""] : [];
+
   if (sig.model === "longest_green_body") {
     return [
       withQualitySignalAlertHeader(
@@ -1057,7 +1081,7 @@ export function buildCandleReversalAlertMessage(
       "• แนวทาง Market ตามน้ำ หรือรีเทสต์เบา",
       `• รีเทสต์ ~38.2–50% เนื้อเขียว: ${fmtReversalPrice(sig.retestPrice)}`,
       `• SL ใต้ยอดแท่ง: ${fmtReversalPrice(sig.slPrice)}`,
-      "",
+      ...assetFooterBlock,
       `⚠️ สัญญาณจากแท่ง ${tfLabel} ปิด — ไม่ใช่คำแนะนำลงทุน`,
     ].join("\n");
   }
@@ -1071,7 +1095,7 @@ export function buildCandleReversalAlertMessage(
       "📍 แผน Short (รอรีเทสต์):",
       `• Limit รีเทสต์ ~50% ไส้บน: ${fmtReversalPrice(sig.retestPrice)}`,
       `• SL เหนือปลายไส้: ${fmtReversalPrice(sig.slPrice)}`,
-      "",
+      ...assetFooterBlock,
       `⚠️ สัญญาณจากแท่ง ${tfLabel} ปิด — ไม่ใช่คำแนะนำลงทุน`,
     ].join("\n");
   }
@@ -1099,7 +1123,7 @@ export function buildCandleReversalAlertMessage(
       : `เนื้อแดง ${bodyPct}%${candleReversalLookbackContextSuffix(sig)} · high/vol/เนื้อยาวสุดในรอบ · กลืน/monster`,
     "",
     ...plan,
-    "",
+    ...assetFooterBlock,
     `⚠️ สัญญาณจากแท่ง ${tfLabel} ปิด — ไม่ใช่คำแนะนำลงทุน`,
   ].join("\n");
 }

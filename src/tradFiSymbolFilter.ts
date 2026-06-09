@@ -48,3 +48,49 @@ export function shouldExcludeMexcContractFromCryptoScan(contractSymbol: string):
   if (mexcIncludeStockContracts()) return false;
   return isMexcStockContractSymbol(contractSymbol);
 }
+
+export type BinanceUsdmSymbolMeta = {
+  underlyingType: string | null;
+  underlyingSubTypes: string[];
+  isTradFi: boolean;
+};
+
+/** ข้อความประเภทสินทรัพย์สำหรับแจ้งเตือน Reversal */
+export function formatBinanceUsdmAssetTypeLine(meta: BinanceUsdmSymbolMeta | null | undefined): string {
+  if (!meta) return "ประเภท: — (ไม่พบใน Binance exchangeInfo)";
+  if (meta.isTradFi) {
+    const sub =
+      meta.underlyingSubTypes.length > 0
+        ? meta.underlyingSubTypes.join(", ")
+        : meta.underlyingType ?? "TradFi";
+    const ut = meta.underlyingType && meta.underlyingType !== sub ? ` · ${meta.underlyingType}` : "";
+    return `ประเภท: ${sub}${ut} (TradFi — ไม่ใช่ crypto perp)`;
+  }
+  const ut = meta.underlyingType ?? "COIN";
+  return `ประเภท: ${ut} (crypto perp)`;
+}
+
+/** เหตุผล skip auto-open — null = ไม่ skip จากฝั่งสัญญา */
+export function reversalAutoOpenSkipLineTh(opts: {
+  isTradFi: boolean;
+  mexcContractSymbol?: string | null;
+}): string | null {
+  if (opts.isTradFi) {
+    return "⏭️ Auto-open: skip — TradFi/stock perp (ระบบไม่เปิดออเดอร์ MEXC)";
+  }
+  const mexc = opts.mexcContractSymbol?.trim();
+  if (!mexc) {
+    return "⏭️ Auto-open: skip — ไม่พบสัญญา USDT perp บน MEXC";
+  }
+  if (shouldExcludeMexcContractFromCryptoScan(mexc)) {
+    return "⏭️ Auto-open: skip — สัญญา MEXC ประเภท stock (ไม่รองรับ auto-open)";
+  }
+  return null;
+}
+
+export function reversalShouldSkipAutoOpenForAsset(opts: {
+  isTradFi: boolean;
+  mexcContractSymbol?: string | null;
+}): boolean {
+  return reversalAutoOpenSkipLineTh(opts) != null;
+}
