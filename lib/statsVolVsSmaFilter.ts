@@ -11,9 +11,19 @@ export type StatsVolVsSmaFilter =
   | "ge5"
   | "ge6"
   | "ge8"
-  | "ge10";
+  | "ge10"
+  | "lt1"
+  | "lt15"
+  | "lt2"
+  | "lt25"
+  | "lt3"
+  | "lt4"
+  | "lt5"
+  | "lt6"
+  | "lt8"
+  | "lt10";
 
-const VOL_VS_SMA_MIN: Record<Exclude<StatsVolVsSmaFilter, "all">, number> = {
+const VOL_VS_SMA_GE: Record<Extract<StatsVolVsSmaFilter, `ge${string}`>, number> = {
   ge1: 1,
   ge15: 1.5,
   ge2: 2,
@@ -24,6 +34,19 @@ const VOL_VS_SMA_MIN: Record<Exclude<StatsVolVsSmaFilter, "all">, number> = {
   ge6: 6,
   ge8: 8,
   ge10: 10,
+};
+
+const VOL_VS_SMA_LT: Record<Extract<StatsVolVsSmaFilter, `lt${string}`>, number> = {
+  lt1: 1,
+  lt15: 1.5,
+  lt2: 2,
+  lt25: 2.5,
+  lt3: 3,
+  lt4: 4,
+  lt5: 5,
+  lt6: 6,
+  lt8: 8,
+  lt10: 10,
 };
 
 export const STATS_VOL_VS_SMA_FILTER_OPTIONS: ReadonlyArray<{
@@ -41,6 +64,16 @@ export const STATS_VOL_VS_SMA_FILTER_OPTIONS: ReadonlyArray<{
   { value: "ge6", label: "≥ 6×" },
   { value: "ge8", label: "≥ 8×" },
   { value: "ge10", label: "≥ 10×" },
+  { value: "lt1", label: "< 1.0×" },
+  { value: "lt15", label: "< 1.5×" },
+  { value: "lt2", label: "< 2.0×" },
+  { value: "lt25", label: "< 2.5×" },
+  { value: "lt3", label: "< 3×" },
+  { value: "lt4", label: "< 4×" },
+  { value: "lt5", label: "< 5×" },
+  { value: "lt6", label: "< 6×" },
+  { value: "lt8", label: "< 8×" },
+  { value: "lt10", label: "< 10×" },
 ];
 
 export function statsVolVsSmaFilterLabel(filter: StatsVolVsSmaFilter): string {
@@ -53,5 +86,11 @@ export function statsRowMatchesVolVsSmaFilter(
 ): boolean {
   if (filter === "all") return true;
   if (ratio == null || !Number.isFinite(ratio)) return false;
-  return ratio >= VOL_VS_SMA_MIN[filter];
+  if (filter in VOL_VS_SMA_GE) {
+    return ratio >= VOL_VS_SMA_GE[filter as keyof typeof VOL_VS_SMA_GE];
+  }
+  if (filter in VOL_VS_SMA_LT) {
+    return ratio < VOL_VS_SMA_LT[filter as keyof typeof VOL_VS_SMA_LT];
+  }
+  return false;
 }
