@@ -1,6 +1,5 @@
 import type { BinanceIndicatorTf, BinanceKlinePack } from "./binanceIndicatorKline";
 import {
-  classifyLongStructureTier,
   resolveSnowballLongFinalGrade,
   snowballLongGradeDisplayLabel,
   snowballLongGradeShortLabel,
@@ -101,11 +100,6 @@ function stageMark(ok: boolean): string {
 }
 
 function finalGradeLine(res: SnowballLongGradeResolution): string {
-  if (res.kind === "block") {
-    if (res.reason === "structure_fail") return "BLOCK (Stage 1 — โครงสร้าง 4H)";
-    if (res.reason === "two_bar_inline_fail") return "BLOCK (Stage 2 — two-bar inline)";
-    return `BLOCK (${res.reason})`;
-  }
   return snowballLongGradeDisplayLabel(res.grade);
 }
 
@@ -230,12 +224,10 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
     volumeStrictOk: volStrictOk,
     volumeNearMissOnly: input.volNearMissOnly,
     gradeDPlusNearMissVolumeEnabled: snowballGradeBNearMissVolumeEnabled(),
+    trendGradeInput: { alertSide: "long" },
   });
 
-  const structureTier =
-    gradeRes.kind === "grade"
-      ? gradeRes.structureTier
-      : classifyLongStructureTier(swing48, input.swing200, vahOk);
+  const structureTier = gradeRes.structureTier;
 
   let stage3Head: string;
   if (!stage2Pass) {
