@@ -1,20 +1,51 @@
 import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
 import type { SnowballLongBreakout1hConfirmEval } from "./snowballLongBreakoutConfirm";
-import { resolveSnowballLong4hPipeline } from "./snowballLongGrade4hPipeline";
-import type {
-  SnowballActionPlan,
-  SnowballDisplayGrade,
-  SnowballStructureCeiling,
-} from "./snowballLongGradeMatrix";
 import type { TrendMomentumMetrics } from "./snowballTrendMomentumMetrics";
 import type { SnowballTwoBarInlineEval } from "./snowballTwoBarInline";
+import {
+  classifySnowballTrendGrade,
+  snowballIsTrendGradeF,
+  snowballTrendGradeActionPlan,
+  snowballTrendGradeDisplayLabel,
+  snowballTrendGradeFootnote,
+  snowballTrendGradeShortLabel,
+  snowballTrendGradeSkipsFeedDedupe,
+  type ClassifySnowballTrendGradeInput,
+  type SnowballLongBreakoutGrade,
+  type SnowballTrendActionPlan,
+  type SnowballTrendGrade,
+} from "./snowballTrendGrade";
 
-/** เกรดสุทธิที่แจ้ง / บันทึกสถิติ (Single-Layer Matrix) */
-export type SnowballLongBreakoutGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus";
+export type {
+  ClassifySnowballTrendGradeInput,
+  LegacySnowballQualityTier,
+  SnowballLongBreakoutGrade,
+  SnowballTrendActionPlan,
+  SnowballTrendGrade,
+  SnowballTrendGradeDisplay,
+} from "./snowballTrendGrade";
+
+export {
+  classifySnowballTrendGrade,
+  isLegacySnowballQualityTier,
+  isSnowballTrendGrade,
+  legacySnowballQualityTierToDisplay,
+  migrateSnowballAutoTradeGradeKey,
+  normalizeSnowballQualityTier,
+  snowballIsTrendGradeF,
+  snowballTrendActionPlanLabel,
+  snowballTrendGradeActionPlan,
+  snowballTrendGradeDisplayLabel,
+  snowballTrendGradeFootnote,
+  snowballTrendGradeShortLabel,
+  snowballTrendGradeSkipsFeedDedupe,
+  snowballTrendGradeToDisplay,
+} from "./snowballTrendGrade";
 
 export type SnowballLongStructureTier = "a_plus" | "b_plus" | "c_plus";
 
+/** @deprecated — ไม่ block alert อีกต่อไป */
 export type SnowballLongGradeBlockReason =
   | "structure_fail"
   | "two_bar_inline_fail"
@@ -23,58 +54,37 @@ export type SnowballLongGradeBlockReason =
   | "momentum_fail_d_plus_off"
   | "confirm_fail";
 
-export type SnowballLongGradeResolution =
-  | {
-      kind: "grade";
-      grade: SnowballLongBreakoutGrade;
-      structureTier: SnowballLongStructureTier;
-      confirm1hOk: boolean;
-      momentumOk: boolean;
-      confirm1hEval: SnowballLongBreakout1hConfirmEval | null;
-      footnote?: string;
-      /** เกรดสุทธิ B เพราะ vol ใกล้เกณฑ์ (ผ่าน near-miss แต่ไม่ถึง SMA×strict) */
-      nearMissVolume?: boolean;
-      /** Stage 1 ceiling (Base-Offset matrix สำหรับ 4h) */
-      structureCeiling?: SnowballStructureCeiling;
-      /** Stage 3 — จำนวนข้อที่พลาด (0–3) */
-      momentumFailCount?: 0 | 1 | 2 | 3;
-      /** Notch จาก ceiling: +1 / 0 / -1 / -2 */
-      gradeNotch?: 1 | 0 | -1 | -2;
-      /** ป้ายเกรดสำหรับแสดงผล (A+ / B- / D ฯลฯ) */
-      displayGrade?: SnowballDisplayGrade;
-      /** แผนเทรด — กำหนด marginScale และการ auto-open */
-      actionPlan?: SnowballActionPlan;
-    }
-  | {
-      kind: "block";
-      reason: SnowballLongGradeBlockReason;
-      detail: string;
-    };
+export type SnowballLongGradeResolution = {
+  kind: "grade";
+  grade: SnowballLongBreakoutGrade;
+  structureTier: SnowballLongStructureTier;
+  confirm1hOk: boolean;
+  momentumOk: boolean;
+  confirm1hEval: SnowballLongBreakout1hConfirmEval | null;
+  footnote?: string;
+  actionPlan?: SnowballTrendActionPlan;
+};
 
 export type ResolveSnowballLongFinalGradeInput = {
   snowTf: BinanceIndicatorTf;
   swing48: boolean;
   swing200: boolean;
   vahOk: boolean;
-  /** ผล two-bar inline (4h) — ใช้ pipeline 4h */
   twoBarEval?: SnowballTwoBarInlineEval | null;
   trendMomentum?: TrendMomentumMetrics | null;
-  /** Vol แท่งสัญญาณ ÷ SMA (4h pipeline) */
   signalVolVsSma?: number | null;
-  /** ผ่าน two-bar inline (pullback / vol / 1h min-low) แล้ว — ถือ 1H confirm ผ่าน */
   twoBarInlinePassed: boolean;
-  /** Snowball TF ≠ 4h และเปิด Long Breakout 1H */
   longBreakout1h: boolean;
   breakout1hEval: SnowballLongBreakout1hConfirmEval | null;
   momentumRequired: boolean;
   momentumOk: boolean;
   gradeDPlusOnMomentumFail: boolean;
   gradeFOnMomentumAndConfirmFail: boolean;
-  /** ผ่าน vol > SMA×strict (หรือ intrabar relax) */
   volumeStrictOk: boolean;
-  /** strict ไม่ผ่าน แต่ vol > SMA×near — ติดแค่ Volume */
   volumeNearMissOnly: boolean;
   gradeDPlusNearMissVolumeEnabled: boolean;
+  /** market context สำหรับ trend grade */
+  trendGradeInput: ClassifySnowballTrendGradeInput;
 };
 
 const SEC_4H = 4 * 3600;
@@ -87,7 +97,6 @@ export function snowballTfBarDurationSec(tf: BinanceIndicatorTf): number {
   return SEC_15M;
 }
 
-/** โครงสร้าง 4H จาก HH48 · HH200 · VAH (ชั้น A+/B/C เท่านั้น) */
 export function classifyLongStructureTier(
   swing48: boolean,
   swing200: boolean,
@@ -98,20 +107,28 @@ export function classifyLongStructureTier(
   return "c_plus";
 }
 
-/** @deprecated ใช้ classifyLongStructureTier — คง alias เพื่อ compat */
+/** @deprecated */
 export function classifyLongBreakoutGrade(
   swing48: boolean,
   swing200: boolean,
   vahOk: boolean,
 ): SnowballLongBreakoutGrade {
-  return classifyLongStructureTier(swing48, swing200, vahOk);
+  return classifyLongStructureTier(swing48, swing200, vahOk) === "a_plus"
+    ? "a"
+    : classifyLongStructureTier(swing48, swing200, vahOk) === "b_plus"
+      ? "b"
+      : "c";
 }
 
-export function snowballLongStructurePassesMain(swing48: boolean, vahOk: boolean): boolean {
+export function snowballLongStructureTierShortLabel(tier: SnowballLongStructureTier): string {
+  if (tier === "a_plus") return "A";
+  if (tier === "b_plus") return "B";
+  return "C";
+}
+
   return swing48 || vahOk;
 }
 
-/** Breakout Entry 1H confirm ผ่าน (body/vol/clean close บนแท่ง 1H) */
 export function snowballLongBreakout1hEvalPasses(
   ev: SnowballLongBreakout1hConfirmEval | null | undefined,
 ): boolean {
@@ -129,7 +146,7 @@ function resolveConfirm1hOk(input: ResolveSnowballLongFinalGradeInput): {
   return { ok: snowballLongBreakout1hEvalPasses(ev), eval: ev };
 }
 
-/** @deprecated Grade D (Long->Short) ถูกถอดแล้ว — ใช้แถวสถิติเก่าที่ breakout1hConfirmFail เท่านั้น */
+/** @deprecated */
 export function snowballIsGradeDLongToShort(
   _grade: SnowballLongBreakoutGrade | undefined,
   breakout1hConfirmFail: boolean | undefined,
@@ -137,20 +154,19 @@ export function snowballIsGradeDLongToShort(
   return breakout1hConfirmFail === true;
 }
 
-/** Grade D+ (Long) */
-export function snowballIsGradeDPlusLong(grade: SnowballLongBreakoutGrade | undefined): boolean {
-  return grade === "d_plus";
+/** @deprecated — ไม่มี D+ ใน trend grade */
+export function snowballIsGradeDPlusLong(_grade: SnowballLongBreakoutGrade | undefined): boolean {
+  return false;
 }
 
 export function snowballIsGradeF(grade: SnowballLongBreakoutGrade | undefined): boolean {
-  return grade === "f_plus";
+  return snowballIsTrendGradeF(grade);
 }
 
-/** Grade F ไม่บล็อก pending dedupe และไม่ตั้ง lastFiredBarSec — ให้สแกนรอบถัดไปยิงเกรดจริงได้ */
 export function snowballLongGradeSkipsFeedDedupe(
   grade: SnowballLongBreakoutGrade | undefined,
 ): boolean {
-  return grade === "f_plus";
+  return snowballTrendGradeSkipsFeedDedupe(grade);
 }
 
 export function snowballStatsRowSkipsFeedDedupe(row: {
@@ -160,182 +176,51 @@ export function snowballStatsRowSkipsFeedDedupe(row: {
 }): boolean {
   if (row.momentumFailGradeF === true) return true;
   const t = row.alertQualityTier ?? row.qualityTier;
-  return t === "f_plus";
+  return t === "f" || t === "f_plus";
 }
 
 export function snowballLongGradeShortLabel(g: SnowballLongBreakoutGrade): string {
-  if (g === "a_plus") return "A+";
-  if (g === "b_plus") return "B";
-  if (g === "c_plus") return "C";
-  if (g === "f_plus") return "F";
-  if (g === "d_plus") return "D+";
-  return "—";
+  return snowballTrendGradeShortLabel(g);
 }
 
 export function snowballLongGradeDisplayLabel(grade: SnowballLongBreakoutGrade): string {
-  if (snowballIsGradeDPlusLong(grade)) return "Grade D+ (Long)";
-  if (grade === "f_plus") return snowballLongGradeFLabel();
-  if (grade === "a_plus") return "Grade A+ (Long)";
-  if (grade === "b_plus") return "Grade B (Long)";
-  if (grade === "c_plus") return "Grade C (Long)";
-  return "Grade — (Long)";
+  return snowballTrendGradeDisplayLabel(grade, "long");
 }
 
+/** @deprecated */
 export function snowballLongGradePlusLabel(_g: SnowballLongBreakoutGrade): string {
-  return "Grade D+ (Long)";
+  return "Grade C (Long)";
 }
 
 export function snowballLongGradeFLabel(): string {
-  return "Grade F (Long)";
+  return snowballTrendGradeDisplayLabel("f", "long");
 }
 
-/** @deprecated ใช้ snowballLongStructureTierShortLabel */
+/** @deprecated */
 export function snowballStructureGradeShortLabel(g: SnowballLongBreakoutGrade): string {
-  if (g === "a_plus" || g === "b_plus" || g === "c_plus") return snowballLongGradeShortLabel(g);
-  return "—";
+  return snowballTrendGradeShortLabel(g);
 }
 
 /**
- * Single-Layer Matrix — คืนเกรดสุทธิหรือ BLOCK ครั้งเดียว
- * Master 4h → resolveSnowballLong4hPipeline (โครงสร้าง → two-bar → momentum)
+ * Trend grade จาก EMA slope — ไม่ block alert จาก structure/two-bar/momentum
  */
 export function resolveSnowballLongFinalGrade(
   input: ResolveSnowballLongFinalGradeInput,
 ): SnowballLongGradeResolution {
-  if (input.snowTf === "4h") {
-    const twoBar =
-      input.twoBarEval ??
-      ({
-        ok: input.twoBarInlinePassed,
-        pullbackOk: input.twoBarInlinePassed,
-        volRatioOk: input.twoBarInlinePassed,
-        minLow1hOk: input.twoBarInlinePassed,
-        confirmNotInvertedDojiOk: input.twoBarInlinePassed,
-        detail: input.twoBarInlinePassed ? "two-bar inline ผ่าน" : "two-bar inline ไม่ผ่าน",
-      } satisfies SnowballTwoBarInlineEval);
-    return resolveSnowballLong4hPipeline({
-      swing48: input.swing48,
-      swing200: input.swing200,
-      vahOk: input.vahOk,
-      twoBar,
-      trendMomentum: input.trendMomentum ?? null,
-      signalVolVsSma: input.signalVolVsSma ?? null,
-      volumeStrictOk: input.volumeStrictOk,
-    });
-  }
-
-  const structureOk = snowballLongStructurePassesMain(input.swing48, input.vahOk);
-  if (!structureOk) {
-    return { kind: "block", reason: "structure_fail", detail: "โครงสร้าง 4H ไม่ผ่าน (ไม่มี Swing HH48 / VAH)" };
-  }
-
   const structureTier = classifyLongStructureTier(input.swing48, input.swing200, input.vahOk);
   const confirm = resolveConfirm1hOk(input);
-  const confirmOk = confirm.ok;
   const momentumOk = !input.momentumRequired || input.momentumOk;
-
-  const confirm1hEvalOk = snowballLongBreakout1hEvalPasses(confirm.eval);
-
-  if (
-    input.gradeDPlusNearMissVolumeEnabled &&
-    input.volumeNearMissOnly &&
-    confirmOk &&
-    confirm1hEvalOk &&
-    momentumOk
-  ) {
-    return {
-      kind: "grade",
-      grade: "b_plus",
-      structureTier,
-      confirm1hOk: true,
-      momentumOk: true,
-      confirm1hEval: confirm.eval,
-      nearMissVolume: true,
-    };
-  }
-
-  if (
-    input.volumeNearMissOnly &&
-    momentumOk &&
-    !confirm1hEvalOk &&
-    input.gradeFOnMomentumAndConfirmFail
-  ) {
-    return {
-      kind: "grade",
-      grade: "f_plus",
-      structureTier,
-      confirm1hOk: false,
-      momentumOk: true,
-      confirm1hEval: confirm.eval,
-      nearMissVolume: true,
-    };
-  }
-
-  if (momentumOk && confirmOk && input.volumeStrictOk) {
-    return {
-      kind: "grade",
-      grade: structureTier,
-      structureTier,
-      confirm1hOk: true,
-      momentumOk: true,
-      confirm1hEval: confirm.eval,
-    };
-  }
-
-  if (!momentumOk && confirmOk) {
-    if (!input.gradeDPlusOnMomentumFail) {
-      return {
-        kind: "block",
-        reason: "momentum_fail_d_plus_off",
-        detail: "momentum ไม่ผ่าน · ปิด D+ (INDICATOR_PUBLIC_SNOWBALL_GRADE_B_MOMENTUM_FAIL_GRADE_D_ON_1H_CONFIRM=0)",
-      };
-    }
-    return {
-      kind: "grade",
-      grade: "d_plus",
-      structureTier,
-      confirm1hOk: true,
-      momentumOk: false,
-      confirm1hEval: confirm.eval,
-    };
-  }
-
-  if (input.longBreakout1h && !confirmOk) {
-    return {
-      kind: "block",
-      reason: "breakout_1h_fail",
-      detail: confirm.eval?.detail ?? "1H Breakout confirm ไม่ผ่าน",
-    };
-  }
-
-  if (!momentumOk && !confirmOk && !input.twoBarInlinePassed && input.gradeFOnMomentumAndConfirmFail) {
-    return {
-      kind: "grade",
-      grade: "f_plus",
-      structureTier,
-      confirm1hOk: false,
-      momentumOk: false,
-      confirm1hEval: confirm.eval,
-    };
-  }
-
-  if (!momentumOk && !confirmOk) {
-    return {
-      kind: "block",
-      reason: "momentum_and_confirm_fail",
-      detail: confirm.eval?.detail ?? "momentum ไม่ผ่าน · 1H confirm ไม่ผ่าน",
-    };
-  }
-
-  if (!confirmOk) {
-    return {
-      kind: "block",
-      reason: "confirm_fail",
-      detail: confirm.eval?.detail ?? "1H confirm ไม่ผ่าน",
-    };
-  }
-
-  return { kind: "block", reason: "momentum_and_confirm_fail", detail: "ไม่ตรงเกณฑ์ matrix" };
+  const grade = classifySnowballTrendGrade(input.trendGradeInput);
+  return {
+    kind: "grade",
+    grade,
+    structureTier,
+    confirm1hOk: confirm.ok,
+    momentumOk,
+    confirm1hEval: confirm.eval,
+    footnote: snowballTrendGradeFootnote({ ...input.trendGradeInput, grade }),
+    actionPlan: snowballTrendGradeActionPlan(grade),
+  };
 }
 
 function maxHighPriorWindow(
@@ -402,7 +287,6 @@ function vahCrossOnBar(
   return Number.isFinite(cl) && Number.isFinite(clPrev) && cl > vahH && clPrev <= vahH;
 }
 
-/** A/B/C จากโครงสร้างแท่งสัญญาณ (HH48 / HH200 / VAH บน TF เดียวกับ Snowball) */
 export function classifyLongBreakoutGradeOnBar(
   pack: BinanceKlinePack,
   iBar: number,
@@ -418,7 +302,6 @@ export function classifyLongBreakoutGradeOnBar(
   return classifyLongStructureTier(swing48, swing200, vahOk);
 }
 
-/** แท่งปิดล่าสุดที่ close time ≤ asOfSec */
 export function latestClosedBarIndexAtOrBefore(
   pack: BinanceKlinePack,
   barDurSec: number,

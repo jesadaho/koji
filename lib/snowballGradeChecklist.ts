@@ -1,10 +1,26 @@
 /** Client-safe Snowball grade checklist (popup สถิติ) */
 
 import {
-  snowballIsGradeDPlusLong,
-  snowballIsGradeF,
-  snowballLongGradeDisplayLabel,
-  snowballLongGradeShortLabel,
+  classifySnowballTrendGrade,
+  snowballIsTrendGradeF,
+  snowballTrendGradeDisplayLabel,
+  snowballTrendGradeShortLabel,
+  isLegacySnowballQualityTier,
+  isSnowballTrendGrade,
+  normalizeSnowballQualityTier,
+  SNOWBALL_TREND_GRADE_A_EMA4H_MAX,
+  SNOWBALL_TREND_GRADE_A_EMA4H_MIN,
+  SNOWBALL_TREND_GRADE_A_GREEN_MAX,
+  SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE,
+  SNOWBALL_TREND_GRADE_B_EMA4H_MAX,
+  SNOWBALL_TREND_GRADE_B_EMA4H_MIN,
+  SNOWBALL_TREND_GRADE_F_EMA1D_MAX_EXCLUSIVE,
+  SNOWBALL_TREND_GRADE_F_EMA1D_MIN_EXCLUSIVE,
+  SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE,
+  SNOWBALL_TREND_GRADE_S_GREEN_MAX,
+} from "@/src/snowballTrendGrade";
+import {
+  snowballLongStructureTierShortLabel,
   type SnowballLongStructureTier,
 } from "@/src/snowballLongBreakoutGrade";
 import {
@@ -29,7 +45,11 @@ import {
 function effectiveQualityTier(
   row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier">,
 ): SnowballStatsQualityTier | undefined {
-  return row.qualityTier ?? row.alertQualityTier;
+  const raw = row.qualityTier ?? row.alertQualityTier;
+  if (raw == null) return undefined;
+  if (isSnowballTrendGrade(raw)) return raw;
+  if (isLegacySnowballQualityTier(raw)) return normalizeSnowballQualityTier(raw);
+  return undefined;
 }
 
 /** ค่าเริ่มต้นสอดคล้อง INDICATOR_PUBLIC_SNOWBALL_VOL_MULT / VOL_NEAR_MISS_MULT */
@@ -105,7 +125,7 @@ export function snowballStatsConfirmOk(
   if (snowballStatsLegacyBreakout1hConfirmFailIgnored(row)) return true;
 
   const grade = effectiveQualityTier(row);
-  if (!grade || snowballIsGradeF(grade) || row.momentumFailGradeF) return false;
+  if (!grade || snowballIsTrendGradeF(grade) || row.momentumFailGradeF) return false;
   if (row.breakout1hConfirmFail === true) return false;
   return true;
 }
@@ -122,7 +142,7 @@ function confirmOk(
   >,
 ): boolean {
   const grade = effectiveQualityTier(row);
-  if (!grade || snowballIsGradeF(grade) || row.momentumFailGradeF) return false;
+  if (!grade || snowballIsTrendGradeF(grade) || row.momentumFailGradeF) return false;
   return snowballStatsConfirmOk(row);
 }
 
@@ -170,10 +190,10 @@ function momentumOk(
   >,
 ): boolean {
   const grade = effectiveQualityTier(row);
-  if (!grade || snowballIsGradeF(grade) || row.momentumFailGradeF) return false;
-  if (row.momentumDowngrade === true || snowballIsGradeDPlusLong(grade)) return false;
+  if (!grade || snowballIsTrendGradeF(grade) || row.momentumFailGradeF) return false;
+  if (row.momentumDowngrade === true) return false;
   if (isVolCascadePassPartialMomentumC(row)) return false;
-  return grade === "a_plus" || grade === "b_plus" || grade === "c_plus";
+  return grade === "s" || grade === "a" || grade === "b" || grade === "c";
 }
 
 function momentumFailCriteria(
@@ -274,7 +294,7 @@ function confirmFailCriteria(
 
   if (row.breakout1hConfirmFail && !snowballStatsLegacyBreakout1hConfirmFailIgnored(row)) {
     fails.push("1H confirm ไม่ผ่าน (breakout1hConfirmFail — แถวเก่า)");
-  } else if (snowballIsGradeF(grade) || row.momentumFailGradeF) {
+  } else if (snowballIsTrendGradeF(grade) || row.momentumFailGradeF) {
     fails.push("เกรด F (Long): momentum และ/หรือ 1H confirm ไม่ผ่านตอนแจ้งเตือน");
   } else {
     const tf = row.signalBarTf ?? "15m";
@@ -352,7 +372,116 @@ function mainTfLabel(tf: SnowballStatsRow["signalBarTf"]): string {
   return "Main TF";
 }
 
-/** Checklist LONG — โครงสร้าง · confirm · vol strict · vol near-miss · momentum */
+function mainTfLabel(tf: SnowballStatsRow["signalBarTf"]): string {
+  if (tf === "4h") return "4H";
+  if (tf === "1h") return "1H";
+  if (tf === "15m") return "15m";
+  return "Main TF";
+}
+
+function fmtSlope(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
+function snowballTrendGradeChecklistItems(
+  row: Pick<
+    SnowballStatsRow,
+    | "alertSide"
+    | "triggerKind"
+    | "ema4hSlopePct7d"
+    | "ema1dSlopePct7d"
+    | "btcEma4hSlopePct7d"
+    | "greenDaysBeforeSignal"
+    | "qualityTier"
+    | "alertQualityTier"
+  >,
+  side: "long" | "bear",
+): SnowballGradeChecklistItem[] {
+  const grade = effectiveQualityTier(row);
+  const ema4h = row.ema4hSlopePct7d;
+  const ema1d = row.ema1dSlopePct7d;
+  const btc4h = row.btcEma4hSlopePct7d;
+  const green = row.greenDaysBeforeSignal;
+  const greenStr = green != null && Number.isFinite(green) ? String(Math.floor(green)) : "—";
+
+  const input = {
+    alertSide: side,
+    ema4hSlopePct7d: ema4h,
+    ema1dSlopePct7d: ema1d,
+    btcEma4hSlopePct7d: btc4h,
+    greenDaysBeforeSignal: green,
+  };
+  const computed = classifySnowballTrendGrade(input);
+
+  return [
+    {
+      id: "structure",
+      title: `Trend Grade ${side === "bear" ? "SHORT" : "LONG"}`,
+      status: grade ? "pass" : "unknown",
+      detail: grade
+        ? `เกรด ${snowballTrendGradeShortLabel(grade)} (คำนวณ ${snowballTrendGradeShortLabel(computed)})`
+        : "—",
+    },
+    {
+      id: "confirm",
+      title: "EMA4h slope 7d",
+      status:
+        ema4h != null && Number.isFinite(ema4h) && ema4h > SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE
+          ? "pass"
+          : ema4h != null &&
+              Number.isFinite(ema4h) &&
+              ema4h >= SNOWBALL_TREND_GRADE_A_EMA4H_MIN &&
+              ema4h <= SNOWBALL_TREND_GRADE_A_EMA4H_MAX
+            ? "pass"
+            : ema4h != null &&
+                Number.isFinite(ema4h) &&
+                ema4h >= SNOWBALL_TREND_GRADE_B_EMA4H_MIN &&
+                ema4h <= SNOWBALL_TREND_GRADE_B_EMA4H_MAX
+              ? "pass"
+              : "unknown",
+      detail: `${fmtSlope(ema4h)} · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_A_EMA4H_MAX}% · B ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}%`,
+    },
+    ...(side === "long"
+      ? [
+          {
+            id: "momentum" as const,
+            title: "เขียวก่อนสัญญาณ",
+            status:
+              green != null && Number.isFinite(green) && green >= 0
+                ? green <= SNOWBALL_TREND_GRADE_S_GREEN_MAX || green <= SNOWBALL_TREND_GRADE_A_GREEN_MAX
+                  ? "pass"
+                  : "fail"
+                : "unknown",
+            detail: `${greenStr} วัน · S ต้อง 0–${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ต้อง 0–${SNOWBALL_TREND_GRADE_A_GREEN_MAX}`,
+          },
+        ]
+      : []),
+    {
+      id: "vol_strict",
+      title: "BTC EMA4h slope 7d",
+      status:
+        btc4h != null && Number.isFinite(btc4h) && btc4h < SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE
+          ? "pass"
+          : "unknown",
+      detail: `${fmtSlope(btc4h)} · B ถ้า < ${SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE}%`,
+    },
+    {
+      id: "vol_near_miss",
+      title: "EMA1d slope 7d (Grade F)",
+      status:
+        ema1d != null &&
+        Number.isFinite(ema1d) &&
+        ema1d > SNOWBALL_TREND_GRADE_F_EMA1D_MIN_EXCLUSIVE &&
+        ema1d < SNOWBALL_TREND_GRADE_F_EMA1D_MAX_EXCLUSIVE
+          ? "pass"
+          : "unknown",
+      detail: `${fmtSlope(ema1d)} · F ถ้า > ${SNOWBALL_TREND_GRADE_F_EMA1D_MIN_EXCLUSIVE}% และ < ${SNOWBALL_TREND_GRADE_F_EMA1D_MAX_EXCLUSIVE}%`,
+    },
+  ];
+}
+
+/** Checklist LONG — trend grade + diagnostic โครงสร้าง/vol/momentum */
 export function snowballStatsGradeChecklist(
   row: Pick<
     SnowballStatsRow,
@@ -375,19 +504,31 @@ export function snowballStatsGradeChecklist(
     | "confirmVolRank"
     | "confirmVolRankLb"
     | "volumeCascadeYn"
+    | "ema4hSlopePct7d"
+    | "ema1dSlopePct7d"
+    | "btcEma4hSlopePct7d"
+    | "greenDaysBeforeSignal"
   >,
 ): SnowballGradeChecklistItem[] {
   const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
   if (side === "bear") {
     const grade = effectiveQualityTier(row);
-    return [
-      {
-        id: "structure",
-        title: "Double Barrier SHORT",
-        status: grade ? "pass" : "unknown",
-        detail: grade ? `เกรด ${snowballLongGradeShortLabel(grade)}` : "—",
-      },
-    ];
+    const items = snowballTrendGradeChecklistItems(row, "bear");
+    return items.length > 0
+      ? items
+      : [
+          {
+            id: "structure",
+            title: "Trend Grade SHORT",
+            status: grade ? "pass" : "unknown",
+            detail: grade ? `เกรด ${snowballTrendGradeShortLabel(grade)}` : "—",
+          },
+        ];
+  }
+
+  const trendItems = snowballTrendGradeChecklistItems(row, "long");
+  if (trendItems.length > 0) {
+    return trendItems;
   }
 
   const strictMult =
@@ -421,7 +562,7 @@ export function snowballStatsGradeChecklist(
       title: `โครงสร้างหลัก (${tfLabel} / Main TF)`,
       status: struct ? "pass" : "unknown",
       detail: struct
-        ? `${snowballLongGradeShortLabel(struct)} · ${structureTierHint(struct)}`
+        ? `${snowballLongStructureTierShortLabel(struct)} · ${structureTierHint(struct)}`
         : "แถวเก่า — ไม่บันทึก structureTier",
     },
     {
@@ -640,13 +781,13 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
     "==================================================",
     "",
     `🟢 [STAGE 1: 4H STRUCTURE] -> ${stage1Pass ? "PASS" : "FAIL"} (Status: ${stage1Pass ? "Active" : "Blocked"})`,
-    `  [${stageLineMark(swing48Ok)}] Swing HH48 Check — โครงสร้าง ${struct ? snowballLongGradeShortLabel(struct) : "—"} (${struct ? structureTierHint(struct) : "ไม่บันทึก"})`,
+    `  [${stageLineMark(swing48Ok)}] Swing HH48 Check — โครงสร้าง ${struct ? snowballLongStructureTierShortLabel(struct) : "—"} (${struct ? structureTierHint(struct) : "ไม่บันทึก"})`,
     `  [${swing200Ok == null ? "—" : stageLineMark(swing200Ok)}] Swing HH200 Check${
       swing200Ok === true
         ? " — โครงสร้างใหญ่ผ่าน (ช่วยดันเกรด)"
         : swing200Ok === false
           ? " — ไม่ผ่าน HH200 (ตัดเพดานเกรด)"
-          : " — แถวเก่าไม่บันทึก (อนุมานจาก " + (struct ? snowballLongGradeShortLabel(struct) : "—") + " ไม่ได้)"
+          : " — แถวเก่าไม่บันทึก (อนุมานจาก " + (struct ? snowballLongStructureTierShortLabel(struct) : "—") + " ไม่ได้)"
     }`,
     `  [${stageLineMark(vahOk)}] VAH Proxy Escape${struct === "b_plus" ? " (Grade B path)" : struct === "a_plus" ? " (A+ path)" : " — ไม่ถึง VAH (Grade C)"}`,
     `  [—] EMA Trend Check — ไม่บันทึกในแถวสถิติ (ดู debug snowball สดได้)`,
@@ -711,13 +852,13 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
                 ? "Drop 1 Item"
                 : `Drop ${failCount} Items`
       }`,
-      `- Result: [ ${grade ? snowballLongGradeDisplayLabel(grade) : "—"} ] ตอนแจ้ง`,
+      `- Result: [ ${grade ? snowballTrendGradeDisplayLabel(grade, "long") : "—"} ] ตอนแจ้ง`,
     );
   }
 
   if (row.qualityTier4hAdjusted && row.qualityTier && row.alertQualityTier && row.qualityTier !== row.alertQualityTier) {
     lines.push(
-      `- หมายเหตุ: หลัง follow-up 4h ปรับเป็น ${snowballLongGradeShortLabel(row.qualityTier)} (ตอนแจ้ง ${snowballLongGradeShortLabel(row.alertQualityTier)})`,
+      `- หมายเหตุ: หลัง follow-up 4h ปรับเป็น ${snowballTrendGradeShortLabel(row.qualityTier as SnowballStatsQualityTier)} (ตอนแจ้ง ${snowballTrendGradeShortLabel(row.alertQualityTier as SnowballStatsQualityTier)})`,
     );
   }
 
@@ -764,11 +905,9 @@ export function snowballStatsGradeChecklistFooter(
   const lines: string[] = [];
   if (grade) {
     lines.push(
-      `เกรดสุทธิที่แจ้ง: ${snowballLongGradeDisplayLabel(grade)} [${snowballLongGradeShortLabel(grade)}]`,
+      `เกรดสุทธิที่แจ้ง: ${snowballTrendGradeDisplayLabel(grade, "long")} [${snowballTrendGradeShortLabel(grade)}]`,
     );
-    if (snowballIsGradeDPlusLong(grade)) {
-      lines.push("auto-open: ไม่สั่ง (Grade D+)");
-    } else if (snowballIsGradeF(grade)) {
+    if (snowballIsTrendGradeF(grade)) {
       lines.push("auto-open: ไม่สั่ง (Grade F)");
     }
   }
@@ -780,7 +919,7 @@ export function snowballStatsGradeChecklistFooter(
     row.qualityTier !== alertAt
   ) {
     lines.push(
-      `หลังปรับ 4h: ${snowballLongGradeShortLabel(row.qualityTier)} (ตอนแจ้ง ${snowballLongGradeShortLabel(alertAt)})`,
+      `หลังปรับ 4h: ${snowballTrendGradeShortLabel(row.qualityTier as SnowballStatsQualityTier)} (ตอนแจ้ง ${snowballTrendGradeShortLabel(alertAt as SnowballStatsQualityTier)})`,
     );
   }
   return lines;

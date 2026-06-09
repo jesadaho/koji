@@ -13,7 +13,7 @@ import {
   loadTradingViewMexcSettingsFullMap,
   type TradingViewMexcUserSettings,
 } from "./tradingViewCloseSettingsStore";
-import type { SnowballActionPlan, SnowballDisplayGrade } from "./snowballLongGradeMatrix";
+import type { SnowballTrendActionPlan, SnowballTrendGradeDisplay } from "./snowballTrendGrade";
 import {
   snowballAutoTradeGradeKeyFromAlert,
   type SnowballAutoTradeAlertGradeInput,
@@ -78,12 +78,12 @@ export function isSnowballAutotradeEnabled(): boolean {
   return true;
 }
 
-/** Grade LONG จากสัญญาณ Snowball (สอดคล้อง publicIndicatorFeed) */
-export type SnowballLongAlertGrade = "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus";
+/** Grade จากสัญญาณ Snowball */
+export type SnowballLongAlertGrade = import("./snowballTrendGrade").SnowballTrendGrade;
 
-/** @deprecated ใช้ snowballAutoTradeGradeKeyFromAlert + user rules */
+/** @deprecated */
 export function isSnowballLongGradeBelowB(grade: SnowballLongAlertGrade | undefined): boolean {
-  return grade === "c_plus" || grade === "d_plus";
+  return grade === "c" || grade === "f";
 }
 
 /** @deprecated ใช้ user grade rules แทน */
@@ -257,7 +257,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   contractSymbol: string;
   binanceSymbol: string;
   alertSide: SnowballAutoTradeAlertSide;
-  displayGrade?: SnowballDisplayGrade | null;
+  displayGrade?: SnowballTrendGradeDisplay | null;
   qualityTier?: SnowballAutoTradeAlertGradeInput["qualityTier"];
   momentumFailGradeF?: boolean | null;
   momentumDowngrade?: boolean | null;
@@ -273,7 +273,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   /** สัดส่วน margin (เช่น 0.5 สำหรับ action plan Light) */
   marginScale?: number;
   /** จาก matrix 4h — monitor = ไม่ auto-open */
-  actionPlan?: SnowballActionPlan | null;
+  actionPlan?: SnowballTrendActionPlan | null;
   /** Quality Signal / Quality Short Signal */
   greenDaysBeforeSignal?: number | null;
   fundingRate?: number | null;

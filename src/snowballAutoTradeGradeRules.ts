@@ -1,17 +1,16 @@
-import type { SnowballDisplayGrade } from "./snowballLongGradeMatrix";
+import type { SnowballTrendGradeDisplay } from "./snowballTrendGrade";
 import type { SnowballAutoTradeGradeKey } from "./tradingViewCloseSettingsStore";
+import {
+  migrateSnowballAutoTradeGradeKey,
+  snowballTrendGradeToDisplay,
+  type SnowballTrendGrade,
+} from "./snowballTrendGrade";
 
 export const SNOWBALL_AUTO_TRADE_GRADE_KEYS: readonly SnowballAutoTradeGradeKey[] = [
-  "A+",
+  "S",
   "A",
-  "A-",
-  "B+",
   "B",
-  "B-",
-  "C+",
   "C",
-  "C-",
-  "D",
   "F",
 ] as const;
 
@@ -22,8 +21,8 @@ export function isSnowballAutoTradeGradeKey(k: string): k is SnowballAutoTradeGr
 }
 
 export type SnowballAutoTradeAlertGradeInput = {
-  displayGrade?: SnowballDisplayGrade | null;
-  qualityTier?: "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus" | null;
+  displayGrade?: SnowballTrendGradeDisplay | null;
+  qualityTier?: SnowballTrendGrade | null;
   momentumFailGradeF?: boolean | null;
   momentumDowngrade?: boolean | null;
 };
@@ -35,11 +34,11 @@ export function snowballAutoTradeGradeKeyFromAlert(
   const dg = input.displayGrade;
   if (dg && isSnowballAutoTradeGradeKey(dg)) return dg;
   if (input.momentumFailGradeF) return "F";
-  const tier = input.qualityTier;
-  if (tier === "a_plus") return "A+";
-  if (tier === "b_plus") return "B";
-  if (tier === "c_plus") return "C";
-  if (tier === "d_plus") return "D";
-  if (tier === "f_plus") return "F";
+  if (input.qualityTier) return snowballTrendGradeToDisplay(input.qualityTier);
   return null;
+}
+
+/** migrate legacy grade key จาก settings เก่า */
+export function normalizeSnowballAutoTradeGradeKey(key: string): SnowballAutoTradeGradeKey | null {
+  return migrateSnowballAutoTradeGradeKey(key);
 }

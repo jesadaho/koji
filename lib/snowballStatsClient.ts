@@ -12,13 +12,20 @@ import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import { statsFmtPctCell } from "@/lib/statsCsv";
 import { formatFunding } from "@/src/marketsFormat";
 import {
-  snowballIsGradeDPlusLong,
-  snowballIsGradeF,
-  snowballLongGradeShortLabel,
-  type SnowballLongBreakoutGrade,
+  snowballIsTrendGradeF,
+  snowballTrendGradeShortLabel,
+  snowballTrendGradeToDisplay,
+  normalizeSnowballQualityTier,
+  legacySnowballQualityTierToDisplay,
+  isLegacySnowballQualityTier,
+  isSnowballTrendGrade,
+  type SnowballTrendGrade,
+  type SnowballTrendGradeDisplay,
+} from "@/src/snowballTrendGrade";
+import {
+  snowballLongStructureTierShortLabel,
   type SnowballLongStructureTier,
 } from "@/src/snowballLongBreakoutGrade";
-import { displayGradeToQualityTier } from "@/src/snowballLongGradeMatrix";
 import type { MarketSentimentLabel, MarketSentimentSnapshot } from "@/lib/marketSentiment";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
@@ -33,7 +40,7 @@ export type { SnowballLongStructureTier };
 
 export type SnowballStatsOutcome = "pending" | "win_trend" | "loss" | "flat";
 
-export type SnowballStatsQualityTier = SnowballLongBreakoutGrade;
+export type SnowballStatsQualityTier = SnowballTrendGrade;
 
 /** ทิศสัญญาณ Snowball ตอนแจ้ง (long / bear) */
 export type SnowballStatsAlertSide = "long" | "bear";
@@ -144,19 +151,8 @@ export type SnowballStatsRow = {
   momentumFailCount?: 0 | 1 | 2 | 3 | null;
   /** notch จาก ceiling (+1 / 0 / -1 / -2) — 4h เท่านั้น */
   gradeNotch?: 1 | 0 | -1 | -2 | null;
-  /** Display grade (A+ / A / A- / B+ / B / B- / C+ / C / C- / D) — 4h เท่านั้น */
-  displayGrade?:
-    | "A+"
-    | "A"
-    | "A-"
-    | "B+"
-    | "B"
-    | "B-"
-    | "C+"
-    | "C"
-    | "C-"
-    | "D"
-    | null;
+  /** Display grade (S / A / B / C / F) */
+  displayGrade?: SnowballTrendGradeDisplay | null;
   /** Action plan — ผูก margin scale / auto-open */
   actionPlan?: "full" | "standard" | "light" | "monitor" | null;
   price4h: number | null;
@@ -211,7 +207,11 @@ export function snowballStatsSideLabel(
 }
 
 function effectiveQualityTier(row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier">): SnowballStatsQualityTier | undefined {
-  return row.qualityTier ?? row.alertQualityTier;
+  const raw = row.qualityTier ?? row.alertQualityTier;
+  if (raw == null) return undefined;
+  if (isSnowballTrendGrade(raw)) return raw;
+  if (isLegacySnowballQualityTier(raw)) return normalizeSnowballQualityTier(raw);
+  return undefined;
 }
 
 /** แถวสถิติเก่า Grade D (Long->Short) — ใช้ปรับเกรด 4h follow-up เท่านั้น */
@@ -221,26 +221,23 @@ export function snowballStatsIsLongConfirmFailRow(
   return row.breakout1hConfirmFail === true;
 }
 
-/** @deprecated ใช้ qualityTier === f_plus */
+/** @deprecated ใช้ qualityTier === f */
 export function snowballStatsIsGradeFMomentumFailRow(
   row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "momentumFailGradeF">,
 ): boolean {
   if (row.momentumFailGradeF === true) return true;
   if (row.momentumFailGradeF === false) return false;
-  return snowballIsGradeF(effectiveQualityTier(row));
+  return snowballIsTrendGradeF(effectiveQualityTier(row));
 }
 
-/** @deprecated ใช้ qualityTier === d_plus && !breakout1hConfirmFail */
+/** @deprecated — ไม่มี D+ ใน trend grade */
 export function snowballStatsIsGradeBMomentumDowngradeRow(
-  row: Pick<
+  _row: Pick<
     SnowballStatsRow,
     "qualityTier" | "alertQualityTier" | "breakout1hConfirmFail" | "momentumDowngrade" | "momentumFailGradeF"
   >,
 ): boolean {
-  if (row.momentumFailGradeF) return false;
-  if (row.momentumDowngrade === true) return true;
-  if (row.momentumDowngrade === false) return false;
-  return snowballIsGradeDPlusLong(effectiveQualityTier(row));
+  return false;
 }
 
 /** Label สำหรับ Action Plan (ใช้ใน popup + TG footer) */
@@ -254,24 +251,40 @@ export function snowballStatsActionPlanLabel(
   return "—";
 }
 
-/** เทียบ qualityTier เก่ากับ schema ใหม่ (สำหรับแถวที่ไม่มี displayGrade) */
+/** เทียบ qualityTier เก่ากับ schema ใหม่ */
 export function snowballStatsDerivedDisplayGrade(
-  row: Pick<SnowballStatsRow, "displayGrade" | "qualityTier" | "alertQualityTier" | "momentumDowngrade" | "momentumFailGradeF">,
+  row: Pick<
+    SnowballStatsRow,
+    | "displayGrade"
+    | "qualityTier"
+    | "alertQualityTier"
+    | "ema4hSlopePct7d"
+    | "ema1dSlopePct7d"
+    | "btcEma4hSlopePct7d"
+    | "greenDaysBeforeSignal"
+    | "alertSide"
+    | "triggerKind"
+  >,
 ): string | null {
   if (row.displayGrade) return row.displayGrade;
-  if (row.momentumFailGradeF) return "F";
-  const tier = row.qualityTier ?? row.alertQualityTier;
-  if (tier === "a_plus") return "A+";
-  if (tier === "b_plus") return "B";
-  if (tier === "c_plus") return "C";
-  if (tier === "d_plus") return row.momentumDowngrade ? "D+" : "D";
-  if (tier === "f_plus") return "F";
-  return null;
+  const tier = effectiveQualityTier(row);
+  if (tier) return snowballTrendGradeToDisplay(tier);
+  const raw = row.qualityTier ?? row.alertQualityTier;
+  if (raw && isLegacySnowballQualityTier(raw)) return legacySnowballQualityTierToDisplay(raw);
+  const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+  const derived = normalizeSnowballQualityTier(undefined, {
+    alertSide: side,
+    ema4hSlopePct7d: row.ema4hSlopePct7d,
+    ema1dSlopePct7d: row.ema1dSlopePct7d,
+    btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
+    greenDaysBeforeSignal: row.greenDaysBeforeSignal,
+  });
+  return derived ? snowballTrendGradeToDisplay(derived) : null;
 }
 
 function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): string {
   if (!tier) return "—";
-  return snowballLongGradeShortLabel(tier);
+  return snowballTrendGradeShortLabel(tier);
 }
 
 function snowballStatsStructureTierHint(tier: SnowballLongStructureTier): string {
@@ -291,7 +304,7 @@ export function snowballStatsStructureTierLabel(
   tier: SnowballLongStructureTier | null | undefined,
 ): string {
   if (!tier || !snowballStatsIsStructureTier(tier)) return "—";
-  return snowballLongGradeShortLabel(tier);
+  return snowballLongStructureTierShortLabel(tier);
 }
 
 type SnowballStatsGradeDisplayRow = Pick<
@@ -304,7 +317,7 @@ type SnowballStatsGradeDisplayRow = Pick<
   | "momentumFailGradeF"
 >;
 
-/** ป้ายเกรดตอนแจ้ง — ใช้ displayGrade (B-/A-/…) ถ้ามี ไม่ใช้แค่ qualityTier หยาบ (B- → c_plus → "C") */
+/** ป้ายเกรดตอนแจ้ง — ใช้ displayGrade (S/A/B/C/F) ถ้ามี */
 export function snowballStatsGradeAtAlertLabel(row: SnowballStatsGradeDisplayRow): string {
   return snowballStatsDerivedDisplayGrade(row) ?? snowballStatsGradeLetter(effectiveQualityTier(row));
 }
@@ -324,7 +337,7 @@ export function snowballStatsGradeDisplayLabel(row: SnowballStatsGradeDisplayRow
   return atAlert;
 }
 
-/** กรอง dropdown Grade — รองรับ B-/B+/C- และรูปแบบ "B- → C" หลังปรับ 4h */
+/** กรอง dropdown Grade — S/A/B/C/F */
 export function snowballStatsGradeMatchesFilter(
   row: SnowballStatsGradeDisplayRow,
   filter: string,
@@ -333,13 +346,7 @@ export function snowballStatsGradeMatchesFilter(
   const label = snowballStatsGradeDisplayLabel(row);
   if (label === filter) return true;
   const parts = label.split(" → ").map((s) => s.trim());
-  if (parts.some((p) => p === filter)) return true;
-  if (filter === "B" && parts.some((p) => p.startsWith("B"))) return true;
-  if (filter === "C" && parts.some((p) => p.startsWith("C"))) return true;
-  if (filter === "A+" && parts.some((p) => p.startsWith("A"))) return true;
-  if (filter === "D+" && parts.some((p) => p.startsWith("D"))) return true;
-  if (filter === "F" && parts.some((p) => p === "F" || p.startsWith("F"))) return true;
-  return false;
+  return parts.some((p) => p === filter || p.startsWith(filter));
 }
 
 export type { SnowballGradeChecklistItem } from "@/lib/snowballGradeChecklist";
@@ -359,7 +366,7 @@ export function snowballStatsGradeDetailLines(row: SnowballStatsRow): string[] {
   if (side === "bear") {
     const grade = effectiveQualityTier(row);
     const bear: string[] = ["— grade SHORT —"];
-    if (grade) bear.push(`เกรดสุทธิ: ${snowballLongGradeShortLabel(grade)}`);
+    if (grade) bear.push(`เกรดสุทธิ: ${snowballTrendGradeShortLabel(grade)}`);
     return bear;
   }
   const items = snowballStatsGradeChecklist(row);
@@ -384,8 +391,15 @@ export function snowballStatsGradeLabel(
 function snowballStatsGradeTierForStyle(
   row: Pick<SnowballStatsRow, "displayGrade" | "qualityTier" | "alertQualityTier" | "qualityTier4hAdjusted">,
 ): SnowballStatsQualityTier | undefined {
-  if (row.qualityTier4hAdjusted && row.qualityTier) return row.qualityTier;
-  if (row.displayGrade) return displayGradeToQualityTier(row.displayGrade);
+  if (row.qualityTier4hAdjusted && row.qualityTier) {
+    return effectiveQualityTier({ qualityTier: row.qualityTier, alertQualityTier: row.qualityTier });
+  }
+  const fromDisplay = row.displayGrade;
+  if (fromDisplay === "S") return "s";
+  if (fromDisplay === "A") return "a";
+  if (fromDisplay === "B") return "b";
+  if (fromDisplay === "C") return "c";
+  if (fromDisplay === "F") return "f";
   return effectiveQualityTier(row);
 }
 
@@ -396,13 +410,11 @@ export function snowballStatsGradeCellClass(
   >,
 ): string {
   const tier = snowballStatsGradeTierForStyle(row);
-  if (snowballIsGradeF(tier)) return "snowGradeCell snowGradeCell--f";
-  if (snowballIsGradeDPlusLong(tier)) {
-    return "snowGradeCell snowGradeCell--d";
-  }
-  if (tier === "a_plus") return "snowGradeCell snowGradeCell--a";
-  if (tier === "b_plus") return "snowGradeCell snowGradeCell--b";
-  if (tier === "c_plus") return "snowGradeCell snowGradeCell--c";
+  if (tier === "f") return "snowGradeCell snowGradeCell--f";
+  if (tier === "s") return "snowGradeCell snowGradeCell--s";
+  if (tier === "a") return "snowGradeCell snowGradeCell--a";
+  if (tier === "b") return "snowGradeCell snowGradeCell--b";
+  if (tier === "c") return "snowGradeCell snowGradeCell--c";
   return "snowGradeCell";
 }
 
@@ -911,11 +923,11 @@ export const SNOWBALL_STATS_DEFAULT_SORT: SnowballStatsSort = {
 };
 
 const QUALITY_TIER_SORT_ORDER: Record<SnowballStatsQualityTier, number> = {
-  a_plus: 0,
-  b_plus: 1,
-  c_plus: 2,
-  d_plus: 3,
-  f_plus: 4,
+  s: 0,
+  a: 1,
+  b: 2,
+  c: 3,
+  f: 4,
 };
 
 const OUTCOME_SORT_ORDER: Record<SnowballStatsOutcome, number> = {
@@ -951,18 +963,11 @@ function statsCmpYnNullLast(a: "Y" | "N" | null | undefined, b: "Y" | "N" | null
 }
 
 const DISPLAY_GRADE_SORT_ORDER: Record<string, number> = {
-  "A+": 0,
+  S: 0,
   A: 1,
-  "A-": 2,
-  "B+": 3,
-  B: 4,
-  "B-": 5,
-  "C+": 6,
-  C: 7,
-  "C-": 8,
-  D: 9,
-  "D+": 10,
-  F: 11,
+  B: 2,
+  C: 3,
+  F: 4,
 };
 
 function snowballStatsGradeSortOrder(row: SnowballStatsRow): number {

@@ -523,6 +523,10 @@ code {
   z-index: 2;
   background: color-mix(in srgb, var(--card) 88%, var(--border));
 }
+.snowGradeCell--s {
+  color: #059669;
+  font-weight: 700;
+}
 .snowGradeCell--a {
   color: #22c55e;
 }

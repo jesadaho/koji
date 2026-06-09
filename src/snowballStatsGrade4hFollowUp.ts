@@ -63,10 +63,11 @@ export function anchorCloseSec(row: SnowballStatsRow): number {
   return row.signalBarOpenSec + signalBarDurationSec(row);
 }
 
+/** @deprecated — trend grade fix ณ เวลาแจ้ง ไม่ re-grade หลัง 4h */
 export function snowballStatsGrade4hFollowUpEnabled(): boolean {
   const raw = process.env.SNOWBALL_STATS_GRADE_4H_FOLLOWUP_ENABLED?.trim().toLowerCase();
-  if (raw === "0" || raw === "false" || raw === "no" || raw === "off") return false;
-  return true;
+  if (raw === "1" || raw === "true" || raw === "yes" || raw === "on") return true;
+  return false;
 }
 
 export function snowballStatsAlertQualityTier(row: SnowballStatsRow) {

@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import type { ReversalAutoTradeEntryMode } from "../lib/reversalAutoTradeEntry.js";
 import type { SnowballAutoTradeEntryMode } from "../lib/snowballAutoTradeEntry.js";
+import { migrateSnowballAutoTradeGradeKey } from "./snowballTrendGrade";
 
 export type { ReversalAutoTradeEntryMode, SnowballAutoTradeEntryMode };
 
@@ -31,23 +32,41 @@ export type SnowballAutoTradeDirection = "both" | "long_only" | "short_only";
 
 export type SnowballAutoTradeAlertSide = "long" | "bear";
 
-export type SnowballAutoTradeGradeKey =
-  | "A+"
-  | "A"
-  | "A-"
-  | "B+"
-  | "B"
-  | "B-"
-  | "C+"
-  | "C"
-  | "C-"
-  | "D"
-  | "F";
+export type SnowballAutoTradeGradeKey = "S" | "A" | "B" | "C" | "F";
 
 /** ค่าใน map = ทิศที่เปิด · ไม่มี key = ปิดเกรดนั้น */
 export type SnowballAutoTradeGradeRulesMap = Partial<
   Record<SnowballAutoTradeGradeKey, "long" | "short">
 >;
+
+function migrateSnowballAutoTradeGradeRulesMap(
+  rules: SnowballAutoTradeGradeRulesMap | undefined,
+): SnowballAutoTradeGradeRulesMap | undefined {
+  if (!rules || typeof rules !== "object") return rules;
+  const out: SnowballAutoTradeGradeRulesMap = {};
+  for (const [rawKey, side] of Object.entries(rules)) {
+    if (side !== "long" && side !== "short") continue;
+    const key = migrateSnowballAutoTradeGradeKey(rawKey);
+    if (!key) continue;
+    if (out[key] == null) out[key] = side;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function migrateTradingViewMexcUserSettings(
+  row: TradingViewMexcUserSettings,
+): TradingViewMexcUserSettings {
+  const rulesLong = migrateSnowballAutoTradeGradeRulesMap(row.snowballAutoTradeRulesLong);
+  const rulesBear = migrateSnowballAutoTradeGradeRulesMap(row.snowballAutoTradeRulesBear);
+  if (rulesLong === row.snowballAutoTradeRulesLong && rulesBear === row.snowballAutoTradeRulesBear) {
+    return row;
+  }
+  return {
+    ...row,
+    ...(rulesLong !== row.snowballAutoTradeRulesLong ? { snowballAutoTradeRulesLong: rulesLong } : {}),
+    ...(rulesBear !== row.snowballAutoTradeRulesBear ? { snowballAutoTradeRulesBear: rulesBear } : {}),
+  };
+}
 
 export type TradingViewMexcUserSettings = {
   mexcApiKey: string;
@@ -948,7 +967,11 @@ export async function loadTradingViewMexcSettingsFullMap(): Promise<
   Record<string, TradingViewMexcUserSettings>
 > {
   const m = await loadMap();
-  return { ...m };
+  const out: Record<string, TradingViewMexcUserSettings> = {};
+  for (const [userId, row] of Object.entries(m)) {
+    out[userId] = migrateTradingViewMexcUserSettings(row);
+  }
+  return out;
 }
 
 /**

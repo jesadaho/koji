@@ -160,7 +160,7 @@ const SNOWBALL_HORIZON_WR = [
 ] as const;
 
 type SnowballDayFilter = "all" | "7" | "30" | "90";
-type SnowballGradeFilter = "all" | "A+" | "B" | "C" | "D+" | "F";
+type SnowballGradeFilter = "all" | "S" | "A" | "B" | "C" | "F";
 type SnowballDowFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5" | "6";
 
 const SNOWBALL_DAY_FILTER_OPTIONS: ReadonlyArray<{ value: SnowballDayFilter; label: string }> = [
@@ -175,10 +175,10 @@ const SNOWBALL_GRADE_FILTER_OPTIONS: ReadonlyArray<{
   label: string;
 }> = [
   { value: "all", label: "ทุก grade" },
-  { value: "A+", label: "A+" },
+  { value: "S", label: "S" },
+  { value: "A", label: "A" },
   { value: "B", label: "B" },
   { value: "C", label: "C" },
-  { value: "D+", label: "D+" },
   { value: "F", label: "F" },
 ];
 
@@ -847,7 +847,7 @@ export default function SnowballStatsTelegramMiniApp() {
               label="Grade"
               sortKey="grade"
               className="snowStatsStickyGrade"
-              title="เกรดสุทธิ (A+/B/C/D+/F) — คลิกดูโครงสร้าง HH48/VAH และเหตุผล"
+              title="เกรดสุทธิ (S/A/B/C/F) — คลิกดูเกณฑ์ slope/เขียว"
               activeSort={sort}
               onSort={onSortColumn}
             />

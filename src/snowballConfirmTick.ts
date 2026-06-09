@@ -403,7 +403,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
                 ? { swing200Ok: item.statsSwing200Ok }
                 : {}),
               momentumDowngrade: item.qualityTier === "d_plus",
-              momentumFailGradeF: item.qualityTier === "f_plus",
+              momentumFailGradeF: item.qualityTier === "f",
               atr100: item.statsAtr100 ?? null,
               maxUpperWick100: item.statsMaxUpperWick100 ?? null,
               rangeScore: item.statsRangeScore ?? null,
@@ -472,7 +472,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               alertSide: item.side,
               displayGrade: item.statsDisplayGrade,
               qualityTier: item.qualityTier,
-              momentumFailGradeF: item.qualityTier === "f_plus",
+              momentumFailGradeF: item.qualityTier === "f",
               momentumDowngrade: item.qualityTier === "d_plus",
               referenceEntryPrice: cl,
               referenceEntryPriceEma20_1h: snowballEma20_1hReferencePrice(

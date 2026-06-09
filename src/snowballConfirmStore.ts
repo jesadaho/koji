@@ -3,7 +3,13 @@ import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import type { SnowballBinanceTf } from "./binanceIndicatorKline";
-import type { SnowballDisplayGrade } from "./snowballLongGradeMatrix";
+import {
+  isLegacySnowballQualityTier,
+  isSnowballTrendGrade,
+  migrateSnowballAutoTradeGradeKey,
+  normalizeSnowballQualityTier,
+  type SnowballTrendGrade,
+} from "./snowballTrendGrade";
 
 /** ค่าเดียวกับ SnowballConfirmRiskFlagId ใน publicIndicatorFeed — แยกเพื่อกัน import วน */
 export type SnowballConfirmRiskFlagId = "wick_history" | "supply_zone" | "signal_wick";
@@ -49,9 +55,9 @@ export type SnowballPendingConfirm = {
   alertedAtIso: string;
   alertedAtMs: number;
   riskFlags: SnowballPendingConfirmFlag[];
-  qualityTier?: "a_plus" | "b_plus" | "c_plus" | "d_plus" | "f_plus";
-  /** เกรด matrix ตอนแจ้ง (4h LONG) — ใช้บันทึก stats / ประวัติ */
-  statsDisplayGrade?: SnowballDisplayGrade;
+  qualityTier?: SnowballTrendGrade;
+  /** เกรด matrix ตอนแจ้ง — ใช้บันทึก stats / ประวัติ */
+  statsDisplayGrade?: import("./snowballTrendGrade").SnowballTrendGradeDisplay;
   /**
    * true = แท่ง 1 ไม่ส่ง TG / ไม่ autotrade — ให้เรียก Snowball auto-open หลัง ✅ Confirmed (เมื่อเป็น Super A+)
    */
@@ -141,13 +147,11 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const riskFlags = flagsRaw
     .map(normalizeFlag)
     .filter((f): f is SnowballPendingConfirmFlag => f != null);
-  const qualityTier =
-    o.qualityTier === "a_plus" ||
-    o.qualityTier === "b_plus" ||
-    o.qualityTier === "c_plus" ||
-    o.qualityTier === "d_plus" ||
-    o.qualityTier === "f_plus"
-      ? o.qualityTier
+  const qualityTierRaw = typeof o.qualityTier === "string" ? o.qualityTier : undefined;
+  const qualityTier = isSnowballTrendGrade(qualityTierRaw)
+    ? qualityTierRaw
+    : isLegacySnowballQualityTier(qualityTierRaw)
+      ? normalizeSnowballQualityTier(qualityTierRaw)
       : undefined;
   const deferSnowballAutotradeToConfirm =
     o.deferSnowballAutotradeToConfirm === true ||
@@ -245,21 +249,9 @@ function normalizeItem(raw: unknown): SnowballPendingConfirm | null {
   const statsSwing200Ok =
     o.statsSwing200Ok === true || o.statsSwing200Ok === false ? o.statsSwing200Ok : undefined;
   const statsDisplayGradeRaw = o.statsDisplayGrade;
-  const statsDisplayGrades = new Set([
-    "A+",
-    "A",
-    "A-",
-    "B+",
-    "B",
-    "B-",
-    "C+",
-    "C",
-    "C-",
-    "D",
-  ]);
   const statsDisplayGrade =
-    typeof statsDisplayGradeRaw === "string" && statsDisplayGrades.has(statsDisplayGradeRaw)
-      ? (statsDisplayGradeRaw as SnowballDisplayGrade)
+    typeof statsDisplayGradeRaw === "string"
+      ? migrateSnowballAutoTradeGradeKey(statsDisplayGradeRaw) ?? undefined
       : undefined;
   return {
     id: typeof o.id === "string" && o.id ? o.id : randomUUID(),
