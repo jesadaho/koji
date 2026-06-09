@@ -3620,11 +3620,7 @@ export async function runPublicIndicatorFeedInternal(
                 ? vE! / vsE
                 : null;
             const longQualityShortSignal = snowballMatchesQualityShortSignal({
-              greenDaysBeforeSignal: longGreenDaysForAlert,
               ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
-              barRangePctSignal: longVolSnapAuto.barRangePctSignal,
-              signalBarTf: snowTf,
-              signalVolVsSma: longSignalVolVsSma,
             });
             const runLongAutoOpenNow =
               !intrabar &&
@@ -4166,11 +4162,7 @@ export async function runPublicIndicatorFeedInternal(
             ? vE! / vsE
             : null;
         const bearQualityShortSignal = snowballMatchesQualityShortSignal({
-          greenDaysBeforeSignal: bearGreenDaysForAlert,
           ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
-          barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
-          signalBarTf: snowTf,
-          signalVolVsSma: bearSignalVolVsSma,
         });
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", signalBarOpenSec, {
