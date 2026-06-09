@@ -516,6 +516,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         ema20_1h: ema20_1hRef,
         useEma20_1h: row.snowballAutoTradeReferenceEma20_1hEnabled === true,
       });
+    const marginScale = inputMarginScale;
     const logSignal: SnowballAutoOpenLogSignal = {
       contractSymbol: sym,
       binanceSymbol,
