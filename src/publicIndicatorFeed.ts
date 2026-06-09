@@ -3621,6 +3621,7 @@ export async function runPublicIndicatorFeedInternal(
                 : null;
             const longQualityShortSignal = snowballMatchesQualityShortSignal({
               greenDaysBeforeSignal: longGreenDaysForAlert,
+              ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
               barRangePctSignal: longVolSnapAuto.barRangePctSignal,
               signalBarTf: snowTf,
               signalVolVsSma: longSignalVolVsSma,
@@ -3668,6 +3669,7 @@ export async function runPublicIndicatorFeedInternal(
                   greenDaysBeforeSignal: longGreenDaysForAlert,
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
                   ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
+                  ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: longSignalVolVsSma,
                   ...(marginScale != null ? { marginScale } : {}),
@@ -4165,6 +4167,7 @@ export async function runPublicIndicatorFeedInternal(
             : null;
         const bearQualityShortSignal = snowballMatchesQualityShortSignal({
           greenDaysBeforeSignal: bearGreenDaysForAlert,
+          ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
           barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
           signalBarTf: snowTf,
           signalVolVsSma: bearSignalVolVsSma,
@@ -4262,6 +4265,7 @@ export async function runPublicIndicatorFeedInternal(
                   greenDaysBeforeSignal: bearGreenDaysForAlert,
                   fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
                   ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
+                  ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
                   barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: bearSignalVolVsSma,
                 });

@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
-import { SNOWBALL_QUALITY_SIGNAL_CRITERIA } from "@/lib/snowballMatrixFilters";
+import {
+  SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA,
+  SNOWBALL_QUALITY_SIGNAL_CRITERIA,
+} from "@/lib/snowballMatrixFilters";
 import { REVERSAL_LONG_DYNAMIC_LEVERAGE_CRITERIA_TH } from "@/lib/reversalLongDynamicLeverage";
 import {
   REVERSAL_QUALITY_SIGNAL_CRITERIA,
@@ -1240,7 +1243,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>✨ Quality Short Signal → Short</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              สัญญาณที่ตรง matrix ✨ Quality Short Signal — เขียว <strong>1</strong> วัน · Vol×SMA &gt; 3× · R% สัญญาณ &gt; 8% — สั่ง <strong>Short</strong> ทันทีตอนแจ้ง (ไม่รอ confirm) · ชนะวันอาทิตย์ (ถ้าไม่ตรง Quality Signal Long)
+              สัญญาณที่ตรง matrix ✨ Quality Short Signal — {SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA} — สั่ง <strong>Short</strong> ทันทีตอนแจ้ง (ไม่รอ confirm) · ชนะวันอาทิตย์ (ถ้าไม่ตรง Quality Signal Long)
             </span>
           </span>
         </label>

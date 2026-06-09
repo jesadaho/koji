@@ -105,6 +105,7 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
 
 function snowballAutoOpenMatchesQualityShortSignal(input: {
   greenDaysBeforeSignal?: number | null;
+  ema1dSlopePct7d?: number | null;
   barRangePctSignal?: number | null;
   signalBarTf: "15m" | "1h" | "4h";
   vol: number;
@@ -120,6 +121,7 @@ function snowballAutoOpenMatchesQualityShortSignal(input: {
         : null;
   return snowballMatchesQualityShortSignal({
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
+    ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
     barRangePctSignal: input.barRangePctSignal ?? null,
     signalBarTf: input.signalBarTf,
     signalVolVsSma,
@@ -134,6 +136,7 @@ function resolveSnowballAutoOpenSide(
     greenDaysBeforeSignal?: number | null;
     fundingRate?: number | null;
     ema4hSlopePct7d?: number | null;
+    ema1dSlopePct7d?: number | null;
     barRangePctSignal?: number | null;
     signalBarTf: "15m" | "1h" | "4h";
     vol: number;
@@ -286,6 +289,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   greenDaysBeforeSignal?: number | null;
   fundingRate?: number | null;
   ema4hSlopePct7d?: number | null;
+  ema1dSlopePct7d?: number | null;
   barRangePctSignal?: number | null;
   signalVolVsSma?: number | null;
   confirmVolVsSma?: number | null;
@@ -298,6 +302,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   });
   const qualityShortMatch = snowballAutoOpenMatchesQualityShortSignal({
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
+    ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
     barRangePctSignal: input.barRangePctSignal ?? null,
     signalBarTf: input.signalBarTf,
     vol: input.vol,
@@ -341,6 +346,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   const gradeKey = snowballAutoTradeGradeKeyFromAlert(gradeInput);
   const qualityShortInput = {
     greenDaysBeforeSignal: input.greenDaysBeforeSignal,
+    ema1dSlopePct7d: input.ema1dSlopePct7d,
     barRangePctSignal: input.barRangePctSignal,
     signalBarTf: input.signalBarTf,
     vol: input.vol,

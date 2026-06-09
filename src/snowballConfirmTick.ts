@@ -487,13 +487,10 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               greenDaysBeforeSignal: greenDaysForAutoOpen,
               fundingRate: item.statsFundingRate ?? null,
               ema4hSlopePct7d: item.statsEma4hSlopePct7d ?? null,
-              ...(item.side === "long"
-                ? {
-                    barRangePctSignal: item.statsBarRangePctSignal ?? null,
-                    signalVolVsSma: item.statsSignalVolVsSma ?? null,
-                    confirmVolVsSma,
-                  }
-                : {}),
+              ema1dSlopePct7d: item.statsEma1dSlopePct7d ?? null,
+              barRangePctSignal: item.statsBarRangePctSignal ?? null,
+              signalVolVsSma: item.statsSignalVolVsSma ?? null,
+              confirmVolVsSma,
               ...(marginScale != null ? { marginScale } : {}),
             });
           } catch (e) {
