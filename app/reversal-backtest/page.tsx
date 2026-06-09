@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { MiniAppBacktestNav } from "@/components/MiniAppBacktestNav";
+import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 
 export const metadata: Metadata = {
@@ -18,13 +18,7 @@ export default function ReversalBacktestPage() {
         </span>
       </h1>
 
-      <p className="sub tmaQuickNav" style={{ marginTop: "0.5rem" }}>
-        <Link href="/">หน้าแรก</Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
-        <Link href="/stats">Stats</Link>
-      </p>
+      <MiniAppMainNav showHome style={{ marginTop: "0.5rem" }} />
 
       <MiniAppBacktestNav style={{ marginTop: "0.35rem" }} />
 

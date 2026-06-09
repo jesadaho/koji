@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppTradeNav } from "@/components/MiniAppTradeNav";
 import { AutoOpenMexcActiveBadge } from "@/components/AutoOpenMexcActiveBadge";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
@@ -1126,7 +1127,8 @@ export default function AutoOpenHistoryTelegramMiniApp() {
         </span>
       </h1>
 
-      <MiniAppTradeNav showHome style={{ marginTop: "0.5rem" }} />
+      <MiniAppMainNav showHome style={{ marginTop: "0.5rem" }} />
+      <MiniAppTradeNav style={{ marginTop: "0.35rem" }} />
 
       <div className="card" style={{ marginTop: "0.75rem" }}>
         <p className="sub" style={{ marginTop: 0 }}>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import {
   getTelegramInitData,
@@ -484,7 +485,8 @@ export default function DivergenceStatsTelegramMiniApp() {
         </span>
       </h1>
 
-      <MiniAppStatsNav showHome style={{ marginTop: "0.75rem" }} />
+      <MiniAppMainNav showHome style={{ marginTop: "0.75rem" }} />
+      <MiniAppStatsNav style={{ marginTop: "0.35rem" }} />
 
       <p className="sparkStatsActionRow" style={{ marginTop: "0.75rem" }}>
         <button type="button" className="sparkStatsRefreshBtn" onClick={() => void loadStats()}>

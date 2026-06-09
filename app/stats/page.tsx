@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MiniAppBacktestNav } from "@/components/MiniAppBacktestNav";
+import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 
 export const metadata: Metadata = {
@@ -11,7 +12,9 @@ export const metadata: Metadata = {
 export default function StatsPage() {
   return (
     <main className="sparkStatsPage">
-      <h1 className="sparkStatsMatrixSectionTitle">
+      <MiniAppMainNav showHome style={{ marginTop: 0 }} />
+
+      <h1 className="sparkStatsMatrixSectionTitle" style={{ marginTop: "0.75rem" }}>
         Stats
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
           สัญญาณ Binance · Live follow-up และจำลองย้อนหลัง

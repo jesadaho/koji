@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppTradeNav } from "@/components/MiniAppTradeNav";
 
 export const metadata: Metadata = {
@@ -10,7 +11,9 @@ export const metadata: Metadata = {
 export default function TradePage() {
   return (
     <main className="sparkStatsPage">
-      <h1 className="sparkStatsMatrixSectionTitle">
+      <MiniAppMainNav showHome style={{ marginTop: 0 }} />
+
+      <h1 className="sparkStatsMatrixSectionTitle" style={{ marginTop: "0.75rem" }}>
         Trade
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
           สิ่งที่ Koji สั่งบน MEXC

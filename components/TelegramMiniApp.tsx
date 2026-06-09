@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import IndicatorCoinPicker from "@/components/IndicatorCoinPicker";
+import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { formatScore } from "@/src/marketsFormat";
 import {
   getTelegramInitData,
@@ -743,21 +744,7 @@ export default function TelegramMiniApp() {
     <>
       <h1>Koji</h1>
       <p className="sub">{welcome}</p>
-      <p className="sub tmaQuickNav">
-        <Link href="/markets">Markets</Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
-        <Link href="/stats">Stats</Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
-        <Link href="/trade">Trade</Link>
-        <span className="siteNavSep" aria-hidden>
-          |
-        </span>
-        <Link href="/settings">Settings</Link>
-      </p>
+      <MiniAppMainNav />
 
       <div className="card">
         <div

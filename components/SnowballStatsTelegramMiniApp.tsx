@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import {
@@ -1273,7 +1274,8 @@ export default function SnowballStatsTelegramMiniApp() {
         </span>
       </h1>
 
-      <MiniAppStatsNav showHome style={{ marginTop: "0.75rem" }} />
+      <MiniAppMainNav showHome style={{ marginTop: "0.75rem" }} />
+      <MiniAppStatsNav style={{ marginTop: "0.35rem" }} />
 
       <section className="sparkStatsMatrixSection" style={{ marginTop: "1rem" }}>
         <div
