@@ -229,7 +229,7 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
         ac,
         windowEndSec,
         pctAtClose: pctClose,
-        pctAtPhase1,
+        pctAtPhase1: pctPhase1,
         plan: planAtHorizon,
       });
       if (applyHorizonFields(row, holdHours, cacheKey, computed)) dirty += 1;
