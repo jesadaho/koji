@@ -9,7 +9,7 @@ import {
   type StatsTpSlExitReason,
   type StatsTpSlPlan,
 } from "@/lib/tpSlStrategySimulate";
-import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanForUser";
+import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanCacheKey";
 
 export type StrategyProfitByPlanEntry = {
   profitPct: number;
