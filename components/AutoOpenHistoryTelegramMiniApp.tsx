@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
+import { MiniAppTradeNav } from "@/components/MiniAppTradeNav";
 import { AutoOpenMexcActiveBadge } from "@/components/AutoOpenMexcActiveBadge";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import {
@@ -1105,13 +1105,13 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     return (
       <main className="sparkStatsPage sparkStatsPage--wide">
         <h1 className="sparkStatsMatrixSectionTitle" style={{ marginTop: 0 }}>
-          ประวัติ Auto-open
+          ประวัติ Bot Trade
         </h1>
         <div className="card">{setupBody}</div>
         <p className="sub" style={{ marginTop: "1rem" }}>
           <Link href="/settings">ตั้งค่า auto-open</Link>
           {" · "}
-          <Link href="/stats">Stats</Link>
+          <Link href="/trade">Trade</Link>
         </p>
       </main>
     );
@@ -1120,13 +1120,13 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   return (
     <main className="sparkStatsPage sparkStatsPage--wide">
       <h1 className="sparkStatsMatrixSectionTitle" style={{ marginTop: 0 }}>
-        ประวัติ Auto-open
+        ประวัติ Bot Trade
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
           Snowball + Reversal · บันทึกทุกครั้งที่ระบบพยายามสั่ง MEXC
         </span>
       </h1>
 
-      <MiniAppStatsNav showHome style={{ marginTop: "0.5rem" }} />
+      <MiniAppTradeNav showHome style={{ marginTop: "0.5rem" }} />
 
       <div className="card" style={{ marginTop: "0.75rem" }}>
         <p className="sub" style={{ marginTop: 0 }}>

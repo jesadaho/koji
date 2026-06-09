@@ -1056,6 +1056,10 @@ export default function SettingsTelegramMiniApp() {
         <span className="siteNavSep" aria-hidden>
           |
         </span>
+        <Link href="/trade">Trade</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
         <a href="#portfolio-trailing-alert">Portfolio trailing</a>
         {" · "}
         <a href="#snowball-auto-open">Snowball auto-open</a>
@@ -1318,7 +1322,7 @@ export default function SettingsTelegramMiniApp() {
           ค่าเริ่มต้น <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · ตัวเลือกด้านล่าง: ✨ Quality Signal → Long · Long fade SHORT (เกรด F) · Snowball SHORT (ทิศ Short) · วันอาทิตย์ → Short ทุกสัญญาณ
         </p>
         <p className="sub" style={{ marginTop: "0.5rem" }}>
-          <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
+          <Link href="/trade/bot-trade">ประวัติ Bot Trade</Link>
           {" "}
           (สำเร็จ / ข้าม / ล้มเหลว + เหตุผล)
         </p>
@@ -1779,7 +1783,7 @@ export default function SettingsTelegramMiniApp() {
           <li><strong>Market ตลอด</strong>: เปิด Market SHORT ทุกสัญญาณ ไม่ใช้ EMA/Limit</li>
         </ul>
         <p className="sub" style={{ marginTop: "0.5rem" }}>
-          <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
+          <Link href="/trade/bot-trade">ประวัติ Bot Trade</Link>
         </p>
         {tvSettings?.reversalAutotradeServerEnabled === false ? (
           <p className="sub" style={{ marginTop: "0.75rem", color: "var(--danger, #c44)" }}>

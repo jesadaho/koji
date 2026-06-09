@@ -752,6 +752,10 @@ export default function TelegramMiniApp() {
         <span className="siteNavSep" aria-hidden>
           |
         </span>
+        <Link href="/trade">Trade</Link>
+        <span className="siteNavSep" aria-hidden>
+          |
+        </span>
         <Link href="/settings">Settings</Link>
       </p>
 

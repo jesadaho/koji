@@ -29,10 +29,6 @@ export function MiniAppStatsNav({ showHome = false, className = "sub tmaQuickNav
         |
       </span>
       <Link href="/divergence-stats">Divergence</Link>
-      <span className="siteNavSep" aria-hidden>
-        |
-      </span>
-      <Link href="/auto-open-history">Auto-open</Link>
     </p>
   );
 }

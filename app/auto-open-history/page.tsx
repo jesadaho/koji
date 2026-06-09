@@ -1,16 +1,6 @@
-import type { Metadata } from "next";
-import dynamic from "next/dynamic";
+import { redirect } from "next/navigation";
 
-const AutoOpenHistoryTelegramMiniApp = dynamic(
-  () => import("@/components/AutoOpenHistoryTelegramMiniApp"),
-  { ssr: false },
-);
-
-export const metadata: Metadata = {
-  title: "ประวัติ Auto-open — Koji",
-  description: "บันทึกการสั่งเปิดอัตโนมัติ Snowball และ Reversal บน MEXC",
-};
-
-export default function AutoOpenHistoryPage() {
-  return <AutoOpenHistoryTelegramMiniApp />;
+/** @deprecated ใช้ /trade/bot-trade */
+export default function AutoOpenHistoryRedirectPage() {
+  redirect("/trade/bot-trade");
 }
