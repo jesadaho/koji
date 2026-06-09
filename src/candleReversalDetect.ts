@@ -10,6 +10,8 @@ export type CandleReversalAlertQualityContext = {
   rangeScore?: number | null;
   ema4hSlopePct7d?: number | null;
   btcEma1dSlopePct7d?: number | null;
+  btcEma4hSlopePct7d?: number | null;
+  atrPct14d?: number | null;
 };
 
 export type CandleReversalTf = "1d" | "1h";
@@ -950,6 +952,8 @@ export function buildCandleReversalAlertMessage(
       rangeScore: qualityCtx.rangeScore,
       ema4hSlopePct7d: qualityCtx.ema4hSlopePct7d,
       btcEma1dSlopePct7d: qualityCtx.btcEma1dSlopePct7d,
+      btcEma4hSlopePct7d: qualityCtx.btcEma4hSlopePct7d,
+      atrPct14d: qualityCtx.atrPct14d,
     });
 
   if (sig.model === "longest_green_body") {

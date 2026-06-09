@@ -66,6 +66,8 @@ export function reversalAutotradePassesEntryGate(input: {
   rangeScore?: number | null;
   ema4hSlopePct7d?: number | null;
   btcEma1dSlopePct7d?: number | null;
+  btcEma4hSlopePct7d?: number | null;
+  atrPct14d?: number | null;
   allowQualitySignal?: boolean;
 }): boolean {
   if (input.allowQualitySignal === false) return false;
@@ -77,6 +79,8 @@ export function reversalAutotradePassesEntryGate(input: {
     rangeScore: input.rangeScore,
     ema4hSlopePct7d: input.ema4hSlopePct7d,
     btcEma1dSlopePct7d: input.btcEma1dSlopePct7d,
+    btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
+    atrPct14d: input.atrPct14d,
   });
 }
 
@@ -197,6 +201,10 @@ export type ReversalAutoTradeInput = {
   ema4hSlopePct7d?: number | null;
   /** BTC EMA(12) 1d slope 7 วัน % — Long 1H fade SHORT Quality Signal */
   btcEma1dSlopePct7d?: number | null;
+  /** BTC EMA(12) 4h slope 7 วัน % — Long 1H fade SHORT Quality Signal */
+  btcEma4hSlopePct7d?: number | null;
+  /** Wilder ATR(14) 1d ÷ close × 100 — Long 1H fade SHORT Quality Signal */
+  atrPct14d?: number | null;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
   signalClosePrice?: number;
 };
@@ -333,7 +341,7 @@ function logReversalAutoOpen(
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
  * - สัญญาณ Short: `reversalAutoTradeEnabled` · สัญญาณ Long (fade): `reversalAutoTradeLongSignalShortEnabled`
  * - มี MEXC creds
- * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — EMA4H <−3% · BTC∠1d >−8%
+ * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — ดู REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA
  * - entry ตั้งค่าต่อ user: Hybrid (EMA period บน 15m, default 20) หรือ Market ตลอด
  *   - Hybrid: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.)
  * - TP ใช้ cron tick ปิด market (ไม่วาง plan TP บน MEXC)
@@ -614,6 +622,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
         rangeScore: input.rangeScore,
         ema4hSlopePct7d: input.ema4hSlopePct7d,
         btcEma1dSlopePct7d: input.btcEma1dSlopePct7d,
+        btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
+        atrPct14d: input.atrPct14d,
         allowQualitySignal: allowQuality,
       })
     ) {

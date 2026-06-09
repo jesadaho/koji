@@ -641,11 +641,21 @@ async function notifyResults(
         mktSnap.btcEma1dSlopePct7d != null && Number.isFinite(mktSnap.btcEma1dSlopePct7d)
           ? mktSnap.btcEma1dSlopePct7d
           : null;
+      const btcEma4hSlopePct7d =
+        mktSnap.btcEma4hSlopePct7d != null && Number.isFinite(mktSnap.btcEma4hSlopePct7d)
+          ? mktSnap.btcEma4hSlopePct7d
+          : null;
+      const atrPct14d =
+        mktSnap.atrPct14d != null && Number.isFinite(mktSnap.atrPct14d) && mktSnap.atrPct14d > 0
+          ? mktSnap.atrPct14d
+          : null;
       const msg = buildCandleReversalAlertMessage(row.symbol, sig, {
         greenDaysBeforeSignal,
         rangeScore: row.evals.rangeScore,
         ema4hSlopePct7d,
         btcEma1dSlopePct7d,
+        btcEma4hSlopePct7d,
+        atrPct14d,
       });
       const ok = await sendPublicReversalFeedToSparkGroup(msg);
       if (ok && isCandleReversalStatsEnabled()) {
@@ -702,6 +712,8 @@ async function notifyResults(
             greenDaysBeforeSignal,
             ema4hSlopePct7d,
             btcEma1dSlopePct7d,
+            btcEma4hSlopePct7d,
+            atrPct14d,
             signalClosePrice: sig.c,
           });
         } catch (e) {
