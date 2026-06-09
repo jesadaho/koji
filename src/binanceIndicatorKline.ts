@@ -1,4 +1,5 @@
 import axios, { isAxiosError } from "axios";
+import { shouldExcludeBinanceUsdmFromCryptoScan } from "./tradFiSymbolFilter";
 
 /** Binance USDT-M perpetual — เดียวกันทั้ง ticker และ kline */
 const FAPI = "https://fapi.binance.com";
@@ -203,41 +204,79 @@ type ExchangeInfoSymbolRow = {
   status?: string;
   contractType?: string;
   quoteAsset?: string;
+  underlyingType?: string;
+  underlyingSubType?: string[] | string;
 };
 
-/**
- * สัญลักษณ์ USDT-M PERPETUAL ทั้งหมดที่ TRADING จาก exchangeInfo (สแกน universe เต็ม)
- */
-export async function fetchAllBinanceUsdmLinearSymbols(): Promise<string[]> {
-  if (!isBinanceIndicatorFapiEnabled()) return [];
+const EXCHANGE_INFO_CACHE_MS = 6 * 60 * 60 * 1000;
+let exchangeInfoCache: { rows: ExchangeInfoSymbolRow[]; at: number } | null = null;
+
+function isEligibleUsdmPerpRow(row: ExchangeInfoSymbolRow): boolean {
+  if (row.status !== "TRADING" || row.contractType !== "PERPETUAL") return false;
+  if (row.quoteAsset !== "USDT") return false;
+  const s = typeof row.symbol === "string" ? row.symbol.trim().toUpperCase() : "";
+  if (!s || !s.endsWith("USDT")) return false;
+  return true;
+}
+
+async function fetchBinanceUsdmExchangeInfoRows(forceRefresh = false): Promise<ExchangeInfoSymbolRow[]> {
+  if (
+    !forceRefresh &&
+    exchangeInfoCache &&
+    Date.now() - exchangeInfoCache.at < EXCHANGE_INFO_CACHE_MS
+  ) {
+    return exchangeInfoCache.rows;
+  }
+  if (!isBinanceIndicatorFapiEnabled()) return exchangeInfoCache?.rows ?? [];
   try {
     const { data } = await axios.get<{ symbols?: ExchangeInfoSymbolRow[] }>(`${FAPI}/fapi/v1/exchangeInfo`, {
       timeout: 60_000,
     });
-    const rows = data.symbols;
-    if (!Array.isArray(rows)) return [];
-    const out: string[] = [];
-    const seen = new Set<string>();
-    for (const row of rows) {
-      if (!row || typeof row !== "object") continue;
-      if (row.status !== "TRADING" || row.contractType !== "PERPETUAL") continue;
-      if (row.quoteAsset !== "USDT") continue;
-      const s = typeof row.symbol === "string" ? row.symbol.trim().toUpperCase() : "";
-      if (!s || !s.endsWith("USDT")) continue;
-      if (seen.has(s)) continue;
-      seen.add(s);
-      out.push(s);
-    }
-    out.sort();
-    return out;
+    const rows = Array.isArray(data.symbols) ? data.symbols : [];
+    exchangeInfoCache = { rows, at: Date.now() };
+    return rows;
   } catch (e) {
     if (isBinance451Geo(e)) {
       logBinance451Once("exchangeInfo", "—");
     } else {
       console.error("[binanceIndicatorKline] exchangeInfo", axiosBrief(e));
     }
-    return [];
+    return exchangeInfoCache?.rows ?? [];
   }
+}
+
+function tradFiBinanceSymbolSet(rows: ExchangeInfoSymbolRow[]): Set<string> {
+  const out = new Set<string>();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    if (!isEligibleUsdmPerpRow(row)) continue;
+    if (!shouldExcludeBinanceUsdmFromCryptoScan(row)) continue;
+    const s = row.symbol!.trim().toUpperCase();
+    out.add(s);
+  }
+  return out;
+}
+
+/**
+ * สัญลักษณ์ USDT-M PERPETUAL ทั้งหมดที่ TRADING จาก exchangeInfo (สแกน universe เต็ม)
+ * ไม่รวม TradFi/stock perp — ยกเว้น BINANCE_INCLUDE_STOCK_PERPS=1
+ */
+export async function fetchAllBinanceUsdmLinearSymbols(): Promise<string[]> {
+  if (!isBinanceIndicatorFapiEnabled()) return [];
+  const rows = await fetchBinanceUsdmExchangeInfoRows();
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    if (!isEligibleUsdmPerpRow(row)) continue;
+    if (shouldExcludeBinanceUsdmFromCryptoScan(row)) continue;
+    const s = row.symbol!.trim().toUpperCase();
+    if (seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  out.sort();
+  return out;
 }
 
 /** last price จาก Binance USDT-M perp — fallback เมื่อ MEXC ticker ไม่ได้ */
@@ -313,15 +352,19 @@ export async function fetchTopUsdmUsdtSymbolsByQuoteVolume(topN: number): Promis
   if (topN <= 0) return [];
   if (!isBinanceIndicatorFapiEnabled()) return [];
   try {
-    const { data } = await axios.get<Ticker24hRow[]>(`${FAPI}/fapi/v1/ticker/24hr`, {
-      timeout: 45_000,
-    });
+    const [exchangeRows, tickerRes] = await Promise.all([
+      fetchBinanceUsdmExchangeInfoRows(),
+      axios.get<Ticker24hRow[]>(`${FAPI}/fapi/v1/ticker/24hr`, { timeout: 45_000 }),
+    ]);
+    const tradFiSymbols = tradFiBinanceSymbolSet(exchangeRows);
+    const data = tickerRes.data;
     if (!Array.isArray(data)) return [];
     const rows = data
       .filter((r) => {
         const s = r.symbol?.trim().toUpperCase();
         if (!s || !s.endsWith("USDT")) return false;
         if (EXCLUDED_TOP_SYMBOLS.has(s)) return false;
+        if (tradFiSymbols.has(s)) return false;
         return true;
       })
       .map((r) => ({

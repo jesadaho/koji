@@ -1,5 +1,6 @@
 import axios from "axios";
 import { fetchContractFunding } from "./mexcContractMeta";
+import { shouldExcludeMexcContractFromCryptoScan } from "./tradFiSymbolFilter";
 
 const MEXC_TICKER = "https://api.mexc.com/api/v1/contract/ticker";
 const MEXC_DETAIL = "https://api.mexc.com/api/v1/contract/detail";
@@ -1385,6 +1386,7 @@ export async function getTopUsdtSymbolsByAmount24(limit: number): Promise<string
   const usdtPerp = tickers.filter((t) => {
     const sym = t.symbol?.trim();
     if (!sym || !sym.endsWith("_USDT")) return false;
+    if (shouldExcludeMexcContractFromCryptoScan(sym)) return false;
     const amt = t.amount24;
     if (typeof amt !== "number" || Number.isNaN(amt) || amt <= minAmount24Usdt) return false;
     const price = t.lastPrice;
