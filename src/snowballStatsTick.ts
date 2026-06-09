@@ -30,7 +30,6 @@ import {
   type SnowballStatsOutcome,
   type SnowballStatsRow,
 } from "./snowballStatsStore";
-import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
 import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
 import { backfillAllStatsRowsQuoteVol24h } from "./statsQuoteVol24h";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
