@@ -123,7 +123,7 @@ const REASON_LABELS: Record<string, string> = {
   mark_unavailable: "ดึงราคาตลาดไม่ได้",
   entry_gate: "สัญญาณไม่ผ่าน gate (legacy)",
   quality_signal_gate: `สัญญาณไม่ผ่าน Quality Signal (${SNOWBALL_QUALITY_SIGNAL_CRITERIA})`,
-  quality_filter_no_match: "ไม่ตรงเกณฑ์ Quality Signal / Quality Short Signal ที่เปิดไว้",
+  quality_filter_no_match: "ไม่ตรงเกณฑ์ Quality Signal / fade SHORT เกรด F / Snowball SHORT ที่เปิดไว้",
   network_error: "ข้อผิดพลาดเครือข่าย/MEXC",
   open_success_market: "เปิดสำเร็จ (Market)",
   open_success_limit: "ตั้ง Limit สำเร็จ",

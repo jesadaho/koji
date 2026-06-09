@@ -52,7 +52,8 @@ import { loadSparkFollowUpState } from "./sparkFollowUpStore";
 import { buildSparkStatsApiPayload, type SparkStatsApiPayload } from "./sparkFollowUpStats";
 import type { SnowballStatsApiPayload } from "@/lib/snowballStatsClient";
 import {
-  SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA,
+  SNOWBALL_GRADE_F_FADE_SHORT_CRITERIA,
+  SNOWBALL_SHORT_SIGNAL_CRITERIA,
   SNOWBALL_QUALITY_SIGNAL_CRITERIA,
 } from "@/lib/snowballMatrixFilters";
 import {
@@ -157,7 +158,7 @@ import {
 } from "@/lib/snowballAutoTradeEntry";
 /** คำอธิบายใน Mini App — สอดคล้อง `isSnowballAutotradeEnabled` (ค่าเริ่มต้นเปิด; ตั้ง =0 เพื่อปิดเซิร์ฟ) */
 const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
-  `Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ค่าเริ่มต้น LONG → Long · BEAR → Short · entry default Market ตลอด · ตัวเลือก Hybrid EMA บน 1h (default EMA20): ราคา > EMA → Market, ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.) · ถ้าเปิด ✨ Quality Signal: สัญญาณที่ตรง (${SNOWBALL_QUALITY_SIGNAL_CRITERIA}) → Long · ถ้าเปิด ✨ Quality Short Signal: สัญญาณที่ตรง (${SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA}) → Short (ชนะ Quality Signal) · เปิดอย่างใดอย่างหนึ่งแล้วไม่ตรงเกณฑ์ → ข้าม · วันอาทิตย์ (ไทย) → Short ทุกสัญญาณ · Action Plan = Monitor ไม่เปิด · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)`;
+  `Snowball ในแชทเป็นคู่ Binance USDT-M แต่ auto-open สั่งเฉพาะบน MEXC — ค่าเริ่มต้น LONG → Long · BEAR → Short · entry default Market ตลอด · ตัวเลือก Hybrid EMA บน 1h (default EMA20): ราคา > EMA → Market, ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.) · ถ้าเปิด ✨ Quality Signal: (${SNOWBALL_QUALITY_SIGNAL_CRITERIA}) → Long · ถ้าเปิด Long → fade SHORT (เกรด F): (${SNOWBALL_GRADE_F_FADE_SHORT_CRITERIA}) · ถ้าเปิด Snowball SHORT (ทิศ Short): (${SNOWBALL_SHORT_SIGNAL_CRITERIA}) · gate แยกกัน · วันอาทิตย์ (ไทย) → Short ทุกสัญญาณ · Action Plan = Monitor ไม่เปิด · kill switch: SNOWBALL_AUTOTRADE_ENABLED=0 — 1 order/เหรียญ/วัน (BKK)`;
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
@@ -1209,7 +1210,11 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
       row.snowballAutoTradeQualitySignalLongEnabled ??
       row.snowballAutoTradeQualitySignalGateEnabled ??
       false,
-    qualityShortSignalShortEnabled: row.snowballAutoTradeQualityShortSignalShortEnabled ?? false,
+    gradeFFadeShortEnabled:
+      row.snowballAutoTradeGradeFFadeShortEnabled ??
+      row.snowballAutoTradeQualityShortSignalShortEnabled ??
+      false,
+    shortSignalShortEnabled: row.snowballAutoTradeShortSignalShortEnabled ?? false,
     qualityShortTpSlEnabled: row.snowballAutoTradeQualityShortTpSlEnabled ?? true,
     qualityShortTp1PricePct: row.snowballAutoTradeQualityShortTp1PricePct ?? null,
     qualityShortTp1PartialPct: row.snowballAutoTradeQualityShortTp1PartialPct ?? null,
@@ -1646,15 +1651,23 @@ function parseSnowballAutoTradeNested(
     qualitySignalLongEnabled = true;
   }
 
-  let qualityShortSignalShortEnabled = false;
-  if (typeof o.qualityShortSignalShortEnabled === "boolean") {
-    qualityShortSignalShortEnabled = o.qualityShortSignalShortEnabled;
+  let gradeFFadeShortEnabled = false;
+  const gradeFFadeRaw = o.gradeFFadeShortEnabled ?? o.qualityShortSignalShortEnabled;
+  if (typeof gradeFFadeRaw === "boolean") {
+    gradeFFadeShortEnabled = gradeFFadeRaw;
+  } else if (gradeFFadeRaw === "1" || gradeFFadeRaw === 1 || gradeFFadeRaw === "true") {
+    gradeFFadeShortEnabled = true;
+  }
+
+  let shortSignalShortEnabled = false;
+  if (typeof o.shortSignalShortEnabled === "boolean") {
+    shortSignalShortEnabled = o.shortSignalShortEnabled;
   } else if (
-    o.qualityShortSignalShortEnabled === "1" ||
-    o.qualityShortSignalShortEnabled === 1 ||
-    o.qualityShortSignalShortEnabled === "true"
+    o.shortSignalShortEnabled === "1" ||
+    o.shortSignalShortEnabled === 1 ||
+    o.shortSignalShortEnabled === "true"
   ) {
-    qualityShortSignalShortEnabled = true;
+    shortSignalShortEnabled = true;
   }
 
   let sundayAllShortEnabled = false;
@@ -1695,7 +1708,9 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeRulesLong: null,
     snowballAutoTradeRulesBear: null,
     snowballAutoTradeQualitySignalLongEnabled: qualitySignalLongEnabled,
-    snowballAutoTradeQualityShortSignalShortEnabled: qualityShortSignalShortEnabled,
+    snowballAutoTradeGradeFFadeShortEnabled: gradeFFadeShortEnabled,
+    snowballAutoTradeShortSignalShortEnabled: shortSignalShortEnabled,
+    snowballAutoTradeQualityShortSignalShortEnabled: gradeFFadeShortEnabled,
     snowballAutoTradeSundayAllShortEnabled: sundayAllShortEnabled,
     snowballAutoTradeLongDynamicBoostEnabled: longDynamicBoostEnabled,
     snowballAutoTradeReferenceEma20_1hEnabled: referenceEma20_1hEnabled,

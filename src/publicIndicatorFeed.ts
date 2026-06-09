@@ -4069,9 +4069,6 @@ export async function runPublicIndicatorFeedInternal(
           typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
             ? vE! / vsE
             : null;
-        const bearQualityShortSignal = snowballMatchesQualityShortSignal({
-          ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
-        });
         const bearTrendGrade = classifySnowballTrendGrade({
           alertSide: "bear",
           ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
@@ -4147,7 +4144,7 @@ export async function runPublicIndicatorFeedInternal(
                 pushSnowScanSymList(snowScanStats.bearSentSymbols, `${symbol} BEAR`);
               }
             }
-            const runBearAutoOpenNow = !intrabar && (!skipBearTgForPending || bearQualityShortSignal);
+            const runBearAutoOpenNow = !intrabar && !skipBearTgForPending;
             if (runBearAutoOpenNow) {
               try {
                 const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(symbol);
@@ -4175,11 +4172,6 @@ export async function runPublicIndicatorFeedInternal(
                   barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: bearSignalVolVsSma,
                 });
-                if (bearQualityShortSignal && skipBearTgForPending) {
-                  console.info(
-                    `[indicatorPublicFeed] Snowball BEAR auto-open at alert (✨ Quality Short Signal, pending confirm) ${symbol} ${snowTf}`,
-                  );
-                }
                 }
               } catch (e) {
                 console.error("[indicatorPublicFeed] snowball auto-open SHORT", symbol, e);

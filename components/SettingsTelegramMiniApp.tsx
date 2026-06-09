@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import {
-  SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA,
+  SNOWBALL_GRADE_F_FADE_SHORT_CRITERIA,
   SNOWBALL_QUALITY_SIGNAL_CRITERIA,
+  SNOWBALL_SHORT_SIGNAL_CRITERIA,
 } from "@/lib/snowballMatrixFilters";
 import { REVERSAL_LONG_DYNAMIC_LEVERAGE_CRITERIA_TH } from "@/lib/reversalLongDynamicLeverage";
 import { SNOWBALL_LONG_DYNAMIC_BOOST_CRITERIA_TH } from "@/lib/snowballLongDynamicBoost";
@@ -105,7 +106,8 @@ type Phase = "loading" | "setup" | "ready";
 type SnowballAutoTradeApiBundle = {
   enabled?: boolean;
   qualitySignalLongEnabled?: boolean;
-  qualityShortSignalShortEnabled?: boolean;
+  gradeFFadeShortEnabled?: boolean;
+  shortSignalShortEnabled?: boolean;
   sundayAllShortEnabled?: boolean;
   longDynamicBoostEnabled?: boolean;
   marginUsdt?: number | null;
@@ -195,7 +197,8 @@ export default function SettingsTelegramMiniApp() {
 
   const [snowEnabled, setSnowEnabled] = useState(false);
   const [snowQualitySignalLong, setSnowQualitySignalLong] = useState(false);
-  const [snowQualityShortShort, setSnowQualityShortShort] = useState(false);
+  const [snowGradeFFadeShort, setSnowGradeFFadeShort] = useState(false);
+  const [snowShortSignalShort, setSnowShortSignalShort] = useState(false);
   const [snowSundayAllShort, setSnowSundayAllShort] = useState(false);
   const [snowLongDynamicBoost, setSnowLongDynamicBoost] = useState(false);
   const [snowReferenceEma20_1h, setSnowReferenceEma20_1h] = useState(false);
@@ -276,7 +279,8 @@ export default function SettingsTelegramMiniApp() {
 
     setSnowEnabled(Boolean(st.enabled));
     setSnowQualitySignalLong(Boolean(st.qualitySignalLongEnabled));
-    setSnowQualityShortShort(Boolean(st.qualityShortSignalShortEnabled));
+    setSnowGradeFFadeShort(Boolean(st.gradeFFadeShortEnabled));
+    setSnowShortSignalShort(Boolean(st.shortSignalShortEnabled));
     setSnowSundayAllShort(Boolean(st.sundayAllShortEnabled));
     setSnowLongDynamicBoost(Boolean(st.longDynamicBoostEnabled));
     setSnowReferenceEma20_1h(Boolean(st.referenceEma20_1hEnabled));
@@ -804,7 +808,8 @@ export default function SettingsTelegramMiniApp() {
       const snowballAutoTrade: Record<string, unknown> = {
         enabled: snowEnabled,
         qualitySignalLongEnabled: snowQualitySignalLong,
-        qualityShortSignalShortEnabled: snowQualityShortShort,
+        gradeFFadeShortEnabled: snowGradeFFadeShort,
+        shortSignalShortEnabled: snowShortSignalShort,
         sundayAllShortEnabled: snowSundayAllShort,
         longDynamicBoostEnabled: snowLongDynamicBoost,
         referenceEma20_1hEnabled: snowReferenceEma20_1h,
@@ -1310,7 +1315,7 @@ export default function SettingsTelegramMiniApp() {
         <h2>Snowball auto-open (MEXC)</h2>
         <p className="sub" style={{ marginTop: 0 }}>
           เมื่อ <strong>Snowball ส่งสัญญาณสำเร็จ (closed bar)</strong> ระบบสามารถสั่ง MEXC เปิดโพซิชัน market ตามทิศสัญญาณ —{" "}
-          ค่าเริ่มต้น <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · ตัวเลือกด้านล่าง: ✨ Quality Signal → Long · ✨ Quality Short Signal → Short · วันอาทิตย์ → Short ทุกสัญญาณ
+          ค่าเริ่มต้น <strong>LONG</strong> → Long · <strong>BEAR</strong> → Short · ตัวเลือกด้านล่าง: ✨ Quality Signal → Long · Long fade SHORT (เกรด F) · Snowball SHORT (ทิศ Short) · วันอาทิตย์ → Short ทุกสัญญาณ
         </p>
         <p className="sub" style={{ marginTop: "0.5rem" }}>
           <Link href="/auto-open-history">ดูประวัติ auto-open</Link>
@@ -1350,7 +1355,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>✨ Quality Signal → Long</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              สัญญาณที่ตรง matrix ✨ Quality Signal — {SNOWBALL_QUALITY_SIGNAL_CRITERIA} — สั่ง <strong>Long</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะ Quality Short / วันอาทิตย์เมื่อตรงเกณฑ์ Long
+              สัญญาณที่ตรง matrix ✨ Quality Signal — {SNOWBALL_QUALITY_SIGNAL_CRITERIA} — สั่ง <strong>Long</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะ fade SHORT / SHORT ทิศ / วันอาทิตย์เมื่อตรงเกณฑ์ Long
             </span>
           </span>
         </label>
@@ -1358,22 +1363,36 @@ export default function SettingsTelegramMiniApp() {
         <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
           <input
             type="checkbox"
-            checked={snowQualityShortShort}
-            onChange={(e) => setSnowQualityShortShort(e.target.checked)}
+            checked={snowGradeFFadeShort}
+            onChange={(e) => setSnowGradeFFadeShort(e.target.checked)}
           />
           <span className="tmaCheckboxField__text">
-            <strong style={{ fontWeight: 600 }}>✨ Quality Short Signal → Short</strong>
+            <strong style={{ fontWeight: 600 }}>Snowball Long → fade SHORT (เกรด F)</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              สัญญาณที่ตรง matrix ✨ Quality Short Signal — {SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA} — สั่ง <strong>Short</strong> ทันทีตอนแจ้ง (ไม่รอ confirm) · ชนะวันอาทิตย์ (ถ้าไม่ตรง Quality Signal Long)
+              สัญญาณ <strong>LONG</strong> ที่ตรง {SNOWBALL_GRADE_F_FADE_SHORT_CRITERIA} — สั่ง <strong>Short</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะวันอาทิตย์เมื่อไม่ตรง Quality Signal Long
+            </span>
+          </span>
+        </label>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={snowShortSignalShort}
+            onChange={(e) => setSnowShortSignalShort(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>Snowball SHORT (ทิศ Short)</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              สัญญาณ <strong>SHORT</strong> ({SNOWBALL_SHORT_SIGNAL_CRITERIA}) — สั่ง <strong>Short</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · แยกจาก fade เกรด F
             </span>
           </span>
         </label>
 
         <p className="sub" style={{ marginTop: "0.65rem", fontWeight: 600 }}>
-          กลยุทธ์ TP/SL — ✨ Quality Short Signal เท่านั้น
+          กลยุทธ์ TP/SL — fade SHORT (เกรด F) เท่านั้น
         </p>
         <p className="sub" style={{ marginTop: "0.25rem", opacity: 0.9 }}>
-          ใช้เมื่อเปิด Short จาก ✨ Quality Short Signal เท่านั้น — Long / Bear / Sunday ยังใช้แผน TP/SL ด้านล่าง
+          ใช้เมื่อเปิด Short จาก Long → fade SHORT (เกรด F) เท่านั้น — SHORT ทิศ Short / Sunday / Long ปกติ ยังใช้แผน TP/SL ด้านล่าง
         </p>
         <label className="sub tmaCheckboxField" style={{ marginTop: "0.5rem" }}>
           <input
@@ -1382,7 +1401,7 @@ export default function SettingsTelegramMiniApp() {
             onChange={(e) => setSnowQsTpSlEnabled(e.target.checked)}
           />
           <span className="tmaCheckboxField__text">
-            <strong style={{ fontWeight: 600 }}>เปิดใช้กลยุทธ์ TP/SL (Quality Short)</strong>
+            <strong style={{ fontWeight: 600 }}>เปิดใช้กลยุทธ์ TP/SL (fade SHORT · เกรด F)</strong>
           </span>
         </label>
         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
@@ -1550,7 +1569,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>Dynamic boost margin (LONG)</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              {SNOWBALL_LONG_DYNAMIC_BOOST_CRITERIA_TH} — ใช้ BTC EMA(12) 4h slope 7d + PSAR 4h ของคู่สัญญาณ ณ เวลาแจ้ง · SHORT / Sunday / Quality Short ไม่ใช้
+              {SNOWBALL_LONG_DYNAMIC_BOOST_CRITERIA_TH} — ใช้ BTC EMA(12) 4h slope 7d + PSAR 4h ของคู่สัญญาณ ณ เวลาแจ้ง · SHORT / Sunday / fade SHORT เกรด F ไม่ใช้
             </span>
           </span>
         </label>
