@@ -30,8 +30,8 @@ export type StatsStrategyProfitHorizon = 24 | 48;
 export const STATS_STRATEGY_PROFIT_HOLD_24H = 24 as const;
 export const STATS_STRATEGY_PROFIT_HOLD_48H = 48 as const;
 
-/** ชั่วคราว: คอลัมน์ 48h ใช้ pct48h ถือครบ — ไม่จำลอง TP/SL (ไม่ผูก checkpoint 24h) */
-export const STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL = true;
+/** คอลัมน์ 48h จำลอง TP/SL เหมือน 24h (ไม่ bypass ไปใช้ pct48h ถือครบ) */
+export const STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL = false;
 
 export function statsStrategyPlanAtHoldHours(
   plan: StatsTpSlPlan,

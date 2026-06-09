@@ -14,6 +14,7 @@ import {
   statsStrategyProfitFromHorizonPct,
   type StatsStrategyProfitHorizon,
 } from "@/lib/statsStrategyProfitClient";
+import { firstFollowUpKlineIndexAfterAnchorClose } from "@/lib/statsFollowUpAdverse";
 import {
   simulateStatsTpSlProfit,
   type StatsTpSlPlan,
@@ -75,7 +76,7 @@ function simulateFromPack(input: {
   }
 
   const { timeSec, high, low } = input.pack;
-  const iFirst = timeSec.findIndex((t) => t + KLINE_15M_SEC >= input.ac);
+  const iFirst = firstFollowUpKlineIndexAfterAnchorClose(timeSec, input.ac);
   if (iFirst < 0) return null;
   const iLast = indexRangeThrough(timeSec, KLINE_15M_SEC, iFirst, input.windowEndSec);
   if (iLast < iFirst) return null;

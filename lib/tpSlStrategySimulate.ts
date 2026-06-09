@@ -200,10 +200,6 @@ export function simulateStatsTpSlProfit(input: {
       break;
     }
 
-    if (fav >= slArm) {
-      slAtEntryArmed = true;
-    }
-
     if (!tp1Done && fav >= tp1) {
       profit += rem * partialFrac * tp1;
       rem *= 1 - partialFrac;
@@ -213,6 +209,11 @@ export function simulateStatsTpSlProfit(input: {
         exitReason = "tp1_only";
         break;
       }
+    }
+
+    // อย่าย้าย SL@entry ก่อนแตะ TP1 — กัน ROI ค้างระหว่าง slArm กับ tp1 แล้วโดน BE
+    if ((tp1Done || fav >= tp1) && fav >= slArm) {
+      slAtEntryArmed = true;
     }
 
     if (slAtEntryArmed && rem > 0) {

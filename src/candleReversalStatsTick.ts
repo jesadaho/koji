@@ -383,18 +383,19 @@ async function followUpCandleReversal1hRow(
     endTimeMs: nowMs,
     limit: 200,
   });
+  const i15FollowFirst = firstFollowUpKlineIndexAfterAnchorClose(t15, ac);
   if (hPack && hPack.timeSec.length > 0) {
     const { timeSec: hT, high: hH, low: hL } = hPack;
-    const iHFirst = hT.findIndex((t) => t + HOUR_SEC >= ac);
-    if (iHFirst >= 0) {
-      const iHLast = indexRangeThrough(hT, HOUR_SEC, iHFirst, windowEndSec);
-      if (iHLast >= iHFirst) {
-        mfe = computeMfeFromPack(hT, hH, hL, HOUR_SEC, iHFirst, iHLast, ac, entry);
+    const iHFollowFirst = firstFollowUpKlineIndexAfterAnchorClose(hT, ac);
+    if (iHFollowFirst >= 0) {
+      const iHLast = indexRangeThrough(hT, HOUR_SEC, iHFollowFirst, windowEndSec);
+      if (iHLast >= iHFollowFirst) {
+        mfe = computeMfeFromPack(hT, hH, hL, HOUR_SEC, iHFollowFirst, iHLast, ac, entry);
       }
     }
   }
-  if (!mfe) {
-    mfe = computeMfeFromPack(t15, h15, l15, KLINE_15M_SEC, i15First, i15Last, ac, entry);
+  if (!mfe && i15FollowFirst >= 0 && i15Last >= i15FollowFirst) {
+    mfe = computeMfeFromPack(t15, h15, l15, KLINE_15M_SEC, i15FollowFirst, i15Last, ac, entry);
   }
   if (!mfe) return false;
 
@@ -467,15 +468,17 @@ async function followUpCandleReversal1hRow(
 
   if (row.pct24h != null && nowSec >= h24End) {
     const i15Last24 = indexRangeThrough(t15, KLINE_15M_SEC, i15First, h24End);
-    applyReversal1hStrategyProfitAtHorizon(
-      row,
-      h15,
-      l15,
-      i15First,
-      i15Last24,
-      STATS_STRATEGY_PROFIT_HOLD_24H,
-      row.pct24h,
-    );
+    if (i15FollowFirst >= 0 && i15Last24 >= i15FollowFirst) {
+      applyReversal1hStrategyProfitAtHorizon(
+        row,
+        h15,
+        l15,
+        i15FollowFirst,
+        i15Last24,
+        STATS_STRATEGY_PROFIT_HOLD_24H,
+        row.pct24h,
+      );
+    }
   } else if (nowSec < h24End) {
     row.strategyProfitPct24h = null;
     row.strategyExitReason24h = null;
@@ -483,15 +486,17 @@ async function followUpCandleReversal1hRow(
 
   if (row.pct48h != null && nowSec >= h48End) {
     const i15Last48 = indexRangeThrough(t15, KLINE_15M_SEC, i15First, h48End);
-    applyReversal1hStrategyProfitAtHorizon(
-      row,
-      h15,
-      l15,
-      i15First,
-      i15Last48,
-      STATS_STRATEGY_PROFIT_HOLD_48H,
-      row.pct48h,
-    );
+    if (i15FollowFirst >= 0 && i15Last48 >= i15FollowFirst) {
+      applyReversal1hStrategyProfitAtHorizon(
+        row,
+        h15,
+        l15,
+        i15FollowFirst,
+        i15Last48,
+        STATS_STRATEGY_PROFIT_HOLD_48H,
+        row.pct48h,
+      );
+    }
   } else if (nowSec < h48End) {
     row.strategyProfitPct = null;
     row.strategyExitReason = null;

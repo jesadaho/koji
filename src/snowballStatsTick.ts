@@ -523,7 +523,9 @@ export async function runSnowballStatsFollowUpTick(
 
     let rowTouched = false;
 
-    const iAdverseFirst = firstFollowUpKlineIndexAfterAnchorClose(timeSec, ac);
+    const iFollowFirst = firstFollowUpKlineIndexAfterAnchorClose(timeSec, ac);
+
+    const iAdverseFirst = iFollowFirst;
     const adverse =
       iAdverseFirst >= 0 && iLastHorizon >= iAdverseFirst
         ? computeFollowUpMaxAdversePct(high, low, iAdverseFirst, iLastHorizon, entry, row.side)
@@ -602,13 +604,13 @@ export async function runSnowballStatsFollowUpTick(
 
     if (row.pct24h != null && nowSec >= ac + SEC_24H) {
       const iLast24 = klineIndexLastThrough(timeSec, KLINE_GRAN_SEC, iFirst, ac + SEC_24H);
-      if (iLast24 >= iFirst) {
+      if (iFollowFirst >= 0 && iLast24 >= iFollowFirst) {
         rowTouched =
           applySnowballStrategyProfitAtHorizon(
             row,
             high,
             low,
-            iFirst,
+            iFollowFirst,
             iLast24,
             STATS_STRATEGY_PROFIT_HOLD_24H,
             row.pct24h,
@@ -624,13 +626,13 @@ export async function runSnowballStatsFollowUpTick(
 
     if (row.pct48h != null && nowSec >= ac + SEC_48H) {
       const iLast48 = klineIndexLastThrough(timeSec, KLINE_GRAN_SEC, iFirst, ac + SEC_48H);
-      if (iLast48 >= iFirst) {
+      if (iFollowFirst >= 0 && iLast48 >= iFollowFirst) {
         rowTouched =
           applySnowballStrategyProfitAtHorizon(
             row,
             high,
             low,
-            iFirst,
+            iFollowFirst,
             iLast48,
             STATS_STRATEGY_PROFIT_HOLD_48H,
             row.pct48h,
@@ -653,8 +655,10 @@ export async function runSnowballStatsFollowUpTick(
         iLastMfe--;
       }
       if (iLastMfe < iFirst) continue;
+      const iMfeFirst = iFollowFirst >= 0 ? Math.max(iFollowFirst, iFirst) : iFirst;
+      if (iMfeFirst > iLastMfe) continue;
 
-      if (h24 == null && nowSec >= ac + SEC_24H && iLastMfe >= iFirst) {
+      if (h24 == null && nowSec >= ac + SEC_24H && iLastMfe >= iMfeFirst) {
         const p = close[iLastMfe]!;
         h24 = { price: p, pct: pctVsEntry(row.side, entry, p) };
         row.price24h = h24.price;
@@ -663,9 +667,9 @@ export async function runSnowballStatsFollowUpTick(
       }
 
       let maxRoi = -Infinity;
-      let mfeIdx = iFirst;
+      let mfeIdx = iMfeFirst;
       if (row.side === "long") {
-        for (let i = iFirst; i <= iLastMfe; i++) {
+        for (let i = iMfeFirst; i <= iLastMfe; i++) {
           const roi = ((high[i]! - entry) / entry) * 100;
           if (roi > maxRoi) {
             maxRoi = roi;
@@ -673,7 +677,7 @@ export async function runSnowballStatsFollowUpTick(
           }
         }
       } else {
-        for (let i = iFirst; i <= iLastMfe; i++) {
+        for (let i = iMfeFirst; i <= iLastMfe; i++) {
           const roi = ((entry - low[i]!) / entry) * 100;
           if (roi > maxRoi) {
             maxRoi = roi;
@@ -685,7 +689,7 @@ export async function runSnowballStatsFollowUpTick(
       if (Number.isFinite(maxRoi)) {
         let minLow = Infinity;
         let maxHigh = -Infinity;
-        for (let i = iFirst; i <= mfeIdx; i++) {
+        for (let i = iMfeFirst; i <= mfeIdx; i++) {
           minLow = Math.min(minLow, low[i]!);
           maxHigh = Math.max(maxHigh, high[i]!);
         }
