@@ -45,6 +45,13 @@ import {
   type SnowballBtcPsarFilter,
 } from "@/lib/snowballBtcPsarFilter";
 import {
+  SNOWBALL_STRUCTURE_FILTER_OPTIONS,
+  snowballStructureFilterLabel,
+  snowballStructureFilterTitle,
+  snowballStatsRowMatchesStructureFilter,
+  type SnowballStructureFilter,
+} from "@/lib/snowballStructureFilter";
+import {
   SNOWBALL_EFFICIENCY_SCORE_FILTER_OPTIONS,
   snowballEfficiencyScoreFilterLabel,
   snowballEfficiencyScoreFilterTitle,
@@ -139,6 +146,7 @@ export type SnowballStatsFilterState = {
   matrixFilter: SnowballMatrixFilter;
   fundingFilter: SnowballFundingFilter;
   btcPsarFilter: SnowballBtcPsarFilter;
+  structureFilter: SnowballStructureFilter;
   greenDaysFilter: SnowballGreenDaysFilter;
 };
 
@@ -237,6 +245,10 @@ export function filterSnowballStatsRows(
     result = result.filter((r) => snowballStatsRowMatchesBtcPsarFilter(r, filters.btcPsarFilter));
   }
 
+  if (filters.structureFilter !== "all") {
+    result = result.filter((r) => snowballStatsRowMatchesStructureFilter(r, filters.structureFilter));
+  }
+
   if (filters.greenDaysFilter !== "all") {
     result = result.filter((r) => snowballStatsRowMatchesGreenDaysFilter(r, filters.greenDaysFilter));
   }
@@ -249,6 +261,7 @@ export type SnowballStatsEmptyFilterLabels = {
   greenDays: string;
   funding: string;
   btcPsar: string;
+  structure: string;
   matrix: string;
   ema1h: string;
   ema4h: string;
@@ -267,6 +280,7 @@ export function snowballStatsEmptyFilterLabels(filters: SnowballStatsFilterState
     greenDays: snowballStatsGreenDaysFilterLabel(filters.greenDaysFilter),
     funding: snowballStatsFundingFilterLabel(filters.fundingFilter),
     btcPsar: snowballBtcPsarFilterLabel(filters.btcPsarFilter),
+    structure: snowballStructureFilterLabel(filters.structureFilter),
     matrix: snowballMatrixFilterLabel(filters.matrixFilter),
     ema1h: reversalEma1hFilterLabel(filters.ema1hFilter),
     ema4h: reversalEma4hFilterLabel(filters.ema4hFilter),
@@ -298,6 +312,7 @@ type Props = {
   onMatrixFilterChange: (v: SnowballMatrixFilter) => void;
   onFundingFilterChange: (v: SnowballFundingFilter) => void;
   onBtcPsarFilterChange: (v: SnowballBtcPsarFilter) => void;
+  onStructureFilterChange: (v: SnowballStructureFilter) => void;
   onGreenDaysFilterChange: (v: SnowballGreenDaysFilter) => void;
   monthKeys: string[];
   monthFilter: string;
@@ -328,6 +343,7 @@ export function SnowballStatsFilters({
   onMatrixFilterChange,
   onFundingFilterChange,
   onBtcPsarFilterChange,
+  onStructureFilterChange,
   onGreenDaysFilterChange,
   monthKeys,
   monthFilter,
@@ -634,6 +650,25 @@ export function SnowballStatsFilters({
         >
           {SNOWBALL_GREEN_DAYS_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label
+        className="sub"
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+      >
+        โครงสร้าง
+        <select
+          value={filters.structureFilter}
+          onChange={(e) => onStructureFilterChange(e.currentTarget.value as SnowballStructureFilter)}
+          className="tmaInput"
+          style={{ width: "auto", minWidth: "7.5rem" }}
+          title={snowballStructureFilterTitle(filters.structureFilter)}
+        >
+          {SNOWBALL_STRUCTURE_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value} title={snowballStructureFilterTitle(opt.value)}>
               {opt.label}
             </option>
           ))}

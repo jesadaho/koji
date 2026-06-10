@@ -1,6 +1,11 @@
 /** Snapshot 3-stage checklist Snowball 4h LONG — ใช้ popup + CSV */
 
 import type { SnowballStatsRow } from "@/lib/snowballStatsClient";
+import {
+  snowballStatsRowSwing200Ok,
+  snowballStatsRowVahOk,
+  snowballStatsRowVolSpurtOk,
+} from "@/lib/snowballStructureFilter";
 import type { SnowballLongStructureTier } from "@/src/snowballLongBreakoutGrade";
 import type { SnowballStatsGateStep } from "@/src/snowballStatsGateSteps";
 import {
@@ -64,21 +69,10 @@ export function snowballStatsStagedSnapshot(row: StagedSnapshotRow): SnowballSta
 
   const struct =
     row.structureTier && isStructureTier(row.structureTier) ? row.structureTier : null;
-  const strictMult =
-    row.volMultAtAlert != null && Number.isFinite(row.volMultAtAlert) && row.volMultAtAlert > 0
-      ? row.volMultAtAlert
-      : SNOWBALL_STATS_VOL_STRICT_MULT;
 
   const swing48Ok = struct != null;
-  const vahOk = struct === "a_plus" || struct === "b_plus";
-  const swing200Ok: boolean | null =
-    typeof row.swing200Ok === "boolean"
-      ? row.swing200Ok
-      : struct === "a_plus"
-        ? true
-        : struct === "c_plus"
-          ? false
-          : null;
+  const vahOk = snowballStatsRowVahOk(row);
+  const swing200Ok = snowballStatsRowSwing200Ok(row);
   const stage1Pass = swing48Ok;
 
   const stage2Pass = confirmGateStepsAllPass(row);
@@ -94,12 +88,7 @@ export function snowballStatsStagedSnapshot(row: StagedSnapshotRow): SnowballSta
           ? maxVolDrops + 1
           : null;
   const volCascadeOk = row.volumeCascadeYn === "Y";
-  const volStrictOk =
-    row.volStrictOk === true ||
-    (row.volStrictOk !== false &&
-      row.signalVolVsSma != null &&
-      Number.isFinite(row.signalVolVsSma) &&
-      row.signalVolVsSma >= strictMult);
+  const volStrictOk = snowballStatsRowVolSpurtOk(row);
 
   const ddLimit = snowballTrendMomentumMaxDrawbackPct();
   const ddPct =
@@ -124,6 +113,11 @@ export function snowballStatsStagedSnapshot(row: StagedSnapshotRow): SnowballSta
     if (row.momentumFailGradeF) failCount = Math.max(failCount, 2);
     else if (row.momentumDowngrade) failCount = Math.max(failCount, 1);
   }
+
+  const strictMult =
+    row.volMultAtAlert != null && Number.isFinite(row.volMultAtAlert) && row.volMultAtAlert > 0
+      ? row.volMultAtAlert
+      : SNOWBALL_STATS_VOL_STRICT_MULT;
 
   return {
     stage1Pass,

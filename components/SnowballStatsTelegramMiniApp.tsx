@@ -34,6 +34,7 @@ import type { StatsAtrPct14dFilter } from "@/lib/statsAtrPct14dFilter";
 import type { BtcEma4hFilter, ReversalEma1hFilter, ReversalEma4hFilter, ReversalEma1dFilter } from "@/lib/reversalEma4hFilter";
 import type { SnowballMatrixFilter } from "@/lib/snowballMatrixFilters";
 import type { SnowballBtcPsarFilter } from "@/lib/snowballBtcPsarFilter";
+import type { SnowballStructureFilter } from "@/lib/snowballStructureFilter";
 import type { SnowballEfficiencyScoreFilter } from "@/lib/snowballEfficiencyScoreFilter";
 import type { SnowballSignalMaxDdFilter } from "@/lib/snowballSignalMaxDdFilter";
 import type { SnowballGreenDaysFilter, SnowballFundingFilter, SnowballSideFilter, SnowballVolRankFilter, SnowballVolVsSmaFilter } from "@/lib/snowballStatsClient";
@@ -199,6 +200,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [matrixFilter, setMatrixFilter] = useState<SnowballMatrixFilter>("all");
   const [fundingFilter, setFundingFilter] = useState<SnowballFundingFilter>("all");
   const [btcPsarFilter, setBtcPsarFilter] = useState<SnowballBtcPsarFilter>("all");
+  const [structureFilter, setStructureFilter] = useState<SnowballStructureFilter>("all");
   const [greenDaysFilter, setGreenDaysFilter] = useState<SnowballGreenDaysFilter>("all");
   const [sort, setSort] = useState<SnowballStatsSort>(SNOWBALL_STATS_DEFAULT_SORT);
 
@@ -222,6 +224,7 @@ export default function SnowballStatsTelegramMiniApp() {
       matrixFilter,
       fundingFilter,
       btcPsarFilter,
+      structureFilter,
       greenDaysFilter,
     }),
     [
@@ -241,6 +244,7 @@ export default function SnowballStatsTelegramMiniApp() {
       matrixFilter,
       fundingFilter,
       btcPsarFilter,
+      structureFilter,
       greenDaysFilter,
     ],
   );
@@ -599,6 +603,7 @@ export default function SnowballStatsTelegramMiniApp() {
           onMatrixFilterChange={setMatrixFilter}
           onFundingFilterChange={setFundingFilter}
           onBtcPsarFilterChange={setBtcPsarFilter}
+          onStructureFilterChange={setStructureFilter}
           onGreenDaysFilterChange={setGreenDaysFilter}
           monthKeys={monthKeys}
           monthFilter={monthFilter}
