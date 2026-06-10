@@ -99,7 +99,7 @@ export function statsTpSlProfitLegBreakdown(
   };
 }
 
-function favorablePctInBar(
+export function favorablePctInBar(
   side: "long" | "short",
   entry: number,
   high: number,
@@ -108,6 +108,68 @@ function favorablePctInBar(
   if (!(entry > 0)) return NaN;
   if (side === "long") return ((high - entry) / entry) * 100;
   return ((entry - low) / entry) * 100;
+}
+
+/** MFE สูงสุด (%) ในช่วงแท่ง iFirst..iLast — ใช้ร่วมกับ Max ROI และตรวจ TP */
+export function maxFavorablePctInRange(
+  side: "long" | "short",
+  entry: number,
+  high: number[],
+  low: number[],
+  iFirst: number,
+  iLast: number,
+): number | null {
+  if (!(entry > 0) || iFirst < 0 || iLast < iFirst) return null;
+  let max = -Infinity;
+  for (let i = iFirst; i <= iLast; i++) {
+    const fav = favorablePctInBar(side, entry, high[i]!, low[i]!);
+    if (Number.isFinite(fav)) max = Math.max(max, fav);
+  }
+  return Number.isFinite(max) ? max : null;
+}
+
+function minFavorablePctForTpExit(
+  reason: StatsTpSlExitReason,
+  plan: StatsTpSlPlan,
+): number | null {
+  if (reason === "tp2_full" || reason === "tp1_tp2") return plan.tp2PricePct;
+  if (reason === "tp1_only" || reason === "tp1_be" || reason === "tp1_24h" || reason === "tp1_48h") {
+    return plan.tp1PricePct;
+  }
+  return null;
+}
+
+/** ถ้า exit อ้าง TP แต่ MFE ในช่วงไม่ถึงเกณฑ์ — ใช้ผลถือครบแทน (กันขัดกับ Max ROI) */
+function reconcileTpExitWithMaxFavorable(input: {
+  side: "long" | "short";
+  entry: number;
+  high: number[];
+  low: number[];
+  iFirst: number;
+  iLast: number;
+  pctAt48h: number;
+  plan: StatsTpSlPlan;
+  profitPct: number;
+  exitReason: StatsTpSlExitReason;
+  tp1Done: boolean;
+}): { profitPct: number; exitReason: StatsTpSlExitReason } {
+  const need = minFavorablePctForTpExit(input.exitReason, input.plan);
+  if (need == null) return { profitPct: input.profitPct, exitReason: input.exitReason };
+  const maxFav = maxFavorablePctInRange(
+    input.side,
+    input.entry,
+    input.high,
+    input.low,
+    input.iFirst,
+    input.iLast,
+  );
+  if (maxFav == null || maxFav + 1e-6 >= need) {
+    return { profitPct: input.profitPct, exitReason: input.exitReason };
+  }
+  return {
+    profitPct: input.pctAt48h,
+    exitReason: holdTimeExitReason(input.plan, input.tp1Done),
+  };
 }
 
 /** การเคลื่อนไหวสวนทางจาก entry ในแท่งเดียว (%) */
@@ -256,5 +318,17 @@ export function simulateStatsTpSlProfit(input: {
   }
 
   if (!Number.isFinite(profit)) return null;
-  return { profitPct: profit, exitReason };
+  return reconcileTpExitWithMaxFavorable({
+    side: input.side,
+    entry,
+    high: input.high,
+    low: input.low,
+    iFirst: input.iFirst,
+    iLast: input.iLast,
+    pctAt48h: input.pctAt48h,
+    plan,
+    profitPct: profit,
+    exitReason,
+    tp1Done,
+  });
 }

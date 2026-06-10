@@ -3,7 +3,7 @@ import {
   computeFollowUpMaxAdversePct,
   firstFollowUpKlineIndexAfterAnchorClose,
 } from "@/lib/statsFollowUpAdverse";
-import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
+import { DEFAULT_STATS_TPSL_PLAN, favorablePctInBar } from "@/lib/tpSlStrategySimulate";
 import {
   computeStatsStrategyProfitFromBars,
   statsStrategyProfitCacheKey,
@@ -253,21 +253,11 @@ export function simulateSnowballStatsFollowUp(row: SnowballStatsRow, pack15m: Bi
 
   let maxRoi = -Infinity;
   let mfeIdx = iMfeFirst;
-  if (row.side === "long") {
-    for (let i = iMfeFirst; i <= iLastMfe; i++) {
-      const roi = ((high[i]! - entry) / entry) * 100;
-      if (roi > maxRoi) {
-        maxRoi = roi;
-        mfeIdx = i;
-      }
-    }
-  } else {
-    for (let i = iMfeFirst; i <= iLastMfe; i++) {
-      const roi = ((entry - low[i]!) / entry) * 100;
-      if (roi > maxRoi) {
-        maxRoi = roi;
-        mfeIdx = i;
-      }
+  for (let i = iMfeFirst; i <= iLastMfe; i++) {
+    const roi = favorablePctInBar(row.side, entry, high[i]!, low[i]!);
+    if (Number.isFinite(roi) && roi > maxRoi) {
+      maxRoi = roi;
+      mfeIdx = i;
     }
   }
 

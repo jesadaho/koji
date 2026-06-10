@@ -7,7 +7,10 @@ import {
   viewerStatsTpSlPlanPayload,
   viewerStatsTpSlPlanSummary,
 } from "@/lib/statsTpSlPlanForUser";
-import { withViewerStrategyProfitDisplayFields } from "@/src/statsStrategyProfitEnrich";
+import {
+  enrichSnowballStatsWithViewerStrategyProfit,
+  withViewerStrategyProfitDisplayFields,
+} from "@/src/statsStrategyProfitEnrich";
 import { authenticateTmaRequest } from "@/src/telegramMiniAppAuth";
 import { runSnowballBacktest } from "@/src/snowballBacktest";
 
@@ -104,7 +107,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       resolveViewerStatsTradeSizing(auth.telegramUserId, "snowball"),
     ]);
 
-    const displayRows = result.rows.map((r) => withViewerStrategyProfitDisplayFields(r, plan));
+    const rows = [...result.rows];
+    if (plan.tpSlEnabled) {
+      await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
+    }
+    const displayRows = rows.map((r) => withViewerStrategyProfitDisplayFields(r, plan));
 
     const payload: SnowballBacktestApiPayload = {
       rows: displayRows,
