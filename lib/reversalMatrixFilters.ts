@@ -15,7 +15,7 @@ export type ReversalQualitySignalProfile = "short" | "long1h";
 
 /** ข้อความเกณฑ์ Quality Signal (stats + auto-open) — Reversal Short */
 export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
-  "(เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5 · EMA4H < 30%) หรือ (EMA4H < 0% และ > −30%)";
+  "(เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5 · EMA4H < 30%) หรือ EMA4H < 80%";
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
@@ -25,10 +25,8 @@ export const REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO = 0.2;
 export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
 /** EMA(12) 4h slope 7d — classic path ต้องต่ำกว่า (exclusive) */
 export const REVERSAL_QUALITY_SIGNAL_CLASSIC_EMA4H_MAX_PCT = 30;
-/** EMA(12) 4h slope 7d — ช่วงล่าง (exclusive) */
-export const REVERSAL_QUALITY_SIGNAL_EMA4H_MIN_PCT = -30;
-/** EMA(12) 4h slope 7d — ช่วงบน (exclusive) */
-export const REVERSAL_QUALITY_SIGNAL_EMA4H_MAX_PCT = 0;
+/** EMA(12) 4h slope 7d — ทางเลือก (exclusive) — ไม่ต้องผ่าน classic path */
+export const REVERSAL_QUALITY_SIGNAL_EMA4H_ALT_MAX_PCT = 80;
 /** Long 1H stats — BTC EMA(12) 1d slope ต้องสูงกว่า (exclusive) */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MIN_PCT = -8;
 /** Long 1H stats — BTC EMA(12) 4h slope ต้องสูงกว่า (exclusive) */
@@ -128,14 +126,9 @@ function reversalMatchesQualitySignalClassic(input: {
   return true;
 }
 
-/** EMA(12) 4h slope 7d — อยู่ระหว่าง −30% ถึง 0% (ไม่รวมขอบ) */
-function reversalMatchesQualitySignalEma4hBand(ema4hSlopePct7d?: number | null): boolean {
-  const pct = ema4hSlopePct7d;
-  if (pct == null || !Number.isFinite(pct)) return false;
-  return (
-    pct < REVERSAL_QUALITY_SIGNAL_EMA4H_MAX_PCT &&
-    pct > REVERSAL_QUALITY_SIGNAL_EMA4H_MIN_PCT
-  );
+/** EMA(12) 4h slope 7d < 80% */
+function reversalMatchesQualitySignalEma4hAlt(ema4hSlopePct7d?: number | null): boolean {
+  return ema4hSlopeBelow(REVERSAL_QUALITY_SIGNAL_EMA4H_ALT_MAX_PCT, ema4hSlopePct7d);
 }
 
 /** BTC∠1d > −8% OR BTC∠4h > −13% */
@@ -185,7 +178,7 @@ export function reversalMatchesQualitySignal(input: {
       wickRatioPct: input.wickRatioPct,
       rangeScore: input.rangeScore,
       ema4hSlopePct7d: input.ema4hSlopePct7d,
-    }) || reversalMatchesQualitySignalEma4hBand(input.ema4hSlopePct7d)
+    }) || reversalMatchesQualitySignalEma4hAlt(input.ema4hSlopePct7d)
   );
 }
 
