@@ -18,6 +18,9 @@ export type CandleReversalModel =
 
 export type CandleReversalOutcome = "pending" | "win" | "loss" | "flat";
 
+/** bump เมื่อเปลี่ยนวิธีคำนวณ Max ROI — บังคับ follow-up แถวเก่า */
+export const STATS_MAX_ROI_15M_VERSION = 1;
+
 export type CandleReversalStatsRow = {
   id: string;
   symbol: string;
@@ -100,6 +103,8 @@ export type CandleReversalStatsRow = {
   price7d: number | null;
   pct7d: number | null;
   maxRoiPct: number | null;
+  /** 1 = Max ROI จากแท่ง 15m (ทิศวัดผลเดียวกับกำไรกลยุทธ์) */
+  maxRoi15mV?: number;
   durationToMfeHours: number | null;
   maxDrawdownPct: number | null;
   /** Max adverse จาก entry ตลอดช่วง follow-up (ไม่ตัดที่ MFE) */

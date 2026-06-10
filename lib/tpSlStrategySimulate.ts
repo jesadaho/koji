@@ -139,6 +139,18 @@ function minFavorablePctForTpExit(
   return null;
 }
 
+/** exit อ้าง TP แต่ Max ROI ที่บันทึกต่ำกว่าเกณฑ์ — cache กำไรกลยุทธ์ไม่น่าเชื่อถือ */
+export function tpExitExceedsMaxRoi(
+  exitReason: StatsTpSlExitReason,
+  plan: StatsTpSlPlan,
+  maxRoiPct: number | null | undefined,
+): boolean {
+  const need = minFavorablePctForTpExit(exitReason, plan);
+  if (need == null) return false;
+  if (maxRoiPct == null || !Number.isFinite(maxRoiPct)) return false;
+  return maxRoiPct + 1e-6 < need;
+}
+
 /** ถ้า exit อ้าง TP แต่ MFE ในช่วงไม่ถึงเกณฑ์ — ใช้ผลถือครบแทน (กันขัดกับ Max ROI) */
 function reconcileTpExitWithMaxFavorable(input: {
   side: "long" | "short";

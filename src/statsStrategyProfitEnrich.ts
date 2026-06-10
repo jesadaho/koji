@@ -1,5 +1,6 @@
 import {
   reversalStatsMeasureSide,
+  STATS_MAX_ROI_15M_VERSION,
   type CandleReversalStatsRow,
 } from "@/lib/candleReversalStatsClient";
 import { snowballStatsAnchorCloseSec } from "@/lib/snowballStatsClient";
@@ -16,7 +17,9 @@ import {
 } from "@/lib/statsStrategyProfitClient";
 import { firstFollowUpKlineIndexAfterAnchorClose } from "@/lib/statsFollowUpAdverse";
 import {
+  maxFavorablePctInRange,
   simulateStatsTpSlProfit,
+  tpExitExceedsMaxRoi,
   type StatsTpSlPlan,
 } from "@/lib/tpSlStrategySimulate";
 import {
@@ -108,6 +111,10 @@ function reversalAnchorCloseSec(row: CandleReversalStatsRow): number {
   return row.signalBarOpenSec + dur;
 }
 
+function packCacheKey(symbol: string, signalBarOpenSec: number, windowEndSec: number): string {
+  return `${symbol}:${signalBarOpenSec}:${windowEndSec}`;
+}
+
 async function fetchPackForRow(
   symbol: string,
   signalBarOpenSec: number,
@@ -162,6 +169,54 @@ function applyHorizonFields(
   return true;
 }
 
+/** อัปเดต Max ROI จาก 15m สำหรับแถวเก่าที่ยังใช้ค่าจากแท่ง 1H */
+async function refreshCandleReversal1hMaxRoiFrom15m(rows: CandleReversalStatsRow[]): Promise<number> {
+  const packCache = new Map<string, BinanceKlinePack | null>();
+  const nowSec = Math.floor(Date.now() / 1000);
+  let dirty = 0;
+
+  for (const row of rows) {
+    if (row.signalBarTf !== "1h" || row.pct24h == null) continue;
+    if (row.maxRoi15mV === STATS_MAX_ROI_15M_VERSION && row.maxRoiPct != null) continue;
+
+    const ac = reversalAnchorCloseSec(row);
+    if (nowSec < ac + 24 * HOUR_SEC) continue;
+    const windowEndSec = Math.min(nowSec, ac + 48 * HOUR_SEC);
+
+    const sym = row.symbol.trim().toUpperCase();
+    const key = packCacheKey(sym, row.signalBarOpenSec, windowEndSec);
+    let pack = packCache.get(key);
+    if (pack === undefined) {
+      pack = await fetchPackForRow(sym, row.signalBarOpenSec, windowEndSec);
+      packCache.set(key, pack);
+    }
+    if (!pack?.timeSec.length) continue;
+
+    const side = reversalStatsMeasureSide(row);
+    const { timeSec, high, low } = pack;
+    const iFirst = firstFollowUpKlineIndexAfterAnchorClose(timeSec, ac);
+    if (iFirst < 0) continue;
+    const iLast = indexRangeThrough(timeSec, KLINE_15M_SEC, iFirst, windowEndSec);
+    if (iLast < iFirst) continue;
+
+    const maxRoi = maxFavorablePctInRange(side, row.entryPrice, high, low, iFirst, iLast);
+    if (maxRoi == null) continue;
+
+    if (row.maxRoiPct !== maxRoi || row.maxRoi15mV !== STATS_MAX_ROI_15M_VERSION) {
+      row.maxRoiPct = maxRoi;
+      row.maxRoi15mV = STATS_MAX_ROI_15M_VERSION;
+      row.strategyProfitByPlan = undefined;
+      row.strategyProfitPct = null;
+      row.strategyProfitPct24h = null;
+      row.strategyExitReason = null;
+      row.strategyExitReason24h = null;
+      dirty += 1;
+    }
+  }
+
+  return dirty;
+}
+
 async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsRow | SnowballStatsRow>(opts: {
   rows: T[];
   plan: ViewerStatsTpSlPlan;
@@ -169,7 +224,7 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
   sideForRow: (row: T) => "long" | "short";
   includeRow: (row: T) => boolean;
 }): Promise<number> {
-  const packBySymbol = new Map<string, BinanceKlinePack | null>();
+  const packCache = new Map<string, BinanceKlinePack | null>();
   let dirty = 0;
 
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
@@ -185,11 +240,15 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H && row.pct24h == null) continue;
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_48H && row.pct48h == null) continue;
 
-      const cached = row.strategyProfitByPlan?.[cacheKey];
+      let cached = row.strategyProfitByPlan?.[cacheKey];
+      if (cached && tpExitExceedsMaxRoi(cached.exitReason, planAtHorizon, row.maxRoiPct)) {
+        const rest = { ...row.strategyProfitByPlan };
+        delete rest[cacheKey];
+        row.strategyProfitByPlan = Object.keys(rest).length > 0 ? rest : undefined;
+        cached = undefined;
+      }
       if (cached) {
-        if (
-          applyHorizonFields(row, holdHours, cacheKey, cached)
-        ) {
+        if (applyHorizonFields(row, holdHours, cacheKey, cached)) {
           dirty += 1;
         }
         continue;
@@ -216,10 +275,11 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
       const ac = opts.anchorCloseSec(row);
       const windowEndSec = ac + holdHours * HOUR_SEC;
       const sym = row.symbol.trim().toUpperCase();
-      let pack = packBySymbol.get(sym);
+      const pKey = packCacheKey(sym, row.signalBarOpenSec, windowEndSec);
+      let pack = packCache.get(pKey);
       if (pack === undefined) {
         pack = await fetchPackForRow(sym, row.signalBarOpenSec, windowEndSec);
-        packBySymbol.set(sym, pack);
+        packCache.set(pKey, pack);
       }
       if (!pack?.timeSec.length) continue;
 
@@ -244,13 +304,15 @@ export async function enrichCandleReversalStatsWithViewerStrategyProfit(
   rows: CandleReversalStatsRow[],
   plan: ViewerStatsTpSlPlan,
 ): Promise<number> {
-  return enrichRowsWithViewerStrategyProfit({
+  let dirty = await refreshCandleReversal1hMaxRoiFrom15m(rows);
+  dirty += await enrichRowsWithViewerStrategyProfit({
     rows,
     plan,
     anchorCloseSec: reversalAnchorCloseSec,
     sideForRow: (row) => reversalStatsMeasureSide(row),
     includeRow: (row) => row.signalBarTf === "1h",
   });
+  return dirty;
 }
 
 export async function enrichSnowballStatsWithViewerStrategyProfit(

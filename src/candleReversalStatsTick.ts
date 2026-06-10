@@ -1,5 +1,6 @@
 import {
   reversalStatsMeasureSide,
+  STATS_MAX_ROI_15M_VERSION,
   type CandleReversalSignalBarTf,
 } from "@/lib/candleReversalStatsClient";
 import { lenPercentilePctFromRank, statsRangeRankInWindow, statsValueRankInWindow } from "@/lib/statsLenPercentile";
@@ -481,6 +482,7 @@ async function followUpCandleReversal1hRow(
   }
 
   row.maxRoiPct = mfe.maxRoi;
+  row.maxRoi15mV = STATS_MAX_ROI_15M_VERSION;
   row.durationToMfeHours = mfe.durationHours;
   row.maxDrawdownPct = mfe.maxDd;
   if (h4) {
@@ -564,6 +566,7 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
   if (row.outcome === "pending") return true;
   const ac = anchorCloseSec(row);
   if (signalBarTf(row) === "1h") {
+    if (row.maxRoi15mV !== STATS_MAX_ROI_15M_VERSION && nowSec >= ac + 24 * HOUR_SEC) return true;
     if (nowSec < ac + 4 * HOUR_SEC && row.pct4h != null) return true;
     if (nowSec < ac + 12 * HOUR_SEC && row.pct12h != null) return true;
     if (nowSec < ac + 24 * HOUR_SEC && row.pct24h != null) return true;

@@ -18,6 +18,7 @@ export type ReversalEmaSlopeFilter =
   | "gt20"
   | "gt30"
   | "gt50"
+  | "lt80"
   | "gt100"
   | "gt150"
   | "gt200";
@@ -46,6 +47,7 @@ export const REVERSAL_EMA_SLOPE_FILTER_OPTIONS: ReadonlyArray<{
   { value: "gt20", label: "> 20" },
   { value: "gt30", label: "> 30" },
   { value: "gt50", label: "> 50" },
+  { value: "lt80", label: "< 80" },
   { value: "gt100", label: "> 100" },
   { value: "gt150", label: "> 150" },
   { value: "gt200", label: "> 200" },
@@ -71,6 +73,7 @@ const EMA_SLOPE_THRESHOLD: Record<
   gt20: 20,
   gt30: 30,
   gt50: 50,
+  lt80: 80,
   gt100: 100,
   gt150: 150,
   gt200: 200,
@@ -83,7 +86,9 @@ function emaSlopePctMatchesFilter(pct: number | null | undefined, filter: Revers
   if (filter === "gtm10lt0") return pct > -10 && pct < 0;
   if (filter === "gtm14") return pct > -14;
   const th = EMA_SLOPE_THRESHOLD[filter];
-  if (filter === "lt0" || filter === "lt3" || filter === "lt5" || filter === "lt10") return pct < th;
+  if (filter === "lt0" || filter === "lt3" || filter === "lt5" || filter === "lt10" || filter === "lt80") {
+    return pct < th;
+  }
   return pct > th;
 }
 
