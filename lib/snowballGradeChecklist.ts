@@ -8,9 +8,9 @@ import {
   isLegacySnowballQualityTier,
   isSnowballTrendGrade,
   normalizeSnowballQualityTier,
-  SNOWBALL_TREND_GRADE_A_EMA4H_MAX,
-  SNOWBALL_TREND_GRADE_A_EMA4H_MIN,
+  SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_A_GREEN_MAX,
+  SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_B_EMA4H_MAX,
   SNOWBALL_TREND_GRADE_B_EMA4H_MIN,
@@ -405,6 +405,7 @@ function snowballTrendGradeChecklistItems(
     greenDaysBeforeSignal: green,
   };
   const computed = classifySnowballTrendGrade(input);
+  const grade = computed;
 
   const greenDaysItem: SnowballGradeChecklistItem | null =
     side === "long"
@@ -413,11 +414,11 @@ function snowballTrendGradeChecklistItems(
           title: "เขียวก่อนสัญญาณ",
           status:
             green != null && Number.isFinite(green) && green >= 0
-              ? green <= SNOWBALL_TREND_GRADE_S_GREEN_MAX || green <= SNOWBALL_TREND_GRADE_A_GREEN_MAX
-                ? "pass"
-                : "fail"
+              ? Math.floor(green) > SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE
+                ? "fail"
+                : "pass"
               : "unknown",
-          detail: `${greenStr} วัน · S ต้อง 0–${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ต้อง 0–${SNOWBALL_TREND_GRADE_A_GREEN_MAX}`,
+          detail: `${greenStr} วัน · S ≤${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ≤${SNOWBALL_TREND_GRADE_A_GREEN_MAX} · >${SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE} → C`,
         }
       : null;
 
@@ -426,9 +427,7 @@ function snowballTrendGradeChecklistItems(
       id: "structure",
       title: `Trend Grade ${side === "bear" ? "SHORT" : "LONG"}`,
       status: grade ? "pass" : "unknown",
-      detail: grade
-        ? `เกรด ${snowballTrendGradeShortLabel(grade)} (คำนวณ ${snowballTrendGradeShortLabel(computed)})`
-        : "—",
+      detail: grade ? `เกรด ${snowballTrendGradeShortLabel(grade)}` : "—",
     },
     {
       id: "confirm",
@@ -440,10 +439,9 @@ function snowballTrendGradeChecklistItems(
           ? "pass"
           : ema4h != null && Number.isFinite(ema4h) && ema4h > SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE
             ? "pass"
-            : ema4h != null &&
+              : ema4h != null &&
                 Number.isFinite(ema4h) &&
-                ema4h >= SNOWBALL_TREND_GRADE_A_EMA4H_MIN &&
-                ema4h <= SNOWBALL_TREND_GRADE_A_EMA4H_MAX
+                ema4h > SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE
               ? "pass"
               : ema4h != null &&
                   Number.isFinite(ema4h) &&
@@ -451,7 +449,7 @@ function snowballTrendGradeChecklistItems(
                   ema4h <= SNOWBALL_TREND_GRADE_B_EMA4H_MAX
                 ? "pass"
                 : "unknown",
-      detail: `${fmtSlope(ema4h)} · F (ลำดับแรก) < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}% · EMA1d < 0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_A_EMA4H_MAX}% · B ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}%`,
+      detail: `${fmtSlope(ema4h)} · F (ลำดับแรก) < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}% · EMA1d < 0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A>${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · B ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}%`,
     },
     ...(greenDaysItem ? [greenDaysItem] : []),
     {

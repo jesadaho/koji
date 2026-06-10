@@ -35,7 +35,7 @@ import {
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
 
 /** แถวที่ recompute trend grade (S/A/B/C/F) จาก snapshot ณ alertedAtMs แล้ว */
-export const STATS_TREND_GRADE_VERSION = 4;
+export const STATS_TREND_GRADE_VERSION = 7;
 
 export function snowballStatsRowAlertSide(row: Pick<SnowballStatsRow, "alertSide" | "triggerKind">): SnowballStatsAlertSide {
   return row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
@@ -70,7 +70,14 @@ export function snowballStatsRowReadyForTrendGradeBackfill(row: SnowballStatsRow
 }
 
 export function snowballStatsRowNeedsTrendGradeBackfill(row: SnowballStatsRow): boolean {
-  return row.trendGradeV !== STATS_TREND_GRADE_VERSION;
+  if (row.trendGradeV !== STATS_TREND_GRADE_VERSION) return true;
+  if (!snowballStatsRowReadyForTrendGradeBackfill(row)) return false;
+  const grade = classifySnowballTrendGrade(snowballStatsRowTrendGradeInput(row));
+  const display = snowballTrendGradeToDisplay(grade);
+  if (row.alertQualityTier !== grade) return true;
+  if (row.displayGrade !== display) return true;
+  if (!row.qualityTier4hAdjusted && row.qualityTier !== grade) return true;
+  return false;
 }
 
 /** คำนวณและเขียน qualityTier / displayGrade / actionPlan จาก snapshot ในแถว */

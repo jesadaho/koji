@@ -15,8 +15,11 @@ export type SnowballTrendGradeDisplay = "S" | "A" | "B" | "C" | "F";
 export type SnowballTrendActionPlan = "full" | "standard" | "light" | "monitor";
 
 export const SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE = 50;
+/** @deprecated ใช้ SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE */
 export const SNOWBALL_TREND_GRADE_A_EMA4H_MIN = 15;
+/** @deprecated ไม่มีเพดานบนเกรด A อีกต่อไป */
 export const SNOWBALL_TREND_GRADE_A_EMA4H_MAX = 50;
+export const SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE = 15;
 export const SNOWBALL_TREND_GRADE_B_EMA4H_MIN = 10;
 export const SNOWBALL_TREND_GRADE_B_EMA4H_MAX = 15;
 export const SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE = -10;
@@ -71,8 +74,7 @@ function matchesGradeS(input: ClassifySnowballTrendGradeInput): boolean {
 
 function matchesGradeA(input: ClassifySnowballTrendGradeInput): boolean {
   if (!finitePct(input.ema4hSlopePct7d)) return false;
-  const pct = input.ema4hSlopePct7d;
-  if (pct < SNOWBALL_TREND_GRADE_A_EMA4H_MIN || pct > SNOWBALL_TREND_GRADE_A_EMA4H_MAX) return false;
+  if (input.ema4hSlopePct7d <= SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE) return false;
   if (isLongSide(input.alertSide) && !greenDaysAtMost(SNOWBALL_TREND_GRADE_A_GREEN_MAX, input.greenDaysBeforeSignal)) {
     return false;
   }
@@ -141,7 +143,7 @@ export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDispla
     return `EMA4h > ${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_S_GREEN_MAX} วัน`;
   }
   if (grade === "A") {
-    return `EMA4h ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_A_EMA4H_MAX}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} วัน`;
+    return `EMA4h > ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} วัน`;
   }
   if (grade === "B") {
     return `EMA4h ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}% หรือ BTC EMA4h < ${SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} วัน`;

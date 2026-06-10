@@ -12,6 +12,7 @@ import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import { statsFmtPctCell } from "@/lib/statsCsv";
 import { formatFunding } from "@/src/marketsFormat";
 import {
+  classifySnowballTrendGrade,
   snowballIsTrendGradeF,
   snowballTrendGradeShortLabel,
   snowballTrendGradeToDisplay,
@@ -19,6 +20,7 @@ import {
   legacySnowballQualityTierToDisplay,
   isLegacySnowballQualityTier,
   isSnowballTrendGrade,
+  type ClassifySnowballTrendGradeInput,
   type SnowballTrendGrade,
   type SnowballTrendGradeDisplay,
 } from "@/src/snowballTrendGrade";
@@ -283,25 +285,42 @@ type SnowballStatsGradeDisplayRow = Pick<
 > &
   SnowballStatsGradeDerivationFields;
 
-/** เทียบ qualityTier เก่ากับ schema ใหม่ */
+function snowballStatsTrendGradeInputFromRow(
+  row: SnowballStatsGradeDerivationFields,
+): ClassifySnowballTrendGradeInput | null {
+  const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+  const ema4h = row.ema4hSlopePct7d;
+  if (ema4h == null || !Number.isFinite(ema4h)) return null;
+  if (
+    side === "long" &&
+    (row.greenDaysBeforeSignal == null || !Number.isFinite(row.greenDaysBeforeSignal))
+  ) {
+    return null;
+  }
+  return {
+    alertSide: side,
+    ema4hSlopePct7d: ema4h,
+    ema1dSlopePct7d: row.ema1dSlopePct7d,
+    btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
+    greenDaysBeforeSignal: row.greenDaysBeforeSignal,
+  };
+}
+
+/** เทียบ qualityTier เก่ากับ schema ใหม่ — คำนวณสดจาก EMA+เขียวเมื่อมี snapshot */
 export function snowballStatsDerivedDisplayGrade(
   row: Pick<SnowballStatsRow, "displayGrade" | "qualityTier" | "alertQualityTier"> &
     SnowballStatsGradeDerivationFields,
 ): string | null {
+  const liveInput = snowballStatsTrendGradeInputFromRow(row);
+  if (liveInput) {
+    return snowballTrendGradeToDisplay(classifySnowballTrendGrade(liveInput));
+  }
   if (row.displayGrade) return row.displayGrade;
   const tier = effectiveQualityTier(row);
   if (tier) return snowballTrendGradeToDisplay(tier);
   const raw = (row.qualityTier ?? row.alertQualityTier) as string | undefined;
   if (raw && isLegacySnowballQualityTier(raw)) return legacySnowballQualityTierToDisplay(raw);
-  const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
-  const derived = normalizeSnowballQualityTier(undefined, {
-    alertSide: side,
-    ema4hSlopePct7d: row.ema4hSlopePct7d,
-    ema1dSlopePct7d: row.ema1dSlopePct7d,
-    btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
-    greenDaysBeforeSignal: row.greenDaysBeforeSignal,
-  });
-  return derived ? snowballTrendGradeToDisplay(derived) : null;
+  return null;
 }
 
 function snowballStatsGradeLetter(tier: SnowballStatsQualityTier | undefined): string {
