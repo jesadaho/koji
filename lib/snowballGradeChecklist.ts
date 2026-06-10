@@ -390,22 +390,19 @@ function snowballTrendGradeChecklistItems(
   >,
   side: "long" | "bear",
 ): SnowballGradeChecklistItem[] {
-  const grade = effectiveQualityTier(row);
   const ema4h = row.ema4hSlopePct7d;
   const ema1d = row.ema1dSlopePct7d;
   const btc4h = row.btcEma4hSlopePct7d;
   const green = row.greenDaysBeforeSignal;
   const greenStr = green != null && Number.isFinite(green) ? String(Math.floor(green)) : "—";
 
-  const input = {
+  const grade = classifySnowballTrendGrade({
     alertSide: side,
     ema4hSlopePct7d: ema4h,
     ema1dSlopePct7d: ema1d,
     btcEma4hSlopePct7d: btc4h,
     greenDaysBeforeSignal: green,
-  };
-  const computed = classifySnowballTrendGrade(input);
-  const grade = computed;
+  });
 
   const greenDaysItem: SnowballGradeChecklistItem | null =
     side === "long"
