@@ -38,6 +38,10 @@ import {
   statsPsar4hDistPctCsv,
   statsPsar4hTrendLabel,
 } from "@/lib/statsPsar4h";
+import {
+  SNOWBALL_STATS_STAGED_CSV_HEADERS,
+  snowballStatsStagedCsvCells,
+} from "@/lib/snowballStatsStagedCsv";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPrice } from "@/lib/statsCsv";
 
 const HEADERS = [
@@ -46,6 +50,7 @@ const HEADERS = [
   "ทิศ",
   "Grade",
   "โครงสร้าง",
+  ...SNOWBALL_STATS_STAGED_CSV_HEADERS,
   "วัน",
   "เวลา (BKK)",
   "Entry",
@@ -105,6 +110,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyC
     snowballStatsSideLabel(r),
     snowballStatsGradeDisplayLabel(r),
     snowballStatsStructureTierLabel(r.structureTier),
+    ...snowballStatsStagedCsvCells(r),
     snowballStatsDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs),
     statsFmtBkk(r.alertedAtIso),
     statsFmtPrice(r.entryPrice),

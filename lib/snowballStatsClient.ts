@@ -136,6 +136,8 @@ export type SnowballStatsRow = {
   /** 1 = trend grade (S/A/B/C/F) recompute จาก snapshot ในแถว */
   trendGradeV?: number;
   volumeCascadeYn?: "Y" | "N" | null;
+  /** จำนวนครั้งที่ vol 1H ไม่ยกฐานใน lookback Vol — Stage 3 */
+  volumeDropCount?: number | null;
   /** Max DD% (stats-style 15m, lookback 32 แท่ง) ณ เวลาแจ้ง — undefined = แถวเก่าก่อนเพิ่ม field */
   signalMaxDdPct?: number | null;
   trendMomentumVolLookback?: number | null;

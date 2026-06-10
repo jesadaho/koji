@@ -382,13 +382,20 @@ export function calculateTrendMomentumMetrics(
 export function trendMomentumStatsFields(metrics: TrendMomentumMetrics | null): {
   volumeCascadeYn: "Y" | "N" | null;
   signalMaxDdPct: number | null;
+  volumeDropCount: number | null;
 } {
-  if (!metrics) return { volumeCascadeYn: null, signalMaxDdPct: null };
+  if (!metrics) {
+    return { volumeCascadeYn: null, signalMaxDdPct: null, volumeDropCount: null };
+  }
   return {
     volumeCascadeYn: metrics.isVolumeCascading ? "Y" : "N",
     signalMaxDdPct:
       Number.isFinite(metrics.maxDrawbackPercent) && metrics.maxDrawbackPercent >= 0
         ? metrics.maxDrawbackPercent
+        : null,
+    volumeDropCount:
+      Number.isFinite(metrics.volumeDropCount) && metrics.volumeDropCount >= 0
+        ? metrics.volumeDropCount
         : null,
   };
 }

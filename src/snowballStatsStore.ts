@@ -284,6 +284,7 @@ export type AppendSnowballStatsInput = {
   volNearMultAtAlert?: number | null;
   confirmGateSteps?: SnowballStatsGateStep[];
   volumeCascadeYn?: "Y" | "N" | null;
+  volumeDropCount?: number | null;
   signalMaxDdPct?: number | null;
   trendMomentumVolLookback?: number | null;
   /** Snowball LONG 1H breakout / pending confirm bar */

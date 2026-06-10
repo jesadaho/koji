@@ -215,6 +215,12 @@ export function buildSnowballStatsRow(input: AppendSnowballStatsInput): Snowball
         : undefined,
     volumeCascadeYn:
       input.volumeCascadeYn === "Y" || input.volumeCascadeYn === "N" ? input.volumeCascadeYn : null,
+    volumeDropCount:
+      input.volumeDropCount != null &&
+      Number.isFinite(input.volumeDropCount) &&
+      input.volumeDropCount >= 0
+        ? Math.floor(input.volumeDropCount)
+        : null,
     signalMaxDdPct:
       input.signalMaxDdPct != null &&
       Number.isFinite(input.signalMaxDdPct) &&
