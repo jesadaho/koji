@@ -20,6 +20,7 @@ import {
   loadIndicatorPublicFeedState,
   saveIndicatorPublicFeedState,
   updatePublicFeedFiredKey,
+  updatePublicFeedWaveGatePrice,
   type IndicatorPublicFeedState,
 } from "./indicatorPublicFeedStore";
 import {
@@ -3529,6 +3530,8 @@ export async function runPublicIndicatorFeedInternal(
                 now,
                 entryClosePx,
               );
+            } else {
+              await updatePublicFeedWaveGatePrice(state, key, entryClosePx);
             }
             if (!skipSnowballTgForPending) {
               notified += 1;

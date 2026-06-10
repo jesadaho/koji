@@ -184,6 +184,16 @@ export function computeSvpHoleYn(vol: number, volSma: number): "Y" | "N" {
   return vol / volSma < svpHoleVolRatioMax() ? "Y" : "N";
 }
 
+/** คีย์ dedupe สัญญาณ — เหรียญ + ทิศแจ้ง + แท่งสัญญาณเปิด (ตรง live lastFiredBarSec) */
+export function snowballStatsSignalDedupeKey(
+  row: Pick<SnowballStatsRow, "symbol" | "alertSide" | "triggerKind" | "signalBarOpenSec">,
+): string {
+  const sym = row.symbol.trim().toUpperCase();
+  const side = snowballStatsRowAlertSide(row);
+  const bar = row.signalBarOpenSec;
+  return `${sym}|${side}|${bar}`;
+}
+
 export async function loadSnowballStatsState(): Promise<SnowballStatsState> {
   if (useCloudStorage()) {
     const data = await cloudGet<SnowballStatsState>(KV_KEY);
@@ -521,6 +531,16 @@ export function migrateSnowballStatsLegacyGradeD(rows: SnowballStatsRow[]): numb
 export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): Promise<SnowballStatsRow | null> {
   if (!isSnowballStatsEnabled()) return null;
 
+  const state = await loadSnowballStatsState();
+  const dedupeKey = snowballStatsSignalDedupeKey({
+    symbol: input.symbol,
+    alertSide: input.alertSide,
+    triggerKind: input.triggerKind,
+    signalBarOpenSec: input.signalBarOpenSec,
+  });
+  const existing = state.rows.find((r) => snowballStatsSignalDedupeKey(r) === dedupeKey);
+  if (existing) return existing;
+
   const row = buildSnowballStatsRow(input);
   try {
     row.marketSentiment = await resolveMarketSentimentForStats(input.alertedAtMs);
@@ -528,7 +548,6 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     /* ignore */
   }
 
-  const state = await loadSnowballStatsState();
   state.rows.push(row);
   const max = snowballStatsMaxRows();
   if (state.rows.length > max) {

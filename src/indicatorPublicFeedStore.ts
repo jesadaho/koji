@@ -118,3 +118,15 @@ export async function updatePublicFeedFiredKey(
   state.lastTriggeredAt = triggeredAtIso;
   await saveIndicatorPublicFeedState(state);
 }
+
+/** Grade F — ไม่อัปเดต lastFiredBarSec แต่ยังตั้ง lastAlertPrice ให้ wave gate แท่งถัดไป */
+export async function updatePublicFeedWaveGatePrice(
+  state: IndicatorPublicFeedState,
+  key: string,
+  alertPrice: number,
+): Promise<void> {
+  if (typeof alertPrice !== "number" || !Number.isFinite(alertPrice) || alertPrice <= 0) return;
+  if (!state.lastAlertPrice) state.lastAlertPrice = {};
+  state.lastAlertPrice[key] = alertPrice;
+  await saveIndicatorPublicFeedState(state);
+}

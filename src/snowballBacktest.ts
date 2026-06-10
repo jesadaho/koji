@@ -18,7 +18,7 @@ import {
 import { simulateSnowballStatsFollowUp } from "./snowballBacktestFollowUp";
 import { fetchSnowballAlertMarketContextAt } from "./snowballMarketContext";
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
-import type { AppendSnowballStatsInput } from "./snowballStatsStore";
+import { snowballStatsSignalDedupeKey, type AppendSnowballStatsInput } from "./snowballStatsStore";
 
 const WARMUP_BARS = 250;
 const MAX_SIGNALS = 500;
@@ -209,9 +209,8 @@ async function backtestSymbol(
         pack1d,
         snowTf,
       );
-      if (!hit.skipFiredKeyUpdate) {
-        applySnowballBacktestFiredKey(state, hit.feedKey, hit.signalBarOpenSec, hit.entryPrice);
-      }
+      // Walk แท่งเดียวต่อรอบ — อัปเดต state ทุก hit (รวม Grade F) เพื่อให้ wave gate ถัดไปถูกต้อง
+      applySnowballBacktestFiredKey(state, hit.feedKey, hit.signalBarOpenSec, hit.entryPrice);
       const stop = !onRow(row);
       if (stop) return;
     }
@@ -246,9 +245,13 @@ export async function runSnowballBacktest(opts: RunSnowballBacktestOpts): Promis
 
   const symbols = await resolveBacktestUniverse(opts);
   const rows: SnowballStatsRow[] = [];
+  const seenSignalKeys = new Set<string>();
   let truncated = false;
 
   const onRow = (row: SnowballStatsRow): boolean => {
+    const key = snowballStatsSignalDedupeKey(row);
+    if (seenSignalKeys.has(key)) return true;
+    seenSignalKeys.add(key);
     rows.push(row);
     if (rows.length >= MAX_SIGNALS) {
       truncated = true;
