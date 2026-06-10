@@ -2,6 +2,8 @@
 export const DEFAULT_SL_ARM_ROI_PCT = 10;
 /** SL ห่างจาก entry เป็น % ราคาสวน (0 = @entry พอดี) */
 export const DEFAULT_SL_ENTRY_OFFSET_PCT = 0;
+/** ครบช่วงนี้หลังเปิด + ยังเขียว → ตั้ง SL @entry ทันที */
+export const SL_BREAKEVEN_AFTER_24H_IF_GREEN_MS = 24 * 3600 * 1000;
 
 export type TpSlBreakevenConfig = {
   slArmRoiPct: number;
@@ -64,6 +66,19 @@ export function breakevenSlTriggered(
 /** ขาดทุน % ราคาของส่วนที่เหลือเมื่อโดน SL บังทุน */
 export function slBreakevenRemainderLossPct(offsetPct: number): number {
   return -Math.max(0, offsetPct);
+}
+
+/** ครบ 24 ชม. หลังเปิดและยังเขียว (favorable move % > 0) */
+export function slBreakevenDueAfter24hIfGreen(
+  openedAtMs: number,
+  favorableMovePct: number,
+  nowMs: number,
+): boolean {
+  return (
+    nowMs - openedAtMs >= SL_BREAKEVEN_AFTER_24H_IF_GREEN_MS &&
+    Number.isFinite(favorableMovePct) &&
+    favorableMovePct > 0
+  );
 }
 
 export function formatSlBreakevenTriggerLabel(

@@ -1622,6 +1622,9 @@ export default function SettingsTelegramMiniApp() {
             <strong>แผนบังทุน</strong>: เมื่อ ROI ≥ <code>{snowSlArmRoiPct.trim() || "10"}%</code> ตั้ง SL บังทุน (LONG ต่ำกว่า entry · SHORT สูงกว่า entry ตาม <code>SL ห่าง entry %</code> · 0 = @entry)
           </li>
           <li>
+            <strong>แผนบังทุน</strong>: ครบ <strong>24 ชม.</strong> แล้วยังเขียว → ตั้ง SL @entry ทันที (ไม่รอ ROI ถึงเกณฑ์)
+          </li>
+          <li>
             <strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุนที่เหลือด้วย offset เดียวกัน
           </li>
           <li>
@@ -1743,6 +1746,9 @@ export default function SettingsTelegramMiniApp() {
               disabled={!snowTpSlEnabled}
             />
           </label>
+          <p className="sub" style={{ margin: 0, opacity: 0.92 }}>
+            กติกาเพิ่ม: ครบ <strong>24 ชม.</strong> หลังเปิดแล้วยังเขียว → ตั้ง SL @entry ทันที (ใช้ offset 0 ไม่รอ ROI ถึงเกณฑ์ด้านบน)
+          </p>
         </div>
 
         <p className="sub" style={{ marginTop: "0.85rem" }}>
@@ -1986,6 +1992,9 @@ export default function SettingsTelegramMiniApp() {
           <li>
             <strong>แผนบังทุน</strong>: ROI ≥ <code>{revSlArmRoiPct.trim() || "10"}%</code> → SL บังทุน (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code> จาก entry)
           </li>
+          <li>
+            <strong>แผนบังทุน</strong>: ครบ <strong>24 ชม.</strong> แล้วยังเขียว → ตั้ง SL @entry ทันที
+          </li>
           <li><strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุนที่เหลือด้วย offset เดียวกัน</li>
           <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ปิดทั้งหมด (force) ถ้าเขียวหรือปิด option ขยาย</li>
           <li><strong>จังหวะ 2 (option)</strong>: ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
@@ -2102,6 +2111,9 @@ export default function SettingsTelegramMiniApp() {
               disabled={!revTpSlEnabled}
             />
           </label>
+          <p className="sub" style={{ margin: 0, opacity: 0.92 }}>
+            กติกาเพิ่ม: ครบ <strong>24 ชม.</strong> หลังเปิดแล้วยังเขียว → ตั้ง SL @entry ทันที (ใช้ offset 0 ไม่รอ ROI ถึงเกณฑ์ด้านบน)
+          </p>
         </div>
 
         <p style={{ marginTop: "0.95rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
