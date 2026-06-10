@@ -304,14 +304,17 @@ function stochSeries(close: number[], rsiP: number, stochLen: number, kSmooth: n
   return smaLine(raw, kSmooth);
 }
 
-/** Mirror updatePublicFeedFiredKey — in-memory only for backtest */
+/** Mirror updatePublicFeedFiredKey / updatePublicFeedWaveGatePrice — in-memory only for backtest */
 export function applySnowballBacktestFiredKey(
   state: SnowballBacktestFeedState,
   key: string,
   barTimeSec: number,
   alertPrice?: number,
+  opts?: { skipFiredBarSec?: boolean },
 ): void {
-  state.lastFiredBarSec[key] = barTimeSec;
+  if (!opts?.skipFiredBarSec) {
+    state.lastFiredBarSec[key] = barTimeSec;
+  }
   if (typeof alertPrice === "number" && Number.isFinite(alertPrice) && alertPrice > 0) {
     if (!state.lastAlertPrice) state.lastAlertPrice = {};
     state.lastAlertPrice[key] = alertPrice;
@@ -424,7 +427,7 @@ function detectSnowballLongClosed(
       pack1h,
     });
     twoBarInlinePassed = twoBarEval.ok;
-    if (!twoBarInlinePassed) return null;
+    // สอดคล้อง live — two-bar ไม่ผ่านยังแจ้งได้ (grade จาก trend ไม่ block)
   }
 
   const signalBarOpenSec = t15[iSig]!;

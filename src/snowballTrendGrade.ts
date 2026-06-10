@@ -1,5 +1,6 @@
 /**
  * Snowball trend grade — S / A / B / C / F จาก EMA slope (+ เขียวสำหรับ LONG)
+ * LONG เขียว > 3 วัน cap ที่ C (ก่อน B)
  */
 
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
@@ -23,6 +24,8 @@ export const SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE = -10;
 export const SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE = -2.5;
 export const SNOWBALL_TREND_GRADE_S_GREEN_MAX = 1;
 export const SNOWBALL_TREND_GRADE_A_GREEN_MAX = 3;
+/** LONG เขียว > 3 วัน (≥4) → cap ที่ Grade C — สูงกว่า B */
+export const SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE = SNOWBALL_TREND_GRADE_A_GREEN_MAX;
 
 export type ClassifySnowballTrendGradeInput = {
   alertSide?: SnowballAutoTradeAlertSide | "long" | "bear" | null;
@@ -43,6 +46,18 @@ function finitePct(v: number | null | undefined): v is number {
 function greenDaysAtMost(maxDays: number, greenDaysBeforeSignal?: number | null): boolean {
   const n = greenDaysBeforeSignal;
   return n != null && Number.isFinite(n) && n >= 0 && Math.floor(n) <= maxDays;
+}
+
+function greenDaysExceeds(maxDays: number, greenDaysBeforeSignal?: number | null): boolean {
+  const n = greenDaysBeforeSignal;
+  return n != null && Number.isFinite(n) && n >= 0 && Math.floor(n) > maxDays;
+}
+
+function longGreenDaysForcesGradeC(input: ClassifySnowballTrendGradeInput): boolean {
+  return (
+    isLongSide(input.alertSide) &&
+    greenDaysExceeds(SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE, input.greenDaysBeforeSignal)
+  );
 }
 
 function matchesGradeS(input: ClassifySnowballTrendGradeInput): boolean {
@@ -97,11 +112,12 @@ export function snowballEma4hSlopeMatchesTrendGradeF(
   return matchesGradeF({ ema4hSlopePct7d, ema1dSlopePct7d });
 }
 
-/** ตัดเกรด F → S → A → B → C */
+/** ตัดเกรด F → S → A → (LONG เขียว>3 → C) → B → C */
 export function classifySnowballTrendGrade(input: ClassifySnowballTrendGradeInput): SnowballTrendGrade {
   if (matchesGradeF(input)) return "f";
   if (matchesGradeS(input)) return "s";
   if (matchesGradeA(input)) return "a";
+  if (longGreenDaysForcesGradeC(input)) return "c";
   if (matchesGradeB(input)) return "b";
   return "c";
 }
@@ -128,9 +144,9 @@ export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDispla
     return `EMA4h ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_A_EMA4H_MAX}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} วัน`;
   }
   if (grade === "B") {
-    return `EMA4h ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}% หรือ BTC EMA4h < ${SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE}%`;
+    return `EMA4h ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}% หรือ BTC EMA4h < ${SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} วัน`;
   }
-  return "นอกเหนือเกณฑ์ F / S / A / B";
+  return `นอกเหนือเกณฑ์ F / S / A / B · หรือ LONG เขียว > ${SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE} วัน`;
 }
 
 export function snowballTrendGradeFilterTitle(filter: SnowballTrendGradeFilter): string {

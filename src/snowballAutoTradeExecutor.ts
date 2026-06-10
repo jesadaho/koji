@@ -161,7 +161,7 @@ function resolveSnowballAutoOpenSide(
   const gradeFMatch = snowballAutoOpenMatchesQualityShortSignal(input);
   const longGateOn = qsOn || gradeFFadeOn;
 
-  if (qsOn && qsMatch) {
+  if (isLongAlert && qsOn && qsMatch) {
     return "long";
   }
   if (isLongAlert && gradeFFadeOn && gradeFMatch) {

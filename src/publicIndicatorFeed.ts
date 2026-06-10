@@ -4150,7 +4150,8 @@ export async function runPublicIndicatorFeedInternal(
                 pushSnowScanSymList(snowScanStats.bearSentSymbols, `${symbol} BEAR`);
               }
             }
-            const runBearAutoOpenNow = !intrabar && !skipBearTgForPending;
+            // SHORT ทิศ BEAR — เปิดทันทีตอนแจ้ง (ไม่รอ confirm) ตามตั้งค่า Snowball SHORT
+            const runBearAutoOpenNow = !intrabar;
             if (runBearAutoOpenNow) {
               try {
                 const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(symbol);
@@ -4259,7 +4260,7 @@ export async function runPublicIndicatorFeedInternal(
                   alertedAtMs: now,
                   signalBarOpenSec,
                   signalBarTf: snowTf,
-                  entryPrice: clE!,
+                  entryPrice: twoBarInline ? c15[iConf]! : clE!,
                   intrabar,
                   triggerKind: "swing_ll",
                   vol: vE!,

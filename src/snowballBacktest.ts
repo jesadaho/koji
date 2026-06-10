@@ -18,6 +18,11 @@ import {
 import { simulateSnowballStatsFollowUp } from "./snowballBacktestFollowUp";
 import { fetchSnowballAlertMarketContextAt } from "./snowballMarketContext";
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
+import {
+  classifySnowballTrendGrade,
+  snowballTrendGradeActionPlan,
+  snowballTrendGradeToDisplay,
+} from "./snowballTrendGrade";
 import { snowballStatsSignalDedupeKey, type AppendSnowballStatsInput } from "./snowballStatsStore";
 
 const WARMUP_BARS = 250;
@@ -129,6 +134,21 @@ async function processHit(
       ? countGreenDaysBeforeSignalBar(pack1d, hit.signalBarOpenSec, snowTf)
       : await fetchGreenDaysBeforeSignalBar(symbol, hit.signalBarOpenSec, snowTf);
 
+  if (hit.alertSide === "long") {
+    const grade = classifySnowballTrendGrade({
+      alertSide: "long",
+      ema4hSlopePct7d: mktCtx.ema4hSlopePct7d,
+      ema1dSlopePct7d: mktCtx.ema1dSlopePct7d,
+      btcEma4hSlopePct7d: mktCtx.btcEma4hSlopePct7d,
+      greenDaysBeforeSignal: greenDays,
+    });
+    hit.statsInput.qualityTier = grade;
+    hit.statsInput.alertQualityTier = grade;
+    hit.statsInput.displayGrade = snowballTrendGradeToDisplay(grade);
+    hit.statsInput.actionPlan = snowballTrendGradeActionPlan(grade);
+    hit.statsInput.momentumFailGradeF = grade === "f";
+  }
+
   const appendInput: AppendSnowballStatsInput = {
     symbol,
     alertedAtIso,
@@ -185,8 +205,9 @@ async function backtestSymbol(
       : null;
 
     const mktCtx = await fetchSnowballAlertMarketContextAt(symbol, barCloseMs);
-    const iSigEstimate = Math.max(0, iClosed - 1);
-    const signalBarOpenSecEst = pack4hFull.timeSec[iSigEstimate] ?? 0;
+    const iEval = pack4h.close.length - 1;
+    const iSig = iEval >= 1 ? iEval - 1 : iEval;
+    const signalBarOpenSecEst = pack4h.timeSec[iSig] ?? 0;
     const greenDays =
       pack1d != null && signalBarOpenSecEst > 0
         ? countGreenDaysBeforeSignalBar(pack1d, signalBarOpenSecEst, snowTf)
@@ -217,8 +238,10 @@ async function backtestSymbol(
         pack1d,
         snowTf,
       );
-      // Walk แท่งเดียวต่อรอบ — อัปเดต state ทุก hit (รวม Grade F) เพื่อให้ wave gate ถัดไปถูกต้อง
-      applySnowballBacktestFiredKey(state, hit.feedKey, hit.signalBarOpenSec, hit.entryPrice);
+      // Walk แท่งเดียวต่อรอบ — Grade F อัปเดตแค่ wave-gate price (ไม่ล็อกแท่ง) เหมือน live
+      applySnowballBacktestFiredKey(state, hit.feedKey, hit.signalBarOpenSec, hit.entryPrice, {
+        skipFiredBarSec: hit.skipFiredKeyUpdate,
+      });
       const stop = !onRow(row);
       if (stop) return;
     }
