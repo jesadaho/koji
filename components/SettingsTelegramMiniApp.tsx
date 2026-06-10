@@ -1370,14 +1370,12 @@ export default function SettingsTelegramMiniApp() {
           </span>
         </label>
 
-        <div style={{ marginTop: "0.75rem" }}>
-          <p className="sub" style={{ margin: 0 }}>
+        <div className="sub" style={{ marginTop: "0.75rem" }}>
+          <p className="tmaCheckboxField__text" style={{ margin: "0 0 0.45rem" }}>
             <strong style={{ fontWeight: 600 }}>✨ Quality Signal → Long</strong>
-          </p>
-          <p className="sub" style={{ margin: "0.2rem 0 0.5rem", opacity: 0.9, fontSize: "0.93em" }}>
-            สัญญาณที่ตรง matrix ✨ Quality Signal — {SNOWBALL_QUALITY_SIGNAL_CRITERIA} — สั่ง{" "}
-            <strong>Long</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะ fade SHORT /
-            SHORT ทิศ / วันอาทิตย์เมื่อตรงเกณฑ์ Long · เลือกเกรดที่จะเปิด
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              {SNOWBALL_QUALITY_SIGNAL_CRITERIA} — เปิด Long ทันทีเฉพาะเกรดที่ติ๊ก (ไม่ติ๊กเกรดใด = ปิด)
+            </span>
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 0.75rem" }}>
             {SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS.map((grade) => {
@@ -1396,7 +1394,7 @@ export default function SettingsTelegramMiniApp() {
                     }}
                   />
                   <span className="tmaCheckboxField__text">
-                    <strong style={{ fontWeight: 600 }}>เกรด {grade}</strong>
+                    <strong style={{ fontWeight: 600 }}>{grade}</strong>
                   </span>
                 </label>
               );
