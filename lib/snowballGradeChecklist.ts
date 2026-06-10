@@ -15,7 +15,6 @@ import {
   SNOWBALL_TREND_GRADE_B_EMA4H_MAX,
   SNOWBALL_TREND_GRADE_B_EMA4H_MIN,
   SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_S_GREEN_MAX,
 } from "@/src/snowballTrendGrade";
@@ -437,7 +436,6 @@ function snowballTrendGradeChecklistItems(
       status:
         ema4h != null &&
         Number.isFinite(ema4h) &&
-        ema4h > SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE &&
         ema4h < SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE
           ? "pass"
           : ema4h != null && Number.isFinite(ema4h) && ema4h > SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE
@@ -453,7 +451,7 @@ function snowballTrendGradeChecklistItems(
                   ema4h <= SNOWBALL_TREND_GRADE_B_EMA4H_MAX
                 ? "pass"
                 : "unknown",
-      detail: `${fmtSlope(ema4h)} · F (ลำดับแรก) > ${SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE}% และ < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}% · EMA1d < 0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_A_EMA4H_MAX}% · B ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}%`,
+      detail: `${fmtSlope(ema4h)} · F (ลำดับแรก) < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}% · EMA1d < 0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_A_EMA4H_MAX}% · B ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}%`,
     },
     ...(greenDaysItem ? [greenDaysItem] : []),
     {

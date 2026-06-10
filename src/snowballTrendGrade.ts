@@ -19,7 +19,7 @@ export const SNOWBALL_TREND_GRADE_A_EMA4H_MAX = 50;
 export const SNOWBALL_TREND_GRADE_B_EMA4H_MIN = 10;
 export const SNOWBALL_TREND_GRADE_B_EMA4H_MAX = 15;
 export const SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE = -10;
-export const SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE = -10;
+/** Grade F — EMA4h slope 7d ต้องต่ำกว่าค่านี้ (เช่น -3% ผ่าน, -2% ไม่ผ่าน) */
 export const SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE = -2.5;
 export const SNOWBALL_TREND_GRADE_S_GREEN_MAX = 1;
 export const SNOWBALL_TREND_GRADE_A_GREEN_MAX = 3;
@@ -81,16 +81,13 @@ function matchesGradeB(input: ClassifySnowballTrendGradeInput): boolean {
 
 function matchesGradeF(input: ClassifySnowballTrendGradeInput): boolean {
   if (!finitePct(input.ema4hSlopePct7d) || !finitePct(input.ema1dSlopePct7d)) return false;
-  const ema4h = input.ema4hSlopePct7d;
-  const ema1d = input.ema1dSlopePct7d;
   return (
-    ema4h > SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE &&
-    ema4h < SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE &&
-    ema1d < 0
+    input.ema4hSlopePct7d < SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE &&
+    input.ema1dSlopePct7d < 0
   );
 }
 
-export const SNOWBALL_TREND_GRADE_F_CRITERIA = `EMA4h > ${SNOWBALL_TREND_GRADE_F_EMA4H_MIN_EXCLUSIVE}% และ < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}% (ลำดับแรก) · EMA1d < 0%`;
+export const SNOWBALL_TREND_GRADE_F_CRITERIA = `EMA4h < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}% · EMA1d < 0%`;
 
 /** ตรงเกรด F — ใช้ Quality Short Signal / matrix filter / fade SHORT */
 export function snowballEma4hSlopeMatchesTrendGradeF(

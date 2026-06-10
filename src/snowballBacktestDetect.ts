@@ -3,7 +3,7 @@
  * Mirrors sendSnowballLong / sendSnowballBear in publicIndicatorFeed.ts (4h two-bar inline).
  */
 
-import type { BinanceIndicatorTf, BinanceKlinePack } from "./binanceIndicatorKline";
+import type { BinanceKlinePack, SnowballBinanceTf } from "./binanceIndicatorKline";
 import { emaLine, rsiWilder, smaLine, stochRsiLine } from "./indicatorMath";
 import {
   evaluateSnowballLongBreakout1hConfirm,
@@ -721,7 +721,7 @@ function detectSnowballBearClosed(
 }
 
 type DetectSeriesConfig = {
-  snowTf: BinanceIndicatorTf;
+  snowTf: SnowballBinanceTf;
   swingLb: number;
   swingGradeLb: number;
   swingEx: number;
