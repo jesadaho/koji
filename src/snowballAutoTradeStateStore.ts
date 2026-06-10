@@ -70,6 +70,7 @@ export type SnowballAutoTradeActive = {
   holdExtendedForRed?: boolean;
   slArmRoiPct?: number;
   slEntryOffsetPct?: number;
+  slAtEntryAfter24hIfGreenEnabled?: boolean;
   /** ตั้ง/แจ้ง SL บังทุนแล้ว — กันยิงซ้ำเมื่อ slPlanOrderId ว่าง */
   slBreakevenArmed?: boolean;
   slPlanOrderId?: string;
@@ -103,6 +104,7 @@ export type SnowballAutoTradePendingLimit = {
   maxHoldHours: number;
   slArmRoiPct: number;
   slEntryOffsetPct: number;
+  slAtEntryAfter24hIfGreenEnabled?: boolean;
 };
 
 export type SnowballAutoTradePerUserState = {
@@ -214,7 +216,7 @@ function normalizePendingLimits(raw: unknown): SnowballAutoTradePendingLimit[] {
     ) {
       continue;
     }
-    out.push({
+    const pendingRow: SnowballAutoTradePendingLimit = {
       contractSymbol: sym,
       binanceSymbol,
       side,
@@ -235,7 +237,11 @@ function normalizePendingLimits(raw: unknown): SnowballAutoTradePendingLimit[] {
       maxHoldHours: maxH,
       slArmRoiPct: slArm,
       slEntryOffsetPct: slOff,
-    });
+    };
+    if (typeof o.slAtEntryAfter24hIfGreenEnabled === "boolean") {
+      pendingRow.slAtEntryAfter24hIfGreenEnabled = o.slAtEntryAfter24hIfGreenEnabled;
+    }
+    out.push(pendingRow);
   }
   const byKey = new Map<string, SnowballAutoTradePendingLimit>();
   for (const e of out) byKey.set(`${e.contractSymbol}|${e.side}|${e.orderId}`, e);
@@ -341,6 +347,9 @@ function normalizeActive(raw: unknown): SnowballAutoTradeActive[] {
       row.maxHoldHours = Number.isFinite(maxH) && maxH > 0 ? maxH : 48;
       if (slArm != null) row.slArmRoiPct = slArm;
       if (slOff != null) row.slEntryOffsetPct = slOff;
+      if (typeof o.slAtEntryAfter24hIfGreenEnabled === "boolean") {
+        row.slAtEntryAfter24hIfGreenEnabled = o.slAtEntryAfter24hIfGreenEnabled;
+      }
       if (slPlan) row.slPlanOrderId = slPlan;
       if (o.slBreakevenArmed === true || slPlan) row.slBreakevenArmed = true;
       if (tp1Plan) row.tp1PlanOrderId = tp1Plan;
@@ -582,6 +591,7 @@ export function withRecordedSnowballSuccessfulOpen(
       maxHoldHours: number;
       slArmRoiPct: number;
       slEntryOffsetPct: number;
+      slAtEntryAfter24hIfGreenEnabled?: boolean;
       tp1PlanOrderId?: string;
       tp2PlanOrderId?: string;
       initialHoldVol?: number;
@@ -628,6 +638,9 @@ export function withRecordedSnowballSuccessfulOpen(
     activeRow.maxHoldHours = plan.maxHoldHours;
     activeRow.slArmRoiPct = plan.slArmRoiPct;
     activeRow.slEntryOffsetPct = plan.slEntryOffsetPct;
+    if (typeof plan.slAtEntryAfter24hIfGreenEnabled === "boolean") {
+      activeRow.slAtEntryAfter24hIfGreenEnabled = plan.slAtEntryAfter24hIfGreenEnabled;
+    }
     if (typeof mexcE === "number" && Number.isFinite(mexcE) && mexcE > 0) {
       activeRow.tpSlEnabled = true;
       if (plan.tp1PlanOrderId?.trim()) activeRow.tp1PlanOrderId = plan.tp1PlanOrderId.trim();

@@ -3,6 +3,7 @@ import {
   DEFAULT_SL_ENTRY_OFFSET_PCT,
   parseSlArmRoiPct,
   parseSlEntryOffsetPct,
+  slAtEntryAfter24hIfGreenEnabledFromSetting,
 } from "@/lib/tpSlBreakevenPlan";
 import type { TradingViewMexcUserSettings } from "./tradingViewCloseSettingsStore";
 
@@ -20,6 +21,7 @@ export type SnowballTpSlPlan = {
   holdExtendIfRedEnabled: boolean;
   slArmRoiPct: number;
   slEntryOffsetPct: number;
+  slAtEntryAfter24hIfGreenEnabled: boolean;
 };
 
 type SnowballTpSlPlanFieldKeys = {
@@ -31,6 +33,7 @@ type SnowballTpSlPlanFieldKeys = {
   holdExtendIfRedEnabled: keyof TradingViewMexcUserSettings;
   slArmRoiPct: keyof TradingViewMexcUserSettings;
   slEntryOffsetPct: keyof TradingViewMexcUserSettings;
+  slAtEntryAfter24hIfGreenEnabled: keyof TradingViewMexcUserSettings;
 };
 
 const SNOWBALL_DEFAULT_TP_SL_KEYS: SnowballTpSlPlanFieldKeys = {
@@ -42,6 +45,7 @@ const SNOWBALL_DEFAULT_TP_SL_KEYS: SnowballTpSlPlanFieldKeys = {
   holdExtendIfRedEnabled: "snowballAutoTradeHoldExtendIfRedEnabled",
   slArmRoiPct: "snowballAutoTradeSlArmRoiPct",
   slEntryOffsetPct: "snowballAutoTradeSlEntryOffsetPct",
+  slAtEntryAfter24hIfGreenEnabled: "snowballAutoTradeSlAtEntryAfter24hIfGreenEnabled",
 };
 
 const SNOWBALL_QUALITY_SHORT_TP_SL_KEYS: SnowballTpSlPlanFieldKeys = {
@@ -53,6 +57,7 @@ const SNOWBALL_QUALITY_SHORT_TP_SL_KEYS: SnowballTpSlPlanFieldKeys = {
   holdExtendIfRedEnabled: "snowballAutoTradeQualityShortHoldExtendIfRedEnabled",
   slArmRoiPct: "snowballAutoTradeQualityShortSlArmRoiPct",
   slEntryOffsetPct: "snowballAutoTradeQualityShortSlEntryOffsetPct",
+  slAtEntryAfter24hIfGreenEnabled: "snowballAutoTradeQualityShortSlAtEntryAfter24hIfGreenEnabled",
 };
 
 function readPositiveNumber(
@@ -83,6 +88,9 @@ function resolveSnowballTpSlPlanFromRowKeys(
     slEntryOffsetPct: parseSlEntryOffsetPct(
       row[keys.slEntryOffsetPct] as number | null | undefined,
       DEFAULT_SL_ENTRY_OFFSET_PCT,
+    ),
+    slAtEntryAfter24hIfGreenEnabled: slAtEntryAfter24hIfGreenEnabledFromSetting(
+      row[keys.slAtEntryAfter24hIfGreenEnabled] as boolean | null | undefined,
     ),
   };
 }

@@ -38,6 +38,7 @@ import {
   DEFAULT_SL_ENTRY_OFFSET_PCT,
   parseSlArmRoiPct,
   parseSlEntryOffsetPct,
+  slAtEntryAfter24hIfGreenEnabledFromSetting,
 } from "@/lib/tpSlBreakevenPlan";
 import { bkkIsSaturdayNow } from "./snowballAutoTradeStateStore";
 import {
@@ -147,6 +148,7 @@ export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings)
   holdExtendIfRedEnabled: boolean;
   slArmRoiPct: number;
   slEntryOffsetPct: number;
+  slAtEntryAfter24hIfGreenEnabled: boolean;
 } {
   const en = row.reversalAutoTradeTpSlEnabled !== false;
   const t1 =
@@ -176,6 +178,9 @@ export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings)
     slEntryOffsetPct: parseSlEntryOffsetPct(
       row.reversalAutoTradeSlEntryOffsetPct,
       DEFAULT_SL_ENTRY_OFFSET_PCT,
+    ),
+    slAtEntryAfter24hIfGreenEnabled: slAtEntryAfter24hIfGreenEnabledFromSetting(
+      row.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled,
     ),
   };
 }
@@ -903,6 +908,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             maxHoldHours: plan.maxHoldHours,
             slArmRoiPct: plan.slArmRoiPct,
             slEntryOffsetPct: plan.slEntryOffsetPct,
+            slAtEntryAfter24hIfGreenEnabled: plan.slAtEntryAfter24hIfGreenEnabled,
           },
           dayKey,
         );
@@ -937,6 +943,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
               maxHoldHours: plan.maxHoldHours,
               slArmRoiPct: plan.slArmRoiPct,
               slEntryOffsetPct: plan.slEntryOffsetPct,
+              slAtEntryAfter24hIfGreenEnabled: plan.slAtEntryAfter24hIfGreenEnabled,
             },
             dayKey,
           );

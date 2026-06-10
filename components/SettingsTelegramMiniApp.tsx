@@ -120,6 +120,7 @@ type SnowballAutoTradeApiBundle = {
   holdExtendIfRedEnabled?: boolean;
   slArmRoiPct?: number | null;
   slEntryOffsetPct?: number | null;
+  slAtEntryAfter24hIfGreenEnabled?: boolean;
   qualityShortTpSlEnabled?: boolean;
   qualityShortTp1PricePct?: number | null;
   qualityShortTp1PartialPct?: number | null;
@@ -146,6 +147,7 @@ type ReversalAutoTradeApiBundle = {
   holdExtendIfRedEnabled?: boolean;
   slArmRoiPct?: number | null;
   slEntryOffsetPct?: number | null;
+  slAtEntryAfter24hIfGreenEnabled?: boolean;
   gateQualitySignal?: boolean;
   saturdayAllSignalsEnabled?: boolean;
   longSignalShortEnabled?: boolean;
@@ -214,6 +216,7 @@ export default function SettingsTelegramMiniApp() {
   const [snowHoldExtendIfRed, setSnowHoldExtendIfRed] = useState(false);
   const [snowSlArmRoiPct, setSnowSlArmRoiPct] = useState("");
   const [snowSlEntryOffsetPct, setSnowSlEntryOffsetPct] = useState("");
+  const [snowSlAtEntryAfter24hIfGreen, setSnowSlAtEntryAfter24hIfGreen] = useState(true);
   const [snowQsTpSlEnabled, setSnowQsTpSlEnabled] = useState(true);
   const [snowQsTp1PricePct, setSnowQsTp1PricePct] = useState("");
   const [snowQsTp1PartialPct, setSnowQsTp1PartialPct] = useState("");
@@ -243,6 +246,7 @@ export default function SettingsTelegramMiniApp() {
   const [revHoldExtendIfRed, setRevHoldExtendIfRed] = useState(false);
   const [revSlArmRoiPct, setRevSlArmRoiPct] = useState("");
   const [revSlEntryOffsetPct, setRevSlEntryOffsetPct] = useState("");
+  const [revSlAtEntryAfter24hIfGreen, setRevSlAtEntryAfter24hIfGreen] = useState(true);
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revLongSignalShort, setRevLongSignalShort] = useState(false);
@@ -306,6 +310,7 @@ export default function SettingsTelegramMiniApp() {
     setSnowSlEntryOffsetPct(
       st.slEntryOffsetPct != null && Number.isFinite(st.slEntryOffsetPct) ? String(st.slEntryOffsetPct) : ""
     );
+    setSnowSlAtEntryAfter24hIfGreen(st.slAtEntryAfter24hIfGreenEnabled !== false);
     setSnowQsTpSlEnabled(st.qualityShortTpSlEnabled !== false);
     setSnowQsTp1PricePct(
       st.qualityShortTp1PricePct != null && Number.isFinite(st.qualityShortTp1PricePct)
@@ -380,6 +385,7 @@ export default function SettingsTelegramMiniApp() {
     setRevSlEntryOffsetPct(
       st.slEntryOffsetPct != null && Number.isFinite(st.slEntryOffsetPct) ? String(st.slEntryOffsetPct) : ""
     );
+    setRevSlAtEntryAfter24hIfGreen(st.slAtEntryAfter24hIfGreenEnabled !== false);
     setRevGateQualitySignal(st.gateQualitySignal !== false);
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
     setRevLongSignalShort(Boolean(st.longSignalShortEnabled));
@@ -825,6 +831,7 @@ export default function SettingsTelegramMiniApp() {
         holdExtendIfRedEnabled: snowHoldExtendIfRed,
         slArmRoiPct: snowSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: snowSlEntryOffsetPct.trim() ? slOffParsed : null,
+        slAtEntryAfter24hIfGreenEnabled: snowSlAtEntryAfter24hIfGreen,
         qualityShortTpSlEnabled: snowQsTpSlEnabled,
         qualityShortTp1PricePct: snowQsTp1PricePct.trim() ? qsTp1Parsed : null,
         qualityShortTp1PartialPct: snowQsTp1PartialPct.trim() ? qsTp1PartialParsed : null,
@@ -983,6 +990,7 @@ export default function SettingsTelegramMiniApp() {
         holdExtendIfRedEnabled: revHoldExtendIfRed,
         slArmRoiPct: revSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
+        slAtEntryAfter24hIfGreenEnabled: revSlAtEntryAfter24hIfGreen,
         entryMode: revShortEntryMode,
         entryEmaPeriod:
           revShortEntryMode === "hybrid_ema" ? Math.floor(shortEntryEmaPeriodParsed) : null,
@@ -1621,9 +1629,11 @@ export default function SettingsTelegramMiniApp() {
           <li>
             <strong>แผนบังทุน</strong>: เมื่อ ROI ≥ <code>{snowSlArmRoiPct.trim() || "10"}%</code> ตั้ง SL บังทุน (LONG ต่ำกว่า entry · SHORT สูงกว่า entry ตาม <code>SL ห่าง entry %</code> · 0 = @entry)
           </li>
-          <li>
-            <strong>แผนบังทุน</strong>: ครบ <strong>24 ชม.</strong> แล้วยังเขียว → ตั้ง SL @entry ทันที (ไม่รอ ROI ถึงเกณฑ์)
-          </li>
+          {snowSlAtEntryAfter24hIfGreen ? (
+            <li>
+              <strong>แผนบังทุน</strong>: ครบ <strong>24 ชม.</strong> แล้วยังเขียว → ตั้ง SL @entry ทันที (offset 0 · ไม่รอ ROI)
+            </li>
+          ) : null}
           <li>
             <strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุนที่เหลือด้วย offset เดียวกัน
           </li>
@@ -1746,9 +1756,17 @@ export default function SettingsTelegramMiniApp() {
               disabled={!snowTpSlEnabled}
             />
           </label>
-          <p className="sub" style={{ margin: 0, opacity: 0.92 }}>
-            กติกาเพิ่ม: ครบ <strong>24 ชม.</strong> หลังเปิดแล้วยังเขียว → ตั้ง SL @entry ทันที (ใช้ offset 0 ไม่รอ ROI ถึงเกณฑ์ด้านบน)
-          </p>
+          <label className="sub tmaCheckboxField" style={{ display: "block", margin: 0 }}>
+            <input
+              type="checkbox"
+              checked={snowSlAtEntryAfter24hIfGreen}
+              onChange={(e) => setSnowSlAtEntryAfter24hIfGreen(e.target.checked)}
+              disabled={!snowTpSlEnabled}
+            />
+            <span className="tmaCheckboxField__text">
+              ครบ <strong>24 ชม.</strong> หลังเปิดแล้วยังเขียว → ตั้ง SL @entry ทันที (offset 0 · ไม่รอ ROI ถึงเกณฑ์ด้านบน)
+            </span>
+          </label>
         </div>
 
         <p className="sub" style={{ marginTop: "0.85rem" }}>
@@ -1992,9 +2010,11 @@ export default function SettingsTelegramMiniApp() {
           <li>
             <strong>แผนบังทุน</strong>: ROI ≥ <code>{revSlArmRoiPct.trim() || "10"}%</code> → SL บังทุน (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code> จาก entry)
           </li>
-          <li>
-            <strong>แผนบังทุน</strong>: ครบ <strong>24 ชม.</strong> แล้วยังเขียว → ตั้ง SL @entry ทันที
-          </li>
+          {revSlAtEntryAfter24hIfGreen ? (
+            <li>
+              <strong>แผนบังทุน</strong>: ครบ <strong>24 ชม.</strong> แล้วยังเขียว → ตั้ง SL @entry ทันที
+            </li>
+          ) : null}
           <li><strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุนที่เหลือด้วย offset เดียวกัน</li>
           <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ปิดทั้งหมด (force) ถ้าเขียวหรือปิด option ขยาย</li>
           <li><strong>จังหวะ 2 (option)</strong>: ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
@@ -2111,9 +2131,17 @@ export default function SettingsTelegramMiniApp() {
               disabled={!revTpSlEnabled}
             />
           </label>
-          <p className="sub" style={{ margin: 0, opacity: 0.92 }}>
-            กติกาเพิ่ม: ครบ <strong>24 ชม.</strong> หลังเปิดแล้วยังเขียว → ตั้ง SL @entry ทันที (ใช้ offset 0 ไม่รอ ROI ถึงเกณฑ์ด้านบน)
-          </p>
+          <label className="sub tmaCheckboxField" style={{ display: "block", margin: 0 }}>
+            <input
+              type="checkbox"
+              checked={revSlAtEntryAfter24hIfGreen}
+              onChange={(e) => setRevSlAtEntryAfter24hIfGreen(e.target.checked)}
+              disabled={!revTpSlEnabled}
+            />
+            <span className="tmaCheckboxField__text">
+              ครบ <strong>24 ชม.</strong> หลังเปิดแล้วยังเขียว → ตั้ง SL @entry ทันที (offset 0 · ไม่รอ ROI ถึงเกณฑ์ด้านบน)
+            </span>
+          </label>
         </div>
 
         <p style={{ marginTop: "0.95rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>

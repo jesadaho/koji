@@ -1207,6 +1207,8 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     holdExtendIfRedEnabled: row.snowballAutoTradeHoldExtendIfRedEnabled === true,
     slArmRoiPct: row.snowballAutoTradeSlArmRoiPct ?? null,
     slEntryOffsetPct: row.snowballAutoTradeSlEntryOffsetPct ?? null,
+    slAtEntryAfter24hIfGreenEnabled:
+      row.snowballAutoTradeSlAtEntryAfter24hIfGreenEnabled !== false,
     qualitySignalLongEnabled:
       row.snowballAutoTradeQualitySignalLongEnabled ??
       row.snowballAutoTradeQualitySignalGateEnabled ??
@@ -1225,6 +1227,8 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
       row.snowballAutoTradeQualityShortHoldExtendIfRedEnabled === true,
     qualityShortSlArmRoiPct: row.snowballAutoTradeQualityShortSlArmRoiPct ?? null,
     qualityShortSlEntryOffsetPct: row.snowballAutoTradeQualityShortSlEntryOffsetPct ?? null,
+    qualityShortSlAtEntryAfter24hIfGreenEnabled:
+      row.snowballAutoTradeQualityShortSlAtEntryAfter24hIfGreenEnabled !== false,
     sundayAllShortEnabled: row.snowballAutoTradeSundayAllShortEnabled ?? false,
     longDynamicBoostEnabled: row.snowballAutoTradeLongDynamicBoostEnabled === true,
     referenceEma20_1hEnabled: row.snowballAutoTradeReferenceEma20_1hEnabled ?? false,
@@ -1257,6 +1261,8 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     holdExtendIfRedEnabled: row.reversalAutoTradeHoldExtendIfRedEnabled === true,
     slArmRoiPct: row.reversalAutoTradeSlArmRoiPct ?? null,
     slEntryOffsetPct: row.reversalAutoTradeSlEntryOffsetPct ?? null,
+    slAtEntryAfter24hIfGreenEnabled:
+      row.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== false,
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
     longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
@@ -1615,6 +1621,23 @@ function parseSnowballAutoTradeNested(
     holdExtendIfRedEnabled = false;
   }
 
+  let slAtEntryAfter24hIfGreenEnabled: boolean | undefined;
+  if (typeof o.slAtEntryAfter24hIfGreenEnabled === "boolean") {
+    slAtEntryAfter24hIfGreenEnabled = o.slAtEntryAfter24hIfGreenEnabled;
+  } else if (
+    o.slAtEntryAfter24hIfGreenEnabled === "1" ||
+    o.slAtEntryAfter24hIfGreenEnabled === 1 ||
+    o.slAtEntryAfter24hIfGreenEnabled === "true"
+  ) {
+    slAtEntryAfter24hIfGreenEnabled = true;
+  } else if (
+    o.slAtEntryAfter24hIfGreenEnabled === "0" ||
+    o.slAtEntryAfter24hIfGreenEnabled === 0 ||
+    o.slAtEntryAfter24hIfGreenEnabled === "false"
+  ) {
+    slAtEntryAfter24hIfGreenEnabled = false;
+  }
+
   let qualityShortTpSlEnabled: boolean | undefined;
   if (typeof o.qualityShortTpSlEnabled === "boolean") qualityShortTpSlEnabled = o.qualityShortTpSlEnabled;
   else if (o.qualityShortTpSlEnabled === "1" || o.qualityShortTpSlEnabled === 1 || o.qualityShortTpSlEnabled === "true") {
@@ -1736,6 +1759,11 @@ function parseSnowballAutoTradeNested(
   if (tpSlEnabled !== undefined) patchPart.snowballAutoTradeTpSlEnabled = tpSlEnabled;
   if (holdExtendIfRedEnabled !== undefined) {
     patchPart.snowballAutoTradeHoldExtendIfRedEnabled = holdExtendIfRedEnabled;
+  }
+  if (slAtEntryAfter24hIfGreenEnabled !== undefined) {
+    patchPart.snowballAutoTradeSlAtEntryAfter24hIfGreenEnabled = slAtEntryAfter24hIfGreenEnabled;
+    patchPart.snowballAutoTradeQualityShortSlAtEntryAfter24hIfGreenEnabled =
+      slAtEntryAfter24hIfGreenEnabled;
   }
   if (qualityShortTpSlEnabled !== undefined) {
     patchPart.snowballAutoTradeQualityShortTpSlEnabled = qualityShortTpSlEnabled;
@@ -1880,6 +1908,23 @@ function parseReversalAutoTradeNested(
     holdExtendIfRedEnabled = false;
   }
 
+  let slAtEntryAfter24hIfGreenEnabled: boolean | undefined;
+  if (typeof o.slAtEntryAfter24hIfGreenEnabled === "boolean") {
+    slAtEntryAfter24hIfGreenEnabled = o.slAtEntryAfter24hIfGreenEnabled;
+  } else if (
+    o.slAtEntryAfter24hIfGreenEnabled === "1" ||
+    o.slAtEntryAfter24hIfGreenEnabled === 1 ||
+    o.slAtEntryAfter24hIfGreenEnabled === "true"
+  ) {
+    slAtEntryAfter24hIfGreenEnabled = true;
+  } else if (
+    o.slAtEntryAfter24hIfGreenEnabled === "0" ||
+    o.slAtEntryAfter24hIfGreenEnabled === 0 ||
+    o.slAtEntryAfter24hIfGreenEnabled === "false"
+  ) {
+    slAtEntryAfter24hIfGreenEnabled = false;
+  }
+
   const parseGateBool = (key: string, defaultOn: boolean): boolean => {
     if (!(key in o)) return defaultOn;
     const x = o[key];
@@ -1932,6 +1977,9 @@ function parseReversalAutoTradeNested(
   if (tpSlEnabled !== undefined) patchPart.reversalAutoTradeTpSlEnabled = tpSlEnabled;
   if (holdExtendIfRedEnabled !== undefined) {
     patchPart.reversalAutoTradeHoldExtendIfRedEnabled = holdExtendIfRedEnabled;
+  }
+  if (slAtEntryAfter24hIfGreenEnabled !== undefined) {
+    patchPart.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled = slAtEntryAfter24hIfGreenEnabled;
   }
 
   const parseReversalEntryEmaPatch = (

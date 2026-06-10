@@ -96,6 +96,7 @@ async function promotePendingToActive(args: {
     maxHoldHours: number;
     slArmRoiPct: number;
     slEntryOffsetPct: number;
+    slAtEntryAfter24hIfGreenEnabled?: boolean;
     tp1PlanOrderId?: string;
     tp2PlanOrderId?: string;
     initialHoldVol?: number;
@@ -111,6 +112,7 @@ async function promotePendingToActive(args: {
       maxHoldHours: pending.maxHoldHours,
       slArmRoiPct: pending.slArmRoiPct,
       slEntryOffsetPct: pending.slEntryOffsetPct,
+      slAtEntryAfter24hIfGreenEnabled: pending.slAtEntryAfter24hIfGreenEnabled,
     };
     try {
       const placed = await placeTpPlanOrdersAfterOpen(creds, {

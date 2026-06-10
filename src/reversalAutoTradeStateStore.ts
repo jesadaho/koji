@@ -46,6 +46,7 @@ export type ReversalAutoTradeActive = {
   holdExtendedForRed?: boolean;
   slArmRoiPct?: number;
   slEntryOffsetPct?: number;
+  slAtEntryAfter24hIfGreenEnabled?: boolean;
   /** ตั้ง/แจ้ง SL บังทุนแล้ว — กันยิงซ้ำเมื่อ slPlanOrderId ว่าง */
   slBreakevenArmed?: boolean;
   /** orderId ของ plan SL ที่ตั้งหลัง TP1 — ใช้ cancel ตอน TP2/48h */
@@ -71,6 +72,7 @@ export type ReversalAutoTradePendingLimit = {
   maxHoldHours: number;
   slArmRoiPct: number;
   slEntryOffsetPct: number;
+  slAtEntryAfter24hIfGreenEnabled?: boolean;
 };
 
 export type ReversalAutoTradePerUserState = {
@@ -162,7 +164,7 @@ function normalizePendingLimits(raw: unknown): ReversalAutoTradePendingLimit[] {
     ) {
       continue;
     }
-    out.push({
+    const pendingRow: ReversalAutoTradePendingLimit = {
       contractSymbol: sym,
       binanceSymbol,
       orderId,
@@ -177,7 +179,11 @@ function normalizePendingLimits(raw: unknown): ReversalAutoTradePendingLimit[] {
       maxHoldHours: maxH,
       slArmRoiPct: slArm,
       slEntryOffsetPct: slOff,
-    });
+    };
+    if (typeof o.slAtEntryAfter24hIfGreenEnabled === "boolean") {
+      pendingRow.slAtEntryAfter24hIfGreenEnabled = o.slAtEntryAfter24hIfGreenEnabled;
+    }
+    out.push(pendingRow);
   }
   const byKey = new Map<string, ReversalAutoTradePendingLimit>();
   for (const e of out) byKey.set(`${e.contractSymbol}|${e.orderId}`, e);
@@ -275,6 +281,9 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
     };
     if (slArm != null) row.slArmRoiPct = slArm;
     if (slOff != null) row.slEntryOffsetPct = slOff;
+    if (typeof o.slAtEntryAfter24hIfGreenEnabled === "boolean") {
+      row.slAtEntryAfter24hIfGreenEnabled = o.slAtEntryAfter24hIfGreenEnabled;
+    }
     if (slId) row.slPlanOrderId = slId;
     if (o.slBreakevenArmed === true || slId) row.slBreakevenArmed = true;
     if (tp1Plan) row.tp1PlanOrderId = tp1Plan;
@@ -507,6 +516,7 @@ export function withReversalActiveOpen(
     maxHoldHours: number;
     slArmRoiPct: number;
     slEntryOffsetPct: number;
+    slAtEntryAfter24hIfGreenEnabled?: boolean;
     tp1PlanOrderId?: string;
     tp2PlanOrderId?: string;
     initialHoldVol?: number;
@@ -539,6 +549,9 @@ export function withReversalActiveOpen(
         ? p.slEntryOffsetPct
         : 0,
   };
+  if (typeof p.slAtEntryAfter24hIfGreenEnabled === "boolean") {
+    row.slAtEntryAfter24hIfGreenEnabled = p.slAtEntryAfter24hIfGreenEnabled;
+  }
   if (p.tp1PlanOrderId?.trim()) row.tp1PlanOrderId = p.tp1PlanOrderId.trim();
   if (p.tp2PlanOrderId?.trim()) row.tp2PlanOrderId = p.tp2PlanOrderId.trim();
   if (typeof p.initialHoldVol === "number" && p.initialHoldVol > 0) row.initialHoldVol = p.initialHoldVol;

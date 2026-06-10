@@ -5,6 +5,23 @@ export const DEFAULT_SL_ENTRY_OFFSET_PCT = 0;
 /** ครบช่วงนี้หลังเปิด + ยังเขียว → ตั้ง SL @entry ทันที */
 export const SL_BREAKEVEN_AFTER_24H_IF_GREEN_MS = 24 * 3600 * 1000;
 
+export function slAtEntryAfter24hIfGreenEnabledFromSetting(
+  enabled: boolean | null | undefined,
+): boolean {
+  return enabled !== false;
+}
+
+/** snapshot บน active ก่อน · fallback แผนผู้ใช้ */
+export function resolveSlAtEntryAfter24hIfGreenEnabled(
+  active: { slAtEntryAfter24hIfGreenEnabled?: boolean } | null | undefined,
+  planEnabled: boolean,
+): boolean {
+  if (typeof active?.slAtEntryAfter24hIfGreenEnabled === "boolean") {
+    return active.slAtEntryAfter24hIfGreenEnabled;
+  }
+  return planEnabled;
+}
+
 export type TpSlBreakevenConfig = {
   slArmRoiPct: number;
   slEntryOffsetPct: number;

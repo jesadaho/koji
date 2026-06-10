@@ -99,6 +99,7 @@ async function promotePendingToActive(args: {
       maxHoldHours: pending.maxHoldHours,
       slArmRoiPct: pending.slArmRoiPct,
       slEntryOffsetPct: pending.slEntryOffsetPct,
+      slAtEntryAfter24hIfGreenEnabled: pending.slAtEntryAfter24hIfGreenEnabled,
     },
     dayKey,
   );

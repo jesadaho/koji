@@ -804,6 +804,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
               maxHoldHours: tpPlan.maxHoldHours,
               slArmRoiPct: tpPlan.slArmRoiPct,
               slEntryOffsetPct: tpPlan.slEntryOffsetPct,
+              slAtEntryAfter24hIfGreenEnabled: tpPlan.slAtEntryAfter24hIfGreenEnabled,
             },
             dayKey,
           );
@@ -872,6 +873,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
         maxHoldHours: number;
         slArmRoiPct: number;
         slEntryOffsetPct: number;
+        slAtEntryAfter24hIfGreenEnabled?: boolean;
         tp1PlanOrderId?: string;
         tp2PlanOrderId?: string;
         initialHoldVol?: number;
@@ -887,6 +889,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
           maxHoldHours: tpPlan.maxHoldHours,
           slArmRoiPct: tpPlan.slArmRoiPct,
           slEntryOffsetPct: tpPlan.slEntryOffsetPct,
+          slAtEntryAfter24hIfGreenEnabled: tpPlan.slAtEntryAfter24hIfGreenEnabled,
         };
         if (trackedTpSl && posAfterOpen) {
           try {

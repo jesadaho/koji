@@ -9,6 +9,7 @@ import {
   formatSlBreakevenTriggerLabel,
   parseSlArmRoiPct,
   parseSlEntryOffsetPct,
+  resolveSlAtEntryAfter24hIfGreenEnabled,
   slBreakevenDueAfter24hIfGreen,
 } from "@/lib/tpSlBreakevenPlan";
 import {
@@ -570,6 +571,7 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
         if (
           !a.slPlanOrderId?.trim() &&
           !a.slBreakevenArmed &&
+          resolveSlAtEntryAfter24hIfGreenEnabled(a, tpPlan.slAtEntryAfter24hIfGreenEnabled) &&
           slBreakevenDueAfter24hIfGreen(a.openedAtMs, move, nowMs)
         ) {
           const r = await handleSlAtEntryOnRoi(ctx, { reason: "24h_green" });
