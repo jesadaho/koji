@@ -59,15 +59,13 @@ import {
   resolveSnowballLongDynamicBoostMarginScale,
   snowballLongDynamicBoostNote,
 } from "@/lib/snowballLongDynamicBoost";
+import {
+  snowballQualitySignalLongFeatureEnabled,
+  snowballQualitySignalLongGradeAllowed,
+} from "./snowballQualitySignalLongGrades";
+import type { SnowballAutoTradeGradeKey } from "./tradingViewCloseSettingsStore";
 
 const SNOWBALL_AUTOTRADE_1H_FETCH_BARS = 200;
-
-function snowballQualitySignalLongEnabled(row: TradingViewMexcUserSettings): boolean {
-  return (
-    row.snowballAutoTradeQualitySignalLongEnabled === true ||
-    row.snowballAutoTradeQualitySignalGateEnabled === true
-  );
-}
 
 /**
  * ค่าเริ่มต้นเปิด — ผู้ใช้เปิด/ปิดหลักใน Mini App (`snowballAutoTradeEnabled`)
@@ -135,6 +133,7 @@ function snowballShortSignalShortEnabled(row: TradingViewMexcUserSettings): bool
 function resolveSnowballAutoOpenSide(
   row: TradingViewMexcUserSettings,
   alertSide: SnowballAutoTradeAlertSide,
+  gradeKey: SnowballAutoTradeGradeKey,
   input: {
     greenDaysBeforeSignal?: number | null;
     fundingRate?: number | null;
@@ -151,17 +150,18 @@ function resolveSnowballAutoOpenSide(
   const defaultSide: SnowballAutoTradeSide = alertSide === "bear" ? "short" : "long";
   const isLongAlert = alertSide !== "bear";
   const isBearAlert = alertSide === "bear";
-  const qsOn = snowballQualitySignalLongEnabled(row);
+  const qsOn = snowballQualitySignalLongFeatureEnabled(row);
   const gradeFFadeOn = snowballGradeFFadeShortEnabled(row);
   const shortSignalOn = snowballShortSignalShortEnabled(row);
   const qsMatch = snowballMatchesQualitySignal({
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
     greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
   });
+  const qsGradeAllowed = qsOn && snowballQualitySignalLongGradeAllowed(row, gradeKey);
   const gradeFMatch = snowballAutoOpenMatchesQualityShortSignal(input);
   const longGateOn = qsOn || gradeFFadeOn;
 
-  if (isLongAlert && qsOn && qsMatch) {
+  if (isLongAlert && qsGradeAllowed && qsMatch) {
     return "long";
   }
   if (isLongAlert && gradeFFadeOn && gradeFMatch) {
@@ -322,12 +322,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
       ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
       ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
     });
-  const forceMatrixOpenLong = qualitySignalMatch || gradeFFadeMatch;
   const isBearAlert = input.alertSide === "bear";
-
-  if (input.actionPlan === "monitor" && !forceMatrixOpenLong && !isBearAlert) {
-    return { usersAttempted: 0, usersSucceeded: 0 };
-  }
 
   const sym = input.contractSymbol.trim();
   if (!sym) return { usersAttempted: 0, usersSucceeded: 0 };
@@ -568,16 +563,19 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     }
 
     const shortSignalOn = snowballShortSignalShortEnabled(row);
+    const userQualitySignalLong =
+      qualitySignalMatch && snowballQualitySignalLongGradeAllowed(row, gradeKey);
+    const userForceMatrixOpenLong = userQualitySignalLong || gradeFFadeMatch;
     if (
       input.actionPlan === "monitor" &&
-      !forceMatrixOpenLong &&
+      !userForceMatrixOpenLong &&
       !(isBearAlert && shortSignalOn)
     ) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "monitor_action_plan");
       continue;
     }
 
-    const side = resolveSnowballAutoOpenSide(row, input.alertSide, qualitySideInput);
+    const side = resolveSnowballAutoOpenSide(row, input.alertSide, gradeKey, qualitySideInput);
     if (side === null) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "quality_filter_no_match");
       continue;
@@ -603,7 +601,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     const qualitySignalLongOverride =
       !sundayShortOverride &&
       !gradeFFadeOverride &&
-      snowballQualitySignalLongEnabled(row) &&
+      userQualitySignalLong &&
       side === "long" &&
       defaultSide !== "long";
 

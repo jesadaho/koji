@@ -147,6 +147,12 @@ import {
 import type { SparkVolBand } from "./sparkTierContext";
 import { newTvWebhookNonce } from "./tradingViewWebhookNonceStore";
 import { isSnowballAutotradeEnabled } from "./snowballAutoTradeExecutor";
+import {
+  resolveSnowballQualitySignalLongGrades,
+  snowballQualitySignalLongFeatureEnabled,
+  SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS,
+} from "./snowballQualitySignalLongGrades";
+import type { SnowballAutoTradeGradeKey } from "./tradingViewCloseSettingsStore";
 import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
 import {
   parseReversalAutoTradeEntryEmaPeriod,
@@ -1209,10 +1215,8 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     slEntryOffsetPct: row.snowballAutoTradeSlEntryOffsetPct ?? null,
     slAtEntryAfter24hIfGreenEnabled:
       row.snowballAutoTradeSlAtEntryAfter24hIfGreenEnabled !== false,
-    qualitySignalLongEnabled:
-      row.snowballAutoTradeQualitySignalLongEnabled ??
-      row.snowballAutoTradeQualitySignalGateEnabled ??
-      false,
+    qualitySignalLongGrades: resolveSnowballQualitySignalLongGrades(row),
+    qualitySignalLongEnabled: snowballQualitySignalLongFeatureEnabled(row),
     gradeFFadeShortEnabled:
       row.snowballAutoTradeGradeFFadeShortEnabled ??
       row.snowballAutoTradeQualityShortSignalShortEnabled ??
@@ -1667,13 +1671,36 @@ function parseSnowballAutoTradeNested(
     qualityShortHoldExtendIfRedEnabled = false;
   }
 
-  let qualitySignalLongEnabled = false;
-  const qsRaw = o.qualitySignalLongEnabled ?? o.qualitySignalGateEnabled;
-  if (typeof qsRaw === "boolean") {
-    qualitySignalLongEnabled = qsRaw;
-  } else if (qsRaw === "1" || qsRaw === 1 || qsRaw === "true") {
-    qualitySignalLongEnabled = true;
+  let qualitySignalLongGrades: SnowballAutoTradeGradeKey[] | undefined;
+  const qsGradesRaw = o.qualitySignalLongGrades;
+  if (Array.isArray(qsGradesRaw)) {
+    const valid = new Set(SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS);
+    const out: SnowballAutoTradeGradeKey[] = [];
+    for (const g of qsGradesRaw) {
+      if (
+        (g === "S" || g === "A" || g === "B" || g === "C" || g === "F") &&
+        valid.has(g) &&
+        !out.includes(g)
+      ) {
+        out.push(g);
+      }
+    }
+    qualitySignalLongGrades = out;
+  } else {
+    const qsRaw = o.qualitySignalLongEnabled ?? o.qualitySignalGateEnabled;
+    let legacyOn = false;
+    if (typeof qsRaw === "boolean") {
+      legacyOn = qsRaw;
+    } else if (qsRaw === "1" || qsRaw === 1 || qsRaw === "true") {
+      legacyOn = true;
+    }
+    if (legacyOn) {
+      qualitySignalLongGrades = [...SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS];
+    } else if (qsRaw === false || qsRaw === "0" || qsRaw === 0 || qsRaw === "false") {
+      qualitySignalLongGrades = [];
+    }
   }
+  const qualitySignalLongEnabled = (qualitySignalLongGrades?.length ?? 0) > 0;
 
   let gradeFFadeShortEnabled = false;
   const gradeFFadeRaw = o.gradeFFadeShortEnabled ?? o.qualityShortSignalShortEnabled;
@@ -1731,6 +1758,7 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeEnabled: enabled,
     snowballAutoTradeRulesLong: null,
     snowballAutoTradeRulesBear: null,
+    snowballAutoTradeQualitySignalLongGrades: qualitySignalLongGrades,
     snowballAutoTradeQualitySignalLongEnabled: qualitySignalLongEnabled,
     snowballAutoTradeGradeFFadeShortEnabled: gradeFFadeShortEnabled,
     snowballAutoTradeShortSignalShortEnabled: shortSignalShortEnabled,

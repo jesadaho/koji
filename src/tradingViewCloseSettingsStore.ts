@@ -100,7 +100,9 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap;
   /** สัญญาณ LONG + Quality Signal (EMA4h > 15% · เขียว ≤ 3 วัน) → เปิด Long ทุกเกรด (ข้าม matrix) */
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
-  /** สัญญาณที่ตรง ✨ Quality Signal → Long */
+  /** เกรดที่เปิด ✨ Quality Signal → Long — ว่าง = ปิด */
+  snowballAutoTradeQualitySignalLongGrades?: SnowballAutoTradeGradeKey[];
+  /** สัญญาณที่ตรง ✨ Quality Signal → Long — sync จาก grades (legacy boolean) */
   snowballAutoTradeQualitySignalLongEnabled?: boolean;
   /** @deprecated ใช้ snowballAutoTradeQualitySignalLongEnabled */
   snowballAutoTradeQualitySignalGateEnabled?: boolean;
@@ -334,6 +336,7 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeRulesLong?: SnowballAutoTradeGradeRulesMap | null;
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap | null;
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
+  snowballAutoTradeQualitySignalLongGrades?: SnowballAutoTradeGradeKey[] | null;
   snowballAutoTradeQualitySignalLongEnabled?: boolean;
   snowballAutoTradeQualityShortSignalShortEnabled?: boolean;
   snowballAutoTradeGradeFFadeShortEnabled?: boolean;
@@ -437,6 +440,7 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeRulesLong !== undefined ||
     input.snowballAutoTradeRulesBear !== undefined ||
     input.snowballAutoTradeGreen2DaysLongAllGrades !== undefined ||
+    input.snowballAutoTradeQualitySignalLongGrades !== undefined ||
     input.snowballAutoTradeQualitySignalLongEnabled !== undefined ||
     input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined ||
     input.snowballAutoTradeGradeFFadeShortEnabled !== undefined ||
@@ -600,12 +604,21 @@ export async function saveTradingViewMexcSettings(
         ? input.snowballAutoTradeGreen2DaysLongAllGrades
         : prev?.snowballAutoTradeGreen2DaysLongAllGrades ?? false,
 
+    snowballAutoTradeQualitySignalLongGrades:
+      input.snowballAutoTradeQualitySignalLongGrades === null
+        ? undefined
+        : input.snowballAutoTradeQualitySignalLongGrades !== undefined
+          ? input.snowballAutoTradeQualitySignalLongGrades
+          : prev?.snowballAutoTradeQualitySignalLongGrades,
+
     snowballAutoTradeQualitySignalLongEnabled:
-      input.snowballAutoTradeQualitySignalLongEnabled !== undefined
-        ? input.snowballAutoTradeQualitySignalLongEnabled
-        : prev?.snowballAutoTradeQualitySignalLongEnabled ??
-          prev?.snowballAutoTradeQualitySignalGateEnabled ??
-          false,
+      input.snowballAutoTradeQualitySignalLongGrades !== undefined
+        ? (input.snowballAutoTradeQualitySignalLongGrades?.length ?? 0) > 0
+        : input.snowballAutoTradeQualitySignalLongEnabled !== undefined
+          ? input.snowballAutoTradeQualitySignalLongEnabled
+          : prev?.snowballAutoTradeQualitySignalLongEnabled ??
+            prev?.snowballAutoTradeQualitySignalGateEnabled ??
+            false,
 
     snowballAutoTradeQualityShortSignalShortEnabled:
       input.snowballAutoTradeQualityShortSignalShortEnabled !== undefined

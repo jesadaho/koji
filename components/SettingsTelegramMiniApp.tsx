@@ -14,6 +14,8 @@ import {
   REVERSAL_QUALITY_SIGNAL_CRITERIA,
   REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA,
 } from "@/lib/reversalMatrixFilters";
+import { SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS } from "@/src/snowballQualitySignalLongGrades";
+import type { SnowballAutoTradeGradeKey } from "@/src/tradingViewCloseSettingsStore";
 import {
   getTelegramInitData,
   getTelegramMiniAppDisplayName,
@@ -105,6 +107,7 @@ type Phase = "loading" | "setup" | "ready";
 
 type SnowballAutoTradeApiBundle = {
   enabled?: boolean;
+  qualitySignalLongGrades?: SnowballAutoTradeGradeKey[];
   qualitySignalLongEnabled?: boolean;
   gradeFFadeShortEnabled?: boolean;
   shortSignalShortEnabled?: boolean;
@@ -198,7 +201,9 @@ export default function SettingsTelegramMiniApp() {
   const [mexcSecretInput, setMexcSecretInput] = useState("");
 
   const [snowEnabled, setSnowEnabled] = useState(false);
-  const [snowQualitySignalLong, setSnowQualitySignalLong] = useState(false);
+  const [snowQualitySignalLongGrades, setSnowQualitySignalLongGrades] = useState<
+    SnowballAutoTradeGradeKey[]
+  >([]);
   const [snowGradeFFadeShort, setSnowGradeFFadeShort] = useState(false);
   const [snowShortSignalShort, setSnowShortSignalShort] = useState(false);
   const [snowSundayAllShort, setSnowSundayAllShort] = useState(false);
@@ -282,7 +287,13 @@ export default function SettingsTelegramMiniApp() {
     if (!st) return;
 
     setSnowEnabled(Boolean(st.enabled));
-    setSnowQualitySignalLong(Boolean(st.qualitySignalLongEnabled));
+    if (Array.isArray(st.qualitySignalLongGrades)) {
+      setSnowQualitySignalLongGrades(st.qualitySignalLongGrades);
+    } else if (st.qualitySignalLongEnabled) {
+      setSnowQualitySignalLongGrades([...SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS]);
+    } else {
+      setSnowQualitySignalLongGrades([]);
+    }
     setSnowGradeFFadeShort(Boolean(st.gradeFFadeShortEnabled));
     setSnowShortSignalShort(Boolean(st.shortSignalShortEnabled));
     setSnowSundayAllShort(Boolean(st.sundayAllShortEnabled));
@@ -813,7 +824,8 @@ export default function SettingsTelegramMiniApp() {
     try {
       const snowballAutoTrade: Record<string, unknown> = {
         enabled: snowEnabled,
-        qualitySignalLongEnabled: snowQualitySignalLong,
+        qualitySignalLongGrades: snowQualitySignalLongGrades,
+        qualitySignalLongEnabled: snowQualitySignalLongGrades.length > 0,
         gradeFFadeShortEnabled: snowGradeFFadeShort,
         shortSignalShortEnabled: snowShortSignalShort,
         sundayAllShortEnabled: snowSundayAllShort,
@@ -1358,19 +1370,39 @@ export default function SettingsTelegramMiniApp() {
           </span>
         </label>
 
-        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
-          <input
-            type="checkbox"
-            checked={snowQualitySignalLong}
-            onChange={(e) => setSnowQualitySignalLong(e.target.checked)}
-          />
-          <span className="tmaCheckboxField__text">
+        <div style={{ marginTop: "0.75rem" }}>
+          <p className="sub" style={{ margin: 0 }}>
             <strong style={{ fontWeight: 600 }}>✨ Quality Signal → Long</strong>
-            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              สัญญาณที่ตรง matrix ✨ Quality Signal — {SNOWBALL_QUALITY_SIGNAL_CRITERIA} — สั่ง <strong>Long</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะ fade SHORT / SHORT ทิศ / วันอาทิตย์เมื่อตรงเกณฑ์ Long
-            </span>
-          </span>
-        </label>
+          </p>
+          <p className="sub" style={{ margin: "0.2rem 0 0.5rem", opacity: 0.9, fontSize: "0.93em" }}>
+            สัญญาณที่ตรง matrix ✨ Quality Signal — {SNOWBALL_QUALITY_SIGNAL_CRITERIA} — สั่ง{" "}
+            <strong>Long</strong> ทันทีตอนแจ้ง (ไม่รอ confirm · ไม่บล็อก Monitor) · ชนะ fade SHORT /
+            SHORT ทิศ / วันอาทิตย์เมื่อตรงเกณฑ์ Long · เลือกเกรดที่จะเปิด
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 0.75rem" }}>
+            {SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS.map((grade) => {
+              const checked = snowQualitySignalLongGrades.includes(grade);
+              return (
+                <label key={grade} className="sub tmaCheckboxField" style={{ margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      setSnowQualitySignalLongGrades((prev) =>
+                        e.target.checked
+                          ? [...prev, grade]
+                          : prev.filter((g) => g !== grade),
+                      );
+                    }}
+                  />
+                  <span className="tmaCheckboxField__text">
+                    <strong style={{ fontWeight: 600 }}>เกรด {grade}</strong>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
 
         <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
           <input
