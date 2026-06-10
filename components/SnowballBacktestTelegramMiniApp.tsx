@@ -25,6 +25,9 @@ import {
   SNOWBALL_BACKTEST_BATCH_DELAY_SEC_OPTIONS,
   SNOWBALL_BACKTEST_BATCH_SIZE,
   SNOWBALL_BACKTEST_UNIVERSE_OPTIONS,
+  SnowballBacktestApiError,
+  snowballBacktestErrorHeadline,
+  truncateSnowballBacktestDebugBody,
   type SnowballBacktestApiPayload,
   type SnowballBacktestBatchDelaySec,
   type SnowballBacktestUniverseSize,
@@ -75,6 +78,61 @@ const FOOTNOTE =
 
 type Phase = "loading" | "setup" | "ready";
 
+function SnowballBacktestApiDebugBlock({ error }: { error: SnowballBacktestApiError }) {
+  const batch =
+    error.batchIndex != null && error.batchCount != null
+      ? ` · รอบ ${error.batchIndex}/${error.batchCount}`
+      : "";
+  return (
+    <>
+      <p className="sub" style={{ marginTop: "0.75rem" }}>
+        <strong>
+          {error.phase === "universe" ? "GET universe" : "POST backtest"}
+          {error.status > 0 ? ` · HTTP ${error.status}` : " · เครือข่าย"}
+          {batch}
+        </strong>
+      </p>
+      <p className="sub" style={{ marginTop: "0.35rem" }}>
+        <code style={{ wordBreak: "break-all", fontSize: "0.8rem" }}>{error.url}</code>
+      </p>
+      {error.bodyText.trim() ? (
+        <>
+          <p className="sub" style={{ marginTop: "0.5rem" }}>
+            Response body (ดิบ):
+          </p>
+          <pre
+            style={{
+              marginTop: "0.25rem",
+              padding: "0.75rem",
+              fontSize: "0.72rem",
+              overflow: "auto",
+              maxHeight: "45vh",
+              background: "rgba(0,0,0,0.2)",
+              borderRadius: "6px",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+            }}
+          >
+            {truncateSnowballBacktestDebugBody(error.bodyText)}
+          </pre>
+        </>
+      ) : (
+        <p className="sub" style={{ marginTop: "0.5rem" }}>
+          ไม่มี response body — มักเกิดจาก timeout, server หลุด, หรือ URL/API base ผิด
+          {apiBase ? "" : " (NEXT_PUBLIC_API_BASE_URL ยังว่าง)"}
+        </p>
+      )}
+    </>
+  );
+}
+
+function snowballBacktestErrorDebug(err: unknown): ReactNode {
+  if (err instanceof SnowballBacktestApiError) {
+    return <SnowballBacktestApiDebugBlock error={err} />;
+  }
+  return null;
+}
+
 function isoDateLocal(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -102,7 +160,7 @@ export default function SnowballBacktestTelegramMiniApp() {
   const [totalSymbols, setTotalSymbols] = useState<SnowballBacktestUniverseSize>(40);
   const [batchDelaySec, setBatchDelaySec] = useState<SnowballBacktestBatchDelaySec>(30);
   const [runBusy, setRunBusy] = useState(false);
-  const [runErr, setRunErr] = useState<string | null>(null);
+  const [runErr, setRunErr] = useState<ReactNode | null>(null);
   const [runStatus, setRunStatus] = useState<string | null>(null);
   const [payload, setPayload] = useState<SnowballBacktestApiPayload | null>(null);
   const [gradeDetailRow, setGradeDetailRow] = useState<SnowballStatsRow | null>(null);
@@ -213,7 +271,12 @@ export default function SnowballBacktestTelegramMiniApp() {
         `เสร็จ ${sec}s${batchNote} · ${data.meta.signalCount} สัญญาณ · ${data.meta.symbols.length} เหรียญ (${data.meta.startDate} → ${data.meta.endDate})`,
       );
     } catch (e) {
-      setRunErr(e instanceof Error ? e.message : String(e));
+      setRunErr(
+        <>
+          <span>{snowballBacktestErrorHeadline(e)}</span>
+          {snowballBacktestErrorDebug(e)}
+        </>,
+      );
       setRunStatus(null);
     } finally {
       setRunBusy(false);
@@ -252,10 +315,34 @@ export default function SnowballBacktestTelegramMiniApp() {
         }
         if (!res.ok) {
           if (!cancelled) {
+            const errMsg =
+              parsed && typeof parsed === "object" && parsed !== null && "error" in parsed
+                ? String((parsed as { error: unknown }).error)
+                : res.statusText;
             setSetupBody(
               <>
-                <p>โหลด config ไม่สำเร็จ</p>
-                <p className="sub">{res.statusText}</p>
+                <p>โหลด config ไม่สำเร็จ: {errMsg}</p>
+                <p className="sub" style={{ marginTop: "0.5rem" }}>
+                  <strong>HTTP {res.status}</strong>{" "}
+                  <code style={{ wordBreak: "break-all", fontSize: "0.8rem" }}>{configUrl}</code>
+                </p>
+                {text.trim() ? (
+                  <pre
+                    style={{
+                      marginTop: "0.35rem",
+                      padding: "0.75rem",
+                      fontSize: "0.72rem",
+                      overflow: "auto",
+                      maxHeight: "30vh",
+                      background: "rgba(0,0,0,0.2)",
+                      borderRadius: "6px",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {truncateSnowballBacktestDebugBody(text)}
+                  </pre>
+                ) : null}
               </>
             );
             setPhase("setup");
@@ -265,10 +352,19 @@ export default function SnowballBacktestTelegramMiniApp() {
         cfg = parsed as TmaConfig;
       } catch (e) {
         if (!cancelled) {
+          const msg = e instanceof Error ? e.message : String(e);
           setSetupBody(
             <>
-              <p>โหลด config ไม่ได้</p>
-              <p className="sub">{e instanceof Error ? e.message : String(e)}</p>
+              <p>โหลด config ไม่ได้: {msg}</p>
+              <p className="sub" style={{ marginTop: "0.5rem" }}>
+                <code style={{ wordBreak: "break-all", fontSize: "0.8rem" }}>
+                  {`${apiBase}/api/tma/config`}
+                </code>
+              </p>
+              <p className="sub" style={{ marginTop: "0.35rem" }}>
+                ถ้าเห็น “Load failed” — เช็คเน็ตหรือ NEXT_PUBLIC_API_BASE_URL
+                {apiBase ? "" : " (ยังไม่ได้ตั้ง)"}
+              </p>
             </>
           );
           setPhase("setup");
@@ -470,9 +566,9 @@ export default function SnowballBacktestTelegramMiniApp() {
           </p>
         ) : null}
         {runErr ? (
-          <p className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }}>
+          <div className="sub" style={{ marginTop: "0.5rem", color: "var(--danger)" }} role="alert">
             {runErr}
-          </p>
+          </div>
         ) : null}
       </section>
 

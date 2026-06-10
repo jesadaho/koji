@@ -48,16 +48,68 @@ export type SnowballBacktestBatchProgress = {
   signalsSoFar: number;
 };
 
+export type SnowballBacktestApiPhase = "universe" | "backtest";
+
 export class SnowballBacktestApiError extends Error {
   readonly status: number;
   readonly bodyText: string;
+  readonly url: string;
+  readonly phase: SnowballBacktestApiPhase;
+  /** รอบ batch ที่ล้ม (1-based) — เฉพาะ POST backtest แบบแบ่ง batch */
+  readonly batchIndex?: number;
+  readonly batchCount?: number;
 
-  constructor(message: string, status: number, bodyText: string) {
+  constructor(
+    message: string,
+    status: number,
+    bodyText: string,
+    url: string,
+    phase: SnowballBacktestApiPhase,
+    batch?: { index: number; count: number },
+  ) {
     super(message);
     this.name = "SnowballBacktestApiError";
     this.status = status;
     this.bodyText = bodyText;
+    this.url = url;
+    this.phase = phase;
+    if (batch) {
+      this.batchIndex = batch.index;
+      this.batchCount = batch.count;
+    }
   }
+}
+
+const MAX_DEBUG_BODY = 12_000;
+
+export function truncateSnowballBacktestDebugBody(s: string, max = MAX_DEBUG_BODY): string {
+  if (s.length <= max) return s;
+  return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
+}
+
+/** ข้อความสั้นสำหรับแสดงหลัก */
+export function snowballBacktestErrorHeadline(err: unknown): string {
+  if (err instanceof SnowballBacktestApiError) {
+    const batch =
+      err.batchIndex != null && err.batchCount != null
+        ? ` · รอบ ${err.batchIndex}/${err.batchCount}`
+        : "";
+    const phaseLabel = err.phase === "universe" ? "โหลด universe" : "รัน backtest";
+    if (err.status > 0) {
+      return `${phaseLabel}ไม่สำเร็จ (HTTP ${err.status})${batch}: ${err.message}`;
+    }
+    return `${phaseLabel}ไม่ได้${batch}: ${err.message}`;
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function networkErrorHint(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("load failed") || m.includes("failed to fetch") || m.includes("networkerror")) {
+    return " — เช็คเน็ต, NEXT_PUBLIC_API_BASE_URL, หรือ timeout ของ server (backtest อาจใช้เวลานาน)";
+  }
+  return "";
 }
 
 function messageFromParsed(parsed: unknown, fallback: string): string {
@@ -116,7 +168,19 @@ export async function fetchSnowballBacktestUniverse(
   initData?: string | null,
 ): Promise<string[]> {
   const url = `${apiBase}/api/tma/snowball-backtest/symbols?total=${encodeURIComponent(String(total))}`;
-  const res = await fetch(url, { headers: authHeaders(initData) });
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: authHeaders(initData) });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new SnowballBacktestApiError(
+      `fetch universe: ${msg}${networkErrorHint(msg)}`,
+      0,
+      "",
+      url,
+      "universe",
+    );
+  }
   const text = await res.text();
   let parsed: unknown = null;
   if (text) {
@@ -127,11 +191,17 @@ export async function fetchSnowballBacktestUniverse(
     }
   }
   if (!res.ok) {
-    throw new SnowballBacktestApiError(messageFromParsed(parsed, res.statusText), res.status, text);
+    throw new SnowballBacktestApiError(
+      messageFromParsed(parsed, res.statusText),
+      res.status,
+      text,
+      url,
+      "universe",
+    );
   }
   const symbols = (parsed as { symbols?: unknown })?.symbols;
   if (!Array.isArray(symbols)) {
-    throw new SnowballBacktestApiError("invalid universe response", res.status, text);
+    throw new SnowballBacktestApiError("invalid universe response", res.status, text, url, "universe");
   }
   return symbols.filter((s): s is string => typeof s === "string" && s.trim().length > 0);
 }
@@ -140,17 +210,31 @@ export async function fetchSnowballBacktestUniverse(
 export async function fetchSnowballBacktest(
   body: SnowballBacktestRequest,
   initData?: string | null,
+  batch?: { index: number; count: number },
 ): Promise<SnowballBacktestApiPayload> {
   const headers: HeadersInit = {
     ...authHeaders(initData),
     "Content-Type": "application/json",
   };
   const url = `${apiBase}/api/tma/snowball-backtest`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new SnowballBacktestApiError(
+      `fetch backtest: ${msg}${networkErrorHint(msg)}`,
+      0,
+      "",
+      url,
+      "backtest",
+      batch,
+    );
+  }
   const text = await res.text();
   let parsed: unknown = null;
   if (text) {
@@ -161,7 +245,14 @@ export async function fetchSnowballBacktest(
     }
   }
   if (!res.ok) {
-    throw new SnowballBacktestApiError(messageFromParsed(parsed, res.statusText), res.status, text);
+    throw new SnowballBacktestApiError(
+      messageFromParsed(parsed, res.statusText),
+      res.status,
+      text,
+      url,
+      "backtest",
+      batch,
+    );
   }
   return parsed as SnowballBacktestApiPayload;
 }
@@ -187,7 +278,13 @@ export async function runSnowballBacktestBatched(
   const universe = await fetchSnowballBacktestUniverse(opts.totalSymbols, opts.initData);
   const batches = chunkSymbols(universe, batchSize);
   if (batches.length === 0) {
-    throw new SnowballBacktestApiError("ไม่มีเหรียญใน universe", 400, "");
+    throw new SnowballBacktestApiError(
+      "ไม่มีเหรียญใน universe",
+      400,
+      "",
+      `${apiBase}/api/tma/snowball-backtest/symbols`,
+      "universe",
+    );
   }
 
   let mergedRows: SnowballStatsRow[] = [];
@@ -209,6 +306,7 @@ export async function runSnowballBacktestBatched(
     const data = await fetchSnowballBacktest(
       { startDate: opts.startDate, endDate: opts.endDate, symbols },
       opts.initData,
+      { index: i + 1, count: batches.length },
     );
     lastPayload = data;
     mergedRows = mergeSnowballBacktestRows(mergedRows, data.rows);
@@ -230,7 +328,13 @@ export async function runSnowballBacktestBatched(
   }
 
   if (!lastPayload) {
-    throw new SnowballBacktestApiError("backtest ไม่สำเร็จ", 500, "");
+    throw new SnowballBacktestApiError(
+      "backtest ไม่สำเร็จ",
+      500,
+      "",
+      `${apiBase}/api/tma/snowball-backtest`,
+      "backtest",
+    );
   }
 
   return {
