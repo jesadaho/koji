@@ -368,16 +368,26 @@ export function snowballStatsGradeDisplayLabel(row: SnowballStatsGradeDisplayRow
   return atAlert;
 }
 
-/** กรอง dropdown Grade — S/A/B/C/F */
+function snowballStatsGradeLabelMatchesSingle(
+  label: string,
+  grade: string,
+): boolean {
+  if (label === grade) return true;
+  const parts = label.split(" → ").map((s) => s.trim());
+  return parts.some((p) => p === grade || p.startsWith(grade));
+}
+
+/** กรอง dropdown Grade — S/A/B/C/F · SAB = S or A or B */
 export function snowballStatsGradeMatchesFilter(
   row: SnowballStatsGradeDisplayRow,
   filter: string,
 ): boolean {
   if (filter === "all") return true;
   const label = snowballStatsGradeDisplayLabel(row);
-  if (label === filter) return true;
-  const parts = label.split(" → ").map((s) => s.trim());
-  return parts.some((p) => p === filter || p.startsWith(filter));
+  if (filter === "SAB") {
+    return ["S", "A", "B"].some((g) => snowballStatsGradeLabelMatchesSingle(label, g));
+  }
+  return snowballStatsGradeLabelMatchesSingle(label, filter);
 }
 
 export type { SnowballGradeChecklistItem } from "@/lib/snowballGradeChecklist";

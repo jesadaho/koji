@@ -132,7 +132,7 @@ export function snowballTrendGradeToDisplay(grade: SnowballTrendGrade): Snowball
   return "C";
 }
 
-export type SnowballTrendGradeFilter = "all" | SnowballTrendGradeDisplay;
+export type SnowballTrendGradeFilter = "all" | SnowballTrendGradeDisplay | "SAB";
 
 /** เกณฑ์ Trend Grade ต่อชั้น — ใช้ใน stats filter / tooltip */
 export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDisplay): string {
@@ -153,6 +153,7 @@ export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDispla
 
 export function snowballTrendGradeFilterTitle(filter: SnowballTrendGradeFilter): string {
   if (filter === "all") return "ทุก grade";
+  if (filter === "SAB") return "Grade S / A / B";
   return `Grade ${filter}: ${snowballTrendGradeFilterCriteria(filter)}`;
 }
 
