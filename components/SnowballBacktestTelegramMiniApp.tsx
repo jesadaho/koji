@@ -21,8 +21,13 @@ import {
 import { useStatsMonthFilter } from "@/lib/useStatsMonthFilter";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import {
-  fetchSnowballBacktest,
+  runSnowballBacktestBatched,
+  SNOWBALL_BACKTEST_BATCH_DELAY_SEC_OPTIONS,
+  SNOWBALL_BACKTEST_BATCH_SIZE,
+  SNOWBALL_BACKTEST_UNIVERSE_OPTIONS,
   type SnowballBacktestApiPayload,
+  type SnowballBacktestBatchDelaySec,
+  type SnowballBacktestUniverseSize,
 } from "@/lib/snowballBacktestClient";
 import {
   loadTelegramWebApp,
@@ -68,8 +73,6 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const FOOTNOTE =
   "จำลอง · ทิศ = ทิศสัญญาณ Snowball · ผล = ปิดที่ 48h (pct48h) · Grade = เกรดสุทธิ · คลิกดู HH48/VAH";
 
-const TOP_ALTS_OPTIONS = [5, 10, 15, 20] as const;
-
 type Phase = "loading" | "setup" | "ready";
 
 function isoDateLocal(d: Date): string {
@@ -96,7 +99,8 @@ export default function SnowballBacktestTelegramMiniApp() {
   const defaults = useMemo(() => defaultDateRange(), []);
   const [startDate, setStartDate] = useState(defaults.start);
   const [endDate, setEndDate] = useState(defaults.end);
-  const [topAlts, setTopAlts] = useState<number>(15);
+  const [totalSymbols, setTotalSymbols] = useState<SnowballBacktestUniverseSize>(40);
+  const [batchDelaySec, setBatchDelaySec] = useState<SnowballBacktestBatchDelaySec>(30);
   const [runBusy, setRunBusy] = useState(false);
   const [runErr, setRunErr] = useState<string | null>(null);
   const [runStatus, setRunStatus] = useState<string | null>(null);
@@ -175,13 +179,38 @@ export default function SnowballBacktestTelegramMiniApp() {
   const runBacktest = useCallback(async () => {
     setRunBusy(true);
     setRunErr(null);
-    setRunStatus("กำลังรัน backtest…");
+    const batchCount = Math.ceil(totalSymbols / SNOWBALL_BACKTEST_BATCH_SIZE);
+    setRunStatus(
+      batchCount > 1
+        ? `กำลังรัน backtest · ${totalSymbols} เหรียญ · ${batchCount} batch`
+        : "กำลังรัน backtest…",
+    );
     try {
-      const data = await fetchSnowballBacktest({ startDate, endDate, topAlts });
+      const data = await runSnowballBacktestBatched({
+        startDate,
+        endDate,
+        totalSymbols,
+        batchDelaySec,
+        onProgress: (p) => {
+          if (p.phase === "running") {
+            setRunStatus(
+              `รอบ ${p.batchIndex}/${p.batchCount} · ${p.symbols.length} เหรียญ · สัญญาณรวม ${p.signalsSoFar}`,
+            );
+          } else if (p.waitSecRemaining != null) {
+            setRunStatus(
+              `รอ ${p.waitSecRemaining}s ก่อนรอบ ${p.batchIndex + 1}/${p.batchCount} · สัญญาณรวม ${p.signalsSoFar}`,
+            );
+          }
+        },
+      });
       setPayload(data);
       const sec = ((data.meta.elapsedMs ?? 0) / 1000).toFixed(1);
+      const batchNote =
+        (data.meta.batchCount ?? 1) > 1
+          ? ` · ${data.meta.batchCount} batch × ${data.meta.batchSize ?? SNOWBALL_BACKTEST_BATCH_SIZE}`
+          : "";
       setRunStatus(
-        `เสร็จ ${sec}s · ${data.meta.signalCount} สัญญาณ · ${data.meta.symbols.length} เหรียญ (${data.meta.startDate} → ${data.meta.endDate})`,
+        `เสร็จ ${sec}s${batchNote} · ${data.meta.signalCount} สัญญาณ · ${data.meta.symbols.length} เหรียญ (${data.meta.startDate} → ${data.meta.endDate})`,
       );
     } catch (e) {
       setRunErr(e instanceof Error ? e.message : String(e));
@@ -189,7 +218,7 @@ export default function SnowballBacktestTelegramMiniApp() {
     } finally {
       setRunBusy(false);
     }
-  }, [startDate, endDate, topAlts]);
+  }, [startDate, endDate, totalSymbols, batchDelaySec]);
 
   useEffect(() => {
     let cancelled = false;
@@ -386,18 +415,42 @@ export default function SnowballBacktestTelegramMiniApp() {
             />
           </label>
           <label className="sub" style={{ display: "inline-flex", flexDirection: "column", gap: "0.25rem" }}>
-            Top alts
+            เหรียญรวม
             <select
               className="tmaInput"
-              value={topAlts}
-              onChange={(e) => setTopAlts(Number(e.currentTarget.value))}
+              value={totalSymbols}
+              onChange={(e) =>
+                setTotalSymbols(Number(e.currentTarget.value) as SnowballBacktestUniverseSize)
+              }
               disabled={runBusy}
-              style={{ minWidth: "5rem" }}
-              title="BTC + ETH + top N จาก quote volume"
+              style={{ minWidth: "5.5rem" }}
+              title="BTC + ETH + top alts จาก quote volume · เกิน 20 แบ่ง batch ละ 20"
             >
-              {TOP_ALTS_OPTIONS.map((n) => (
+              {SNOWBALL_BACKTEST_UNIVERSE_OPTIONS.map((n) => (
                 <option key={n} value={n}>
                   {n}
+                  {n > SNOWBALL_BACKTEST_BATCH_SIZE
+                    ? ` (${Math.ceil(n / SNOWBALL_BACKTEST_BATCH_SIZE)} batch)`
+                    : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="sub" style={{ display: "inline-flex", flexDirection: "column", gap: "0.25rem" }}>
+            เว้นระหว่าง batch
+            <select
+              className="tmaInput"
+              value={batchDelaySec}
+              onChange={(e) =>
+                setBatchDelaySec(Number(e.currentTarget.value) as SnowballBacktestBatchDelaySec)
+              }
+              disabled={runBusy || totalSymbols <= SNOWBALL_BACKTEST_BATCH_SIZE}
+              style={{ minWidth: "5.5rem" }}
+              title="หน่วงก่อนเริ่ม batch ถัดไป (ลด rate limit Binance)"
+            >
+              {SNOWBALL_BACKTEST_BATCH_DELAY_SEC_OPTIONS.map((sec) => (
+                <option key={sec} value={sec}>
+                  {sec === 0 ? "ไม่เว้น" : `${sec}s`}
                 </option>
               ))}
             </select>

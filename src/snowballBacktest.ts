@@ -58,6 +58,22 @@ function closedBarIndicesInRange(
   return out;
 }
 
+/** BTC + ETH + top alts จาก quote volume — สูงสุด maxTotal เหรียญ */
+export async function buildSnowballBacktestUniverse(maxTotal: number): Promise<string[]> {
+  const cap = Math.min(Math.max(2, Math.floor(maxTotal)), 100);
+  const topN = Math.max(0, cap - 2);
+  const top = topN > 0 ? await fetchTopUsdmUsdtSymbolsByQuoteVolume(topN) : [];
+  const seen = new Set<string>(["BTCUSDT", "ETHUSDT"]);
+  const out = ["BTCUSDT", "ETHUSDT"];
+  for (const s of top) {
+    if (out.length >= cap) break;
+    if (seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out.slice(0, cap);
+}
+
 async function resolveBacktestUniverse(opts: RunSnowballBacktestOpts): Promise<string[]> {
   const maxSym = Math.min(Math.max(1, opts.maxSymbols ?? MAX_SYMBOLS_CAP), MAX_SYMBOLS_CAP);
   if (opts.symbols?.length) {
@@ -74,16 +90,7 @@ async function resolveBacktestUniverse(opts: RunSnowballBacktestOpts): Promise<s
   }
 
   const topN = Math.max(0, opts.topAlts ?? 10);
-  const top = topN > 0 ? await fetchTopUsdmUsdtSymbolsByQuoteVolume(topN) : [];
-  const seen = new Set<string>(["BTCUSDT", "ETHUSDT"]);
-  const out = ["BTCUSDT", "ETHUSDT"];
-  for (const s of top) {
-    if (out.length >= maxSym) break;
-    if (seen.has(s)) continue;
-    seen.add(s);
-    out.push(s);
-  }
-  return out.slice(0, maxSym);
+  return buildSnowballBacktestUniverse(2 + topN).then((all) => all.slice(0, maxSym));
 }
 
 function mktCtxToStatsFields(ctx: Awaited<ReturnType<typeof fetchSnowballAlertMarketContextAt>>) {

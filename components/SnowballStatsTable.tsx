@@ -494,6 +494,7 @@ export function SnowballStatsTable({
                 <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                 <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                 <td>{statsAtrPct14dLabel(r.atrPct14d)}</td>
+                <td title="EMA(12) 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema1hSlopePct7d)}</td>
                 <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
                 <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
                 <td title="BTC EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma4hSlopePct7d)}</td>
