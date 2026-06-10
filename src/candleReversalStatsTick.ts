@@ -7,7 +7,7 @@ import {
   computeFollowUpMaxAdversePct,
   firstFollowUpKlineIndexAfterAnchorClose,
 } from "@/lib/statsFollowUpAdverse";
-import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
+import { DEFAULT_STATS_TPSL_PLAN, favorablePctInBar } from "@/lib/tpSlStrategySimulate";
 import {
   computeStatsStrategyProfitFromBars,
   statsStrategyProfitCacheKey,
@@ -162,22 +162,46 @@ function computeMfeFromPackLong(
   ac: number,
   entry: number,
 ): { maxRoi: number; mfeIdx: number; maxDd: number; durationHours: number } | null {
+  return computeMfeForMeasureSide("long", timeSec, high, low, barDurSec, iFirst, iLast, ac, entry);
+}
+
+/** MFE / Max DD ก่อน MFE — ใช้ทิศวัดผลเดียวกับกำไรกลยุทธ์ (เช่น Long 1H fade → short) */
+function computeMfeForMeasureSide(
+  side: "short" | "long",
+  timeSec: number[],
+  high: number[],
+  low: number[],
+  barDurSec: number,
+  iFirst: number,
+  iLast: number,
+  ac: number,
+  entry: number,
+): { maxRoi: number; mfeIdx: number; maxDd: number; durationHours: number } | null {
   let maxRoi = -Infinity;
   let mfeIdx = iFirst;
   for (let i = iFirst; i <= iLast; i++) {
-    const roi = ((high[i]! - entry) / entry) * 100;
-    if (roi > maxRoi) {
+    const roi = favorablePctInBar(side, entry, high[i]!, low[i]!);
+    if (Number.isFinite(roi) && roi > maxRoi) {
       maxRoi = roi;
       mfeIdx = i;
     }
   }
   if (!Number.isFinite(maxRoi)) return null;
 
-  let minLow = Infinity;
-  for (let i = iFirst; i <= mfeIdx; i++) {
-    minLow = Math.min(minLow, low[i]!);
+  let maxDd = 0;
+  if (side === "short") {
+    let maxHigh = -Infinity;
+    for (let i = iFirst; i <= mfeIdx; i++) {
+      maxHigh = Math.max(maxHigh, high[i]!);
+    }
+    maxDd = ((maxHigh - entry) / entry) * 100;
+  } else {
+    let minLow = Infinity;
+    for (let i = iFirst; i <= mfeIdx; i++) {
+      minLow = Math.min(minLow, low[i]!);
+    }
+    maxDd = ((entry - minLow) / entry) * 100;
   }
-  let maxDd = ((entry - minLow) / entry) * 100;
   if (!Number.isFinite(maxDd) || maxDd < 0) maxDd = 0;
 
   const durationHours = (timeSec[mfeIdx]! + barDurSec - ac) / 3600;
@@ -418,54 +442,35 @@ async function followUpCandleReversal1hRow(
   const i15Last = indexRangeThrough(t15, KLINE_15M_SEC, i15First, windowEndSec);
   if (i15Last < i15First) return false;
 
-  let mfe: ReturnType<typeof computeMfeFromPack> = null;
-  const hPack = await fetchBinanceUsdmKlinesRange(row.symbol, "1h", {
-    startTimeMs: row.signalBarOpenSec * 1000,
-    endTimeMs: nowMs,
-    limit: 200,
-  });
   const i15FollowFirst = firstFollowUpKlineIndexAfterAnchorClose(t15, ac);
-  if (hPack && hPack.timeSec.length > 0) {
-    const { timeSec: hT, high: hH, low: hL } = hPack;
-    const iHFollowFirst = firstFollowUpKlineIndexAfterAnchorClose(hT, ac);
-    if (iHFollowFirst >= 0) {
-      const iHLast = indexRangeThrough(hT, HOUR_SEC, iHFollowFirst, windowEndSec);
-      if (iHLast >= iHFollowFirst) {
-        mfe = computeMfeFromPack(hT, hH, hL, HOUR_SEC, iHFollowFirst, iHLast, ac, entry);
-      }
-    }
-  }
-  if (!mfe && i15FollowFirst >= 0 && i15Last >= i15FollowFirst) {
-    mfe = computeMfeFromPack(t15, h15, l15, KLINE_15M_SEC, i15FollowFirst, i15Last, ac, entry);
-  }
+  const h48End = ac + 48 * HOUR_SEC;
+  const mfeWindowEnd = Math.min(windowEndSec, h48End);
+  const i15LastMfe = indexRangeThrough(t15, KLINE_15M_SEC, i15First, mfeWindowEnd);
+  const mfe =
+    i15FollowFirst >= 0 && i15LastMfe >= i15FollowFirst
+      ? computeMfeForMeasureSide(
+          side,
+          t15,
+          h15,
+          l15,
+          KLINE_15M_SEC,
+          i15FollowFirst,
+          i15LastMfe,
+          ac,
+          entry,
+        )
+      : null;
   if (!mfe) return false;
 
-  if (hPack && hPack.timeSec.length > 0) {
-    const { timeSec: hT, high: hH, low: hL } = hPack;
-    const iHFirst = hT.findIndex((t) => t + HOUR_SEC >= ac);
-    if (iHFirst >= 0) {
-      const iHLast = indexRangeThrough(hT, HOUR_SEC, iHFirst, windowEndSec);
-      if (iHLast >= iHFirst) {
-        const iAdverseFirst = firstFollowUpKlineIndexAfterAnchorClose(hT, ac);
-        if (iAdverseFirst >= 0 && iHLast >= iAdverseFirst) {
-          const adverse = computeFollowUpMaxAdversePct(hH, hL, iAdverseFirst, iHLast, entry, side);
-          if (adverse != null) row.followUpMaxAdversePct = adverse;
-        }
-      }
-    }
-  } else {
-    const iAdverseFirst = firstFollowUpKlineIndexAfterAnchorClose(t15, ac);
-    const adverse =
-      iAdverseFirst >= 0 && i15Last >= iAdverseFirst
-        ? computeFollowUpMaxAdversePct(h15, l15, iAdverseFirst, i15Last, entry, side)
-        : null;
+  const iAdverseFirst = firstFollowUpKlineIndexAfterAnchorClose(t15, ac);
+  if (iAdverseFirst >= 0 && i15Last >= iAdverseFirst) {
+    const adverse = computeFollowUpMaxAdversePct(h15, l15, iAdverseFirst, i15Last, entry, side);
     if (adverse != null) row.followUpMaxAdversePct = adverse;
   }
 
   const h4End = ac + 4 * HOUR_SEC;
   const h12End = ac + 12 * HOUR_SEC;
   const h24End = ac + 24 * HOUR_SEC;
-  const h48End = ac + 48 * HOUR_SEC;
   const h4 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h4End, entry, side);
   const h12 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h12End, entry, side);
   const h24 = pickHorizonClose(t15, c15, KLINE_15M_SEC, i15First, i15Last, nowSec, h24End, entry, side);
