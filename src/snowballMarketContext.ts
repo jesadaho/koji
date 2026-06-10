@@ -48,6 +48,8 @@ export type SnowballAlertMarketContext = {
   fundingRate: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d: number | null;
+  /** EMA(12) 1h ของคู่สัญญาณ — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
+  ema1hSlopePct7d: number | null;
   /** EMA(12) 4h ของคู่สัญญาณ — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
   ema4hSlopePct7d: number | null;
   /** EMA(12) 1d ของคู่สัญญาณ — slope % ย้อนหลัง 7 แท่ง */
@@ -216,6 +218,7 @@ export async function fetchSnowballAlertMarketContextAt(
     marketCapUsd,
     fundingRate,
     atrPct14d,
+    ema1hSlopePct7d: symbolEma.ema1hSlopePct7d,
     ema4hSlopePct7d: symbolEma.ema4hSlopePct7d,
     ema1dSlopePct7d: symbolEma.ema1dSlopePct7d,
     btcEma4hSlopePct7d: btcEma.btcEma4hSlopePct7d,

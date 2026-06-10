@@ -111,6 +111,8 @@ export type SnowballStatsRow = {
   fundingRate?: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d?: number | null;
+  /** EMA(12) 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
+  ema1hSlopePct7d?: number | null;
   /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
   ema4hSlopePct7d?: number | null;
   /** EMA(12) 1d — slope % ย้อนหลัง 7 แท่ง */
@@ -127,7 +129,7 @@ export type SnowballStatsRow = {
   psar4hV?: number;
   /** 2 = BTC EMA คำนวณ ณ alertedAtMs */
   btcEmaSlopesV?: number;
-  /** 1 = symbol EMA4h/1d คำนวณ ณ alertedAtMs */
+  /** 1 = symbol EMA4h/1d คำนวณ ณ alertedAtMs · 2 = รวม EMA1h */
   symbolEmaSlopesV?: number;
   /** 1 = trend grade (S/A/B/C/F) recompute จาก snapshot ในแถว */
   trendGradeV?: number;
@@ -636,6 +638,32 @@ export function snowballStatsRowMatchesGreenDaysFilter(
   if (filter === "le3") return n <= 3;
   if (filter === "gt3") return n > 3;
   return n >= 2;
+}
+
+export type SnowballSideFilter = "all" | "long" | "bear";
+
+export const SNOWBALL_SIDE_FILTER_OPTIONS: ReadonlyArray<{ value: SnowballSideFilter; label: string }> = [
+  { value: "all", label: "ทุกทิศ" },
+  { value: "long", label: "Long" },
+  { value: "bear", label: "Bear" },
+];
+
+export function snowballSideFilterLabel(filter: SnowballSideFilter): string {
+  return SNOWBALL_SIDE_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+function snowballRowAlertSide(
+  row: Pick<SnowballStatsRow, "alertSide" | "triggerKind">,
+): SnowballStatsAlertSide {
+  return row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
+}
+
+export function snowballStatsRowMatchesSideFilter(
+  row: Pick<SnowballStatsRow, "alertSide" | "triggerKind">,
+  filter: SnowballSideFilter,
+): boolean {
+  if (filter === "all") return true;
+  return snowballRowAlertSide(row) === filter;
 }
 
 export function snowballStatsRowMatchesVolRankFilter(

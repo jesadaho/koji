@@ -3323,7 +3323,10 @@ export async function runPublicIndicatorFeedInternal(
         ]);
         const longTrendGradeInput = {
           alertSide: "long" as const,
-          ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
+          ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+              ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
           ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
           btcEma4hSlopePct7d: longMktCtxForAlert?.btcEma4hSlopePct7d ?? null,
           greenDaysBeforeSignal: longGreenDaysForAlert,
@@ -3443,7 +3446,10 @@ export async function runPublicIndicatorFeedInternal(
         }
 
         const longQualitySignal = snowballMatchesQualitySignal({
-          ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
+          ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+              ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
           greenDaysBeforeSignal: longGreenDaysForAlert,
         });
 
@@ -3551,7 +3557,10 @@ export async function runPublicIndicatorFeedInternal(
                 ? vE! / vsE
                 : null;
             const longGradeFFade = snowballMatchesQualityShortSignal({
-              ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
+              ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+              ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
               ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
             });
             const runLongAutoOpenNow =
@@ -3592,6 +3601,9 @@ export async function runPublicIndicatorFeedInternal(
                     longQualitySignal || longGradeFFade ? null : longActionPlan,
                   greenDaysBeforeSignal: longGreenDaysForAlert,
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
+                  ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+              ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
                   ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
@@ -3779,6 +3791,7 @@ export async function runPublicIndicatorFeedInternal(
                   marketCapUsd: longMktCtx?.marketCapUsd ?? null,
                   fundingRate: longMktCtx?.fundingRate ?? null,
                   atrPct14d: longMktCtx?.atrPct14d ?? null,
+                  ema1hSlopePct7d: longMktCtx?.ema1hSlopePct7d ?? null,
                   ema4hSlopePct7d: longMktCtx?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: longMktCtx?.ema1dSlopePct7d ?? null,
                   btcEma4hSlopePct7d: longMktCtx?.btcEma4hSlopePct7d ?? null,
@@ -4066,7 +4079,9 @@ export async function runPublicIndicatorFeedInternal(
           fetchSnowballAlertMarketContext(symbol),
         ]);
         const bearQualitySignal = snowballMatchesQualitySignal({
-          ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
+          ema1hSlopePct7d: bearMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema1hSlopePct7d: bearMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
           greenDaysBeforeSignal: bearGreenDaysForAlert,
         });
         const bearVolSnapAuto = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
@@ -4076,7 +4091,9 @@ export async function runPublicIndicatorFeedInternal(
             : null;
         const bearTrendGrade = classifySnowballTrendGrade({
           alertSide: "bear",
-          ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
+          ema1hSlopePct7d: bearMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema1hSlopePct7d: bearMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
           ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
           btcEma4hSlopePct7d: bearMktCtxForAlert?.btcEma4hSlopePct7d ?? null,
         });
@@ -4172,6 +4189,8 @@ export async function runPublicIndicatorFeedInternal(
                   volSma: vsE!,
                   greenDaysBeforeSignal: bearGreenDaysForAlert,
                   fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
+                  ema1hSlopePct7d: bearMktCtxForAlert?.ema1hSlopePct7d ?? null,
+                  ema1hSlopePct7d: bearMktCtxForAlert?.ema1hSlopePct7d ?? null,
                   ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
                   barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
@@ -4282,6 +4301,7 @@ export async function runPublicIndicatorFeedInternal(
                   marketCapUsd: bearMktCtx?.marketCapUsd ?? null,
                   fundingRate: bearMktCtx?.fundingRate ?? null,
                   atrPct14d: bearMktCtx?.atrPct14d ?? null,
+                  ema1hSlopePct7d: bearMktCtx?.ema1hSlopePct7d ?? null,
                   ema4hSlopePct7d: bearMktCtx?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: bearMktCtx?.ema1dSlopePct7d ?? null,
                   btcEma4hSlopePct7d: bearMktCtx?.btcEma4hSlopePct7d ?? null,

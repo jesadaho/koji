@@ -24,6 +24,7 @@ export type ReversalEmaSlopeFilter =
 
 /** @deprecated alias — ใช้ ReversalEmaSlopeFilter */
 export type ReversalEma4hFilter = ReversalEmaSlopeFilter;
+export type ReversalEma1hFilter = ReversalEmaSlopeFilter;
 export type ReversalEma1dFilter = ReversalEmaSlopeFilter;
 
 export const REVERSAL_EMA_SLOPE_FILTER_OPTIONS: ReadonlyArray<{
@@ -52,6 +53,7 @@ export const REVERSAL_EMA_SLOPE_FILTER_OPTIONS: ReadonlyArray<{
 
 /** @deprecated alias */
 export const REVERSAL_EMA4H_FILTER_OPTIONS = REVERSAL_EMA_SLOPE_FILTER_OPTIONS;
+export const REVERSAL_EMA1H_FILTER_OPTIONS = REVERSAL_EMA_SLOPE_FILTER_OPTIONS;
 export const REVERSAL_EMA1D_FILTER_OPTIONS = REVERSAL_EMA_SLOPE_FILTER_OPTIONS;
 
 const EMA_SLOPE_THRESHOLD: Record<
@@ -93,6 +95,10 @@ export function reversalEma4hFilterLabel(filter: ReversalEma4hFilter): string {
   return reversalEmaSlopeFilterLabel(filter);
 }
 
+export function reversalEma1hFilterLabel(filter: ReversalEma1hFilter): string {
+  return reversalEmaSlopeFilterLabel(filter);
+}
+
 export function reversalEma1dFilterLabel(filter: ReversalEma1dFilter): string {
   return reversalEmaSlopeFilterLabel(filter);
 }
@@ -103,6 +109,14 @@ export function reversalEma4hFilterTitle(filter: ReversalEma4hFilter): string {
   if (filter === "gtm10lt0") return "EMA(12) 4h slope 7 วัน > -10% และ < 0%";
   const label = reversalEma4hFilterLabel(filter);
   return `EMA(12) 4h slope 7 วัน ${label}%`;
+}
+
+export function reversalEma1hFilterTitle(filter: ReversalEma1hFilter): string {
+  if (filter === "all") return "ไม่กรอง EMA1h slope 7 วัน";
+  if (filter === "gt0lt30") return "EMA(12) 1h slope 7 วัน > 0% และ < 30%";
+  if (filter === "gtm10lt0") return "EMA(12) 1h slope 7 วัน > -10% และ < 0%";
+  const label = reversalEma1hFilterLabel(filter);
+  return `EMA(12) 1h slope 7 วัน ${label}%`;
 }
 
 export function reversalEma1dFilterTitle(filter: ReversalEma1dFilter): string {
@@ -118,6 +132,13 @@ export function reversalRowMatchesEma4hFilter(
   filter: ReversalEma4hFilter,
 ): boolean {
   return emaSlopePctMatchesFilter(row.ema4hSlopePct7d, filter);
+}
+
+export function reversalRowMatchesEma1hFilter(
+  row: { ema1hSlopePct7d?: number | null },
+  filter: ReversalEma1hFilter,
+): boolean {
+  return emaSlopePctMatchesFilter(row.ema1hSlopePct7d, filter);
 }
 
 export function reversalRowMatchesEma1dFilter(

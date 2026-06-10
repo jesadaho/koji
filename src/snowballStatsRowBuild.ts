@@ -150,6 +150,10 @@ export function buildSnowballStatsRow(input: AppendSnowballStatsInput): Snowball
       input.atrPct14d != null && Number.isFinite(input.atrPct14d) && input.atrPct14d > 0
         ? input.atrPct14d
         : null,
+    ema1hSlopePct7d:
+      input.ema1hSlopePct7d != null && Number.isFinite(input.ema1hSlopePct7d)
+        ? input.ema1hSlopePct7d
+        : null,
     ema4hSlopePct7d:
       input.ema4hSlopePct7d != null && Number.isFinite(input.ema4hSlopePct7d)
         ? input.ema4hSlopePct7d
@@ -174,7 +178,9 @@ export function buildSnowballStatsRow(input: AppendSnowballStatsInput): Snowball
         : null,
     psar4hV: STATS_PSAR_4H_VERSION,
     btcEmaSlopesV: STATS_BTC_EMA_SLOPES_VERSION,
-    ...(input.ema4hSlopePct7d != null && Number.isFinite(input.ema4hSlopePct7d)
+    ...((input.ema1hSlopePct7d != null && Number.isFinite(input.ema1hSlopePct7d)) ||
+    (input.ema4hSlopePct7d != null && Number.isFinite(input.ema4hSlopePct7d)) ||
+    (input.ema1dSlopePct7d != null && Number.isFinite(input.ema1dSlopePct7d))
       ? { symbolEmaSlopesV: STATS_SYMBOL_EMA_SLOPES_VERSION }
       : {}),
     ...(input.qualityTier ? { trendGradeV: STATS_TREND_GRADE_VERSION } : {}),

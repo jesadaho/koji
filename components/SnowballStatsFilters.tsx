@@ -11,17 +11,22 @@ import {
 } from "@/lib/statsAtrPct14dFilter";
 import {
   BTC_EMA4H_FILTER_OPTIONS,
+  REVERSAL_EMA1H_FILTER_OPTIONS,
   REVERSAL_EMA4H_FILTER_OPTIONS,
   REVERSAL_EMA1D_FILTER_OPTIONS,
   reversalBtcEma4hFilterTitle,
+  reversalEma1hFilterLabel,
+  reversalEma1hFilterTitle,
   reversalEma4hFilterLabel,
   reversalEma4hFilterTitle,
   reversalEma1dFilterLabel,
   reversalEma1dFilterTitle,
   reversalRowMatchesBtcEma4hFilter,
+  reversalRowMatchesEma1hFilter,
   reversalRowMatchesEma4hFilter,
   reversalRowMatchesEma1dFilter,
   type BtcEma4hFilter,
+  type ReversalEma1hFilter,
   type ReversalEma4hFilter,
   type ReversalEma1dFilter,
 } from "@/lib/reversalEma4hFilter";
@@ -56,10 +61,14 @@ import {
 import {
   snowballStatsRowMatchesFundingFilter,
   snowballStatsRowMatchesGreenDaysFilter,
+  snowballStatsRowMatchesSideFilter,
   snowballStatsRowMatchesVolRankFilter,
   SNOWBALL_GREEN_DAYS_FILTER_OPTIONS,
+  SNOWBALL_SIDE_FILTER_OPTIONS,
+  snowballSideFilterLabel,
   snowballStatsGreenDaysFilterLabel,
   type SnowballGreenDaysFilter,
+  type SnowballSideFilter,
   snowballStatsRowMatchesVolVsSmaFilter,
   SNOWBALL_FUNDING_FILTER_OPTIONS,
   snowballStatsFundingFilterLabel,
@@ -114,12 +123,14 @@ export const SNOWBALL_DOW_FILTER_OPTIONS: ReadonlyArray<{ value: SnowballDowFilt
 
 export type SnowballStatsFilterState = {
   dayFilter: SnowballDayFilter;
+  sideFilter: SnowballSideFilter;
   gradeFilter: SnowballGradeFilter;
   dowFilter: SnowballDowFilter;
   volVsSmaFilter: SnowballVolVsSmaFilter;
   efficiencyFilter: SnowballEfficiencyScoreFilter;
   signalMaxDdFilter: SnowballSignalMaxDdFilter;
   volRankFilter: SnowballVolRankFilter;
+  ema1hFilter: ReversalEma1hFilter;
   ema4hFilter: ReversalEma4hFilter;
   ema1dFilter: ReversalEma1dFilter;
   btcEma4hFilter: BtcEma4hFilter;
@@ -158,6 +169,10 @@ export function filterSnowballStatsRows(
     result = result.filter((r) => snowballStatsGradeMatchesFilter(r, filters.gradeFilter));
   }
 
+  if (filters.sideFilter !== "all") {
+    result = result.filter((r) => snowballStatsRowMatchesSideFilter(r, filters.sideFilter));
+  }
+
   if (filters.dowFilter !== "all") {
     const targetDow = Number(filters.dowFilter);
     result = result.filter((r) => {
@@ -187,6 +202,10 @@ export function filterSnowballStatsRows(
 
   if (filters.volRankFilter !== "all") {
     result = result.filter((r) => snowballStatsRowMatchesVolRankFilter(r, filters.volRankFilter));
+  }
+
+  if (filters.ema1hFilter !== "all") {
+    result = result.filter((r) => reversalRowMatchesEma1hFilter(r, filters.ema1hFilter));
   }
 
   if (filters.ema4hFilter !== "all") {
@@ -225,10 +244,12 @@ export function filterSnowballStatsRows(
 }
 
 export type SnowballStatsEmptyFilterLabels = {
+  side: string;
   greenDays: string;
   funding: string;
   btcPsar: string;
   matrix: string;
+  ema1h: string;
   ema4h: string;
   ema1d: string;
   btcEma4h: string;
@@ -241,10 +262,12 @@ export type SnowballStatsEmptyFilterLabels = {
 
 export function snowballStatsEmptyFilterLabels(filters: SnowballStatsFilterState): SnowballStatsEmptyFilterLabels {
   return {
+    side: snowballSideFilterLabel(filters.sideFilter),
     greenDays: snowballStatsGreenDaysFilterLabel(filters.greenDaysFilter),
     funding: snowballStatsFundingFilterLabel(filters.fundingFilter),
     btcPsar: snowballBtcPsarFilterLabel(filters.btcPsarFilter),
     matrix: snowballMatrixFilterLabel(filters.matrixFilter),
+    ema1h: reversalEma1hFilterLabel(filters.ema1hFilter),
     ema4h: reversalEma4hFilterLabel(filters.ema4hFilter),
     ema1d: reversalEma1dFilterLabel(filters.ema1dFilter),
     btcEma4h: reversalEma4hFilterLabel(filters.btcEma4hFilter),
@@ -259,12 +282,14 @@ export function snowballStatsEmptyFilterLabels(filters: SnowballStatsFilterState
 type Props = {
   filters: SnowballStatsFilterState;
   onDayFilterChange: (v: SnowballDayFilter) => void;
+  onSideFilterChange: (v: SnowballSideFilter) => void;
   onGradeFilterChange: (v: SnowballGradeFilter) => void;
   onDowFilterChange: (v: SnowballDowFilter) => void;
   onVolVsSmaFilterChange: (v: SnowballVolVsSmaFilter) => void;
   onEfficiencyFilterChange: (v: SnowballEfficiencyScoreFilter) => void;
   onSignalMaxDdFilterChange: (v: SnowballSignalMaxDdFilter) => void;
   onVolRankFilterChange: (v: SnowballVolRankFilter) => void;
+  onEma1hFilterChange: (v: ReversalEma1hFilter) => void;
   onEma4hFilterChange: (v: ReversalEma4hFilter) => void;
   onEma1dFilterChange: (v: ReversalEma1dFilter) => void;
   onBtcEma4hFilterChange: (v: BtcEma4hFilter) => void;
@@ -287,12 +312,14 @@ type Props = {
 export function SnowballStatsFilters({
   filters,
   onDayFilterChange,
+  onSideFilterChange,
   onGradeFilterChange,
   onDowFilterChange,
   onVolVsSmaFilterChange,
   onEfficiencyFilterChange,
   onSignalMaxDdFilterChange,
   onVolRankFilterChange,
+  onEma1hFilterChange,
   onEma4hFilterChange,
   onEma1dFilterChange,
   onBtcEma4hFilterChange,
@@ -341,6 +368,25 @@ export function SnowballStatsFilters({
           </select>
         </label>
       ) : null}
+      <label
+        className="sub"
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+      >
+        ทิศ
+        <select
+          value={filters.sideFilter}
+          onChange={(e) => onSideFilterChange(e.currentTarget.value as SnowballSideFilter)}
+          className="tmaInput"
+          style={{ width: "auto", minWidth: "6.5rem" }}
+          title="ทิศสัญญาณ Snowball ตอนแจ้ง — Long / Bear"
+        >
+          {SNOWBALL_SIDE_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <label
         className="sub"
         style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
@@ -453,6 +499,25 @@ export function SnowballStatsFilters({
           title="อันดับ vol 1H จาก breakout confirm eval — 1 = สูงสุดในรอบ lookback"
         >
           {SNOWBALL_VOL_RANK_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label
+        className="sub"
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+      >
+        EMA1h∠7d
+        <select
+          value={filters.ema1hFilter}
+          onChange={(e) => onEma1hFilterChange(e.currentTarget.value as ReversalEma1hFilter)}
+          className="tmaInput"
+          style={{ width: "auto", minWidth: "5.5rem" }}
+          title={reversalEma1hFilterTitle(filters.ema1hFilter)}
+        >
+          {REVERSAL_EMA1H_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>

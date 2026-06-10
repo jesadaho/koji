@@ -16,11 +16,14 @@ export const STATS_EMA1D_SLOPE_LOOKBACK_BARS = 7;
 /** 7 วันบน 4h = 42 แท่ง */
 export const STATS_EMA4H_SLOPE_LOOKBACK_BARS = 42;
 
+/** 7 วันบน 1h = 168 แท่ง */
+export const STATS_EMA1H_SLOPE_LOOKBACK_BARS = 168;
+
 /** แถวที่คำนวณ BTC EMA slope ณ alertedAtMs แล้ว (ไม่ใช่ backfill ค่าเดียวทั้งตาราง) */
 export const STATS_BTC_EMA_SLOPES_VERSION = 2;
 
-/** แถวที่คำนวณ symbol EMA4h/1d slope ณ alertedAtMs แล้ว */
-export const STATS_SYMBOL_EMA_SLOPES_VERSION = 1;
+/** แถวที่คำนวณ symbol EMA1h/4h/1d slope ณ alertedAtMs แล้ว */
+export const STATS_SYMBOL_EMA_SLOPES_VERSION = 2;
 
 const BTC_USDT = "BTCUSDT";
 const BTC_EMA_SLOPES_CACHE_MS = 5 * 60 * 1000;
@@ -46,7 +49,8 @@ export function computeEmaSlopePctFromCloses(
   return emaSlopePctFromValues(emaToday, emaAgo);
 }
 
-function tfBarDurSec(tf: "4h" | "1d"): number {
+function tfBarDurSec(tf: "1h" | "4h" | "1d"): number {
+  if (tf === "1h") return 3600;
   return tf === "4h" ? 4 * 3600 : 24 * 3600;
 }
 
@@ -61,7 +65,7 @@ function lastClosedBarIndexAt(pack: BinanceKlinePack, barDurSec: number, atSec: 
 /** EMA slope ณ เวลา atMs — ใช้แท่งปิดล่าสุดที่ปิดแล้วก่อน atMs */
 export function computeEmaSlopePctFromPackAt(
   pack: BinanceKlinePack,
-  tf: "4h" | "1d",
+  tf: "1h" | "4h" | "1d",
   lookbackBars: number,
   atMs: number,
   emaPeriod: number = STATS_EMA_SLOPE_PERIOD,
@@ -88,7 +92,7 @@ export function computeEmaSlopePctFromPack(
 
 export async function fetchSymbolEmaSlopePctTf(
   symbol: string,
-  tf: "4h" | "1d",
+  tf: "1h" | "4h" | "1d",
   lookbackBars: number,
 ): Promise<number | null> {
   if (!isBinanceIndicatorFapiEnabled()) return null;
@@ -101,7 +105,7 @@ export async function fetchSymbolEmaSlopePctTf(
 
 async function fetchKlinePackThrough(
   symbol: string,
-  tf: "4h" | "1d",
+  tf: "1h" | "4h" | "1d",
   atMs: number,
   lookbackBars: number,
 ): Promise<BinanceKlinePack | null> {
@@ -125,36 +129,42 @@ async function fetchBtcKlinePackThrough(
 }
 
 export type SymbolEmaSlopesPct7d = {
+  ema1hSlopePct7d: number | null;
   ema4hSlopePct7d: number | null;
   ema1dSlopePct7d: number | null;
 };
 
-/** Symbol EMA(12) slope 4h/1d ณ alertedAtMs */
+/** Symbol EMA(12) slope 1h/4h/1d ณ alertedAtMs */
 export async function fetchSymbolEmaSlopesAtMs(
   symbol: string,
   atMs: number,
 ): Promise<SymbolEmaSlopesPct7d> {
   if (!isBinanceIndicatorFapiEnabled()) {
-    return { ema4hSlopePct7d: null, ema1dSlopePct7d: null };
+    return { ema1hSlopePct7d: null, ema4hSlopePct7d: null, ema1dSlopePct7d: null };
   }
   if (!Number.isFinite(atMs) || atMs <= 0) {
-    return { ema4hSlopePct7d: null, ema1dSlopePct7d: null };
+    return { ema1hSlopePct7d: null, ema4hSlopePct7d: null, ema1dSlopePct7d: null };
   }
 
   const ageMs = Date.now() - atMs;
   if (ageMs >= 0 && ageMs < LIVE_ALERT_MAX_AGE_MS) {
-    const [ema4h, ema1d] = await Promise.all([
+    const [ema1h, ema4h, ema1d] = await Promise.all([
+      fetchSymbolEmaSlopePctTf(symbol, "1h", STATS_EMA1H_SLOPE_LOOKBACK_BARS),
       fetchSymbolEmaSlopePctTf(symbol, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
       fetchSymbolEmaSlopePctTf(symbol, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
     ]);
-    return { ema4hSlopePct7d: ema4h, ema1dSlopePct7d: ema1d };
+    return { ema1hSlopePct7d: ema1h, ema4hSlopePct7d: ema4h, ema1dSlopePct7d: ema1d };
   }
 
-  const [pack4h, pack1d] = await Promise.all([
+  const [pack1h, pack4h, pack1d] = await Promise.all([
+    fetchKlinePackThrough(symbol, "1h", atMs, STATS_EMA1H_SLOPE_LOOKBACK_BARS),
     fetchKlinePackThrough(symbol, "4h", atMs, STATS_EMA4H_SLOPE_LOOKBACK_BARS),
     fetchKlinePackThrough(symbol, "1d", atMs, STATS_EMA1D_SLOPE_LOOKBACK_BARS),
   ]);
   return {
+    ema1hSlopePct7d: pack1h
+      ? computeEmaSlopePctFromPackAt(pack1h, "1h", STATS_EMA1H_SLOPE_LOOKBACK_BARS, atMs)
+      : null,
     ema4hSlopePct7d: pack4h
       ? computeEmaSlopePctFromPackAt(pack4h, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS, atMs)
       : null,
@@ -276,6 +286,7 @@ export async function backfillAllStatsRowsBtcEmaSlopes<T extends StatsRowWithBtc
 export type StatsRowWithSymbolEmaSlopes = {
   symbol: string;
   alertedAtMs: number;
+  ema1hSlopePct7d?: number | null;
   ema4hSlopePct7d?: number | null;
   ema1dSlopePct7d?: number | null;
   symbolEmaSlopesV?: number;
@@ -297,6 +308,7 @@ export async function backfillStatsRowsSymbolEmaSlopes<T extends StatsRowWithSym
     if (!Number.isFinite(row.alertedAtMs) || row.alertedAtMs <= 0) continue;
     try {
       const slopes = await fetchSymbolEmaSlopesAtMs(row.symbol, row.alertedAtMs);
+      row.ema1hSlopePct7d = slopes.ema1hSlopePct7d;
       row.ema4hSlopePct7d = slopes.ema4hSlopePct7d;
       row.ema1dSlopePct7d = slopes.ema1dSlopePct7d;
       row.symbolEmaSlopesV = STATS_SYMBOL_EMA_SLOPES_VERSION;

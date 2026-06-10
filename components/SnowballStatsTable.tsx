@@ -445,7 +445,7 @@ export function SnowballStatsTable({
               <td colSpan={showDelete ? 44 : 43} className="sub">
                 {allRowsCount === 0
                   ? emptyMessageNoRows
-                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุก grade / เขียว ${emptyFilterLabels.greenDays} / Funding ${emptyFilterLabels.funding} / BTC SAR ${emptyFilterLabels.btcPsar} / Matrix ${emptyFilterLabels.matrix} / EMA4h ${emptyFilterLabels.ema4h} / EMA1d ${emptyFilterLabels.ema1d} / BTC∠4h ${emptyFilterLabels.btcEma4h} / ATR ${emptyFilterLabels.atr} / Vol×SMA ${emptyFilterLabels.volVsSma} / Efficiency ${emptyFilterLabels.efficiency} / Max DD ก่อน ${emptyFilterLabels.signalMaxDd} / Vol rank ${emptyFilterLabels.volRank}`}
+                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุกทิศ / ทุก grade / เขียว ${emptyFilterLabels.greenDays} / Funding ${emptyFilterLabels.funding} / BTC SAR ${emptyFilterLabels.btcPsar} / Matrix ${emptyFilterLabels.matrix} / EMA1h ${emptyFilterLabels.ema1h} / EMA4h ${emptyFilterLabels.ema4h} / EMA1d ${emptyFilterLabels.ema1d} / BTC∠4h ${emptyFilterLabels.btcEma4h} / ATR ${emptyFilterLabels.atr} / Vol×SMA ${emptyFilterLabels.volVsSma} / Efficiency ${emptyFilterLabels.efficiency} / Max DD ก่อน ${emptyFilterLabels.signalMaxDd} / Vol rank ${emptyFilterLabels.volRank}`}
               </td>
             </tr>
           ) : (

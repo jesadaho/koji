@@ -263,6 +263,7 @@ export type AppendSnowballStatsInput = {
   marketCapUsd?: number | null;
   fundingRate?: number | null;
   atrPct14d?: number | null;
+  ema1hSlopePct7d?: number | null;
   ema4hSlopePct7d?: number | null;
   ema1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;

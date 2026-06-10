@@ -96,6 +96,7 @@ function mktCtxToStatsFields(ctx: Awaited<ReturnType<typeof fetchSnowballAlertMa
     marketCapUsd: ctx.marketCapUsd,
     fundingRate: ctx.fundingRate,
     atrPct14d: ctx.atrPct14d,
+    ema1hSlopePct7d: ctx.ema1hSlopePct7d,
     ema4hSlopePct7d: ctx.ema4hSlopePct7d,
     ema1dSlopePct7d: ctx.ema1dSlopePct7d,
     btcEma4hSlopePct7d: ctx.btcEma4hSlopePct7d,

@@ -31,12 +31,12 @@ import {
   prepareTelegramMiniAppShell,
 } from "@/lib/kojiTelegramWebApp";
 import type { StatsAtrPct14dFilter } from "@/lib/statsAtrPct14dFilter";
-import type { BtcEma4hFilter, ReversalEma4hFilter, ReversalEma1dFilter } from "@/lib/reversalEma4hFilter";
+import type { BtcEma4hFilter, ReversalEma1hFilter, ReversalEma4hFilter, ReversalEma1dFilter } from "@/lib/reversalEma4hFilter";
 import type { SnowballMatrixFilter } from "@/lib/snowballMatrixFilters";
 import type { SnowballBtcPsarFilter } from "@/lib/snowballBtcPsarFilter";
 import type { SnowballEfficiencyScoreFilter } from "@/lib/snowballEfficiencyScoreFilter";
 import type { SnowballSignalMaxDdFilter } from "@/lib/snowballSignalMaxDdFilter";
-import type { SnowballGreenDaysFilter, SnowballFundingFilter, SnowballVolRankFilter, SnowballVolVsSmaFilter } from "@/lib/snowballStatsClient";
+import type { SnowballGreenDaysFilter, SnowballFundingFilter, SnowballSideFilter, SnowballVolRankFilter, SnowballVolVsSmaFilter } from "@/lib/snowballStatsClient";
 import {
   SNOWBALL_STATS_DEFAULT_SORT,
   sortSnowballStatsRows,
@@ -184,12 +184,14 @@ export default function SnowballStatsTelegramMiniApp() {
   const [backfillErr, setBackfillErr] = useState<string | null>(null);
   const [backfillOk, setBackfillOk] = useState<string | null>(null);
   const [dayFilter, setDayFilter] = useState<SnowballDayFilter>("all");
+  const [sideFilter, setSideFilter] = useState<SnowballSideFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<SnowballGradeFilter>("all");
   const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
   const [efficiencyFilter, setEfficiencyFilter] = useState<SnowballEfficiencyScoreFilter>("all");
   const [signalMaxDdFilter, setSignalMaxDdFilter] = useState<SnowballSignalMaxDdFilter>("all");
   const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
+  const [ema1hFilter, setEma1hFilter] = useState<ReversalEma1hFilter>("all");
   const [ema4hFilter, setEma4hFilter] = useState<ReversalEma4hFilter>("all");
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
   const [btcEma4hFilter, setBtcEma4hFilter] = useState<BtcEma4hFilter>("all");
@@ -205,12 +207,14 @@ export default function SnowballStatsTelegramMiniApp() {
   const filters: SnowballStatsFilterState = useMemo(
     () => ({
       dayFilter,
+      sideFilter,
       gradeFilter,
       dowFilter,
       volVsSmaFilter,
       efficiencyFilter,
       signalMaxDdFilter,
       volRankFilter,
+      ema1hFilter,
       ema4hFilter,
       ema1dFilter,
       btcEma4hFilter,
@@ -222,12 +226,14 @@ export default function SnowballStatsTelegramMiniApp() {
     }),
     [
       dayFilter,
+      sideFilter,
       gradeFilter,
       dowFilter,
       volVsSmaFilter,
       efficiencyFilter,
       signalMaxDdFilter,
       volRankFilter,
+      ema1hFilter,
       ema4hFilter,
       ema1dFilter,
       btcEma4hFilter,
@@ -578,12 +584,14 @@ export default function SnowballStatsTelegramMiniApp() {
         <SnowballStatsFilters
           filters={filters}
           onDayFilterChange={setDayFilter}
+          onSideFilterChange={setSideFilter}
           onGradeFilterChange={setGradeFilter}
           onDowFilterChange={setDowFilter}
           onVolVsSmaFilterChange={setVolVsSmaFilter}
           onEfficiencyFilterChange={setEfficiencyFilter}
           onSignalMaxDdFilterChange={setSignalMaxDdFilter}
           onVolRankFilterChange={setVolRankFilter}
+          onEma1hFilterChange={setEma1hFilter}
           onEma4hFilterChange={setEma4hFilter}
           onEma1dFilterChange={setEma1dFilter}
           onBtcEma4hFilterChange={setBtcEma4hFilter}
