@@ -117,7 +117,7 @@ export type CandleReversalStatsRow = {
   /** cache ตามชุด TP/SL (key = tp1-tp1p-tp2-maxH) */
   strategyProfitByPlan?: StrategyProfitByPlanMap | null;
   outcome: CandleReversalOutcome;
-  /** มี Snowball pending คู่กัน — แสดงในตาราง */
+  /** ฝั่งตรงข้ามที่เคย conflict (บันทึกตอนแจ้ง) — แสดง badge ถาวร */
   conflictWith?: string | null;
 };
 

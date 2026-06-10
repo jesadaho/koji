@@ -32,6 +32,17 @@ export function pendingConflictWithLabel(
   return self === "snowball" ? "Reversal" : "Snowball";
 }
 
+/** ค่าที่บันทึกใน store ก่อน · fallback คำนวณจาก pending สด (แถวเก่า) */
+export function resolveRowConflictWith(
+  row: { conflictWith?: string | null; symbol: string },
+  sets: PendingConflictSets,
+  self: PendingStrategy,
+): string | null {
+  const stored = row.conflictWith?.trim();
+  if (stored) return stored;
+  return pendingConflictWithLabel(sets, row.symbol, self);
+}
+
 export function pendingConflictBadgeText(conflictWith: string | null | undefined): string | null {
   if (!conflictWith?.trim()) return null;
   return `⚠ conflict w/ ${conflictWith.trim()}`;

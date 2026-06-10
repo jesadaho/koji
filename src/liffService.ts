@@ -124,7 +124,8 @@ import {
 } from "./autoOpenOrderLogStore";
 import { attachAutoOpenMexcActiveFlags } from "./autoOpenMexcActiveForUser";
 import { collectAutoOpenContractSymbols, fetchAutoOpenMarkPrices } from "./autoOpenMarkPrices";
-import { conflictWithForSymbol, loadPendingConflictSets } from "./signalPendingConflictServer";
+import { loadPendingConflictSets } from "./signalPendingConflictServer";
+import { resolveRowConflictWith } from "@/lib/signalPendingConflict";
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
 import { isPctStepPresetValue, PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import { clearPortfolioTrailingStateForUser } from "./portfolioTrailingAlertStateStore";
@@ -793,7 +794,7 @@ async function buildSnowballStatsPayload(
   const conflictSets = await loadPendingConflictSets();
   const rowsWithConflict = rows.map((r) => ({
     ...r,
-    conflictWith: conflictWithForSymbol(conflictSets, r.symbol, "snowball"),
+    conflictWith: resolveRowConflictWith(r, conflictSets, "snowball"),
   }));
 
   let viewerTpSlPlanSummary: string | undefined;
@@ -891,9 +892,9 @@ export async function liffGetAutoOpenOrderHistory(
   const conflictSets = await loadPendingConflictSets();
   const rowsWithConflict: AutoOpenOrderLogRow[] = rawRows.map((r) => ({
     ...r,
-    conflictWith: conflictWithForSymbol(
+    conflictWith: resolveRowConflictWith(
+      { conflictWith: r.conflictWith, symbol: r.binanceSymbol || r.contractSymbol },
       conflictSets,
-      r.binanceSymbol || r.contractSymbol,
       r.source,
     ),
   }));
@@ -992,7 +993,7 @@ export async function liffGetCandleReversalStats(
     .slice(0, 200)
     .map((r) => ({
       ...r,
-      conflictWith: conflictWithForSymbol(conflictSets, r.symbol, "reversal"),
+      conflictWith: resolveRowConflictWith(r, conflictSets, "reversal"),
     }));
   let viewerTpSlPlanSummary: string | undefined;
   let viewerTpSlPlan: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;

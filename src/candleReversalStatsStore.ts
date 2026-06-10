@@ -462,6 +462,18 @@ export async function appendCandleReversalStatsRow(
     outcome: "pending",
   };
 
+  try {
+    const { stampPendingConflictOnStatsAppend } = await import("./signalPendingConflictServer");
+    const conflictWith = await stampPendingConflictOnStatsAppend(
+      input.symbol,
+      "reversal",
+      input.alertedAtMs,
+    );
+    if (conflictWith) row.conflictWith = conflictWith;
+  } catch {
+    /* ignore */
+  }
+
   state.rows.push(row);
   const max = maxRows();
   if (state.rows.length > max) {

@@ -6,9 +6,12 @@ import {
   type PendingConflictSets,
   type PendingStrategy,
 } from "@/lib/signalPendingConflict";
-import { loadCandleReversalStatsState } from "./candleReversalStatsStore";
+import {
+  loadCandleReversalStatsState,
+  saveCandleReversalStatsState,
+} from "./candleReversalStatsStore";
 import { loadSnowballPendingConfirms } from "./snowballConfirmStore";
-import { loadSnowballStatsState } from "./snowballStatsStore";
+import { loadSnowballStatsState, saveSnowballStatsState } from "./snowballStatsStore";
 
 const SNOWBALL_STATS_PENDING_MAX_AGE_MS = 30 * 3600 * 1000;
 
@@ -59,6 +62,63 @@ export function conflictWithForSymbol(
   self: PendingStrategy,
 ): string | null {
   return pendingConflictWithLabel(sets, symbol, self);
+}
+
+function oppositePendingForSymbol(
+  sets: PendingConflictSets,
+  symbol: string,
+  self: PendingStrategy,
+): boolean {
+  const k = pendingConflictSymbolKey(symbol);
+  if (!k) return false;
+  if (self === "snowball") return sets.reversalPending.has(k);
+  return sets.snowballPending.has(k);
+}
+
+/**
+ * ตอนแจ้งสัญญาณใหม่ — ถ้าฝั่งตรงข้ามยัง pending ให้ stamp conflictWith ลง store (ถาวร)
+ * คืนค่าสำหรับแถวใหม่ · null ถ้าไม่มี conflict
+ */
+export async function stampPendingConflictOnStatsAppend(
+  symbol: string,
+  self: PendingStrategy,
+  nowMs = Date.now(),
+): Promise<string | null> {
+  const sets = await loadPendingConflictSets(nowMs);
+  if (!oppositePendingForSymbol(sets, symbol, self)) return null;
+
+  const newRowLabel = self === "snowball" ? "Reversal" : "Snowball";
+  const oppositeLabel = self === "snowball" ? "Snowball" : "Reversal";
+  const key = pendingConflictSymbolKey(symbol);
+  if (!key) return null;
+
+  if (self === "snowball") {
+    const revState = await loadCandleReversalStatsState();
+    let dirty = false;
+    for (const r of revState.rows) {
+      if (r.outcome !== "pending") continue;
+      if (pendingConflictSymbolKey(r.symbol) !== key) continue;
+      if (r.conflictWith === oppositeLabel) continue;
+      r.conflictWith = oppositeLabel;
+      dirty = true;
+    }
+    if (dirty) await saveCandleReversalStatsState(revState);
+  } else {
+    const sbState = await loadSnowballStatsState();
+    let dirty = false;
+    for (const r of sbState.rows) {
+      if (r.outcome !== "pending") continue;
+      const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
+      if (atMs > 0 && nowMs - atMs > SNOWBALL_STATS_PENDING_MAX_AGE_MS) continue;
+      if (pendingConflictSymbolKey(r.symbol) !== key) continue;
+      if (r.conflictWith === oppositeLabel) continue;
+      r.conflictWith = oppositeLabel;
+      dirty = true;
+    }
+    if (dirty) await saveSnowballStatsState(sbState);
+  }
+
+  return newRowLabel;
 }
 
 /** ข้าม auto-open เมื่อฝั่งตรงข้ามยัง pending (รวมกรณี conflict สองฝั่ง) */

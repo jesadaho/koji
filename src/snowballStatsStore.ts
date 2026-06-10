@@ -556,6 +556,14 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
     /* ignore */
   }
 
+  try {
+    const { stampPendingConflictOnStatsAppend } = await import("./signalPendingConflictServer");
+    const conflictWith = await stampPendingConflictOnStatsAppend(input.symbol, "snowball", input.alertedAtMs);
+    if (conflictWith) row.conflictWith = conflictWith;
+  } catch {
+    /* ignore */
+  }
+
   state.rows.push(row);
   const max = snowballStatsMaxRows();
   if (state.rows.length > max) {
