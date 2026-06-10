@@ -1219,8 +1219,8 @@ function inCooldown(state: IndicatorPublicFeedState, key: string, nowMs: number)
 }
 
 /** Snowball dedupe ต่อเหรียญ+TF+ทิศ+แท่งสัญญาณ — ยิงแล้วไม่ยิงซ้ำแท่งเดิม (แท่ง 4h ใหม่ยิงได้) */
-function snowballSymbolDedupeBlocks(
-  state: IndicatorPublicFeedState,
+export function snowballSymbolDedupeBlocks(
+  state: Pick<IndicatorPublicFeedState, "lastFiredBarSec">,
   key: string,
   signalBarOpenSec: number,
 ): boolean {
@@ -3050,6 +3050,7 @@ export async function runPublicIndicatorFeedInternal(
         : [];
       const waveRsiArr = waveGateOn && c15.length >= waveRsiPeriod + 3 ? rsiWilder(c15, waveRsiPeriod) : [];
 
+      /* Historical backtest reuses snowballBacktestDetect.ts (wave gate, two-bar, grade) — keep sendSnowball* in sync */
       const sendSnowballLong = async (
         iEval: number,
         intrabar: boolean,
@@ -4853,7 +4854,8 @@ function normalizeBinanceSym(raw: string): string {
   return s.endsWith("USDT") ? s : `${s}USDT`;
 }
 
-function evaluateSnowballLongAt(
+/** Checklist / backtest shared gate — โหมด two-bar ใช้ iEval เป็นแท่ง confirm */
+export function evaluateSnowballLongAt(
   iEval: number,
   intrabar: boolean,
   data: { close: number[]; high: number[]; low: number[]; open: number[]; volume: number[]; timeSec: number[] },
@@ -5053,7 +5055,7 @@ function evaluateSnowballLongAt(
   };
 }
 
-function evaluateSnowballBearAt(
+export function evaluateSnowballBearAt(
   iEval: number,
   intrabar: boolean,
   data: { close: number[]; high: number[]; low: number[]; open: number[]; volume: number[]; timeSec: number[] },

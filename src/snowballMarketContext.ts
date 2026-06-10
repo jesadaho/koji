@@ -4,13 +4,18 @@
 
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
-import { fetchBinanceUsdmKlines, isBinanceIndicatorFapiEnabled } from "./binanceIndicatorKline";
+import {
+  fetchBinanceUsdmKlines,
+  fetchBinanceUsdmKlinesRange,
+  isBinanceIndicatorFapiEnabled,
+} from "./binanceIndicatorKline";
 import { computeParabolicSarLast } from "./indicatorMath";
 import { fetchContractTickerSingle } from "./mexcMarkets";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 import { fetchStatsQuoteVol24hUsdt } from "./statsQuoteVol24h";
 import {
   fetchBtcEmaSlopesAtMs,
+  fetchSymbolEmaSlopesAtMs,
   fetchSymbolEmaSlopePctTf,
   resetBtcEmaSlopesCache,
   STATS_EMA1D_SLOPE_LOOKBACK_BARS,
@@ -146,23 +151,56 @@ export async function fetchBtcPsar1hSnapshot(): Promise<BtcPsarSnapshot | null> 
   return snap;
 }
 
-/** BTC PSAR 4h + 1h + vol 24h (Binance) + mcap (CoinGecko) + funding (MEXC) */
-export async function fetchSnowballAlertMarketContext(
+async function fetchBtcPsarSnapshotAt(tf: "4h" | "1h", atMs: number): Promise<BtcPsarSnapshot | null> {
+  if (!isBinanceIndicatorFapiEnabled()) return null;
+  const bars = snowballBtcPsarBars(tf);
+  const barDurSec = tf === "4h" ? 4 * 3600 : 3600;
+  const atSec = Math.floor(atMs / 1000);
+  const startMs = (atSec - bars * barDurSec) * 1000;
+  const pack = await fetchBinanceUsdmKlinesRange(BTC_SYMBOL, tf, {
+    startTimeMs: startMs,
+    endTimeMs: atMs,
+    limit: Math.min(1500, bars + 20),
+  });
+  if (!pack || pack.high.length < 5) return null;
+
+  let iClosed = -1;
+  for (let i = 0; i < pack.timeSec.length; i++) {
+    if (pack.timeSec[i]! + barDurSec <= atSec) iClosed = i;
+  }
+  if (iClosed < 0) return null;
+
+  const high = pack.high.slice(0, iClosed + 1);
+  const low = pack.low.slice(0, iClosed + 1);
+  const psar = computeParabolicSarLast(high, low);
+  const close = pack.close[iClosed]!;
+  if (!psar || !Number.isFinite(close) || close <= 0) return null;
+
+  return {
+    trend: psar.trend,
+    sar: psar.sar,
+    close,
+    priceVsSar: close > psar.sar ? "above" : "below",
+    flipped: psar.flipped,
+  };
+}
+
+/** บริบทตลาด ณ เวลา atMs — ใช้ backtest / replay (BTC PSAR + EMA slope ย้อนหลัง) */
+export async function fetchSnowballAlertMarketContextAt(
   binanceSymbol: string,
-  atMs: number = Date.now(),
+  atMs: number,
 ): Promise<SnowballAlertMarketContext> {
   const sym = binanceSymbol.trim().toUpperCase();
   const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(sym);
   const base = binanceUsdtPerpBase(sym);
-  const [btc4h, btc1h, marketCapUsd, mexcTicker, atrPct14d, ema4hSlopePct7d, ema1dSlopePct7d, btcEma, psar4h] =
+  const [btc4h, btc1h, symbolEma, marketCapUsd, mexcTicker, atrPct14d, btcEma, psar4h] =
     await Promise.all([
-      fetchBtcPsar4hSnapshot(),
-      fetchBtcPsar1hSnapshot(),
+      fetchBtcPsarSnapshotAt("4h", atMs),
+      fetchBtcPsarSnapshotAt("1h", atMs),
+      fetchSymbolEmaSlopesAtMs(sym, atMs),
       base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
       mexcContract ? fetchContractTickerSingle(mexcContract) : Promise.resolve(null),
       fetchSymbolAtrPct14d(sym),
-      fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
-      fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
       fetchBtcEmaSlopesAtMs(atMs),
       fetchSymbolPsar4hAtMs(sym, atMs),
     ]);
@@ -178,11 +216,19 @@ export async function fetchSnowballAlertMarketContext(
     marketCapUsd,
     fundingRate,
     atrPct14d,
-    ema4hSlopePct7d,
-    ema1dSlopePct7d,
+    ema4hSlopePct7d: symbolEma.ema4hSlopePct7d,
+    ema1dSlopePct7d: symbolEma.ema1dSlopePct7d,
     btcEma4hSlopePct7d: btcEma.btcEma4hSlopePct7d,
     btcEma1dSlopePct7d: btcEma.btcEma1dSlopePct7d,
     psar4hTrend: psar4h?.trend ?? null,
     psar4hDistPct: psar4h?.distPct ?? null,
   };
+}
+
+/** BTC PSAR 4h + 1h + vol 24h (Binance) + mcap (CoinGecko) + funding (MEXC) */
+export async function fetchSnowballAlertMarketContext(
+  binanceSymbol: string,
+  atMs: number = Date.now(),
+): Promise<SnowballAlertMarketContext> {
+  return fetchSnowballAlertMarketContextAt(binanceSymbol, atMs);
 }

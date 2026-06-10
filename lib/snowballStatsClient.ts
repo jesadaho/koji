@@ -184,6 +184,8 @@ export type SnowballStatsRow = {
   horizonAnchorV2?: boolean;
   /** มี Reversal pending คู่กัน — แสดงในตาราง */
   conflictWith?: string | null;
+  /** แหล่งข้อมูล — live stats store หรือ backtest simulation */
+  source?: "live" | "backtest";
 };
 
 export type SnowballStatsApiPayload = {

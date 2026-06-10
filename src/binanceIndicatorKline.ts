@@ -73,6 +73,97 @@ const INTERVAL: Record<BinanceIndicatorTf, string> = {
   "1d": "1d",
 };
 
+const TF_DURATION_SEC: Record<BinanceIndicatorTf, number> = {
+  "15m": 15 * 60,
+  "1h": 3600,
+  "4h": 4 * 3600,
+  "1d": 86400,
+};
+
+export function binanceIndicatorTfDurationSec(tf: BinanceIndicatorTf): number {
+  return TF_DURATION_SEC[tf];
+}
+
+function mergeKlinePacks(a: BinanceKlinePack, b: BinanceKlinePack): BinanceKlinePack {
+  const out: BinanceKlinePack = {
+    open: [...a.open],
+    high: [...a.high],
+    low: [...a.low],
+    close: [...a.close],
+    volume: [...a.volume],
+    timeSec: [...a.timeSec],
+  };
+  for (let i = 0; i < b.timeSec.length; i++) {
+    const t = b.timeSec[i]!;
+    if (out.timeSec.length > 0 && t <= out.timeSec[out.timeSec.length - 1]!) continue;
+    out.timeSec.push(t);
+    out.open.push(b.open[i]!);
+    out.high.push(b.high[i]!);
+    out.low.push(b.low[i]!);
+    out.close.push(b.close[i]!);
+    out.volume.push(b.volume[i]!);
+  }
+  return out;
+}
+
+/** ตัด pack ให้เหลือแท่งที่ปิดไม่เกิน asOfSec */
+export function sliceKlinePackThrough(pack: BinanceKlinePack, tf: BinanceIndicatorTf, asOfSec: number): BinanceKlinePack {
+  const dur = TF_DURATION_SEC[tf];
+  const n = pack.timeSec.length;
+  let last = -1;
+  for (let i = 0; i < n; i++) {
+    if (pack.timeSec[i]! + dur <= asOfSec) last = i;
+  }
+  if (last < 0) {
+    return { open: [], high: [], low: [], close: [], volume: [], timeSec: [] };
+  }
+  return {
+    open: pack.open.slice(0, last + 1),
+    high: pack.high.slice(0, last + 1),
+    low: pack.low.slice(0, last + 1),
+    close: pack.close.slice(0, last + 1),
+    volume: pack.volume.slice(0, last + 1),
+    timeSec: pack.timeSec.slice(0, last + 1),
+  };
+}
+
+/**
+ * ดึง klines ย้อนหลังทั้งช่วง — paginate ทีละ 1500 แท่ง
+ */
+export async function fetchBinanceUsdmKlinesPaginated(
+  symbol: string,
+  tf: BinanceIndicatorTf,
+  startTimeMs: number,
+  endTimeMs: number,
+): Promise<BinanceKlinePack | null> {
+  const sym = symbol.trim().toUpperCase();
+  if (!sym || !isBinanceIndicatorFapiEnabled()) return null;
+  const st = Math.floor(startTimeMs);
+  const et = Math.floor(endTimeMs);
+  if (!Number.isFinite(st) || !Number.isFinite(et) || et <= st) return null;
+
+  const durMs = TF_DURATION_SEC[tf] * 1000;
+  let cursor = st;
+  let merged: BinanceKlinePack | null = null;
+
+  while (cursor < et) {
+    const chunk = await fetchBinanceUsdmKlinesRange(sym, tf, {
+      startTimeMs: cursor,
+      endTimeMs: et,
+      limit: KLINE_MAX_LIMIT,
+    });
+    if (!chunk || chunk.timeSec.length === 0) break;
+    merged = merged ? mergeKlinePacks(merged, chunk) : chunk;
+    const lastOpenMs = chunk.timeSec[chunk.timeSec.length - 1]! * 1000;
+    const next = lastOpenMs + durMs;
+    if (next <= cursor) break;
+    cursor = next;
+    if (chunk.timeSec.length < KLINE_MAX_LIMIT) break;
+  }
+
+  return merged;
+}
+
 function parseKlineRows(rows: unknown, minBars = 10): BinanceKlinePack | null {
   if (!Array.isArray(rows) || rows.length === 0) return null;
   const close: number[] = [];
