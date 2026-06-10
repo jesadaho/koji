@@ -4,6 +4,7 @@ import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import { candleReversalLookbackRankCell } from "@/lib/candleReversalStatsClient";
 import {
+  candleReversalEma1hSlopeLabel,
   candleReversalEma4hSlopeLabel,
   candleReversalEma1dSlopeLabel,
 } from "@/lib/candleReversalStatsClient";
@@ -260,6 +261,13 @@ export function SnowballStatsTable({
               onSort={onSort}
             />
             <SortTh
+              label="EMA1h∠7d"
+              sortKey="ema1h"
+              title="EMA(12) 1h slope % ย้อนหลัง 7 วัน (168 แท่ง)"
+              activeSort={sort}
+              onSort={onSort}
+            />
+            <SortTh
               label="EMA4h∠7d"
               sortKey="ema4h"
               title="EMA(12) 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
@@ -442,7 +450,7 @@ export function SnowballStatsTable({
         <tbody>
           {tableRows.length === 0 ? (
             <tr>
-              <td colSpan={showDelete ? 44 : 43} className="sub">
+              <td colSpan={showDelete ? 45 : 44} className="sub">
                 {allRowsCount === 0
                   ? emptyMessageNoRows
                   : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุกทิศ / ทุก grade / เขียว ${emptyFilterLabels.greenDays} / Funding ${emptyFilterLabels.funding} / BTC SAR ${emptyFilterLabels.btcPsar} / Matrix ${emptyFilterLabels.matrix} / EMA1h ${emptyFilterLabels.ema1h} / EMA4h ${emptyFilterLabels.ema4h} / EMA1d ${emptyFilterLabels.ema1d} / BTC∠4h ${emptyFilterLabels.btcEma4h} / ATR ${emptyFilterLabels.atr} / Vol×SMA ${emptyFilterLabels.volVsSma} / Efficiency ${emptyFilterLabels.efficiency} / Max DD ก่อน ${emptyFilterLabels.signalMaxDd} / Vol rank ${emptyFilterLabels.volRank}`}

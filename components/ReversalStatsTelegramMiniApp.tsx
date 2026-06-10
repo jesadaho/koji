@@ -44,6 +44,7 @@ import {
 } from "@/lib/snowballStatsClient";
 import {
   candleReversalDayOfWeekBkk,
+  candleReversalEma1hSlopeLabel,
   candleReversalEma4hSlopeLabel,
   candleReversalEma1dSlopeLabel,
   candleReversalGreenDaysLabel,
@@ -424,7 +425,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 10;
+  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 11;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -509,6 +510,13 @@ function ReversalStatsSection({
               label="Mcap"
               sortKey="mcap"
               title="Market cap USD (CoinGecko) ณ เวลาแจ้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="EMA1h∠7d"
+              sortKey="ema1h"
+              title="EMA(12) 1h slope % ย้อนหลัง 7 วัน (168 แท่ง)"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -742,6 +750,7 @@ function ReversalStatsSection({
                   <td>{fmtPrice(r.entryPrice)}</td>
                   <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
+                  <td title="EMA(12) 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema1hSlopePct7d)}</td>
                   <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
                   <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
                   <td title="BTC EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma4hSlopePct7d)}</td>

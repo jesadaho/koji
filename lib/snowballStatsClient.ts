@@ -916,6 +916,7 @@ export type SnowballStatsSortKey =
   | "vol24"
   | "mcap"
   | "atr14d"
+  | "ema1h"
   | "ema4h"
   | "ema1d"
   | "btcEma4h"
@@ -1062,6 +1063,8 @@ function compareSnowballStatsRows(
       return statsCmpNumNullLast(a.marketCapUsd, b.marketCapUsd);
     case "atr14d":
       return statsCmpNumNullLast(a.atrPct14d, b.atrPct14d);
+    case "ema1h":
+      return statsCmpNumNullLast(a.ema1hSlopePct7d, b.ema1hSlopePct7d);
     case "ema4h":
       return statsCmpNumNullLast(a.ema4hSlopePct7d, b.ema4hSlopePct7d);
     case "ema1d":

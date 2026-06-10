@@ -292,20 +292,30 @@ async function backfillReversalEmaSlopes(rows: CandleReversalStatsRow[]): Promis
   const snapCache = new Map<string, Awaited<ReturnType<typeof fetchReversalAlertMarketSnapshot>>>();
   let updated = 0;
   for (const row of rows) {
+    const need1h = row.ema1hSlopePct7d == null || !Number.isFinite(row.ema1hSlopePct7d);
     const need4h = row.ema4hSlopePct7d == null || !Number.isFinite(row.ema4hSlopePct7d);
     const need1d = row.ema1dSlopePct7d == null || !Number.isFinite(row.ema1dSlopePct7d);
-    if (!need4h && !need1d) continue;
+    if (!need1h && !need4h && !need1d) continue;
     const sym = row.symbol.trim().toUpperCase();
-    let snap = snapCache.get(sym);
+    const atMs =
+      row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)
+        ? row.alertedAtMs
+        : Date.parse(row.alertedAtIso);
+    const cacheKey = `${sym}:${atMs}`;
+    let snap = snapCache.get(cacheKey);
     if (!snap) {
       try {
-        snap = await fetchReversalAlertMarketSnapshot(sym);
-        snapCache.set(sym, snap);
+        snap = await fetchReversalAlertMarketSnapshot(sym, atMs);
+        snapCache.set(cacheKey, snap);
       } catch {
         continue;
       }
     }
     let rowDirty = false;
+    if (need1h && snap.ema1hSlopePct7d != null && Number.isFinite(snap.ema1hSlopePct7d)) {
+      row.ema1hSlopePct7d = snap.ema1hSlopePct7d;
+      rowDirty = true;
+    }
     if (need4h && snap.ema4hSlopePct7d != null && Number.isFinite(snap.ema4hSlopePct7d)) {
       row.ema4hSlopePct7d = snap.ema4hSlopePct7d;
       rowDirty = true;

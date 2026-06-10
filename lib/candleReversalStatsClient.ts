@@ -36,6 +36,8 @@ export type CandleReversalStatsRow = {
   quoteVol24hV?: number;
   /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
   marketCapUsd?: number | null;
+  /** EMA(12) 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
+  ema1hSlopePct7d?: number | null;
   /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
   ema4hSlopePct7d?: number | null;
   /** EMA(12) 1d — slope % ย้อนหลัง 7 แท่ง */
@@ -242,6 +244,7 @@ export type CandleReversalStatsSortKey =
   | "entry"
   | "vol24"
   | "mcap"
+  | "ema1h"
   | "ema4h"
   | "ema1d"
   | "btcEma4h"
@@ -353,6 +356,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.quoteVol24hUsdt, b.quoteVol24hUsdt);
     case "mcap":
       return cmpNumNullLast(a.marketCapUsd, b.marketCapUsd);
+    case "ema1h":
+      return cmpNumNullLast(a.ema1hSlopePct7d, b.ema1hSlopePct7d);
     case "ema4h":
       return cmpNumNullLast(a.ema4hSlopePct7d, b.ema4hSlopePct7d);
     case "ema1d":
@@ -434,6 +439,10 @@ export function sortCandleReversalStatsRows(
 export function candleReversalGreenDaysLabel(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v) || v < 0) return "—";
   return `${Math.floor(v)} วัน`;
+}
+
+export function candleReversalEma1hSlopeLabel(pct: CandleReversalStatsRow["ema1hSlopePct7d"]): string {
+  return statsEmaSlopePctLabel(pct);
 }
 
 export function candleReversalEma4hSlopeLabel(pct: CandleReversalStatsRow["ema4hSlopePct7d"]): string {

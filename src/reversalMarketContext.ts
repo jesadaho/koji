@@ -5,12 +5,7 @@
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 import { fetchStatsQuoteVol24hUsdt } from "./statsQuoteVol24h";
-import {
-  fetchBtcEmaSlopesAtMs,
-  fetchSymbolEmaSlopePctTf,
-  STATS_EMA1D_SLOPE_LOOKBACK_BARS,
-  STATS_EMA4H_SLOPE_LOOKBACK_BARS,
-} from "./statsEmaSlope";
+import { fetchBtcEmaSlopesAtMs, fetchSymbolEmaSlopesAtMs } from "./statsEmaSlope";
 import { fetchSymbolPsar4hAtMs } from "./statsPsar4h";
 
 const mcapCache = new Map<string, { atMs: number; mcap: number | null }>();
@@ -36,6 +31,8 @@ async function fetchMarketCapUsdCached(base: string): Promise<number | null> {
 export type ReversalAlertMarketSnapshot = {
   quoteVol24hUsdt: number | null;
   marketCapUsd: number | null;
+  /** EMA(12) 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
+  ema1hSlopePct7d: number | null;
   /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
   ema4hSlopePct7d: number | null;
   /** EMA(12) 1d — slope % ย้อนหลัง 7 แท่ง */
@@ -59,12 +56,10 @@ export async function fetchReversalAlertMarketSnapshot(
 ): Promise<ReversalAlertMarketSnapshot> {
   const sym = binanceSymbol.trim().toUpperCase();
   const base = binanceUsdtPerpBase(sym);
-  const [quoteVol24hUsdt, marketCapUsd, ema4hSlopePct7d, ema1dSlopePct7d, atrPct14d, btcEma, psar4h] =
-    await Promise.all([
+  const [quoteVol24hUsdt, marketCapUsd, symbolEma, atrPct14d, btcEma, psar4h] = await Promise.all([
     fetchStatsQuoteVol24hUsdt(sym),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
-    fetchSymbolEmaSlopePctTf(sym, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS),
-    fetchSymbolEmaSlopePctTf(sym, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS),
+    fetchSymbolEmaSlopesAtMs(sym, atMs),
     fetchSymbolAtrPct14d(sym),
     fetchBtcEmaSlopesAtMs(atMs),
     fetchSymbolPsar4hAtMs(sym, atMs),
@@ -72,8 +67,9 @@ export async function fetchReversalAlertMarketSnapshot(
   return {
     quoteVol24hUsdt,
     marketCapUsd,
-    ema4hSlopePct7d,
-    ema1dSlopePct7d,
+    ema1hSlopePct7d: symbolEma.ema1hSlopePct7d,
+    ema4hSlopePct7d: symbolEma.ema4hSlopePct7d,
+    ema1dSlopePct7d: symbolEma.ema1dSlopePct7d,
     btcEma4hSlopePct7d: btcEma.btcEma4hSlopePct7d,
     btcEma1dSlopePct7d: btcEma.btcEma1dSlopePct7d,
     atrPct14d,

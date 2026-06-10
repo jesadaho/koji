@@ -133,6 +133,7 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
         : undefined,
     quoteVol24hUsdt: nullNum(r.quoteVol24hUsdt),
     marketCapUsd: nullNum(r.marketCapUsd),
+    ema1hSlopePct7d: nullNum(r.ema1hSlopePct7d),
     ema4hSlopePct7d: nullNum(r.ema4hSlopePct7d),
     ema1dSlopePct7d: nullNum(r.ema1dSlopePct7d),
     btcEma4hSlopePct7d: nullNum(r.btcEma4hSlopePct7d),
@@ -319,6 +320,7 @@ export async function appendCandleReversalStatsRow(
 
   let quoteVol24hUsdt: number | null = null;
   let marketCapUsd: number | null = null;
+  let ema1hSlopePct7d: CandleReversalStatsRow["ema1hSlopePct7d"] = null;
   let ema4hSlopePct7d: CandleReversalStatsRow["ema4hSlopePct7d"] = null;
   let ema1dSlopePct7d: CandleReversalStatsRow["ema1dSlopePct7d"] = null;
   let btcEma4hSlopePct7d: CandleReversalStatsRow["btcEma4hSlopePct7d"] = null;
@@ -336,6 +338,8 @@ export async function appendCandleReversalStatsRow(
       snap.marketCapUsd != null && Number.isFinite(snap.marketCapUsd) && snap.marketCapUsd > 0
         ? snap.marketCapUsd
         : null;
+    ema1hSlopePct7d =
+      snap.ema1hSlopePct7d != null && Number.isFinite(snap.ema1hSlopePct7d) ? snap.ema1hSlopePct7d : null;
     ema4hSlopePct7d =
       snap.ema4hSlopePct7d != null && Number.isFinite(snap.ema4hSlopePct7d) ? snap.ema4hSlopePct7d : null;
     ema1dSlopePct7d =
@@ -384,6 +388,7 @@ export async function appendCandleReversalStatsRow(
     quoteVol24hUsdt,
     quoteVol24hV: STATS_QUOTE_VOL_24H_VERSION,
     marketCapUsd,
+    ema1hSlopePct7d,
     ema4hSlopePct7d,
     ema1dSlopePct7d,
     btcEma4hSlopePct7d,
