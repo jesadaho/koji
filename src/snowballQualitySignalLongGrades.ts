@@ -53,7 +53,8 @@ export function snowballQualitySignalLongFeatureEnabled(
 
 export function snowballQualitySignalLongGradeAllowed(
   row: TradingViewMexcUserSettings,
-  gradeKey: SnowballAutoTradeGradeKey,
+  gradeKey: SnowballAutoTradeGradeKey | null,
 ): boolean {
+  if (gradeKey == null) return false;
   return resolveSnowballQualitySignalLongGrades(row).includes(gradeKey);
 }

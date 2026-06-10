@@ -133,7 +133,7 @@ function snowballShortSignalShortEnabled(row: TradingViewMexcUserSettings): bool
 function resolveSnowballAutoOpenSide(
   row: TradingViewMexcUserSettings,
   alertSide: SnowballAutoTradeAlertSide,
-  gradeKey: SnowballAutoTradeGradeKey,
+  gradeKey: SnowballAutoTradeGradeKey | null,
   input: {
     greenDaysBeforeSignal?: number | null;
     fundingRate?: number | null;
