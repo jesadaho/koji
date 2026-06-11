@@ -31,8 +31,10 @@ export type SnowballCompositeGradeResult = {
   composite: boolean;
 };
 
+export type SnowballCompositeSignalBarTf = "15m" | "1h" | "4h";
+
 export type SnowballCompositeGradeInput = ClassifySnowballTrendGradeInput & {
-  signalBarTf?: "15m" | "1h" | "4h" | null;
+  signalBarTf?: SnowballCompositeSignalBarTf | null;
   swing200Ok?: boolean | null;
   vahOk?: boolean | null;
   structureTier?: SnowballLongStructureTier | null;
@@ -154,6 +156,14 @@ export function snowballS3MaxDdOk(signalMaxDdPct: number | null | undefined): bo
 export function snowballS3MaxDdDangerous(signalMaxDdPct: number | null | undefined): boolean {
   if (signalMaxDdPct == null || !Number.isFinite(signalMaxDdPct)) return false;
   return signalMaxDdPct > snowballTrendMomentumMaxDrawbackPct();
+}
+
+/** Normalize Binance TF → composite signal TF (1d etc. → null = momentum-only) */
+export function snowballCompositeSignalBarTf(
+  tf: string | null | undefined,
+): SnowballCompositeSignalBarTf | null {
+  if (tf === "15m" || tf === "1h" || tf === "4h") return tf;
+  return null;
 }
 
 export function snowballCompositeGradeApplies(input: SnowballCompositeGradeInput): boolean {

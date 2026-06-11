@@ -6,6 +6,7 @@ import type { SnowballTwoBarInlineEval } from "./snowballTwoBarInline";
 import {
   classifySnowballGradeWithFallback,
   snowballCompositeGradeFootnote,
+  snowballCompositeSignalBarTf,
   type SnowballCompositeGradeResult,
 } from "./snowballCompositeGrade";
 import {
@@ -240,7 +241,7 @@ function resolveCompositeGradeResult(
 
   return classifySnowballGradeWithFallback({
     ...input.trendGradeInput,
-    signalBarTf: input.snowTf,
+    signalBarTf: snowballCompositeSignalBarTf(input.snowTf),
     swing200Ok: input.swing200,
     vahOk: input.vahOk,
     structureTier: classifyLongStructureTier(input.swing48, input.swing200, input.vahOk),

@@ -1,4 +1,4 @@
-import { resolveAutoOpenEntryPrice } from "@/lib/autoOpenFollowUp";
+import { autoOpenOrderPeriodLabel, resolveAutoOpenEntryPrice } from "@/lib/autoOpenFollowUp";
 import {
   autoOpenStrategyOutcomeLabel,
   type AutoOpenStrategyOutcome,
@@ -15,6 +15,7 @@ import { buildCsv, statsCoinLabel, statsFmtBkk } from "@/lib/statsCsv";
 const HEADERS = [
   "atMs",
   "เวลา (BKK)",
+  "เปิดมา",
   "แหล่ง",
   "ผลลัพธ์",
   "เหตุผล",
@@ -57,6 +58,7 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
     return [
     String(r.atMs),
     statsFmtBkk(new Date(r.atMs).toISOString()),
+    autoOpenOrderPeriodLabel(r, undefined),
     autoOpenSourceLabel(r.source),
     autoOpenOutcomeLabel(r.outcome),
     autoOpenReasonLabel(r.reasonCode),

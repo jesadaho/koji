@@ -317,6 +317,73 @@ export function autoOpenFollowUpEligible(row: AutoOpenOrderLogRow): boolean {
   return typeof entry === "number" && Number.isFinite(entry) && entry > 0;
 }
 
+export type AutoOpenOrderPeriodState = "open" | "closed" | "pending_fill";
+
+/** เวลาเริ่มนับ position — Limit fill จริง หรือ atMs ตอนสั่งสำเร็จ */
+export function resolveAutoOpenOpenedAtMs(row: AutoOpenOrderLogRow): number | null {
+  if (row.limitFilledAtMs != null && Number.isFinite(row.limitFilledAtMs)) {
+    return row.limitFilledAtMs;
+  }
+  if (row.outcome === "success") return row.atMs;
+  if (row.mexcActive || row.mexcClosedAtMs != null) return row.atMs;
+  return null;
+}
+
+export function formatAutoOpenOrderPeriodDuration(ms: number): string {
+  if (!(ms >= 0) || !Number.isFinite(ms)) return "—";
+  const totalMin = Math.floor(ms / 60_000);
+  const hours = Math.floor(totalMin / 60);
+  const mins = totalMin % 60;
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24);
+    const remH = hours % 24;
+    if (remH > 0) return `${days}ว ${remH}ชม ${mins}นาที`;
+    return `${days}ว ${mins}นาที`;
+  }
+  if (hours > 0) return `${hours}ชม ${mins}นาที`;
+  if (mins > 0) return `${mins}นาที`;
+  return "<1นาที";
+}
+
+export function resolveAutoOpenOrderPeriod(
+  row: AutoOpenOrderLogRow,
+  markPrice: number | undefined,
+  nowMs = Date.now(),
+): { state: AutoOpenOrderPeriodState | null; durationMs: number | null } {
+  if (autoOpenLimitPriceNotTouchedYet(row, markPrice)) {
+    const waitMs = nowMs - row.atMs;
+    return { state: "pending_fill", durationMs: waitMs >= 0 ? waitMs : null };
+  }
+
+  const openedAt = resolveAutoOpenOpenedAtMs(row);
+  if (openedAt == null) return { state: null, durationMs: null };
+
+  if (row.mexcClosedAtMs != null && Number.isFinite(row.mexcClosedAtMs)) {
+    const ms = row.mexcClosedAtMs - openedAt;
+    return { state: "closed", durationMs: ms >= 0 ? ms : null };
+  }
+
+  if (row.mexcActive) {
+    const ms = nowMs - openedAt;
+    return { state: "open", durationMs: ms >= 0 ? ms : null };
+  }
+
+  return { state: null, durationMs: null };
+}
+
+export function autoOpenOrderPeriodLabel(
+  row: AutoOpenOrderLogRow,
+  markPrice: number | undefined,
+  nowMs = Date.now(),
+): string {
+  const { state, durationMs } = resolveAutoOpenOrderPeriod(row, markPrice, nowMs);
+  if (durationMs == null || state == null) return "—";
+  const dur = formatAutoOpenOrderPeriodDuration(durationMs);
+  if (state === "pending_fill") return `รอ fill ${dur}`;
+  if (state === "open") return dur;
+  return dur;
+}
+
 export function autoOpenFollowUpAnchorSec(row: AutoOpenOrderLogRow): number {
   return Math.floor(row.atMs / 1000);
 }

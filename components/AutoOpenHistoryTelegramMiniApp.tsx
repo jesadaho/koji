@@ -29,6 +29,8 @@ import {
   autoOpenRowMarginUsdt,
   filterAutoOpenLogsExcludingLimitPending,
   resolveAutoOpenEntryPrice,
+  resolveAutoOpenOrderPeriod,
+  formatAutoOpenOrderPeriodDuration,
   pctVsEntrySide,
 } from "@/lib/autoOpenFollowUp";
 import {
@@ -630,15 +632,45 @@ function fmtMaxDdCell(row: AutoOpenOrderLogRow): ReactNode {
   return <span style={{ whiteSpace: "nowrap" }}>{dd.toFixed(2)}%</span>;
 }
 
+function fmtOrderPeriodCell(
+  row: AutoOpenOrderLogRow,
+  markPrice: number | undefined,
+  nowMs: number,
+): ReactNode {
+  const { state, durationMs } = resolveAutoOpenOrderPeriod(row, markPrice, nowMs);
+  if (durationMs == null || state == null) return "—";
+  const dur = formatAutoOpenOrderPeriodDuration(durationMs);
+  if (state === "pending_fill") {
+    return (
+      <span style={{ whiteSpace: "nowrap" }} title="Limit รอราคาแตะ entry">
+        ⏳ {dur}
+      </span>
+    );
+  }
+  if (state === "open") {
+    return (
+      <span style={{ whiteSpace: "nowrap", color: "var(--ok, #3a8)" }} title="เปิดอยู่บน MEXC — นับถึงปัจจุบัน">
+        {dur}
+      </span>
+    );
+  }
+  return (
+    <span style={{ whiteSpace: "nowrap" }} title="ระยะเวลาถือ position จนปิดบน MEXC">
+      {dur}
+    </span>
+  );
+}
+
 function renderAutoOpenHistoryTableBody(
   rows: AutoOpenOrderLogRow[],
   markPrices: Record<string, number>,
   emptyMessage: string,
+  nowMs: number,
 ): ReactNode {
   if (rows.length === 0) {
     return (
       <tr>
-        <td colSpan={21} className="sub">
+        <td colSpan={22} className="sub">
           {emptyMessage}
         </td>
       </tr>
@@ -650,6 +682,9 @@ function renderAutoOpenHistoryTableBody(
       <tr key={r.id}>
         <td>
           <code className="marketsFundingHistTime">{formatBkk(r.atMs)}</code>
+        </td>
+        <td title="ระยะเวลาตั้งแต่เข้า position — เปิดอยู่นับถึงปัจจุบัน · ปิดแล้วนับจนปิด MEXC">
+          {fmtOrderPeriodCell(r, nowPx, nowMs)}
         </td>
         <td>{autoOpenSourceLabel(r.source)}</td>
         <td>
@@ -698,6 +733,25 @@ function renderAutoOpenHistoryTableBody(
 const AUTO_OPEN_HISTORY_EMPTY_MSG =
   "ยังไม่มีบันทึก — จะมีเมื่อมีสัญญาณและระบบประเมิน auto-open ของบัญชีคุณ";
 
+function useOrderPeriodNowMs(rows: AutoOpenOrderLogRow[], markPrices: Record<string, number>): number {
+  const needsTick = useMemo(
+    () =>
+      rows.some((r) => {
+        if (r.mexcActive) return true;
+        const mark = markPrices[contractKey(r.contractSymbol)];
+        return autoOpenLimitPriceNotTouchedYet(r, mark);
+      }),
+    [rows, markPrices],
+  );
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!needsTick) return;
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, [needsTick]);
+  return nowMs;
+}
+
 function AutoOpenHistoryTable({
   rows,
   markPrices,
@@ -707,12 +761,16 @@ function AutoOpenHistoryTable({
   markPrices: Record<string, number>;
   emptyMessage?: string;
 }) {
+  const nowMs = useOrderPeriodNowMs(rows, markPrices);
   return (
     <div className="marketsFundingHistTableWrap" style={{ overflowX: "auto" }}>
       <table className="marketsFundingHistTable sparkStatsTable">
         <thead>
           <tr>
             <th>เวลา (BKK)</th>
+            <th title="ระยะเวลาตั้งแต่เข้า position (ชม.·นาที) — เปิดอยู่นับถึงปัจจุบัน · ปิดแล้วนับจนปิด MEXC">
+              เปิดมา
+            </th>
             <th>แหล่ง</th>
             <th>เหรียญ</th>
             <th>ทิศ</th>
@@ -743,7 +801,7 @@ function AutoOpenHistoryTable({
             <th title="Max drawdown % ถึง MFE ในกรอบ 48h">Max DD</th>
           </tr>
         </thead>
-        <tbody>{renderAutoOpenHistoryTableBody(rows, markPrices, emptyMessage)}</tbody>
+        <tbody>{renderAutoOpenHistoryTableBody(rows, markPrices, emptyMessage, nowMs)}</tbody>
       </table>
     </div>
   );
