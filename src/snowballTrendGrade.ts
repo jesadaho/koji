@@ -1,6 +1,6 @@
 /**
- * Snowball trend grade — S / A / B / C / F จาก EMA slope (+ เขียวสำหรับ LONG)
- * LONG เขียว > 3 วัน cap ที่ C (ก่อน B)
+ * Snowball trend grade — S / A / B / C / F จาก EMA slope + เขียว (LONG)
+ * 4h LONG: + (HH200+VAH) และ (D) (Max DD>7%) เป็น modifier ใน composite
  */
 
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
@@ -17,6 +17,7 @@ export type SnowballTrendGradeDisplay =
   | "A"
   | "B+"
   | "B"
+  | "C+"
   | "C"
   | "F";
 
@@ -28,6 +29,7 @@ export function isSnowballTrendGradeDisplay(v: string | undefined | null): v is 
     v === "A" ||
     v === "B+" ||
     v === "B" ||
+    v === "C+" ||
     v === "C" ||
     v === "F"
   );
@@ -41,14 +43,19 @@ export const SNOWBALL_TREND_GRADE_A_EMA4H_MIN = 15;
 /** @deprecated ไม่มีเพดานบนเกรด A อีกต่อไป */
 export const SNOWBALL_TREND_GRADE_A_EMA4H_MAX = 50;
 export const SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE = 15;
+/** @deprecated เกณฑ์เก่า B 10–15% */
 export const SNOWBALL_TREND_GRADE_B_EMA4H_MIN = 10;
+/** @deprecated เกณฑ์เก่า B 10–15% */
 export const SNOWBALL_TREND_GRADE_B_EMA4H_MAX = 15;
+/** @deprecated ไม่ใช้ BTC weak path แล้ว */
 export const SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE = -10;
-/** Grade F — EMA4h slope 7d ต้องต่ำกว่าค่านี้ (เช่น -3% ผ่าน, -2% ไม่ผ่าน) */
-export const SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE = -2.5;
+/** B — EMA4h > 0% */
+export const SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE = 0;
+/** F — EMA4h < 0% (ใช้เป็น upper bound exclusive) */
+export const SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE = 0;
 export const SNOWBALL_TREND_GRADE_S_GREEN_MAX = 1;
 export const SNOWBALL_TREND_GRADE_A_GREEN_MAX = 3;
-/** LONG เขียว > 3 วัน (≥4) → cap ที่ Grade C — สูงกว่า B */
+/** LONG เขียว > 3 วัน (≥4) → Grade C */
 export const SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE = SNOWBALL_TREND_GRADE_A_GREEN_MAX;
 
 export type ClassifySnowballTrendGradeInput = {
@@ -77,7 +84,7 @@ function greenDaysExceeds(maxDays: number, greenDaysBeforeSignal?: number | null
   return n != null && Number.isFinite(n) && n >= 0 && Math.floor(n) > maxDays;
 }
 
-function longGreenDaysForcesGradeC(input: ClassifySnowballTrendGradeInput): boolean {
+function matchesGradeCGreen(input: ClassifySnowballTrendGradeInput): boolean {
   return (
     isLongSide(input.alertSide) &&
     greenDaysExceeds(SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE, input.greenDaysBeforeSignal)
@@ -102,19 +109,9 @@ function matchesGradeA(input: ClassifySnowballTrendGradeInput): boolean {
   return true;
 }
 
-function matchesGradeBSlope(input: ClassifySnowballTrendGradeInput): boolean {
-  if (!finitePct(input.ema4hSlopePct7d)) return false;
-  const pct = input.ema4hSlopePct7d;
-  return pct >= SNOWBALL_TREND_GRADE_B_EMA4H_MIN && pct <= SNOWBALL_TREND_GRADE_B_EMA4H_MAX;
-}
-
-function matchesGradeBBtc(input: ClassifySnowballTrendGradeInput): boolean {
-  if (!finitePct(input.btcEma4hSlopePct7d)) return false;
-  return input.btcEma4hSlopePct7d < SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE;
-}
-
 function matchesGradeB(input: ClassifySnowballTrendGradeInput): boolean {
-  return matchesGradeBSlope(input) || matchesGradeBBtc(input);
+  if (!finitePct(input.ema4hSlopePct7d)) return false;
+  return input.ema4hSlopePct7d > SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE;
 }
 
 function matchesGradeF(input: ClassifySnowballTrendGradeInput): boolean {
@@ -125,7 +122,7 @@ function matchesGradeF(input: ClassifySnowballTrendGradeInput): boolean {
   );
 }
 
-export const SNOWBALL_TREND_GRADE_F_CRITERIA = `EMA4h < ${SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE}% · EMA1d < 0%`;
+export const SNOWBALL_TREND_GRADE_F_CRITERIA = "EMA4h < 0% · EMA1d < 0%";
 
 /** ตรงเกรด F — ใช้ Quality Short Signal / matrix filter / fade SHORT */
 export function snowballEma4hSlopeMatchesTrendGradeF(
@@ -135,14 +132,24 @@ export function snowballEma4hSlopeMatchesTrendGradeF(
   return matchesGradeF({ ema4hSlopePct7d, ema1dSlopePct7d });
 }
 
-/** ตัดเกรด F → S → A → (LONG เขียว>3 → C) → B → C */
+/** ตัดเกรด F → S → A → C (เขียว>3) → B (EMA>0) → C */
 export function classifySnowballTrendGrade(input: ClassifySnowballTrendGradeInput): SnowballTrendGrade {
   if (matchesGradeF(input)) return "f";
   if (matchesGradeS(input)) return "s";
   if (matchesGradeA(input)) return "a";
-  if (longGreenDaysForcesGradeC(input)) return "c";
+  if (matchesGradeCGreen(input)) return "c";
   if (matchesGradeB(input)) return "b";
   return "c";
+}
+
+/** เพิ่ม + เมื่อ HH200+VAH (composite modifier) */
+export function snowballTrendGradeWithPlus(
+  baseTier: SnowballTrendGrade,
+  plus: boolean,
+): SnowballTrendGradeDisplay {
+  const letter = snowballTrendGradeToDisplay(baseTier);
+  if (plus) return `${letter}+` as SnowballTrendGradeDisplay;
+  return letter;
 }
 
 export function snowballTrendGradeToDisplay(grade: SnowballTrendGrade): SnowballTrendGradeDisplay {
@@ -161,34 +168,24 @@ export type SnowballTrendGradeFilter =
 
 /** เกณฑ์ Trend Grade ต่อชั้น — ใช้ใน stats filter / tooltip */
 export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDisplay): string {
-  if (grade === "F") {
-    return SNOWBALL_TREND_GRADE_F_CRITERIA;
+  const base = grade.endsWith("+") ? grade.slice(0, -1) : grade;
+  const plusNote = grade.endsWith("+") ? " · HH200+VAH" : "";
+  if (base === "F") return `${SNOWBALL_TREND_GRADE_F_CRITERIA}${plusNote}`;
+  if (base === "S") {
+    return `EMA4h > ${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_S_GREEN_MAX}${plusNote}`;
   }
-  if (grade === "S+") {
-    return `EMA4h > ${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · HH200+VAH · Max DD ≤ 7%`;
+  if (base === "A") {
+    return `EMA4h > ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX}${plusNote}`;
   }
-  if (grade === "S") {
-    return `EMA4h > ${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_S_GREEN_MAX} วัน`;
-  }
-  if (grade === "A+") {
-    return `EMA4h > ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} · HH200+VAH · Max DD ≤ 7%`;
-  }
-  if (grade === "A") {
-    return `EMA4h > ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} วัน`;
-  }
-  if (grade === "B+") {
-    return `LONG เขียว > ${SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE} วัน · HH200 ผ่าน · Max DD ≤ 7%`;
-  }
-  if (grade === "B") {
-    return `EMA4h ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}% หรือ BTC EMA4h < ${SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE}% · HH200 หรือ VAH`;
-  }
-  return `นอกเหนือเกณฑ์ F / S / A / B · หรือ LONG เขียว > ${SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE} วัน`;
+  if (base === "B") return `EMA4h > 0%${plusNote}`;
+  if (base === "C") return `LONG เขียว > ${SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE} วัน${plusNote}`;
+  return `นอกเหนือเกณฑ์ F / S / A / B / C`;
 }
 
 export function snowballTrendGradeFilterTitle(filter: SnowballTrendGradeFilter): string {
   if (filter === "all") return "ทุก grade";
   if (filter === "SAB") return "Grade S / A / B (รวม +)";
-  if (filter === "SABplus") return "Grade S+ / A+ / B+ เท่านั้น";
+  if (filter === "SABplus") return "Grade S+ / A+ / B+ / C+ เท่านั้น";
   return `Grade ${filter}: ${snowballTrendGradeFilterCriteria(filter)}`;
 }
 
@@ -312,7 +309,7 @@ export function normalizeSnowballQualityTier(
 /** migrate auto-trade grade key เก่า → ใหม่ */
 export function migrateSnowballAutoTradeGradeKey(key: string): SnowballTrendGradeDisplay | null {
   const k = key.trim();
-  if (k === "S+" || k === "A+" || k === "B+") return k as SnowballTrendGradeDisplay;
+  if (k === "S+" || k === "A+" || k === "B+" || k === "C+") return k as SnowballTrendGradeDisplay;
   if (k === "S" || k === "A" || k === "B" || k === "C" || k === "F") return k;
   if (k.startsWith("A")) return "A";
   if (k.startsWith("B")) return "B";

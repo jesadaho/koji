@@ -421,16 +421,13 @@ export function snowballStatsGradeMatchesFilter(
     return ["S", "A", "B"].some((g) => snowballStatsGradeLabelMatchesBaseTier(label, g));
   }
   if (filter === "SABplus") {
-    return ["S+", "A+", "B+"].some((g) => snowballStatsGradeLabelMatchesPlusTier(label, g));
+    return ["S+", "A+", "B+", "C+"].some((g) => snowballStatsGradeLabelMatchesPlusTier(label, g));
   }
-  if (filter === "S+" || filter === "A+" || filter === "B+") {
+  if (filter === "S+" || filter === "A+" || filter === "B+" || filter === "C+") {
     return snowballStatsGradeLabelMatchesPlusTier(label, filter);
   }
-  if (filter === "S" || filter === "A" || filter === "B") {
+  if (filter === "S" || filter === "A" || filter === "B" || filter === "C" || filter === "F") {
     return snowballStatsGradeLabelMatchesBaseTier(label, filter);
-  }
-  if (filter === "C" || filter === "F") {
-    return snowballStatsGradeLabelMatchesPlusTier(label, filter);
   }
   return snowballStatsGradeLabelMatchesBaseTier(label, filter);
 }

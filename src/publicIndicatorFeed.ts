@@ -53,7 +53,10 @@ import {
   type SnowballLongGradeResolution,
   type SnowballLongStructureTier,
 } from "./snowballLongBreakoutGrade";
-import { snowballTrendGradeDisplayWithDangerous } from "./snowballCompositeGrade";
+import {
+  displayGradeToBaseTier,
+  snowballTrendGradeDisplayWithDangerous,
+} from "./snowballCompositeGrade";
 import {
   classifySnowballTrendGrade,
   snowballTrendGradeActionPlan,
@@ -1861,8 +1864,8 @@ function buildSnowballTripleCheckMessage(
     const g = args.snowballLongBreakoutGrade;
     const dg =
       args.snowballTrendDisplayGrade ?? (g ? snowballTrendGradeToDisplay(g) : null);
-    const gradeF = snowballIsGradeF(g) || dg === "F";
-    const gradeDangerous = args.gradeDangerous === true && dg === "F";
+    const gradeF = snowballIsGradeF(g) || dg === "F" || (dg != null && displayGradeToBaseTier(dg) === "f");
+    const gradeDangerous = args.gradeDangerous === true;
     const gradeLine = args.gradeFootnote ?? (g ? snowballTrendGradeDisplayLabel(g, "long") : "");
     const actionPlan = g ? snowballTrendGradeActionPlan(g) : null;
     const displayForAuto = dg
@@ -1881,16 +1884,20 @@ function buildSnowballTripleCheckMessage(
     const longHeadline = withQualitySignalAlertHeader(
       (() => {
         const sfx = sniperSuffix;
-        if (dg === "S+") return `🟢 [Grade S+] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-        if (dg === "S" || g === "s") return `🟢 [Grade S] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-        if (dg === "A+") return `🟢 [Grade A+] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-        if (dg === "A" || g === "a") return `🟢 [Grade A] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-        if (dg === "B+") return `🟡 [Grade B+] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-        if (dg === "B" || g === "b") return `🟡 [Grade B] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (dg) {
+          const tier = displayGradeToBaseTier(dg);
+          const label = snowballTrendGradeDisplayWithDangerous(dg, gradeDangerous);
+          const emoji =
+            tier === "f" ? "🔴" : tier === "c" ? "🟠" : tier === "b" ? "🟡" : "🟢";
+          return `${emoji} [Grade ${label}] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        }
         if (gradeF) {
           return `🔴 [Grade ${snowballTrendGradeDisplayWithDangerous("F", gradeDangerous)}] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
         }
-        if (dg === "C" || g === "c") return `🟠 [Grade C] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (g === "s") return `🟢 [Grade S] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (g === "a") return `🟢 [Grade A] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (g === "b") return `🟡 [Grade B] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (g === "c") return `🟠 [Grade C] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
         if (args.breakout1hConfirmUsed) {
           return `🟢 [Breakout Entry · 1H Confirm] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
         }

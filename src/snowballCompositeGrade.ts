@@ -1,5 +1,5 @@
 /**
- * Snowball composite grade — Momentum + S1 (HH200/VAH) + S3 (Max DD 15m)
+ * Snowball composite grade — base (EMA/เขียว) + modifiers: + (HH200+VAH) · (D) (Max DD)
  * ใช้กับ 4h LONG เมื่อมี snapshot โครงสร้าง/DD
  */
 
@@ -10,15 +10,7 @@ import {
   snowballTrendActionPlanLabel,
   snowballTrendGradeActionPlan,
   snowballTrendGradeToDisplay,
-  SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_A_GREEN_MAX,
-  SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_B_EMA4H_MAX,
-  SNOWBALL_TREND_GRADE_B_EMA4H_MIN,
-  SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_S_GREEN_MAX,
+  snowballTrendGradeWithPlus,
   type ClassifySnowballTrendGradeInput,
   type SnowballTrendGrade,
   type SnowballTrendGradeDisplay,
@@ -40,71 +32,6 @@ export type SnowballCompositeGradeInput = ClassifySnowballTrendGradeInput & {
   structureTier?: SnowballLongStructureTier | null;
   signalMaxDdPct?: number | null;
 };
-
-function isLongSide(alertSide: ClassifySnowballTrendGradeInput["alertSide"]): boolean {
-  return (alertSide ?? "long") !== "bear";
-}
-
-function finitePct(v: number | null | undefined): v is number {
-  return v != null && Number.isFinite(v);
-}
-
-function greenDaysAtMost(maxDays: number, greenDaysBeforeSignal?: number | null): boolean {
-  const n = greenDaysBeforeSignal;
-  return n != null && Number.isFinite(n) && n >= 0 && Math.floor(n) <= maxDays;
-}
-
-function greenDaysExceeds(maxDays: number, greenDaysBeforeSignal?: number | null): boolean {
-  const n = greenDaysBeforeSignal;
-  return n != null && Number.isFinite(n) && n >= 0 && Math.floor(n) > maxDays;
-}
-
-function matchesMomentumS(input: ClassifySnowballTrendGradeInput): boolean {
-  if (!finitePct(input.ema4hSlopePct7d)) return false;
-  if (input.ema4hSlopePct7d <= SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE) return false;
-  if (
-    isLongSide(input.alertSide) &&
-    !greenDaysAtMost(SNOWBALL_TREND_GRADE_S_GREEN_MAX, input.greenDaysBeforeSignal)
-  ) {
-    return false;
-  }
-  return true;
-}
-
-function matchesMomentumA(input: ClassifySnowballTrendGradeInput): boolean {
-  if (!finitePct(input.ema4hSlopePct7d)) return false;
-  if (input.ema4hSlopePct7d <= SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE) return false;
-  if (
-    isLongSide(input.alertSide) &&
-    !greenDaysAtMost(SNOWBALL_TREND_GRADE_A_GREEN_MAX, input.greenDaysBeforeSignal)
-  ) {
-    return false;
-  }
-  return true;
-}
-
-function matchesMomentumBSlope(input: ClassifySnowballTrendGradeInput): boolean {
-  if (!finitePct(input.ema4hSlopePct7d)) return false;
-  const pct = input.ema4hSlopePct7d;
-  return pct >= SNOWBALL_TREND_GRADE_B_EMA4H_MIN && pct <= SNOWBALL_TREND_GRADE_B_EMA4H_MAX;
-}
-
-function matchesMomentumBBtc(input: ClassifySnowballTrendGradeInput): boolean {
-  if (!finitePct(input.btcEma4hSlopePct7d)) return false;
-  return input.btcEma4hSlopePct7d < SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE;
-}
-
-function matchesMomentumB(input: ClassifySnowballTrendGradeInput): boolean {
-  return matchesMomentumBSlope(input) || matchesMomentumBBtc(input);
-}
-
-function matchesMomentumF(input: ClassifySnowballTrendGradeInput): boolean {
-  if (!finitePct(input.ema4hSlopePct7d) || !finitePct(input.ema1dSlopePct7d)) return false;
-  return (
-    input.ema4hSlopePct7d < SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE &&
-    input.ema1dSlopePct7d < 0
-  );
-}
 
 /** S1 — HH200 ผ่าน (feed-time หรือ stats row) */
 export function snowballS1Hh200Ok(input: {
@@ -152,7 +79,7 @@ export function snowballS3MaxDdOk(signalMaxDdPct: number | null | undefined): bo
   return signalMaxDdPct <= snowballTrendMomentumMaxDrawbackPct();
 }
 
-/** S3 — Dangerous demote */
+/** S3 — Max DD > limit → suffix (D) */
 export function snowballS3MaxDdDangerous(signalMaxDdPct: number | null | undefined): boolean {
   if (signalMaxDdPct == null || !Number.isFinite(signalMaxDdPct)) return false;
   return signalMaxDdPct > snowballTrendMomentumMaxDrawbackPct();
@@ -176,6 +103,7 @@ export function displayGradeToBaseTier(display: SnowballTrendGradeDisplay): Snow
   if (display === "S+" || display === "S") return "s";
   if (display === "A+" || display === "A") return "a";
   if (display === "B+" || display === "B") return "b";
+  if (display === "C+" || display === "C") return "c";
   if (display === "F") return "f";
   return "c";
 }
@@ -184,12 +112,12 @@ export function snowballAutoTradeGradeKeyFromDisplay(
   display: SnowballTrendGradeDisplay | string | null | undefined,
 ): "S" | "A" | "B" | "C" | "F" | null {
   if (!display) return null;
-  const d = display.trim();
+  const d = snowballTrendGradeDisplayLabelBase(display.trim());
   if (d === "S+" || d === "S") return "S";
   if (d === "A+" || d === "A") return "A";
   if (d === "B+" || d === "B") return "B";
-  if (d === "C") return "C";
-  if (d === "F" || d.startsWith("F")) return "F";
+  if (d === "C+" || d === "C") return "C";
+  if (d === "F") return "F";
   return null;
 }
 
@@ -201,46 +129,15 @@ function result(
   return { baseTier, display, dangerous, composite: true };
 }
 
-/** Classify composite grade for 4h LONG */
+/** Classify composite grade for 4h LONG — base tier + + / (D) modifiers */
 export function classifySnowballCompositeGrade(
   input: SnowballCompositeGradeInput,
 ): SnowballCompositeGradeResult {
-  const momentum = input as ClassifySnowballTrendGradeInput;
-
-  if (snowballS3MaxDdDangerous(input.signalMaxDdPct)) {
-    return result("f", "F", true);
-  }
-
-  if (matchesMomentumF(momentum)) {
-    return result("f", "F", false);
-  }
-
-  const hh200AndVah = snowballS1Hh200AndVahOk(input);
-  const hh200OrVah = snowballS1Hh200OrVahOk(input);
-  const hh200 = snowballS1Hh200Ok(input) === true;
-  const greenOver3 =
-    isLongSide(input.alertSide) &&
-    greenDaysExceeds(SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE, input.greenDaysBeforeSignal);
-
-  if (matchesMomentumS(momentum)) {
-    return result("s", hh200AndVah ? "S+" : "S", false);
-  }
-
-  if (matchesMomentumA(momentum)) {
-    return result("a", hh200AndVah ? "A+" : "A", false);
-  }
-
-  if (greenOver3) {
-    if (hh200) return result("b", "B+", false);
-    if (hh200OrVah) return result("b", "B", false);
-    return result("c", "C", false);
-  }
-
-  if (matchesMomentumB(momentum) && hh200OrVah) {
-    return result("b", "B", false);
-  }
-
-  return result("c", "C", false);
+  const baseTier = classifySnowballTrendGrade(input);
+  const plus = snowballS1Hh200AndVahOk(input);
+  const dangerous = snowballS3MaxDdDangerous(input.signalMaxDdPct);
+  const display = snowballTrendGradeWithPlus(baseTier, plus);
+  return result(baseTier, display, dangerous);
 }
 
 /** Fallback: momentum-only (non-4h / bear / missing composite context) */
@@ -285,35 +182,36 @@ export function snowballCompositeGradeFootnote(input: {
       ? String(Math.floor(input.greenDaysBeforeSignal))
       : "—";
   const plan = snowballTrendActionPlanLabel(snowballTrendGradeActionPlan(r.baseTier));
-  const greenPart = isLongSide(input.alertSide) ? ` · เขียว ${green}` : "";
+  const greenPart =
+    (input.alertSide ?? "long") !== "bear" ? ` · เขียว ${green}` : "";
   const gradeLabel = snowballTrendGradeDisplayWithDangerous(r.display, r.dangerous);
-  const s1Part = r.composite
-    ? ` · S1 HH200 ${snowballS1Hh200Ok(input) === true ? "✓" : "—"} · VAH ${snowballS1VahOk(input) ? "✓" : "—"}`
+  const plusPart = r.composite
+    ? ` · + ${snowballS1Hh200AndVahOk(input) ? "✓" : "—"} (HH200+VAH)`
     : "";
   const dd =
     input.signalMaxDdPct != null && Number.isFinite(input.signalMaxDdPct)
       ? `${input.signalMaxDdPct.toFixed(2)}%`
       : "—";
-  const s3Part = r.composite ? ` · S3 Max DD ${dd}` : "";
-  return `📎 Grade ${gradeLabel}: EMA4h ${ema4h}${greenPart} · EMA1d ${ema1d} · BTC∠4h ${btc4h}${s1Part}${s3Part} · ${plan}`;
+  const ddPart = r.composite ? ` · (D) Max DD ${dd}` : "";
+  return `📎 Grade ${gradeLabel}: EMA4h ${ema4h}${greenPart} · EMA1d ${ema1d} · BTC∠4h ${btc4h}${plusPart}${ddPart} · ${plan}`;
 }
 
-/** ป้าย display สั้น — F + dangerous → F (D) */
-export function snowballTrendGradeDisplayWithDangerous(
-  display: SnowballTrendGradeDisplay,
-  dangerous?: boolean,
-): string {
-  if (dangerous && display === "F") return "F (D)";
-  return display;
-}
-
-/** ตัด suffix dangerous ก่อนเทียบ filter */
+/** ตัด suffix (D) / legacy Dangerous ก่อนเทียบ filter */
 export function snowballTrendGradeDisplayLabelBase(label: string): string {
   return label
     .replace(" (Dangerous)", "")
     .replace(" · Dangerous", "")
     .replace(" (D)", "")
     .trim();
+}
+
+/** ป้าย display + suffix (D) เมื่อ Max DD > 7% */
+export function snowballTrendGradeDisplayWithDangerous(
+  display: SnowballTrendGradeDisplay | string,
+  dangerous?: boolean,
+): string {
+  if (dangerous) return `${display} (D)`;
+  return display;
 }
 
 export function snowballCompositeGradeDisplayLabel(

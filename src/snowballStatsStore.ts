@@ -39,7 +39,7 @@ import {
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
 
 /** แถวที่ recompute trend grade (S/A/B/C/F) จาก snapshot ณ alertedAtMs แล้ว */
-export const STATS_TREND_GRADE_VERSION = 7;
+export const STATS_TREND_GRADE_VERSION = 9;
 
 export function snowballStatsRowAlertSide(row: Pick<SnowballStatsRow, "alertSide" | "triggerKind">): SnowballStatsAlertSide {
   return row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
@@ -86,11 +86,11 @@ export function snowballStatsRowReadyForTrendGradeBackfill(row: SnowballStatsRow
 export function snowballStatsRowNeedsTrendGradeBackfill(row: SnowballStatsRow): boolean {
   if (row.trendGradeV !== STATS_TREND_GRADE_VERSION) return true;
   if (!snowballStatsRowReadyForTrendGradeBackfill(row)) return false;
-  const grade = classifySnowballTrendGrade(snowballStatsRowTrendGradeInput(row));
-  const display = snowballTrendGradeToDisplay(grade);
-  if (row.alertQualityTier !== grade) return true;
-  if (row.displayGrade !== display) return true;
-  if (!row.qualityTier4hAdjusted && row.qualityTier !== grade) return true;
+  const composite = classifySnowballGradeWithFallback(snowballStatsRowCompositeGradeInput(row));
+  if (row.alertQualityTier !== composite.baseTier) return true;
+  if (row.displayGrade !== composite.display) return true;
+  if (Boolean(row.gradeDangerous) !== composite.dangerous) return true;
+  if (!row.qualityTier4hAdjusted && row.qualityTier !== composite.baseTier) return true;
   return false;
 }
 
