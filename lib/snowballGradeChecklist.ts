@@ -415,11 +415,11 @@ function snowballTrendGradeChecklistItems(
           title: "เขียวก่อนสัญญาณ",
           status:
             green != null && Number.isFinite(green) && green >= 0
-              ? Math.floor(green) > SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE
+              ? Math.floor(green) > SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE
                 ? "fail"
                 : "pass"
               : "unknown",
-          detail: `${greenStr} วัน · S ≤${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ≤${SNOWBALL_TREND_GRADE_A_GREEN_MAX} · >${SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE} → C (base)`,
+          detail: `${greenStr} วัน · S ≤${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ≤${SNOWBALL_TREND_GRADE_A_GREEN_MAX} · >${SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE} → B (base)`,
         }
       : null;
 

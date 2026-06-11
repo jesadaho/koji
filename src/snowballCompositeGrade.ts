@@ -113,7 +113,7 @@ export function displayGradeToBaseTier(display: SnowballTrendGradeDisplay): Snow
 
 export function snowballAutoTradeGradeKeyFromDisplay(
   display: SnowballTrendGradeDisplay | string | null | undefined,
-): "S" | "A" | "B" | "C" | "F" | null {
+): SnowballTrendGradeDisplay extends never ? never : "S" | "A" | "B" | "C" | "F" | null {
   if (!display) return null;
   const d = snowballTrendGradeDisplayLabelBase(display.trim());
   if (d === "S+" || d === "S") return "S";

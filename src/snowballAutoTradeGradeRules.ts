@@ -1,5 +1,5 @@
 import type { SnowballTrendGrade, SnowballTrendGradeDisplay } from "./snowballTrendGrade";
-import { snowballTrendGradeToDisplay } from "./snowballTrendGrade";
+import { migrateSnowballAutoTradeGradeKey, snowballTrendGradeToDisplay } from "./snowballTrendGrade";
 import { snowballAutoTradeGradeKeyFromDisplay } from "./snowballCompositeGrade";
 import type { SnowballAutoTradeGradeKey } from "./tradingViewCloseSettingsStore";
 

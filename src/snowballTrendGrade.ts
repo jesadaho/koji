@@ -136,13 +136,13 @@ export function snowballEma4hSlopeMatchesTrendGradeF(
   return matchesGradeF({ ema4hSlopePct7d, ema1dSlopePct7d });
 }
 
-/** ตัดเกรด F → S → A → C (เขียว>3) → B (EMA>0) → C */
+/** ตัดเกรด F → S → A → B (เขียว>3) → C (EMA>0) → C */
 export function classifySnowballTrendGrade(input: ClassifySnowballTrendGradeInput): SnowballTrendGrade {
   if (matchesGradeF(input)) return "f";
   if (matchesGradeS(input)) return "s";
   if (matchesGradeA(input)) return "a";
-  if (matchesGradeCGreen(input)) return "c";
-  if (matchesGradeB(input)) return "b";
+  if (matchesGradeBGreen(input)) return "b";
+  if (matchesGradeCEma(input)) return "c";
   return "c";
 }
 

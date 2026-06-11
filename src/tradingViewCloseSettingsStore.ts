@@ -4,8 +4,7 @@ import { dirname, join } from "node:path";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import type { ReversalAutoTradeEntryMode } from "../lib/reversalAutoTradeEntry.js";
 import type { SnowballAutoTradeEntryMode } from "../lib/snowballAutoTradeEntry.js";
-import { snowballAutoTradeGradeKeyFromDisplay } from "./snowballCompositeGrade";
-import { migrateSnowballAutoTradeGradeKey } from "./snowballTrendGrade";
+import { snowballAutoTradeGradeKeyFromMigratedRawKey } from "./snowballAutoTradeGradeRules";
 
 export type { ReversalAutoTradeEntryMode, SnowballAutoTradeEntryMode };
 
