@@ -49,6 +49,8 @@ export const SNOWBALL_TREND_GRADE_B_EMA4H_MIN = 10;
 export const SNOWBALL_TREND_GRADE_B_EMA4H_MAX = 15;
 /** @deprecated ไม่ใช้ BTC weak path แล้ว */
 export const SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE = -10;
+export const SNOWBALL_TREND_GRADE_S_GREEN_MAX = 1;
+export const SNOWBALL_TREND_GRADE_A_GREEN_MAX = 3;
 /** B — LONG เขียว > 3 วัน (≥4) */
 export const SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE = SNOWBALL_TREND_GRADE_A_GREEN_MAX;
 /** @deprecated ใช้ SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE */
@@ -59,8 +61,6 @@ export const SNOWBALL_TREND_GRADE_C_EMA4H_MIN_EXCLUSIVE = 0;
 export const SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE = SNOWBALL_TREND_GRADE_C_EMA4H_MIN_EXCLUSIVE;
 /** F — EMA4h < 0% (ใช้เป็น upper bound exclusive) */
 export const SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE = 0;
-export const SNOWBALL_TREND_GRADE_S_GREEN_MAX = 1;
-export const SNOWBALL_TREND_GRADE_A_GREEN_MAX = 3;
 
 export type ClassifySnowballTrendGradeInput = {
   alertSide?: SnowballAutoTradeAlertSide | "long" | "bear" | null;
