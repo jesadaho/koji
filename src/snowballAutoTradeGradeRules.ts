@@ -23,6 +23,8 @@ export function snowballAutoTradeGradeKeyFromAlert(
   const fromDisplay = snowballAutoTradeGradeKeyFromDisplay(input.displayGrade);
   if (fromDisplay) return fromDisplay;
   if (input.momentumFailGradeF) return "F";
-  if (input.qualityTier) return snowballTrendGradeToDisplay(input.qualityTier);
+  if (input.qualityTier) {
+    return snowballAutoTradeGradeKeyFromDisplay(snowballTrendGradeToDisplay(input.qualityTier));
+  }
   return null;
 }
