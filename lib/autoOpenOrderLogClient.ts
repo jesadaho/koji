@@ -6,6 +6,9 @@ export type AutoOpenOutcome = "success" | "skipped" | "failed";
 /** ทิศสัญญาณ Reversal ที่ยิง alert — long = fade เปิด SHORT */
 export type ReversalAutoOpenAlertSide = "short" | "long";
 
+/** ฟิลเตอร์แหล่งในหน้าประวัติ Bot Trade — แยก Reversal Short / Long */
+export type AutoOpenSourceFilter = "all" | "snowball" | "reversal_short" | "reversal_long";
+
 export type AutoOpenOrderLogRow = {
   id: string;
   atMs: number;
@@ -146,6 +149,106 @@ export function autoOpenSourceLabel(source: AutoOpenSource): string {
 
 export function reversalAutoOpenAlertSideLabel(side: ReversalAutoOpenAlertSide): string {
   return side === "long" ? "Long (fade)" : "Short";
+}
+
+/** แถวเก่าไม่มี reversalAlertSide — ถือเป็น Short */
+export function resolveReversalAutoOpenAlertSide(
+  row: Pick<AutoOpenOrderLogRow, "source" | "reversalAlertSide">,
+): ReversalAutoOpenAlertSide | null {
+  if (row.source !== "reversal") return null;
+  if (row.reversalAlertSide === "short" || row.reversalAlertSide === "long") {
+    return row.reversalAlertSide;
+  }
+  return "short";
+}
+
+export function matchesAutoOpenSourceFilter(
+  row: AutoOpenOrderLogRow,
+  filter: AutoOpenSourceFilter,
+): boolean {
+  switch (filter) {
+    case "all":
+      return true;
+    case "snowball":
+      return row.source === "snowball";
+    case "reversal_short":
+      return row.source === "reversal" && resolveReversalAutoOpenAlertSide(row) === "short";
+    case "reversal_long":
+      return row.source === "reversal" && resolveReversalAutoOpenAlertSide(row) === "long";
+    default:
+      return true;
+  }
+}
+
+export function filterAutoOpenLogsBySourceFilter(
+  rows: AutoOpenOrderLogRow[],
+  filter: AutoOpenSourceFilter,
+): AutoOpenOrderLogRow[] {
+  if (filter === "all") return rows;
+  return rows.filter((r) => matchesAutoOpenSourceFilter(r, filter));
+}
+
+export function autoOpenSourceFilterToApiQuery(filter: AutoOpenSourceFilter): {
+  source?: AutoOpenSource;
+  reversalAlertSide?: ReversalAutoOpenAlertSide;
+} {
+  if (filter === "snowball") return { source: "snowball" };
+  if (filter === "reversal_short") return { source: "reversal", reversalAlertSide: "short" };
+  if (filter === "reversal_long") return { source: "reversal", reversalAlertSide: "long" };
+  return {};
+}
+
+export function autoOpenSourceFilterLabel(filter: AutoOpenSourceFilter): string {
+  switch (filter) {
+    case "all":
+      return "Snowball + Reversal";
+    case "snowball":
+      return "Snowball";
+    case "reversal_short":
+      return "Reversal Short";
+    case "reversal_long":
+      return "Reversal Long (fade)";
+  }
+}
+
+export function parseReversalAutoOpenAlertSide(
+  raw: string | null | undefined,
+): ReversalAutoOpenAlertSide | undefined {
+  const v = raw?.trim().toLowerCase();
+  if (v === "short" || v === "long") return v;
+  return undefined;
+}
+
+export function autoOpenHistoryQueryFromSearchParams(params: {
+  get(name: string): string | null;
+}): {
+  days?: number;
+  source?: AutoOpenSource;
+  reversalAlertSide?: ReversalAutoOpenAlertSide;
+} {
+  const daysRaw = params.get("days");
+  const days = daysRaw != null ? Number(daysRaw) : undefined;
+  const srcRaw = params.get("source")?.toLowerCase();
+  const source: AutoOpenSource | undefined =
+    srcRaw === "snowball" || srcRaw === "reversal" ? srcRaw : undefined;
+  const reversalAlertSide = parseReversalAutoOpenAlertSide(params.get("reversalSide"));
+  return {
+    days: Number.isFinite(days) && days! > 0 ? days : undefined,
+    source,
+    reversalAlertSide,
+  };
+}
+
+export function autoOpenHistoryQueryToSearchParams(query: {
+  days?: number;
+  source?: AutoOpenSource;
+  reversalAlertSide?: ReversalAutoOpenAlertSide;
+}): URLSearchParams {
+  const q = new URLSearchParams();
+  if (query.days != null && query.days > 0) q.set("days", String(query.days));
+  if (query.source) q.set("source", query.source);
+  if (query.reversalAlertSide) q.set("reversalSide", query.reversalAlertSide);
+  return q;
 }
 
 /** ทิศสัญญาณที่ยิง alert — แยกตามแหล่ง */

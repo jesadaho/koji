@@ -9,6 +9,15 @@ export function isSnowballAutoTradeGradeKey(k: string): k is SnowballAutoTradeGr
   return GRADE_KEY_SET.has(k);
 }
 
+/** migrate key เก่า (รวม S+/A+/…) → คีย์ auto-trade S/A/B/C/F */
+export function snowballAutoTradeGradeKeyFromMigratedRawKey(
+  rawKey: string,
+): SnowballAutoTradeGradeKey | null {
+  const display = migrateSnowballAutoTradeGradeKey(rawKey);
+  const key = snowballAutoTradeGradeKeyFromDisplay(display);
+  return key && isSnowballAutoTradeGradeKey(key) ? key : null;
+}
+
 export type SnowballAutoTradeAlertGradeInput = {
   displayGrade?: SnowballTrendGradeDisplay | null;
   qualityTier?: SnowballTrendGrade | null;

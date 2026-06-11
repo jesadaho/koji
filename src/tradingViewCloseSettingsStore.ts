@@ -46,8 +46,7 @@ function migrateSnowballAutoTradeGradeRulesMap(
   const out: SnowballAutoTradeGradeRulesMap = {};
   for (const [rawKey, side] of Object.entries(rules)) {
     if (side !== "long" && side !== "short") continue;
-    const display = migrateSnowballAutoTradeGradeKey(rawKey);
-    const key = snowballAutoTradeGradeKeyFromDisplay(display);
+    const key = snowballAutoTradeGradeKeyFromMigratedRawKey(rawKey);
     if (!key) continue;
     if (out[key] == null) out[key] = side;
   }

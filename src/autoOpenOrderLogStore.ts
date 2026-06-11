@@ -6,7 +6,9 @@ import { randomUUID } from "node:crypto";
 import type {
   AutoOpenOrderLogRow,
   AutoOpenSource,
+  ReversalAutoOpenAlertSide,
 } from "@/lib/autoOpenOrderLogClient";
+import { resolveReversalAutoOpenAlertSide } from "@/lib/autoOpenOrderLogClient";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 
 export type {
@@ -256,15 +258,26 @@ export function appendAutoOpenOrderLogSafe(input: AppendAutoOpenOrderLogInput): 
   });
 }
 
+function matchesReversalAlertSideFilter(
+  row: AutoOpenOrderLogRow,
+  reversalAlertSide?: ReversalAutoOpenAlertSide,
+): boolean {
+  if (!reversalAlertSide) return true;
+  return row.source === "reversal" && resolveReversalAutoOpenAlertSide(row) === reversalAlertSide;
+}
+
 export async function listAutoOpenOrderLogsForUser(
   userId: string,
-  opts?: { days?: number; source?: AutoOpenSource },
+  opts?: { days?: number; source?: AutoOpenSource; reversalAlertSide?: ReversalAutoOpenAlertSide },
 ): Promise<AutoOpenOrderLogRow[]> {
   const uid = userId.trim();
   if (!uid) return [];
   const state = await loadAutoOpenOrderLogState();
   let rows = state.rows.filter((r) => r.userId === uid);
   if (opts?.source) rows = rows.filter((r) => r.source === opts.source);
+  if (opts?.reversalAlertSide) {
+    rows = rows.filter((r) => matchesReversalAlertSideFilter(r, opts.reversalAlertSide));
+  }
   if (typeof opts?.days === "number" && opts.days > 0) {
     const cutoff = Date.now() - opts.days * 24 * 3600 * 1000;
     rows = rows.filter((r) => r.atMs >= cutoff);
@@ -276,7 +289,7 @@ export async function listAutoOpenOrderLogsForUser(
 /** ลบแถว outcome=skipped ของ user (เฉพาะของตัวเอง) */
 export async function deleteSkippedAutoOpenOrderLogsForUser(
   userId: string,
-  opts?: { source?: AutoOpenSource },
+  opts?: { source?: AutoOpenSource; reversalAlertSide?: ReversalAutoOpenAlertSide },
 ): Promise<{ removed: number }> {
   const uid = userId.trim();
   if (!uid) return { removed: 0 };
@@ -287,6 +300,9 @@ export async function deleteSkippedAutoOpenOrderLogsForUser(
     if (r.userId !== uid) return true;
     if (r.outcome !== "skipped") return true;
     if (opts?.source && r.source !== opts.source) return true;
+    if (opts?.reversalAlertSide && !matchesReversalAlertSideFilter(r, opts.reversalAlertSide)) {
+      return true;
+    }
     return false;
   });
   const removed = before - state.rows.length;
@@ -370,7 +386,7 @@ export async function patchAutoOpenOrderLogMexcPnl(
 
 export async function countSkippedAutoOpenOrderLogsForUser(
   userId: string,
-  opts?: { source?: AutoOpenSource },
+  opts?: { source?: AutoOpenSource; reversalAlertSide?: ReversalAutoOpenAlertSide },
 ): Promise<number> {
   const uid = userId.trim();
   if (!uid) return 0;
@@ -380,6 +396,9 @@ export async function countSkippedAutoOpenOrderLogsForUser(
     if (r.userId !== uid) return false;
     if (r.outcome !== "skipped") return false;
     if (opts?.source && r.source !== opts.source) return false;
+    if (opts?.reversalAlertSide && !matchesReversalAlertSideFilter(r, opts.reversalAlertSide)) {
+      return false;
+    }
     return true;
   }).length;
 }

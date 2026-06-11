@@ -887,7 +887,11 @@ export async function liffBackfillSnowballStats(
 
 export async function liffGetAutoOpenOrderHistory(
   userId: string,
-  opts?: { days?: number; source?: AutoOpenSource },
+  opts?: {
+    days?: number;
+    source?: AutoOpenSource;
+    reversalAlertSide?: import("@/lib/autoOpenOrderLogClient").ReversalAutoOpenAlertSide;
+  },
 ): Promise<AutoOpenOrderLogApiPayload> {
   const settingsMap = await loadTradingViewMexcSettingsFullMap();
   const { enrichAutoOpenOrderLogsTpStrategyForUser } = await import(
@@ -911,6 +915,7 @@ export async function liffGetAutoOpenOrderHistory(
   });
   const skippedTotal = await countSkippedAutoOpenOrderLogsForUser(userId, {
     source: opts?.source,
+    reversalAlertSide: opts?.reversalAlertSide,
   });
   const symbols = collectAutoOpenContractSymbols(rows.map((r) => r.contractSymbol));
   const markPrices = await fetchAutoOpenMarkPrices(symbols);
@@ -926,7 +931,10 @@ export async function liffGetAutoOpenMarkPrices(
 
 export async function liffClearSkippedAutoOpenOrderLogs(
   userId: string,
-  opts?: { source?: AutoOpenSource },
+  opts?: {
+    source?: AutoOpenSource;
+    reversalAlertSide?: import("@/lib/autoOpenOrderLogClient").ReversalAutoOpenAlertSide;
+  },
 ): Promise<{ ok: true; removed: number }> {
   const { removed } = await deleteSkippedAutoOpenOrderLogsForUser(userId, opts);
   return { ok: true, removed };

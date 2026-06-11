@@ -11,13 +11,16 @@ import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import {
   autoOpenOutcomeLabel,
   autoOpenReasonLabel,
+  autoOpenHistoryQueryToSearchParams,
   autoOpenSignalSideLabel,
+  autoOpenSourceFilterLabel,
+  autoOpenSourceFilterToApiQuery,
   autoOpenSourceLabel,
   filterAutoOpenLogsByDays,
   summarizeAutoOpenOrderLogs,
   type AutoOpenOrderLogApiPayload,
   type AutoOpenOrderLogRow,
-  type AutoOpenSource,
+  type AutoOpenSourceFilter,
 } from "@/lib/autoOpenOrderLogClient";
 import { groupAutoOpenLogsByBkkWeek } from "@/lib/autoOpenWeekGroup";
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
@@ -72,7 +75,6 @@ import {
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 type Phase = "loading" | "setup" | "ready";
-type SourceFilter = "all" | AutoOpenSource;
 type DayFilter = "7" | "30" | "90" | "all";
 
 function coinLabel(symbol: string): string {
@@ -869,7 +871,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
   const [payload, setPayload] = useState<AutoOpenOrderLogApiPayload | null>(null);
   const [markPrices, setMarkPrices] = useState<Record<string, number>>({});
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<AutoOpenSourceFilter>("all");
   const [dayFilter, setDayFilter] = useState<DayFilter>("30");
   const [splitByWeek, setSplitByWeek] = useState(false);
   const [hideLimitPending, setHideLimitPending] = useState(false);
@@ -934,9 +936,11 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   );
 
   const loadHistory = useCallback(async () => {
-    const q = new URLSearchParams();
-    if (dayFilter !== "all") q.set("days", dayFilter);
-    if (sourceFilter !== "all") q.set("source", sourceFilter);
+    const apiQuery = autoOpenSourceFilterToApiQuery(sourceFilter);
+    const q = autoOpenHistoryQueryToSearchParams({
+      ...apiQuery,
+      days: dayFilter !== "all" ? Number(dayFilter) : undefined,
+    });
     const qs = q.toString();
     const data = (await apiGet(`/auto-open-history${qs ? `?${qs}` : ""}`)) as AutoOpenOrderLogApiPayload;
     setPayload(data);
@@ -949,19 +953,23 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       window.alert("ไม่มีรายการข้ามให้ลบ");
       return;
     }
-    const scope =
-      sourceFilter === "all"
-        ? "Snowball + Reversal"
-        : sourceFilter === "snowball"
-          ? "Snowball"
-          : "Reversal";
+    const scope = autoOpenSourceFilterLabel(sourceFilter);
     const ok = window.confirm(
       `ลบรายการข้ามทั้งหมด ${total} รายการ (${scope}) ออกจากประวัติ?\n\nการลบไม่สามารถย้อนกลับได้`,
     );
     if (!ok) return;
     setClearingSkipped(true);
     try {
-      const body = sourceFilter !== "all" ? { source: sourceFilter } : undefined;
+      const apiQuery = autoOpenSourceFilterToApiQuery(sourceFilter);
+      const body =
+        sourceFilter !== "all"
+          ? {
+              ...(apiQuery.source ? { source: apiQuery.source } : {}),
+              ...(apiQuery.reversalAlertSide
+                ? { reversalSide: apiQuery.reversalAlertSide }
+                : {}),
+            }
+          : undefined;
       const r = (await apiPost("/auto-open-history/clear-skipped", body)) as { removed?: number };
       await loadHistory();
       window.alert(`ลบแล้ว ${r.removed ?? 0} รายการ`);
@@ -1151,9 +1159,11 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
-    const q = new URLSearchParams();
-    if (dayFilter !== "all") q.set("days", dayFilter);
-    if (sourceFilter !== "all") q.set("source", sourceFilter);
+    const apiQuery = autoOpenSourceFilterToApiQuery(sourceFilter);
+    const q = autoOpenHistoryQueryToSearchParams({
+      ...apiQuery,
+      days: dayFilter !== "all" ? Number(dayFilter) : undefined,
+    });
     const qs = q.toString();
     await downloadCsv(statsCsvFilename("auto-open-history"), autoOpenOrderLogToCsv(displayRows), {
       telegramExportPath: `/api/tma/auto-open-history.csv${qs ? `?${qs}` : ""}`,
@@ -1233,11 +1243,12 @@ export default function AutoOpenHistoryTelegramMiniApp() {
           แหล่ง
           <select
             value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value as SourceFilter)}
+            onChange={(e) => setSourceFilter(e.target.value as AutoOpenSourceFilter)}
           >
             <option value="all">ทั้งหมด</option>
             <option value="snowball">Snowball</option>
-            <option value="reversal">Reversal</option>
+            <option value="reversal_short">Reversal Short</option>
+            <option value="reversal_long">Reversal Long (fade)</option>
           </select>
         </label>
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
