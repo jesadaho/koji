@@ -483,6 +483,8 @@ function detectSnowballLongClosed(
   });
 
   const longBreakoutGrade = gradeResolution.grade;
+  const longDisplayGrade = gradeResolution.displayGrade;
+  const longGradeDangerous = gradeResolution.gradeDangerous;
   const entryClosePx = twoBarInline ? c15[iConf]! : clE!;
   const trig = swing48 && vahOk ? "both" : swing48 ? "swing_hh" : "vah_break";
   const longSignalLow = l15[iSig];
@@ -531,12 +533,13 @@ function detectSnowballLongClosed(
       volSma: vsE!,
       qualityTier: longBreakoutGrade,
       alertQualityTier: longBreakoutGrade,
-      displayGrade: snowballTrendGradeToDisplay(longBreakoutGrade),
+      displayGrade: longDisplayGrade,
       ...(gradeResolution.structureTier ? { structureTier: gradeResolution.structureTier as SnowballLongStructureTier } : {}),
       swing200Ok: swing200,
       ...(gradeResolution.actionPlan ? { actionPlan: gradeResolution.actionPlan } : {}),
       momentumDowngrade: false,
       momentumFailGradeF: snowballIsGradeF(longBreakoutGrade),
+      ...(longGradeDangerous ? { gradeDangerous: true } : {}),
       atr100: volSnap.atr100,
       maxUpperWick100: volSnap.maxUpperWick100,
       rangeScore: volSnap.rangeScore,

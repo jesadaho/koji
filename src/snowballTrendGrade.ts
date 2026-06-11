@@ -10,7 +10,28 @@ export type SnowballTrendGrade = "s" | "a" | "b" | "c" | "f";
 /** @deprecated alias — ใช้ SnowballTrendGrade */
 export type SnowballLongBreakoutGrade = SnowballTrendGrade;
 
-export type SnowballTrendGradeDisplay = "S" | "A" | "B" | "C" | "F";
+export type SnowballTrendGradeDisplay =
+  | "S+"
+  | "S"
+  | "A+"
+  | "A"
+  | "B+"
+  | "B"
+  | "C"
+  | "F";
+
+export function isSnowballTrendGradeDisplay(v: string | undefined | null): v is SnowballTrendGradeDisplay {
+  return (
+    v === "S+" ||
+    v === "S" ||
+    v === "A+" ||
+    v === "A" ||
+    v === "B+" ||
+    v === "B" ||
+    v === "C" ||
+    v === "F"
+  );
+}
 
 export type SnowballTrendActionPlan = "full" | "standard" | "light" | "monitor";
 
@@ -132,28 +153,42 @@ export function snowballTrendGradeToDisplay(grade: SnowballTrendGrade): Snowball
   return "C";
 }
 
-export type SnowballTrendGradeFilter = "all" | SnowballTrendGradeDisplay | "SAB";
+export type SnowballTrendGradeFilter =
+  | "all"
+  | SnowballTrendGradeDisplay
+  | "SAB"
+  | "SABplus";
 
 /** เกณฑ์ Trend Grade ต่อชั้น — ใช้ใน stats filter / tooltip */
 export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDisplay): string {
   if (grade === "F") {
     return SNOWBALL_TREND_GRADE_F_CRITERIA;
   }
+  if (grade === "S+") {
+    return `EMA4h > ${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · HH200+VAH · Max DD ≤ 7%`;
+  }
   if (grade === "S") {
     return `EMA4h > ${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_S_GREEN_MAX} วัน`;
+  }
+  if (grade === "A+") {
+    return `EMA4h > ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} · HH200+VAH · Max DD ≤ 7%`;
   }
   if (grade === "A") {
     return `EMA4h > ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} วัน`;
   }
+  if (grade === "B+") {
+    return `LONG เขียว > ${SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE} วัน · HH200 ผ่าน · Max DD ≤ 7%`;
+  }
   if (grade === "B") {
-    return `EMA4h ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}% หรือ BTC EMA4h < ${SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE}% · LONG เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} วัน`;
+    return `EMA4h ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN}–${SNOWBALL_TREND_GRADE_B_EMA4H_MAX}% หรือ BTC EMA4h < ${SNOWBALL_TREND_GRADE_B_BTC_EMA4H_MAX_EXCLUSIVE}% · HH200 หรือ VAH`;
   }
   return `นอกเหนือเกณฑ์ F / S / A / B · หรือ LONG เขียว > ${SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE} วัน`;
 }
 
 export function snowballTrendGradeFilterTitle(filter: SnowballTrendGradeFilter): string {
   if (filter === "all") return "ทุก grade";
-  if (filter === "SAB") return "Grade S / A / B";
+  if (filter === "SAB") return "Grade S / A / B (รวม +)";
+  if (filter === "SABplus") return "Grade S+ / A+ / B+ เท่านั้น";
   return `Grade ${filter}: ${snowballTrendGradeFilterCriteria(filter)}`;
 }
 
@@ -277,6 +312,7 @@ export function normalizeSnowballQualityTier(
 /** migrate auto-trade grade key เก่า → ใหม่ */
 export function migrateSnowballAutoTradeGradeKey(key: string): SnowballTrendGradeDisplay | null {
   const k = key.trim();
+  if (k === "S+" || k === "A+" || k === "B+") return k as SnowballTrendGradeDisplay;
   if (k === "S" || k === "A" || k === "B" || k === "C" || k === "F") return k;
   if (k.startsWith("A")) return "A";
   if (k.startsWith("B")) return "B";

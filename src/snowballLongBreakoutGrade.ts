@@ -4,17 +4,21 @@ import type { SnowballLongBreakout1hConfirmEval } from "./snowballLongBreakoutCo
 import type { TrendMomentumMetrics } from "./snowballTrendMomentumMetrics";
 import type { SnowballTwoBarInlineEval } from "./snowballTwoBarInline";
 import {
-  classifySnowballTrendGrade,
+  classifySnowballGradeWithFallback,
+  snowballCompositeGradeFootnote,
+  type SnowballCompositeGradeResult,
+} from "./snowballCompositeGrade";
+import {
   snowballIsTrendGradeF,
   snowballTrendGradeActionPlan,
   snowballTrendGradeDisplayLabel,
-  snowballTrendGradeFootnote,
   snowballTrendGradeShortLabel,
   snowballTrendGradeSkipsFeedDedupe,
   type ClassifySnowballTrendGradeInput,
   type SnowballLongBreakoutGrade,
   type SnowballTrendActionPlan,
   type SnowballTrendGrade,
+  type SnowballTrendGradeDisplay,
 } from "./snowballTrendGrade";
 
 export type {
@@ -61,6 +65,9 @@ export type SnowballLongGradeBlockReason =
 export type SnowballLongGradeResolution = {
   kind: "grade";
   grade: SnowballLongBreakoutGrade;
+  displayGrade: SnowballTrendGradeDisplay;
+  gradeDangerous: boolean;
+  compositeGrade: boolean;
   structureTier: SnowballLongStructureTier;
   confirm1hOk: boolean;
   momentumOk: boolean;
@@ -221,21 +228,56 @@ export function snowballStructureGradeShortLabel(g: SnowballLongBreakoutGrade): 
 /**
  * Trend grade จาก EMA slope — ไม่ block alert จาก structure/two-bar/momentum
  */
+function resolveCompositeGradeResult(
+  input: ResolveSnowballLongFinalGradeInput,
+): SnowballCompositeGradeResult {
+  const signalMaxDdPct =
+    input.trendMomentum != null &&
+    Number.isFinite(input.trendMomentum.maxDrawbackPercent) &&
+    input.trendMomentum.maxDrawbackPercent >= 0
+      ? input.trendMomentum.maxDrawbackPercent
+      : null;
+
+  return classifySnowballGradeWithFallback({
+    ...input.trendGradeInput,
+    signalBarTf: input.snowTf,
+    swing200Ok: input.swing200,
+    vahOk: input.vahOk,
+    structureTier: classifyLongStructureTier(input.swing48, input.swing200, input.vahOk),
+    signalMaxDdPct,
+  });
+}
+
 export function resolveSnowballLongFinalGrade(
   input: ResolveSnowballLongFinalGradeInput,
 ): SnowballLongGradeResolution {
   const structureTier = classifyLongStructureTier(input.swing48, input.swing200, input.vahOk);
   const confirm = resolveConfirm1hOk(input);
   const momentumOk = !input.momentumRequired || input.momentumOk;
-  const grade = classifySnowballTrendGrade(input.trendGradeInput);
+  const composite = resolveCompositeGradeResult(input);
+  const grade = composite.baseTier;
   return {
     kind: "grade",
     grade,
+    displayGrade: composite.display,
+    gradeDangerous: composite.dangerous,
+    compositeGrade: composite.composite,
     structureTier,
     confirm1hOk: confirm.ok,
     momentumOk,
     confirm1hEval: confirm.eval,
-    footnote: snowballTrendGradeFootnote({ ...input.trendGradeInput, grade }),
+    footnote: snowballCompositeGradeFootnote({
+      ...input.trendGradeInput,
+      result: composite,
+      swing200Ok: input.swing200,
+      vahOk: input.vahOk,
+      structureTier,
+      signalMaxDdPct:
+        input.trendMomentum != null &&
+        Number.isFinite(input.trendMomentum.maxDrawbackPercent)
+          ? input.trendMomentum.maxDrawbackPercent
+          : null,
+    }),
     actionPlan: snowballTrendGradeActionPlan(grade),
   };
 }

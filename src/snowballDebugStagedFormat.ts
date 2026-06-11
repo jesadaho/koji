@@ -2,7 +2,6 @@ import type { BinanceIndicatorTf, BinanceKlinePack } from "./binanceIndicatorKli
 import {
   classifySnowballStructureCeiling,
   resolveSnowballLongFinalGrade,
-  snowballLongGradeDisplayLabel,
   snowballLongStructurePassesMain,
   snowballLongStructureTierShortLabel,
   snowballTfBarDurationSec,
@@ -101,7 +100,8 @@ function stageMark(ok: boolean): string {
 }
 
 function finalGradeLine(res: SnowballLongGradeResolution): string {
-  return snowballLongGradeDisplayLabel(res.grade);
+  if (res.gradeDangerous && res.displayGrade === "F") return "Grade F · Dangerous";
+  return `Grade ${res.displayGrade}`;
 }
 
 export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebugInput): string {

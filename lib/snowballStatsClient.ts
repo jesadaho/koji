@@ -24,6 +24,7 @@ import {
   type SnowballTrendGrade,
   type SnowballTrendGradeDisplay,
 } from "@/src/snowballTrendGrade";
+import { classifySnowballGradeWithFallback } from "@/src/snowballCompositeGrade";
 import {
   snowballLongStructureTierShortLabel,
   type SnowballLongStructureTier,
@@ -161,8 +162,10 @@ export type SnowballStatsRow = {
   momentumFailCount?: 0 | 1 | 2 | 3 | null;
   /** notch จาก ceiling (+1 / 0 / -1 / -2) — 4h เท่านั้น */
   gradeNotch?: 1 | 0 | -1 | -2 | null;
-  /** Display grade (S / A / B / C / F) */
+  /** Display grade (S+ / S / A+ / A / B+ / B / C / F) */
   displayGrade?: SnowballTrendGradeDisplay | null;
+  /** Max DD > 7% → F Dangerous */
+  gradeDangerous?: boolean;
   /** Action plan — ผูก margin scale / auto-open */
   actionPlan?: "full" | "standard" | "light" | "monitor" | null;
   price4h: number | null;
@@ -273,12 +276,16 @@ type SnowballStatsGradeDerivationFields = Partial<
     | "alertSide"
     | "triggerKind"
     | "structureTier"
+    | "signalBarTf"
+    | "swing200Ok"
+    | "signalMaxDdPct"
   >
 >;
 
 type SnowballStatsGradeDisplayRow = Pick<
   SnowballStatsRow,
   | "displayGrade"
+  | "gradeDangerous"
   | "qualityTier"
   | "alertQualityTier"
   | "qualityTier4hAdjusted"
@@ -286,6 +293,14 @@ type SnowballStatsGradeDisplayRow = Pick<
   | "momentumFailGradeF"
 > &
   SnowballStatsGradeDerivationFields;
+
+function snowballStatsFormatDisplayGrade(
+  display: string,
+  dangerous?: boolean,
+): string {
+  if (dangerous && display === "F") return "F (Dangerous)";
+  return display;
+}
 
 function snowballStatsTrendGradeInputFromRow(
   row: SnowballStatsGradeDerivationFields,
@@ -310,14 +325,23 @@ function snowballStatsTrendGradeInputFromRow(
 
 /** เทียบ qualityTier เก่ากับ schema ใหม่ — คำนวณสดจาก EMA+เขียวเมื่อมี snapshot */
 export function snowballStatsDerivedDisplayGrade(
-  row: Pick<SnowballStatsRow, "displayGrade" | "qualityTier" | "alertQualityTier"> &
+  row: Pick<SnowballStatsRow, "displayGrade" | "qualityTier" | "alertQualityTier" | "gradeDangerous"> &
     SnowballStatsGradeDerivationFields,
 ): string | null {
   const liveInput = snowballStatsTrendGradeInputFromRow(row);
   if (liveInput) {
-    return snowballTrendGradeToDisplay(classifySnowballTrendGrade(liveInput));
+    const composite = classifySnowballGradeWithFallback({
+      ...liveInput,
+      signalBarTf: row.signalBarTf,
+      swing200Ok: row.swing200Ok,
+      structureTier: row.structureTier,
+      signalMaxDdPct: row.signalMaxDdPct,
+    });
+    return snowballStatsFormatDisplayGrade(composite.display, composite.dangerous);
   }
-  if (row.displayGrade) return row.displayGrade;
+  if (row.displayGrade) {
+    return snowballStatsFormatDisplayGrade(row.displayGrade, row.gradeDangerous);
+  }
   const tier = effectiveQualityTier(row);
   if (tier) return snowballTrendGradeToDisplay(tier);
   const raw = (row.qualityTier ?? row.alertQualityTier) as string | undefined;
@@ -370,16 +394,19 @@ export function snowballStatsGradeDisplayLabel(row: SnowballStatsGradeDisplayRow
   return atAlert;
 }
 
-function snowballStatsGradeLabelMatchesSingle(
-  label: string,
-  grade: string,
-): boolean {
-  if (label === grade) return true;
-  const parts = label.split(" → ").map((s) => s.trim());
-  return parts.some((p) => p === grade || p.startsWith(grade));
+function snowballStatsGradeLabelMatchesBaseTier(label: string, grade: string): boolean {
+  const normalized = label.replace(" (Dangerous)", "").replace(" · Dangerous", "");
+  const parts = normalized.split(" → ").map((s) => s.trim());
+  return parts.some((p) => p === grade || p === `${grade}+`);
 }
 
-/** กรอง dropdown Grade — S/A/B/C/F · SAB = S or A or B */
+function snowballStatsGradeLabelMatchesPlusTier(label: string, grade: string): boolean {
+  const normalized = label.replace(" (Dangerous)", "").replace(" · Dangerous", "");
+  const parts = normalized.split(" → ").map((s) => s.trim());
+  return parts.some((p) => p === grade);
+}
+
+/** กรอง dropdown Grade — S/A/B/C/F · SAB = S or A or B (รวม +) */
 export function snowballStatsGradeMatchesFilter(
   row: SnowballStatsGradeDisplayRow,
   filter: string,
@@ -387,9 +414,21 @@ export function snowballStatsGradeMatchesFilter(
   if (filter === "all") return true;
   const label = snowballStatsGradeDisplayLabel(row);
   if (filter === "SAB") {
-    return ["S", "A", "B"].some((g) => snowballStatsGradeLabelMatchesSingle(label, g));
+    return ["S", "A", "B"].some((g) => snowballStatsGradeLabelMatchesBaseTier(label, g));
   }
-  return snowballStatsGradeLabelMatchesSingle(label, filter);
+  if (filter === "SABplus") {
+    return ["S+", "A+", "B+"].some((g) => snowballStatsGradeLabelMatchesPlusTier(label, g));
+  }
+  if (filter === "S+" || filter === "A+" || filter === "B+") {
+    return snowballStatsGradeLabelMatchesPlusTier(label, filter);
+  }
+  if (filter === "S" || filter === "A" || filter === "B") {
+    return snowballStatsGradeLabelMatchesBaseTier(label, filter);
+  }
+  if (filter === "C" || filter === "F") {
+    return snowballStatsGradeLabelMatchesPlusTier(label, filter);
+  }
+  return snowballStatsGradeLabelMatchesBaseTier(label, filter);
 }
 
 export type { SnowballGradeChecklistItem } from "@/lib/snowballGradeChecklist";
@@ -438,9 +477,9 @@ function snowballStatsGradeTierForStyle(
     return effectiveQualityTier({ qualityTier: row.qualityTier, alertQualityTier: row.qualityTier });
   }
   const fromDisplay = row.displayGrade;
-  if (fromDisplay === "S") return "s";
-  if (fromDisplay === "A") return "a";
-  if (fromDisplay === "B") return "b";
+  if (fromDisplay === "S+" || fromDisplay === "S") return "s";
+  if (fromDisplay === "A+" || fromDisplay === "A") return "a";
+  if (fromDisplay === "B+" || fromDisplay === "B") return "b";
   if (fromDisplay === "C") return "c";
   if (fromDisplay === "F") return "f";
   return effectiveQualityTier(row);

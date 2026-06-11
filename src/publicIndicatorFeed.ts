@@ -48,7 +48,6 @@ import {
   snowballLongGradeSkipsFeedDedupe,
   snowballLongStructureTierShortLabel,
   snowballStatsRowSkipsFeedDedupe,
-  snowballLongGradeDisplayLabel,
   snowballLongGradeShortLabel,
   type SnowballLongBreakoutGrade,
   type SnowballLongGradeResolution,
@@ -60,6 +59,7 @@ import {
   snowballTrendGradeDisplayLabel,
   snowballTrendGradeToDisplay,
   snowballTrendActionPlanMarginScale,
+  type SnowballTrendGradeDisplay,
 } from "./snowballTrendGrade";
 
 export type { SnowballLongBreakoutGrade };
@@ -1691,6 +1691,10 @@ function buildSnowballTripleCheckMessage(
     master4hTradePlan?: SnowballMaster4hLongTradePlan | null;
     /** Grade LONG (HH48/HH200/VAH) — หัวข้อ Telegram */
     snowballLongBreakoutGrade?: SnowballLongBreakoutGrade;
+    /** Display grade (S+/S/A+/A/B+/B/C/F) — composite เมื่อ 4h LONG */
+    snowballTrendDisplayGrade?: SnowballTrendGradeDisplay;
+    /** Max DD > 7% → F Dangerous */
+    gradeDangerous?: boolean;
     /** ผ่าน Swing HH โครงสร้าง (ดีฟอลต์ 200 แท่ง) — ใช้ข้อความ Grade C */
     longSwing200Ok?: boolean;
     doubleBarrierEnabled?: boolean;
@@ -1854,12 +1858,16 @@ function buildSnowballTripleCheckMessage(
     }
 
     const g = args.snowballLongBreakoutGrade;
-    const gradeF = snowballIsGradeF(g);
+    const dg =
+      args.snowballTrendDisplayGrade ?? (g ? snowballTrendGradeToDisplay(g) : null);
+    const gradeF = snowballIsGradeF(g) || dg === "F";
+    const gradeDangerous = args.gradeDangerous === true && dg === "F";
     const gradeLine = args.gradeFootnote ?? (g ? snowballTrendGradeDisplayLabel(g, "long") : "");
     const actionPlan = g ? snowballTrendGradeActionPlan(g) : null;
+    const displayForAuto = dg ?? (g ? snowballTrendGradeToDisplay(g) : "—");
     const longAutotradeBiasLine =
       actionPlan === "monitor"
-        ? `📎 Auto-open: Grade ${g ? snowballTrendGradeToDisplay(g) : "—"} — Monitor (no auto-open)`
+        ? `📎 Auto-open: Grade ${displayForAuto}${gradeDangerous ? " · Dangerous" : ""} — Monitor (no auto-open)`
         : actionPlan === "light"
           ? "📎 Auto-open: Grade B — Light (0.5× margin) เมื่อเปิดใช้ใน Settings"
           : g
@@ -1868,11 +1876,17 @@ function buildSnowballTripleCheckMessage(
     const longHeadline = withQualitySignalAlertHeader(
       (() => {
         const sfx = sniperSuffix;
-        if (g === "s") return `🟢 [Grade S] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-        if (g === "a") return `🟢 [Grade A] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-        if (g === "b") return `🟡 [Grade B] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-        if (gradeF) return `🔴 [Grade F] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
-        if (g === "c") return `🟠 [Grade C] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (dg === "S+") return `🟢 [Grade S+] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (dg === "S" || g === "s") return `🟢 [Grade S] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (dg === "A+") return `🟢 [Grade A+] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (dg === "A" || g === "a") return `🟢 [Grade A] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (dg === "B+") return `🟡 [Grade B+] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (dg === "B" || g === "b") return `🟡 [Grade B] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        if (gradeF) {
+          const fLabel = gradeDangerous ? "F · Dangerous" : "F";
+          return `🔴 [Grade ${fLabel}] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+        }
+        if (dg === "C" || g === "c") return `🟠 [Grade C] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
         if (args.breakout1hConfirmUsed) {
           return `🟢 [Breakout Entry · 1H Confirm] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
         }
@@ -3354,6 +3368,9 @@ export async function runPublicIndicatorFeedInternal(
           : {
               kind: "grade",
               grade: "c",
+              displayGrade: "C",
+              gradeDangerous: false,
+              compositeGrade: false,
               structureTier: classifyLongStructureTier(swing48, swing200, vahOk),
               confirm1hOk: true,
               momentumOk: true,
@@ -3361,6 +3378,8 @@ export async function runPublicIndicatorFeedInternal(
             };
 
         const longBreakoutGrade = gradeResolution.grade;
+        const longDisplayGrade = gradeResolution.displayGrade;
+        const longGradeDangerous = gradeResolution.gradeDangerous;
         const gradeBMomentum1hEval = gradeResolution.confirm1hEval;
         const gradeFootnote: string | undefined = gradeResolution.footnote;
 
@@ -3484,6 +3503,8 @@ export async function runPublicIndicatorFeedInternal(
           master4hTradePlan: snowTf === "4h" ? master4hTradePlan : null,
           doubleBarrierEnabled: dbOn,
           snowballLongBreakoutGrade: longBreakoutGrade,
+          snowballTrendDisplayGrade: longDisplayGrade,
+          gradeDangerous: longGradeDangerous,
           longSwing200Ok: swing200,
           doubleBarrierChecklistLine: dbOn ? longDoubleBarrierLine : undefined,
           confirmRiskFlags:
@@ -3539,7 +3560,7 @@ export async function runPublicIndicatorFeedInternal(
                 snowScanStats.longSent++;
                 pushSnowScanSymList(
                   snowScanStats.longSentSymbols,
-                  `${symbol} LONG (Grade ${snowballTrendGradeToDisplay(longBreakoutGrade)})`,
+                  `${symbol} LONG (Grade ${longDisplayGrade}${longGradeDangerous ? " · Dangerous" : ""})`,
                 );
               }
             }
@@ -3571,9 +3592,9 @@ export async function runPublicIndicatorFeedInternal(
                   contractSymbol: mexcContract,
                   binanceSymbol: symbol,
                   alertSide: "long",
-                  displayGrade: snowballTrendGradeToDisplay(longBreakoutGrade),
+                  displayGrade: longDisplayGrade,
                   qualityTier: longBreakoutGrade,
-                  momentumFailGradeF: longBreakoutGrade === "f",
+                  momentumFailGradeF: snowballIsGradeF(longBreakoutGrade),
                   momentumDowngrade: false,
                   referenceEntryPrice: entryClosePx,
                   referenceEntryPriceEma20_1h: snowballEma20_1hReferencePrice(
@@ -3657,7 +3678,7 @@ export async function runPublicIndicatorFeedInternal(
                   alertedAtMs: now,
                   riskFlags: longRiskFlags.map((f) => ({ id: f.id, label: f.label, detail: f.detail })),
                   qualityTier: longBreakoutGrade,
-                  statsDisplayGrade: snowballTrendGradeToDisplay(longBreakoutGrade),
+                  statsDisplayGrade: longDisplayGrade,
                   statsTriggerKind: String(trig),
                   statsVolSma: typeof vsE === "number" && Number.isFinite(vsE) ? vsE : undefined,
                   statsAtr100: longVolSnap.atr100,
@@ -3756,7 +3777,7 @@ export async function runPublicIndicatorFeedInternal(
                   volSma: vsE!,
                   qualityTier: longBreakoutGrade,
                   alertQualityTier: longBreakoutGrade,
-                  displayGrade: snowballTrendGradeToDisplay(longBreakoutGrade),
+                  displayGrade: longDisplayGrade,
                   ...(gradeResolution.structureTier
                     ? { structureTier: gradeResolution.structureTier }
                     : {}),
@@ -3764,6 +3785,7 @@ export async function runPublicIndicatorFeedInternal(
                   ...(gradeResolution.actionPlan ? { actionPlan: gradeResolution.actionPlan } : {}),
                   momentumDowngrade: false,
                   momentumFailGradeF: snowballIsGradeF(longBreakoutGrade),
+                  ...(longGradeDangerous ? { gradeDangerous: true } : {}),
                   atr100: longVolSnap.atr100,
                   maxUpperWick100: longVolSnap.maxUpperWick100,
                   rangeScore: longVolSnap.rangeScore,
@@ -4463,13 +4485,17 @@ function snowballLongStructureTierHint(tier: SnowballLongStructureTier): string 
 
 function snowballLongGradeResolutionSummaryLines(res: SnowballLongGradeResolution): string[] {
   const g = res.grade;
+  const display =
+    res.gradeDangerous && res.displayGrade === "F"
+      ? "F · Dangerous"
+      : res.displayGrade;
   return [
     `โครงสร้าง 4H: ${snowballLongStructureTierShortLabel(res.structureTier)} (${snowballLongStructureTierHint(res.structureTier)})`,
     `momentum 1H (sustained): ${res.momentumOk ? "✅ ผ่าน" : "❌ ไม่ผ่าน"}`,
     `1H confirm: ${res.confirm1hOk ? "✅ ผ่าน" : "❌ ไม่ผ่าน"}${
       res.confirm1hEval?.detail ? ` · ${res.confirm1hEval.detail.slice(0, 120)}` : ""
     }`,
-    `เกรดสุทธิที่แจ้ง: ${snowballLongGradeDisplayLabel(g)} [${snowballLongGradeShortLabel(g)}]`,
+    `เกรดสุทธิที่แจ้ง: Grade ${display} [${snowballLongGradeShortLabel(g)}]`,
     res.footnote ? `  ${res.footnote}` : "",
   ].filter(Boolean);
 }

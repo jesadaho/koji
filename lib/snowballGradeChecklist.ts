@@ -27,6 +27,11 @@ import {
   snowballVolSmaMeetsGradeCMin,
 } from "@/src/snowballLongGrade4hPipeline";
 import {
+  snowballS1Hh200Ok,
+  snowballS1VahOk,
+  snowballS3MaxDdOk,
+} from "@/src/snowballCompositeGrade";
+import {
   SNOWBALL_TREND_15M_DD_LOOKBACK,
   SNOWBALL_TREND_1H_VOL_LOOKBACK,
   snowballTrendMomentumMaxDrawbackPct,
@@ -642,6 +647,7 @@ type StagedPopupRow = Pick<
   | "momentumFailCount"
   | "gradeNotch"
   | "displayGrade"
+  | "gradeDangerous"
   | "actionPlan"
   | "maxRoiPct"
   | "durationToMfeHours"
@@ -822,6 +828,37 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
       `- Decision Matrix     : ${row.structureCeiling} × พลาด ${failCount} → ${row.displayGrade ?? derivedDisplay ?? "—"}`,
       `- Action Plan         : ${actionPlanLabel ?? "—"}`,
       `- Result              : [ ${snowballStatsGradeAtAlertLabel(row) } ] ตอนแจ้ง`,
+    );
+  } else if (row.displayGrade) {
+    const displayLabel =
+      row.gradeDangerous && row.displayGrade === "F"
+        ? "F (Dangerous)"
+        : row.displayGrade;
+    const s1Hh200 = snowballS1Hh200Ok({ swing200Ok: row.swing200Ok, structureTier: struct });
+    const s1Vah = snowballS1VahOk({ structureTier: struct });
+    const s3Dd = snowballS3MaxDdOk(row.signalMaxDdPct);
+    lines.push(
+      `- Stage 1: ${stage1Pass ? "PASS" : "FAIL"}`,
+      `- Stage 2: ${twoBarPass ? "PASS" : "FAIL"}`,
+      `- Stage 3: ${
+        !twoBarPass
+          ? "—"
+          : failCount === 0
+            ? "PASS"
+            : volCascadeGradeC
+              ? "Vol↗ path → C"
+              : failCount === 1
+                ? "Drop 1 Item"
+                : `Drop ${failCount} Items`
+      }`,
+      `- S1 HH200            : ${s1Hh200 === true ? "✓" : s1Hh200 === false ? "—" : "?"}`,
+      `- S1 VAH              : ${s1Vah ? "✓" : "—"}`,
+      `- S3 Max DD 15m       : ${ddValueStr} (≤ ${ddLimit}%${
+        s3Dd === false ? " · FAILED" : s3Dd === true ? " · OK" : ""
+      })`,
+      `- Composite display   : ${displayLabel}`,
+      `- Action Plan         : ${actionPlanLabel ?? "—"}`,
+      `- Result              : [ ${snowballStatsGradeAtAlertLabel(row)} ] ตอนแจ้ง`,
     );
   } else {
     lines.push(

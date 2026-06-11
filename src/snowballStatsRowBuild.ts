@@ -91,6 +91,7 @@ export function buildSnowballStatsRow(input: AppendSnowballStatsInput): Snowball
       ? { gradeNotch: input.gradeNotch }
       : {}),
     ...(input.displayGrade ? { displayGrade: input.displayGrade } : {}),
+    ...(input.gradeDangerous === true ? { gradeDangerous: true } : {}),
     ...(input.actionPlan === "full" ||
     input.actionPlan === "standard" ||
     input.actionPlan === "light" ||

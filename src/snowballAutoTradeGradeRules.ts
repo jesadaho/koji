@@ -1,5 +1,6 @@
 import type { SnowballTrendGrade, SnowballTrendGradeDisplay } from "./snowballTrendGrade";
 import { snowballTrendGradeToDisplay } from "./snowballTrendGrade";
+import { snowballAutoTradeGradeKeyFromDisplay } from "./snowballCompositeGrade";
 import type { SnowballAutoTradeGradeKey } from "./tradingViewCloseSettingsStore";
 
 const GRADE_KEY_SET = new Set<string>(["S", "A", "B", "C", "F"]);
@@ -19,8 +20,8 @@ export type SnowballAutoTradeAlertGradeInput = {
 export function snowballAutoTradeGradeKeyFromAlert(
   input: SnowballAutoTradeAlertGradeInput,
 ): SnowballAutoTradeGradeKey | null {
-  const dg = input.displayGrade;
-  if (dg && isSnowballAutoTradeGradeKey(dg)) return dg;
+  const fromDisplay = snowballAutoTradeGradeKeyFromDisplay(input.displayGrade);
+  if (fromDisplay) return fromDisplay;
   if (input.momentumFailGradeF) return "F";
   if (input.qualityTier) return snowballTrendGradeToDisplay(input.qualityTier);
   return null;

@@ -110,9 +110,13 @@ export const SNOWBALL_GRADE_FILTER_OPTIONS: ReadonlyArray<{
   label: string;
 }> = [
   { value: "all", label: "ทุก grade" },
-  { value: "SAB", label: "A or B or S" },
+  { value: "SAB", label: "S / A / B (รวม +)" },
+  { value: "SABplus", label: "S+ / A+ / B+" },
+  { value: "S+", label: "S+" },
   { value: "S", label: "S" },
+  { value: "A+", label: "A+" },
   { value: "A", label: "A" },
+  { value: "B+", label: "B+" },
   { value: "B", label: "B" },
   { value: "C", label: "C" },
   { value: "F", label: "F" },

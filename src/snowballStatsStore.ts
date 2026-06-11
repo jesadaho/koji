@@ -22,6 +22,10 @@ import {
   snowballTrendGradeActionPlan,
   type ClassifySnowballTrendGradeInput,
 } from "@/src/snowballTrendGrade";
+import {
+  classifySnowballGradeWithFallback,
+  type SnowballCompositeGradeInput,
+} from "@/src/snowballCompositeGrade";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
@@ -48,6 +52,16 @@ export function snowballStatsRowTrendGradeInput(row: SnowballStatsRow): Classify
     ema1dSlopePct7d: row.ema1dSlopePct7d,
     btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
     greenDaysBeforeSignal: row.greenDaysBeforeSignal,
+  };
+}
+
+export function snowballStatsRowCompositeGradeInput(row: SnowballStatsRow): SnowballCompositeGradeInput {
+  return {
+    ...snowballStatsRowTrendGradeInput(row),
+    signalBarTf: row.signalBarTf,
+    swing200Ok: row.swing200Ok,
+    structureTier: row.structureTier,
+    signalMaxDdPct: row.signalMaxDdPct,
   };
 }
 
@@ -82,8 +96,9 @@ export function snowballStatsRowNeedsTrendGradeBackfill(row: SnowballStatsRow): 
 
 /** คำนวณและเขียน qualityTier / displayGrade / actionPlan จาก snapshot ในแถว */
 export function applySnowballStatsTrendGradeFromRow(row: SnowballStatsRow): boolean {
-  const grade = classifySnowballTrendGrade(snowballStatsRowTrendGradeInput(row));
-  const display = snowballTrendGradeToDisplay(grade);
+  const composite = classifySnowballGradeWithFallback(snowballStatsRowCompositeGradeInput(row));
+  const grade = composite.baseTier;
+  const display = composite.display;
   const plan = snowballTrendGradeActionPlan(grade);
   let touched = false;
 
@@ -97,6 +112,10 @@ export function applySnowballStatsTrendGradeFromRow(row: SnowballStatsRow): bool
   }
   if (row.displayGrade !== display) {
     row.displayGrade = display;
+    touched = true;
+  }
+  if (Boolean(row.gradeDangerous) !== composite.dangerous) {
+    row.gradeDangerous = composite.dangerous || undefined;
     touched = true;
   }
   if (row.actionPlan !== plan) {
@@ -301,6 +320,7 @@ export type AppendSnowballStatsInput = {
   momentumFailCount?: SnowballStatsRow["momentumFailCount"];
   gradeNotch?: SnowballStatsRow["gradeNotch"];
   displayGrade?: SnowballStatsRow["displayGrade"];
+  gradeDangerous?: boolean;
   actionPlan?: SnowballStatsRow["actionPlan"];
 };
 
