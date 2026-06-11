@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import type { ReversalAutoTradeEntryMode } from "../lib/reversalAutoTradeEntry.js";
 import type { SnowballAutoTradeEntryMode } from "../lib/snowballAutoTradeEntry.js";
+import { snowballAutoTradeGradeKeyFromDisplay } from "./snowballCompositeGrade";
 import { migrateSnowballAutoTradeGradeKey } from "./snowballTrendGrade";
 
 export type { ReversalAutoTradeEntryMode, SnowballAutoTradeEntryMode };
@@ -46,7 +47,8 @@ function migrateSnowballAutoTradeGradeRulesMap(
   const out: SnowballAutoTradeGradeRulesMap = {};
   for (const [rawKey, side] of Object.entries(rules)) {
     if (side !== "long" && side !== "short") continue;
-    const key = migrateSnowballAutoTradeGradeKey(rawKey);
+    const display = migrateSnowballAutoTradeGradeKey(rawKey);
+    const key = snowballAutoTradeGradeKeyFromDisplay(display);
     if (!key) continue;
     if (out[key] == null) out[key] = side;
   }
