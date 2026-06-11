@@ -1,7 +1,10 @@
 /**
- * Snowball composite grade — base (EMA/เขียว) + modifiers: + (HH200+VAH) · (D) (Max DD)
+ * Snowball composite grade — base (EMA/เขียว) + modifiers: + (HH200+VAH) · ⚠️ (Max DD)
  * ใช้กับ 4h LONG เมื่อมี snapshot โครงสร้าง/DD
  */
+
+/** suffix แสดง Max DD > limit — ต่อท้าย display grade */
+export const SNOWBALL_GRADE_DANGEROUS_DISPLAY_SUFFIX = " ⚠️";
 
 import type { SnowballLongStructureTier } from "./snowballLongBreakoutGrade";
 import { snowballTrendMomentumMaxDrawbackPct } from "./snowballTrendMomentumMetrics";
@@ -79,7 +82,7 @@ export function snowballS3MaxDdOk(signalMaxDdPct: number | null | undefined): bo
   return signalMaxDdPct <= snowballTrendMomentumMaxDrawbackPct();
 }
 
-/** S3 — Max DD > limit → suffix (D) */
+/** S3 — Max DD > limit → suffix ⚠️ */
 export function snowballS3MaxDdDangerous(signalMaxDdPct: number | null | undefined): boolean {
   if (signalMaxDdPct == null || !Number.isFinite(signalMaxDdPct)) return false;
   return signalMaxDdPct > snowballTrendMomentumMaxDrawbackPct();
@@ -129,7 +132,7 @@ function result(
   return { baseTier, display, dangerous, composite: true };
 }
 
-/** Classify composite grade for 4h LONG — base tier + + / (D) modifiers */
+/** Classify composite grade for 4h LONG — base tier + + / ⚠️ modifiers */
 export function classifySnowballCompositeGrade(
   input: SnowballCompositeGradeInput,
 ): SnowballCompositeGradeResult {
@@ -192,25 +195,26 @@ export function snowballCompositeGradeFootnote(input: {
     input.signalMaxDdPct != null && Number.isFinite(input.signalMaxDdPct)
       ? `${input.signalMaxDdPct.toFixed(2)}%`
       : "—";
-  const ddPart = r.composite ? ` · (D) Max DD ${dd}` : "";
+  const ddPart = r.composite && r.dangerous ? ` · Max DD ${dd}` : "";
   return `📎 Grade ${gradeLabel}: EMA4h ${ema4h}${greenPart} · EMA1d ${ema1d} · BTC∠4h ${btc4h}${plusPart}${ddPart} · ${plan}`;
 }
 
-/** ตัด suffix (D) / legacy Dangerous ก่อนเทียบ filter */
+/** ตัด suffix ⚠️ / legacy (D) ก่อนเทียบ filter */
 export function snowballTrendGradeDisplayLabelBase(label: string): string {
   return label
+    .replace(SNOWBALL_GRADE_DANGEROUS_DISPLAY_SUFFIX, "")
     .replace(" (Dangerous)", "")
     .replace(" · Dangerous", "")
     .replace(" (D)", "")
     .trim();
 }
 
-/** ป้าย display + suffix (D) เมื่อ Max DD > 7% */
+/** ป้าย display + ⚠️ เมื่อ Max DD > 7% */
 export function snowballTrendGradeDisplayWithDangerous(
   display: SnowballTrendGradeDisplay | string,
   dangerous?: boolean,
 ): string {
-  if (dangerous) return `${display} (D)`;
+  if (dangerous) return `${display}${SNOWBALL_GRADE_DANGEROUS_DISPLAY_SUFFIX}`;
   return display;
 }
 

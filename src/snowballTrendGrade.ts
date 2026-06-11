@@ -1,6 +1,6 @@
 /**
  * Snowball trend grade — S / A / B / C / F จาก EMA slope + เขียว (LONG)
- * 4h LONG: + (HH200+VAH) และ (D) (Max DD>7%) เป็น modifier ใน composite
+ * 4h LONG: + (HH200+VAH) และ ⚠️ (Max DD>7%) เป็น modifier ใน composite
  */
 
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";

@@ -1697,7 +1697,7 @@ function buildSnowballTripleCheckMessage(
     snowballLongBreakoutGrade?: SnowballLongBreakoutGrade;
     /** Display grade (S+/S/A+/A/B+/B/C/F) — composite เมื่อ 4h LONG */
     snowballTrendDisplayGrade?: SnowballTrendGradeDisplay;
-    /** Max DD > 7% → F Dangerous */
+    /** Max DD > 7% → suffix ⚠️ บนป้ายเกรด */
     gradeDangerous?: boolean;
     /** ผ่าน Swing HH โครงสร้าง (ดีฟอลต์ 200 แท่ง) — ใช้ข้อความ Grade C */
     longSwing200Ok?: boolean;

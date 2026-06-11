@@ -169,7 +169,7 @@ export type SnowballStatsRow = {
   gradeNotch?: 1 | 0 | -1 | -2 | null;
   /** Display grade (S+ / S / A+ / A / B+ / B / C / F) */
   displayGrade?: SnowballTrendGradeDisplay | null;
-  /** Max DD > 7% → F Dangerous */
+  /** Max DD > 7% → suffix ⚠️ บนป้ายเกรด */
   gradeDangerous?: boolean;
   /** Action plan — ผูก margin scale / auto-open */
   actionPlan?: "full" | "standard" | "light" | "monitor" | null;
