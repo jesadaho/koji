@@ -30,6 +30,7 @@ import {
   snowballS1Hh200Ok,
   snowballS1VahOk,
   snowballS3MaxDdOk,
+  snowballTrendGradeDisplayWithDangerous,
 } from "@/src/snowballCompositeGrade";
 import {
   SNOWBALL_TREND_15M_DD_LOOKBACK,
@@ -830,10 +831,9 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
       `- Result              : [ ${snowballStatsGradeAtAlertLabel(row) } ] ตอนแจ้ง`,
     );
   } else if (row.displayGrade) {
-    const displayLabel =
-      row.gradeDangerous && row.displayGrade === "F"
-        ? "F (Dangerous)"
-        : row.displayGrade;
+    const displayLabel = row.displayGrade
+      ? snowballTrendGradeDisplayWithDangerous(row.displayGrade, row.gradeDangerous)
+      : "—";
     const s1Hh200 = snowballS1Hh200Ok({ swing200Ok: row.swing200Ok, structureTier: struct });
     const s1Vah = snowballS1VahOk({ structureTier: struct });
     const s3Dd = snowballS3MaxDdOk(row.signalMaxDdPct);

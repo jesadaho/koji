@@ -53,6 +53,7 @@ import {
   type SnowballLongGradeResolution,
   type SnowballLongStructureTier,
 } from "./snowballLongBreakoutGrade";
+import { snowballTrendGradeDisplayWithDangerous } from "./snowballCompositeGrade";
 import {
   classifySnowballTrendGrade,
   snowballTrendGradeActionPlan,
@@ -1864,10 +1865,14 @@ function buildSnowballTripleCheckMessage(
     const gradeDangerous = args.gradeDangerous === true && dg === "F";
     const gradeLine = args.gradeFootnote ?? (g ? snowballTrendGradeDisplayLabel(g, "long") : "");
     const actionPlan = g ? snowballTrendGradeActionPlan(g) : null;
-    const displayForAuto = dg ?? (g ? snowballTrendGradeToDisplay(g) : "—");
+    const displayForAuto = dg
+      ? snowballTrendGradeDisplayWithDangerous(dg, gradeDangerous)
+      : g
+        ? snowballTrendGradeToDisplay(g)
+        : "—";
     const longAutotradeBiasLine =
       actionPlan === "monitor"
-        ? `📎 Auto-open: Grade ${displayForAuto}${gradeDangerous ? " · Dangerous" : ""} — Monitor (no auto-open)`
+        ? `📎 Auto-open: Grade ${displayForAuto} — Monitor (no auto-open)`
         : actionPlan === "light"
           ? "📎 Auto-open: Grade B — Light (0.5× margin) เมื่อเปิดใช้ใน Settings"
           : g
@@ -1883,8 +1888,7 @@ function buildSnowballTripleCheckMessage(
         if (dg === "B+") return `🟡 [Grade B+] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
         if (dg === "B" || g === "b") return `🟡 [Grade B] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
         if (gradeF) {
-          const fLabel = gradeDangerous ? "F · Dangerous" : "F";
-          return `🔴 [Grade ${fLabel}] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
+          return `🔴 [Grade ${snowballTrendGradeDisplayWithDangerous("F", gradeDangerous)}] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
         }
         if (dg === "C" || g === "c") return `🟠 [Grade C] — Snowball Triple-Check (${args.snowballTfDisplay})${sfx}`;
         if (args.breakout1hConfirmUsed) {
@@ -3560,7 +3564,7 @@ export async function runPublicIndicatorFeedInternal(
                 snowScanStats.longSent++;
                 pushSnowScanSymList(
                   snowScanStats.longSentSymbols,
-                  `${symbol} LONG (Grade ${longDisplayGrade}${longGradeDangerous ? " · Dangerous" : ""})`,
+                  `${symbol} LONG (Grade ${snowballTrendGradeDisplayWithDangerous(longDisplayGrade, longGradeDangerous)})`,
                 );
               }
             }
@@ -4485,10 +4489,10 @@ function snowballLongStructureTierHint(tier: SnowballLongStructureTier): string 
 
 function snowballLongGradeResolutionSummaryLines(res: SnowballLongGradeResolution): string[] {
   const g = res.grade;
-  const display =
-    res.gradeDangerous && res.displayGrade === "F"
-      ? "F · Dangerous"
-      : res.displayGrade;
+  const display = snowballTrendGradeDisplayWithDangerous(
+    res.displayGrade,
+    res.gradeDangerous,
+  );
   return [
     `โครงสร้าง 4H: ${snowballLongStructureTierShortLabel(res.structureTier)} (${snowballLongStructureTierHint(res.structureTier)})`,
     `momentum 1H (sustained): ${res.momentumOk ? "✅ ผ่าน" : "❌ ไม่ผ่าน"}`,

@@ -286,7 +286,7 @@ export function snowballCompositeGradeFootnote(input: {
       : "—";
   const plan = snowballTrendActionPlanLabel(snowballTrendGradeActionPlan(r.baseTier));
   const greenPart = isLongSide(input.alertSide) ? ` · เขียว ${green}` : "";
-  const dangerousPart = r.dangerous ? " · Dangerous (Max DD > 7%)" : "";
+  const gradeLabel = snowballTrendGradeDisplayWithDangerous(r.display, r.dangerous);
   const s1Part = r.composite
     ? ` · S1 HH200 ${snowballS1Hh200Ok(input) === true ? "✓" : "—"} · VAH ${snowballS1VahOk(input) ? "✓" : "—"}`
     : "";
@@ -295,7 +295,25 @@ export function snowballCompositeGradeFootnote(input: {
       ? `${input.signalMaxDdPct.toFixed(2)}%`
       : "—";
   const s3Part = r.composite ? ` · S3 Max DD ${dd}` : "";
-  return `📎 Grade ${r.display}${dangerousPart}: EMA4h ${ema4h}${greenPart} · EMA1d ${ema1d} · BTC∠4h ${btc4h}${s1Part}${s3Part} · ${plan}`;
+  return `📎 Grade ${gradeLabel}: EMA4h ${ema4h}${greenPart} · EMA1d ${ema1d} · BTC∠4h ${btc4h}${s1Part}${s3Part} · ${plan}`;
+}
+
+/** ป้าย display สั้น — F + dangerous → F (D) */
+export function snowballTrendGradeDisplayWithDangerous(
+  display: SnowballTrendGradeDisplay,
+  dangerous?: boolean,
+): string {
+  if (dangerous && display === "F") return "F (D)";
+  return display;
+}
+
+/** ตัด suffix dangerous ก่อนเทียบ filter */
+export function snowballTrendGradeDisplayLabelBase(label: string): string {
+  return label
+    .replace(" (Dangerous)", "")
+    .replace(" · Dangerous", "")
+    .replace(" (D)", "")
+    .trim();
 }
 
 export function snowballCompositeGradeDisplayLabel(
@@ -304,6 +322,6 @@ export function snowballCompositeGradeDisplayLabel(
   side: "long" | "short" = "long",
 ): string {
   const sideTag = side === "short" ? "Short" : "Long";
-  const d = dangerous && display === "F" ? `${display} Dangerous` : display;
+  const d = snowballTrendGradeDisplayWithDangerous(display, dangerous);
   return `Grade ${d} (${sideTag})`;
 }
