@@ -1,10 +1,12 @@
 import "server-only";
 
 import {
+  buildStatsConflictIndex,
   pendingConflictSymbolKey,
   pendingConflictWithLabel,
   type PendingConflictSets,
   type PendingStrategy,
+  type StatsConflictIndex,
 } from "@/lib/signalPendingConflict";
 import {
   loadCandleReversalStatsState,
@@ -119,6 +121,51 @@ export async function stampPendingConflictOnStatsAppend(
   }
 
   return newRowLabel;
+}
+
+/** ดัชนี conflict ถาวรจากสถิติ — ใช้ enrich ประวัติ auto-open แถวเก่า */
+export async function loadStatsConflictIndex(): Promise<StatsConflictIndex> {
+  const entries: Array<{
+    symbol: string;
+    source: PendingStrategy;
+    conflictWith?: string | null;
+    alertedAtMs: number;
+    signalBarOpenSec?: number | null;
+  }> = [];
+
+  try {
+    const stats = await loadSnowballStatsState();
+    for (const r of stats.rows ?? []) {
+      if (!r?.conflictWith?.trim()) continue;
+      entries.push({
+        symbol: r.symbol,
+        source: "snowball",
+        conflictWith: r.conflictWith,
+        alertedAtMs: r.alertedAtMs,
+        signalBarOpenSec: r.signalBarOpenSec,
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const rev = await loadCandleReversalStatsState();
+    for (const r of rev.rows ?? []) {
+      if (!r?.conflictWith?.trim()) continue;
+      entries.push({
+        symbol: r.symbol,
+        source: "reversal",
+        conflictWith: r.conflictWith,
+        alertedAtMs: r.alertedAtMs,
+        signalBarOpenSec: r.signalBarOpenSec,
+      });
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return buildStatsConflictIndex(entries);
 }
 
 /** ข้าม auto-open เมื่อฝั่งตรงข้ามยัง pending (รวมกรณี conflict สองฝั่ง) */

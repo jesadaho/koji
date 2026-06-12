@@ -188,6 +188,11 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   } else if (o.limitFilledAtMs === null) {
     row.limitFilledAtMs = null;
   }
+  if (typeof o.conflictWith === "string" && o.conflictWith.trim()) {
+    row.conflictWith = o.conflictWith.trim();
+  } else if (o.conflictWith === null) {
+    row.conflictWith = null;
+  }
 
   return row;
 }
@@ -235,8 +240,24 @@ export type AppendAutoOpenOrderLogInput = Omit<AutoOpenOrderLogRow, "id" | "atMs
 };
 
 export async function appendAutoOpenOrderLog(input: AppendAutoOpenOrderLogInput): Promise<void> {
+  let conflictWith = input.conflictWith;
+  if (!conflictWith?.trim() && (input.source === "snowball" || input.source === "reversal")) {
+    try {
+      const { conflictWithForSymbol, loadPendingConflictSets } = await import(
+        "./signalPendingConflictServer"
+      );
+      const sets = await loadPendingConflictSets();
+      conflictWith =
+        conflictWithForSymbol(sets, input.binanceSymbol || input.contractSymbol, input.source) ??
+        undefined;
+    } catch {
+      /* ignore */
+    }
+  }
+
   const row = normalizeRow({
     ...input,
+    ...(conflictWith?.trim() ? { conflictWith: conflictWith.trim() } : {}),
     id: input.id ?? randomUUID(),
     atMs: input.atMs ?? Date.now(),
   });

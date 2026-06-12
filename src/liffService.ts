@@ -124,8 +124,8 @@ import {
 } from "./autoOpenOrderLogStore";
 import { attachAutoOpenMexcActiveFlags } from "./autoOpenMexcActiveForUser";
 import { collectAutoOpenContractSymbols, fetchAutoOpenMarkPrices } from "./autoOpenMarkPrices";
-import { loadPendingConflictSets } from "./signalPendingConflictServer";
-import { resolveRowConflictWith } from "@/lib/signalPendingConflict";
+import { loadPendingConflictSets, loadStatsConflictIndex } from "./signalPendingConflictServer";
+import { resolveAutoOpenLogConflictWith, resolveRowConflictWith } from "@/lib/signalPendingConflict";
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
 import { isPctStepPresetValue, PCT_STEP_PRESET_VALUES } from "@/lib/alertPresets";
 import { clearPortfolioTrailingStateForUser } from "./portfolioTrailingAlertStateStore";
@@ -899,14 +899,13 @@ export async function liffGetAutoOpenOrderHistory(
   );
   await enrichAutoOpenOrderLogsTpStrategyForUser(userId, settingsMap, opts);
   const rawRows = await listAutoOpenOrderLogsForUser(userId, opts);
-  const conflictSets = await loadPendingConflictSets();
+  const [conflictSets, statsConflictIndex] = await Promise.all([
+    loadPendingConflictSets(),
+    loadStatsConflictIndex(),
+  ]);
   const rowsWithConflict: AutoOpenOrderLogRow[] = rawRows.map((r) => ({
     ...r,
-    conflictWith: resolveRowConflictWith(
-      { conflictWith: r.conflictWith, symbol: r.binanceSymbol || r.contractSymbol },
-      conflictSets,
-      r.source,
-    ),
+    conflictWith: resolveAutoOpenLogConflictWith(r, conflictSets, statsConflictIndex),
   }));
   const rowsActive = await attachAutoOpenMexcActiveFlags(userId, rowsWithConflict);
   const rows = rowsActive.map((r) => {

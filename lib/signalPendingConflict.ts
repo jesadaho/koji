@@ -58,3 +58,90 @@ export function excludePendingConflictRows<T extends { conflictWith?: string | n
 ): T[] {
   return rows.filter((r) => !rowHasPendingConflict(r));
 }
+
+export type StatsConflictIndex = {
+  byBarKey: ReadonlyMap<string, string>;
+  bySourceSym: ReadonlyMap<string, ReadonlyArray<{ atMs: number; conflictWith: string }>>;
+};
+
+/** ดัชนี conflict จากสถิติ Snowball/Reversal ที่ stamp ตอนแจ้ง — ใช้ backfill ประวัติ auto-open */
+export function buildStatsConflictIndex(
+  entries: ReadonlyArray<{
+    symbol: string;
+    source: PendingStrategy;
+    conflictWith?: string | null;
+    alertedAtMs: number;
+    signalBarOpenSec?: number | null;
+  }>,
+): StatsConflictIndex {
+  const byBarKey = new Map<string, string>();
+  const bySourceSym = new Map<string, Array<{ atMs: number; conflictWith: string }>>();
+
+  for (const e of entries) {
+    const label = e.conflictWith?.trim();
+    if (!label) continue;
+    const sym = pendingConflictSymbolKey(e.symbol);
+    if (!sym) continue;
+    const barSec = e.signalBarOpenSec;
+    if (barSec != null && Number.isFinite(barSec)) {
+      byBarKey.set(`${sym}|${e.source}|${barSec}`, label);
+    }
+    const listKey = `${sym}|${e.source}`;
+    const list = bySourceSym.get(listKey) ?? [];
+    list.push({ atMs: e.alertedAtMs, conflictWith: label });
+    bySourceSym.set(listKey, list);
+  }
+
+  for (const list of bySourceSym.values()) {
+    list.sort((a, b) => a.atMs - b.atMs);
+  }
+
+  return { byBarKey, bySourceSym };
+}
+
+/** ช่วงเวลา match แถว auto-open กับสถิติเมื่อไม่มี signalBarOpenSec */
+export const AUTO_OPEN_STATS_CONFLICT_MATCH_MS = 60 * 60 * 1000;
+
+export function resolveAutoOpenLogConflictWith(
+  row: {
+    conflictWith?: string | null;
+    source: PendingStrategy;
+    binanceSymbol?: string;
+    contractSymbol: string;
+    atMs: number;
+    signalBarOpenSec?: number | null;
+  },
+  sets: PendingConflictSets,
+  statsIndex: StatsConflictIndex,
+): string | null {
+  const stored = row.conflictWith?.trim();
+  if (stored) return stored;
+
+  const sym = pendingConflictSymbolKey(row.binanceSymbol || row.contractSymbol);
+  if (sym) {
+    const barSec = row.signalBarOpenSec;
+    if (barSec != null && Number.isFinite(barSec)) {
+      const byBar = statsIndex.byBarKey.get(`${sym}|${row.source}|${barSec}`);
+      if (byBar) return byBar;
+    }
+    const list = statsIndex.bySourceSym.get(`${sym}|${row.source}`);
+    if (list?.length) {
+      let best: string | null = null;
+      let bestDist = Infinity;
+      for (const h of list) {
+        const d = Math.abs(h.atMs - row.atMs);
+        if (d <= AUTO_OPEN_STATS_CONFLICT_MATCH_MS && d < bestDist) {
+          bestDist = d;
+          best = h.conflictWith;
+        }
+      }
+      if (best) return best;
+    }
+  }
+
+  return resolveRowConflictWith(
+    { conflictWith: row.conflictWith, symbol: row.binanceSymbol || row.contractSymbol },
+    sets,
+    row.source,
+  );
+}
