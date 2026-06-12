@@ -3,7 +3,6 @@ import { snowballTrendGradeDisplayWithDangerous } from "./snowballCompositeGrade
 import {
   classifySnowballStructureCeiling,
   resolveSnowballLongFinalGrade,
-  snowballLongStructurePassesMain,
   snowballLongStructureTierShortLabel,
   snowballTfBarDurationSec,
   type SnowballLongGradeResolution,
@@ -152,7 +151,7 @@ export function formatSnowball4hStagedDebugChecklist(input: Snowball4hStagedDebu
   const sigOpen = timeSec[iSig]!;
   const confEnd = timeSec[iConf]! + dur;
 
-  const structureMain = snowballLongStructurePassesMain(swing48, vahOk);
+  const structureMain = swing48 || vahOk;
   const emaTrendOk =
     (!longSlopeEmaOn || emaSlopeOk) && (!longEma2On || ema2SlopeOk);
   const innerOk = !longRequireInnerHvnClear || innerHvnCleared;
