@@ -10,8 +10,8 @@ import {
   normalizeSnowballQualityTier,
   SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_A_GREEN_MAX,
-  SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_C_EMA4H_MIN_EXCLUSIVE,
+  SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE,
+  SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_S_GREEN_MAX,
@@ -415,11 +415,11 @@ function snowballTrendGradeChecklistItems(
           title: "เขียวก่อนสัญญาณ",
           status:
             green != null && Number.isFinite(green) && green >= 0
-              ? Math.floor(green) > SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE
+              ? Math.floor(green) > SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE
                 ? "fail"
                 : "pass"
               : "unknown",
-          detail: `${greenStr} วัน · S ≤${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ≤${SNOWBALL_TREND_GRADE_A_GREEN_MAX} · >${SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE} → B (base)`,
+          detail: `${greenStr} วัน · S ≤${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ≤${SNOWBALL_TREND_GRADE_A_GREEN_MAX} · >${SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE} → C (base)`,
         }
       : null;
 
@@ -446,10 +446,10 @@ function snowballTrendGradeChecklistItems(
               ? "pass"
               : ema4h != null &&
                   Number.isFinite(ema4h) &&
-                  ema4h > SNOWBALL_TREND_GRADE_C_EMA4H_MIN_EXCLUSIVE
+                  ema4h > SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE
                 ? "pass"
                 : "unknown",
-      detail: `${fmtSlope(ema4h)} · F<0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A>${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · C>0%`,
+      detail: `${fmtSlope(ema4h)} · F<0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A>${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · B>0%`,
     },
     ...(greenDaysItem ? [greenDaysItem] : []),
     {

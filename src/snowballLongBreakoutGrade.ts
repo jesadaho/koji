@@ -194,14 +194,12 @@ export function snowballLongGradeSkipsFeedDedupe(
   return snowballTrendGradeSkipsFeedDedupe(grade);
 }
 
-export function snowballStatsRowSkipsFeedDedupe(row: {
+export function snowballStatsRowSkipsFeedDedupe(_row: {
   qualityTier?: string;
   alertQualityTier?: string;
   momentumFailGradeF?: boolean;
 }): boolean {
-  if (row.momentumFailGradeF === true) return true;
-  const t = row.alertQualityTier ?? row.qualityTier;
-  return t === "f" || t === "f_plus";
+  return false;
 }
 
 export function snowballLongGradeShortLabel(g: SnowballLongBreakoutGrade): string {

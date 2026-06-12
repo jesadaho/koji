@@ -12,7 +12,6 @@ import {
 import {
   resolveSnowballLongFinalGrade,
   snowballIsGradeF,
-  snowballLongGradeSkipsFeedDedupe,
   snowballTfBarDurationSec,
   type SnowballLongStructureTier,
 } from "./snowballLongBreakoutGrade";
@@ -519,7 +518,7 @@ function detectSnowballLongClosed(
     feedKey: key,
     signalBarOpenSec,
     entryPrice: entryClosePx,
-    skipFiredKeyUpdate: snowballLongGradeSkipsFeedDedupe(longBreakoutGrade),
+    skipFiredKeyUpdate: false,
     statsInput: {
       side: statsTradeSide,
       alertSide: "long",
