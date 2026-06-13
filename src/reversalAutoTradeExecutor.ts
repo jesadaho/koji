@@ -381,7 +381,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
   const sym = contractSymbol;
 
   try {
-    if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "reversal")) {
+    if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "reversal", { atMs: Date.now() })) {
       return { usersAttempted: 0, usersSucceeded: 0 };
     }
   } catch {

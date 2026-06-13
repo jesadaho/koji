@@ -329,7 +329,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   const binanceSymbol = input.binanceSymbol.trim().toUpperCase();
   if (!binanceSymbol) return { usersAttempted: 0, usersSucceeded: 0 };
 
-  // Reversal pending / conflict สองฝั่ง — ไม่ auto-open
+  // Reversal pending / conflict สองฝั่ง — ไม่ auto-open (Reversal หลัง Snowball ยังเปิดได้)
   try {
     if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "snowball")) {
       return { usersAttempted: 0, usersSucceeded: 0 };

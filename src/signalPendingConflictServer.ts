@@ -2,8 +2,10 @@ import "server-only";
 
 import {
   buildStatsConflictIndex,
+  isReversalAfterPendingSnowball,
   pendingConflictSymbolKey,
   pendingConflictWithLabel,
+  shouldDualPendingConflictClose,
   type PendingConflictSets,
   type PendingStrategy,
   type StatsConflictIndex,
@@ -75,6 +77,63 @@ function oppositePendingForSymbol(
   if (!k) return false;
   if (self === "snowball") return sets.reversalPending.has(k);
   return sets.snowballPending.has(k);
+}
+
+/** alertedAtMs ล่าสุดของ Snowball pending (stats + confirm queue) ต่อเหรียญ */
+export async function getLatestPendingSnowballAtMsForSymbol(
+  symbol: string,
+  nowMs = Date.now(),
+): Promise<number | null> {
+  const key = pendingConflictSymbolKey(symbol);
+  if (!key) return null;
+  let latest: number | null = null;
+
+  try {
+    const stats = await loadSnowballStatsState();
+    for (const r of stats.rows ?? []) {
+      if (!r || r.outcome !== "pending") continue;
+      if (pendingConflictSymbolKey(r.symbol) !== key) continue;
+      const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
+      if (atMs > 0 && nowMs - atMs > SNOWBALL_STATS_PENDING_MAX_AGE_MS) continue;
+      latest = latest == null ? atMs : Math.max(latest, atMs);
+    }
+  } catch {
+    /* ignore */
+  }
+
+  try {
+    const pend = await loadSnowballPendingConfirms();
+    for (const it of pend.items ?? []) {
+      if (pendingConflictSymbolKey(it.symbol) !== key) continue;
+      const atMs = typeof it.alertedAtMs === "number" && Number.isFinite(it.alertedAtMs) ? it.alertedAtMs : 0;
+      if (atMs > 0) latest = latest == null ? atMs : Math.max(latest, atMs);
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return latest;
+}
+
+/** alertedAtMs ล่าสุดของ Reversal pending ต่อเหรียญ */
+export async function getLatestPendingReversalAtMsForSymbol(symbol: string): Promise<number | null> {
+  const key = pendingConflictSymbolKey(symbol);
+  if (!key) return null;
+  let latest: number | null = null;
+
+  try {
+    const rev = await loadCandleReversalStatsState();
+    for (const r of rev.rows ?? []) {
+      if (!r || r.outcome !== "pending") continue;
+      if (pendingConflictSymbolKey(r.symbol) !== key) continue;
+      const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
+      if (atMs > 0) latest = latest == null ? atMs : Math.max(latest, atMs);
+    }
+  } catch {
+    /* ignore */
+  }
+
+  return latest;
 }
 
 /**
@@ -172,10 +231,32 @@ export async function loadStatsConflictIndex(): Promise<StatsConflictIndex> {
 export async function shouldSkipAutoOpenForPendingConflict(
   binanceSymbol: string,
   self: PendingStrategy,
+  opts?: { atMs?: number },
 ): Promise<boolean> {
   const sets = await loadPendingConflictSets();
   const k = pendingConflictSymbolKey(binanceSymbol);
   if (!k) return false;
   if (self === "snowball") return sets.reversalPending.has(k);
-  return sets.snowballPending.has(k);
+  if (!sets.snowballPending.has(k)) return false;
+
+  const atMs = opts?.atMs ?? Date.now();
+  const snowballMs = await getLatestPendingSnowballAtMsForSymbol(binanceSymbol, atMs);
+  if (isReversalAfterPendingSnowball(snowballMs, atMs)) return false;
+  return true;
+}
+
+/** ควร conflict-close สำหรับเหรียญนี้หรือไม่ (false = Reversal เกิดหลัง Snowball → ปล่อย Reversal เปิด/ถือต่อ) */
+export async function shouldConflictCloseDualPendingForSymbol(
+  symbol: string,
+  sets: PendingConflictSets,
+  nowMs = Date.now(),
+): Promise<boolean> {
+  if (!sets.snowballPending.has(pendingConflictSymbolKey(symbol))) return false;
+  if (!sets.reversalPending.has(pendingConflictSymbolKey(symbol))) return false;
+
+  const [snowballMs, reversalMs] = await Promise.all([
+    getLatestPendingSnowballAtMsForSymbol(symbol, nowMs),
+    getLatestPendingReversalAtMsForSymbol(symbol),
+  ]);
+  return shouldDualPendingConflictClose(snowballMs, reversalMs);
 }

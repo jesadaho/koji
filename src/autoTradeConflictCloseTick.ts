@@ -1,7 +1,4 @@
-import {
-  hasDualPendingConflict,
-  type PendingConflictSets,
-} from "@/lib/signalPendingConflict";
+import { type PendingConflictSets } from "@/lib/signalPendingConflict";
 import { cancelActiveTpSlPlanOrders } from "./autoTradeTpSlPlanOrders";
 import {
   cancelOpenOrders,
@@ -10,7 +7,10 @@ import {
   getOpenOrders,
   type MexcCredentials,
 } from "./mexcFuturesClient";
-import { loadPendingConflictSets } from "./signalPendingConflictServer";
+import {
+  loadPendingConflictSets,
+  shouldConflictCloseDualPendingForSymbol,
+} from "./signalPendingConflictServer";
 import {
   bkkReversalAutoTradeDayKeyNow,
   loadReversalAutoTradeState,
@@ -88,15 +88,16 @@ async function processReversalUserConflictClose(args: {
   reversalDayKey: string;
   sets: PendingConflictSets;
   state: Awaited<ReturnType<typeof loadReversalAutoTradeState>>;
+  nowMs: number;
 }): Promise<{ state: Awaited<ReturnType<typeof loadReversalAutoTradeState>>; actions: number }> {
-  const { userId, creds, reversalDayKey, sets } = args;
+  const { userId, creds, reversalDayKey, sets, nowMs } = args;
   let state = args.state;
   let actions = 0;
   const perUser = state[userId];
   if (!perUser) return { state, actions };
 
   for (const pending of [...(perUser.pendingLimits ?? [])]) {
-    if (!hasDualPendingConflict(sets, pending.binanceSymbol)) continue;
+    if (!(await shouldConflictCloseDualPendingForSymbol(pending.binanceSymbol, sets, nowMs))) continue;
     await cancelPendingLimitOnMexc(creds, pending.contractSymbol, pending.orderId);
     state = withReversalPendingLimitRemoved(
       state,
@@ -117,7 +118,7 @@ async function processReversalUserConflictClose(args: {
   }
 
   for (const active of [...(perUser.active ?? [])]) {
-    if (!hasDualPendingConflict(sets, active.binanceSymbol)) continue;
+    if (!(await shouldConflictCloseDualPendingForSymbol(active.binanceSymbol, sets, nowMs))) continue;
     const mark = (await getContractLastPricePublic(active.contractSymbol)) ?? NaN;
     const closeRes = await closeActivePositionOnMexc(creds, active);
     state = withReversalActiveRemoved(state, userId, active.contractSymbol, active.side);
@@ -143,15 +144,16 @@ async function processSnowballUserConflictClose(args: {
   snowballDayKey: string;
   sets: PendingConflictSets;
   state: Awaited<ReturnType<typeof loadSnowballAutoTradeState>>;
+  nowMs: number;
 }): Promise<{ state: Awaited<ReturnType<typeof loadSnowballAutoTradeState>>; actions: number }> {
-  const { userId, creds, snowballDayKey, sets } = args;
+  const { userId, creds, snowballDayKey, sets, nowMs } = args;
   let state = args.state;
   let actions = 0;
   const perUser = state[userId];
   if (!perUser) return { state, actions };
 
   for (const pending of [...(perUser.pendingLimits ?? [])]) {
-    if (!hasDualPendingConflict(sets, pending.binanceSymbol)) continue;
+    if (!(await shouldConflictCloseDualPendingForSymbol(pending.binanceSymbol, sets, nowMs))) continue;
     await cancelPendingLimitOnMexc(creds, pending.contractSymbol, pending.orderId);
     state = withSnowballPendingLimitRemoved(
       state,
@@ -173,7 +175,7 @@ async function processSnowballUserConflictClose(args: {
   }
 
   for (const active of [...(perUser.active ?? [])]) {
-    if (!hasDualPendingConflict(sets, active.binanceSymbol)) continue;
+    if (!(await shouldConflictCloseDualPendingForSymbol(active.binanceSymbol, sets, nowMs))) continue;
     const mark = (await getContractLastPricePublic(active.contractSymbol)) ?? NaN;
     const entry = active.mexcAvgEntryPrice ?? active.referenceEntryPrice;
     const closeRes = await closeActivePositionOnMexc(creds, active);
@@ -230,6 +232,7 @@ export async function runAutoTradeConflictCloseTick(nowMs = Date.now()): Promise
         reversalDayKey,
         sets,
         state: reversalState,
+        nowMs,
       });
       reversalState = rev.state;
       actionsCount += rev.actions;
@@ -240,6 +243,7 @@ export async function runAutoTradeConflictCloseTick(nowMs = Date.now()): Promise
         snowballDayKey,
         sets,
         state: snowballState,
+        nowMs,
       });
       snowballState = sb.state;
       actionsCount += sb.actions;

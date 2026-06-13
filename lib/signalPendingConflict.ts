@@ -22,6 +22,31 @@ export function hasDualPendingConflict(sets: PendingConflictSets, symbol: string
   return sets.snowballPending.has(k) && sets.reversalPending.has(k);
 }
 
+/** Reversal เกิดหลัง Snowball (alert ช้ากว่า) */
+export function isReversalAfterPendingSnowball(
+  snowballAtMs: number | null,
+  reversalAtMs: number | null,
+): boolean {
+  return (
+    snowballAtMs != null &&
+    reversalAtMs != null &&
+    Number.isFinite(snowballAtMs) &&
+    Number.isFinite(reversalAtMs) &&
+    reversalAtMs > snowballAtMs
+  );
+}
+
+/**
+ * ควร conflict-close หรือไม่ — false เมื่อ Reversal เกิดหลัง Snowball (ให้ Reversal เปิด/ถือต่อได้)
+ */
+export function shouldDualPendingConflictClose(
+  snowballAtMs: number | null,
+  reversalAtMs: number | null,
+): boolean {
+  if (snowballAtMs == null || reversalAtMs == null) return true;
+  return reversalAtMs <= snowballAtMs;
+}
+
 /** ชื่อฝั่งตรงข้ามเมื่อทั้งสอง pending — null ถ้าไม่ conflict */
 export function pendingConflictWithLabel(
   sets: PendingConflictSets,
