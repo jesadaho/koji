@@ -183,6 +183,8 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   } else if (o.mexcPositionId === null) {
     row.mexcPositionId = null;
   }
+  const mexcFee = nullNum(o.mexcTotalFeeUsdt);
+  if (mexcFee !== undefined) row.mexcTotalFeeUsdt = mexcFee;
   if (typeof o.limitFilledAtMs === "number" && Number.isFinite(o.limitFilledAtMs)) {
     row.limitFilledAtMs = o.limitFilledAtMs;
   } else if (o.limitFilledAtMs === null) {
@@ -384,9 +386,10 @@ export function patchAutoOpenOrderLogLimitFillSafe(input: {
 export async function patchAutoOpenOrderLogMexcPnl(
   updates: {
     id: string;
-    mexcRealisedPnlUsdt: number;
-    mexcClosedAtMs: number;
+    mexcRealisedPnlUsdt?: number;
+    mexcClosedAtMs?: number;
     mexcPositionId?: number;
+    mexcTotalFeeUsdt?: number;
   }[],
 ): Promise<number> {
   if (updates.length === 0) return 0;
@@ -396,9 +399,16 @@ export async function patchAutoOpenOrderLogMexcPnl(
   for (const row of state.rows) {
     const u = byId.get(row.id);
     if (!u) continue;
-    row.mexcRealisedPnlUsdt = u.mexcRealisedPnlUsdt;
-    row.mexcClosedAtMs = u.mexcClosedAtMs;
+    if (u.mexcRealisedPnlUsdt != null && Number.isFinite(u.mexcRealisedPnlUsdt)) {
+      row.mexcRealisedPnlUsdt = u.mexcRealisedPnlUsdt;
+    }
+    if (u.mexcClosedAtMs != null && Number.isFinite(u.mexcClosedAtMs)) {
+      row.mexcClosedAtMs = u.mexcClosedAtMs;
+    }
     if (u.mexcPositionId != null) row.mexcPositionId = u.mexcPositionId;
+    if (u.mexcTotalFeeUsdt != null && Number.isFinite(u.mexcTotalFeeUsdt)) {
+      row.mexcTotalFeeUsdt = u.mexcTotalFeeUsdt;
+    }
     dirty += 1;
   }
   if (dirty > 0) await saveAutoOpenOrderLogState(state);

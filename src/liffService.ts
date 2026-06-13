@@ -124,6 +124,11 @@ import {
 } from "./autoOpenOrderLogStore";
 import { attachAutoOpenMexcActiveFlags } from "./autoOpenMexcActiveForUser";
 import { collectAutoOpenContractSymbols, fetchAutoOpenMarkPrices } from "./autoOpenMarkPrices";
+import {
+  fetchFuturesAccountAssetList,
+  parseMexcUsdtBalanceFromAssets,
+  type MexcCredentials,
+} from "./mexcFuturesClient";
 import { loadPendingConflictSets, loadStatsConflictIndex } from "./signalPendingConflictServer";
 import { resolveAutoOpenLogConflictWith, resolveRowConflictWith } from "@/lib/signalPendingConflict";
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
@@ -918,7 +923,25 @@ export async function liffGetAutoOpenOrderHistory(
   });
   const symbols = collectAutoOpenContractSymbols(rows.map((r) => r.contractSymbol));
   const markPrices = await fetchAutoOpenMarkPrices(symbols);
-  return { rows, summary: summarizeAutoOpenOrderLogs(rows), skippedTotal, markPrices };
+
+  let mexcBalance: AutoOpenOrderLogApiPayload["mexcBalance"] = null;
+  const credsRow = settingsMap[userId];
+  if (credsRow?.mexcApiKey?.trim() && credsRow?.mexcSecret?.trim()) {
+    const creds: MexcCredentials = {
+      apiKey: credsRow.mexcApiKey.trim(),
+      secret: credsRow.mexcSecret.trim(),
+    };
+    try {
+      const assetsRes = await fetchFuturesAccountAssetList(creds);
+      if (assetsRes.ok) {
+        mexcBalance = parseMexcUsdtBalanceFromAssets(assetsRes.rows);
+      }
+    } catch {
+      mexcBalance = null;
+    }
+  }
+
+  return { rows, summary: summarizeAutoOpenOrderLogs(rows), skippedTotal, markPrices, mexcBalance };
 }
 
 export async function liffGetAutoOpenMarkPrices(

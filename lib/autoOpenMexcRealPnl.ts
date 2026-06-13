@@ -7,13 +7,39 @@ import type { OpenPositionRow } from "@/src/mexcFuturesClient";
 export type AutoOpenMexcRealisedSummary = {
   trades: number;
   sumUsdt: number | null;
+  sumWinUsdt: number | null;
+  sumLossUsdt: number | null;
+  feeTrades: number;
+  sumTotalFeesUsdt: number | null;
 };
 
+function isSuccessSideRow(row: AutoOpenOrderLogRow): boolean {
+  return row.outcome === "success" && (row.side === "long" || row.side === "short");
+}
+
 export function autoOpenMexcPnlNeedsBackfill(row: AutoOpenOrderLogRow): boolean {
-  if (row.outcome !== "success") return false;
-  if (row.side !== "long" && row.side !== "short") return false;
+  if (!isSuccessSideRow(row)) return false;
   if (row.mexcRealisedPnlUsdt != null && Number.isFinite(row.mexcRealisedPnlUsdt)) return false;
   return true;
+}
+
+export function autoOpenMexcFeeNeedsBackfill(row: AutoOpenOrderLogRow): boolean {
+  if (!isSuccessSideRow(row)) return false;
+  if (row.mexcRealisedPnlUsdt == null || !Number.isFinite(row.mexcRealisedPnlUsdt)) return false;
+  if (row.mexcTotalFeeUsdt != null && Number.isFinite(row.mexcTotalFeeUsdt)) return false;
+  return true;
+}
+
+export function autoOpenMexcDataNeedsBackfill(row: AutoOpenOrderLogRow): boolean {
+  return autoOpenMexcPnlNeedsBackfill(row) || autoOpenMexcFeeNeedsBackfill(row);
+}
+
+export function parseMexcHistoricalTotalFeeUsdt(match: MexcHistoricalPositionRow): number | null {
+  const totalFee = Number(match.totalFee);
+  if (Number.isFinite(totalFee) && totalFee >= 0) return totalFee;
+  const fee = Number(match.fee);
+  if (Number.isFinite(fee) && fee >= 0) return fee;
+  return null;
 }
 
 export function mexcPositionTypeForSide(side: "long" | "short"): 1 | 2 {
@@ -57,6 +83,16 @@ export function matchMexcHistoricalPosition(
   history: MexcHistoricalPositionRow[],
   usedPositionIds: Set<number>,
 ): MexcHistoricalPositionRow | null {
+  if (row.mexcPositionId != null && Number.isFinite(row.mexcPositionId)) {
+    const byId = history.find(
+      (p) =>
+        p.positionId === row.mexcPositionId &&
+        p.state === 3 &&
+        !usedPositionIds.has(p.positionId),
+    );
+    if (byId) return byId;
+  }
+
   const sym = row.contractSymbol.trim().toUpperCase();
   const wantType = mexcPositionTypeForSide(row.side!);
   const { startMs, endMs } = autoOpenMexcMatchWindowMs(row);
@@ -100,18 +136,71 @@ export function summarizeAutoOpenMexcRealisedPnl(
 ): AutoOpenMexcRealisedSummary {
   let trades = 0;
   let sumUsdt = 0;
+  let sumWinUsdt = 0;
+  let sumLossUsdt = 0;
+  let hasWin = false;
+  let hasLoss = false;
   let hasSum = false;
+  let feeTrades = 0;
+  let sumTotalFeesUsdt = 0;
+  let hasFees = false;
+
   for (const r of rows) {
     const pnl = r.mexcRealisedPnlUsdt;
-    if (pnl == null || !Number.isFinite(pnl)) continue;
-    trades += 1;
-    sumUsdt += pnl;
-    hasSum = true;
+    if (pnl != null && Number.isFinite(pnl)) {
+      trades += 1;
+      sumUsdt += pnl;
+      hasSum = true;
+      if (pnl > 0) {
+        sumWinUsdt += pnl;
+        hasWin = true;
+      } else if (pnl < 0) {
+        sumLossUsdt += pnl;
+        hasLoss = true;
+      }
+    }
+
+    const fee = r.mexcTotalFeeUsdt;
+    if (fee != null && Number.isFinite(fee) && fee > 0) {
+      feeTrades += 1;
+      sumTotalFeesUsdt += fee;
+      hasFees = true;
+    }
   }
-  return { trades, sumUsdt: hasSum ? sumUsdt : null };
+
+  return {
+    trades,
+    sumUsdt: hasSum ? sumUsdt : null,
+    sumWinUsdt: hasWin ? sumWinUsdt : null,
+    sumLossUsdt: hasLoss ? sumLossUsdt : null,
+    feeTrades,
+    sumTotalFeesUsdt: hasFees ? sumTotalFeesUsdt : null,
+  };
+}
+
+function formatMexcPnlSplitText(summary: AutoOpenMexcRealisedSummary): string {
+  const parts: string[] = [];
+  if (summary.sumWinUsdt != null && summary.sumWinUsdt > 0) {
+    parts.push(`P ${formatStatsStrategyProfitDollarAmount(summary.sumWinUsdt)}`);
+  }
+  if (summary.sumLossUsdt != null && summary.sumLossUsdt < 0) {
+    parts.push(`L ${formatStatsStrategyProfitDollarAmount(summary.sumLossUsdt)}`);
+  }
+  if (summary.sumUsdt != null) {
+    parts.push(`สุทธิ ${formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}`);
+  }
+  return parts.join(" · ");
 }
 
 export function formatAutoOpenMexcRealisedSummaryText(summary: AutoOpenMexcRealisedSummary): string | null {
-  if (summary.trades === 0 || summary.sumUsdt == null) return null;
-  return `MEXC Realised ${formatStatsStrategyProfitDollarAmount(summary.sumUsdt)} (${summary.trades} ไม้)`;
+  const lines: string[] = [];
+  if (summary.trades > 0 && summary.sumUsdt != null) {
+    lines.push(`MEXC Realised ${formatMexcPnlSplitText(summary)} (${summary.trades} ไม้)`);
+  }
+  if (summary.feeTrades > 0 && summary.sumTotalFeesUsdt != null) {
+    lines.push(
+      `ค่าธรรมเนียมรวม -${summary.sumTotalFeesUsdt.toFixed(2)} $ (${summary.feeTrades} ไม้)`,
+    );
+  }
+  return lines.length > 0 ? lines.join("\n") : null;
 }

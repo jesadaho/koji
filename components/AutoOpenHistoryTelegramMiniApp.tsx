@@ -41,6 +41,7 @@ import {
   summarizeAutoOpenMexcRealisedPnl,
   type AutoOpenMexcRealisedSummary,
 } from "@/lib/autoOpenMexcRealPnl";
+import type { MexcUsdtBalanceSnapshot } from "@/src/mexcFuturesClient";
 import {
   statsStrategyExitReasonForHorizon,
   statsStrategyExitReasonShort,
@@ -243,15 +244,49 @@ function renderPnlBucketRow(
   );
 }
 
-function renderMexcRealisedSummaryRow(summary: AutoOpenMexcRealisedSummary): ReactNode | null {
-  if (summary.trades === 0 || summary.sumUsdt == null) return null;
+function formatBalanceUsdt(amount: number): string {
+  return `${amount.toFixed(2)} $`;
+}
+
+function renderMexcRealisedSummaryRow(
+  summary: AutoOpenMexcRealisedSummary | undefined,
+  balance?: MexcUsdtBalanceSnapshot | null,
+): ReactNode | null {
+  const hasPnl = (summary?.trades ?? 0) > 0 && summary?.sumUsdt != null;
+  const hasFees = (summary?.feeTrades ?? 0) > 0 && summary?.sumTotalFeesUsdt != null;
+  const hasBalance = balance?.equityUsdt != null && Number.isFinite(balance.equityUsdt);
+  if (!hasPnl && !hasFees && !hasBalance) return null;
+
   return (
     <div style={{ marginTop: "0.35rem" }}>
-      <span>MEXC Realised </span>
-      <span style={pnlAmountStyle(summary.sumUsdt)}>
-        {formatStatsStrategyProfitDollarAmount(summary.sumUsdt)}
-      </span>
-      <span style={{ color: PNL_MUTED }}> ({summary.trades} ไม้)</span>
+      {hasPnl ? (
+        <div>
+          <span>MEXC Realised </span>
+          {renderPnlWinLossInline(summary!.sumWinUsdt, summary!.sumLossUsdt, summary!.sumUsdt)}
+          <span style={{ color: PNL_MUTED }}> ({summary!.trades} ไม้)</span>
+        </div>
+      ) : null}
+      {hasFees ? (
+        <div style={{ marginTop: hasPnl ? "0.2rem" : 0 }}>
+          <span>ค่าธรรมเนียมรวม </span>
+          <span style={{ color: PNL_DANGER, fontWeight: 600 }}>
+            -{summary!.sumTotalFeesUsdt!.toFixed(2)} $
+          </span>
+          <span style={{ color: PNL_MUTED }}> ({summary!.feeTrades} ไม้)</span>
+        </div>
+      ) : null}
+      {hasBalance ? (
+        <div style={{ marginTop: hasPnl || hasFees ? "0.2rem" : 0 }}>
+          <span>Balance </span>
+          <span style={{ fontWeight: 600 }}>{formatBalanceUsdt(balance!.equityUsdt!)}</span>
+          {balance?.availableUsdt != null && Number.isFinite(balance.availableUsdt) ? (
+            <span style={{ color: PNL_MUTED }}>
+              {" "}
+              (ว่าง {formatBalanceUsdt(balance.availableUsdt)})
+            </span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -349,8 +384,9 @@ function renderAutoOpenStrategy48hSummary(
   unrealised: AutoOpenPnlUsdtBucket,
   mexcRealised?: AutoOpenMexcRealisedSummary,
   closed24h?: AutoOpenStrategyHorizonSummary,
+  mexcBalance?: MexcUsdtBalanceSnapshot | null,
 ): ReactNode | null {
-  const mexcNode = mexcRealised ? renderMexcRealisedSummaryRow(mexcRealised) : null;
+  const mexcNode = renderMexcRealisedSummaryRow(mexcRealised, mexcBalance);
   const closed24Node = closed24h ? renderAutoOpenStrategy24hSummaryLine(closed24h) : null;
   if (!shouldShowAutoOpenPnlSummary(closed, unrealised, closed24h) && !mexcNode) return null;
 
@@ -1128,8 +1164,15 @@ export default function AutoOpenHistoryTelegramMiniApp() {
         unrealisedPnlSummary,
         mexcRealisedSummary,
         strategy24hSummary,
+        payload?.mexcBalance,
       ),
-    [strategy48hSummary, unrealisedPnlSummary, mexcRealisedSummary, strategy24hSummary],
+    [
+      strategy48hSummary,
+      unrealisedPnlSummary,
+      mexcRealisedSummary,
+      strategy24hSummary,
+      payload?.mexcBalance,
+    ],
   );
   const strategy48hSummaryTitle = useMemo(() => {
     const lines = [
@@ -1141,9 +1184,19 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       ),
       formatAutoOpenStrategy48hSummaryText(strategy48hSummary, unrealisedPnlSummary),
       formatAutoOpenMexcRealisedSummaryText(mexcRealisedSummary),
+      payload?.mexcBalance?.equityUsdt != null &&
+      Number.isFinite(payload.mexcBalance.equityUsdt)
+        ? `Balance ${formatBalanceUsdt(payload.mexcBalance.equityUsdt)}`
+        : null,
     ].filter(Boolean);
     return lines.length > 0 ? lines.join("\n") : null;
-  }, [strategy48hSummary, strategy24hSummary, unrealisedPnlSummary, mexcRealisedSummary]);
+  }, [
+    strategy48hSummary,
+    strategy24hSummary,
+    unrealisedPnlSummary,
+    mexcRealisedSummary,
+    payload?.mexcBalance,
+  ]);
 
   const weekGroups = useMemo(() => groupAutoOpenLogsByBkkWeek(displayRows), [displayRows]);
 
@@ -1317,7 +1370,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             className="sub"
             title={
               strategy48hSummaryTitle ??
-              "ชนะ/แพ้@24h/@48h = ไม้ครบ horizon · Realised = P/L ตามกติกาสถิติ · MEXC Realised = P/L จริงเมื่อปิดบน MEXC · Unrealised (<24h) = mark สดเฉพาะไม้ที่ยังไม่ครบ 24h (ไม่รวม Limit ⏳ รอแตะ · รวมล้มเหลว Limit ที่แตะแล้วจำลอง fill) · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่ราคาแตะ entry แล้ว"
+              "ชนะ/แพ้@24h/@48h = ไม้ครบ horizon · Realised = P/L ตามกติกาสถิติ · MEXC Realised = P/L จริงเมื่อปิดบน MEXC (แยก P/L) · ค่าธรรมเนียมรวม = fee สะสมจาก MEXC · Balance = equity USDT ปัจจุบัน · Unrealised (<24h) = mark สดเฉพาะไม้ที่ยังไม่ครบ 24h (ไม่รวม Limit ⏳ รอแตะ · รวมล้มเหลว Limit ที่แตะแล้วจำลอง fill) · ล้มเหลว(สมมติ) = สั่งไม่สำเร็จแต่ราคาแตะ entry แล้ว"
             }
             style={{ marginTop: 0, marginBottom: "0.65rem", lineHeight: 1.45 }}
           >

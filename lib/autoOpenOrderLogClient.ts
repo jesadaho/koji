@@ -86,6 +86,8 @@ export type AutoOpenOrderLogRow = {
   mexcClosedAtMs?: number | null;
   /** positionId จาก MEXC history — กันจับคู่ซ้ำ */
   mexcPositionId?: number | null;
+  /** ค่าธรรมเนียมสะสมจาก MEXC เมื่อปิด position */
+  mexcTotalFeeUsdt?: number | null;
   /** ยังมี position เปิดอยู่บน MEXC (แถว success ล่าสุดของเหรียญ+ทิศ) */
   mexcActive?: boolean;
   /** Limit บน MEXC fill แล้ว (จาก limit tick) — ไม่แสดง ⏳ รอแตะ */
@@ -99,6 +101,8 @@ export type AutoOpenOrderLogApiPayload = {
   skippedTotal: number;
   /** ราคา last MEXC perp — key = contract symbol เช่น BTC_USDT */
   markPrices: Record<string, number>;
+  /** ยอด USDT ปัจจุบันจาก MEXC futures (equity / available) */
+  mexcBalance?: import("@/src/mexcFuturesClient").MexcUsdtBalanceSnapshot | null;
 };
 
 export type AutoOpenOrderLogSummary = {

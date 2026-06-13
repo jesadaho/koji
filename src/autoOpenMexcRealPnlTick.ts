@@ -1,7 +1,8 @@
 import {
-  autoOpenMexcPnlNeedsBackfill,
+  autoOpenMexcDataNeedsBackfill,
   isMexcPositionStillOpen,
   matchMexcHistoricalPosition,
+  parseMexcHistoricalTotalFeeUsdt,
   parseMexcHistoryTimeMs,
 } from "@/lib/autoOpenMexcRealPnl";
 import type { AutoOpenOrderLogRow } from "@/lib/autoOpenOrderLogClient";
@@ -60,7 +61,7 @@ async function backfillUserRows(
   creds: MexcCredentials,
   rows: AutoOpenOrderLogRow[],
 ): Promise<{ dirty: number; rowsChecked: number }> {
-  const pending = rows.filter(autoOpenMexcPnlNeedsBackfill).slice(0, MAX_ROWS_PER_USER);
+  const pending = rows.filter(autoOpenMexcDataNeedsBackfill).slice(0, MAX_ROWS_PER_USER);
   if (pending.length === 0) return { dirty: 0, rowsChecked: 0 };
 
   const openRes = await fetchAllOpenPositions(creds);
@@ -77,9 +78,10 @@ async function backfillUserRows(
   const usedPositionIds = new Set<number>();
   const updates: {
     id: string;
-    mexcRealisedPnlUsdt: number;
-    mexcClosedAtMs: number;
+    mexcRealisedPnlUsdt?: number;
+    mexcClosedAtMs?: number;
     mexcPositionId?: number;
+    mexcTotalFeeUsdt?: number;
   }[] = [];
 
   for (const row of closedCandidates) {
@@ -87,14 +89,33 @@ async function backfillUserRows(
     if (!match) continue;
     const realised = Number(match.realised);
     const closedAtMs = parseMexcHistoryTimeMs(match.updateTime);
-    if (!Number.isFinite(realised) || closedAtMs == null) continue;
+    const totalFeeUsdt = parseMexcHistoricalTotalFeeUsdt(match);
+    const update: (typeof updates)[number] = { id: row.id };
+    let changed = false;
+
+    if (
+      (row.mexcRealisedPnlUsdt == null || !Number.isFinite(row.mexcRealisedPnlUsdt)) &&
+      Number.isFinite(realised) &&
+      closedAtMs != null
+    ) {
+      update.mexcRealisedPnlUsdt = realised;
+      update.mexcClosedAtMs = closedAtMs;
+      update.mexcPositionId = match.positionId;
+      changed = true;
+    }
+
+    if (
+      (row.mexcTotalFeeUsdt == null || !Number.isFinite(row.mexcTotalFeeUsdt)) &&
+      totalFeeUsdt != null
+    ) {
+      update.mexcTotalFeeUsdt = totalFeeUsdt;
+      if (update.mexcPositionId == null) update.mexcPositionId = match.positionId;
+      changed = true;
+    }
+
+    if (!changed) continue;
     usedPositionIds.add(match.positionId);
-    updates.push({
-      id: row.id,
-      mexcRealisedPnlUsdt: realised,
-      mexcClosedAtMs: closedAtMs,
-      mexcPositionId: match.positionId,
-    });
+    updates.push(update);
   }
 
   const dirty = updates.length > 0 ? await patchAutoOpenOrderLogMexcPnl(updates) : 0;
@@ -112,7 +133,7 @@ export async function runAutoOpenMexcRealPnlTick(
 
   const byUser = new Map<string, AutoOpenOrderLogRow[]>();
   for (const row of state.rows) {
-    if (!autoOpenMexcPnlNeedsBackfill(row)) continue;
+    if (!autoOpenMexcDataNeedsBackfill(row)) continue;
     const list = byUser.get(row.userId) ?? [];
     list.push(row);
     byUser.set(row.userId, list);

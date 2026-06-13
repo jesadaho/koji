@@ -160,6 +160,28 @@ export type MexcFuturesAssetRow = {
   frozenBalance?: number | string;
 };
 
+export type MexcUsdtBalanceSnapshot = {
+  equityUsdt: number | null;
+  availableUsdt: number | null;
+};
+
+function numFromAssetField(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+export function parseMexcUsdtBalanceFromAssets(rows: MexcFuturesAssetRow[]): MexcUsdtBalanceSnapshot {
+  const usdt = rows.find((r) => String(r.currency ?? "").toUpperCase() === "USDT");
+  return {
+    equityUsdt: numFromAssetField(usdt?.equity),
+    availableUsdt: numFromAssetField(usdt?.availableBalance),
+  };
+}
+
 export async function fetchFuturesAccountAssetList(
   creds: MexcCredentials
 ): Promise<{ ok: true; rows: MexcFuturesAssetRow[] } | { ok: false; code?: number; message: string }> {
@@ -1023,6 +1045,9 @@ export type MexcHistoricalPositionRow = {
   closeAvgPrice?: number;
   realised?: number;
   closeProfitLoss?: number;
+  /** ค่าธรรมเนียมสะสมของ position (ไม่รวม funding) */
+  fee?: number;
+  totalFee?: number;
   leverage?: number;
   createTime?: number | string;
   updateTime?: number | string;
@@ -1061,6 +1086,8 @@ function parseMexcHistoricalPositionRow(raw: unknown): MexcHistoricalPositionRow
   row.closeAvgPrice = num(o.closeAvgPrice);
   row.realised = num(o.realised);
   row.closeProfitLoss = num(o.closeProfitLoss);
+  row.fee = num(o.fee);
+  row.totalFee = num(o.totalFee);
   row.leverage = num(o.leverage);
   if (typeof o.createTime === "number" || typeof o.createTime === "string") row.createTime = o.createTime;
   if (typeof o.updateTime === "number" || typeof o.updateTime === "string") row.updateTime = o.updateTime;

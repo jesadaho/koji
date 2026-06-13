@@ -43,6 +43,7 @@ const HEADERS = [
   "strategyPct",
   "strategyExitReason",
   "mexcRealisedPnlUsdt",
+  "mexcTotalFeeUsdt",
   "mexcClosedAtMs",
 ];
 
@@ -96,6 +97,9 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
     r.strategyExitReason ?? "",
     r.mexcRealisedPnlUsdt != null && Number.isFinite(r.mexcRealisedPnlUsdt)
       ? String(r.mexcRealisedPnlUsdt)
+      : "",
+    r.mexcTotalFeeUsdt != null && Number.isFinite(r.mexcTotalFeeUsdt)
+      ? String(r.mexcTotalFeeUsdt)
       : "",
     r.mexcClosedAtMs != null && Number.isFinite(r.mexcClosedAtMs) ? String(r.mexcClosedAtMs) : "",
   ];
