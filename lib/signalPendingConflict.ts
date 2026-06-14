@@ -37,14 +37,14 @@ export function isReversalAfterPendingSnowball(
 }
 
 /**
- * ควร conflict-close หรือไม่ — false เมื่อ Reversal เกิดหลัง Snowball (ให้ Reversal เปิด/ถือต่อได้)
+ * ควร conflict-close หรือไม่ — ไม่ปิด position/limit เมื่อ Reversal + Snowball conflict
+ * (Reversal หลัง Snowball ยังเปิด/ถือต่อได้ · ไม่ market-close ฝั่งใดเมื่อเจอ Reversal)
  */
 export function shouldDualPendingConflictClose(
-  snowballAtMs: number | null,
-  reversalAtMs: number | null,
+  _snowballAtMs: number | null,
+  _reversalAtMs: number | null,
 ): boolean {
-  if (snowballAtMs == null || reversalAtMs == null) return true;
-  return reversalAtMs <= snowballAtMs;
+  return false;
 }
 
 /** ชื่อฝั่งตรงข้ามเมื่อทั้งสอง pending — null ถ้าไม่ conflict */

@@ -241,22 +241,19 @@ export async function shouldSkipAutoOpenForPendingConflict(
 
   const atMs = opts?.atMs ?? Date.now();
   const snowballMs = await getLatestPendingSnowballAtMsForSymbol(binanceSymbol, atMs);
+  if (snowballMs == null) return false;
   if (isReversalAfterPendingSnowball(snowballMs, atMs)) return false;
   return true;
 }
 
-/** ควร conflict-close สำหรับเหรียญนี้หรือไม่ (false = Reversal เกิดหลัง Snowball → ปล่อย Reversal เปิด/ถือต่อ) */
+/** ควร conflict-close สำหรับเหรียญนี้หรือไม่ — ปัจจุบันไม่ปิดเมื่อ Reversal + Snowball conflict */
 export async function shouldConflictCloseDualPendingForSymbol(
   symbol: string,
   sets: PendingConflictSets,
-  nowMs = Date.now(),
+  _nowMs = Date.now(),
 ): Promise<boolean> {
-  if (!sets.snowballPending.has(pendingConflictSymbolKey(symbol))) return false;
-  if (!sets.reversalPending.has(pendingConflictSymbolKey(symbol))) return false;
-
-  const [snowballMs, reversalMs] = await Promise.all([
-    getLatestPendingSnowballAtMsForSymbol(symbol, nowMs),
-    getLatestPendingReversalAtMsForSymbol(symbol),
-  ]);
-  return shouldDualPendingConflictClose(snowballMs, reversalMs);
+  const k = pendingConflictSymbolKey(symbol);
+  if (!k) return false;
+  if (!sets.snowballPending.has(k) || !sets.reversalPending.has(k)) return false;
+  return shouldDualPendingConflictClose(null, null);
 }
