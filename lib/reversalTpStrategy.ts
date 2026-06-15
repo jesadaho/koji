@@ -239,10 +239,9 @@ export function simulateReversalTpStrategyProfit(input: {
   const beExitFinal = tryBeExit(horizonLast);
   if (beExitFinal) return beExitFinal;
 
-  const pctEnd = maxHorizon === STATS_STRATEGY_PROFIT_HOLD_24H ? input.pct24h : input.pct48h;
   return {
-    profitPct: pctEnd,
-    exitReason: maxHorizon === STATS_STRATEGY_PROFIT_HOLD_24H ? "time_24h" : "time_48h",
+    profitPct: input.pct48h,
+    exitReason: "time_48h",
   };
 }
 
