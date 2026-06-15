@@ -185,7 +185,7 @@ function reconcileTpExitWithMaxFavorable(input: {
 }
 
 /** การเคลื่อนไหวสวนทางจาก entry ในแท่งเดียว (%) */
-function adversePctInBar(
+export function adversePctInBar(
   side: "long" | "short",
   entry: number,
   high: number,
