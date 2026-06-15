@@ -13,6 +13,10 @@ import {
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
 import {
+  statsConflictFilterTitle,
+  type StatsConflictFilter,
+} from "@/lib/signalPendingConflict";
+import {
   snowballMatrixFilterTitle,
   type SnowballMatrixFilter,
 } from "@/lib/snowballMatrixFilters";
@@ -38,6 +42,7 @@ type Props = {
   strategySizing: StrategySizing;
   gradeFilter: SnowballTrendGradeFilter;
   matrixFilter: SnowballMatrixFilter;
+  conflictFilter: StatsConflictFilter;
   splitByWeek: boolean;
 };
 
@@ -46,6 +51,7 @@ export function SnowballStatsSummary({
   strategySizing,
   gradeFilter,
   matrixFilter,
+  conflictFilter,
   splitByWeek,
 }: Props) {
   const horizonWinrateText = useMemo(
@@ -91,6 +97,11 @@ export function SnowballStatsSummary({
       {matrixFilter !== "all" ? (
         <p className="sub" style={{ marginBottom: "0.5rem" }} title={snowballMatrixFilterTitle(matrixFilter)}>
           {snowballMatrixFilterTitle(matrixFilter)}
+        </p>
+      ) : null}
+      {conflictFilter !== "all" ? (
+        <p className="sub" style={{ marginBottom: "0.5rem" }} title={statsConflictFilterTitle(conflictFilter)}>
+          {statsConflictFilterTitle(conflictFilter)}
         </p>
       ) : null}
       <p

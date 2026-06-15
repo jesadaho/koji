@@ -1,7 +1,6 @@
 /** Client-safe candle reversal stats types (no Node.js / Redis). */
 
 import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
-import { rowHasPendingConflict } from "@/lib/signalPendingConflict";
 import { statsEmaSlopePctLabel } from "@/lib/statsEmaSlope";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
@@ -510,7 +509,6 @@ export function candleReversalHorizonWinrate(
   let losses = 0;
   let done = 0;
   for (const r of rows) {
-    if (rowHasPendingConflict(r)) continue;
     const o = pctToOutcomeWithDefaults(r[pctKey]);
     if (o == null) continue;
     done += 1;

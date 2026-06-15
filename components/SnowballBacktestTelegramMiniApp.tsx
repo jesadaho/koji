@@ -12,6 +12,7 @@ import {
   type SnowballGradeFilter,
   type SnowballStatsFilterState,
 } from "@/components/SnowballStatsFilters";
+import type { StatsConflictFilter } from "@/lib/signalPendingConflict";
 import { SNOWBALL_HORIZON_WR, SnowballStatsSummary } from "@/components/SnowballStatsSummary";
 import { SnowballStatsTable } from "@/components/SnowballStatsTable";
 import {
@@ -183,6 +184,7 @@ export default function SnowballBacktestTelegramMiniApp() {
   const [btcPsarFilter, setBtcPsarFilter] = useState<SnowballBtcPsarFilter>("all");
   const [structureFilter, setStructureFilter] = useState<SnowballStructureFilter>("all");
   const [greenDaysFilter, setGreenDaysFilter] = useState<SnowballGreenDaysFilter>("all");
+  const [conflictFilter, setConflictFilter] = useState<StatsConflictFilter>("all");
   const [sort, setSort] = useState<SnowballStatsSort>(SNOWBALL_STATS_DEFAULT_SORT);
   const [splitByWeek, setSplitByWeek] = useState(false);
 
@@ -206,6 +208,7 @@ export default function SnowballBacktestTelegramMiniApp() {
       btcPsarFilter,
       structureFilter,
       greenDaysFilter,
+      conflictFilter,
     }),
     [
       sideFilter,
@@ -225,6 +228,7 @@ export default function SnowballBacktestTelegramMiniApp() {
       btcPsarFilter,
       structureFilter,
       greenDaysFilter,
+      conflictFilter,
     ],
   );
 
@@ -598,6 +602,7 @@ export default function SnowballBacktestTelegramMiniApp() {
             onBtcPsarFilterChange={setBtcPsarFilter}
             onStructureFilterChange={setStructureFilter}
             onGreenDaysFilterChange={setGreenDaysFilter}
+            onConflictFilterChange={setConflictFilter}
             monthKeys={monthKeys}
             monthFilter={monthFilter}
             onMonthFilterChange={setMonthFilter}
@@ -613,6 +618,7 @@ export default function SnowballBacktestTelegramMiniApp() {
             strategySizing={strategySizing}
             gradeFilter={gradeFilter}
             matrixFilter={matrixFilter}
+            conflictFilter={conflictFilter}
             splitByWeek={splitByWeek}
           />
           {splitByWeek ? (

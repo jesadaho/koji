@@ -90,6 +90,13 @@ import {
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
 import {
+  STATS_CONFLICT_FILTER_OPTIONS,
+  statsConflictFilterLabel,
+  statsConflictFilterTitle,
+  statsRowMatchesConflictFilter,
+  type StatsConflictFilter,
+} from "@/lib/signalPendingConflict";
+import {
   snowballTrendGradeFilterTitle,
   type SnowballTrendGradeFilter,
 } from "@/src/snowballTrendGrade";
@@ -152,6 +159,7 @@ export type SnowballStatsFilterState = {
   btcPsarFilter: SnowballBtcPsarFilter;
   structureFilter: SnowballStructureFilter;
   greenDaysFilter: SnowballGreenDaysFilter;
+  conflictFilter: StatsConflictFilter;
 };
 
 /** BKK = UTC+7 (no DST) — 0 = Sunday, 1 = Monday, ..., 6 = Saturday */
@@ -257,6 +265,10 @@ export function filterSnowballStatsRows(
     result = result.filter((r) => snowballStatsRowMatchesGreenDaysFilter(r, filters.greenDaysFilter));
   }
 
+  if (filters.conflictFilter !== "all") {
+    result = result.filter((r) => statsRowMatchesConflictFilter(r, filters.conflictFilter));
+  }
+
   return result;
 }
 
@@ -276,6 +288,7 @@ export type SnowballStatsEmptyFilterLabels = {
   efficiency: string;
   signalMaxDd: string;
   volRank: string;
+  conflict: string;
 };
 
 export function snowballStatsEmptyFilterLabels(filters: SnowballStatsFilterState): SnowballStatsEmptyFilterLabels {
@@ -295,6 +308,7 @@ export function snowballStatsEmptyFilterLabels(filters: SnowballStatsFilterState
     efficiency: snowballEfficiencyScoreFilterLabel(filters.efficiencyFilter),
     signalMaxDd: snowballSignalMaxDdFilterLabel(filters.signalMaxDdFilter),
     volRank: snowballStatsVolRankFilterLabel(filters.volRankFilter),
+    conflict: statsConflictFilterLabel(filters.conflictFilter),
   };
 }
 
@@ -318,6 +332,7 @@ type Props = {
   onBtcPsarFilterChange: (v: SnowballBtcPsarFilter) => void;
   onStructureFilterChange: (v: SnowballStructureFilter) => void;
   onGreenDaysFilterChange: (v: SnowballGreenDaysFilter) => void;
+  onConflictFilterChange: (v: StatsConflictFilter) => void;
   monthKeys: string[];
   monthFilter: string;
   onMonthFilterChange: (v: string) => void;
@@ -349,6 +364,7 @@ export function SnowballStatsFilters({
   onBtcPsarFilterChange,
   onStructureFilterChange,
   onGreenDaysFilterChange,
+  onConflictFilterChange,
   monthKeys,
   monthFilter,
   onMonthFilterChange,
@@ -422,6 +438,25 @@ export function SnowballStatsFilters({
         >
           {SNOWBALL_GRADE_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value} title={snowballTrendGradeFilterTitle(opt.value)}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label
+        className="sub"
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+      >
+        Conflict
+        <select
+          value={filters.conflictFilter}
+          onChange={(e) => onConflictFilterChange(e.currentTarget.value as StatsConflictFilter)}
+          className="tmaInput"
+          style={{ width: "auto", minWidth: "7.5rem" }}
+          title={statsConflictFilterTitle(filters.conflictFilter)}
+        >
+          {STATS_CONFLICT_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
           ))}

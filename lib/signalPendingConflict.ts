@@ -73,6 +73,45 @@ export function pendingConflictBadgeText(conflictWith: string | null | undefined
   return `⚠ conflict w/ ${conflictWith.trim()}`;
 }
 
+export function rowHasStoredConflict(row: { conflictWith?: string | null }): boolean {
+  return Boolean(row.conflictWith?.trim());
+}
+
+export type StatsConflictFilter = "all" | "conflict" | "no_conflict";
+
+export const STATS_CONFLICT_FILTER_OPTIONS: ReadonlyArray<{
+  value: StatsConflictFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "conflict", label: "มี conflict" },
+  { value: "no_conflict", label: "ไม่ conflict" },
+];
+
+export function statsConflictFilterLabel(filter: StatsConflictFilter): string {
+  return STATS_CONFLICT_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function statsConflictFilterTitle(filter: StatsConflictFilter): string {
+  switch (filter) {
+    case "conflict":
+      return "เฉพาะแถวที่เคย conflict กับสัญญาณฝั่งตรงข้าม (Snowball ↔ Reversal)";
+    case "no_conflict":
+      return "เฉพาะแถวที่ไม่มี conflict";
+    default:
+      return "รวมทุกแถว — ทั้งที่มีและไม่มี conflict";
+  }
+}
+
+export function statsRowMatchesConflictFilter(
+  row: { conflictWith?: string | null },
+  filter: StatsConflictFilter,
+): boolean {
+  if (filter === "all") return true;
+  const has = rowHasStoredConflict(row);
+  return filter === "conflict" ? has : !has;
+}
+
 /** แถวสถิติ/auto-open ที่ยังรอผล horizon (ไม่รวม win/loss/flat ที่ปิดแล้ว) */
 export function isStatsRowStillPending(row: {
   outcome?: string | null;

@@ -8,7 +8,6 @@ import {
   snowballStatsGradeChecklistFooter,
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
-import { rowHasPendingConflict } from "@/lib/signalPendingConflict";
 import { statsFmtPctCell } from "@/lib/statsCsv";
 import { formatFunding } from "@/src/marketsFormat";
 import {
@@ -939,7 +938,6 @@ export function snowballHorizonWinrate(
   let losses = 0;
   let done = 0;
   for (const r of rows) {
-    if (rowHasPendingConflict(r)) continue;
     const o = snowballPctToHorizonOutcome(r[pctKey]);
     if (o == null) continue;
     done += 1;

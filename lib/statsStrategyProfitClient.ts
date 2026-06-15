@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import { rowHasPendingConflict } from "@/lib/signalPendingConflict";
 import {
   DEFAULT_STATS_TPSL_PLAN,
   simulateStatsTpSlProfit,
@@ -523,10 +522,6 @@ export function summarizeStatsStrategyProfit(
   const leverageForRow = sizing?.leverageForRow;
 
   for (const row of rows) {
-    if (rowHasPendingConflict(row)) {
-      if (!statsStrategyProfitFinalizedAtHorizon(row, holdHours)) pending += 1;
-      continue;
-    }
     if (!statsStrategyProfitFinalizedAtHorizon(row, holdHours)) {
       pending += 1;
       continue;
