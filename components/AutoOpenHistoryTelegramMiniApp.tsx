@@ -17,6 +17,7 @@ import {
   autoOpenSourceFilterToApiQuery,
   autoOpenSourceLabel,
   filterAutoOpenLogsByDays,
+  filterAutoOpenLogsMexcLiveOnly,
   summarizeAutoOpenOrderLogs,
   type AutoOpenOrderLogApiPayload,
   type AutoOpenOrderLogRow,
@@ -911,6 +912,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   const [dayFilter, setDayFilter] = useState<DayFilter>("30");
   const [splitByWeek, setSplitByWeek] = useState(false);
   const [hideLimitPending, setHideLimitPending] = useState(false);
+  const [mexcLiveOnly, setMexcLiveOnly] = useState(false);
   const [clearingSkipped, setClearingSkipped] = useState(false);
 
   const apiGet = useCallback(async (path: string) => {
@@ -1133,10 +1135,20 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     );
   }, [monthScopedRows, markPrices, hideLimitPending]);
 
-  const displayRows = useMemo(() => {
+  const limitFilteredRows = useMemo(() => {
     if (!hideLimitPending) return monthScopedRows;
     return filterAutoOpenLogsExcludingLimitPending(monthScopedRows, markPrices);
   }, [monthScopedRows, markPrices, hideLimitPending]);
+
+  const mexcLiveHiddenCount = useMemo(() => {
+    if (!mexcLiveOnly) return 0;
+    return limitFilteredRows.length - filterAutoOpenLogsMexcLiveOnly(limitFilteredRows).length;
+  }, [limitFilteredRows, mexcLiveOnly]);
+
+  const displayRows = useMemo(() => {
+    if (!mexcLiveOnly) return limitFilteredRows;
+    return filterAutoOpenLogsMexcLiveOnly(limitFilteredRows);
+  }, [limitFilteredRows, mexcLiveOnly]);
 
   /** สรุป WR/P/L — ไม่รวมแถว conflict (สอดคล้องสถิติ Snowball/Reversal) */
   const summaryRows = useMemo(() => excludePendingConflictRows(displayRows), [displayRows]);
@@ -1334,6 +1346,18 @@ export default function AutoOpenHistoryTelegramMiniApp() {
           />
           ซ่อน Limit รอแตะ ⏳
         </label>
+        <label
+          className="sub"
+          style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+          title="แสดงเฉพาะแถวที่ยังมี position เปิดอยู่บน MEXC (● MEXC)"
+        >
+          <input
+            type="checkbox"
+            checked={mexcLiveOnly}
+            onChange={(e) => setMexcLiveOnly(e.target.checked)}
+          />
+          เฉพาะ MEXC live ●
+        </label>
         <button type="button" className="btn" onClick={() => void loadHistory()}>
           รีเฟรช
         </button>
@@ -1381,11 +1405,14 @@ export default function AutoOpenHistoryTelegramMiniApp() {
           <span style={{ color: "var(--ok, #3a8)", fontWeight: 600 }}>● MEXC</span> = ยังมี position
           เปิดบน MEXC (แถวเปิดสำเร็จล่าสุดของเหรียญ+ทิศ)
         </p>
-        {limitPendingHiddenCount > 0 || conflictHiddenFromSummary > 0 ? (
+        {limitPendingHiddenCount > 0 || mexcLiveHiddenCount > 0 || conflictHiddenFromSummary > 0 ? (
           <p className="sub" style={{ marginTop: 0, marginBottom: "0.65rem", opacity: 0.9 }}>
             แสดงในตาราง {displayRows.length}/{tableRows.length} รายการ
             {limitPendingHiddenCount > 0 ? (
               <> (ซ่อน Limit รอแตะ ⏳ {limitPendingHiddenCount})</>
+            ) : null}
+            {mexcLiveHiddenCount > 0 ? (
+              <> (กรอง MEXC live — ซ่อน {mexcLiveHiddenCount})</>
             ) : null}
             {conflictHiddenFromSummary > 0 ? (
               <>
@@ -1415,9 +1442,11 @@ export default function AutoOpenHistoryTelegramMiniApp() {
             rows={displayRows}
             markPrices={markPrices}
             emptyMessage={
-              hideLimitPending && tableRows.length > 0
-                ? "ทุกรายการในช่วงนี้เป็น Limit รอแตะ ⏳ — ปิดตัวกรองเพื่อดู"
-                : AUTO_OPEN_HISTORY_EMPTY_MSG
+              mexcLiveOnly && limitFilteredRows.length > 0 && displayRows.length === 0
+                ? "ไม่มี position เปิดอยู่บน MEXC ในช่วงที่เลือก — ปิดตัวกรองเพื่อดูทั้งหมด"
+                : hideLimitPending && tableRows.length > 0 && displayRows.length === 0
+                  ? "ทุกรายการในช่วงนี้เป็น Limit รอแตะ ⏳ — ปิดตัวกรองเพื่อดู"
+                  : AUTO_OPEN_HISTORY_EMPTY_MSG
             }
           />
         )}

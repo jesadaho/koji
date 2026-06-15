@@ -325,3 +325,8 @@ export function filterAutoOpenLogsByDays(
   const cutoff = nowMs - days * 24 * 3600 * 1000;
   return rows.filter((r) => r.atMs >= cutoff);
 }
+
+/** เฉพาะแถวที่ยังมี position เปิดบน MEXC (mexcActive) */
+export function filterAutoOpenLogsMexcLiveOnly(rows: AutoOpenOrderLogRow[]): AutoOpenOrderLogRow[] {
+  return rows.filter((r) => r.mexcActive === true);
+}
