@@ -250,6 +250,8 @@ function formatSnowballStatsBackfillReply(r: SnowballStatsAdminBackfillResult): 
     `รวมแถวที่แตะ (dirty): ${f.dirty}`,
     "",
     `4h ครบเวลาแต่ pct4h ว่าง — ก่อน: ${r.missingHorizon4hBefore} · หลัง: ${r.missingHorizon4hAfter}`,
+    `ค้าง horizon: ${r.pendingHorizon} · trend grade: ${r.pendingTrendGrades}`,
+    r.hasMore ? "ยังไม่ครบ — ส่งคำสั่งอีกครั้งหรือรอ cron" : "ครบแล้วในรอบนี้",
   ];
   if (r.missingHorizon4hBefore > r.missingHorizon4hAfter) {
     lines.push(`เติม horizon 4h ได้ประมาณ ${r.missingHorizon4hBefore - r.missingHorizon4hAfter} แถว`);

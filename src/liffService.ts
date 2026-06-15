@@ -878,12 +878,15 @@ export async function liffBackfillSnowballStats(
       };
     }
 
-    const st = await loadSnowballStatsState();
-    const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
-    const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "snowball");
-    const strategyProfitEnriched = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
-    if (strategyProfitEnriched > 0) {
-      await saveSnowballStatsState(st);
+    let strategyProfitEnriched = 0;
+    if (!backfill.hasMore) {
+      const st = await loadSnowballStatsState();
+      const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 60);
+      const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "snowball");
+      strategyProfitEnriched = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
+      if (strategyProfitEnriched > 0) {
+        await saveSnowballStatsState(st);
+      }
     }
 
     return { ...backfill, ok: true, strategyProfitEnriched };

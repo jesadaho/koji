@@ -73,14 +73,30 @@ export function pendingConflictBadgeText(conflictWith: string | null | undefined
   return `⚠ conflict w/ ${conflictWith.trim()}`;
 }
 
-/** แถวที่ Snowball + Reversal pending พร้อมกัน (มี conflict badge) */
-export function rowHasPendingConflict(row: { conflictWith?: string | null }): boolean {
-  return Boolean(row.conflictWith?.trim());
+/** แถวสถิติ/auto-open ที่ยังรอผล horizon (ไม่รวม win/loss/flat ที่ปิดแล้ว) */
+export function isStatsRowStillPending(row: {
+  outcome?: string | null;
+  pct48h?: number | null;
+}): boolean {
+  if (row.outcome === "pending") return true;
+  // auto-open success — รอ follow-up 48h
+  if (row.outcome === "success" && row.pct48h == null) return true;
+  return false;
 }
 
-export function excludePendingConflictRows<T extends { conflictWith?: string | null }>(
-  rows: readonly T[],
-): T[] {
+/** แถวที่ Snowball + Reversal ยัง pending พร้อมกัน — ไม่รวมใน WR/สรุป P/L */
+export function rowHasPendingConflict(row: {
+  conflictWith?: string | null;
+  outcome?: string | null;
+  pct48h?: number | null;
+}): boolean {
+  if (!row.conflictWith?.trim()) return false;
+  return isStatsRowStillPending(row);
+}
+
+export function excludePendingConflictRows<
+  T extends { conflictWith?: string | null; outcome?: string | null; pct48h?: number | null },
+>(rows: readonly T[]): T[] {
   return rows.filter((r) => !rowHasPendingConflict(r));
 }
 

@@ -366,7 +366,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const backfillStats = useCallback(async () => {
     if (
       !window.confirm(
-        "Backfill สถิติ Snowball?\n\nดึง Binance — EMA slope · horizon · gate steps · กำไรกลยุทธ์ ฯลฯ\n\nอาจใช้เวลาหลายนาที",
+        "Backfill สถิติ Snowball?\n\nดึง Binance ทีละชุด (horizon · EMA · grade) — อาจใช้หลายรอบจนกว่าจะครบ",
       )
     ) {
       return;
@@ -375,30 +375,53 @@ export default function SnowballStatsTelegramMiniApp() {
     setBackfillErr(null);
     setBackfillOk(null);
     try {
-      const r = (await api("/snowball-stats/backfill", { method: "POST", body: "{}" })) as {
-        durationMs?: number;
-        followUp?: {
-          dirty?: number;
-          emaSlopes?: number;
-          trendGrades?: number;
-          confirmGateSteps?: number;
-          horizonRows?: number;
-        };
-        strategyProfitEnriched?: number;
-        missingHorizon4hBefore?: number;
-        missingHorizon4hAfter?: number;
-      } | null;
-      const sec = ((r?.durationMs ?? 0) / 1000).toFixed(1);
-      const dirty = r?.followUp?.dirty ?? 0;
-      const ema = r?.followUp?.emaSlopes ?? 0;
-      const grades = r?.followUp?.trendGrades ?? 0;
-      const gates = r?.followUp?.confirmGateSteps ?? 0;
-      const horizons = r?.followUp?.horizonRows ?? 0;
-      const strat = r?.strategyProfitEnriched ?? 0;
-      const missBefore = r?.missingHorizon4hBefore ?? 0;
-      const missAfter = r?.missingHorizon4hAfter ?? 0;
+      let pass = 0;
+      let totalDirty = 0;
+      let totalEma = 0;
+      let totalGrades = 0;
+      let totalGates = 0;
+      let totalHorizons = 0;
+      let totalStrat = 0;
+      let missBefore = 0;
+      let missAfter = 0;
+      let hasMore = true;
+
+      while (hasMore && pass < 80) {
+        pass += 1;
+        if (pass > 1) {
+          setBackfillOk(`กำลัง backfill… รอบ ${pass} · อัปเดต ${totalDirty} แถว`);
+        }
+        const r = (await api("/snowball-stats/backfill", { method: "POST", body: "{}" })) as {
+          hasMore?: boolean;
+          durationMs?: number;
+          followUp?: {
+            dirty?: number;
+            emaSlopes?: number;
+            trendGrades?: number;
+            confirmGateSteps?: number;
+            horizonRows?: number;
+          };
+          strategyProfitEnriched?: number;
+          missingHorizon4hBefore?: number;
+          missingHorizon4hAfter?: number;
+          pendingHorizon?: number;
+          pendingTrendGrades?: number;
+        } | null;
+        totalDirty += r?.followUp?.dirty ?? 0;
+        totalEma += r?.followUp?.emaSlopes ?? 0;
+        totalGrades += r?.followUp?.trendGrades ?? 0;
+        totalGates += r?.followUp?.confirmGateSteps ?? 0;
+        totalHorizons += r?.followUp?.horizonRows ?? 0;
+        totalStrat += r?.strategyProfitEnriched ?? 0;
+        if (pass === 1) missBefore = r?.missingHorizon4hBefore ?? 0;
+        missAfter = r?.missingHorizon4hAfter ?? 0;
+        hasMore = r?.hasMore === true;
+        if ((r?.followUp?.dirty ?? 0) === 0 && !hasMore) break;
+      }
+
+      const secNote = pass > 1 ? ` · ${pass} รอบ` : "";
       setBackfillOk(
-        `Backfill เสร็จ ${sec}s — อัปเดต ${dirty} แถว · EMA ${ema} · grade ${grades} · gate ${gates} · horizon ${horizons} · กำไรกลยุทธ์ ${strat} · 4h ว่าง ${missBefore}→${missAfter}`,
+        `Backfill เสร็จ${secNote} — อัปเดต ${totalDirty} แถว · EMA ${totalEma} · grade ${totalGrades} · gate ${totalGates} · horizon ${totalHorizons} · กำไรกลยุทธ์ ${totalStrat} · 4h ว่าง ${missBefore}→${missAfter}${hasMore ? " · ยังค้าง — กดอีกครั้ง" : ""}`,
       );
       await loadStats();
     } catch (e) {

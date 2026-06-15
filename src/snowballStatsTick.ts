@@ -27,6 +27,7 @@ import {
   applySnowballStatsRowMigrations,
   backfillSnowballStatsTrendGrades,
   saveSnowballStatsState,
+  snowballStatsRowNeedsTrendGradeBackfill,
   type SnowballStatsOutcome,
   type SnowballStatsRow,
 } from "./snowballStatsStore";
@@ -68,11 +69,61 @@ export type SnowballStatsAdminBackfillResult = {
   missingHorizon4hBefore: number;
   /** หลังรัน */
   missingHorizon4hAfter: number;
+  /** ยังมีงาน backfill ค้าง — เรียกซ้ำ (chunk) */
+  hasMore: boolean;
+  /** แถวที่ยังรอ horizon / trend grade (หลังรัน) */
+  pendingHorizon: number;
+  pendingTrendGrades: number;
   samplesFilled: string[];
 };
 
 /** ความละเอียดของ kline ที่ใช้คำนวณ MFE / horizon (คง 15m) */
 const KLINE_GRAN_SEC = 900;
+
+function snowballStatsBackfillMaxHorizonPerPass(): number {
+  const v = Number(process.env.SNOWBALL_STATS_BACKFILL_MAX_HORIZON_PER_PASS?.trim());
+  if (Number.isFinite(v) && v >= 1 && v <= 80) return Math.floor(v);
+  return 10;
+}
+
+function snowballStatsRowNeedsHorizonFollowUpWork(row: SnowballStatsRow, nowSec: number): boolean {
+  const entry = row.entryPrice;
+  if (!Number.isFinite(entry) || entry <= 0) return false;
+
+  const ac = snowballStatsAnchorCloseSec(row);
+  if (nowSec < ac) return false;
+
+  const SEC_48H = 48 * 3600;
+  const SEC_24H = 24 * 3600;
+  const pending = row.outcome === "pending";
+  const needs48h = row.pct48h == null && nowSec >= ac + SEC_48H;
+  const needsHorizonBackfill =
+    (row.pct4h == null && nowSec >= ac + 4 * 3600) ||
+    (row.pct12h == null && nowSec >= ac + 12 * 3600) ||
+    (row.pct24h == null && nowSec >= ac + SEC_24H) ||
+    (row.pct48h == null && nowSec >= ac + SEC_48H);
+  const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < ac + SEC_48H;
+  const needsStrategyProfit =
+    (row.pct24h != null && row.strategyProfitPct24h == null) ||
+    (row.pct48h != null && row.strategyProfitPct == null);
+  return pending || needs48h || needsHorizonBackfill || needsFollowUpAdverse || needsStrategyProfit;
+}
+
+export function countSnowballStatsBackfillPending(
+  rows: SnowballStatsRow[],
+  nowMs: number,
+  symbol?: string,
+): { horizon: number; trendGrades: number } {
+  const nowSec = Math.floor(nowMs / 1000);
+  let horizon = 0;
+  let trendGrades = 0;
+  for (const row of rows) {
+    if (symbol && row.symbol.trim().toUpperCase() !== symbol) continue;
+    if (snowballStatsRowNeedsTrendGradeBackfill(row)) trendGrades += 1;
+    if (snowballStatsRowNeedsHorizonFollowUpWork(row, nowSec)) horizon += 1;
+  }
+  return { horizon, trendGrades };
+}
 
 async function backfillSnowballEmaSlopes(
   rows: SnowballStatsRow[],
@@ -396,7 +447,7 @@ function countMissingHorizon4h(rows: SnowballStatsRow[], nowMs: number, symbol?:
 
 export async function runSnowballStatsFollowUpTick(
   nowMs: number,
-  opts?: { symbol?: string },
+  opts?: { symbol?: string; maxHorizonRowsPerTick?: number },
 ): Promise<SnowballStatsFollowUpResult> {
   const empty: SnowballStatsFollowUpResult = {
     dirty: 0,
@@ -458,29 +509,20 @@ export async function runSnowballStatsFollowUpTick(
   const SEC_24H = 24 * 3600;
 
   let horizonRows = 0;
+  let horizonFetched = 0;
+  const maxHorizonRowsPerTick = opts?.maxHorizonRowsPerTick;
 
   for (const row of state.rows) {
     if (!rowInScope(row)) continue;
+    if (maxHorizonRowsPerTick != null && horizonFetched >= maxHorizonRowsPerTick) break;
+    if (!snowballStatsRowNeedsHorizonFollowUpWork(row, nowSec)) continue;
+
     const entry = row.entryPrice;
     if (!Number.isFinite(entry) || entry <= 0) continue;
 
     const ac = snowballStatsAnchorCloseSec(row);
-    if (nowSec < ac) continue;
-
     const pending = row.outcome === "pending";
-    const needs48h = row.pct48h == null && nowSec >= ac + SEC_48H;
-    const needsHorizonBackfill =
-      (row.pct4h == null && nowSec >= ac + 4 * 3600) ||
-      (row.pct12h == null && nowSec >= ac + 12 * 3600) ||
-      (row.pct24h == null && nowSec >= ac + SEC_24H) ||
-      (row.pct48h == null && nowSec >= ac + SEC_48H);
-    const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < ac + SEC_48H;
-    const needsStrategyProfit =
-      (row.pct24h != null && row.strategyProfitPct24h == null) ||
-      (row.pct48h != null && row.strategyProfitPct == null);
-    if (!pending && !needs48h && !needsHorizonBackfill && !needsFollowUpAdverse && !needsStrategyProfit) {
-      continue;
-    }
+    horizonFetched += 1;
 
     const windowEndHorizonSec = Math.min(nowSec, ac + SEC_48H);
     const windowEndMfeSec = Math.min(nowSec, ac + SEC_48H);
@@ -810,6 +852,9 @@ export async function runSnowballStatsAdminBackfill(opts?: {
       },
       missingHorizon4hBefore: 0,
       missingHorizon4hAfter: 0,
+      hasMore: false,
+      pendingHorizon: 0,
+      pendingTrendGrades: 0,
       samplesFilled: [],
     };
   }
@@ -833,6 +878,9 @@ export async function runSnowballStatsAdminBackfill(opts?: {
       },
       missingHorizon4hBefore: 0,
       missingHorizon4hAfter: 0,
+      hasMore: false,
+      pendingHorizon: 0,
+      pendingTrendGrades: 0,
       samplesFilled: [],
     };
   }
@@ -841,36 +889,20 @@ export async function runSnowballStatsAdminBackfill(opts?: {
   const missingHorizon4hBefore = countMissingHorizon4h(before.rows, nowMs, symbol);
   const started = Date.now();
 
-  const followUpEmpty: SnowballStatsFollowUpResult = {
-    dirty: 0,
-    migrations: 0,
-    trendMomentum: 0,
-    confirmGateSteps: 0,
-    greenDays: 0,
-    grade4h: 0,
-    horizonRows: 0,
-    emaSlopes: 0,
-    trendGrades: 0,
-  };
-  let followUp = followUpEmpty;
-  for (let pass = 0; pass < 6; pass++) {
-    const tick = await runSnowballStatsFollowUpTick(nowMs, { symbol });
-    followUp = {
-      dirty: followUp.dirty + tick.dirty,
-      migrations: followUp.migrations + tick.migrations,
-      trendMomentum: followUp.trendMomentum + tick.trendMomentum,
-      confirmGateSteps: followUp.confirmGateSteps + tick.confirmGateSteps,
-      greenDays: followUp.greenDays + tick.greenDays,
-      grade4h: followUp.grade4h + tick.grade4h,
-      horizonRows: followUp.horizonRows + tick.horizonRows,
-      emaSlopes: followUp.emaSlopes + tick.emaSlopes,
-      trendGrades: followUp.trendGrades + tick.trendGrades,
-    };
-    if (tick.emaSlopes === 0 && tick.trendGrades === 0 && tick.dirty === 0) break;
-  }
+  const tick = await runSnowballStatsFollowUpTick(nowMs, {
+    symbol,
+    maxHorizonRowsPerTick: snowballStatsBackfillMaxHorizonPerPass(),
+  });
+  const followUp = tick;
 
   const after = await loadSnowballStatsState();
   const missingHorizon4hAfter = countMissingHorizon4h(after.rows, nowMs, symbol);
+  const pending = countSnowballStatsBackfillPending(after.rows, nowMs, symbol);
+  const hasMore =
+    pending.horizon > 0 ||
+    pending.trendGrades > 0 ||
+    missingHorizon4hAfter > 0 ||
+    tick.emaSlopes > 0;
 
   const samplesFilled: string[] = [];
   for (const row of after.rows) {
@@ -888,6 +920,9 @@ export async function runSnowballStatsAdminBackfill(opts?: {
     followUp,
     missingHorizon4hBefore,
     missingHorizon4hAfter,
+    hasMore,
+    pendingHorizon: pending.horizon,
+    pendingTrendGrades: pending.trendGrades,
     samplesFilled,
   };
 }
