@@ -47,6 +47,12 @@ export type ReversalAutoTradeActive = {
   slArmRoiPct?: number;
   slEntryOffsetPct?: number;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
+  /** EMA(12) 4h slope 7d % ณ เวลาแจ้ง — Reversal TP strategy @ 24h */
+  ema4hSlopePct7d?: number;
+  /** ตรวจ 12h checkpoint แล้ว */
+  reversalTp12hChecked?: boolean;
+  /** ตรวจ 24h checkpoint แล้ว */
+  reversalTp24hChecked?: boolean;
   /** ตั้ง/แจ้ง SL บังทุนแล้ว — กันยิงซ้ำเมื่อ slPlanOrderId ว่าง */
   slBreakevenArmed?: boolean;
   /** orderId ของ plan SL ที่ตั้งหลัง TP1 — ใช้ cancel ตอน TP2/48h */
@@ -73,6 +79,7 @@ export type ReversalAutoTradePendingLimit = {
   slArmRoiPct: number;
   slEntryOffsetPct: number;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
+  ema4hSlopePct7d?: number;
 };
 
 export type ReversalAutoTradePerUserState = {
@@ -291,6 +298,13 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
     if (initHold != null) row.initialHoldVol = initHold;
     if (tp1PlanVol != null) row.tp1PlanVol = tp1PlanVol;
     if (holdExtendedForRed) row.holdExtendedForRed = true;
+    const ema4h =
+      typeof o.ema4hSlopePct7d === "number" && Number.isFinite(o.ema4hSlopePct7d)
+        ? o.ema4hSlopePct7d
+        : undefined;
+    if (ema4h != null) row.ema4hSlopePct7d = ema4h;
+    if (o.reversalTp12hChecked === true) row.reversalTp12hChecked = true;
+    if (o.reversalTp24hChecked === true) row.reversalTp24hChecked = true;
     out.push(row);
   }
   const bySym = new Map<string, ReversalAutoTradeActive>();
@@ -517,6 +531,7 @@ export function withReversalActiveOpen(
     slArmRoiPct: number;
     slEntryOffsetPct: number;
     slAtEntryAfter24hIfGreenEnabled?: boolean;
+    ema4hSlopePct7d?: number;
     tp1PlanOrderId?: string;
     tp2PlanOrderId?: string;
     initialHoldVol?: number;
@@ -551,6 +566,9 @@ export function withReversalActiveOpen(
   };
   if (typeof p.slAtEntryAfter24hIfGreenEnabled === "boolean") {
     row.slAtEntryAfter24hIfGreenEnabled = p.slAtEntryAfter24hIfGreenEnabled;
+  }
+  if (typeof p.ema4hSlopePct7d === "number" && Number.isFinite(p.ema4hSlopePct7d)) {
+    row.ema4hSlopePct7d = p.ema4hSlopePct7d;
   }
   if (p.tp1PlanOrderId?.trim()) row.tp1PlanOrderId = p.tp1PlanOrderId.trim();
   if (p.tp2PlanOrderId?.trim()) row.tp2PlanOrderId = p.tp2PlanOrderId.trim();
@@ -614,6 +632,41 @@ export function withReversalSlAtEntryArmed(
     return x;
   });
   return { ...state, [uid]: { ...prev, active: nextActive } };
+}
+
+function withReversalTpCheckpoint(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: "short" | "long",
+  field: "reversalTp12hChecked" | "reversalTp24hChecked",
+): ReversalAutoTradeState {
+  const uid = userId.trim();
+  const prev = state[uid];
+  if (!prev?.active?.length) return state;
+  const sym = contractSymbol.trim().toUpperCase();
+  const nextActive = normalizeActive(prev.active).map((x) =>
+    x.contractSymbol === sym && x.side === side ? { ...x, [field]: true } : x,
+  );
+  return { ...state, [uid]: { ...prev, active: nextActive } };
+}
+
+export function withReversalTp12hChecked(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: "short" | "long",
+): ReversalAutoTradeState {
+  return withReversalTpCheckpoint(state, userId, contractSymbol, side, "reversalTp12hChecked");
+}
+
+export function withReversalTp24hChecked(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: "short" | "long",
+): ReversalAutoTradeState {
+  return withReversalTpCheckpoint(state, userId, contractSymbol, side, "reversalTp24hChecked");
 }
 
 export function withReversalTp1Done(

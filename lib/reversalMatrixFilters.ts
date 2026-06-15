@@ -19,7 +19,7 @@ export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
-  "((BTC∠1d > −8% (fade SHORT) OR BTC∠4h > −13%) OR ATR%14D < 8) and BTC∠4h < 3%";
+  "((BTC∠1d > −8% (fade SHORT) OR BTC∠4h > −13%) OR ATR%14D < 8) and BTC∠4h < 3% and ATR%14D < 40";
 
 export const REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO = 0.2;
 export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
@@ -33,8 +33,10 @@ export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MIN_PCT = -8;
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MIN_PCT = -13;
 /** Long 1H stats — BTC EMA(12) 4h slope ต้องต่ำกว่า (exclusive) */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MAX_PCT = 3;
-/** Long 1H stats — ATR(14) 1d ÷ close ต้องต่ำกว่า (exclusive) */
+/** Long 1H stats — ATR(14) 1d ÷ close ต้องต่ำกว่า (exclusive) — ทางเลือกใน OR */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_MAX_PCT = 8;
+/** Long 1H stats — ATR(14) 1d ÷ close ต้องต่ำกว่า (exclusive) — gate บังคับทุก path */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_CEILING_PCT = 40;
 
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
@@ -162,6 +164,9 @@ export function reversalMatchesQualitySignalLong1h(input: {
       input.btcEma4hSlopePct7d,
     )
   ) {
+    return false;
+  }
+  if (!atrPct14dBelow(REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_CEILING_PCT, input.atrPct14d)) {
     return false;
   }
   if (atrPct14dBelow(REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_MAX_PCT, input.atrPct14d)) {

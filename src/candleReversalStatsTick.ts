@@ -8,10 +8,12 @@ import {
   computeFollowUpMaxAdversePct,
   firstFollowUpKlineIndexAfterAnchorClose,
 } from "@/lib/statsFollowUpAdverse";
-import { DEFAULT_STATS_TPSL_PLAN, favorablePctInBar } from "@/lib/tpSlStrategySimulate";
+import { favorablePctInBar } from "@/lib/tpSlStrategySimulate";
 import {
-  computeStatsStrategyProfitFromBars,
-  statsStrategyProfitCacheKey,
+  reversalTpStrategyCacheKey,
+  simulateReversalTpStrategyProfit,
+} from "@/lib/reversalTpStrategy";
+import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
 } from "@/lib/statsStrategyProfitClient";
@@ -391,27 +393,31 @@ async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<n
 
 function applyReversal1hStrategyProfitAtHorizon(
   row: CandleReversalStatsRow,
+  timeSec: number[],
   high: number[],
   low: number[],
   iFirst: number,
   iLast: number,
   holdHours: typeof STATS_STRATEGY_PROFIT_HOLD_24H | typeof STATS_STRATEGY_PROFIT_HOLD_48H,
-  pctAtHorizon: number,
 ): void {
+  if (row.pct12h == null || row.pct24h == null || row.pct48h == null) return;
   const side = reversalMeasureSide(row);
-  const sim = computeStatsStrategyProfitFromBars({
+  const sim = simulateReversalTpStrategyProfit({
     side,
     entry: row.entryPrice,
     high,
     low,
+    timeSec,
     iFirst,
     iLast,
-    holdHours,
-    pctAtHorizon,
-    plan: DEFAULT_STATS_TPSL_PLAN,
+    pct12h: row.pct12h,
+    pct24h: row.pct24h,
+    pct48h: row.pct48h,
+    ema4hSlopePct7d: row.ema4hSlopePct7d,
+    maxHorizonHours: holdHours,
   });
   if (!sim) return;
-  const key = statsStrategyProfitCacheKey(DEFAULT_STATS_TPSL_PLAN, holdHours);
+  const key = reversalTpStrategyCacheKey(holdHours);
   row.strategyProfitByPlan = {
     ...row.strategyProfitByPlan,
     [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
@@ -519,12 +525,12 @@ async function followUpCandleReversal1hRow(
     if (i15FollowFirst >= 0 && i15Last24 >= i15FollowFirst) {
       applyReversal1hStrategyProfitAtHorizon(
         row,
+        t15,
         h15,
         l15,
         i15FollowFirst,
         i15Last24,
         STATS_STRATEGY_PROFIT_HOLD_24H,
-        row.pct24h,
       );
     }
   } else if (nowSec < h24End) {
@@ -537,12 +543,12 @@ async function followUpCandleReversal1hRow(
     if (i15FollowFirst >= 0 && i15Last48 >= i15FollowFirst) {
       applyReversal1hStrategyProfitAtHorizon(
         row,
+        t15,
         h15,
         l15,
         i15FollowFirst,
         i15Last48,
         STATS_STRATEGY_PROFIT_HOLD_48H,
-        row.pct48h,
       );
     }
   } else if (nowSec < h48End) {
@@ -577,6 +583,7 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
     if (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC) return true;
     if (row.pct24h != null && row.strategyProfitPct24h == null) return true;
     if (row.pct48h != null && row.strategyProfitPct == null) return true;
+    if (row.pct12h == null && nowSec >= ac + 12 * HOUR_SEC) return true;
     return false;
   }
   if (nowSec < ac + DAY_SEC && row.pct1d != null) return true;

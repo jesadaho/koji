@@ -28,6 +28,7 @@ import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } f
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import { shouldSkipAutoOpenForPendingConflict } from "./signalPendingConflictServer";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
+import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
 import { reversalMatchesQualitySignalForAlert } from "@/lib/reversalMatrixFilters";
 import {
   resolveReversalLongTradeLeverage,
@@ -909,6 +910,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             slArmRoiPct: plan.slArmRoiPct,
             slEntryOffsetPct: plan.slEntryOffsetPct,
             slAtEntryAfter24hIfGreenEnabled: plan.slAtEntryAfter24hIfGreenEnabled,
+            ema4hSlopePct7d: ema4hPct ?? undefined,
           },
           dayKey,
         );
@@ -944,6 +946,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
               slArmRoiPct: plan.slArmRoiPct,
               slEntryOffsetPct: plan.slEntryOffsetPct,
               slAtEntryAfter24hIfGreenEnabled: plan.slAtEntryAfter24hIfGreenEnabled,
+              ema4hSlopePct7d: ema4hPct ?? undefined,
             },
             dayKey,
           );
@@ -957,9 +960,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
           if (trackedTpSl && mexcAvgEntry != null) {
             tpSlLines.push(
               `ราคาเข้าเฉลี่ย MEXC: ${fmtReversalAutoTradePrice(mexcAvgEntry)} USDT — ใช้คำนวณ % drop จริง`,
-              `กลยุทธ์: TP1 -${plan.tp1PricePct}% ปิด ${plan.tp1PartialPct}% · TP2 -${plan.tp2PricePct}% ปิดทั้งหมด`,
-              "TP ใช้ tick ปิด market (TP1/TP2 ตาม Settings)",
-              `กติกา ${plan.maxHoldHours} ชม.: ถ้าถือครบจะปิด market ทั้งหมด · SL บังทุนตั้งหลัง TP1`,
+              `กลยุทธ์: ${REVERSAL_TP_STRATEGY_SUMMARY}`,
+              `ครบ ${plan.maxHoldHours} ชม. → ปิดทั้งหมด (force)`,
             );
           } else {
             tpSlLines.push(
@@ -968,9 +970,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
           }
         } else {
           tpSlLines.push(
-            `กลยุทธ์ TP/SL: รอ Limit fill ก่อนเริ่ม track (TP1 -${plan.tp1PricePct}% · TP2 -${plan.tp2PricePct}% · ${plan.maxHoldHours} ชม.)`,
+            `กลยุทธ์ TP/SL: รอ Limit fill ก่อนเริ่ม track · ${REVERSAL_TP_STRATEGY_SUMMARY}`,
             `หมดอายุ Limit: ~${fmtExpireBkk(placedAtMs + REVERSAL_LIMIT_EXPIRE_MS)} (8 ชม.) — ไม่ fill จะยกเลิกและปลดล็อกวัน`,
-            "TP ใช้ tick ปิด market หลัง fill",
           );
         }
       }

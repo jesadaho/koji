@@ -14,6 +14,7 @@ import {
   REVERSAL_QUALITY_SIGNAL_CRITERIA,
   REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA,
 } from "@/lib/reversalMatrixFilters";
+import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
 import { SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS } from "@/src/snowballQualitySignalLongGrades";
 import type { SnowballAutoTradeGradeKey } from "@/src/tradingViewCloseSettingsStore";
 import {
@@ -2033,20 +2034,17 @@ export default function SettingsTelegramMiniApp() {
         </div>
 
         <p className="sub" style={{ marginTop: "1.1rem", fontWeight: 600 }}>
-          กลยุทธ์ TP/SL (tick ปิด market สำหรับ TP1/TP2 + plan SL บังทุน)
+          กลยุทธ์ TP/SL (EMA4H + profit band)
+        </p>
+        <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.92 }}>
+          {REVERSAL_TP_STRATEGY_SUMMARY}
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
-          <li><strong>TP1 / TP2</strong>: cron tick ปิด market ตาม <code>TP1 %</code> / <code>TP2 %</code> (ไม่วาง plan TP บน MEXC)</li>
-          <li>
-            <strong>แผนบังทุน</strong>: ROI ≥ <code>{revSlArmRoiPct.trim() || "10"}%</code> → SL บังทุน (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code> จาก entry)
-          </li>
-          {revSlAtEntryAfter24hIfGreen ? (
-            <li>
-              <strong>แผนบังทุน</strong>: ครบ <strong>24 ชม.</strong> แล้วยังเขียว → ตั้ง SL @entry ทันที
-            </li>
-          ) : null}
-          <li><strong>หลัง TP1 execute</strong>: tick ตั้ง SL บังทุนที่เหลือด้วย offset เดียวกัน</li>
-          <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ปิดทั้งหมด (force) ถ้าเขียวหรือปิด option ขยาย</li>
+          <li><strong>12 ชม.</strong>: กำไร &gt; 3% → ตั้ง SL บังทุน (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code>)</li>
+          <li><strong>24 ชม.</strong>: ชนะ (≥2%) + EMA4H &lt; 0 → ถือต่อ + SL บังทุน</li>
+          <li><strong>24 ชม.</strong>: กำไรนิดหน่อย (0–2%) + EMA4H &gt; 0 → ปิดทันที</li>
+          <li><strong>24 ชม.</strong>: ติดลบนิดหน่อย (−2%–0) + EMA4H &gt; 0 → ปิดทันที (ยกเว้นมี SL จาก 12 ชม.)</li>
+          <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ปิดทั้งหมด (force)</li>
           <li><strong>จังหวะ 2 (option)</strong>: ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
           <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
         </ul>
@@ -2060,7 +2058,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>เปิดใช้กลยุทธ์ TP/SL</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              ถ้าปิด ระบบจะเปิด SHORT อย่างเดียว ไม่ tick TP1/TP2/48h ให้
+              ถ้าปิด ระบบจะเปิด SHORT อย่างเดียว ไม่ tick TP/SL ให้ · max hold ยังใช้ค่าด้านล่าง
             </span>
           </span>
         </label>

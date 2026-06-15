@@ -15,7 +15,7 @@ import {
   withReversalPlacedUnlocked,
   type ReversalAutoTradePendingLimit,
 } from "./reversalAutoTradeStateStore";
-import { patchAutoOpenOrderLogLimitFillSafe } from "./autoOpenOrderLogStore";
+import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 
 function shortContractLabel(contractSymbol: string): string {
@@ -100,6 +100,7 @@ async function promotePendingToActive(args: {
       slArmRoiPct: pending.slArmRoiPct,
       slEntryOffsetPct: pending.slEntryOffsetPct,
       slAtEntryAfter24hIfGreenEnabled: pending.slAtEntryAfter24hIfGreenEnabled,
+      ema4hSlopePct7d: pending.ema4hSlopePct7d,
     },
     dayKey,
   );
@@ -114,11 +115,10 @@ async function promotePendingToActive(args: {
   });
   await notifyLines(userId, [
     "Koji — Reversal auto-open (MEXC)",
-    "✅ Limit SHORT fill แล้ว → เริ่มติดตาม TP/SL (tick ปิด market)",
+    "✅ Limit SHORT fill แล้ว → เริ่มติดตาม TP/SL (tick)",
     `[${shortContractLabel(pending.contractSymbol)}]/USDT`,
     `ราคาเข้าเฉลี่ย MEXC: ${fmtPrice(mexcAvgEntry)} USDT`,
-    `กลยุทธ์: TP1 -${pending.tp1PricePct}% ปิด ${pending.tp1PartialPct}% · TP2 -${pending.tp2PricePct}% ปิดทั้งหมด`,
-    `ครบ ${pending.maxHoldHours} ชม. → ปิดทั้งหมด · SL บังทุนตั้งหลัง TP1`,
+    `กลยุทธ์: ${REVERSAL_TP_STRATEGY_SUMMARY}`,
   ]);
   return state;
 }

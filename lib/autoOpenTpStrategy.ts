@@ -14,6 +14,10 @@ import {
   viewerStatsTpSlPlanPayload,
   type ViewerStatsTpSlPlan,
 } from "@/lib/statsTpSlPlanForUser";
+import {
+  reversalTpStrategyCacheKey,
+  simulateReversalTpStrategyProfit,
+} from "@/lib/reversalTpStrategy";
 import { simulateStatsTpSlProfit } from "@/lib/tpSlStrategySimulate";
 import type { loadTradingViewMexcSettingsFullMap } from "@/src/tradingViewCloseSettingsStore";
 
@@ -112,7 +116,9 @@ function simulateAutoOpenTpFromPack(input: {
 export function autoOpenTpStrategyCacheKey(
   plan: ViewerStatsTpSlPlan,
   holdHours: StatsStrategyProfitHorizon,
+  source?: AutoOpenOrderLogRow["source"],
 ): string {
+  if (source === "reversal") return reversalTpStrategyCacheKey(holdHours);
   return statsTpSlPlanCacheKey(viewerStatsTpSlPlanPayload(plan), holdHours);
 }
 
@@ -126,6 +132,43 @@ export function computeAutoOpenTpStrategyAtHorizon(input: {
   plan: ViewerStatsTpSlPlan;
 }): StrategyProfitByPlanEntry | null {
   const { row, holdHours } = input;
+
+  if (row.source === "reversal") {
+    if (row.pct12h == null || row.pct24h == null || row.pct48h == null) return null;
+    const { timeSec, high, low } = input.pack;
+    const iFirst = timeSec.findIndex((t) => t + KLINE_15M_SEC >= input.ac);
+    if (iFirst < 0) return null;
+    const iLast = indexRangeThrough(timeSec, KLINE_15M_SEC, iFirst, input.ac + holdHours * HOUR_SEC);
+    if (iLast < iFirst) return null;
+    const ema4h = undefined;
+    const sim = simulateReversalTpStrategyProfit({
+      side: input.side,
+      entry: input.entry,
+      high,
+      low,
+      timeSec,
+      iFirst,
+      iLast,
+      pct12h: row.pct12h,
+      pct24h: row.pct24h,
+      pct48h: row.pct48h,
+      ema4hSlopePct7d: ema4h,
+      maxHorizonHours: holdHours,
+      leverage: input.row.leverage,
+    });
+    if (!sim) return null;
+    const resolved = resolveStatsStrategyProfitOutcome({
+      profitPct: sim.profitPct,
+      exitReason: sim.exitReason,
+      leverage: input.row.leverage,
+      liquidationMetrics: { maxDrawdownPct: input.row.maxDrawdownPct ?? null },
+    });
+    return {
+      profitPct: resolved.profitPct,
+      exitReason: resolved.exitReason ?? sim.exitReason,
+    };
+  }
+
   const pctClose =
     pctAtPlanMaxHold({ ...input.plan, maxHoldHours: holdHours }, row) ??
     (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? row.pct24h : row.pct48h);
@@ -158,7 +201,7 @@ export function applyAutoOpenTpStrategyHorizon(
   plan: ViewerStatsTpSlPlan,
 ): boolean {
   if (!computed) return false;
-  const cacheKey = autoOpenTpStrategyCacheKey(plan, holdHours);
+  const cacheKey = autoOpenTpStrategyCacheKey(plan, holdHours, row.source);
   const prev = row.strategyProfitByPlan?.[cacheKey];
   const sameCached =
     prev &&
@@ -196,7 +239,7 @@ export function withAutoOpenTpStrategyDisplayFields(
 ): AutoOpenOrderLogRow {
   let out = row;
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
-    const cacheKey = autoOpenTpStrategyCacheKey(plan, holdHours);
+    const cacheKey = autoOpenTpStrategyCacheKey(plan, holdHours, row.source);
     const cached = row.strategyProfitByPlan?.[cacheKey];
     if (!cached) continue;
 
@@ -240,7 +283,7 @@ function horizonNeedsTpRecompute(
   strategyPct: number | null | undefined,
 ): boolean {
   if (pctHorizon == null || !Number.isFinite(pctHorizon)) return false;
-  const cacheKey = autoOpenTpStrategyCacheKey(plan, holdHours);
+  const cacheKey = autoOpenTpStrategyCacheKey(plan, holdHours, row.source);
   if (exitReason == null || row.strategyProfitByPlan?.[cacheKey] == null) {
     return true;
   }

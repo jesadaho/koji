@@ -92,8 +92,10 @@ import {
 import {
   enrichCandleReversalStatsWithViewerStrategyProfit,
   enrichSnowballStatsWithViewerStrategyProfit,
+  withReversalStrategyProfitDisplayFields,
   withViewerStrategyProfitDisplayFields,
 } from "./statsStrategyProfitEnrich";
+import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
 import {
   correctCandleReversalStatsOutcome,
   runCandleReversalStatsFollowUpTick,
@@ -174,7 +176,7 @@ const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
-  `Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — สัญญาณ Short ตามแผน Short · ตัวเลือก Long → SHORT (fade) สำหรับ Reversal Long 1H — gate Quality Signal: Short — ${REVERSAL_QUALITY_SIGNAL_CRITERIA} · Long 1H — ${REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA} — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry: Hybrid (EMA retest บน 15m, default EMA20) ราคา > EMA → Market, ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม. แล้วยกเลิก+ปลดล็อกวัน) · หรือ Market ตลอด — TP ใช้ tick ปิด market (ไม่วาง plan TP) · 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0`;
+  `Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — สัญญาณ Short ตามแผน Short · ตัวเลือก Long → SHORT (fade) สำหรับ Reversal Long 1H — gate Quality Signal: Short — ${REVERSAL_QUALITY_SIGNAL_CRITERIA} · Long 1H — ${REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA} — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry: Hybrid (EMA retest บน 15m, default EMA20) ราคา > EMA → Market, ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม. แล้วยกเลิก+ปลดล็อกวัน) · หรือ Market ตลอด — กลยุทธ์ TP: ${REVERSAL_TP_STRATEGY_SUMMARY} · 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0`;
 
 export function getLiffConfig() {
   return {
@@ -1041,7 +1043,7 @@ export async function liffGetCandleReversalStats(
       resolveViewerStatsTpSlPlan(telegramUserId, "reversal"),
       resolveViewerStatsTradeSizing(telegramUserId, "reversal"),
     ]);
-    viewerTpSlPlanSummary = viewerStatsTpSlPlanSummary(plan);
+    viewerTpSlPlanSummary = REVERSAL_TP_STRATEGY_SUMMARY;
     viewerTpSlPlan = viewerStatsTpSlPlanPayload(plan);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
@@ -1049,6 +1051,9 @@ export async function liffGetCandleReversalStats(
     const dirty = await enrichCandleReversalStatsWithViewerStrategyProfit(rows, plan);
     if (dirty > 0) {
       await saveCandleReversalStatsState(st);
+    }
+    for (let i = 0; i < rows.length; i++) {
+      rows[i] = withReversalStrategyProfitDisplayFields(rows[i]!);
     }
   }
   return {

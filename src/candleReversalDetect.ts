@@ -206,7 +206,7 @@ export type CandleReversal1hDetectEnv = {
   invertedDojiVolSmaPeriod: number;
   longestRedBodyLookback: number;
   longestRedBodyMinRatio: number;
-  /** high ของแท่งต้องอยู่อันดับ 1..N ในรอบ longestRedBodyLookback (ดีฟอลต์ 5) */
+  /** high ของแท่งต้องอยู่อันดับ 1..N ในรอบ longestRedBodyLookback (ดีฟอลต์ 3) */
   longestRedBodyHighRankMax: number;
   emaPeriod: number;
   /** ยอมให้ปิดเหนือ EMA ไม่เกิน X% (ม้วนลงมาหาเส้น) */
@@ -253,7 +253,7 @@ export const DEFAULT_CANDLE_REVERSAL_1H_ENV: CandleReversal1hDetectEnv = {
   invertedDojiVolSmaPeriod: 48,
   longestRedBodyLookback: 200,
   longestRedBodyMinRatio: 0.8,
-  longestRedBodyHighRankMax: 5,
+  longestRedBodyHighRankMax: 3,
   emaPeriod: 20,
   longestRedBodyEmaDistAboveMaxPct: 13,
   longestRedBodyEmaDistBelowMaxPct: 10,

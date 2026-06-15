@@ -15,6 +15,10 @@ import {
   statsStrategyProfitFromHorizonPct,
   type StatsStrategyProfitHorizon,
 } from "@/lib/statsStrategyProfitClient";
+import {
+  reversalTpStrategyCacheKey,
+  simulateReversalTpStrategyProfit,
+} from "@/lib/reversalTpStrategy";
 import { firstFollowUpKlineIndexAfterAnchorClose } from "@/lib/statsFollowUpAdverse";
 import {
   maxFavorablePctInRange,
@@ -59,6 +63,44 @@ function pctAtPlanMaxHold(
   if (h <= 24 && row.pct24h != null && Number.isFinite(row.pct24h)) return row.pct24h;
   if (row.pct48h != null && Number.isFinite(row.pct48h)) return row.pct48h;
   return null;
+}
+
+function simulateReversalFromPack(input: {
+  side: "long" | "short";
+  entry: number;
+  pack: BinanceKlinePack;
+  ac: number;
+  windowEndSec: number;
+  row: Pick<
+    CandleReversalStatsRow,
+    "pct12h" | "pct24h" | "pct48h" | "ema4hSlopePct7d"
+  >;
+  holdHours: StatsStrategyProfitHorizon;
+}): StrategyProfitByPlanEntry | null {
+  if (input.row.pct12h == null || input.row.pct24h == null || input.row.pct48h == null) {
+    return null;
+  }
+  const { timeSec, high, low } = input.pack;
+  const iFirst = firstFollowUpKlineIndexAfterAnchorClose(timeSec, input.ac);
+  if (iFirst < 0) return null;
+  const iLast = indexRangeThrough(timeSec, KLINE_15M_SEC, iFirst, input.windowEndSec);
+  if (iLast < iFirst) return null;
+  const sim = simulateReversalTpStrategyProfit({
+    side: input.side,
+    entry: input.entry,
+    high,
+    low,
+    timeSec,
+    iFirst,
+    iLast,
+    pct12h: input.row.pct12h,
+    pct24h: input.row.pct24h,
+    pct48h: input.row.pct48h,
+    ema4hSlopePct7d: input.row.ema4hSlopePct7d,
+    maxHorizonHours: input.holdHours,
+  });
+  if (!sim) return null;
+  return { profitPct: sim.profitPct, exitReason: sim.exitReason };
 }
 
 function simulateFromPack(input: {
@@ -302,16 +344,56 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
 
 export async function enrichCandleReversalStatsWithViewerStrategyProfit(
   rows: CandleReversalStatsRow[],
-  plan: ViewerStatsTpSlPlan,
+  _plan: ViewerStatsTpSlPlan,
 ): Promise<number> {
   let dirty = await refreshCandleReversal1hMaxRoiFrom15m(rows);
-  dirty += await enrichRowsWithViewerStrategyProfit({
-    rows,
-    plan,
-    anchorCloseSec: reversalAnchorCloseSec,
-    sideForRow: (row) => reversalStatsMeasureSide(row),
-    includeRow: (row) => row.signalBarTf === "1h",
-  });
+  dirty += await enrichReversalRowsStrategyProfit(rows);
+  return dirty;
+}
+
+async function enrichReversalRowsStrategyProfit(rows: CandleReversalStatsRow[]): Promise<number> {
+  const packCache = new Map<string, BinanceKlinePack | null>();
+  let dirty = 0;
+
+  for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
+    const cacheKey = reversalTpStrategyCacheKey(holdHours);
+
+    for (const row of rows) {
+      if (row.signalBarTf !== "1h") continue;
+      if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H && row.pct24h == null) continue;
+      if (holdHours === STATS_STRATEGY_PROFIT_HOLD_48H && row.pct48h == null) continue;
+      if (row.pct12h == null) continue;
+
+      const cached = row.strategyProfitByPlan?.[cacheKey];
+      if (cached) {
+        if (applyHorizonFields(row, holdHours, cacheKey, cached)) dirty += 1;
+        continue;
+      }
+
+      const ac = reversalAnchorCloseSec(row);
+      const windowEndSec = ac + holdHours * HOUR_SEC;
+      const sym = row.symbol.trim().toUpperCase();
+      const pKey = packCacheKey(sym, row.signalBarOpenSec, windowEndSec);
+      let pack = packCache.get(pKey);
+      if (pack === undefined) {
+        pack = await fetchPackForRow(sym, row.signalBarOpenSec, windowEndSec);
+        packCache.set(pKey, pack);
+      }
+      if (!pack?.timeSec.length) continue;
+
+      const computed = simulateReversalFromPack({
+        side: reversalStatsMeasureSide(row),
+        entry: row.entryPrice,
+        pack,
+        ac,
+        windowEndSec,
+        row,
+        holdHours,
+      });
+      if (applyHorizonFields(row, holdHours, cacheKey, computed)) dirty += 1;
+    }
+  }
+
   return dirty;
 }
 
@@ -326,6 +408,56 @@ export async function enrichSnowballStatsWithViewerStrategyProfit(
     sideForRow: (row) => row.side,
     includeRow: () => true,
   });
+}
+
+/** ใส่กำไรกลยุทธ์ Reversal จาก cache (ไม่ดึง Binance) */
+export function withReversalStrategyProfitDisplayFields<
+  T extends {
+    strategyProfitByPlan?: StrategyProfitByPlanMap | null;
+    strategyProfitPct?: number | null;
+    strategyExitReason?: StrategyProfitByPlanEntry["exitReason"] | null;
+    strategyProfitPct24h?: number | null;
+    strategyExitReason24h?: StrategyProfitByPlanEntry["exitReason"] | null;
+  },
+>(row: T): T {
+  let out = row;
+  for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
+    const cacheKey = reversalTpStrategyCacheKey(holdHours);
+    const cached = row.strategyProfitByPlan?.[cacheKey];
+    if (!cached) {
+      if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+        if (out.strategyProfitPct24h != null || out.strategyExitReason24h != null) {
+          out = { ...out, strategyProfitPct24h: null, strategyExitReason24h: null };
+        }
+      } else if (out.strategyProfitPct != null || out.strategyExitReason != null) {
+        out = { ...out, strategyProfitPct: null, strategyExitReason: null };
+      }
+      continue;
+    }
+    if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+      if (
+        out.strategyProfitPct24h === cached.profitPct &&
+        out.strategyExitReason24h === cached.exitReason
+      ) {
+        continue;
+      }
+      out = {
+        ...out,
+        strategyProfitPct24h: cached.profitPct,
+        strategyExitReason24h: cached.exitReason,
+      };
+    } else if (
+      out.strategyProfitPct !== cached.profitPct ||
+      out.strategyExitReason !== cached.exitReason
+    ) {
+      out = {
+        ...out,
+        strategyProfitPct: cached.profitPct,
+        strategyExitReason: cached.exitReason,
+      };
+    }
+  }
+  return out;
 }
 
 /** ใส่กำไรกลยุทธ์จาก cache ตามแผนผู้ชม (ไม่ดึง Binance) — ใช้บน GET */

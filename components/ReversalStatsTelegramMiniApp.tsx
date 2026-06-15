@@ -122,6 +122,7 @@ import {
   type ReversalMatrixFilter,
   type ReversalQualitySignalProfile,
 } from "@/lib/reversalMatrixFilters";
+import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -301,7 +302,7 @@ function ReversalStatsSection({
   showHighRank = true,
   showLowRank = false,
   adverseTitle,
-  strategyPlanTitle = statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H),
+  strategyPlanTitle = REVERSAL_TP_STRATEGY_SUMMARY,
   strategyMarginUsdt,
   strategyLeverage,
   strategyLongDynamicLeverageEnabled = false,
@@ -690,8 +691,8 @@ function ReversalStatsSection({
                 scope="col"
                 title={
                   strategyTpSlPlan
-                    ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H, strategyTpSlPlan)
-                    : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_24H)
+                    ? REVERSAL_TP_STRATEGY_SUMMARY
+                    : REVERSAL_TP_STRATEGY_SUMMARY
                 }
               >
                 กำไรกลยุทธ์ 24h
@@ -1423,11 +1424,7 @@ export default function ReversalStatsTelegramMiniApp() {
           tf="1h"
           title="สถิติ Reversal · 1H Short"
           subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
-          strategyPlanTitle={
-            payload?.viewerTpSlPlan
-              ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H, payload.viewerTpSlPlan)
-              : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H)
-          }
+          strategyPlanTitle={REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
@@ -1452,11 +1449,7 @@ export default function ReversalStatsTelegramMiniApp() {
           tf="1h"
           title="สถิติ Reversal · Long 1H (fade SHORT)"
           subtitle="สัญญาณ Long · วัดผลฝั่ง Short (fade) · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
-          strategyPlanTitle={
-            payload?.viewerTpSlPlan
-              ? statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H, payload.viewerTpSlPlan)
-              : statsStrategyProfitColumnTitle(STATS_STRATEGY_PROFIT_HOLD_48H)
-          }
+          strategyPlanTitle={REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
