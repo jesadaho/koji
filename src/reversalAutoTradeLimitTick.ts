@@ -5,6 +5,7 @@ import {
   type MexcCredentials,
   type OpenPositionRow,
 } from "./mexcFuturesClient";
+import { patchAutoOpenOrderLogLimitFillSafe } from "./autoOpenOrderLogStore";
 import { loadTradingViewMexcSettingsFullMap } from "./tradingViewCloseSettingsStore";
 import {
   bkkReversalAutoTradeDayKeyNow,
