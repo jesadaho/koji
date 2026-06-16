@@ -103,9 +103,13 @@ function snowballStatsRowNeedsHorizonFollowUpWork(row: SnowballStatsRow, nowSec:
     (row.pct24h == null && nowSec >= ac + SEC_24H) ||
     (row.pct48h == null && nowSec >= ac + SEC_48H);
   const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < ac + SEC_48H;
+  const key24 = statsStrategyProfitCacheKey(DEFAULT_STATS_TPSL_PLAN, STATS_STRATEGY_PROFIT_HOLD_24H);
+  const key48 = statsStrategyProfitCacheKey(DEFAULT_STATS_TPSL_PLAN, STATS_STRATEGY_PROFIT_HOLD_48H);
+  const has24 = row.strategyProfitByPlan?.[key24];
+  const has48 = row.strategyProfitByPlan?.[key48];
   const needsStrategyProfit =
-    (row.pct24h != null && row.strategyProfitPct24h == null) ||
-    (row.pct48h != null && row.strategyProfitPct == null);
+    (row.pct24h != null && nowSec >= ac + SEC_24H && !has24) ||
+    (row.pct48h != null && nowSec >= ac + SEC_48H && !has48);
   return pending || needs48h || needsHorizonBackfill || needsFollowUpAdverse || needsStrategyProfit;
 }
 
