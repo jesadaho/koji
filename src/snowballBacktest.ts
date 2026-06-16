@@ -18,10 +18,9 @@ import {
 import { simulateSnowballStatsFollowUp } from "./snowballBacktestFollowUp";
 import { fetchSnowballAlertMarketContextAt } from "./snowballMarketContext";
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
+import { classifySnowballGradeWithFallback } from "./snowballCompositeGrade";
 import {
-  classifySnowballTrendGrade,
   snowballTrendGradeActionPlan,
-  snowballTrendGradeToDisplay,
 } from "./snowballTrendGrade";
 import { snowballStatsSignalDedupeKey, type AppendSnowballStatsInput } from "./snowballStatsStore";
 
@@ -135,18 +134,26 @@ async function processHit(
       : await fetchGreenDaysBeforeSignalBar(symbol, hit.signalBarOpenSec, snowTf);
 
   if (hit.alertSide === "long") {
-    const grade = classifySnowballTrendGrade({
+    const composite = classifySnowballGradeWithFallback({
       alertSide: "long",
       ema4hSlopePct7d: mktCtx.ema4hSlopePct7d,
       ema1dSlopePct7d: mktCtx.ema1dSlopePct7d,
       btcEma4hSlopePct7d: mktCtx.btcEma4hSlopePct7d,
       greenDaysBeforeSignal: greenDays,
+      signalBarTf: snowTf,
+      signalVolVsSma: hit.statsInput.signalVolVsSma,
+      swing200Ok: hit.statsInput.swing200Ok,
+      structureTier: hit.statsInput.structureTier,
+      signalMaxDdPct: hit.statsInput.signalMaxDdPct,
     });
+    const grade = composite.baseTier;
     hit.statsInput.qualityTier = grade;
     hit.statsInput.alertQualityTier = grade;
-    hit.statsInput.displayGrade = snowballTrendGradeToDisplay(grade);
+    hit.statsInput.displayGrade = composite.display;
     hit.statsInput.actionPlan = snowballTrendGradeActionPlan(grade);
     hit.statsInput.momentumFailGradeF = grade === "f";
+    if (composite.dangerous) hit.statsInput.gradeDangerous = true;
+    else delete hit.statsInput.gradeDangerous;
   }
 
   const appendInput: AppendSnowballStatsInput = {

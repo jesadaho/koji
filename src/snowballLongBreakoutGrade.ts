@@ -244,6 +244,7 @@ function resolveCompositeGradeResult(
     vahOk: input.vahOk,
     structureTier: classifyLongStructureTier(input.swing48, input.swing200, input.vahOk),
     signalMaxDdPct,
+    signalVolVsSma: input.signalVolVsSma,
   });
 }
 

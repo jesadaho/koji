@@ -1,9 +1,11 @@
 /**
  * Snowball trend grade — S / A / B / C / F จาก EMA slope + เขียว (LONG)
  * 4h LONG: + (HH200+VAH) และ ⚠️ (Max DD>7%) เป็น modifier ใน composite
+ * 4h LONG S/A/B: ต้อง Vol×SMA ≥ 2× (ดู snowballCompositeGrade)
  */
 
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
+import { SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C } from "./snowballLongGrade4hPipeline";
 
 export type SnowballTrendGrade = "s" | "a" | "b" | "c" | "f";
 
@@ -168,15 +170,16 @@ export type SnowballTrendGradeFilter =
 export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDisplay): string {
   const base = grade.endsWith("+") ? grade.slice(0, -1) : grade;
   const plusNote = grade.endsWith("+") ? " · HH200+VAH" : "";
+  const sabVolNote = ` · 4h Long: Vol×SMA ≥ ${SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C}×`;
   if (base === "F") return `${SNOWBALL_TREND_GRADE_F_CRITERIA}${plusNote}`;
   if (base === "S") {
-    return `EMA4h > ${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_S_GREEN_MAX}${plusNote}`;
+    return `EMA4h > ${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_S_GREEN_MAX}${sabVolNote}${plusNote}`;
   }
   if (base === "A") {
-    return `EMA4h > ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX}${plusNote}`;
+    return `EMA4h > ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX}${sabVolNote}${plusNote}`;
   }
   if (base === "B") {
-    return `LONG เขียว > ${SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE} วัน${plusNote}`;
+    return `LONG เขียว > ${SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE} วัน${sabVolNote}${plusNote}`;
   }
   if (base === "C") return `fallback (นอกเหนือ F / S / A / B)${plusNote}`;
   return `นอกเหนือเกณฑ์ F / S / A / B / C`;

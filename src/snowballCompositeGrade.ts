@@ -7,6 +7,10 @@
 export const SNOWBALL_GRADE_DANGEROUS_DISPLAY_SUFFIX = " ⚠️";
 
 import type { SnowballLongStructureTier } from "./snowballLongBreakoutGrade";
+import {
+  SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C,
+  snowballVolSmaMeetsGradeCMin,
+} from "./snowballLongGrade4hPipeline";
 import { snowballTrendMomentumMaxDrawbackPct } from "./snowballTrendMomentumMetrics";
 import {
   classifySnowballTrendGrade,
@@ -34,7 +38,28 @@ export type SnowballCompositeGradeInput = ClassifySnowballTrendGradeInput & {
   vahOk?: boolean | null;
   structureTier?: SnowballLongStructureTier | null;
   signalMaxDdPct?: number | null;
+  /** Vol แท่งสัญญาณ ÷ SMA — 4h Long ต้อง ≥ 2× ถึงจะได้ S/A/B */
+  signalVolVsSma?: number | null;
 };
+
+/** Vol×SMA ขั้นต่ำสำหรับเกรด S/A/B บน 4h Long */
+export const SNOWBALL_COMPOSITE_SAB_VOL_VS_SMA_MIN = SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C;
+
+export function snowballVolSmaMeetsSabGradeMin(
+  signalVolVsSma: number | null | undefined,
+): boolean {
+  return snowballVolSmaMeetsGradeCMin(signalVolVsSma);
+}
+
+/** S/A/B ที่ Vol×SMA ไม่ถึง → cap เป็น C (F/C ไม่เปลี่ยน) */
+export function applySnowballVolSmaSabCap(
+  baseTier: SnowballTrendGrade,
+  signalVolVsSma: number | null | undefined,
+): SnowballTrendGrade {
+  if (baseTier !== "s" && baseTier !== "a" && baseTier !== "b") return baseTier;
+  if (snowballVolSmaMeetsSabGradeMin(signalVolVsSma)) return baseTier;
+  return "c";
+}
 
 /** S1 — HH200 ผ่าน (feed-time หรือ stats row) */
 export function snowballS1Hh200Ok(input: {
@@ -136,7 +161,8 @@ function result(
 export function classifySnowballCompositeGrade(
   input: SnowballCompositeGradeInput,
 ): SnowballCompositeGradeResult {
-  const baseTier = classifySnowballTrendGrade(input);
+  const rawBase = classifySnowballTrendGrade(input);
+  const baseTier = applySnowballVolSmaSabCap(rawBase, input.signalVolVsSma);
   const plus = snowballS1Hh200AndVahOk(input);
   const dangerous = snowballS3MaxDdDangerous(input.signalMaxDdPct);
   const display = snowballTrendGradeWithPlus(baseTier, plus);
