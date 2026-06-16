@@ -231,9 +231,11 @@ async function backtestSymbol(
       pack15mMomentum: pack15mMom,
       state,
       trendGradeInput: {
+        ema1hSlopePct7d: mktCtx.ema1hSlopePct7d,
         ema4hSlopePct7d: mktCtx.ema4hSlopePct7d,
         ema1dSlopePct7d: mktCtx.ema1dSlopePct7d,
         btcEma4hSlopePct7d: mktCtx.btcEma4hSlopePct7d,
+        btcEma1dSlopePct7d: mktCtx.btcEma1dSlopePct7d,
         greenDaysBeforeSignal: greenDays,
       },
     });

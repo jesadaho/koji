@@ -60,9 +60,11 @@ export type SnowballBacktestFeedState = {
 };
 
 export type SnowballDetectTrendGradeInput = {
+  ema1hSlopePct7d: number | null;
   ema4hSlopePct7d: number | null;
   ema1dSlopePct7d: number | null;
   btcEma4hSlopePct7d: number | null;
+  btcEma1dSlopePct7d: number | null;
   greenDaysBeforeSignal: number | null;
 };
 
@@ -474,9 +476,11 @@ function detectSnowballLongClosed(
     gradeDPlusNearMissVolumeEnabled: snowballGradeBNearMissVolumeEnabled(),
     trendGradeInput: {
       alertSide: "long",
+      ema1hSlopePct7d: trendGradeInput?.ema1hSlopePct7d ?? null,
       ema4hSlopePct7d: trendGradeInput?.ema4hSlopePct7d ?? null,
       ema1dSlopePct7d: trendGradeInput?.ema1dSlopePct7d ?? null,
       btcEma4hSlopePct7d: trendGradeInput?.btcEma4hSlopePct7d ?? null,
+      btcEma1dSlopePct7d: trendGradeInput?.btcEma1dSlopePct7d ?? null,
       greenDaysBeforeSignal: trendGradeInput?.greenDaysBeforeSignal ?? null,
     },
   });
