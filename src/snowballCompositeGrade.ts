@@ -163,12 +163,12 @@ function result(
 export function classifySnowballCompositeGrade(
   input: SnowballCompositeGradeInput,
 ): SnowballCompositeGradeResult {
-  const overextended = snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d);
   const rawBase = classifySnowballTrendGrade(input);
-  const baseTier = overextended ? "c" : applySnowballVolSmaSabCap(rawBase, input.signalVolVsSma);
-  const plus = !overextended && snowballS1Hh200AndVahOk(input);
+  const baseTier = applySnowballVolSmaSabCap(rawBase, input.signalVolVsSma);
+  const ema1hC = snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d);
+  const plus = !ema1hC && snowballS1Hh200AndVahOk(input);
   const dangerous = snowballS3MaxDdDangerous(input.signalMaxDdPct);
-  const display = overextended ? "C" : snowballTrendGradeWithPlus(baseTier, plus);
+  const display = snowballTrendGradeWithPlus(baseTier, plus);
   return result(baseTier, display, dangerous);
 }
 
@@ -178,10 +178,9 @@ export function classifySnowballGradeWithFallback(
 ): SnowballCompositeGradeResult {
   if (!snowballCompositeGradeApplies(input)) {
     const baseTier = classifySnowballTrendGrade(input);
-    const overextended = snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d);
     return {
       baseTier,
-      display: overextended ? "C" : snowballTrendGradeToDisplay(baseTier),
+      display: snowballTrendGradeToDisplay(baseTier),
       dangerous: false,
       composite: false,
     };
@@ -224,7 +223,10 @@ export function snowballCompositeGradeFootnote(input: {
     (input.alertSide ?? "long") !== "bear" ? ` · เขียว ${green}` : "";
   const psarPart =
     input.psar4hTrend === "up" ? " · SAR4h ↑" : input.psar4hTrend === "down" ? " · SAR4h ↓" : "";
-  const ema1hCapPart = snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d) ? " · EMA1h overextended→C" : "";
+  const ema1hCapPart =
+    snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d) && r.baseTier === "c"
+      ? " · EMA1h overextended (C)"
+      : "";
   const gradeLabel = snowballTrendGradeDisplayWithDangerous(r.display, r.dangerous);
   const plusPart = r.composite
     ? ` · + ${snowballS1Hh200AndVahOk(input) ? "✓" : "—"} (HH200+VAH)`

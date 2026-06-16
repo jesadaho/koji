@@ -12,6 +12,7 @@ import {
   SNOWBALL_TREND_GRADE_A_GREEN_MAX,
   SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA,
+  SNOWBALL_TREND_GRADE_C_FALLBACK_CRITERIA,
   SNOWBALL_TREND_GRADE_F_BTC_EMA1D_MAX_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_F_CRITERIA,
@@ -448,14 +449,14 @@ function snowballTrendGradeChecklistItems(
 
   const ema1hCapItem: SnowballGradeChecklistItem = {
     id: "structure",
-    title: "EMA1h slope 7d",
+    title: "EMA1h slope 7d (เกรด C)",
     status:
       ema1h != null && Number.isFinite(ema1h)
         ? ema1hOverextended
           ? "fail"
           : "pass"
         : "unknown",
-    detail: `${fmtSlope(ema1h)} · ${SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA}`,
+    detail: `${fmtSlope(ema1h)} · ${SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA} (ตรวจก่อน F)`,
   };
 
   const volSabItem: SnowballGradeChecklistItem | null = sabGates
@@ -502,7 +503,15 @@ function snowballTrendGradeChecklistItems(
       title: `Trend Grade ${side === "bear" ? "SHORT" : "LONG"}`,
       status: grade ? "pass" : "unknown",
       detail: grade
-        ? `เกรด ${snowballTrendGradeShortLabel(grade)}${ema1hOverextended ? " (EMA1h→C)" : sabGates && !sabOk ? " (Vol/SAR ไม่ครบ)" : ""}`
+        ? `เกรด ${snowballTrendGradeShortLabel(grade)}${
+            ema1hOverextended
+              ? " (EMA1h→C)"
+              : grade === "c"
+                ? ` (${SNOWBALL_TREND_GRADE_C_FALLBACK_CRITERIA})`
+                : sabGates && !sabOk
+                  ? " (Vol/SAR ไม่ครบ)"
+                  : ""
+          }`
         : "—",
     },
     ema1hCapItem,
