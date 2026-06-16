@@ -98,7 +98,7 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeRulesLong?: SnowballAutoTradeGradeRulesMap;
   /** สัญญาณ Snowball BEAR (SUPER ฯลฯ) */
   snowballAutoTradeRulesBear?: SnowballAutoTradeGradeRulesMap;
-  /** สัญญาณ LONG + Quality Signal (EMA4h > 15% · เขียว ≤ 3 วัน) → เปิด Long ทุกเกรด (ข้าม matrix) */
+  /** สัญญาณ LONG + Quality Signal (EMA4h > 10% · Funding > −0.10%) → เปิด Long ทุกเกรด (ข้าม matrix) */
   snowballAutoTradeGreen2DaysLongAllGrades?: boolean;
   /** เกรดที่เปิด ✨ Quality Signal → Long — ว่าง = ปิด */
   snowballAutoTradeQualitySignalLongGrades?: SnowballAutoTradeGradeKey[];

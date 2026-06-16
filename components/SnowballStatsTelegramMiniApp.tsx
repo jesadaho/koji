@@ -37,6 +37,7 @@ import type { SnowballMatrixFilter } from "@/lib/snowballMatrixFilters";
 import type { SnowballBtcPsarFilter } from "@/lib/snowballBtcPsarFilter";
 import type { SnowballStructureFilter } from "@/lib/snowballStructureFilter";
 import type { SnowballBarRange2Filter } from "@/lib/snowballBarRange2Filter";
+import type { SnowballBarRangePrevFilter } from "@/lib/snowballBarRangePrevFilter";
 import type { SnowballEfficiencyScoreFilter } from "@/lib/snowballEfficiencyScoreFilter";
 import type { SnowballSignalMaxDdFilter } from "@/lib/snowballSignalMaxDdFilter";
 import type { SnowballGreenDaysFilter, SnowballFundingFilter, SnowballSideFilter, SnowballVolRankFilter, SnowballVolVsSmaFilter } from "@/lib/snowballStatsClient";
@@ -191,6 +192,7 @@ export default function SnowballStatsTelegramMiniApp() {
   const [gradeFilter, setGradeFilter] = useState<SnowballGradeFilter>("all");
   const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
+  const [barRangePrevFilter, setBarRangePrevFilter] = useState<SnowballBarRangePrevFilter>("all");
   const [barRange2Filter, setBarRange2Filter] = useState<SnowballBarRange2Filter>("all");
   const [efficiencyFilter, setEfficiencyFilter] = useState<SnowballEfficiencyScoreFilter>("all");
   const [signalMaxDdFilter, setSignalMaxDdFilter] = useState<SnowballSignalMaxDdFilter>("all");
@@ -217,6 +219,7 @@ export default function SnowballStatsTelegramMiniApp() {
       gradeFilter,
       dowFilter,
       volVsSmaFilter,
+      barRangePrevFilter,
       barRange2Filter,
       efficiencyFilter,
       signalMaxDdFilter,
@@ -239,6 +242,7 @@ export default function SnowballStatsTelegramMiniApp() {
       gradeFilter,
       dowFilter,
       volVsSmaFilter,
+      barRangePrevFilter,
       barRange2Filter,
       efficiencyFilter,
       signalMaxDdFilter,
@@ -623,6 +627,7 @@ export default function SnowballStatsTelegramMiniApp() {
           onGradeFilterChange={setGradeFilter}
           onDowFilterChange={setDowFilter}
           onVolVsSmaFilterChange={setVolVsSmaFilter}
+          onBarRangePrevFilterChange={setBarRangePrevFilter}
           onBarRange2FilterChange={setBarRange2Filter}
           onEfficiencyFilterChange={setEfficiencyFilter}
           onSignalMaxDdFilterChange={setSignalMaxDdFilter}

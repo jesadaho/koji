@@ -1725,7 +1725,7 @@ function buildSnowballTripleCheckMessage(
     sustainedBuyingPressure?: boolean;
     /** เปิดแท่งที่ใช้แสดงเวลาปิดในหัวข้อ (two-bar = แท่ง confirm) */
     alertClosedBarOpenSec?: number;
-    /** ผ่านเกณฑ์ Quality Signal (EMA4h > 15% · เขียว ≤ 3 วัน) */
+    /** ผ่านเกณฑ์ Quality Signal (EMA4h > 10% · Funding > −0.10%) */
     qualitySignal?: boolean;
   }
 ): string {
@@ -3469,7 +3469,7 @@ export async function runPublicIndicatorFeedInternal(
 
         const longQualitySignal = snowballMatchesQualitySignal({
           ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
-          greenDaysBeforeSignal: longGreenDaysForAlert,
+          fundingRate: longMktCtxForAlert?.fundingRate ?? null,
         });
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bull", signalBarOpenSec, {
@@ -4103,7 +4103,7 @@ export async function runPublicIndicatorFeedInternal(
         ]);
         const bearQualitySignal = snowballMatchesQualitySignal({
           ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
-          greenDaysBeforeSignal: bearGreenDaysForAlert,
+          fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
         });
         const bearVolSnapAuto = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
         const bearSignalVolVsSma =

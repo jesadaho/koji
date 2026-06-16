@@ -3,7 +3,11 @@
  * — Quality Signal / The Snipers / The Whale Riders / High Winrate
  */
 
-import { snowballStatsVolVsSmaDisplay, type SnowballStatsRow } from "@/lib/snowballStatsClient";
+import {
+  snowballFundingRateGtNeg010Pct,
+  snowballStatsVolVsSmaDisplay,
+  type SnowballStatsRow,
+} from "@/lib/snowballStatsClient";
 import {
   snowballEma4hSlopeMatchesTrendGradeF,
   SNOWBALL_TREND_GRADE_F_CRITERIA,
@@ -17,10 +21,9 @@ export type SnowballMatrixFilter =
   | "whaleRiders"
   | "highWinrate";
 
-export const SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT = 15;
-export const SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS = 3;
+export const SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT = 10;
 
-export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}% · เขียว ≤ ${SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS} วัน`;
+export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}% · Funding > −0.10%`;
 
 export const SNOWBALL_QUALITY_SHORT_SIGNAL_CRITERIA = `Grade F — ${SNOWBALL_TREND_GRADE_F_CRITERIA}`;
 
@@ -149,16 +152,16 @@ function greenDaysBeforeSignalAtMost(
   return n != null && Number.isFinite(n) && n >= 0 && Math.floor(n) <= maxDays;
 }
 
-/** ✨ Quality Signal — EMA(12) 4h slope 7 วัน > 15% · Day1 เขียวติดก่อนสัญญาณ ≤ 3 วัน */
+/** ✨ Quality Signal — EMA(12) 4h slope 7 วัน > 10% · Funding rate > −0.10% */
 export function snowballMatchesQualitySignal(
-  row: Pick<SnowballStatsRow, "ema4hSlopePct7d" | "greenDaysBeforeSignal">,
+  row: Pick<SnowballStatsRow, "ema4hSlopePct7d" | "fundingRate">,
 ): boolean {
   const pct = row.ema4hSlopePct7d;
   return (
     pct != null &&
     Number.isFinite(pct) &&
     pct > SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT &&
-    greenDaysBeforeSignalAtMost(row, SNOWBALL_QUALITY_SIGNAL_MAX_GREEN_DAYS)
+    snowballFundingRateGtNeg010Pct(row.fundingRate)
   );
 }
 

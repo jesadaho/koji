@@ -157,7 +157,7 @@ function resolveSnowballAutoOpenSide(
   const shortSignalOn = snowballShortSignalShortEnabled(row);
   const qsMatch = snowballMatchesQualitySignal({
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
-    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
+    fundingRate: input.fundingRate ?? null,
   });
   const qsGradeAllowed = qsOn && snowballQualitySignalLongGradeAllowed(row, gradeKey);
   const gradeFMatch = snowballAutoOpenMatchesQualityShortSignal(input);
@@ -317,7 +317,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
 
   const qualitySignalMatch = snowballMatchesQualitySignal({
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
-    greenDaysBeforeSignal: input.greenDaysBeforeSignal ?? null,
+    fundingRate: input.fundingRate ?? null,
   });
   const gradeFFadeMatch =
     input.alertSide !== "bear" &&

@@ -301,15 +301,11 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
           Number.isFinite(volSmaConfirm) && volSmaConfirm > 0 ? volSmaConfirm : null;
         const volRankLookback = Math.min(SNOWBALL_CONFIRM_VOL_SMA_PERIOD, idx + 1);
         const volRank = volumeRankInWindow(volume, Math.max(0, idx - (volRankLookback - 1)), idx, idx);
-        const greenDaysForConfirm =
-          item.side === "long"
-            ? await fetchGreenDaysBeforeSignalBar(item.symbol, item.signalBarOpenSec, item.snowTf)
-            : null;
         const confirmQualitySignal =
           item.side === "long" &&
           snowballMatchesQualitySignal({
             ema4hSlopePct7d: item.statsEma4hSlopePct7d ?? null,
-            greenDaysBeforeSignal: greenDaysForConfirm,
+            fundingRate: item.statsFundingRate ?? null,
           });
         const text = buildConfirmedMessage({
           item,
