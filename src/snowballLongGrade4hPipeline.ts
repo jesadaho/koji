@@ -24,7 +24,7 @@ export function snowballVolSmaMeetsGradeCMin(signalVolVsSma: number | null | und
   return (
     signalVolVsSma != null &&
     Number.isFinite(signalVolVsSma) &&
-    signalVolVsSma >= SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C
+    signalVolVsSma > SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C
   );
 }
 

@@ -166,11 +166,15 @@ export function snowballRowMatchesQualitySignalMatrix(row: SnowballStatsRow): bo
   return snowballMatchesQualitySignal(row);
 }
 
-/** ✨ Quality Short Signal — ตรงเกรด F (EMA4h + EMA1d) */
+/** ✨ Quality Short Signal — ตรงเกรด F (EMA4h + EMA1d + BTC EMA1d) */
 export function snowballMatchesQualityShortSignal(
-  row: Pick<SnowballStatsRow, "ema4hSlopePct7d" | "ema1dSlopePct7d">,
+  row: Pick<SnowballStatsRow, "ema4hSlopePct7d" | "ema1dSlopePct7d" | "btcEma1dSlopePct7d">,
 ): boolean {
-  return snowballEma4hSlopeMatchesTrendGradeF(row.ema4hSlopePct7d, row.ema1dSlopePct7d);
+  return snowballEma4hSlopeMatchesTrendGradeF(
+    row.ema4hSlopePct7d,
+    row.ema1dSlopePct7d,
+    row.btcEma1dSlopePct7d,
+  );
 }
 
 export function snowballRowMatchesQualityShortSignalMatrix(row: SnowballStatsRow): boolean {

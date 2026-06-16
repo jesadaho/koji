@@ -14,6 +14,7 @@ import {
 import { snowballTrendMomentumMaxDrawbackPct } from "./snowballTrendMomentumMetrics";
 import {
   classifySnowballTrendGrade,
+  snowballEma1hSlopeForcesGradeC,
   snowballTrendActionPlanLabel,
   snowballTrendGradeActionPlan,
   snowballTrendGradeToDisplay,
@@ -161,11 +162,12 @@ function result(
 export function classifySnowballCompositeGrade(
   input: SnowballCompositeGradeInput,
 ): SnowballCompositeGradeResult {
+  const overextended = snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d);
   const rawBase = classifySnowballTrendGrade(input);
-  const baseTier = applySnowballVolSmaSabCap(rawBase, input.signalVolVsSma);
-  const plus = snowballS1Hh200AndVahOk(input);
+  const baseTier = overextended ? "c" : applySnowballVolSmaSabCap(rawBase, input.signalVolVsSma);
+  const plus = !overextended && snowballS1Hh200AndVahOk(input);
   const dangerous = snowballS3MaxDdDangerous(input.signalMaxDdPct);
-  const display = snowballTrendGradeWithPlus(baseTier, plus);
+  const display = overextended ? "C" : snowballTrendGradeWithPlus(baseTier, plus);
   return result(baseTier, display, dangerous);
 }
 
@@ -175,9 +177,10 @@ export function classifySnowballGradeWithFallback(
 ): SnowballCompositeGradeResult {
   if (!snowballCompositeGradeApplies(input)) {
     const baseTier = classifySnowballTrendGrade(input);
+    const overextended = snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d);
     return {
       baseTier,
-      display: snowballTrendGradeToDisplay(baseTier),
+      display: overextended ? "C" : snowballTrendGradeToDisplay(baseTier),
       dangerous: false,
       composite: false,
     };
@@ -193,9 +196,12 @@ function fmtSlopePct(v: number | null | undefined): string {
 export function snowballCompositeGradeFootnote(input: {
   result: SnowballCompositeGradeResult;
   alertSide?: ClassifySnowballTrendGradeInput["alertSide"];
+  ema1hSlopePct7d?: number | null;
   ema4hSlopePct7d?: number | null;
   ema1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;
+  btcEma1dSlopePct7d?: number | null;
+  psar4hTrend?: ClassifySnowballTrendGradeInput["psar4hTrend"];
   greenDaysBeforeSignal?: number | null;
   swing200Ok?: boolean | null;
   vahOk?: boolean | null;
@@ -203,9 +209,11 @@ export function snowballCompositeGradeFootnote(input: {
   signalMaxDdPct?: number | null;
 }): string {
   const { result: r } = input;
+  const ema1h = fmtSlopePct(input.ema1hSlopePct7d);
   const ema4h = fmtSlopePct(input.ema4hSlopePct7d);
   const ema1d = fmtSlopePct(input.ema1dSlopePct7d);
   const btc4h = fmtSlopePct(input.btcEma4hSlopePct7d);
+  const btc1d = fmtSlopePct(input.btcEma1dSlopePct7d);
   const green =
     input.greenDaysBeforeSignal != null && Number.isFinite(input.greenDaysBeforeSignal)
       ? String(Math.floor(input.greenDaysBeforeSignal))
@@ -213,6 +221,9 @@ export function snowballCompositeGradeFootnote(input: {
   const plan = snowballTrendActionPlanLabel(snowballTrendGradeActionPlan(r.baseTier));
   const greenPart =
     (input.alertSide ?? "long") !== "bear" ? ` · เขียว ${green}` : "";
+  const psarPart =
+    input.psar4hTrend === "up" ? " · SAR4h ↑" : input.psar4hTrend === "down" ? " · SAR4h ↓" : "";
+  const ema1hCapPart = snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d) ? " · EMA1h overextended→C" : "";
   const gradeLabel = snowballTrendGradeDisplayWithDangerous(r.display, r.dangerous);
   const plusPart = r.composite
     ? ` · + ${snowballS1Hh200AndVahOk(input) ? "✓" : "—"} (HH200+VAH)`
@@ -222,7 +233,7 @@ export function snowballCompositeGradeFootnote(input: {
       ? `${input.signalMaxDdPct.toFixed(2)}%`
       : "—";
   const ddPart = r.composite && r.dangerous ? ` · Max DD ${dd}` : "";
-  return `📎 Grade ${gradeLabel}: EMA4h ${ema4h}${greenPart} · EMA1d ${ema1d} · BTC∠4h ${btc4h}${plusPart}${ddPart} · ${plan}`;
+  return `📎 Grade ${gradeLabel}: EMA1h ${ema1h} · EMA4h ${ema4h}${greenPart} · EMA1d ${ema1d} · BTC∠4h ${btc4h} · BTC∠1d ${btc1d}${psarPart}${ema1hCapPart}${plusPart}${ddPart} · ${plan}`;
 }
 
 /** ตัด suffix ⚠️ / legacy (D) ก่อนเทียบ filter */

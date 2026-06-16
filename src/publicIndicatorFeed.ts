@@ -3337,10 +3337,16 @@ export async function runPublicIndicatorFeedInternal(
         ]);
         const longTrendGradeInput = {
           alertSide: "long" as const,
+          ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
           ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
           ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
           btcEma4hSlopePct7d: longMktCtxForAlert?.btcEma4hSlopePct7d ?? null,
+          btcEma1dSlopePct7d: longMktCtxForAlert?.btcEma1dSlopePct7d ?? null,
           greenDaysBeforeSignal: longGreenDaysForAlert,
+          signalVolVsSma:
+            typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
+          psar4hTrend: longMktCtxForAlert?.psar4hTrend ?? null,
+          signalBarTf: snowTf,
         };
 
         const gradeResolution: SnowballLongGradeResolution = !intrabar
@@ -3569,6 +3575,7 @@ export async function runPublicIndicatorFeedInternal(
             const longGradeFFade = snowballMatchesQualityShortSignal({
               ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
               ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
+              btcEma1dSlopePct7d: longMktCtxForAlert?.btcEma1dSlopePct7d ?? null,
             });
             const runLongAutoOpenNow =
               !intrabar &&
@@ -3610,6 +3617,7 @@ export async function runPublicIndicatorFeedInternal(
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
                   ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
+                  btcEma1dSlopePct7d: longMktCtxForAlert?.btcEma1dSlopePct7d ?? null,
                   barRangePctSignal: longVolSnapAuto.barRangePctSignal,
                   signalVolVsSma: longSignalVolVsSma,
                   btcEma4hSlopePct7d: longMktCtxForAlert?.btcEma4hSlopePct7d ?? null,
@@ -4104,9 +4112,11 @@ export async function runPublicIndicatorFeedInternal(
             : null;
         const bearTrendGrade = classifySnowballTrendGrade({
           alertSide: "bear",
+          ema1hSlopePct7d: bearMktCtxForAlert?.ema1hSlopePct7d ?? null,
           ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
           ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
           btcEma4hSlopePct7d: bearMktCtxForAlert?.btcEma4hSlopePct7d ?? null,
+          btcEma1dSlopePct7d: bearMktCtxForAlert?.btcEma1dSlopePct7d ?? null,
         });
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", signalBarOpenSec, {

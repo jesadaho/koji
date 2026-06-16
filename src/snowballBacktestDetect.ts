@@ -665,9 +665,11 @@ function detectSnowballBearClosed(
 
   const bearTrendGrade = classifySnowballTrendGrade({
     alertSide: "bear",
+    ema1hSlopePct7d: trendGradeInput?.ema1hSlopePct7d ?? null,
     ema4hSlopePct7d: trendGradeInput?.ema4hSlopePct7d ?? null,
     ema1dSlopePct7d: trendGradeInput?.ema1dSlopePct7d ?? null,
     btcEma4hSlopePct7d: trendGradeInput?.btcEma4hSlopePct7d ?? null,
+    btcEma1dSlopePct7d: trendGradeInput?.btcEma1dSlopePct7d ?? null,
   });
 
   const entryPx = twoBarInline ? c15[iConf]! : clE!;

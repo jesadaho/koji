@@ -136,12 +136,15 @@ async function processHit(
   if (hit.alertSide === "long") {
     const composite = classifySnowballGradeWithFallback({
       alertSide: "long",
+      ema1hSlopePct7d: mktCtx.ema1hSlopePct7d,
       ema4hSlopePct7d: mktCtx.ema4hSlopePct7d,
       ema1dSlopePct7d: mktCtx.ema1dSlopePct7d,
       btcEma4hSlopePct7d: mktCtx.btcEma4hSlopePct7d,
+      btcEma1dSlopePct7d: mktCtx.btcEma1dSlopePct7d,
       greenDaysBeforeSignal: greenDays,
       signalBarTf: snowTf,
       signalVolVsSma: hit.statsInput.signalVolVsSma,
+      psar4hTrend: mktCtx.psar4hTrend,
       swing200Ok: hit.statsInput.swing200Ok,
       structureTier: hit.statsInput.structureTier,
       signalMaxDdPct: hit.statsInput.signalMaxDdPct,

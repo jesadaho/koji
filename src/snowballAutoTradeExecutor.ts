@@ -112,10 +112,12 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
 function snowballAutoOpenMatchesQualityShortSignal(input: {
   ema4hSlopePct7d?: number | null;
   ema1dSlopePct7d?: number | null;
+  btcEma1dSlopePct7d?: number | null;
 }): boolean {
   return snowballMatchesQualityShortSignal({
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
     ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
+    btcEma1dSlopePct7d: input.btcEma1dSlopePct7d ?? null,
   });
 }
 
@@ -302,6 +304,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   fundingRate?: number | null;
   ema4hSlopePct7d?: number | null;
   ema1dSlopePct7d?: number | null;
+  btcEma1dSlopePct7d?: number | null;
   barRangePctSignal?: number | null;
   signalVolVsSma?: number | null;
   confirmVolVsSma?: number | null;
@@ -321,6 +324,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     snowballAutoOpenMatchesQualityShortSignal({
       ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
       ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
+      btcEma1dSlopePct7d: input.btcEma1dSlopePct7d ?? null,
     });
   const isBearAlert = input.alertSide === "bear";
 
