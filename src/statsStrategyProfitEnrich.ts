@@ -21,6 +21,7 @@ import {
 } from "@/lib/reversalTpStrategy";
 import { firstFollowUpKlineIndexAfterAnchorClose } from "@/lib/statsFollowUpAdverse";
 import {
+  DEFAULT_STATS_TPSL_PLAN,
   maxFavorablePctInRange,
   simulateStatsTpSlProfit,
   tpExitExceedsMaxRoi,
@@ -474,7 +475,8 @@ export function withViewerStrategyProfitDisplayFields<
   let out = row;
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
     const cacheKey = statsStrategyProfitCacheKey(plan, holdHours);
-    const cached = row.strategyProfitByPlan?.[cacheKey];
+    const fallbackKey = statsStrategyProfitCacheKey(DEFAULT_STATS_TPSL_PLAN, holdHours);
+    const cached = row.strategyProfitByPlan?.[cacheKey] ?? row.strategyProfitByPlan?.[fallbackKey];
     if (!cached) {
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
         if (out.strategyProfitPct24h != null || out.strategyExitReason24h != null) {
