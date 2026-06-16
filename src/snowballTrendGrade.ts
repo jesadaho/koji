@@ -117,7 +117,7 @@ function fundingRateGtNeg010(fundingRate?: number | null): boolean {
   return fr > SNOWBALL_TREND_GRADE_FUNDING_MIN_DECIMAL;
 }
 
-function barRangePrevInGradeARange(barRangePctPrev?: number | null): boolean {
+function barRangePrevInR1020Range(barRangePctPrev?: number | null): boolean {
   const raw = barRangePctPrev;
   return (
     raw != null &&
@@ -127,22 +127,27 @@ function barRangePrevInGradeARange(barRangePctPrev?: number | null): boolean {
   );
 }
 
-function meetsGradeBBase(input: ClassifySnowballTrendGradeInput): boolean {
+function meetsGradeABase(input: ClassifySnowballTrendGradeInput): boolean {
   const pct = input.ema4hSlopePct7d;
   return finitePct(pct) && pct > SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE && fundingRateGtNeg010(input.fundingRate);
 }
 
 function matchesGradeA(input: ClassifySnowballTrendGradeInput): boolean {
-  return meetsGradeBBase(input) && barRangePrevInGradeARange(input.barRangePctPrev);
+  return meetsGradeABase(input) && barRangePrevInR1020Range(input.barRangePctPrev);
 }
 
 function matchesGradeB(input: ClassifySnowballTrendGradeInput): boolean {
-  return meetsGradeBBase(input);
+  const pct = input.ema4hSlopePct7d;
+  return (
+    finitePct(pct) &&
+    pct < SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE &&
+    barRangePrevInR1020Range(input.barRangePctPrev)
+  );
 }
 
 export const SNOWBALL_TREND_GRADE_A_CRITERIA = `EMA4h > ${SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE}% · Funding > −0.10% · R% ก่อน ${SNOWBALL_TREND_GRADE_A_R_PREV_MIN}–${SNOWBALL_TREND_GRADE_A_R_PREV_MAX}%`;
 
-export const SNOWBALL_TREND_GRADE_B_CRITERIA = `EMA4h > ${SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE}% · Funding > −0.10%`;
+export const SNOWBALL_TREND_GRADE_B_CRITERIA = `EMA4h < ${SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE}% · R% ก่อน ${SNOWBALL_TREND_GRADE_A_R_PREV_MIN}–${SNOWBALL_TREND_GRADE_A_R_PREV_MAX}%`;
 
 export const SNOWBALL_TREND_GRADE_F_CRITERIA = "fallback";
 
