@@ -852,7 +852,8 @@ export async function liffGetSnowballStats(telegramUserId?: number): Promise<Sno
   const vol24hDirty = await backfillAllStatsRowsQuoteVol24h(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
   if (msDirty > 0 || btcEmaDirty > 0 || psar4hDirty > 0 || vol24hDirty > 0) await saveSnowballStatsState(st);
 
-  const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
+  // store จำกัดที่ SNOWBALL_STATS_MAX_ROWS (ดีฟอลต์ 400) — ส่งครบทุกแถว ไม่ slice ซ้ำ
+  const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs);
   return buildSnowballStatsPayload(rows, telegramUserId);
 }
 
@@ -1031,7 +1032,6 @@ export async function liffGetCandleReversalStats(
   const conflictSets = await loadPendingConflictSets();
   const rows = [...st.rows]
     .sort((a, b) => b.alertedAtMs - a.alertedAtMs)
-    .slice(0, 200)
     .map((r) => ({
       ...r,
       conflictWith: resolveRowConflictWith(r, conflictSets, "reversal"),
@@ -1114,7 +1114,7 @@ export async function liffGetRsiDivergenceStats(
   const msDirty = await backfillAllStatsMarketSentiment(st.rows);
   if (msDirty > 0) await saveRsiDivergenceStatsState(st);
 
-  const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 200);
+  const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs);
   return {
     rows,
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
