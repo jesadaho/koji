@@ -520,7 +520,7 @@ function snowballTrendGradeChecklistItems(
       title: "EMA4h slope 7d",
       status:
         ema4h != null && Number.isFinite(ema4h) ? "pass" : "unknown",
-      detail: `${fmtSlope(ema4h)} · F<0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A>${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · B>${SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE}%`,
+      detail: `${fmtSlope(ema4h)} · C: ${SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA} · F<0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A>${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · B>${SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE}%`,
     },
     ...(greenDaysItem ? [greenDaysItem] : []),
     ...(volSabItem ? [volSabItem] : []),
@@ -996,7 +996,10 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
 }
 
 export function snowballStatsGradeChecklistFooter(
-  row: Pick<SnowballStatsRow, "qualityTier" | "alertQualityTier" | "qualityTier4hAdjusted">,
+  row: Pick<
+    SnowballStatsRow,
+    "qualityTier" | "alertQualityTier" | "qualityTier4hAdjusted" | "ema1hSlopePct7d"
+  >,
 ): string[] {
   const grade = effectiveQualityTier(row);
   const lines: string[] = [];
@@ -1004,6 +1007,9 @@ export function snowballStatsGradeChecklistFooter(
     lines.push(
       `เกรดสุทธิที่แจ้ง: ${snowballTrendGradeDisplayLabel(grade, "long")} [${snowballTrendGradeShortLabel(grade)}]`,
     );
+    if (snowballEma1hSlopeForcesGradeC(row.ema1hSlopePct7d)) {
+      lines.push(`เหตุผล C: ${SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA}`);
+    }
     if (snowballIsTrendGradeF(grade)) {
       lines.push("auto-open: ไม่สั่ง (Grade F)");
     }

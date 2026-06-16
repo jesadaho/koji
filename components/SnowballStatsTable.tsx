@@ -48,6 +48,7 @@ import {
   type SnowballStatsSort,
   type SnowballStatsSortKey,
 } from "@/lib/snowballStatsClient";
+import { snowballTrendGradeCriteriaLegend } from "@/src/snowballTrendGrade";
 import type { SnowballStatsEmptyFilterLabels } from "@/components/SnowballStatsFilters";
 import { fundingRateVisualClass } from "@/src/marketsFormat";
 import type { ReactNode } from "react";
@@ -206,7 +207,7 @@ export function SnowballStatsTable({
               label="Grade"
               sortKey="grade"
               className="snowStatsStickyGrade"
-              title="เกรดสุทธิ (S/A/B/C/F) — คลิกดูเกณฑ์ slope/เขียว"
+              title={`เกรดสุทธิ (S/A/B/C/F) — ${snowballTrendGradeCriteriaLegend()} — คลิกแถวดูรายละเอียด`}
               activeSort={sort}
               onSort={onSort}
             />

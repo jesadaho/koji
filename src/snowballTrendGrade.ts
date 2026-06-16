@@ -157,6 +157,19 @@ export const SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA = `EMA1h > ${SNOWB
 
 export const SNOWBALL_TREND_GRADE_C_FALLBACK_CRITERIA = "fallback (นอกเหนือ F / S / A / B)";
 
+/** สรุปเกณฑ์เกรดทั้งหมด — footer Mini App / tooltip */
+export function snowballTrendGradeCriteriaLegend(): string {
+  const sab = SNOWBALL_TREND_GRADE_SAB_VOL_PSAR_NOTE;
+  return [
+    `C: ${SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA}`,
+    `F: ${SNOWBALL_TREND_GRADE_F_CRITERIA}`,
+    `S: EMA4h > ${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · Long เขียว ≤ ${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · ${sab}`,
+    `A: EMA4h > ${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · Long เขียว ≤ ${SNOWBALL_TREND_GRADE_A_GREEN_MAX} · ${sab}`,
+    `B: EMA4h > ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE}% · ${sab}`,
+    `C: ${SNOWBALL_TREND_GRADE_C_FALLBACK_CRITERIA}`,
+  ].join(" · ");
+}
+
 /** EMA1h slope สูงเกิน — เกรด C ชั้นแรก (ก่อน F) */
 export function snowballEma1hSlopeForcesGradeC(ema1hSlopePct7d?: number | null): boolean {
   return finitePct(ema1hSlopePct7d) && ema1hSlopePct7d > SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_MIN_EXCLUSIVE;

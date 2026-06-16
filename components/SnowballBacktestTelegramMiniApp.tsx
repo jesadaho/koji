@@ -72,11 +72,11 @@ import type {
 } from "@/lib/snowballStatsClient";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
 import { downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
+import { snowballTrendGradeCriteriaLegend } from "@/src/snowballTrendGrade";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
-const FOOTNOTE =
-  "จำลอง · ทิศ = ทิศสัญญาณ Snowball · ผล = ปิดที่ 48h (pct48h) · Grade = เกรดสุทธิ · คลิกดู HH48/VAH";
+const FOOTNOTE = `จำลอง · ทิศ = ทิศสัญญาณ Snowball · ผล = ปิดที่ 48h (pct48h) · ${snowballTrendGradeCriteriaLegend()} · คลิกดู HH48/VAH`;
 
 type Phase = "loading" | "setup" | "ready";
 

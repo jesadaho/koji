@@ -207,6 +207,7 @@ function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilt
   if (k === "gt20" || k === "gt+20") return "gt20";
   if (k === "gt30" || k === "gt+30") return "gt30";
   if (k === "gt50" || k === "gt+50") return "gt50";
+  if (k === "gt80" || k === "gt+80") return "gt80";
   if (k === "lt80" || k === "lt+80" || k === "lt-80") return "lt80";
   if (k === "gt100" || k === "gt+100") return "gt100";
   if (k === "gt150" || k === "gt+150") return "gt150";

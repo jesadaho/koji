@@ -58,13 +58,13 @@ import {
 } from "@/lib/snowballStatsClient";
 import { snowballStatsToCsv } from "@/lib/snowballStatsCsvExport";
 import { copyCsvToClipboard, downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
+import { snowballTrendGradeCriteriaLegend } from "@/src/snowballTrendGrade";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const MAX_API_DEBUG_BODY = 12_000;
 
-const FOOTNOTE =
-  "ทิศ = ทิศสัญญาณ Snowball · ผล = ปิดที่ 48h (pct48h) · แจ้งซ้ำต่อเหรียญ+TF+ทิศภายใน 48h · Grade = เกรดสุทธิ · คลิกดู HH48/VAH";
+const FOOTNOTE = `ทิศ = ทิศสัญญาณ Snowball · ผล = ปิดที่ 48h (pct48h) · แจ้งซ้ำต่อเหรียญ+TF+ทิศภายใน 48h · ${snowballTrendGradeCriteriaLegend()} · คลิกดู HH48/VAH`;
 
 function truncateApiBody(s: string, max = MAX_API_DEBUG_BODY): string {
   if (s.length > max) return `${s.slice(0, max)}\n\n… (ตัดเหลือ ${max} ตัวอักษร)`;
