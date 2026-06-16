@@ -1,5 +1,9 @@
 import { autoOpenOrderPeriodLabel, resolveAutoOpenEntryPrice } from "@/lib/autoOpenFollowUp";
 import {
+  autoOpenMexcCloseReasonShort,
+  resolveAutoOpenMexcCloseExitReason,
+} from "@/lib/autoOpenMexcCloseReason";
+import {
   autoOpenStrategyOutcomeLabel,
   type AutoOpenStrategyOutcome,
 } from "@/lib/autoOpenStrategyOutcome";
@@ -43,6 +47,7 @@ const HEADERS = [
   "strategyPct",
   "strategyExitReason",
   "mexcRealisedPnlUsdt",
+  "mexcCloseReason",
   "mexcTotalFeeUsdt",
   "mexcClosedAtMs",
 ];
@@ -98,6 +103,7 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
     r.mexcRealisedPnlUsdt != null && Number.isFinite(r.mexcRealisedPnlUsdt)
       ? String(r.mexcRealisedPnlUsdt)
       : "",
+    autoOpenMexcCloseReasonShort(resolveAutoOpenMexcCloseExitReason(r)),
     r.mexcTotalFeeUsdt != null && Number.isFinite(r.mexcTotalFeeUsdt)
       ? String(r.mexcTotalFeeUsdt)
       : "",

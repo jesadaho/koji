@@ -1249,6 +1249,7 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     tp2PricePct: row.snowballAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.snowballAutoTradeMaxHoldHours ?? null,
     holdExtendIfRedEnabled: row.snowballAutoTradeHoldExtendIfRedEnabled === true,
+    holdExtendRedHours: row.snowballAutoTradeHoldExtendRedHours ?? null,
     slArmRoiPct: row.snowballAutoTradeSlArmRoiPct ?? null,
     slEntryOffsetPct: row.snowballAutoTradeSlEntryOffsetPct ?? null,
     slAtEntryAfter24hIfGreenEnabled:
@@ -1267,6 +1268,7 @@ export function tradingViewSnowballAutoTradePayloadFromRow(
     qualityShortMaxHoldHours: row.snowballAutoTradeQualityShortMaxHoldHours ?? null,
     qualityShortHoldExtendIfRedEnabled:
       row.snowballAutoTradeQualityShortHoldExtendIfRedEnabled === true,
+    qualityShortHoldExtendRedHours: row.snowballAutoTradeQualityShortHoldExtendRedHours ?? null,
     qualityShortSlArmRoiPct: row.snowballAutoTradeQualityShortSlArmRoiPct ?? null,
     qualityShortSlEntryOffsetPct: row.snowballAutoTradeQualityShortSlEntryOffsetPct ?? null,
     qualityShortSlAtEntryAfter24hIfGreenEnabled:
@@ -1301,6 +1303,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     tp2PricePct: row.reversalAutoTradeTp2PricePct ?? null,
     maxHoldHours: row.reversalAutoTradeMaxHoldHours ?? null,
     holdExtendIfRedEnabled: row.reversalAutoTradeHoldExtendIfRedEnabled === true,
+    holdExtendRedHours: row.reversalAutoTradeHoldExtendRedHours ?? null,
     slArmRoiPct: row.reversalAutoTradeSlArmRoiPct ?? null,
     slEntryOffsetPct: row.reversalAutoTradeSlEntryOffsetPct ?? null,
     slAtEntryAfter24hIfGreenEnabled:
@@ -1577,12 +1580,14 @@ function parseSnowballAutoTradeNested(
   const mTp1Partial = numOrEmpty("tp1PartialPct");
   const mTp2 = numOrEmpty("tp2PricePct");
   const mMaxH = numOrEmpty("maxHoldHours");
+  const mExtH = numOrEmpty("holdExtendRedHours");
   const mSlArm = numOrEmpty("slArmRoiPct");
   const mSlOff = numOrEmpty("slEntryOffsetPct");
   const mQsTp1 = numOrEmpty("qualityShortTp1PricePct");
   const mQsTp1Partial = numOrEmpty("qualityShortTp1PartialPct");
   const mQsTp2 = numOrEmpty("qualityShortTp2PricePct");
   const mQsMaxH = numOrEmpty("qualityShortMaxHoldHours");
+  const mQsExtH = numOrEmpty("qualityShortHoldExtendRedHours");
   const mQsSlArm = numOrEmpty("qualityShortSlArmRoiPct");
   const mQsSlOff = numOrEmpty("qualityShortSlEntryOffsetPct");
   if (
@@ -1592,12 +1597,14 @@ function parseSnowballAutoTradeNested(
     mTp1Partial.err ||
     mTp2.err ||
     mMaxH.err ||
+    mExtH.err ||
     mSlArm.err ||
     mSlOff.err ||
     mQsTp1.err ||
     mQsTp1Partial.err ||
     mQsTp2.err ||
     mQsMaxH.err ||
+    mQsExtH.err ||
     mQsSlArm.err ||
     mQsSlOff.err
   ) {
@@ -1639,6 +1646,9 @@ function parseSnowballAutoTradeNested(
 
   const mainTpErr = validateTpSlNums(mTp1, mTp1Partial, mTp2, mMaxH, mSlArm, mSlOff, "snowball_");
   if (mainTpErr) return mainTpErr;
+  if (typeof mExtH.v === "number" && !(mExtH.v > 0 && mExtH.v <= 24 * 30)) {
+    return { ok: false, error: "snowball_hold_extend_red_hours_out_of_range" };
+  }
   const qsTpErr = validateTpSlNums(
     mQsTp1,
     mQsTp1Partial,
@@ -1649,6 +1659,9 @@ function parseSnowballAutoTradeNested(
     "snowball_quality_short_",
   );
   if (qsTpErr) return qsTpErr;
+  if (typeof mQsExtH.v === "number" && !(mQsExtH.v > 0 && mQsExtH.v <= 24 * 30)) {
+    return { ok: false, error: "snowball_quality_short_hold_extend_red_hours_out_of_range" };
+  }
 
   let tpSlEnabled: boolean | undefined;
   if (typeof o.tpSlEnabled === "boolean") tpSlEnabled = o.tpSlEnabled;
@@ -1812,6 +1825,8 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeTp2PricePct: mTp2.v as number | null | undefined,
     snowballAutoTradeMaxHoldHours:
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
+    snowballAutoTradeHoldExtendRedHours:
+      mExtH.v == null ? (mExtH.v as number | null | undefined) : (Math.floor(mExtH.v) as number),
     snowballAutoTradeSlArmRoiPct: mSlArm.v as number | null | undefined,
     snowballAutoTradeSlEntryOffsetPct: mSlOff.v as number | null | undefined,
     snowballAutoTradeQualityShortTp1PricePct: mQsTp1.v as number | null | undefined,
@@ -1819,6 +1834,8 @@ function parseSnowballAutoTradeNested(
     snowballAutoTradeQualityShortTp2PricePct: mQsTp2.v as number | null | undefined,
     snowballAutoTradeQualityShortMaxHoldHours:
       mQsMaxH.v == null ? (mQsMaxH.v as number | null | undefined) : (Math.floor(mQsMaxH.v) as number),
+    snowballAutoTradeQualityShortHoldExtendRedHours:
+      mQsExtH.v == null ? (mQsExtH.v as number | null | undefined) : (Math.floor(mQsExtH.v) as number),
     snowballAutoTradeQualityShortSlArmRoiPct: mQsSlArm.v as number | null | undefined,
     snowballAutoTradeQualityShortSlEntryOffsetPct: mQsSlOff.v as number | null | undefined,
   };
@@ -1909,6 +1926,7 @@ function parseReversalAutoTradeNested(
   const mTp1Partial = numOrEmpty("tp1PartialPct");
   const mTp2 = numOrEmpty("tp2PricePct");
   const mMaxH = numOrEmpty("maxHoldHours");
+  const mExtH = numOrEmpty("holdExtendRedHours");
   const mSlArm = numOrEmpty("slArmRoiPct");
   const mSlOff = numOrEmpty("slEntryOffsetPct");
   if (
@@ -1918,6 +1936,7 @@ function parseReversalAutoTradeNested(
     mTp1Partial.err ||
     mTp2.err ||
     mMaxH.err ||
+    mExtH.err ||
     mSlArm.err ||
     mSlOff.err
   ) {
@@ -1959,6 +1978,9 @@ function parseReversalAutoTradeNested(
   }
   if (typeof mSlOff.v === "number" && !(mSlOff.v >= 0 && mSlOff.v < 50)) {
     return { ok: false, error: "reversal_sl_entry_offset_pct_out_of_range" };
+  }
+  if (typeof mExtH.v === "number" && !(mExtH.v > 0 && mExtH.v <= 24 * 30)) {
+    return { ok: false, error: "reversal_hold_extend_red_hours_out_of_range" };
   }
 
   let tpSlEnabled: boolean | undefined;
@@ -2033,6 +2055,8 @@ function parseReversalAutoTradeNested(
     reversalAutoTradeTp2PricePct: mTp2.v as number | null | undefined,
     reversalAutoTradeMaxHoldHours:
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
+    reversalAutoTradeHoldExtendRedHours:
+      mExtH.v == null ? (mExtH.v as number | null | undefined) : (Math.floor(mExtH.v) as number),
     reversalAutoTradeSlArmRoiPct: mSlArm.v as number | null | undefined,
     reversalAutoTradeSlEntryOffsetPct: mSlOff.v as number | null | undefined,
     reversalAutoTradeGateQualitySignal: gateQualitySignal,

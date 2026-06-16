@@ -1,6 +1,7 @@
 import {
   resolveAutoTradeHoldCheckpoint,
   resolveAutoTradeHoldExtendIfRed,
+  resolveAutoTradeHoldExtendRedHours,
   resolveAutoTradeMaxHoldHours,
 } from "@/lib/autoTradeMaxHold";
 import {
@@ -275,6 +276,11 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           liveHoldExtendIfRed: tpPlan.holdExtendIfRedEnabled,
           tpSlEnabled: tpPlan.enabled,
         });
+        const extendRedH = resolveAutoTradeHoldExtendRedHours({
+          phase1Hours: phase1H,
+          liveHoldExtendRedHours: tpPlan.holdExtendRedHours,
+          tpSlEnabled: tpPlan.enabled,
+        });
 
         const positions = await getOpenPositions(creds, a.contractSymbol);
         const pos = findActivePositionShort(positions, a.contractSymbol, a.side);
@@ -302,6 +308,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
         const holdCheckpoint = resolveAutoTradeHoldCheckpoint({
           openedAtMs: a.openedAtMs,
           phase1Hours: phase1H,
+          extendRedHours: extendRedH,
           extendIfRedEnabled: extendIfRed,
           holdExtendedForRed: a.holdExtendedForRed === true,
           markPnlPct: drop,
@@ -311,7 +318,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           state = withReversalHoldExtendedForRed(state, userId, a.contractSymbol, a.side);
           await notifyLines(userId, [
             "Koji — Reversal TP/SL (MEXC)",
-            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) ยังปิดแดง → ขยายอีก ${holdCheckpoint.phase1Hours} ชม.`,
+            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) ยังปิดแดง → ขยายอีก ${holdCheckpoint.extendRedHours} ชม.`,
             `[${shortContractLabel(a.contractSymbol)}]/USDT (${a.side.toUpperCase()})`,
             `Entry: ${fmtPrice(a.mexcAvgEntryPrice)} · Mark: ${fmtPrice(mark)} · เคลื่อน ${drop.toFixed(2)}%`,
           ]);

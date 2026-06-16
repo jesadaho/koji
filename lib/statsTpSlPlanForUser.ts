@@ -49,6 +49,12 @@ function reversalTpSlPlanFromSettings(
     row.reversalAutoTradeMaxHoldHours > 0
       ? row.reversalAutoTradeMaxHoldHours
       : DEFAULT_STATS_TPSL_PLAN.maxHoldHours;
+  const extH =
+    typeof row.reversalAutoTradeHoldExtendRedHours === "number" &&
+    Number.isFinite(row.reversalAutoTradeHoldExtendRedHours) &&
+    row.reversalAutoTradeHoldExtendRedHours > 0
+      ? row.reversalAutoTradeHoldExtendRedHours
+      : undefined;
   return {
     tpSlEnabled: en,
     tp1PricePct: t1,
@@ -56,6 +62,7 @@ function reversalTpSlPlanFromSettings(
     tp2PricePct: t2,
     maxHoldHours: mh,
     holdExtendIfRedEnabled: row.reversalAutoTradeHoldExtendIfRedEnabled === true,
+    holdExtendRedHours: extH,
     slAtEntryArmRoiPct: parseSlArmRoiPct(row.reversalAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
     slAtEntryOffsetPct: parseSlEntryOffsetPct(
       row.reversalAutoTradeSlEntryOffsetPct,
@@ -75,6 +82,7 @@ function snowballTpSlPlanFromSettings(
     tp2PricePct: p.tp2PricePct,
     maxHoldHours: p.maxHoldHours,
     holdExtendIfRedEnabled: p.holdExtendIfRedEnabled,
+    holdExtendRedHours: p.holdExtendRedHours,
     slAtEntryArmRoiPct: p.slArmRoiPct,
     slAtEntryOffsetPct: p.slEntryOffsetPct,
   };
@@ -115,6 +123,7 @@ export function viewerStatsTpSlPlanPayload(plan: ViewerStatsTpSlPlan): StatsTpSl
     tp2PricePct: plan.tp2PricePct,
     maxHoldHours: plan.maxHoldHours,
     holdExtendIfRedEnabled: plan.holdExtendIfRedEnabled,
+    holdExtendRedHours: plan.holdExtendRedHours,
     slAtEntryArmRoiPct: plan.slAtEntryArmRoiPct ?? DEFAULT_SL_ARM_ROI_PCT,
     slAtEntryOffsetPct: plan.slAtEntryOffsetPct ?? DEFAULT_SL_ENTRY_OFFSET_PCT,
   };

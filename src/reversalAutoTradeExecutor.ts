@@ -147,6 +147,7 @@ export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings)
   tp2PricePct: number;
   maxHoldHours: number;
   holdExtendIfRedEnabled: boolean;
+  holdExtendRedHours?: number;
   slArmRoiPct: number;
   slEntryOffsetPct: number;
   slAtEntryAfter24hIfGreenEnabled: boolean;
@@ -168,6 +169,12 @@ export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings)
     typeof row.reversalAutoTradeMaxHoldHours === "number" && Number.isFinite(row.reversalAutoTradeMaxHoldHours) && row.reversalAutoTradeMaxHoldHours > 0
       ? row.reversalAutoTradeMaxHoldHours
       : REVERSAL_TPSL_DEFAULT_MAX_HOURS;
+  const extH =
+    typeof row.reversalAutoTradeHoldExtendRedHours === "number" &&
+    Number.isFinite(row.reversalAutoTradeHoldExtendRedHours) &&
+    row.reversalAutoTradeHoldExtendRedHours > 0
+      ? row.reversalAutoTradeHoldExtendRedHours
+      : undefined;
   return {
     enabled: en,
     tp1PricePct: t1,
@@ -175,6 +182,7 @@ export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings)
     tp2PricePct: t2,
     maxHoldHours: mh,
     holdExtendIfRedEnabled: row.reversalAutoTradeHoldExtendIfRedEnabled === true,
+    holdExtendRedHours: extH,
     slArmRoiPct: parseSlArmRoiPct(row.reversalAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
     slEntryOffsetPct: parseSlEntryOffsetPct(
       row.reversalAutoTradeSlEntryOffsetPct,

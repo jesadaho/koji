@@ -122,6 +122,7 @@ type SnowballAutoTradeApiBundle = {
   tp2PricePct?: number | null;
   maxHoldHours?: number | null;
   holdExtendIfRedEnabled?: boolean;
+  holdExtendRedHours?: number | null;
   slArmRoiPct?: number | null;
   slEntryOffsetPct?: number | null;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
@@ -131,6 +132,7 @@ type SnowballAutoTradeApiBundle = {
   qualityShortTp2PricePct?: number | null;
   qualityShortMaxHoldHours?: number | null;
   qualityShortHoldExtendIfRedEnabled?: boolean;
+  qualityShortHoldExtendRedHours?: number | null;
   qualityShortSlArmRoiPct?: number | null;
   qualityShortSlEntryOffsetPct?: number | null;
   /** จุดอ้างอิง = EMA20 @1h (ยังเปิด market) */
@@ -149,6 +151,7 @@ type ReversalAutoTradeApiBundle = {
   tp2PricePct?: number | null;
   maxHoldHours?: number | null;
   holdExtendIfRedEnabled?: boolean;
+  holdExtendRedHours?: number | null;
   slArmRoiPct?: number | null;
   slEntryOffsetPct?: number | null;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
@@ -220,6 +223,7 @@ export default function SettingsTelegramMiniApp() {
   const [snowTp2PricePct, setSnowTp2PricePct] = useState("");
   const [snowMaxHoldHours, setSnowMaxHoldHours] = useState("");
   const [snowHoldExtendIfRed, setSnowHoldExtendIfRed] = useState(false);
+  const [snowHoldExtendRedHours, setSnowHoldExtendRedHours] = useState("");
   const [snowSlArmRoiPct, setSnowSlArmRoiPct] = useState("");
   const [snowSlEntryOffsetPct, setSnowSlEntryOffsetPct] = useState("");
   const [snowSlAtEntryAfter24hIfGreen, setSnowSlAtEntryAfter24hIfGreen] = useState(true);
@@ -229,6 +233,7 @@ export default function SettingsTelegramMiniApp() {
   const [snowQsTp2PricePct, setSnowQsTp2PricePct] = useState("");
   const [snowQsMaxHoldHours, setSnowQsMaxHoldHours] = useState("");
   const [snowQsHoldExtendIfRed, setSnowQsHoldExtendIfRed] = useState(false);
+  const [snowQsHoldExtendRedHours, setSnowQsHoldExtendRedHours] = useState("");
   const [snowQsSlArmRoiPct, setSnowQsSlArmRoiPct] = useState("");
   const [snowQsSlEntryOffsetPct, setSnowQsSlEntryOffsetPct] = useState("");
   const [snowSaveErr, setSnowSaveErr] = useState("");
@@ -250,6 +255,7 @@ export default function SettingsTelegramMiniApp() {
   const [revTp2PricePct, setRevTp2PricePct] = useState("");
   const [revMaxHoldHours, setRevMaxHoldHours] = useState("");
   const [revHoldExtendIfRed, setRevHoldExtendIfRed] = useState(false);
+  const [revHoldExtendRedHours, setRevHoldExtendRedHours] = useState("");
   const [revSlArmRoiPct, setRevSlArmRoiPct] = useState("");
   const [revSlEntryOffsetPct, setRevSlEntryOffsetPct] = useState("");
   const [revSlAtEntryAfter24hIfGreen, setRevSlAtEntryAfter24hIfGreen] = useState(true);
@@ -316,6 +322,11 @@ export default function SettingsTelegramMiniApp() {
       st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
     );
     setSnowHoldExtendIfRed(Boolean(st.holdExtendIfRedEnabled));
+    setSnowHoldExtendRedHours(
+      st.holdExtendRedHours != null && Number.isFinite(st.holdExtendRedHours)
+        ? String(st.holdExtendRedHours)
+        : "",
+    );
     setSnowSlArmRoiPct(
       st.slArmRoiPct != null && Number.isFinite(st.slArmRoiPct) ? String(st.slArmRoiPct) : ""
     );
@@ -345,6 +356,11 @@ export default function SettingsTelegramMiniApp() {
         : "",
     );
     setSnowQsHoldExtendIfRed(Boolean(st.qualityShortHoldExtendIfRedEnabled));
+    setSnowQsHoldExtendRedHours(
+      st.qualityShortHoldExtendRedHours != null && Number.isFinite(st.qualityShortHoldExtendRedHours)
+        ? String(st.qualityShortHoldExtendRedHours)
+        : "",
+    );
     setSnowQsSlArmRoiPct(
       st.qualityShortSlArmRoiPct != null && Number.isFinite(st.qualityShortSlArmRoiPct)
         ? String(st.qualityShortSlArmRoiPct)
@@ -391,6 +407,9 @@ export default function SettingsTelegramMiniApp() {
       st.maxHoldHours != null && Number.isFinite(st.maxHoldHours) ? String(st.maxHoldHours) : ""
     );
     setRevHoldExtendIfRed(Boolean(st.holdExtendIfRedEnabled));
+    setRevHoldExtendRedHours(
+      st.holdExtendRedHours != null && Number.isFinite(st.holdExtendRedHours) ? String(st.holdExtendRedHours) : "",
+    );
     setRevSlArmRoiPct(
       st.slArmRoiPct != null && Number.isFinite(st.slArmRoiPct) ? String(st.slArmRoiPct) : ""
     );
@@ -681,12 +700,14 @@ export default function SettingsTelegramMiniApp() {
     const tp1PartialParsed = snowTp1PartialPct.trim() ? parseNumRaw(snowTp1PartialPct) : null;
     const tp2Parsed = snowTp2PricePct.trim() ? parseNumRaw(snowTp2PricePct) : null;
     const maxHoldParsed = snowMaxHoldHours.trim() ? parseNumRaw(snowMaxHoldHours) : null;
+    const extendRedParsed = snowHoldExtendRedHours.trim() ? parseNumRaw(snowHoldExtendRedHours) : null;
     const slArmParsed = snowSlArmRoiPct.trim() ? parseNumRaw(snowSlArmRoiPct) : null;
     const slOffParsed = snowSlEntryOffsetPct.trim() ? parseNumRaw(snowSlEntryOffsetPct) : null;
     const qsTp1Parsed = snowQsTp1PricePct.trim() ? parseNumRaw(snowQsTp1PricePct) : null;
     const qsTp1PartialParsed = snowQsTp1PartialPct.trim() ? parseNumRaw(snowQsTp1PartialPct) : null;
     const qsTp2Parsed = snowQsTp2PricePct.trim() ? parseNumRaw(snowQsTp2PricePct) : null;
     const qsMaxHoldParsed = snowQsMaxHoldHours.trim() ? parseNumRaw(snowQsMaxHoldHours) : null;
+    const qsExtendRedParsed = snowQsHoldExtendRedHours.trim() ? parseNumRaw(snowQsHoldExtendRedHours) : null;
     const qsSlArmParsed = snowQsSlArmRoiPct.trim() ? parseNumRaw(snowQsSlArmRoiPct) : null;
     const qsSlOffParsed = snowQsSlEntryOffsetPct.trim() ? parseNumRaw(snowQsSlEntryOffsetPct) : null;
 
@@ -714,6 +735,10 @@ export default function SettingsTelegramMiniApp() {
       setSnowSaveErr("ครบกี่ชม. ไม่ใช่ตัวเลข");
       return;
     }
+    if (snowHoldExtendRedHours.trim() && extendRedParsed == null) {
+      setSnowSaveErr("ขยายเมื่อแดง (ชม.) ไม่ใช่ตัวเลข");
+      return;
+    }
     if (snowSlArmRoiPct.trim() && slArmParsed == null) {
       setSnowSaveErr("ROI ย้าย SL % ไม่ใช่ตัวเลข");
       return;
@@ -736,6 +761,10 @@ export default function SettingsTelegramMiniApp() {
     }
     if (snowQsMaxHoldHours.trim() && qsMaxHoldParsed == null) {
       setSnowSaveErr("Quality Short ครบกี่ชม. ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (snowQsHoldExtendRedHours.trim() && qsExtendRedParsed == null) {
+      setSnowSaveErr("Quality Short ขยายเมื่อแดง (ชม.) ไม่ใช่ตัวเลข");
       return;
     }
     if (snowQsSlArmRoiPct.trim() && qsSlArmParsed == null) {
@@ -778,6 +807,17 @@ export default function SettingsTelegramMiniApp() {
       setSnowSaveErr("SL ห่าง entry % ต้องอยู่ระหว่าง 0–50");
       return;
     }
+    if (snowMaxHoldHours.trim() && (maxHoldParsed == null || !(maxHoldParsed > 0 && maxHoldParsed <= 720))) {
+      setSnowSaveErr("จังหวะ 1 ต้อง > 0 และ ≤ 720 ชม.");
+      return;
+    }
+    if (
+      snowHoldExtendRedHours.trim() &&
+      (extendRedParsed == null || !(extendRedParsed > 0 && extendRedParsed <= 720))
+    ) {
+      setSnowSaveErr("ขยายเมื่อแดง ต้อง > 0 และ ≤ 720 ชม.");
+      return;
+    }
     if (snowQsTp1PricePct.trim() && (qsTp1Parsed == null || !(qsTp1Parsed > 0 && qsTp1Parsed < 100))) {
       setSnowSaveErr("Quality Short TP1 % ต้องอยู่ระหว่าง 0–100");
       return;
@@ -806,6 +846,17 @@ export default function SettingsTelegramMiniApp() {
       (qsSlOffParsed == null || !(qsSlOffParsed >= 0 && qsSlOffParsed < 50))
     ) {
       setSnowSaveErr("Quality Short SL ห่าง entry % ต้องอยู่ระหว่าง 0–50");
+      return;
+    }
+    if (snowQsMaxHoldHours.trim() && (qsMaxHoldParsed == null || !(qsMaxHoldParsed > 0 && qsMaxHoldParsed <= 720))) {
+      setSnowSaveErr("Quality Short จังหวะ 1 ต้อง > 0 และ ≤ 720 ชม.");
+      return;
+    }
+    if (
+      snowQsHoldExtendRedHours.trim() &&
+      (qsExtendRedParsed == null || !(qsExtendRedParsed > 0 && qsExtendRedParsed <= 720))
+    ) {
+      setSnowSaveErr("Quality Short ขยายเมื่อแดง ต้อง > 0 และ ≤ 720 ชม.");
       return;
     }
 
@@ -842,6 +893,7 @@ export default function SettingsTelegramMiniApp() {
         tp2PricePct: snowTp2PricePct.trim() ? tp2Parsed : null,
         maxHoldHours: snowMaxHoldHours.trim() ? maxHoldParsed : null,
         holdExtendIfRedEnabled: snowHoldExtendIfRed,
+        holdExtendRedHours: snowHoldExtendRedHours.trim() ? extendRedParsed : null,
         slArmRoiPct: snowSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: snowSlEntryOffsetPct.trim() ? slOffParsed : null,
         slAtEntryAfter24hIfGreenEnabled: snowSlAtEntryAfter24hIfGreen,
@@ -851,6 +903,7 @@ export default function SettingsTelegramMiniApp() {
         qualityShortTp2PricePct: snowQsTp2PricePct.trim() ? qsTp2Parsed : null,
         qualityShortMaxHoldHours: snowQsMaxHoldHours.trim() ? qsMaxHoldParsed : null,
         qualityShortHoldExtendIfRedEnabled: snowQsHoldExtendIfRed,
+        qualityShortHoldExtendRedHours: snowQsHoldExtendRedHours.trim() ? qsExtendRedParsed : null,
         qualityShortSlArmRoiPct: snowQsSlArmRoiPct.trim() ? qsSlArmParsed : null,
         qualityShortSlEntryOffsetPct: snowQsSlEntryOffsetPct.trim() ? qsSlOffParsed : null,
       };
@@ -898,6 +951,7 @@ export default function SettingsTelegramMiniApp() {
     const tp1PartialParsed = revTp1PartialPct.trim() ? parseNumRaw(revTp1PartialPct) : null;
     const tp2Parsed = revTp2PricePct.trim() ? parseNumRaw(revTp2PricePct) : null;
     const maxHoldParsed = revMaxHoldHours.trim() ? parseNumRaw(revMaxHoldHours) : null;
+    const extendRedParsed = revHoldExtendRedHours.trim() ? parseNumRaw(revHoldExtendRedHours) : null;
     const slArmParsed = revSlArmRoiPct.trim() ? parseNumRaw(revSlArmRoiPct) : null;
     const slOffParsed = revSlEntryOffsetPct.trim() ? parseNumRaw(revSlEntryOffsetPct) : null;
 
@@ -945,6 +999,13 @@ export default function SettingsTelegramMiniApp() {
     }
     if (revMaxHoldHours.trim() && (maxHoldParsed == null || !(maxHoldParsed > 0 && maxHoldParsed <= 720))) {
       setRevSaveErr("ชั่วโมงถือสูงสุดต้อง > 0 และ ≤ 720");
+      return;
+    }
+    if (
+      revHoldExtendRedHours.trim() &&
+      (extendRedParsed == null || !(extendRedParsed > 0 && extendRedParsed <= 720))
+    ) {
+      setRevSaveErr("ขยายเมื่อแดง ต้อง > 0 และ ≤ 720 ชม.");
       return;
     }
     if (tp1Parsed != null && tp2Parsed != null && !(tp2Parsed > tp1Parsed)) {
@@ -1001,6 +1062,7 @@ export default function SettingsTelegramMiniApp() {
         tp2PricePct: revTp2PricePct.trim() ? tp2Parsed : null,
         maxHoldHours: revMaxHoldHours.trim() ? maxHoldParsed : null,
         holdExtendIfRedEnabled: revHoldExtendIfRed,
+        holdExtendRedHours: revHoldExtendRedHours.trim() ? extendRedParsed : null,
         slArmRoiPct: revSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
         slAtEntryAfter24hIfGreenEnabled: revSlAtEntryAfter24hIfGreen,
@@ -1508,9 +1570,24 @@ export default function SettingsTelegramMiniApp() {
               disabled={!snowQsTpSlEnabled}
             />
             <span className="tmaCheckboxField__text">
-              ครบจังหวะ 1 แล้วยังปิดแดง → รออีก {snowQsMaxHoldHours.trim() || "48"} ชม.
+              ครบจังหวะ 1 แล้วยังปิดแดง → ขยายจังหวะ 2
             </span>
           </label>
+          {snowQsHoldExtendIfRed ? (
+            <label className="sub" style={{ display: "block" }}>
+              จังหวะ 2 — ขยายอีกกี่ ชม. (ว่าง = เท่าจังหวะ 1)
+              <input
+                type="text"
+                inputMode="numeric"
+                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+                autoComplete="off"
+                placeholder={snowQsMaxHoldHours.trim() || "เช่น 24"}
+                value={snowQsHoldExtendRedHours}
+                onChange={(e) => setSnowQsHoldExtendRedHours(e.target.value)}
+                disabled={!snowQsTpSlEnabled}
+              />
+            </label>
+          ) : null}
           <label className="sub" style={{ display: "block" }}>
             ROI ย้าย SL % (default 10)
             <input
@@ -1672,7 +1749,8 @@ export default function SettingsTelegramMiniApp() {
             <strong>จังหวะ 1</strong>: ครบ <strong>{snowMaxHoldHours.trim() || "48"} ชม.</strong> → ปิดทั้งหมด (force) ถ้าเขียวหรือปิด option ขยาย
           </li>
           <li>
-            <strong>จังหวะ 2 (option)</strong>: ถ้าเปิดขยายเมื่อแดง — ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {snowMaxHoldHours.trim() || "48"} ชม. แล้วปิด force
+            <strong>จังหวะ 2 (option)</strong>: ถ้าเปิดขยายเมื่อแดง — ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก{" "}
+            {snowHoldExtendRedHours.trim() || snowMaxHoldHours.trim() || "48"} ชม. แล้วปิด force
           </li>
           <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
         </ul>
@@ -1752,9 +1830,24 @@ export default function SettingsTelegramMiniApp() {
               disabled={!snowTpSlEnabled}
             />
             <span className="tmaCheckboxField__text">
-              ครบจังหวะ 1 แล้วยังปิดแดง → รออีก {snowMaxHoldHours.trim() || "48"} ชม. (จังหวะ 2)
+              ครบจังหวะ 1 แล้วยังปิดแดง → ขยายจังหวะ 2
             </span>
           </label>
+          {snowHoldExtendIfRed ? (
+            <label className="sub" style={{ display: "block" }}>
+              จังหวะ 2 — ขยายอีกกี่ ชม. (ว่าง = เท่าจังหวะ 1)
+              <input
+                type="text"
+                inputMode="numeric"
+                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+                autoComplete="off"
+                placeholder={snowMaxHoldHours.trim() || "เช่น 24"}
+                value={snowHoldExtendRedHours}
+                onChange={(e) => setSnowHoldExtendRedHours(e.target.value)}
+                disabled={!snowTpSlEnabled}
+              />
+            </label>
+          ) : null}
         </div>
 
         <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
@@ -2046,7 +2139,7 @@ export default function SettingsTelegramMiniApp() {
           <li><strong>24 ชม.</strong>: กำไรนิดหน่อย (0–2%) + EMA4H &gt; 0 → ปิดทันที</li>
           <li><strong>24 ชม.</strong>: ติดลบนิดหน่อย (−2%–0) + EMA4H &gt; 0 → ปิดทันที (ยกเว้นมี SL จาก 12 ชม.)</li>
           <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ปิดทั้งหมด (force)</li>
-          <li><strong>จังหวะ 2 (option)</strong>: ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
+          <li><strong>จังหวะ 2 (option)</strong>: ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {revHoldExtendRedHours.trim() || revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
           <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
         </ul>
 
@@ -2125,9 +2218,24 @@ export default function SettingsTelegramMiniApp() {
               disabled={!revTpSlEnabled}
             />
             <span className="tmaCheckboxField__text">
-              ครบจังหวะ 1 แล้วยังปิดแดง → รออีก {revMaxHoldHours.trim() || "48"} ชม. (จังหวะ 2)
+              ครบจังหวะ 1 แล้วยังปิดแดง → ขยายจังหวะ 2
             </span>
           </label>
+          {revHoldExtendIfRed ? (
+            <label className="sub" style={{ display: "block" }}>
+              จังหวะ 2 — ขยายอีกกี่ ชม. (ว่าง = เท่าจังหวะ 1)
+              <input
+                type="text"
+                inputMode="numeric"
+                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+                autoComplete="off"
+                placeholder={revMaxHoldHours.trim() || "เช่น 24"}
+                value={revHoldExtendRedHours}
+                onChange={(e) => setRevHoldExtendRedHours(e.target.value)}
+                disabled={!revTpSlEnabled}
+              />
+            </label>
+          ) : null}
         </div>
 
         <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>

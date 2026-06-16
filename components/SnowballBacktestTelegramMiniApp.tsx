@@ -42,6 +42,7 @@ import type { BtcEma4hFilter, ReversalEma1hFilter, ReversalEma4hFilter, Reversal
 import type { SnowballMatrixFilter } from "@/lib/snowballMatrixFilters";
 import type { SnowballBtcPsarFilter } from "@/lib/snowballBtcPsarFilter";
 import type { SnowballStructureFilter } from "@/lib/snowballStructureFilter";
+import type { SnowballBarRange2Filter } from "@/lib/snowballBarRange2Filter";
 import type { SnowballEfficiencyScoreFilter } from "@/lib/snowballEfficiencyScoreFilter";
 import type { SnowballSignalMaxDdFilter } from "@/lib/snowballSignalMaxDdFilter";
 import {
@@ -171,6 +172,7 @@ export default function SnowballBacktestTelegramMiniApp() {
   const [sideFilter, setSideFilter] = useState<SnowballSideFilter>("all");
   const [dowFilter, setDowFilter] = useState<SnowballDowFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<SnowballVolVsSmaFilter>("all");
+  const [barRange2Filter, setBarRange2Filter] = useState<SnowballBarRange2Filter>("all");
   const [efficiencyFilter, setEfficiencyFilter] = useState<SnowballEfficiencyScoreFilter>("all");
   const [signalMaxDdFilter, setSignalMaxDdFilter] = useState<SnowballSignalMaxDdFilter>("all");
   const [volRankFilter, setVolRankFilter] = useState<SnowballVolRankFilter>("all");
@@ -195,6 +197,7 @@ export default function SnowballBacktestTelegramMiniApp() {
       gradeFilter,
       dowFilter,
       volVsSmaFilter,
+      barRange2Filter,
       efficiencyFilter,
       signalMaxDdFilter,
       volRankFilter,
@@ -215,6 +218,7 @@ export default function SnowballBacktestTelegramMiniApp() {
       gradeFilter,
       dowFilter,
       volVsSmaFilter,
+      barRange2Filter,
       efficiencyFilter,
       signalMaxDdFilter,
       volRankFilter,
@@ -589,6 +593,7 @@ export default function SnowballBacktestTelegramMiniApp() {
             onGradeFilterChange={setGradeFilter}
             onDowFilterChange={setDowFilter}
             onVolVsSmaFilterChange={setVolVsSmaFilter}
+            onBarRange2FilterChange={setBarRange2Filter}
             onEfficiencyFilterChange={setEfficiencyFilter}
             onSignalMaxDdFilterChange={setSignalMaxDdFilter}
             onVolRankFilterChange={setVolRankFilter}

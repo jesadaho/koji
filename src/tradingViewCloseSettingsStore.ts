@@ -140,8 +140,9 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeTp1PartialPct?: number;
   snowballAutoTradeTp2PricePct?: number;
   snowballAutoTradeMaxHoldHours?: number;
-  /** ครบจังหวะ 1 แล้วยังแดง → ถือต่ออีก maxHoldHours ชม. */
+  /** ครบจังหวะ 1 แล้วยังแดง → ถือต่ออีก N ชม. (default = จังหวะ 1) */
   snowballAutoTradeHoldExtendIfRedEnabled?: boolean;
+  snowballAutoTradeHoldExtendRedHours?: number;
   /** ROI % ถึงค่านี้ → ตั้ง SL บังทุน (default 10) */
   snowballAutoTradeSlArmRoiPct?: number;
   /** SL ห่างจาก entry เป็น % ราคาสวน — LONG ลง / SHORT ขึ้น (0 = @entry) */
@@ -157,6 +158,7 @@ export type TradingViewMexcUserSettings = {
   snowballAutoTradeQualityShortTp2PricePct?: number;
   snowballAutoTradeQualityShortMaxHoldHours?: number;
   snowballAutoTradeQualityShortHoldExtendIfRedEnabled?: boolean;
+  snowballAutoTradeQualityShortHoldExtendRedHours?: number;
   snowballAutoTradeQualityShortSlArmRoiPct?: number;
   snowballAutoTradeQualityShortSlEntryOffsetPct?: number;
   snowballAutoTradeQualityShortSlAtEntryAfter24hIfGreenEnabled?: boolean;
@@ -182,8 +184,9 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeTp1PartialPct?: number;
   reversalAutoTradeTp2PricePct?: number;
   reversalAutoTradeMaxHoldHours?: number;
-  /** ครบจังหวะ 1 แล้วยังแดง → ถือต่ออีก maxHoldHours ชม. */
+  /** ครบจังหวะ 1 แล้วยังแดง → ถือต่ออีก N ชม. (default = จังหวะ 1) */
   reversalAutoTradeHoldExtendIfRedEnabled?: boolean;
+  reversalAutoTradeHoldExtendRedHours?: number;
   reversalAutoTradeSlArmRoiPct?: number;
   reversalAutoTradeSlEntryOffsetPct?: number;
   reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
@@ -357,6 +360,7 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeTp2PricePct?: number | null;
   snowballAutoTradeMaxHoldHours?: number | null;
   snowballAutoTradeHoldExtendIfRedEnabled?: boolean;
+  snowballAutoTradeHoldExtendRedHours?: number | null;
   snowballAutoTradeSlArmRoiPct?: number | null;
   snowballAutoTradeSlEntryOffsetPct?: number | null;
   snowballAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
@@ -366,6 +370,7 @@ export type SaveTradingViewMexcInput = {
   snowballAutoTradeQualityShortTp2PricePct?: number | null;
   snowballAutoTradeQualityShortMaxHoldHours?: number | null;
   snowballAutoTradeQualityShortHoldExtendIfRedEnabled?: boolean;
+  snowballAutoTradeQualityShortHoldExtendRedHours?: number | null;
   snowballAutoTradeQualityShortSlArmRoiPct?: number | null;
   snowballAutoTradeQualityShortSlEntryOffsetPct?: number | null;
   snowballAutoTradeQualityShortSlAtEntryAfter24hIfGreenEnabled?: boolean;
@@ -382,6 +387,7 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeTp2PricePct?: number | null;
   reversalAutoTradeMaxHoldHours?: number | null;
   reversalAutoTradeHoldExtendIfRedEnabled?: boolean;
+  reversalAutoTradeHoldExtendRedHours?: number | null;
   reversalAutoTradeSlArmRoiPct?: number | null;
   reversalAutoTradeSlEntryOffsetPct?: number | null;
   reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
@@ -461,6 +467,7 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeTp2PricePct !== undefined ||
     input.snowballAutoTradeMaxHoldHours !== undefined ||
     input.snowballAutoTradeHoldExtendIfRedEnabled !== undefined ||
+    input.snowballAutoTradeHoldExtendRedHours !== undefined ||
     input.snowballAutoTradeSlArmRoiPct !== undefined ||
     input.snowballAutoTradeSlEntryOffsetPct !== undefined ||
     input.snowballAutoTradeSlAtEntryAfter24hIfGreenEnabled !== undefined ||
@@ -470,6 +477,7 @@ export async function saveTradingViewMexcSettings(
     input.snowballAutoTradeQualityShortTp2PricePct !== undefined ||
     input.snowballAutoTradeQualityShortMaxHoldHours !== undefined ||
     input.snowballAutoTradeQualityShortHoldExtendIfRedEnabled !== undefined ||
+    input.snowballAutoTradeQualityShortHoldExtendRedHours !== undefined ||
     input.snowballAutoTradeQualityShortSlArmRoiPct !== undefined ||
     input.snowballAutoTradeQualityShortSlEntryOffsetPct !== undefined ||
     input.snowballAutoTradeQualityShortSlAtEntryAfter24hIfGreenEnabled !== undefined;
@@ -488,6 +496,7 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeTp2PricePct !== undefined ||
     input.reversalAutoTradeMaxHoldHours !== undefined ||
     input.reversalAutoTradeHoldExtendIfRedEnabled !== undefined ||
+    input.reversalAutoTradeHoldExtendRedHours !== undefined ||
     input.reversalAutoTradeSlArmRoiPct !== undefined ||
     input.reversalAutoTradeSlEntryOffsetPct !== undefined ||
     input.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== undefined ||
@@ -743,6 +752,13 @@ export async function saveTradingViewMexcSettings(
         ? input.snowballAutoTradeHoldExtendIfRedEnabled
         : prev?.snowballAutoTradeHoldExtendIfRedEnabled ?? false,
 
+    snowballAutoTradeHoldExtendRedHours:
+      input.snowballAutoTradeHoldExtendRedHours === null
+        ? undefined
+        : input.snowballAutoTradeHoldExtendRedHours !== undefined
+          ? input.snowballAutoTradeHoldExtendRedHours
+          : prev?.snowballAutoTradeHoldExtendRedHours,
+
     snowballAutoTradeSlArmRoiPct:
       input.snowballAutoTradeSlArmRoiPct === null
         ? undefined
@@ -799,6 +815,13 @@ export async function saveTradingViewMexcSettings(
       input.snowballAutoTradeQualityShortHoldExtendIfRedEnabled !== undefined
         ? input.snowballAutoTradeQualityShortHoldExtendIfRedEnabled
         : prev?.snowballAutoTradeQualityShortHoldExtendIfRedEnabled ?? false,
+
+    snowballAutoTradeQualityShortHoldExtendRedHours:
+      input.snowballAutoTradeQualityShortHoldExtendRedHours === null
+        ? undefined
+        : input.snowballAutoTradeQualityShortHoldExtendRedHours !== undefined
+          ? input.snowballAutoTradeQualityShortHoldExtendRedHours
+          : prev?.snowballAutoTradeQualityShortHoldExtendRedHours,
 
     snowballAutoTradeQualityShortSlArmRoiPct:
       input.snowballAutoTradeQualityShortSlArmRoiPct === null
@@ -887,6 +910,13 @@ export async function saveTradingViewMexcSettings(
       input.reversalAutoTradeHoldExtendIfRedEnabled !== undefined
         ? input.reversalAutoTradeHoldExtendIfRedEnabled
         : prev?.reversalAutoTradeHoldExtendIfRedEnabled ?? false,
+
+    reversalAutoTradeHoldExtendRedHours:
+      input.reversalAutoTradeHoldExtendRedHours === null
+        ? undefined
+        : input.reversalAutoTradeHoldExtendRedHours !== undefined
+          ? input.reversalAutoTradeHoldExtendRedHours
+          : prev?.reversalAutoTradeHoldExtendRedHours,
 
     reversalAutoTradeSlArmRoiPct:
       input.reversalAutoTradeSlArmRoiPct === null

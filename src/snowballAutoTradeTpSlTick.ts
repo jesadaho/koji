@@ -1,6 +1,7 @@
 import {
   resolveAutoTradeHoldCheckpoint,
   resolveAutoTradeHoldExtendIfRed,
+  resolveAutoTradeHoldExtendRedHours,
   resolveAutoTradeMaxHoldHours,
 } from "@/lib/autoTradeMaxHold";
 import {
@@ -436,10 +437,6 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
     const tpPlan = resolveSnowballTpSlPlanFromRow(row);
 
     for (const a of actives as SnowballAutoTradeActive[]) {
-      const tracksTpStrategy =
-        tpPlan.enabled || a.tpSlEnabled === true || (a.maxHoldHours ?? 0) > 0;
-      if (!tracksTpStrategy) continue;
-
       try {
         const phase1H = resolveAutoTradeMaxHoldHours({
           activeMaxHoldHours: a.maxHoldHours,
@@ -450,20 +447,19 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
           liveHoldExtendIfRed: tpPlan.holdExtendIfRedEnabled,
           tpSlEnabled: tpPlan.enabled,
         });
-        const maxHoldDueMs =
-          extendIfRed || a.holdExtendedForRed
-            ? phase1H * 2 * 3600 * 1000
-            : phase1H * 3600 * 1000;
+        const extendRedH = resolveAutoTradeHoldExtendRedHours({
+          phase1Hours: phase1H,
+          liveHoldExtendRedHours: tpPlan.holdExtendRedHours,
+          tpSlEnabled: tpPlan.enabled,
+        });
 
         const positions = await getOpenPositions(creds, a.contractSymbol);
         const pos = findActivePosition(positions, a.contractSymbol, a.side);
 
         if (!pos) {
-          if (snowballActiveTracksTpSl(a) || nowMs - a.openedAtMs >= maxHoldDueMs) {
-            await handlePositionDisappeared({ userId, creds, active: a });
-            state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
-            actionsCount += 1;
-          }
+          await handlePositionDisappeared({ userId, creds, active: a });
+          state = withSnowballActiveRemoved(state, userId, a.contractSymbol, a.side);
+          actionsCount += 1;
           continue;
         }
 
@@ -492,6 +488,7 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
         const holdCheckpoint = resolveAutoTradeHoldCheckpoint({
           openedAtMs: a.openedAtMs,
           phase1Hours: phase1H,
+          extendRedHours: extendRedH,
           extendIfRedEnabled: extendIfRed,
           holdExtendedForRed: a.holdExtendedForRed === true,
           markPnlPct: moveForHold,
@@ -501,7 +498,7 @@ export async function runSnowballAutoTradeTpSlTick(nowMs: number): Promise<numbe
           state = withSnowballHoldExtendedForRed(state, userId, a.contractSymbol, a.side);
           await notifyLines(userId, [
             "Koji — Snowball TP/SL (MEXC)",
-            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) ยังปิดแดง → ขยายอีก ${holdCheckpoint.phase1Hours} ชม.`,
+            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) ยังปิดแดง → ขยายอีก ${holdCheckpoint.extendRedHours} ชม.`,
             `[${shortContractLabel(a.contractSymbol)}]/USDT (${a.side.toUpperCase()})`,
             `Entry: ${fmtPrice(ctx.entry)} · Mark: ${fmtPrice(mark)} · เคลื่อน ${moveForHold.toFixed(2)}%`,
           ]);

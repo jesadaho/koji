@@ -45,7 +45,6 @@ import {
 import type { MexcUsdtBalanceSnapshot } from "@/src/mexcFuturesClient";
 import {
   statsStrategyExitReasonForHorizon,
-  statsStrategyExitReasonShort,
 } from "@/lib/statsStrategyProfitClient";
 import {
   autoOpenPnlBucketHeadlineWinLoss,
@@ -72,7 +71,14 @@ import {
   formatStatsStrategyProfitDollarAmount,
   formatStatsStrategyProfitUsdt,
   resolveStatsStrategyDisplayPct,
+  statsStrategyExitReasonDetail,
 } from "@/lib/statsStrategyProfitClient";
+import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
+import {
+  autoOpenMexcCloseReasonShort,
+  autoOpenMexcCloseState,
+  resolveAutoOpenMexcCloseExitReason,
+} from "@/lib/autoOpenMexcCloseReason";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -582,9 +588,7 @@ function fmtStrategyHorizonPnlCell(
   const pct = resolved.pct;
   const outcome = resolved.outcome;
   const displayPct = resolveStatsStrategyDisplayPct(pct, row.leverage);
-  const exitShort = statsStrategyExitReasonShort(
-    statsStrategyExitReasonForHorizon(row, hours),
-  );
+  const exitShort = autoOpenMexcCloseReasonShort(statsStrategyExitReasonForHorizon(row, hours));
   const margin = autoOpenRowMarginUsdt(row);
   const usdtLine =
     margin != null && row.leverage != null && margin > 0 && row.leverage > 0
@@ -602,6 +606,11 @@ function fmtStrategyHorizonPnlCell(
       {usdtLine ? (
         <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
           {usdtLine}
+        </span>
+      ) : null}
+      {exitShort ? (
+        <span className="sub" style={{ display: "block", fontSize: "0.82em", opacity: 0.85 }}>
+          {exitShort}
         </span>
       ) : null}
     </span>
@@ -700,6 +709,33 @@ function fmtOrderPeriodCell(
   );
 }
 
+function fmtMexcCloseReasonCell(row: AutoOpenOrderLogRow): ReactNode {
+  const state = autoOpenMexcCloseState(row);
+  if (state === "na") return "—";
+  if (state === "open") {
+    return (
+      <span style={{ whiteSpace: "nowrap", color: "var(--ok, #3a8)" }} title="ยังเปิดอยู่บน MEXC">
+        เปิดอยู่
+      </span>
+    );
+  }
+  const reason = resolveAutoOpenMexcCloseExitReason(row);
+  const short = autoOpenMexcCloseReasonShort(reason);
+  if (!short) {
+    return (
+      <span style={{ whiteSpace: "nowrap" }} title="ปิดบน MEXC แล้ว — ยังไม่มีเหตุผลจำลอง TP/SL">
+        ปิดแล้ว
+      </span>
+    );
+  }
+  const detail = statsStrategyExitReasonDetail(reason, DEFAULT_STATS_TPSL_PLAN);
+  return (
+    <span style={{ whiteSpace: "nowrap" }} title={detail || short}>
+      {short}
+    </span>
+  );
+}
+
 function renderAutoOpenHistoryTableBody(
   rows: AutoOpenOrderLogRow[],
   markPrices: Record<string, number>,
@@ -709,7 +745,7 @@ function renderAutoOpenHistoryTableBody(
   if (rows.length === 0) {
     return (
       <tr>
-        <td colSpan={22} className="sub">
+        <td colSpan={23} className="sub">
           {emptyMessage}
         </td>
       </tr>
@@ -741,6 +777,9 @@ function renderAutoOpenHistoryTableBody(
         <td>{fmtPrice(nowPx)}</td>
         <td>{fmtPnlCell(r, nowPx)}</td>
         <td title="Realised P/L จาก MEXC เมื่อปิด position">{fmtMexcRealPnlCell(r)}</td>
+        <td title="เหตุผลปิดบน MEXC (จำลองจาก TP/SL ตาม Settings · อ้างอิงช่วงถือจริง)">
+          {fmtMexcCloseReasonCell(r)}
+        </td>
         <td title="หลังครบ 24h — กำไรจำลอง TP/SL (ไม่ใช่คอลัมน์ 24h ดิบ)">
           {fmtStrategy24hPnlCell(r)}
         </td>
@@ -823,6 +862,9 @@ function AutoOpenHistoryTable({
             <th>P/L</th>
             <th title="Realised P/L จาก MEXC เมื่อปิด position (อัปเดตทุก ~15 นาที)">
               MEXC P/L
+            </th>
+            <th title="เหตุผลปิด — จากจำลอง TP/SL (เช่น ครบ 24h · TP2 · SL@entry)">
+              เหตุผลปิด
             </th>
             <th title="หลังครบ 24h — Win/Loss/Flat จากกำไรจำลอง TP/SL (ไม่ใช่คอลัมน์ 24h ดิบ)">
               ผล@24h
@@ -1403,7 +1445,8 @@ export default function AutoOpenHistoryTelegramMiniApp() {
         ) : null}
         <p className="sub" style={{ marginTop: 0, marginBottom: "0.65rem", opacity: 0.9 }}>
           <span style={{ color: "var(--ok, #3a8)", fontWeight: 600 }}>● MEXC</span> = ยังมี position
-          เปิดบน MEXC (แถวเปิดสำเร็จล่าสุดของเหรียญ+ทิศ)
+          เปิดบน MEXC (แถวเปิดสำเร็จล่าสุดของเหรียญ+ทิศ) ·{" "}
+          <strong>เหตุผลปิด</strong> = จำลองจากกลยุทธ์ TP/SL (เช่น ครบ 24h) — hover เพื่อดูรายละเอียด
         </p>
         {limitPendingHiddenCount > 0 || mexcLiveHiddenCount > 0 || conflictHiddenFromSummary > 0 ? (
           <p className="sub" style={{ marginTop: 0, marginBottom: "0.65rem", opacity: 0.9 }}>

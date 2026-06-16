@@ -20,6 +20,8 @@ export type StatsTpSlPlan = {
   maxHoldHours: number;
   /** ถ้าเปิด: ครบจังหวะ 1 แล้วยังแดง → ถือต่ออีก maxHoldHours ชม. */
   holdExtendIfRedEnabled?: boolean;
+  /** จังหวะ 2 เมื่อแดง — ว่าง = เท่าจังหวะ 1 */
+  holdExtendRedHours?: number;
   /** ROI ถึงค่านี้แล้วตั้ง SL บังทุน (แยกจาก TP1 partial) */
   slAtEntryArmRoiPct?: number;
   /** % ราคาสวนจาก entry ที่วาง SL (0 = @entry) */
@@ -63,8 +65,9 @@ export function statsTpSlPlanSummary(plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PL
   const off = slEntryOffsetPctFromPlan(plan);
   const slTag =
     off > 0 ? `ROI≥${arm}%→SL±${off}%` : `ROI≥${arm}%→SL@entry`;
+  const extH = plan.holdExtendRedHours ?? plan.maxHoldHours;
   const holdTag = plan.holdExtendIfRedEnabled
-    ? `${plan.maxHoldHours}h+${plan.maxHoldHours}hถ้าแดง`
+    ? `${plan.maxHoldHours}h+${extH}hถ้าแดง`
     : `${plan.maxHoldHours}h`;
   return `TP1 ${plan.tp1PricePct}%×${plan.tp1PartialPct}% · ${slTag} · TP2 ${plan.tp2PricePct}% · ${holdTag}`;
 }
@@ -223,6 +226,7 @@ export function simulateStatsTpSlProfit(input: {
   if (!Number.isFinite(input.pctAt48h)) return null;
 
   const phase1Hours = plan.maxHoldHours > 0 ? plan.maxHoldHours : 48;
+  const extendRedH = plan.holdExtendRedHours ?? phase1Hours;
   const iPhase1Last =
     typeof input.iPhase1Last === "number" && input.iPhase1Last >= input.iFirst
       ? Math.min(input.iPhase1Last, input.iLast)
@@ -315,7 +319,7 @@ export function simulateStatsTpSlProfit(input: {
       profit += rem * pctExit;
       rem = 0;
       exitReason = holdTimeExitReason(
-        { ...plan, maxHoldHours: holdExtendedForRed ? phase1Hours * 2 : phase1Hours },
+        { ...plan, maxHoldHours: holdExtendedForRed ? phase1Hours + extendRedH : phase1Hours },
         tp1Done,
       );
       break;
@@ -325,7 +329,7 @@ export function simulateStatsTpSlProfit(input: {
   if (rem > 0) {
     profit += rem * input.pctAt48h;
     exitReason = holdTimeExitReason(
-      { ...plan, maxHoldHours: holdExtendedForRed ? phase1Hours * 2 : phase1Hours },
+      { ...plan, maxHoldHours: holdExtendedForRed ? phase1Hours + extendRedH : phase1Hours },
       tp1Done,
     );
   }

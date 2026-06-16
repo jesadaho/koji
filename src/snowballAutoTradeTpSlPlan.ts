@@ -19,6 +19,8 @@ export type SnowballTpSlPlan = {
   tp2PricePct: number;
   maxHoldHours: number;
   holdExtendIfRedEnabled: boolean;
+  /** จังหวะ 2 เมื่อแดง — ว่าง = เท่าจังหวะ 1 */
+  holdExtendRedHours?: number;
   slArmRoiPct: number;
   slEntryOffsetPct: number;
   slAtEntryAfter24hIfGreenEnabled: boolean;
@@ -31,6 +33,7 @@ type SnowballTpSlPlanFieldKeys = {
   tp2PricePct: keyof TradingViewMexcUserSettings;
   maxHoldHours: keyof TradingViewMexcUserSettings;
   holdExtendIfRedEnabled: keyof TradingViewMexcUserSettings;
+  holdExtendRedHours: keyof TradingViewMexcUserSettings;
   slArmRoiPct: keyof TradingViewMexcUserSettings;
   slEntryOffsetPct: keyof TradingViewMexcUserSettings;
   slAtEntryAfter24hIfGreenEnabled: keyof TradingViewMexcUserSettings;
@@ -43,6 +46,7 @@ const SNOWBALL_DEFAULT_TP_SL_KEYS: SnowballTpSlPlanFieldKeys = {
   tp2PricePct: "snowballAutoTradeTp2PricePct",
   maxHoldHours: "snowballAutoTradeMaxHoldHours",
   holdExtendIfRedEnabled: "snowballAutoTradeHoldExtendIfRedEnabled",
+  holdExtendRedHours: "snowballAutoTradeHoldExtendRedHours",
   slArmRoiPct: "snowballAutoTradeSlArmRoiPct",
   slEntryOffsetPct: "snowballAutoTradeSlEntryOffsetPct",
   slAtEntryAfter24hIfGreenEnabled: "snowballAutoTradeSlAtEntryAfter24hIfGreenEnabled",
@@ -55,6 +59,7 @@ const SNOWBALL_QUALITY_SHORT_TP_SL_KEYS: SnowballTpSlPlanFieldKeys = {
   tp2PricePct: "snowballAutoTradeQualityShortTp2PricePct",
   maxHoldHours: "snowballAutoTradeQualityShortMaxHoldHours",
   holdExtendIfRedEnabled: "snowballAutoTradeQualityShortHoldExtendIfRedEnabled",
+  holdExtendRedHours: "snowballAutoTradeQualityShortHoldExtendRedHours",
   slArmRoiPct: "snowballAutoTradeQualityShortSlArmRoiPct",
   slEntryOffsetPct: "snowballAutoTradeQualityShortSlEntryOffsetPct",
   slAtEntryAfter24hIfGreenEnabled: "snowballAutoTradeQualityShortSlAtEntryAfter24hIfGreenEnabled",
@@ -77,6 +82,7 @@ function resolveSnowballTpSlPlanFromRowKeys(
   const t1p = readPositiveNumber(row, keys.tp1PartialPct) ?? SNOWBALL_TPSL_DEFAULT_TP1_PARTIAL;
   const t2 = readPositiveNumber(row, keys.tp2PricePct) ?? SNOWBALL_TPSL_DEFAULT_TP2_PCT;
   const mh = readPositiveNumber(row, keys.maxHoldHours) ?? SNOWBALL_TPSL_DEFAULT_MAX_HOURS;
+  const extH = readPositiveNumber(row, keys.holdExtendRedHours);
   return {
     enabled,
     tp1PricePct: t1,
@@ -84,6 +90,7 @@ function resolveSnowballTpSlPlanFromRowKeys(
     tp2PricePct: t2,
     maxHoldHours: mh,
     holdExtendIfRedEnabled: row[keys.holdExtendIfRedEnabled] === true,
+    holdExtendRedHours: extH,
     slArmRoiPct: parseSlArmRoiPct(row[keys.slArmRoiPct] as number | null | undefined, DEFAULT_SL_ARM_ROI_PCT),
     slEntryOffsetPct: parseSlEntryOffsetPct(
       row[keys.slEntryOffsetPct] as number | null | undefined,
