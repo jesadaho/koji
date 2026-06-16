@@ -102,6 +102,11 @@ import {
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
 import { snowballStatsConfirmVolFieldsFrom1hEval } from "@/lib/snowballStatsClient";
+import {
+  snowballAlertRepeatGuardMs,
+  snowballFeedNotifyKey,
+  snowballFeedNotifyKeyFromStatsRow,
+} from "@/lib/snowballAlertRepeatGuard";
 import { addSnowballPendingConfirm, loadSnowballPendingConfirms } from "./snowballConfirmStore";
 import {
   loadSnowballConfirmLastRoundStats,
@@ -245,9 +250,7 @@ function publicCooldownMs(): number {
 
 /** Cooldown แจ้ง Snowball ต่อ key (เหรียญ+TF+ทิศ) — default 48 ชม. */
 export function snowballPublicCooldownMs(): number {
-  const v = Number(process.env.INDICATOR_PUBLIC_SNOWBALL_COOLDOWN_MS);
-  if (Number.isFinite(v) && v > 0) return v;
-  return 48 * 3600 * 1000;
+  return snowballAlertRepeatGuardMs();
 }
 
 function cooldownMsForFeedKey(key: string): number {
@@ -2693,19 +2696,19 @@ export async function runPublicIndicatorFeedInternal(
   let notified = 0;
   let snowballScanSummaryText: string | undefined;
 
-  /** เหรียญที่มีสัญญาณ pending — ห้ามแจ้ง Snowball ซ้ำจน outcome ไม่ pending / คิว confirm หาย */
-  const snowballPendingSymbols = new Set<string>();
+  /** key (เหรียญ+TF+ทิศ) ที่มีสัญญาณ pending — ห้ามแจ้ง Snowball ซ้ำจน outcome ไม่ pending / คิว confirm หาย */
+  const snowballPendingFeedKeys = new Set<string>();
   if (effectiveSnowballOn) {
-    const pendingMaxAgeMs = 30 * 3600 * 1000;
+    const pendingMaxAgeMs = snowballAlertRepeatGuardMs();
     try {
       const stats = await loadSnowballStatsState();
       const rows = (stats?.rows ?? []) as SnowballStatsRow[];
       for (const r of rows) {
         if (!r || r.outcome !== "pending") continue;
-        const sym = typeof r.symbol === "string" ? r.symbol.trim().toUpperCase() : "";
         const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
         if (atMs > 0 && now - atMs > pendingMaxAgeMs) continue;
-        if (sym) snowballPendingSymbols.add(sym);
+        const key = snowballFeedNotifyKeyFromStatsRow(r);
+        if (key) snowballPendingFeedKeys.add(key);
       }
     } catch (e) {
       console.error("[indicatorPublicFeed] load snowball stats for pending dedupe failed", e);
@@ -2713,8 +2716,8 @@ export async function runPublicIndicatorFeedInternal(
     try {
       const pend = await loadSnowballPendingConfirms();
       for (const it of pend.items) {
-        const sym = typeof it.symbol === "string" ? it.symbol.trim().toUpperCase() : "";
-        if (sym) snowballPendingSymbols.add(sym);
+        const key = snowballFeedNotifyKey(it.symbol, it.snowTf, it.side);
+        if (key) snowballPendingFeedKeys.add(key);
       }
     } catch (e) {
       console.error("[indicatorPublicFeed] load snowball pending confirm for dedupe failed", e);
@@ -3061,16 +3064,6 @@ export async function runPublicIndicatorFeedInternal(
         pack1hForTwoBar: BinanceKlinePack | null,
       ): Promise<void> => {
         if (iEval < 1) return;
-        if (!intrabar && snowballPendingSymbols.has(symbol)) {
-          if (snowScanStats) {
-            snowScanStats.longDeduped++;
-            pushSnowScanSymList(
-              snowScanStats.longDedupedSymbols,
-              `${symbol} LONG (สถิติ/คิว pending)`,
-            );
-          }
-          return;
-        }
         const longBreakout1h = false;
         const twoBarInline = snowTf === "4h" && !intrabar && iEval >= 1;
         const iConf = iEval;
@@ -3235,6 +3228,26 @@ export async function runPublicIndicatorFeedInternal(
             pushSnowScanSymList(
               snowScanStats.longDedupedSymbols,
               `${symbol} LONG (แท่งเดิม)`,
+            );
+          }
+          return;
+        }
+        if (snowballPendingFeedKeys.has(key)) {
+          if (snowScanStats && !intrabar) {
+            snowScanStats.longDeduped++;
+            pushSnowScanSymList(
+              snowScanStats.longDedupedSymbols,
+              `${symbol} LONG (สถิติ/คิว pending)`,
+            );
+          }
+          return;
+        }
+        if (inCooldown(state, key, now)) {
+          if (snowScanStats && !intrabar) {
+            snowScanStats.longDeduped++;
+            pushSnowScanSymList(
+              snowScanStats.longDedupedSymbols,
+              `${symbol} LONG (cooldown 48h)`,
             );
           }
           return;
@@ -3832,16 +3845,6 @@ export async function runPublicIndicatorFeedInternal(
         pack1hForTwoBar: BinanceKlinePack | null,
       ): Promise<void> => {
         if (iEval < 1) return;
-        if (!intrabar && snowballPendingSymbols.has(symbol)) {
-          if (snowScanStats) {
-            snowScanStats.bearDeduped++;
-            pushSnowScanSymList(
-              snowScanStats.bearDedupedSymbols,
-              `${symbol} BEAR (สถิติ/คิว pending)`,
-            );
-          }
-          return;
-        }
         const twoBarInline = !intrabar && snowballTwoBarInlineModeEnabled() && iEval >= 2;
         const iConf = iEval;
         const iSig = twoBarInline ? iEval - 1 : iEval;
@@ -3974,6 +3977,26 @@ export async function runPublicIndicatorFeedInternal(
             pushSnowScanSymList(
               snowScanStats.bearDedupedSymbols,
               `${symbol} BEAR (แท่งเดิม)`,
+            );
+          }
+          return;
+        }
+        if (snowballPendingFeedKeys.has(key)) {
+          if (snowScanStats && !intrabar) {
+            snowScanStats.bearDeduped++;
+            pushSnowScanSymList(
+              snowScanStats.bearDedupedSymbols,
+              `${symbol} BEAR (สถิติ/คิว pending)`,
+            );
+          }
+          return;
+        }
+        if (inCooldown(state, key, now)) {
+          if (snowScanStats && !intrabar) {
+            snowScanStats.bearDeduped++;
+            pushSnowScanSymList(
+              snowScanStats.bearDedupedSymbols,
+              `${symbol} BEAR (cooldown 48h)`,
             );
           }
           return;

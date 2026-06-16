@@ -1,5 +1,6 @@
 import "server-only";
 
+import { snowballAlertRepeatGuardMs } from "@/lib/snowballAlertRepeatGuard";
 import {
   buildStatsConflictIndex,
   isReversalAfterPendingSnowball,
@@ -17,8 +18,6 @@ import {
 import { loadSnowballPendingConfirms } from "./snowballConfirmStore";
 import { loadSnowballStatsState, saveSnowballStatsState } from "./snowballStatsStore";
 
-const SNOWBALL_STATS_PENDING_MAX_AGE_MS = 30 * 3600 * 1000;
-
 export async function loadPendingConflictSets(nowMs = Date.now()): Promise<PendingConflictSets> {
   const snowballPending = new Set<string>();
   const reversalPending = new Set<string>();
@@ -28,7 +27,7 @@ export async function loadPendingConflictSets(nowMs = Date.now()): Promise<Pendi
     for (const r of stats.rows ?? []) {
       if (!r || r.outcome !== "pending") continue;
       const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
-      if (atMs > 0 && nowMs - atMs > SNOWBALL_STATS_PENDING_MAX_AGE_MS) continue;
+      if (atMs > 0 && nowMs - atMs > snowballAlertRepeatGuardMs()) continue;
       const k = pendingConflictSymbolKey(r.symbol);
       if (k) snowballPending.add(k);
     }
@@ -94,7 +93,7 @@ export async function getLatestPendingSnowballAtMsForSymbol(
       if (!r || r.outcome !== "pending") continue;
       if (pendingConflictSymbolKey(r.symbol) !== key) continue;
       const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
-      if (atMs > 0 && nowMs - atMs > SNOWBALL_STATS_PENDING_MAX_AGE_MS) continue;
+      if (atMs > 0 && nowMs - atMs > snowballAlertRepeatGuardMs()) continue;
       latest = latest == null ? atMs : Math.max(latest, atMs);
     }
   } catch {
@@ -170,7 +169,7 @@ export async function stampPendingConflictOnStatsAppend(
     for (const r of sbState.rows) {
       if (r.outcome !== "pending") continue;
       const atMs = typeof r.alertedAtMs === "number" && Number.isFinite(r.alertedAtMs) ? r.alertedAtMs : 0;
-      if (atMs > 0 && nowMs - atMs > SNOWBALL_STATS_PENDING_MAX_AGE_MS) continue;
+      if (atMs > 0 && nowMs - atMs > snowballAlertRepeatGuardMs()) continue;
       if (pendingConflictSymbolKey(r.symbol) !== key) continue;
       if (r.conflictWith === oppositeLabel) continue;
       r.conflictWith = oppositeLabel;
