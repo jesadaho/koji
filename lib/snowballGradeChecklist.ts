@@ -467,11 +467,11 @@ function snowballTrendGradeChecklistItems(
           : row.signalVolVsSma != null && Number.isFinite(row.signalVolVsSma)
             ? "fail"
             : "unknown",
-        detail: `${
-          row.signalVolVsSma != null && Number.isFinite(row.signalVolVsSma)
-            ? row.signalVolVsSma.toFixed(2)
-            : "—"
-        }× · S/A/B ต้อง > ${SNOWBALL_COMPOSITE_SAB_VOL_VS_SMA_MIN}×`,
+          detail: `${
+            row.signalVolVsSma != null && Number.isFinite(row.signalVolVsSma)
+              ? row.signalVolVsSma.toFixed(2)
+              : "—"
+          }× · S/A/B ต้อง > ${SNOWBALL_COMPOSITE_SAB_VOL_VS_SMA_MIN}× · ไม่มีข้อมูล = ยังไม่ตัด`,
       }
     : null;
 
@@ -481,7 +481,7 @@ function snowballTrendGradeChecklistItems(
         title: "SAR 4h (S/A/B)",
         status:
           row.psar4hTrend === "up" ? "pass" : row.psar4hTrend === "down" ? "fail" : "unknown",
-        detail: `${statsPsar4hTrendLabel(row.psar4hTrend)} · S/A/B ต้อง ↑`,
+        detail: `${statsPsar4hTrendLabel(row.psar4hTrend)} · S/A/B ต้อง ↑ · ไม่มีข้อมูล = ยังไม่ตัด`,
       }
     : null;
 

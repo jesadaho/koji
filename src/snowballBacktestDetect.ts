@@ -65,6 +65,7 @@ export type SnowballDetectTrendGradeInput = {
   ema1dSlopePct7d: number | null;
   btcEma4hSlopePct7d: number | null;
   btcEma1dSlopePct7d: number | null;
+  psar4hTrend: "up" | "down" | null;
   greenDaysBeforeSignal: number | null;
 };
 
@@ -481,6 +482,10 @@ function detectSnowballLongClosed(
       ema1dSlopePct7d: trendGradeInput?.ema1dSlopePct7d ?? null,
       btcEma4hSlopePct7d: trendGradeInput?.btcEma4hSlopePct7d ?? null,
       btcEma1dSlopePct7d: trendGradeInput?.btcEma1dSlopePct7d ?? null,
+      psar4hTrend: trendGradeInput?.psar4hTrend ?? null,
+      signalBarTf: snowTf,
+      signalVolVsSma:
+        typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
       greenDaysBeforeSignal: trendGradeInput?.greenDaysBeforeSignal ?? null,
     },
   });
@@ -674,6 +679,10 @@ function detectSnowballBearClosed(
     ema1dSlopePct7d: trendGradeInput?.ema1dSlopePct7d ?? null,
     btcEma4hSlopePct7d: trendGradeInput?.btcEma4hSlopePct7d ?? null,
     btcEma1dSlopePct7d: trendGradeInput?.btcEma1dSlopePct7d ?? null,
+    psar4hTrend: trendGradeInput?.psar4hTrend ?? null,
+    signalBarTf: snowTf,
+    signalVolVsSma:
+      typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
   });
 
   const entryPx = twoBarInline ? c15[iConf]! : clE!;

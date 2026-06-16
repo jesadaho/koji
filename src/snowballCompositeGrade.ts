@@ -52,12 +52,13 @@ export function snowballVolSmaMeetsSabGradeMin(
   return snowballVolSmaMeetsGradeCMin(signalVolVsSma);
 }
 
-/** S/A/B ที่ Vol×SMA ไม่ถึง → cap เป็น C (F/C ไม่เปลี่ยน) */
+/** S/A/B ที่ Vol×SMA ไม่ถึง → cap เป็น C (F/C ไม่เปลี่ยน · ไม่ลงโทษเมื่อไม่มีข้อมูล vol) */
 export function applySnowballVolSmaSabCap(
   baseTier: SnowballTrendGrade,
   signalVolVsSma: number | null | undefined,
 ): SnowballTrendGrade {
   if (baseTier !== "s" && baseTier !== "a" && baseTier !== "b") return baseTier;
+  if (signalVolVsSma == null || !Number.isFinite(signalVolVsSma)) return baseTier;
   if (snowballVolSmaMeetsSabGradeMin(signalVolVsSma)) return baseTier;
   return "c";
 }

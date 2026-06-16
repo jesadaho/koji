@@ -482,6 +482,7 @@ export async function runSnowballStatsFollowUpTick(
   const emaSlopes = await backfillSnowballEmaSlopes(state.rows, symbolFilter);
   dirty += emaSlopes;
   dirty += await backfillAllStatsRowsBtcEmaSlopes(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
+  dirty += await backfillAllStatsRowsPsar4h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   const trendGrades = await backfillSnowballTrendGradesForTick(state.rows, symbolFilter);
   dirty += trendGrades;
   const trendMomentum = await backfillSnowballTrendMomentumFields(state.rows);
@@ -489,7 +490,7 @@ export async function runSnowballStatsFollowUpTick(
   const confirmGateSteps = await backfillSnowballConfirmGateSteps(state.rows);
   dirty += confirmGateSteps;
   dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
-  dirty += await backfillAllStatsRowsPsar4h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
+  dirty += await backfillSnowballTrendGradesForTick(state.rows, symbolFilter);
   dirty += await backfillAllStatsRowsQuoteVol24h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
 
   let grade4h = 0;

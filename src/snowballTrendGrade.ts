@@ -102,11 +102,14 @@ function snowballTrendGradeSabGatesApply(input: ClassifySnowballTrendGradeInput)
   return isLongSide(input.alertSide) && input.signalBarTf === "4h";
 }
 
-/** 4h Long S/A/B — Vol×SMA > 2× และ SAR 4h ↑ */
+/** 4h Long S/A/B — Vol×SMA > 2× และ SAR 4h ↑ (ใช้เมื่อมีข้อมูล — ไม่ลงโทษค่า null) */
 export function snowballTrendGradeMeetsSabVolAndPsar(input: ClassifySnowballTrendGradeInput): boolean {
   if (!snowballTrendGradeSabGatesApply(input)) return true;
-  if (!snowballVolSmaMeetsGradeCMin(input.signalVolVsSma)) return false;
-  return input.psar4hTrend === "up";
+  const volKnown = finitePct(input.signalVolVsSma);
+  const psarKnown = input.psar4hTrend === "up" || input.psar4hTrend === "down";
+  if (volKnown && !snowballVolSmaMeetsGradeCMin(input.signalVolVsSma)) return false;
+  if (psarKnown && input.psar4hTrend !== "up") return false;
+  return true;
 }
 
 function matchesGradeB(input: ClassifySnowballTrendGradeInput): boolean {
