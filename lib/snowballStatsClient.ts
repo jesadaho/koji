@@ -273,9 +273,11 @@ export function snowballStatsActionPlanLabel(
 type SnowballStatsGradeDerivationFields = Partial<
   Pick<
     SnowballStatsRow,
+    | "ema1hSlopePct7d"
     | "ema4hSlopePct7d"
     | "ema1dSlopePct7d"
     | "btcEma4hSlopePct7d"
+    | "btcEma1dSlopePct7d"
     | "greenDaysBeforeSignal"
     | "alertSide"
     | "triggerKind"
@@ -283,6 +285,8 @@ type SnowballStatsGradeDerivationFields = Partial<
     | "signalBarTf"
     | "swing200Ok"
     | "signalMaxDdPct"
+    | "signalVolVsSma"
+    | "psar4hTrend"
   >
 >;
 
@@ -319,10 +323,15 @@ function snowballStatsTrendGradeInputFromRow(
   }
   return {
     alertSide: side,
+    ema1hSlopePct7d: row.ema1hSlopePct7d,
     ema4hSlopePct7d: ema4h,
     ema1dSlopePct7d: row.ema1dSlopePct7d,
     btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
+    btcEma1dSlopePct7d: row.btcEma1dSlopePct7d,
     greenDaysBeforeSignal: row.greenDaysBeforeSignal,
+    signalVolVsSma: row.signalVolVsSma,
+    psar4hTrend: row.psar4hTrend ?? null,
+    signalBarTf: row.signalBarTf ?? null,
   };
 }
 
@@ -339,6 +348,7 @@ export function snowballStatsDerivedDisplayGrade(
       swing200Ok: row.swing200Ok,
       structureTier: row.structureTier,
       signalMaxDdPct: row.signalMaxDdPct,
+      signalVolVsSma: row.signalVolVsSma,
     });
     return snowballStatsFormatDisplayGrade(composite.display, composite.dangerous);
   }
@@ -483,6 +493,7 @@ function snowballStatsDerivedBaseTier(
       swing200Ok: row.swing200Ok,
       structureTier: row.structureTier,
       signalMaxDdPct: row.signalMaxDdPct,
+      signalVolVsSma: row.signalVolVsSma,
     }).baseTier;
   }
   if (row.displayGrade) return displayGradeToBaseTier(row.displayGrade);
@@ -507,9 +518,11 @@ export function snowballStatsGradeCellClass(
     | "alertQualityTier"
     | "qualityTier4hAdjusted"
     | "breakout1hConfirmFail"
+    | "ema1hSlopePct7d"
     | "ema4hSlopePct7d"
     | "ema1dSlopePct7d"
     | "btcEma4hSlopePct7d"
+    | "btcEma1dSlopePct7d"
     | "greenDaysBeforeSignal"
     | "alertSide"
     | "triggerKind"
@@ -517,6 +530,8 @@ export function snowballStatsGradeCellClass(
     | "signalBarTf"
     | "swing200Ok"
     | "signalMaxDdPct"
+    | "signalVolVsSma"
+    | "psar4hTrend"
   >,
 ): string {
   const tier = snowballStatsGradeTierForStyle(row);
