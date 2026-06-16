@@ -31,6 +31,9 @@ export type StatsStrategyProfitHorizon = 24 | 48;
 export const STATS_STRATEGY_PROFIT_HOLD_24H = 24 as const;
 export const STATS_STRATEGY_PROFIT_HOLD_48H = 48 as const;
 
+/** ADV max (follow-up) > ค่านี้ → กำไรกลยุทธ์ 24h = Liquidate ทันที (ไม่รอ pct24h) */
+export const STATS_STRATEGY_ADV_MAX_EARLY_LIQUIDATION_PCT = 20;
+
 /** คอลัมน์ 48h จำลอง TP/SL เหมือน 24h (ไม่ bypass ไปใช้ pct48h ถือครบ) */
 export const STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL = false;
 
@@ -75,9 +78,19 @@ export function statsStrategyProfitFinalized(
 }
 
 export function statsStrategyProfitFinalizedAtHorizon(
-  row: { pct24h?: number | null; pct48h?: number | null },
+  row: {
+    pct24h?: number | null;
+    pct48h?: number | null;
+    followUpMaxAdversePct?: number | null;
+  },
   holdHours: StatsStrategyProfitHorizon,
 ): boolean {
+  if (
+    holdHours === STATS_STRATEGY_PROFIT_HOLD_24H &&
+    rowExceedsAdvMaxEarlyLiquidation(row.followUpMaxAdversePct)
+  ) {
+    return true;
+  }
   const pct = holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? row.pct24h : row.pct48h;
   return pct != null && Number.isFinite(pct);
 }
@@ -119,6 +132,30 @@ export type StatsStrategyLiquidationMetrics = {
   followUpMaxAdversePct?: number | null;
 };
 
+/** ADV max หลังแจ้ง > 20% — ปิดกำไรกลยุทธ์ 24h ทันที */
+export function rowExceedsAdvMaxEarlyLiquidation(
+  followUpMaxAdversePct?: number | null,
+): boolean {
+  return (
+    followUpMaxAdversePct != null &&
+    Number.isFinite(followUpMaxAdversePct) &&
+    followUpMaxAdversePct > STATS_STRATEGY_ADV_MAX_EARLY_LIQUIDATION_PCT
+  );
+}
+
+export function statsStrategyAdvMaxEarlyLiquidationEntry(
+  leverage?: number | null,
+): StrategyProfitByPlanEntry {
+  const lev = leverage != null && Number.isFinite(leverage) && leverage > 0 ? leverage : null;
+  return {
+    profitPct:
+      lev != null
+        ? isolatedLiquidationStrategyProfitPct(lev)
+        : -STATS_STRATEGY_ADV_MAX_EARLY_LIQUIDATION_PCT,
+    exitReason: "liquidated",
+  };
+}
+
 export function maxRowAdversePctForLiquidation(
   metrics: StatsStrategyLiquidationMetrics,
 ): number | null {
@@ -134,6 +171,7 @@ export function rowExceedsIsolatedLiquidationThreshold(
   metrics: StatsStrategyLiquidationMetrics,
   leverage: number | null | undefined,
 ): boolean {
+  if (rowExceedsAdvMaxEarlyLiquidation(metrics.followUpMaxAdversePct)) return true;
   if (leverage == null || !Number.isFinite(leverage) || leverage <= 0) return false;
   const adv = maxRowAdversePctForLiquidation(metrics);
   if (adv == null) return false;
@@ -317,7 +355,7 @@ export function statsStrategyExitReasonDetail(
   if (reason === "time_24h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   if (reason === "time_48h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   if (reason === "liquidated") {
-    return "Max DD หลังหรือ Adv max เกินเกณฑ์ isolated (≈ 100% ÷ leverage) — ถือว่าโดน liquidate สูญ margin (ไม่ใช้กับไม้ที่ปิด TP1 แล้ว SL@entry)";
+    return `ADV max > ${STATS_STRATEGY_ADV_MAX_EARLY_LIQUIDATION_PCT}% หรือเกินเกณฑ์ isolated (≈ 100% ÷ leverage) — ถือว่าโดน liquidate สูญ margin (24h ไม่รอครบ horizon · ไม่ใช้กับไม้ที่ปิด TP1 แล้ว SL@entry)`;
   }
   return "";
 }
@@ -455,6 +493,44 @@ export function statsStrategyExitReasonForHorizon(
     : row.strategyExitReason;
 }
 
+/** กำไรกลยุทธ์หลัง resolve liquidation / leverage cap — รองรับ ADV max > 20% ก่อนครบ 24h */
+export function statsStrategyProfitResolvedForHorizon(
+  row: StatsStrategyProfitRowSlice,
+  holdHours: StatsStrategyProfitHorizon,
+  leverage?: number | null,
+): { profitPct: number; exitReason: StatsTpSlExitReason } | null {
+  if (!statsStrategyProfitFinalizedAtHorizon(row, holdHours)) return null;
+
+  const raw = statsStrategyProfitPctForHorizon(row, holdHours);
+  const exitReason = statsStrategyExitReasonForHorizon(row, holdHours);
+
+  if (raw != null && Number.isFinite(raw)) {
+    const resolved = resolveStatsStrategyProfitOutcome({
+      profitPct: raw,
+      exitReason,
+      leverage,
+      liquidationMetrics: row,
+    });
+    return {
+      profitPct: resolved.profitPct,
+      exitReason:
+        resolved.exitReason ??
+        exitReason ??
+        (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? "time_24h" : "time_48h"),
+    };
+  }
+
+  if (
+    holdHours === STATS_STRATEGY_PROFIT_HOLD_24H &&
+    rowExceedsAdvMaxEarlyLiquidation(row.followUpMaxAdversePct)
+  ) {
+    const early = statsStrategyAdvMaxEarlyLiquidationEntry(leverage);
+    return { profitPct: early.profitPct, exitReason: early.exitReason ?? "liquidated" };
+  }
+
+  return null;
+}
+
 export function statsStrategyProfitPctForHorizon(
   row: Pick<StatsStrategyProfitRowSlice, "strategyProfitPct" | "strategyProfitPct24h">,
   holdHours: StatsStrategyProfitHorizon,
@@ -526,18 +602,13 @@ export function summarizeStatsStrategyProfit(
       pending += 1;
       continue;
     }
-    const raw = statsStrategyProfitPctForHorizon(row, holdHours);
-    if (raw == null || !Number.isFinite(raw)) {
+    const rowLeverage = leverageForRow?.(row) ?? baseLeverage;
+    const resolved = statsStrategyProfitResolvedForHorizon(row, holdHours, rowLeverage);
+    if (!resolved) {
       pending += 1;
       continue;
     }
-    const rowLeverage = leverageForRow?.(row) ?? baseLeverage;
-    const displayPct = resolveStatsStrategyDisplayPct(
-      raw,
-      rowLeverage,
-      row,
-      statsStrategyExitReasonForHorizon(row, holdHours),
-    );
+    const displayPct = resolved.profitPct;
     trades += 1;
     sumPct += displayPct;
     const cls = classifyStatsStrategyProfitPct(displayPct, band);
@@ -622,20 +693,37 @@ export function statsStrategyProfitCsvCell(
   liquidationMetrics?: StatsStrategyLiquidationMetrics,
 ): string {
   if (!statsStrategyProfitFinalizedAtHorizon(
-    holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? { pct24h: pctHorizon } : { pct48h: pctHorizon },
+    holdHours === STATS_STRATEGY_PROFIT_HOLD_24H
+      ? { pct24h: pctHorizon, followUpMaxAdversePct: liquidationMetrics?.followUpMaxAdversePct }
+      : { pct48h: pctHorizon },
     holdHours,
   )) {
     return "";
   }
-  if (strategyProfitPct == null || !Number.isFinite(strategyProfitPct)) return "";
-  const resolved = resolveStatsStrategyProfitOutcome({
-    profitPct: strategyProfitPct,
-    exitReason: strategyExitReason,
-    leverage: sizing?.leverage,
-    liquidationMetrics,
-  });
-  const tag = statsStrategyExitReasonShort(resolved.exitReason);
-  const displayPct = resolved.profitPct;
+  const resolvedFromRow: { profitPct: number; exitReason: StatsTpSlExitReason } | null =
+    strategyProfitPct != null && Number.isFinite(strategyProfitPct)
+      ? (() => {
+          const r = resolveStatsStrategyProfitOutcome({
+            profitPct: strategyProfitPct,
+            exitReason: strategyExitReason,
+            leverage: sizing?.leverage,
+            liquidationMetrics,
+          });
+          return {
+            profitPct: r.profitPct,
+            exitReason:
+              r.exitReason ??
+              strategyExitReason ??
+              (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? "time_24h" : "time_48h"),
+          };
+        })()
+      : holdHours === STATS_STRATEGY_PROFIT_HOLD_24H &&
+          rowExceedsAdvMaxEarlyLiquidation(liquidationMetrics?.followUpMaxAdversePct)
+        ? statsStrategyAdvMaxEarlyLiquidationEntry(sizing?.leverage)
+        : null;
+  if (!resolvedFromRow) return "";
+  const tag = statsStrategyExitReasonShort(resolvedFromRow.exitReason);
+  const displayPct = resolvedFromRow.profitPct;
   const pctPart = formatStatsStrategyProfitPct(displayPct);
   const usdtPart = formatStatsStrategyProfitUsdt(
     sizing?.marginUsdt,
@@ -644,4 +732,24 @@ export function statsStrategyProfitCsvCell(
   );
   const core = tag ? `${pctPart} (${tag})` : pctPart;
   return usdtPart ? `${core} · ${usdtPart}` : core;
+}
+
+/** บันทึก Liquidate 24h ลง strategyProfitByPlan เมื่อ ADV max > 20% (ก่อนครบ horizon) */
+export function applyStatsStrategyEarlyAdvLiquidation24hToRow(
+  row: {
+    strategyProfitByPlan?: StrategyProfitByPlanMap | null;
+    followUpMaxAdversePct?: number | null;
+  },
+  plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
+  leverage?: number | null,
+): boolean {
+  if (!rowExceedsAdvMaxEarlyLiquidation(row.followUpMaxAdversePct)) return false;
+  const key = statsStrategyProfitCacheKey(plan, STATS_STRATEGY_PROFIT_HOLD_24H);
+  const computed = statsStrategyAdvMaxEarlyLiquidationEntry(leverage);
+  const prev = row.strategyProfitByPlan?.[key];
+  if (prev?.profitPct === computed.profitPct && prev?.exitReason === computed.exitReason) {
+    return false;
+  }
+  row.strategyProfitByPlan = { ...row.strategyProfitByPlan, [key]: computed };
+  return true;
 }

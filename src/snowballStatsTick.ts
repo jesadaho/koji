@@ -9,7 +9,9 @@ import {
 } from "@/lib/statsFollowUpAdverse";
 import { DEFAULT_STATS_TPSL_PLAN } from "@/lib/tpSlStrategySimulate";
 import {
+  applyStatsStrategyEarlyAdvLiquidation24hToRow,
   computeStatsStrategyProfitFromBars,
+  rowExceedsAdvMaxEarlyLiquidation,
   statsStrategyProfitCacheKey,
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
@@ -105,7 +107,9 @@ function snowballStatsRowNeedsHorizonFollowUpWork(row: SnowballStatsRow, nowSec:
   const needsFollowUpAdverse = row.followUpMaxAdversePct == null || nowSec < ac + SEC_48H;
   const needsStrategyProfit =
     (row.pct24h != null && row.strategyProfitPct24h == null) ||
-    (row.pct48h != null && row.strategyProfitPct == null);
+    (row.pct48h != null && row.strategyProfitPct == null) ||
+    (rowExceedsAdvMaxEarlyLiquidation(row.followUpMaxAdversePct) &&
+      row.strategyProfitPct24h == null);
   return pending || needs48h || needsHorizonBackfill || needsFollowUpAdverse || needsStrategyProfit;
 }
 
@@ -651,7 +655,10 @@ export async function runSnowballStatsFollowUpTick(
           ) || rowTouched;
       }
     } else if (nowSec < ac + SEC_24H) {
-      if (row.strategyProfitPct24h != null || row.strategyExitReason24h != null) {
+      if (rowExceedsAdvMaxEarlyLiquidation(row.followUpMaxAdversePct)) {
+        rowTouched =
+          applyStatsStrategyEarlyAdvLiquidation24hToRow(row, DEFAULT_STATS_TPSL_PLAN) || rowTouched;
+      } else if (row.strategyProfitPct24h != null || row.strategyExitReason24h != null) {
         row.strategyProfitPct24h = null;
         row.strategyExitReason24h = null;
         rowTouched = true;

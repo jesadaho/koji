@@ -3,13 +3,13 @@
 import {
   formatStatsStrategyProfitPct,
   formatStatsStrategyProfitUsdt,
-  resolveStatsStrategyProfitOutcome,
   statsStrategyExitReasonBreakdownLine,
   statsStrategyExitReasonShort,
   statsStrategyPlanAtHoldHours,
-  statsStrategyProfitFinalizedAtHorizon,
   statsStrategyProfitCellTitle,
+  statsStrategyProfitFinalizedAtHorizon,
   statsStrategyProfitPnlStyle,
+  statsStrategyProfitResolvedForHorizon,
   STATS_STRATEGY_PROFIT_HOLD_48H,
   type StatsStrategyProfitHorizon,
 } from "@/lib/statsStrategyProfitClient";
@@ -31,21 +31,41 @@ export function StatsStrategyProfitCell(props: {
 }) {
   const holdHours = props.holdHours ?? STATS_STRATEGY_PROFIT_HOLD_48H;
   const plan = statsStrategyPlanAtHoldHours(props.tpSlPlan ?? DEFAULT_STATS_TPSL_PLAN, holdHours);
-  const pctHorizon =
-    holdHours === 24 ? props.pct24h : props.pct48h;
-  const profitPct =
-    holdHours === 24 ? props.strategyProfitPct24h : props.strategyProfitPct;
-  const exitReason =
-    holdHours === 24 ? props.strategyExitReason24h : props.strategyExitReason;
+  const pctHorizon = holdHours === 24 ? props.pct24h : props.pct48h;
+  const profitPct = holdHours === 24 ? props.strategyProfitPct24h : props.strategyProfitPct;
+  const exitReason = holdHours === 24 ? props.strategyExitReason24h : props.strategyExitReason;
+  const liquidationMetrics = {
+    maxDrawdownPct: props.maxDrawdownPct,
+    followUpMaxAdversePct: props.followUpMaxAdversePct,
+  };
 
-  if (!statsStrategyProfitFinalizedAtHorizon(
-    holdHours === 24 ? { pct24h: pctHorizon } : { pct48h: pctHorizon },
-    holdHours,
-  )) {
+  if (
+    !statsStrategyProfitFinalizedAtHorizon(
+      holdHours === 24
+        ? { pct24h: pctHorizon, followUpMaxAdversePct: props.followUpMaxAdversePct }
+        : { pct48h: pctHorizon },
+      holdHours,
+    )
+  ) {
     return <>—</>;
   }
-  const pct = profitPct;
-  if (pct == null || !Number.isFinite(pct)) {
+
+  const resolved = statsStrategyProfitResolvedForHorizon(
+    {
+      pct24h: props.pct24h,
+      pct48h: props.pct48h,
+      strategyProfitPct: props.strategyProfitPct,
+      strategyProfitPct24h: props.strategyProfitPct24h,
+      strategyExitReason: props.strategyExitReason,
+      strategyExitReason24h: props.strategyExitReason24h,
+      maxDrawdownPct: props.maxDrawdownPct,
+      followUpMaxAdversePct: props.followUpMaxAdversePct,
+    },
+    holdHours,
+    props.leverage,
+  );
+
+  if (!resolved) {
     return (
       <span
         title={statsStrategyProfitCellTitle(null, exitReason, {
@@ -57,16 +77,7 @@ export function StatsStrategyProfitCell(props: {
       </span>
     );
   }
-  const liquidationMetrics = {
-    maxDrawdownPct: props.maxDrawdownPct,
-    followUpMaxAdversePct: props.followUpMaxAdversePct,
-  };
-  const resolved = resolveStatsStrategyProfitOutcome({
-    profitPct: pct,
-    exitReason,
-    leverage: props.leverage,
-    liquidationMetrics,
-  });
+
   const displayPct = resolved.profitPct;
   const displayReason = resolved.exitReason;
   const tag = statsStrategyExitReasonShort(displayReason);
@@ -76,7 +87,14 @@ export function StatsStrategyProfitCell(props: {
   return (
     <span
       style={statsStrategyProfitPnlStyle(displayPct)}
-      title={statsStrategyProfitCellTitle(pct, exitReason, sizing, plan, liquidationMetrics, holdHours)}
+      title={statsStrategyProfitCellTitle(
+        profitPct,
+        exitReason,
+        sizing,
+        plan,
+        liquidationMetrics,
+        holdHours,
+      )}
     >
       {formatStatsStrategyProfitPct(displayPct)}
       {usdtLine ? (
