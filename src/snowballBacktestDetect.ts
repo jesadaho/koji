@@ -20,6 +20,7 @@ import {
   classifySnowballTrendGrade,
   snowballTrendGradeActionPlan,
   snowballTrendGradeToDisplay,
+  type ClassifySnowballTrendGradeInput,
 } from "./snowballTrendGrade";
 import {
   calculateTrendMomentumMetrics,
@@ -59,16 +60,39 @@ export type SnowballBacktestFeedState = {
   lastAlertPrice: Record<string, number>;
 };
 
-export type SnowballDetectTrendGradeInput = {
-  ema1hSlopePct7d: number | null;
-  ema4hSlopePct7d: number | null;
-  ema1dSlopePct7d: number | null;
-  btcEma4hSlopePct7d: number | null;
-  btcEma1dSlopePct7d: number | null;
-  psar4hTrend: "up" | "down" | null;
-  greenDaysBeforeSignal: number | null;
-  fundingRate?: number | null;
-};
+export type SnowballDetectTrendGradeInput = Required<
+  Pick<
+    ClassifySnowballTrendGradeInput,
+    | "ema1hSlopePct7d"
+    | "ema4hSlopePct7d"
+    | "ema1dSlopePct7d"
+    | "btcEma4hSlopePct7d"
+    | "btcEma1dSlopePct7d"
+    | "psar4hTrend"
+    | "greenDaysBeforeSignal"
+  >
+> &
+  Pick<ClassifySnowballTrendGradeInput, "fundingRate">;
+
+function detectTrendGradeClassifyInput(
+  trendGradeInput: SnowballDetectTrendGradeInput | undefined,
+  extra: Pick<ClassifySnowballTrendGradeInput, "alertSide" | "signalBarTf"> & {
+    signalVolVsSma?: number | null;
+    barRangePctPrev?: number | null;
+  },
+): ClassifySnowballTrendGradeInput {
+  return {
+    ema1hSlopePct7d: trendGradeInput?.ema1hSlopePct7d ?? null,
+    ema4hSlopePct7d: trendGradeInput?.ema4hSlopePct7d ?? null,
+    ema1dSlopePct7d: trendGradeInput?.ema1dSlopePct7d ?? null,
+    btcEma4hSlopePct7d: trendGradeInput?.btcEma4hSlopePct7d ?? null,
+    btcEma1dSlopePct7d: trendGradeInput?.btcEma1dSlopePct7d ?? null,
+    psar4hTrend: trendGradeInput?.psar4hTrend ?? null,
+    greenDaysBeforeSignal: trendGradeInput?.greenDaysBeforeSignal ?? null,
+    fundingRate: trendGradeInput?.fundingRate ?? null,
+    ...extra,
+  };
+}
 
 export type SnowballDetectHit = {
   alertSide: "long" | "bear";
@@ -477,21 +501,13 @@ function detectSnowballLongClosed(
     volumeStrictOk: volStrictOk,
     volumeNearMissOnly: volNearMissOnly,
     gradeDPlusNearMissVolumeEnabled: snowballGradeBNearMissVolumeEnabled(),
-    trendGradeInput: {
+    trendGradeInput: detectTrendGradeClassifyInput(trendGradeInput, {
       alertSide: "long",
-      ema1hSlopePct7d: trendGradeInput?.ema1hSlopePct7d ?? null,
-      ema4hSlopePct7d: trendGradeInput?.ema4hSlopePct7d ?? null,
-      ema1dSlopePct7d: trendGradeInput?.ema1dSlopePct7d ?? null,
-      btcEma4hSlopePct7d: trendGradeInput?.btcEma4hSlopePct7d ?? null,
-      btcEma1dSlopePct7d: trendGradeInput?.btcEma1dSlopePct7d ?? null,
-      psar4hTrend: trendGradeInput?.psar4hTrend ?? null,
       signalBarTf: snowTf,
       signalVolVsSma:
         typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
-      greenDaysBeforeSignal: trendGradeInput?.greenDaysBeforeSignal ?? null,
-      fundingRate: trendGradeInput?.fundingRate ?? null,
       barRangePctPrev: volSnapForGrade.barRangePctPrev,
-    },
+    }),
   });
 
   const longBreakoutGrade = gradeResolution.grade;
@@ -677,20 +693,15 @@ function detectSnowballBearClosed(
   }
 
   const volSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
-  const bearTrendGrade = classifySnowballTrendGrade({
-    alertSide: "bear",
-    ema1hSlopePct7d: trendGradeInput?.ema1hSlopePct7d ?? null,
-    ema4hSlopePct7d: trendGradeInput?.ema4hSlopePct7d ?? null,
-    ema1dSlopePct7d: trendGradeInput?.ema1dSlopePct7d ?? null,
-    btcEma4hSlopePct7d: trendGradeInput?.btcEma4hSlopePct7d ?? null,
-    btcEma1dSlopePct7d: trendGradeInput?.btcEma1dSlopePct7d ?? null,
-    psar4hTrend: trendGradeInput?.psar4hTrend ?? null,
-    signalBarTf: snowTf,
-    signalVolVsSma:
-      typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
-    fundingRate: trendGradeInput?.fundingRate ?? null,
-    barRangePctPrev: volSnap.barRangePctPrev,
-  });
+  const bearTrendGrade = classifySnowballTrendGrade(
+    detectTrendGradeClassifyInput(trendGradeInput, {
+      alertSide: "bear",
+      signalBarTf: snowTf,
+      signalVolVsSma:
+        typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
+      barRangePctPrev: volSnap.barRangePctPrev,
+    }),
+  );
 
   const entryPx = twoBarInline ? c15[iConf]! : clE!;
   const bearSignalHigh = h15[iSig];
