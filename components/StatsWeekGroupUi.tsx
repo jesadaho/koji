@@ -9,6 +9,7 @@ import {
   type StatsStrategyCsvSizing,
   type StatsStrategyProfitRowSlice,
   type StatsStrategyWinLossBand,
+  type StatsStrategyProfitResolveFn,
 } from "@/lib/statsStrategyProfitClient";
 
 /** ตัวเลือกแยกตารางรายสัปดาห์ (จันทร์–อาทิตย์ BKK) */
@@ -54,6 +55,7 @@ export function StatsWeekStrategyProfitBlock(props: {
   band: StatsStrategyWinLossBand;
   show24h?: boolean;
   show48h?: boolean;
+  resolveProfit?: StatsStrategyProfitResolveFn;
 }) {
   const text24h =
     props.show24h !== false
@@ -63,6 +65,7 @@ export function StatsWeekStrategyProfitBlock(props: {
             props.sizing,
             props.band,
             STATS_STRATEGY_PROFIT_HOLD_24H,
+            props.resolveProfit,
           ),
           STATS_STRATEGY_PROFIT_HOLD_24H,
         )
@@ -75,6 +78,7 @@ export function StatsWeekStrategyProfitBlock(props: {
             props.sizing,
             props.band,
             STATS_STRATEGY_PROFIT_HOLD_48H,
+            props.resolveProfit,
           ),
           STATS_STRATEGY_PROFIT_HOLD_48H,
         )

@@ -12,6 +12,7 @@ import {
   statsStrategyProfitResolvedForHorizon,
   STATS_STRATEGY_PROFIT_HOLD_48H,
   type StatsStrategyProfitHorizon,
+  type StatsStrategyProfitResolveFn,
 } from "@/lib/statsStrategyProfitClient";
 import { DEFAULT_STATS_TPSL_PLAN, type StatsTpSlExitReason, type StatsTpSlPlan } from "@/lib/tpSlStrategySimulate";
 
@@ -28,12 +29,14 @@ export function StatsStrategyProfitCell(props: {
   tpSlPlan?: StatsTpSlPlan;
   maxDrawdownPct?: number | null;
   followUpMaxAdversePct?: number | null;
+  resolveProfit?: StatsStrategyProfitResolveFn;
 }) {
   const holdHours = props.holdHours ?? STATS_STRATEGY_PROFIT_HOLD_48H;
   const plan = statsStrategyPlanAtHoldHours(props.tpSlPlan ?? DEFAULT_STATS_TPSL_PLAN, holdHours);
   const pctHorizon = holdHours === 24 ? props.pct24h : props.pct48h;
   const profitPct = holdHours === 24 ? props.strategyProfitPct24h : props.strategyProfitPct;
   const exitReason = holdHours === 24 ? props.strategyExitReason24h : props.strategyExitReason;
+  const resolveProfit = props.resolveProfit ?? statsStrategyProfitResolvedForHorizon;
   const liquidationMetrics = {
     maxDrawdownPct: props.maxDrawdownPct,
     followUpMaxAdversePct: props.followUpMaxAdversePct,
@@ -50,7 +53,7 @@ export function StatsStrategyProfitCell(props: {
     return <>—</>;
   }
 
-  const resolved = statsStrategyProfitResolvedForHorizon(
+  const resolved = resolveProfit(
     {
       pct24h: props.pct24h,
       pct48h: props.pct48h,

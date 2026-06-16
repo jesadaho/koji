@@ -147,6 +147,7 @@ export function computeAutoOpenTpStrategyAtHorizon(input: {
       high,
       low,
       timeSec,
+      anchorCloseSec: input.ac,
       iFirst,
       iLast,
       pct12h: row.pct12h,

@@ -11,8 +11,6 @@ import {
   STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL,
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
-  applyStatsStrategyEarlyAdvLiquidation24hToRow,
-  rowExceedsAdvMaxEarlyLiquidation,
   statsStrategyProfitCacheKey,
   statsStrategyProfitFromHorizonPct,
   type StatsStrategyProfitHorizon,
@@ -93,6 +91,7 @@ function simulateReversalFromPack(input: {
     high,
     low,
     timeSec,
+    anchorCloseSec: input.ac,
     iFirst,
     iLast,
     pct12h: input.row.pct12h,
@@ -281,14 +280,7 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
 
     for (const row of opts.rows) {
       if (!opts.includeRow(row)) continue;
-      if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H && row.pct24h == null) {
-        if (rowExceedsAdvMaxEarlyLiquidation(row.followUpMaxAdversePct)) {
-          applyStatsStrategyEarlyAdvLiquidation24hToRow(row, opts.plan);
-          const early = row.strategyProfitByPlan?.[cacheKey];
-          if (early && applyHorizonFields(row, holdHours, cacheKey, early)) dirty += 1;
-        }
-        continue;
-      }
+      if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H && row.pct24h == null) continue;
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_48H && row.pct48h == null) continue;
 
       let cached = row.strategyProfitByPlan?.[cacheKey];

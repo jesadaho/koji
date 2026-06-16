@@ -10,7 +10,12 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
   STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
+  capStrategyProfitPctForLeverage,
+  statsStrategyExitReasonForHorizon,
+  statsStrategyProfitFinalizedAtHorizon,
+  statsStrategyProfitPctForHorizon,
   type StatsStrategyProfitHorizon,
+  type StatsStrategyProfitRowSlice,
 } from "@/lib/statsStrategyProfitClient";
 import {
   breakevenSlTriggered,
@@ -27,7 +32,7 @@ export const REVERSAL_TP_STRATEGY_12H_BE_MIN_PCT = 3;
 export const REVERSAL_TP_STRATEGY_SUMMARY =
   "12h กำไร>3%→SL@entry · 24h ชนะ+EMA4H<0→ถือ+SL@entry · 24h กำไรนิด+EMA4H>0→ปิด · 24h ติดลบนิด+EMA4H>0→ปิด(ถ้าไม่มี SL@12h) · 48h";
 
-export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revEma4h1";
+export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revBeFwd2";
 
 export type ReversalTpStrategyProfitBand = "win" | "flat_profit" | "flat_loss" | "loss";
 
@@ -114,6 +119,8 @@ export function simulateReversalTpStrategyProfit(input: {
   high: number[];
   low: number[];
   timeSec?: number[];
+  /** anchor close (วินาที) — ใช้หา checkpoint 12h/24h บนแท่ง 15m */
+  anchorCloseSec?: number;
   iFirst: number;
   iLast: number;
   pct12h: number;
@@ -143,9 +150,11 @@ export function simulateReversalTpStrategyProfit(input: {
 
   const barDurSec = 900;
   const ac =
-    input.timeSec && input.timeSec[input.iFirst] != null
-      ? input.timeSec[input.iFirst]! - barDurSec
-      : 0;
+    input.anchorCloseSec != null && Number.isFinite(input.anchorCloseSec) && input.anchorCloseSec > 0
+      ? input.anchorCloseSec
+      : input.timeSec && input.timeSec[input.iFirst] != null
+        ? input.timeSec[input.iFirst]! - barDurSec
+        : 0;
   const i12Last =
     input.timeSec && ac > 0
       ? indexRangeThrough(input.timeSec, barDurSec, input.iFirst, ac + 12 * 3600)
@@ -158,6 +167,8 @@ export function simulateReversalTpStrategyProfit(input: {
     maxHorizon === STATS_STRATEGY_PROFIT_HOLD_24H
       ? Math.min(i24Last, input.iLast)
       : input.iLast;
+  const i12End = Math.min(i12Last, horizonLast);
+  const i24End = Math.min(i24Last, horizonLast);
 
   let beArmed = false;
   let scanFrom = input.iFirst;
@@ -169,7 +180,7 @@ export function simulateReversalTpStrategyProfit(input: {
   };
 
   const tryBeExit = (iTo: number): { profitPct: number; exitReason: StatsTpSlExitReason } | null => {
-    if (!beArmed) return null;
+    if (!beArmed || scanFrom > iTo) return null;
     if (!beTriggeredInRange(input.side, entry, slOffset, input.high, input.low, scanFrom, iTo)) {
       return null;
     }
@@ -179,7 +190,8 @@ export function simulateReversalTpStrategyProfit(input: {
     };
   };
 
-  for (let i = input.iFirst; i <= Math.min(i12Last, horizonLast); i++) {
+  // Phase 1: ถึง 12h — liquidation เท่านั้น (ยังไม่มี SL@entry)
+  for (let i = input.iFirst; i <= i12End; i++) {
     if (checkLiquidation(i)) {
       return { profitPct: -liqPct!, exitReason: "liquidated" };
     }
@@ -187,21 +199,22 @@ export function simulateReversalTpStrategyProfit(input: {
 
   if (input.pct12h > REVERSAL_TP_STRATEGY_12H_BE_MIN_PCT) {
     beArmed = true;
+    scanFrom = i12End + 1;
   }
 
-  if (i12Last >= scanFrom) {
-    const beExit = tryBeExit(Math.min(i12Last, horizonLast));
-    if (beExit) return beExit;
-    scanFrom = Math.min(i12Last, horizonLast) + 1;
-  }
-
-  if (maxHorizon === STATS_STRATEGY_PROFIT_HOLD_24H || horizonLast >= i24Last) {
-    for (let i = scanFrom; i <= Math.min(i24Last, horizonLast); i++) {
-      if (checkLiquidation(i)) {
-        return { profitPct: -liqPct!, exitReason: "liquidated" };
-      }
+  // Phase 2: หลัง 12h → 24h — liquidation + SL@entry (เฉพาะหลัง checkpoint)
+  for (let i = scanFrom; i <= i24End; i++) {
+    if (checkLiquidation(i)) {
+      return { profitPct: -liqPct!, exitReason: "liquidated" };
     }
+  }
+  if (beArmed) {
+    const beExit12 = tryBeExit(i24End);
+    if (beExit12) return beExit12;
+    scanFrom = i24End + 1;
+  }
 
+  if (maxHorizon === STATS_STRATEGY_PROFIT_HOLD_24H || horizonLast >= i24End) {
     const action24 = reversalTpStrategy24hAction({
       pct24h: input.pct24h,
       ema4hSlopePct7d: input.ema4hSlopePct7d,
@@ -213,23 +226,24 @@ export function simulateReversalTpStrategyProfit(input: {
     }
     if (action24 === "hold" && reversalTpStrategyProfitBand(input.pct24h) === "win") {
       beArmed = true;
+      scanFrom = Math.max(scanFrom, i24End + 1);
     }
 
-    if (i24Last >= scanFrom) {
-      const beExit = tryBeExit(Math.min(i24Last, horizonLast));
-      if (beExit) return beExit;
-      scanFrom = Math.min(i24Last, horizonLast) + 1;
+    if (beArmed && scanFrom <= i24End) {
+      const beExit24 = tryBeExit(i24End);
+      if (beExit24) return beExit24;
+      scanFrom = i24End + 1;
     }
 
     if (maxHorizon === STATS_STRATEGY_PROFIT_HOLD_24H) {
-      const pctEnd = input.pct24h;
       return {
-        profitPct: pctEnd,
+        profitPct: input.pct24h,
         exitReason: "time_24h",
       };
     }
   }
 
+  // Phase 3: 24h → 48h
   for (let i = scanFrom; i <= horizonLast; i++) {
     if (checkLiquidation(i)) {
       return { profitPct: -liqPct!, exitReason: "liquidated" };
@@ -243,6 +257,28 @@ export function simulateReversalTpStrategyProfit(input: {
     profitPct: input.pct48h,
     exitReason: "time_48h",
   };
+}
+
+/** กำไรกลยุทธ์ Reversal — ใช้ผลจำลอง EMA4H/BE โดยตรง (ไม่ทับด้วย Snowball ADV-cap) */
+export function reversalStatsStrategyProfitResolvedForHorizon(
+  row: StatsStrategyProfitRowSlice,
+  holdHours: StatsStrategyProfitHorizon,
+  leverage?: number | null,
+): { profitPct: number; exitReason: StatsTpSlExitReason } | null {
+  if (!statsStrategyProfitFinalizedAtHorizon(row, holdHours)) return null;
+
+  const raw = statsStrategyProfitPctForHorizon(row, holdHours);
+  const exitReason = statsStrategyExitReasonForHorizon(row, holdHours);
+
+  if (raw != null && Number.isFinite(raw)) {
+    return {
+      profitPct: capStrategyProfitPctForLeverage(raw, leverage),
+      exitReason:
+        exitReason ?? (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? "time_24h" : "time_48h"),
+    };
+  }
+
+  return null;
 }
 
 export function reversalTpStrategyLive12hShouldArmBe(dropPct: number): boolean {

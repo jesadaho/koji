@@ -33,6 +33,7 @@ import {
   summarizeStatsStrategyProfit,
   type StatsStrategyProfitRowSlice,
 } from "@/lib/statsStrategyProfitClient";
+import { reversalStatsStrategyProfitResolvedForHorizon } from "@/lib/reversalTpStrategy";
 import {
   getTelegramInitData,
   loadTelegramWebApp,
@@ -395,6 +396,7 @@ function ReversalStatsSection({
         strategySizing,
         STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
         STATS_STRATEGY_PROFIT_HOLD_48H,
+        reversalStatsStrategyProfitResolvedForHorizon,
       ),
       STATS_STRATEGY_PROFIT_HOLD_48H,
     );
@@ -408,6 +410,7 @@ function ReversalStatsSection({
         strategySizing,
         STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
         STATS_STRATEGY_PROFIT_HOLD_24H,
+        reversalStatsStrategyProfitResolvedForHorizon,
       ),
       STATS_STRATEGY_PROFIT_HOLD_24H,
     );
@@ -809,6 +812,7 @@ function ReversalStatsSection({
                           tpSlPlan={strategyTpSlPlan}
                           maxDrawdownPct={r.maxDrawdownPct}
                           followUpMaxAdversePct={r.followUpMaxAdversePct}
+                          resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
                         />
                       </td>
                       <td>
@@ -823,6 +827,7 @@ function ReversalStatsSection({
                           tpSlPlan={strategyTpSlPlan}
                           maxDrawdownPct={r.maxDrawdownPct}
                           followUpMaxAdversePct={r.followUpMaxAdversePct}
+                          resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
                         />
                       </td>
                     </>
@@ -1069,6 +1074,7 @@ function ReversalStatsSection({
                   rows={g.rows}
                   sizing={strategySizing}
                   band={STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND}
+                  resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
                 />
               ) : null}
               {renderTable(sortCandleReversalStatsRows(g.rows, sort))}

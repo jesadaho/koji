@@ -24,6 +24,7 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_48H,
   type StatsStrategyCsvSizing,
 } from "@/lib/statsStrategyProfitClient";
+import { reversalStatsStrategyProfitResolvedForHorizon } from "@/lib/reversalTpStrategy";
 
 export type { StatsStrategyCsvSizing } from "@/lib/statsStrategyProfitClient";
 import {
@@ -165,6 +166,7 @@ function candleReversalStatsRowToCsvCells(
       sizing,
       STATS_STRATEGY_PROFIT_HOLD_24H,
       { maxDrawdownPct: r.maxDrawdownPct, followUpMaxAdversePct: r.followUpMaxAdversePct },
+      reversalStatsStrategyProfitResolvedForHorizon,
     ),
     statsStrategyProfitCsvCell(
       r.pct48h,
@@ -173,6 +175,7 @@ function candleReversalStatsRowToCsvCells(
       sizing,
       STATS_STRATEGY_PROFIT_HOLD_48H,
       { maxDrawdownPct: r.maxDrawdownPct, followUpMaxAdversePct: r.followUpMaxAdversePct },
+      reversalStatsStrategyProfitResolvedForHorizon,
     ),
     candleReversalOutcomeLabel(r.outcome),
   ];

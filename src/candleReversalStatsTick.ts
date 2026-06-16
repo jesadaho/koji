@@ -398,6 +398,7 @@ function applyReversal1hStrategyProfitAtHorizon(
   low: number[],
   iFirst: number,
   iLast: number,
+  anchorCloseSec: number,
   holdHours: typeof STATS_STRATEGY_PROFIT_HOLD_24H | typeof STATS_STRATEGY_PROFIT_HOLD_48H,
 ): void {
   if (row.pct12h == null || row.pct24h == null || row.pct48h == null) return;
@@ -408,6 +409,7 @@ function applyReversal1hStrategyProfitAtHorizon(
     high,
     low,
     timeSec,
+    anchorCloseSec,
     iFirst,
     iLast,
     pct12h: row.pct12h,
@@ -530,6 +532,7 @@ async function followUpCandleReversal1hRow(
         l15,
         i15FollowFirst,
         i15Last24,
+        ac,
         STATS_STRATEGY_PROFIT_HOLD_24H,
       );
     }
@@ -548,6 +551,7 @@ async function followUpCandleReversal1hRow(
         l15,
         i15FollowFirst,
         i15Last48,
+        ac,
         STATS_STRATEGY_PROFIT_HOLD_48H,
       );
     }
