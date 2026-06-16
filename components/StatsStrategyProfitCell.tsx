@@ -44,9 +44,7 @@ export function StatsStrategyProfitCell(props: {
 
   if (
     !statsStrategyProfitFinalizedAtHorizon(
-      holdHours === 24
-        ? { pct24h: pctHorizon, followUpMaxAdversePct: props.followUpMaxAdversePct }
-        : { pct48h: pctHorizon },
+      holdHours === 24 ? { pct24h: pctHorizon } : { pct48h: pctHorizon },
       holdHours,
     )
   ) {
