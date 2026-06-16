@@ -8,18 +8,9 @@ import {
   isLegacySnowballQualityTier,
   isSnowballTrendGrade,
   normalizeSnowballQualityTier,
-  SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_A_GREEN_MAX,
-  SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA,
-  SNOWBALL_TREND_GRADE_C_FALLBACK_CRITERIA,
-  SNOWBALL_TREND_GRADE_F_BTC_EMA1D_MAX_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE,
+  SNOWBALL_TREND_GRADE_A_CRITERIA,
+  SNOWBALL_TREND_GRADE_B_CRITERIA,
   SNOWBALL_TREND_GRADE_F_CRITERIA,
-  SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE,
-  SNOWBALL_TREND_GRADE_S_GREEN_MAX,
-  snowballEma1hSlopeForcesGradeC,
-  snowballTrendGradeMeetsSabVolAndPsar,
 } from "@/src/snowballTrendGrade";
 import {
   snowballLongStructureTierShortLabel,
@@ -401,6 +392,8 @@ function snowballTrendGradeChecklistItems(
     | "btcEma4hSlopePct7d"
     | "btcEma1dSlopePct7d"
     | "greenDaysBeforeSignal"
+    | "fundingRate"
+    | "barRangePctPrev"
     | "qualityTier"
     | "alertQualityTier"
     | "signalVolVsSma"
@@ -427,6 +420,8 @@ function snowballTrendGradeChecklistItems(
     btcEma4hSlopePct7d: btc4h,
     btcEma1dSlopePct7d: btc1d,
     greenDaysBeforeSignal: green,
+    fundingRate: row.fundingRate,
+    barRangePctPrev: row.barRangePctPrev,
     signalVolVsSma: row.signalVolVsSma,
     psar4hTrend: row.psar4hTrend ?? null,
     signalBarTf: row.signalBarTf ?? null,
@@ -444,20 +439,6 @@ function snowballTrendGradeChecklistItems(
       : classifySnowballTrendGrade(trendInput);
 
   const sabGates = side === "long" && row.signalBarTf === "4h";
-  const sabOk = snowballTrendGradeMeetsSabVolAndPsar(trendInput);
-  const ema1hOverextended = snowballEma1hSlopeForcesGradeC(ema1h);
-
-  const ema1hCapItem: SnowballGradeChecklistItem = {
-    id: "structure",
-    title: "EMA1h slope 7d (เกรด C)",
-    status:
-      ema1h != null && Number.isFinite(ema1h)
-        ? ema1hOverextended
-          ? "fail"
-          : "pass"
-        : "unknown",
-    detail: `${fmtSlope(ema1h)} · ${SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA} (ตรวจก่อน F)`,
-  };
 
   const volSabItem: SnowballGradeChecklistItem | null = sabGates
     ? {
@@ -493,7 +474,7 @@ function snowballTrendGradeChecklistItems(
           title: "เขียวก่อนสัญญาณ",
           status:
             green != null && Number.isFinite(green) && green >= 0 ? "pass" : "unknown",
-          detail: `${greenStr} วัน · S ≤${SNOWBALL_TREND_GRADE_S_GREEN_MAX} · A ≤${SNOWBALL_TREND_GRADE_A_GREEN_MAX} · B ไม่จำกัด`,
+          detail: `${greenStr} วัน · ไม่ใช้ในเกรดใหม่`,
         }
       : null;
 
@@ -503,46 +484,24 @@ function snowballTrendGradeChecklistItems(
       title: `Trend Grade ${side === "bear" ? "SHORT" : "LONG"}`,
       status: grade ? "pass" : "unknown",
       detail: grade
-        ? `เกรด ${snowballTrendGradeShortLabel(grade)}${
-            ema1hOverextended
-              ? " (EMA1h→C)"
-              : grade === "c"
-                ? ` (${SNOWBALL_TREND_GRADE_C_FALLBACK_CRITERIA})`
-                : sabGates && !sabOk
-                  ? " (Vol/SAR ไม่ครบ)"
-                  : ""
-          }`
+        ? `เกรด ${snowballTrendGradeShortLabel(grade)}`
         : "—",
     },
-    ema1hCapItem,
     {
       id: "confirm",
-      title: "EMA4h slope 7d",
+      title: "EMA4h / Funding / R% ก่อน",
       status:
         ema4h != null && Number.isFinite(ema4h) ? "pass" : "unknown",
-      detail: `${fmtSlope(ema4h)} · C: ${SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA} · F<0% · S>${SNOWBALL_TREND_GRADE_S_EMA4H_MIN_EXCLUSIVE}% · A>${SNOWBALL_TREND_GRADE_A_EMA4H_MIN_EXCLUSIVE}% · B>${SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE}%`,
+      detail: `${fmtSlope(ema4h)} · A: ${SNOWBALL_TREND_GRADE_A_CRITERIA} · B: ${SNOWBALL_TREND_GRADE_B_CRITERIA}`,
     },
     ...(greenDaysItem ? [greenDaysItem] : []),
     ...(volSabItem ? [volSabItem] : []),
     ...(psarItem ? [psarItem] : []),
     {
       id: "confirm",
-      title: "Grade F (EMA + BTC)",
-      status:
-        ema1d != null &&
-        Number.isFinite(ema1d) &&
-        ema1d < 0 &&
-        ema4h != null &&
-        Number.isFinite(ema4h) &&
-        ema4h < SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE &&
-        btc1d != null &&
-        Number.isFinite(btc1d) &&
-        btc1d < SNOWBALL_TREND_GRADE_F_BTC_EMA1D_MAX_EXCLUSIVE
-          ? "pass"
-          : ema1d != null && Number.isFinite(ema1d)
-            ? "fail"
-            : "unknown",
-      detail: `EMA4h ${fmtSlope(ema4h)} · EMA1d ${fmtSlope(ema1d)} · BTC∠1d ${fmtSlope(btc1d)} · ${SNOWBALL_TREND_GRADE_F_CRITERIA}`,
+      title: "Grade F",
+      status: grade === "f" ? "pass" : grade ? "fail" : "unknown",
+      detail: SNOWBALL_TREND_GRADE_F_CRITERIA,
     },
   ];
 }
@@ -1007,11 +966,8 @@ export function snowballStatsGradeChecklistFooter(
     lines.push(
       `เกรดสุทธิที่แจ้ง: ${snowballTrendGradeDisplayLabel(grade, "long")} [${snowballTrendGradeShortLabel(grade)}]`,
     );
-    if (snowballEma1hSlopeForcesGradeC(row.ema1hSlopePct7d)) {
-      lines.push(`เหตุผล C: ${SNOWBALL_TREND_GRADE_EMA1H_OVEREXTENDED_CRITERIA}`);
-    }
     if (snowballIsTrendGradeF(grade)) {
-      lines.push("auto-open: ไม่สั่ง (Grade F)");
+      lines.push(`เหตุผล F: ${SNOWBALL_TREND_GRADE_F_CRITERIA} · auto-open: ไม่สั่ง (Grade F)`);
     }
   }
   const alertAt = row.alertQualityTier ?? grade;

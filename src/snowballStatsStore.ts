@@ -39,7 +39,7 @@ import {
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
 
 /** แถวที่ recompute trend grade (S/A/B/C/F) จาก snapshot ณ alertedAtMs แล้ว */
-export const STATS_TREND_GRADE_VERSION = 15;
+export const STATS_TREND_GRADE_VERSION = 16;
 
 export function snowballStatsRowAlertSide(row: Pick<SnowballStatsRow, "alertSide" | "triggerKind">): SnowballStatsAlertSide {
   return row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
@@ -85,7 +85,6 @@ export function snowballStatsRowReadyForTrendGradeBackfill(row: SnowballStatsRow
   if (row.symbolEmaSlopesV !== STATS_SYMBOL_EMA_SLOPES_VERSION) return false;
   if (row.btcEmaSlopesV !== STATS_BTC_EMA_SLOPES_VERSION) return false;
   if (!snowballStatsRowHasTrendGradeSlope(row)) return false;
-  if (snowballStatsRowAlertSide(row) === "long" && row.greenDaysBeforeSignal == null) return false;
   return true;
 }
 

@@ -3335,6 +3335,7 @@ export async function runPublicIndicatorFeedInternal(
           fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf),
           fetchSnowballAlertMarketContext(symbol),
         ]);
+        const longVolSnapForGrade = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
         const longTrendGradeInput = {
           alertSide: "long" as const,
           ema1hSlopePct7d: longMktCtxForAlert?.ema1hSlopePct7d ?? null,
@@ -3343,6 +3344,8 @@ export async function runPublicIndicatorFeedInternal(
           btcEma4hSlopePct7d: longMktCtxForAlert?.btcEma4hSlopePct7d ?? null,
           btcEma1dSlopePct7d: longMktCtxForAlert?.btcEma1dSlopePct7d ?? null,
           greenDaysBeforeSignal: longGreenDaysForAlert,
+          fundingRate: longMktCtxForAlert?.fundingRate ?? null,
+          barRangePctPrev: longVolSnapForGrade.barRangePctPrev,
           signalVolVsSma:
             typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
           psar4hTrend: longMktCtxForAlert?.psar4hTrend ?? null,
@@ -3615,6 +3618,7 @@ export async function runPublicIndicatorFeedInternal(
                     longQualitySignal || longGradeFFade ? null : longActionPlan,
                   greenDaysBeforeSignal: longGreenDaysForAlert,
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
+                  barRangePctPrev: longVolSnapForGrade.barRangePctPrev,
                   ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
                   ema1dSlopePct7d: longMktCtxForAlert?.ema1dSlopePct7d ?? null,
                   btcEma1dSlopePct7d: longMktCtxForAlert?.btcEma1dSlopePct7d ?? null,
@@ -4117,6 +4121,11 @@ export async function runPublicIndicatorFeedInternal(
           ema1dSlopePct7d: bearMktCtxForAlert?.ema1dSlopePct7d ?? null,
           btcEma4hSlopePct7d: bearMktCtxForAlert?.btcEma4hSlopePct7d ?? null,
           btcEma1dSlopePct7d: bearMktCtxForAlert?.btcEma1dSlopePct7d ?? null,
+          fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
+          barRangePctPrev: bearVolSnapAuto.barRangePctPrev,
+          psar4hTrend: bearMktCtxForAlert?.psar4hTrend ?? null,
+          signalBarTf: snowTf,
+          signalVolVsSma: bearSignalVolVsSma,
         });
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", signalBarOpenSec, {

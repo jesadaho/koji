@@ -67,6 +67,7 @@ export type SnowballDetectTrendGradeInput = {
   btcEma1dSlopePct7d: number | null;
   psar4hTrend: "up" | "down" | null;
   greenDaysBeforeSignal: number | null;
+  fundingRate?: number | null;
 };
 
 export type SnowballDetectHit = {
@@ -457,6 +458,7 @@ function detectSnowballLongClosed(
 
   const trendMomentum = calculateTrendMomentumMetrics(pack1h, { pack15m });
   const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
+  const volSnapForGrade = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
   const gradeResolution = resolveSnowballLongFinalGrade({
     snowTf,
     swing48,
@@ -487,6 +489,8 @@ function detectSnowballLongClosed(
       signalVolVsSma:
         typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
       greenDaysBeforeSignal: trendGradeInput?.greenDaysBeforeSignal ?? null,
+      fundingRate: trendGradeInput?.fundingRate ?? null,
+      barRangePctPrev: volSnapForGrade.barRangePctPrev,
     },
   });
 
@@ -672,6 +676,7 @@ function detectSnowballBearClosed(
     if (wave.blocked) return null;
   }
 
+  const volSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
   const bearTrendGrade = classifySnowballTrendGrade({
     alertSide: "bear",
     ema1hSlopePct7d: trendGradeInput?.ema1hSlopePct7d ?? null,
@@ -683,12 +688,13 @@ function detectSnowballBearClosed(
     signalBarTf: snowTf,
     signalVolVsSma:
       typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
+    fundingRate: trendGradeInput?.fundingRate ?? null,
+    barRangePctPrev: volSnap.barRangePctPrev,
   });
 
   const entryPx = twoBarInline ? c15[iConf]! : clE!;
   const bearSignalHigh = h15[iSig];
   const bearSignalLow = l15[iSig];
-  const volSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
   const lenSnap = computeSnowballSignalLenPercentile(pack, iSig);
   const trendMomentum = calculateTrendMomentumMetrics(pack1h, { pack15m: null });
 

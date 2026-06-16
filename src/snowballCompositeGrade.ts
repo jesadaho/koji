@@ -14,7 +14,6 @@ import {
 import { snowballTrendMomentumMaxDrawbackPct } from "./snowballTrendMomentumMetrics";
 import {
   classifySnowballTrendGrade,
-  snowballEma1hSlopeForcesGradeC,
   snowballTrendActionPlanLabel,
   snowballTrendGradeActionPlan,
   snowballTrendGradeToDisplay,
@@ -163,10 +162,8 @@ function result(
 export function classifySnowballCompositeGrade(
   input: SnowballCompositeGradeInput,
 ): SnowballCompositeGradeResult {
-  const rawBase = classifySnowballTrendGrade(input);
-  const baseTier = applySnowballVolSmaSabCap(rawBase, input.signalVolVsSma);
-  const ema1hC = snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d);
-  const plus = !ema1hC && snowballS1Hh200AndVahOk(input);
+  const baseTier = classifySnowballTrendGrade(input);
+  const plus = snowballS1Hh200AndVahOk(input);
   const dangerous = snowballS3MaxDdDangerous(input.signalMaxDdPct);
   const display = snowballTrendGradeWithPlus(baseTier, plus);
   return result(baseTier, display, dangerous);
@@ -203,30 +200,26 @@ export function snowballCompositeGradeFootnote(input: {
   btcEma1dSlopePct7d?: number | null;
   psar4hTrend?: ClassifySnowballTrendGradeInput["psar4hTrend"];
   greenDaysBeforeSignal?: number | null;
+  fundingRate?: number | null;
+  barRangePctPrev?: number | null;
   swing200Ok?: boolean | null;
   vahOk?: boolean | null;
   structureTier?: SnowballLongStructureTier | null;
   signalMaxDdPct?: number | null;
 }): string {
   const { result: r } = input;
-  const ema1h = fmtSlopePct(input.ema1hSlopePct7d);
   const ema4h = fmtSlopePct(input.ema4hSlopePct7d);
-  const ema1d = fmtSlopePct(input.ema1dSlopePct7d);
-  const btc4h = fmtSlopePct(input.btcEma4hSlopePct7d);
-  const btc1d = fmtSlopePct(input.btcEma1dSlopePct7d);
-  const green =
-    input.greenDaysBeforeSignal != null && Number.isFinite(input.greenDaysBeforeSignal)
-      ? String(Math.floor(input.greenDaysBeforeSignal))
+  const funding =
+    input.fundingRate != null && Number.isFinite(input.fundingRate)
+      ? `${(input.fundingRate * 100).toFixed(4)}%`
+      : "—";
+  const rPrev =
+    input.barRangePctPrev != null && Number.isFinite(input.barRangePctPrev)
+      ? `${input.barRangePctPrev.toFixed(2)}%`
       : "—";
   const plan = snowballTrendActionPlanLabel(snowballTrendGradeActionPlan(r.baseTier));
-  const greenPart =
-    (input.alertSide ?? "long") !== "bear" ? ` · เขียว ${green}` : "";
   const psarPart =
     input.psar4hTrend === "up" ? " · SAR4h ↑" : input.psar4hTrend === "down" ? " · SAR4h ↓" : "";
-  const ema1hCapPart =
-    snowballEma1hSlopeForcesGradeC(input.ema1hSlopePct7d) && r.baseTier === "c"
-      ? " · EMA1h overextended (C)"
-      : "";
   const gradeLabel = snowballTrendGradeDisplayWithDangerous(r.display, r.dangerous);
   const plusPart = r.composite
     ? ` · + ${snowballS1Hh200AndVahOk(input) ? "✓" : "—"} (HH200+VAH)`
@@ -236,7 +229,7 @@ export function snowballCompositeGradeFootnote(input: {
       ? `${input.signalMaxDdPct.toFixed(2)}%`
       : "—";
   const ddPart = r.composite && r.dangerous ? ` · Max DD ${dd}` : "";
-  return `📎 Grade ${gradeLabel}: EMA1h ${ema1h} · EMA4h ${ema4h}${greenPart} · EMA1d ${ema1d} · BTC∠4h ${btc4h} · BTC∠1d ${btc1d}${psarPart}${ema1hCapPart}${plusPart}${ddPart} · ${plan}`;
+  return `📎 Grade ${gradeLabel}: EMA4h ${ema4h} · Funding ${funding} · R% ก่อน ${rPrev}${psarPart}${plusPart}${ddPart} · ${plan}`;
 }
 
 /** ตัด suffix ⚠️ / legacy (D) ก่อนเทียบ filter */

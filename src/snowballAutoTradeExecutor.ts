@@ -111,13 +111,13 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
 
 function snowballAutoOpenMatchesQualityShortSignal(input: {
   ema4hSlopePct7d?: number | null;
-  ema1dSlopePct7d?: number | null;
-  btcEma1dSlopePct7d?: number | null;
+  fundingRate?: number | null;
+  barRangePctPrev?: number | null;
 }): boolean {
   return snowballMatchesQualityShortSignal({
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
-    ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
-    btcEma1dSlopePct7d: input.btcEma1dSlopePct7d ?? null,
+    fundingRate: input.fundingRate ?? null,
+    barRangePctPrev: input.barRangePctPrev ?? null,
   });
 }
 
@@ -139,6 +139,7 @@ function resolveSnowballAutoOpenSide(
   input: {
     greenDaysBeforeSignal?: number | null;
     fundingRate?: number | null;
+    barRangePctPrev?: number | null;
     ema4hSlopePct7d?: number | null;
     ema1dSlopePct7d?: number | null;
     barRangePctSignal?: number | null;
@@ -302,6 +303,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   /** Quality Signal / Quality Short Signal */
   greenDaysBeforeSignal?: number | null;
   fundingRate?: number | null;
+  barRangePctPrev?: number | null;
   ema4hSlopePct7d?: number | null;
   ema1dSlopePct7d?: number | null;
   btcEma1dSlopePct7d?: number | null;
@@ -323,8 +325,8 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     input.alertSide !== "bear" &&
     snowballAutoOpenMatchesQualityShortSignal({
       ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
-      ema1dSlopePct7d: input.ema1dSlopePct7d ?? null,
-      btcEma1dSlopePct7d: input.btcEma1dSlopePct7d ?? null,
+      fundingRate: input.fundingRate ?? null,
+      barRangePctPrev: input.barRangePctPrev ?? null,
     });
   const isBearAlert = input.alertSide === "bear";
 
@@ -369,6 +371,7 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   const qualitySideInput = {
     ...qualityShortInput,
     fundingRate: input.fundingRate,
+    barRangePctPrev: input.barRangePctPrev,
     ema4hSlopePct7d: input.ema4hSlopePct7d,
   };
 

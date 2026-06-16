@@ -279,6 +279,8 @@ type SnowballStatsGradeDerivationFields = Partial<
     | "btcEma4hSlopePct7d"
     | "btcEma1dSlopePct7d"
     | "greenDaysBeforeSignal"
+    | "fundingRate"
+    | "barRangePctPrev"
     | "alertSide"
     | "triggerKind"
     | "structureTier"
@@ -315,12 +317,6 @@ function snowballStatsTrendGradeInputFromRow(
   const side = row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
   const ema4h = row.ema4hSlopePct7d;
   if (ema4h == null || !Number.isFinite(ema4h)) return null;
-  if (
-    side === "long" &&
-    (row.greenDaysBeforeSignal == null || !Number.isFinite(row.greenDaysBeforeSignal))
-  ) {
-    return null;
-  }
   return {
     alertSide: side,
     ema1hSlopePct7d: row.ema1hSlopePct7d,
@@ -329,6 +325,8 @@ function snowballStatsTrendGradeInputFromRow(
     btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
     btcEma1dSlopePct7d: row.btcEma1dSlopePct7d,
     greenDaysBeforeSignal: row.greenDaysBeforeSignal,
+    fundingRate: row.fundingRate,
+    barRangePctPrev: row.barRangePctPrev,
     signalVolVsSma: row.signalVolVsSma,
     psar4hTrend: row.psar4hTrend ?? null,
     signalBarTf: row.signalBarTf ?? null,

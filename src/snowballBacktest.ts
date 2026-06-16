@@ -238,6 +238,7 @@ async function backtestSymbol(
         btcEma1dSlopePct7d: mktCtx.btcEma1dSlopePct7d,
         psar4hTrend: mktCtx.psar4hTrend,
         greenDaysBeforeSignal: greenDays,
+        fundingRate: mktCtx.fundingRate,
       },
     });
 

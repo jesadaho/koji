@@ -9,8 +9,9 @@ import {
   type SnowballStatsRow,
 } from "@/lib/snowballStatsClient";
 import {
-  snowballEma4hSlopeMatchesTrendGradeF,
+  SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE,
   SNOWBALL_TREND_GRADE_F_CRITERIA,
+  classifySnowballTrendGrade,
 } from "@/src/snowballTrendGrade";
 
 export type SnowballMatrixFilter =
@@ -21,7 +22,7 @@ export type SnowballMatrixFilter =
   | "whaleRiders"
   | "highWinrate";
 
-export const SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT = 10;
+export const SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT = SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE;
 
 export const SNOWBALL_QUALITY_SIGNAL_CRITERIA = `EMA4h > ${SNOWBALL_QUALITY_SIGNAL_EMA4H_MIN_PCT}% · Funding > −0.10%`;
 
@@ -169,14 +170,16 @@ export function snowballRowMatchesQualitySignalMatrix(row: SnowballStatsRow): bo
   return snowballMatchesQualitySignal(row);
 }
 
-/** ✨ Quality Short Signal — ตรงเกรด F (EMA4h + EMA1d + BTC EMA1d) */
+/** ✨ Quality Short Signal — ตรงเกรด F (fallback) */
 export function snowballMatchesQualityShortSignal(
-  row: Pick<SnowballStatsRow, "ema4hSlopePct7d" | "ema1dSlopePct7d" | "btcEma1dSlopePct7d">,
+  row: Pick<SnowballStatsRow, "ema4hSlopePct7d" | "fundingRate" | "barRangePctPrev">,
 ): boolean {
-  return snowballEma4hSlopeMatchesTrendGradeF(
-    row.ema4hSlopePct7d,
-    row.ema1dSlopePct7d,
-    row.btcEma1dSlopePct7d,
+  return (
+    classifySnowballTrendGrade({
+      ema4hSlopePct7d: row.ema4hSlopePct7d,
+      fundingRate: row.fundingRate,
+      barRangePctPrev: row.barRangePctPrev,
+    }) === "f"
   );
 }
 

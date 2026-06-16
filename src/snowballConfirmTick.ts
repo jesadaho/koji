@@ -482,6 +482,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               volSma: volSmaUse,
               greenDaysBeforeSignal: greenDaysForAutoOpen,
               fundingRate: item.statsFundingRate ?? null,
+              barRangePctPrev: item.statsBarRangePctPrev ?? null,
               ema4hSlopePct7d: item.statsEma4hSlopePct7d ?? null,
               ema1dSlopePct7d: item.statsEma1dSlopePct7d ?? null,
               barRangePctSignal: item.statsBarRangePctSignal ?? null,
