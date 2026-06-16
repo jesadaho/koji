@@ -1,6 +1,7 @@
 /**
  * Reversal TP strategy — EMA4H + profit band @ 12h / 24h · ถือต่อถึง 48h
  * 12h: กำไร > 3% → SL บังทุน
+ * 12h: ติดลบ + EMA4H > 0 → ปิดทันที
  * 24h ชนะ (≥2%) + EMA4H < 0 → ถือต่อ + SL บังทุน
  * 24h กำไรนิดหน่อย (0–2%) + EMA4H > 0 → ปิดทันที
  * 24h ติดลบนิดหน่อย (−2%–0) + EMA4H > 0 → ปิดทันที (ถ้ายังไม่มี SL@entry จาก 12h)
@@ -30,7 +31,7 @@ import {
 export const REVERSAL_TP_STRATEGY_12H_BE_MIN_PCT = 3;
 
 export const REVERSAL_TP_STRATEGY_SUMMARY =
-  "12h กำไร>3%→SL@entry · 24h ชนะ+EMA4H<0→ถือ+SL@entry · 24h กำไรนิด+EMA4H>0→ปิด · 24h ติดลบนิด+EMA4H>0→ปิด(ถ้าไม่มี SL@12h) · 48h";
+  "12h กำไร>3%→SL@entry · 12h ติดลบ+EMA4H>0→ปิด · 24h ชนะ+EMA4H<0→ถือ+SL@entry · 24h กำไรนิด+EMA4H>0→ปิด · 24h ติดลบนิด+EMA4H>0→ปิด(ถ้าไม่มี SL@12h) · 48h";
 
 export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revBeFwd2";
 
@@ -283,6 +284,14 @@ export function reversalStatsStrategyProfitResolvedForHorizon(
 
 export function reversalTpStrategyLive12hShouldArmBe(dropPct: number): boolean {
   return Number.isFinite(dropPct) && dropPct > REVERSAL_TP_STRATEGY_12H_BE_MIN_PCT;
+}
+
+export function reversalTpStrategyLive12hShouldClose(input: {
+  dropPct: number;
+  ema4hSlopePct7d?: number | null;
+}): boolean {
+  const emaPos = reversalTpStrategyEma4hPositive(input.ema4hSlopePct7d);
+  return emaPos === true && Number.isFinite(input.dropPct) && input.dropPct < 0;
 }
 
 export function reversalTpStrategyLive24hShouldClose(input: {

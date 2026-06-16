@@ -2041,6 +2041,7 @@ export default function SettingsTelegramMiniApp() {
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
           <li><strong>12 ชม.</strong>: กำไร &gt; 3% → ตั้ง SL บังทุน (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code>)</li>
+          <li><strong>12 ชม.</strong>: ติดลบ + EMA4H &gt; 0 → ปิดทันที</li>
           <li><strong>24 ชม.</strong>: ชนะ (≥2%) + EMA4H &lt; 0 → ถือต่อ + SL บังทุน</li>
           <li><strong>24 ชม.</strong>: กำไรนิดหน่อย (0–2%) + EMA4H &gt; 0 → ปิดทันที</li>
           <li><strong>24 ชม.</strong>: ติดลบนิดหน่อย (−2%–0) + EMA4H &gt; 0 → ปิดทันที (ยกเว้นมี SL จาก 12 ชม.)</li>
