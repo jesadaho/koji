@@ -33,7 +33,7 @@ export const REVERSAL_TP_STRATEGY_12H_BE_MIN_PCT = 3;
 export const REVERSAL_TP_STRATEGY_SUMMARY =
   "12h กำไร>3%→SL@entry · 12h ติดลบ+EMA4H>0→ปิด · 24h ชนะ+EMA4H<0→ถือ+SL@entry · 24h กำไรนิด+EMA4H>0→ปิด · 24h ติดลบนิด+EMA4H>0→ปิด(ถ้าไม่มี SL@12h) · 48h";
 
-export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revBeFwd2";
+export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revBeFwd3";
 
 export type ReversalTpStrategyProfitBand = "win" | "flat_profit" | "flat_loss" | "loss";
 
@@ -196,6 +196,15 @@ export function simulateReversalTpStrategyProfit(input: {
     if (checkLiquidation(i)) {
       return { profitPct: -liqPct!, exitReason: "liquidated" };
     }
+  }
+
+  if (
+    reversalTpStrategyLive12hShouldClose({
+      dropPct: input.pct12h,
+      ema4hSlopePct7d: input.ema4hSlopePct7d,
+    })
+  ) {
+    return { profitPct: input.pct12h, exitReason: "time_12h" };
   }
 
   if (input.pct12h > REVERSAL_TP_STRATEGY_12H_BE_MIN_PCT) {

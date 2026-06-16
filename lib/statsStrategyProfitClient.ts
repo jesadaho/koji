@@ -246,6 +246,7 @@ export function statsStrategyExitReasonShort(reason: StatsTpSlExitReason | null 
   if (reason === "tp1_24h") return "TP1+24h";
   if (reason === "tp1_48h") return "TP1+48h";
   if (reason === "tp1_only") return "TP1";
+  if (reason === "time_12h") return "12h";
   if (reason === "time_24h") return "24h";
   if (reason === "time_48h") return "48h";
   if (reason === "liquidated") return "Liquidate";
@@ -317,6 +318,7 @@ export function statsStrategyExitReasonDetail(
   if (reason === "tp1_24h") return `หลัง TP1 ถือส่วนที่เหลือจนครบ ${plan.maxHoldHours}h`;
   if (reason === "tp1_48h") return `หลัง TP1 ถือส่วนที่เหลือจนครบ ${plan.maxHoldHours}h`;
   if (reason === "tp1_only") return `แตะ TP1 แล้วปิดครบ ${plan.tp1PartialPct}% ที่ ${plan.tp1PricePct}%`;
+  if (reason === "time_12h") return "12h ติดลบ + EMA4H>0 — ปิดทันที";
   if (reason === "time_24h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   if (reason === "time_48h") return `ไม่แตะ TP1/TP2 — ปิดที่ผล ${plan.maxHoldHours}h`;
   if (reason === "liquidated") {

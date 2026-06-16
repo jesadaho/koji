@@ -48,6 +48,7 @@ export type StatsTpSlExitReason =
   | "tp1_24h"
   | "tp1_48h"
   | "tp1_only"
+  | "time_12h"
   | "time_24h"
   | "time_48h"
   | "liquidated";
