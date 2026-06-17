@@ -19,6 +19,12 @@ import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
+  pumpCycleAgeHoursLabel,
+  pumpCycleSwingLowSourceLabel,
+  pumpCycleSwingLowTimeIso,
+  pumpCycleTrendGainPctLabel,
+} from "@/lib/pumpCycleSwingLow";
+import {
   statsPsar4hDistPctLabel,
   statsPsar4hTrendLabel,
 } from "@/lib/statsPsar4h";
@@ -429,7 +435,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 11;
+  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 16;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -503,6 +509,41 @@ function ReversalStatsSection({
             <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
             <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
             <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="SL Time"
+              sortKey="swingLowTime"
+              title="Swing Low Time — เวลาเปิดแท่ง 1H ของจุดเริ่มรอบปั๊ม"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="SL Price"
+              sortKey="swingLowPrice"
+              title="Swing Low Price — ราคา Low ของแท่ง 1H"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Age(h)"
+              sortKey="ageOfTrend"
+              title="Age of Trend (Hours) — จาก Swing Low ถึงปิดแท่งสัญญาณ (Entry)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Trend%"
+              sortKey="trendGain"
+              title="Trend Gain % — (Entry − Swing Low) / Swing Low × 100"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="SL Src"
+              sortKey="swingLowSource"
+              title="Swing Low Source — STRICT_20 / FALLBACK_10 / LOWEST_7D / LOWEST_72H / NOT_FOUND"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
             <SortTh
               label="Vol 24h"
               sortKey="vol24"
@@ -752,6 +793,16 @@ function ReversalStatsSection({
                     <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
                   </td>
                   <td>{fmtPrice(r.entryPrice)}</td>
+                  <td>
+                    {(() => {
+                      const iso = pumpCycleSwingLowTimeIso(r.swingLowOpenSec);
+                      return iso ? formatBkk(iso) : "—";
+                    })()}
+                  </td>
+                  <td>{fmtPrice(r.swingLowPrice)}</td>
+                  <td>{pumpCycleAgeHoursLabel(r.ageOfTrendHours)}</td>
+                  <td>{pumpCycleTrendGainPctLabel(r.trendGainPct)}</td>
+                  <td>{pumpCycleSwingLowSourceLabel(r.swingLowSource)}</td>
                   <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                   <td title="EMA(12) 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema1hSlopePct7d)}</td>

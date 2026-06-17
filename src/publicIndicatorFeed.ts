@@ -101,7 +101,8 @@ import {
   type TrendMomentumMetrics,
   trendMomentumStatsFields,
 } from "./snowballTrendMomentumMetrics";
-import { snowballStatsConfirmVolFieldsFrom1hEval } from "@/lib/snowballStatsClient";
+import { snowballStatsAnchorCloseSec, snowballStatsConfirmVolFieldsFrom1hEval } from "@/lib/snowballStatsClient";
+import { resolvePumpCycleSwingLowFields } from "./statsPumpCycleSwingLow";
 import {
   snowballAlertRepeatGuardMs,
   snowballFeedNotifyKey,
@@ -3769,6 +3770,15 @@ export async function runPublicIndicatorFeedInternal(
                   longStatsBarOpenSec,
                   longStatsBarTf,
                 );
+                const longPumpCycleFields = await resolvePumpCycleSwingLowFields({
+                  symbol,
+                  signalAtSec: snowballStatsAnchorCloseSec({
+                    signalBarOpenSec: longStatsBarOpenSec,
+                    signalBarTf: longStatsBarTf,
+                  }),
+                  entryPrice: entryClosePx,
+                  pack1h: pack1hTrend,
+                });
                 await appendSnowballStatsRow({
                   symbol,
                   side: longStatsTradeSide,
@@ -3827,6 +3837,7 @@ export async function runPublicIndicatorFeedInternal(
                   ...(longConfirmGateSteps.length > 0 ? { confirmGateSteps: longConfirmGateSteps } : {}),
                   ...trendMomentumStatsFields(trendMomentum),
                   greenDaysBeforeSignal: longGreenDays,
+                  ...longPumpCycleFields,
                   ...snowballStatsConfirmVolFieldsFrom1hEval(
                     gradeBMomentum1hEval ??
                       (longBreakout1h || snowTf === "4h" ? breakout1hEval : null),
@@ -4298,6 +4309,15 @@ export async function runPublicIndicatorFeedInternal(
                   confirmVolume: twoBarInline ? v15[iConf]! : null,
                 });
                 const bearGreenDays = await fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf);
+                const bearPumpCycleFields = await resolvePumpCycleSwingLowFields({
+                  symbol,
+                  signalAtSec: snowballStatsAnchorCloseSec({
+                    signalBarOpenSec,
+                    signalBarTf: snowTf,
+                  }),
+                  entryPrice: twoBarInline ? c15[iConf]! : clE!,
+                  pack1h: pack1hTrendBear,
+                });
                 await appendSnowballStatsRow({
                   symbol,
                   side: bearStatsTradeSide,
@@ -4342,6 +4362,7 @@ export async function runPublicIndicatorFeedInternal(
                   lenPercentilePct: bearLenSnap?.lenPercentilePct ?? null,
                   ...trendMomentumStatsFields(trendMomentumBear),
                   greenDaysBeforeSignal: bearGreenDays,
+                  ...bearPumpCycleFields,
                 });
               }
             } catch (statsErr) {

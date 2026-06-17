@@ -11,6 +11,12 @@ import {
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
+  pumpCycleAgeHoursLabel,
+  pumpCycleSwingLowSourceLabel,
+  pumpCycleSwingLowTimeIso,
+  pumpCycleTrendGainPctLabel,
+} from "@/lib/pumpCycleSwingLow";
+import {
   statsPsar4hDistPctLabel,
   statsPsar4hTrendLabel,
 } from "@/lib/statsPsar4h";
@@ -214,6 +220,41 @@ export function SnowballStatsTable({
             <SortTh label="วัน" sortKey="day" activeSort={sort} onSort={onSort} />
             <SortTh label="เวลา (BKK)" sortKey="time" activeSort={sort} onSort={onSort} />
             <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSort} />
+            <SortTh
+              label="SL Time"
+              sortKey="swingLowTime"
+              title="Swing Low Time — เวลาเปิดแท่ง 1H ของจุดเริ่มรอบปั๊ม"
+              activeSort={sort}
+              onSort={onSort}
+            />
+            <SortTh
+              label="SL Price"
+              sortKey="swingLowPrice"
+              title="Swing Low Price — ราคา Low ของแท่ง 1H"
+              activeSort={sort}
+              onSort={onSort}
+            />
+            <SortTh
+              label="Age(h)"
+              sortKey="ageOfTrend"
+              title="Age of Trend (Hours) — จาก Swing Low ถึงปิดแท่งสัญญาณ (Entry)"
+              activeSort={sort}
+              onSort={onSort}
+            />
+            <SortTh
+              label="Trend%"
+              sortKey="trendGain"
+              title="Trend Gain % — (Entry − Swing Low) / Swing Low × 100"
+              activeSort={sort}
+              onSort={onSort}
+            />
+            <SortTh
+              label="SL Src"
+              sortKey="swingLowSource"
+              title="Swing Low Source — STRICT_20 / FALLBACK_10 / LOWEST_7D / LOWEST_72H / NOT_FOUND"
+              activeSort={sort}
+              onSort={onSort}
+            />
             <SortTh label="Range" sortKey="range" activeSort={sort} onSort={onSort} />
             <SortTh label="Wick" sortKey="wick" activeSort={sort} onSort={onSort} />
             <SortTh
@@ -451,7 +492,7 @@ export function SnowballStatsTable({
         <tbody>
           {tableRows.length === 0 ? (
             <tr>
-              <td colSpan={showDelete ? 45 : 44} className="sub">
+              <td colSpan={showDelete ? 50 : 49} className="sub">
                 {allRowsCount === 0
                   ? emptyMessageNoRows
                   : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุกทิศ / ทุก grade / เขียว ${emptyFilterLabels.greenDays} / Funding ${emptyFilterLabels.funding} / โครงสร้าง ${emptyFilterLabels.structure} / BTC SAR ${emptyFilterLabels.btcPsar} / Matrix ${emptyFilterLabels.matrix} / EMA1h ${emptyFilterLabels.ema1h} / EMA4h ${emptyFilterLabels.ema4h} / EMA1d ${emptyFilterLabels.ema1d} / BTC∠4h ${emptyFilterLabels.btcEma4h} / ATR ${emptyFilterLabels.atr} / Vol×SMA ${emptyFilterLabels.volVsSma} / R% ก่อน ${emptyFilterLabels.barRangePrev} / R% 2แท่ง ${emptyFilterLabels.barRange2} / Efficiency ${emptyFilterLabels.efficiency} / Max DD ก่อน ${emptyFilterLabels.signalMaxDd} / Vol rank ${emptyFilterLabels.volRank}`}
@@ -484,6 +525,16 @@ export function SnowballStatsTable({
                   <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
                 </td>
                 <td>{fmtPrice(r.entryPrice)}</td>
+                <td>
+                  {(() => {
+                    const iso = pumpCycleSwingLowTimeIso(r.swingLowOpenSec);
+                    return iso ? formatBkk(iso) : "—";
+                  })()}
+                </td>
+                <td>{fmtPrice(r.swingLowPrice)}</td>
+                <td>{pumpCycleAgeHoursLabel(r.ageOfTrendHours)}</td>
+                <td>{pumpCycleTrendGainPctLabel(r.trendGainPct)}</td>
+                <td>{pumpCycleSwingLowSourceLabel(r.swingLowSource)}</td>
                 <td>{snowballStatsVolScoreLabel(r.rangeScore)}</td>
                 <td>{snowballStatsVolScoreLabel(r.wickScore)}</td>
                 <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lenLookbackBars)}</td>

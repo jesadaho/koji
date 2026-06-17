@@ -30,6 +30,8 @@ import {
   appendSnowballStatsRow,
   isSnowballStatsEnabled,
 } from "./snowballStatsStore";
+import { snowballStatsAnchorCloseSec } from "@/lib/snowballStatsClient";
+import { resolvePumpCycleSwingLowFields } from "./statsPumpCycleSwingLow";
 import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 import {
   calculateTrendMomentumMetrics,
@@ -378,6 +380,15 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               item.snowTf,
               { dayTzOffsetSec: BKK_DAY_TZ_OFFSET_SEC },
             );
+            const confirmPumpCycleFields = await resolvePumpCycleSwingLowFields({
+              symbol: item.symbol,
+              signalAtSec: snowballStatsAnchorCloseSec({
+                signalBarOpenSec: item.signalBarOpenSec,
+                signalBarTf: item.snowTf,
+              }),
+              entryPrice: item.signalClose,
+              pack1h: pack1hTrend,
+            });
             await appendSnowballStatsRow({
               symbol: item.symbol,
               side: statsTradeSide,
@@ -437,6 +448,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               confirmVolRankLb: volRank != null && Number.isFinite(volRank) ? volRankLookback : null,
               greenDaysBeforeSignal,
               greenDaysBeforeSignalBkk,
+              ...confirmPumpCycleFields,
             });
           } catch (e) {
             console.error("[snowballConfirmTick] append snowball stats after confirm", item.symbol, item.side, e);

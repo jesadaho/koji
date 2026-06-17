@@ -35,6 +35,8 @@ import {
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
 } from "./candleReversalStatsStore";
+import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
+import { resolvePumpCycleSwingLowFields } from "./statsPumpCycleSwingLow";
 import { formatCandleReversalTfDebugBlock } from "./candleReversalDebugFormat";
 import {
   buildCandleReversalAlertMessage,
@@ -707,6 +709,15 @@ async function notifyResults(
       });
       const ok = await sendPublicReversalFeedToSparkGroup(msg);
       if (ok && isCandleReversalStatsEnabled()) {
+        const anchorCloseSec = candleReversalStatsAnchorCloseSec({
+          signalBarOpenSec: sig.barOpenSec,
+          signalBarTf: sig.tf,
+        });
+        const pumpCycleFields = await resolvePumpCycleSwingLowFields({
+          symbol: row.symbol,
+          signalAtSec: anchorCloseSec,
+          entryPrice: sig.c,
+        });
         const appended = await appendCandleReversalStatsRow({
           symbol: row.symbol,
           model: sig.model,
@@ -735,6 +746,7 @@ async function notifyResults(
           afterInvertedDoji: sig.afterInvertedDoji,
           greenDaysBeforeSignal,
           greenDaysBeforeSignalBkk,
+          ...pumpCycleFields,
         });
         if (appended) {
           pendingStatsKeys.add(pendingKey);

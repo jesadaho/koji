@@ -1,4 +1,4 @@
-import type { SnowballStatsRow } from "@/lib/snowballStatsClient";
+import { snowballStatsAnchorCloseSec, type SnowballStatsRow } from "@/lib/snowballStatsClient";
 import {
   binanceIndicatorTfDurationSec,
   fetchBinanceUsdmKlinesPaginated,
@@ -23,6 +23,8 @@ import {
   snowballTrendGradeActionPlan,
 } from "./snowballTrendGrade";
 import { snowballStatsSignalDedupeKey, type AppendSnowballStatsInput } from "./snowballStatsStore";
+import { pumpCycleSwingLowFieldsFromResult } from "@/lib/pumpCycleSwingLow";
+import { computePumpCycleSwingLowFromPack } from "./statsPumpCycleSwingLow";
 
 const WARMUP_BARS = 250;
 const MAX_SIGNALS = 500;
@@ -123,6 +125,7 @@ async function processHit(
   barCloseMs: number,
   pack15mFollowUp: BinanceKlinePack,
   pack1d: BinanceKlinePack | null,
+  pack1h: BinanceKlinePack | null,
   snowTf: "4h",
 ): Promise<SnowballStatsRow> {
   const alertedAtMs = barCloseMs;
@@ -166,6 +169,16 @@ async function processHit(
     greenDaysBeforeSignal: greenDays,
     ...hit.statsInput,
     ...mktCtxToStatsFields(mktCtx),
+    ...pumpCycleSwingLowFieldsFromResult(
+      computePumpCycleSwingLowFromPack(
+        pack1h,
+        snowballStatsAnchorCloseSec({
+          signalBarOpenSec: hit.signalBarOpenSec,
+          signalBarTf: snowTf,
+        }),
+        hit.entryPrice,
+      ),
+    ),
   };
 
   const row = buildSnowballStatsRow(appendInput);
@@ -250,6 +263,7 @@ async function backtestSymbol(
         barCloseMs,
         pack15mFull ?? { open: [], high: [], low: [], close: [], volume: [], timeSec: [] },
         pack1d,
+        pack1h,
         snowTf,
       );
       // Walk แท่งเดียวต่อรอบ — Grade F อัปเดตแค่ wave-gate price (ไม่ล็อกแท่ง) เหมือน live

@@ -34,6 +34,8 @@ import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
 import { backfillAllStatsRowsQuoteVol24h } from "./statsQuoteVol24h";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
+import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
+import { backfillPumpCycleSwingLowForRows } from "./statsPumpCycleSwingLow";
 import {
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
@@ -806,6 +808,9 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillAllStatsRowsQuoteVol24h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
+  dirty += await backfillPumpCycleSwingLowForRows(state.rows, (row) =>
+    candleReversalStatsAnchorCloseSec(row),
+  );
   dirty += backfill1hOutcomeTo24h(state.rows);
   dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
   if (opts?.forceLong1hFadeShort) {

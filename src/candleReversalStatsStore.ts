@@ -204,6 +204,12 @@ export type AppendCandleReversalStatsInput = {
   afterInvertedDoji?: boolean;
   greenDaysBeforeSignal?: number | null;
   greenDaysBeforeSignalBkk?: number | null;
+  swingLowOpenSec?: number | null;
+  swingLowPrice?: number | null;
+  ageOfTrendHours?: number | null;
+  trendGainPct?: number | null;
+  swingLowSource?: CandleReversalStatsRow["swingLowSource"];
+  pumpCycleSwingLowV?: number;
 };
 
 function normalizeStatsSymbol(symbol: string): string {
@@ -437,6 +443,22 @@ export async function appendCandleReversalStatsRow(
       input.greenDaysBeforeSignalBkk >= 0
         ? Math.floor(input.greenDaysBeforeSignalBkk)
         : null,
+    swingLowOpenSec:
+      input.swingLowOpenSec != null && Number.isFinite(input.swingLowOpenSec)
+        ? input.swingLowOpenSec
+        : null,
+    swingLowPrice:
+      input.swingLowPrice != null && Number.isFinite(input.swingLowPrice) && input.swingLowPrice > 0
+        ? input.swingLowPrice
+        : null,
+    ageOfTrendHours:
+      input.ageOfTrendHours != null && Number.isFinite(input.ageOfTrendHours) && input.ageOfTrendHours >= 0
+        ? input.ageOfTrendHours
+        : null,
+    trendGainPct:
+      input.trendGainPct != null && Number.isFinite(input.trendGainPct) ? input.trendGainPct : null,
+    swingLowSource: input.swingLowSource ?? null,
+    ...(input.pumpCycleSwingLowV != null ? { pumpCycleSwingLowV: input.pumpCycleSwingLowV } : {}),
     price4h: null,
     pct4h: null,
     price12h: null,

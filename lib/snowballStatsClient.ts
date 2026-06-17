@@ -156,6 +156,17 @@ export type SnowballStatsRow = {
   confirmVolVsSma?: number | null;
   confirmVolRank?: number | null;
   confirmVolRankLb?: number | null;
+  /** Swing low 1H — จุดเริ่มรอบปั๊ม (open time sec) */
+  swingLowOpenSec?: number | null;
+  /** Swing low 1H — ราคา Low */
+  swingLowPrice?: number | null;
+  /** ชั่วโมงจาก Swing Low ถึง anchor close */
+  ageOfTrendHours?: number | null;
+  /** ((entry − swingLow) / swingLow) × 100 */
+  trendGainPct?: number | null;
+  swingLowSource?: import("@/lib/pumpCycleSwingLow").PumpCycleSwingLowSource | null;
+  /** 1 = pump-cycle swing low คำนวณแล้ว */
+  pumpCycleSwingLowV?: number;
   greenDaysBeforeSignal?: number | null;
   /** เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) */
   greenDaysBeforeSignalBkk?: number | null;
@@ -1016,6 +1027,11 @@ export type SnowballStatsSortKey =
   | "day"
   | "time"
   | "entry"
+  | "swingLowTime"
+  | "swingLowPrice"
+  | "ageOfTrend"
+  | "trendGain"
+  | "swingLowSource"
   | "range"
   | "wick"
   | "lenRank"
@@ -1149,6 +1165,16 @@ function compareSnowballStatsRows(
       return statsCmpNumNullLast(a.alertedAtMs, b.alertedAtMs);
     case "entry":
       return statsCmpNumNullLast(a.entryPrice, b.entryPrice);
+    case "swingLowTime":
+      return statsCmpNumNullLast(a.swingLowOpenSec, b.swingLowOpenSec);
+    case "swingLowPrice":
+      return statsCmpNumNullLast(a.swingLowPrice, b.swingLowPrice);
+    case "ageOfTrend":
+      return statsCmpNumNullLast(a.ageOfTrendHours, b.ageOfTrendHours);
+    case "trendGain":
+      return statsCmpNumNullLast(a.trendGainPct, b.trendGainPct);
+    case "swingLowSource":
+      return statsCmpStr(a.swingLowSource ?? "", b.swingLowSource ?? "");
     case "range":
       return statsCmpNumNullLast(a.rangeScore, b.rangeScore);
     case "wick":
@@ -1276,6 +1302,7 @@ export function snowballStatsSortDefaultDir(key: SnowballStatsSortKey): Snowball
     key === "volCascade" ||
     key === "resultRr" ||
     key === "sentiment" ||
+    key === "swingLowSource" ||
     key === "outcome"
   ) {
     return "asc";

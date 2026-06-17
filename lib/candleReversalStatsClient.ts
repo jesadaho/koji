@@ -1,6 +1,7 @@
 /** Client-safe candle reversal stats types (no Node.js / Redis). */
 
 import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
+import type { PumpCycleSwingLowSource } from "@/lib/pumpCycleSwingLow";
 import { statsEmaSlopePctLabel } from "@/lib/statsEmaSlope";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
@@ -81,6 +82,17 @@ export type CandleReversalStatsRow = {
   afterInvertedDoji: boolean;
   /** Snapshot market sentiment (Market Pulse) ณ เวลาแจ้ง */
   marketSentiment?: MarketSentimentSnapshot | null;
+  /** Swing low 1H — จุดเริ่มรอบปั๊ม (open time sec) */
+  swingLowOpenSec?: number | null;
+  /** Swing low 1H — ราคา Low */
+  swingLowPrice?: number | null;
+  /** ชั่วโมงจาก Swing Low ถึง anchor close */
+  ageOfTrendHours?: number | null;
+  /** ((entry − swingLow) / swingLow) × 100 */
+  trendGainPct?: number | null;
+  swingLowSource?: PumpCycleSwingLowSource | null;
+  /** 1 = pump-cycle swing low คำนวณแล้ว */
+  pumpCycleSwingLowV?: number;
   /** แท่ง Day1 เขียว (close>open) ติดกันก่อนแท่งสัญญาณ — ไม่นับแท่งสัญญาณ */
   greenDaysBeforeSignal?: number | null;
   /** เขียวตามวันปฏิทิน BKK (เพื่อให้ตรงกับกราฟผู้ใช้) */
@@ -137,6 +149,13 @@ export type CandleReversalStatsApiPayload = {
 
 export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): string {
   return tf.toUpperCase();
+}
+
+export function candleReversalStatsAnchorCloseSec(
+  row: Pick<CandleReversalStatsRow, "signalBarOpenSec" | "signalBarTf">,
+): number {
+  const dur = row.signalBarTf === "1h" ? 3600 : 24 * 3600;
+  return row.signalBarOpenSec + dur;
 }
 
 /** ชื่อเต็ม (Telegram / ข้อความยาว) */
@@ -246,6 +265,11 @@ export type CandleReversalStatsSortKey =
   | "day"
   | "time"
   | "entry"
+  | "swingLowTime"
+  | "swingLowPrice"
+  | "ageOfTrend"
+  | "trendGain"
+  | "swingLowSource"
   | "vol24"
   | "mcap"
   | "ema1h"
@@ -356,6 +380,16 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.alertedAtMs, b.alertedAtMs);
     case "entry":
       return cmpNumNullLast(a.entryPrice, b.entryPrice);
+    case "swingLowTime":
+      return cmpNumNullLast(a.swingLowOpenSec, b.swingLowOpenSec);
+    case "swingLowPrice":
+      return cmpNumNullLast(a.swingLowPrice, b.swingLowPrice);
+    case "ageOfTrend":
+      return cmpNumNullLast(a.ageOfTrendHours, b.ageOfTrendHours);
+    case "trendGain":
+      return cmpNumNullLast(a.trendGainPct, b.trendGainPct);
+    case "swingLowSource":
+      return cmpStr(a.swingLowSource ?? "", b.swingLowSource ?? "");
     case "vol24":
       return cmpNumNullLast(a.quoteVol24hUsdt, b.quoteVol24hUsdt);
     case "mcap":
@@ -463,7 +497,7 @@ export function candleReversalEmaSlopeCsvLabel(pct: number | null | undefined): 
 }
 
 export function candleReversalStatsSortDefaultDir(key: CandleReversalStatsSortKey): CandleReversalStatsSortDir {
-  if (key === "symbol" || key === "tf" || key === "side" || key === "model" || key === "day" || key === "outcome") {
+  if (key === "symbol" || key === "tf" || key === "side" || key === "model" || key === "day" || key === "outcome" || key === "swingLowSource") {
     return "asc";
   }
   return "desc";

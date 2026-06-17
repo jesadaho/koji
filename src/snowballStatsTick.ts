@@ -44,6 +44,7 @@ import { buildSnowballLongConfirmGateStepsForStats } from "./snowballStatsGateSt
 import type { BinanceIndicatorTf } from "./binanceIndicatorKline";
 import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import { snowballStatsAnchorCloseSec, snowballStatsHorizonDue } from "@/lib/snowballStatsClient";
+import { backfillPumpCycleSwingLowForRows } from "./statsPumpCycleSwingLow";
 import { toBinanceUsdtPerpSymbol } from "./snowballManualSymbolClear";
 
 export type SnowballStatsFollowUpResult = {
@@ -483,6 +484,10 @@ export async function runSnowballStatsFollowUpTick(
   dirty += backfillSnowballLenPercentilePct(state.rows);
   const greenDays = await backfillSnowballGreenDaysBeforeSignal(state.rows);
   dirty += greenDays;
+  dirty += await backfillPumpCycleSwingLowForRows(state.rows, (row) =>
+    snowballStatsAnchorCloseSec(row),
+    { symbolFilter },
+  );
   const emaSlopes = await backfillSnowballEmaSlopes(state.rows, symbolFilter);
   dirty += emaSlopes;
   dirty += await backfillAllStatsRowsBtcEmaSlopes(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });

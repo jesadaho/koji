@@ -317,6 +317,12 @@ export type AppendSnowballStatsInput = {
   confirmVolRankLb?: number | null;
   greenDaysBeforeSignal?: number | null;
   greenDaysBeforeSignalBkk?: number | null;
+  swingLowOpenSec?: number | null;
+  swingLowPrice?: number | null;
+  ageOfTrendHours?: number | null;
+  trendGainPct?: number | null;
+  swingLowSource?: SnowballStatsRow["swingLowSource"];
+  pumpCycleSwingLowV?: number;
   breakout1hConfirmFail?: boolean;
   alertQualityTier?: SnowballStatsQualityTier;
   momentumDowngrade?: boolean;

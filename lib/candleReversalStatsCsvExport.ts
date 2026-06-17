@@ -38,6 +38,13 @@ import {
   statsPsar4hTrendLabel,
 } from "@/lib/statsPsar4h";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
+import {
+  pumpCycleAgeHoursCsvCell,
+  pumpCycleSwingLowPriceCsvCell,
+  pumpCycleSwingLowSourceCsvCell,
+  pumpCycleSwingLowTimeCsvCell,
+  pumpCycleTrendGainCsvCell,
+} from "@/lib/pumpCycleSwingLow";
 
 const HEADERS = [
   "symbol",
@@ -50,6 +57,11 @@ const HEADERS = [
   "วัน",
   "เวลา (BKK)",
   "Entry",
+  "Swing Low Time",
+  "Swing Low Price",
+  "Age of Trend (Hours)",
+  "Trend Gain %",
+  "Swing Low Source",
   "Vol 24h",
   "Mcap",
   "EMA1h slope 7d %",
@@ -121,6 +133,11 @@ function candleReversalStatsRowToCsvCells(
     candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs),
     statsFmtBkk(r.alertedAtIso),
     statsFmtPrice(r.entryPrice),
+    pumpCycleSwingLowTimeCsvCell(r.swingLowOpenSec),
+    pumpCycleSwingLowPriceCsvCell(r.swingLowPrice),
+    pumpCycleAgeHoursCsvCell(r.ageOfTrendHours),
+    pumpCycleTrendGainCsvCell(r.trendGainPct),
+    pumpCycleSwingLowSourceCsvCell(r.swingLowSource),
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
     candleReversalEmaSlopeCsvLabel(r.ema1hSlopePct7d),

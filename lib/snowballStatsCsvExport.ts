@@ -43,6 +43,13 @@ import {
   snowballStatsStagedCsvCells,
 } from "@/lib/snowballStatsStagedCsv";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPrice } from "@/lib/statsCsv";
+import {
+  pumpCycleAgeHoursCsvCell,
+  pumpCycleSwingLowPriceCsvCell,
+  pumpCycleSwingLowSourceCsvCell,
+  pumpCycleSwingLowTimeCsvCell,
+  pumpCycleTrendGainCsvCell,
+} from "@/lib/pumpCycleSwingLow";
 
 const HEADERS = [
   "symbol",
@@ -55,6 +62,11 @@ const HEADERS = [
   "วัน",
   "เวลา (BKK)",
   "Entry",
+  "Swing Low Time",
+  "Swing Low Price",
+  "Age of Trend (Hours)",
+  "Trend Gain %",
+  "Swing Low Source",
   "Range",
   "Wick",
   "Len#",
@@ -119,6 +131,11 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyC
     snowballStatsDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs),
     statsFmtBkk(r.alertedAtIso),
     statsFmtPrice(r.entryPrice),
+    pumpCycleSwingLowTimeCsvCell(r.swingLowOpenSec),
+    pumpCycleSwingLowPriceCsvCell(r.swingLowPrice),
+    pumpCycleAgeHoursCsvCell(r.ageOfTrendHours),
+    pumpCycleTrendGainCsvCell(r.trendGainPct),
+    pumpCycleSwingLowSourceCsvCell(r.swingLowSource),
     snowballStatsVolScoreLabel(r.rangeScore),
     snowballStatsVolScoreLabel(r.wickScore),
     candleReversalLookbackRankCell(r.rangeRankInLookback, r.lenLookbackBars),

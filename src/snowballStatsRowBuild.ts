@@ -244,6 +244,22 @@ export function buildSnowballStatsRow(input: AppendSnowballStatsInput): Snowball
       input.greenDaysBeforeSignalBkk >= 0
         ? Math.floor(input.greenDaysBeforeSignalBkk)
         : null,
+    swingLowOpenSec:
+      input.swingLowOpenSec != null && Number.isFinite(input.swingLowOpenSec)
+        ? input.swingLowOpenSec
+        : null,
+    swingLowPrice:
+      input.swingLowPrice != null && Number.isFinite(input.swingLowPrice) && input.swingLowPrice > 0
+        ? input.swingLowPrice
+        : null,
+    ageOfTrendHours:
+      input.ageOfTrendHours != null && Number.isFinite(input.ageOfTrendHours) && input.ageOfTrendHours >= 0
+        ? input.ageOfTrendHours
+        : null,
+    trendGainPct:
+      input.trendGainPct != null && Number.isFinite(input.trendGainPct) ? input.trendGainPct : null,
+    swingLowSource: input.swingLowSource ?? null,
+    ...(input.pumpCycleSwingLowV != null ? { pumpCycleSwingLowV: input.pumpCycleSwingLowV } : {}),
     svpHoleYn: computeSvpHoleYn(input.vol, input.volSma),
     price4h: null,
     pct4h: null,
