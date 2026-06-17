@@ -15,13 +15,13 @@ export type ReversalMatrixFilter = "all" | "qualitySignal";
 export type ReversalQualitySignalProfile = "short" | "long1h";
 
 /** ข้อความเกณฑ์ Quality Signal (stats + auto-open) — Reversal Short */
-export const REVERSAL_QUALITY_SIGNAL_CRITERIA = "Trend Gain 20–50% · หรือ Velocity > 2%/h";
+export const REVERSAL_QUALITY_SIGNAL_CRITERIA = "Velocity > 1.4%/h · Trend Gain 20–50%";
 
 /** Trend Gain % — inclusive */
 export const REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MIN_PCT = 20;
 export const REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MAX_PCT = 50;
 /** Trend Velocity (%/h) — exclusive */
-export const REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE = 2;
+export const REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE = 1.4;
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
@@ -145,7 +145,7 @@ export function reversalMatchesQualitySignal(input: {
   ageOfTrendHours?: number | null;
 }): boolean {
   return (
-    trendGainInBand(input.trendGainPct) ||
+    trendGainInBand(input.trendGainPct) &&
     trendVelocityAboveMin(input.trendGainPct, input.ageOfTrendHours)
   );
 }
