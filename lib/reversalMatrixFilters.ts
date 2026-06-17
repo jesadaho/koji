@@ -15,11 +15,8 @@ export type ReversalMatrixFilter = "all" | "qualitySignal";
 export type ReversalQualitySignalProfile = "short" | "long1h";
 
 /** ข้อความเกณฑ์ Quality Signal (stats + auto-open) — Reversal Short */
-export const REVERSAL_QUALITY_SIGNAL_CRITERIA = "Velocity > 1.4%/h · Trend Gain 20–50%";
+export const REVERSAL_QUALITY_SIGNAL_CRITERIA = "Velocity > 1.4%/h";
 
-/** Trend Gain % — inclusive */
-export const REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MIN_PCT = 20;
-export const REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MAX_PCT = 50;
 /** Trend Velocity (%/h) — exclusive */
 export const REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE = 1.4;
 
@@ -81,16 +78,6 @@ function atrPct14dBelow(maxExclusive: number, atrPct14d?: number | null): boolea
   return v != null && Number.isFinite(v) && v > 0 && v < maxExclusive;
 }
 
-function trendGainInBand(trendGainPct?: number | null): boolean {
-  const pct = trendGainPct;
-  return (
-    pct != null &&
-    Number.isFinite(pct) &&
-    pct >= REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MIN_PCT &&
-    pct <= REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MAX_PCT
-  );
-}
-
 function trendVelocityAboveMin(
   trendGainPct?: number | null,
   ageOfTrendHours?: number | null,
@@ -144,10 +131,7 @@ export function reversalMatchesQualitySignal(input: {
   trendGainPct?: number | null;
   ageOfTrendHours?: number | null;
 }): boolean {
-  return (
-    trendGainInBand(input.trendGainPct) &&
-    trendVelocityAboveMin(input.trendGainPct, input.ageOfTrendHours)
-  );
+  return trendVelocityAboveMin(input.trendGainPct, input.ageOfTrendHours);
 }
 
 export function reversalUsesLong1hQualitySignal(
