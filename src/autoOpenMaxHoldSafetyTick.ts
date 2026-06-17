@@ -238,30 +238,32 @@ function resolveHoldForCandidate(
   settingsMap: Awaited<ReturnType<typeof loadTradingViewMexcSettingsFullMap>>,
 ): ReturnType<typeof resolveSafetyHoldParams> {
   const { row, bot } = candidate;
-  const source = row?.source ?? bot.source;
-  const plan = row
-    ? resolveAutoOpenTpSlPlanForRow(row, settingsMap)
-    : resolveAutoOpenTpSlPlanForRow(
-        {
-          id: "",
-          atMs: bot.active.openedAtMs,
-          userId: "",
-          source,
-          outcome: "success",
-          reasonCode: "",
-          contractSymbol: bot.active.contractSymbol,
-          binanceSymbol: bot.active.binanceSymbol,
-          side: bot.active.side,
-        },
-        settingsMap,
-      );
-  if (row) return resolveSafetyHoldParams(row, plan, bot);
+  if (row) {
+    const plan = resolveAutoOpenTpSlPlanForRow(row, settingsMap);
+    return resolveSafetyHoldParams(row, plan, bot);
+  }
+  if (!bot) return null;
+
+  const plan = resolveAutoOpenTpSlPlanForRow(
+    {
+      id: "",
+      atMs: bot.active.openedAtMs,
+      userId: "",
+      source: bot.source,
+      outcome: "success",
+      reasonCode: "",
+      contractSymbol: bot.active.contractSymbol,
+      binanceSymbol: bot.active.binanceSymbol,
+      side: bot.active.side,
+    },
+    settingsMap,
+  );
   return resolveSafetyHoldParams(
     {
       id: "",
       atMs: bot.active.openedAtMs,
       userId: "",
-      source,
+      source: bot.source,
       outcome: "success",
       reasonCode: "",
       contractSymbol: bot.active.contractSymbol,
