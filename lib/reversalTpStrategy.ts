@@ -1,9 +1,11 @@
 /**
- * Reversal TP strategy — EMA4H + profit band @ 12h / 24h · ถือต่อถึง 48h
- * 12h: ติดลบ + EMA4H > 0 → ปิดทันที
- * 24h ชนะ (≥2%) + EMA4H < 0 → ถือต่อ + SL บังทุน
- * 24h กำไรนิดหน่อย (0–2%) + EMA4H > 0 → ปิดทันที
- * 24h ติดลบนิดหน่อย (−2%–0) + EMA4H > 0 → ปิดทันที (ถ้ายังไม่มี SL@entry)
+ * Reversal TP strategy — SHORT · EMA4H + ROI @ 12h / 24h · ถือต่อถึง 48h
+ * 12h: ROI < 0 AND EMA4H > 0 → CLOSE
+ * 24h: ROI < 3% AND EMA4H > 0 → CLOSE
+ * 24h: ROI > 3% AND EMA4H < 0 → HOLD + SL@entry
+ * 24h: อื่นๆ → HOLD
+ * 24–48h: แตะ SL@entry → EXIT ~0%
+ * 48h: FORCE CLOSE
  */
 
 import {
@@ -27,10 +29,13 @@ import {
   type StatsTpSlExitReason,
 } from "@/lib/tpSlStrategySimulate";
 
-export const REVERSAL_TP_STRATEGY_SUMMARY =
-  "12h ติดลบ+EMA4H>0→ปิด · 24h ชนะ+EMA4H<0→ถือ+SL@entry · 24h กำไรนิด+EMA4H>0→ปิด · 24h ติดลบนิด+EMA4H>0→ปิด(ถ้าไม่มี SL@entry) · 48h";
+export const REVERSAL_TP_STRATEGY_24H_ROI_CLOSE_MAX_EXCLUSIVE = 3;
+export const REVERSAL_TP_STRATEGY_24H_ROI_HOLD_SL_MIN_EXCLUSIVE = 3;
 
-export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revNo12hBe1";
+export const REVERSAL_TP_STRATEGY_SUMMARY =
+  "12h ROI<0+EMA4H>0→ปิด · 24h ROI<3%+EMA4H>0→ปิด · 24h ROI>3%+EMA4H<0→ถือ+SL@entry · 24–48h SL@entry→0% · 48h force";
+
+export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revRoi3v1";
 
 export type ReversalTpStrategyProfitBand = "win" | "flat_profit" | "flat_loss" | "loss";
 
@@ -91,22 +96,41 @@ function isolatedLiquidationPricePct(leverage: number): number {
   return 100 / leverage;
 }
 
+/** ตัดสินใจ @ 24h — null = ไม่มีข้อมูล EMA4H สำหรับเงื่อนไขที่ต้องใช้ */
+export function reversalTpStrategy24hShouldClose(input: {
+  roiPct: number;
+  ema4hSlopePct7d?: number | null;
+}): boolean {
+  const emaPos = reversalTpStrategyEma4hPositive(input.ema4hSlopePct7d);
+  return (
+    emaPos === true &&
+    Number.isFinite(input.roiPct) &&
+    input.roiPct < REVERSAL_TP_STRATEGY_24H_ROI_CLOSE_MAX_EXCLUSIVE
+  );
+}
+
+export function reversalTpStrategy24hShouldArmSlAtEntry(input: {
+  roiPct: number;
+  ema4hSlopePct7d?: number | null;
+}): boolean {
+  const emaNeg = reversalTpStrategyEma4hNegative(input.ema4hSlopePct7d);
+  return (
+    emaNeg === true &&
+    Number.isFinite(input.roiPct) &&
+    input.roiPct > REVERSAL_TP_STRATEGY_24H_ROI_HOLD_SL_MIN_EXCLUSIVE
+  );
+}
+
 export type ReversalTpStrategy24hAction = "hold" | "close";
 
-/** ตัดสินใจ @ 24h — null = ไม่มีข้อมูล EMA4H */
+/** @deprecated ใช้ reversalTpStrategy24hShouldClose / ShouldArmSlAtEntry */
 export function reversalTpStrategy24hAction(input: {
   pct24h: number;
   ema4hSlopePct7d?: number | null;
   beArmedBefore24h?: boolean;
 }): ReversalTpStrategy24hAction | null {
-  const band = reversalTpStrategyProfitBand(input.pct24h);
-  const emaPos = reversalTpStrategyEma4hPositive(input.ema4hSlopePct7d);
-  const emaNeg = reversalTpStrategyEma4hNegative(input.ema4hSlopePct7d);
-
-  if (band === "win" && emaNeg === true) return "hold";
-  if (band === "flat_profit" && emaPos === true) return "close";
-  if (band === "flat_loss" && emaPos === true) {
-    return input.beArmedBefore24h === true ? "hold" : "close";
+  if (reversalTpStrategy24hShouldClose({ roiPct: input.pct24h, ema4hSlopePct7d: input.ema4hSlopePct7d })) {
+    return "close";
   }
   return "hold";
 }
@@ -212,24 +236,22 @@ export function simulateReversalTpStrategyProfit(input: {
   }
 
   if (maxHorizon === STATS_STRATEGY_PROFIT_HOLD_24H || horizonLast >= i24End) {
-    const action24 = reversalTpStrategy24hAction({
-      pct24h: input.pct24h,
-      ema4hSlopePct7d: input.ema4hSlopePct7d,
-      beArmedBefore24h: beArmed,
-    });
-
-    if (action24 === "close") {
+    if (
+      reversalTpStrategy24hShouldClose({
+        roiPct: input.pct24h,
+        ema4hSlopePct7d: input.ema4hSlopePct7d,
+      })
+    ) {
       return { profitPct: input.pct24h, exitReason: "time_24h" };
     }
-    if (action24 === "hold" && reversalTpStrategyProfitBand(input.pct24h) === "win") {
+    if (
+      reversalTpStrategy24hShouldArmSlAtEntry({
+        roiPct: input.pct24h,
+        ema4hSlopePct7d: input.ema4hSlopePct7d,
+      })
+    ) {
       beArmed = true;
       scanFrom = Math.max(scanFrom, i24End + 1);
-    }
-
-    if (beArmed && scanFrom <= i24End) {
-      const beExit24 = tryBeExit(i24End);
-      if (beExit24) return beExit24;
-      scanFrom = i24End + 1;
     }
 
     if (maxHorizon === STATS_STRATEGY_PROFIT_HOLD_24H) {
@@ -289,21 +311,19 @@ export function reversalTpStrategyLive12hShouldClose(input: {
 export function reversalTpStrategyLive24hShouldClose(input: {
   dropPct: number;
   ema4hSlopePct7d?: number | null;
-  beArmed: boolean;
 }): boolean {
-  const action = reversalTpStrategy24hAction({
-    pct24h: input.dropPct,
+  return reversalTpStrategy24hShouldClose({
+    roiPct: input.dropPct,
     ema4hSlopePct7d: input.ema4hSlopePct7d,
-    beArmedBefore24h: input.beArmed,
   });
-  return action === "close";
 }
 
 export function reversalTpStrategyLive24hShouldArmBe(input: {
   dropPct: number;
   ema4hSlopePct7d?: number | null;
 }): boolean {
-  const band = reversalTpStrategyProfitBand(input.dropPct);
-  const emaNeg = reversalTpStrategyEma4hNegative(input.ema4hSlopePct7d);
-  return band === "win" && emaNeg === true;
+  return reversalTpStrategy24hShouldArmSlAtEntry({
+    roiPct: input.dropPct,
+    ema4hSlopePct7d: input.ema4hSlopePct7d,
+  });
 }

@@ -177,7 +177,7 @@ async function handleReversal24hStrategyClose(ctx: TpSlContext): Promise<{ close
   }
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
-    `⏰ ครบ 24 ชม. — กลยุทธ์ปิดทันที (กำไรนิดหน่อย/ติดลบนิดหน่อย + EMA4H>0)`,
+    `⏰ ครบ 24 ชม. — กลยุทธ์ปิดทันที (ROI < 3% + EMA4H>0)`,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${drop.toFixed(2)}%`,
   ]);
@@ -218,7 +218,7 @@ async function handleSlAtEntryOnRoi(
       ? String((slRes.data as { orderId: unknown }).orderId)
       : undefined;
 
-  const headline = `🛡️ ครบ 24 ชม. ชนะ + EMA4H<0 — ถือต่อ · ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`;
+  const headline = `🛡️ ครบ 24 ชม. ROI > 3% + EMA4H<0 — ถือต่อ · ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`;
 
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
@@ -330,7 +330,6 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
         }
 
         const dropForTp = pricePctDrop(a.side, a.mexcAvgEntryPrice, mark);
-        const beArmed = a.slBreakevenArmed === true || Boolean(a.slPlanOrderId?.trim());
 
         if (!a.reversalTp12hChecked && nowMs >= a.openedAtMs + MS_12H) {
           state = withReversalTp12hChecked(state, userId, a.contractSymbol, a.side);
@@ -356,7 +355,6 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
             reversalTpStrategyLive24hShouldClose({
               dropPct: dropForTp,
               ema4hSlopePct7d: a.ema4hSlopePct7d,
-              beArmed,
             })
           ) {
             const r = await handleReversal24hStrategyClose(ctx);
