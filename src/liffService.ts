@@ -124,7 +124,11 @@ import {
   countSkippedAutoOpenOrderLogsForUser,
   loadAutoOpenOrderLogState,
 } from "./autoOpenOrderLogStore";
-import { attachAutoOpenMexcActiveFlags } from "./autoOpenMexcActiveForUser";
+import {
+  attachAutoOpenMexcOpenPnlSnapshots,
+  resolveAutoOpenMexcOpenContextForUser,
+} from "./autoOpenMexcActiveForUser";
+import { annotateAutoOpenRowsWithMexcActive } from "@/lib/autoOpenMexcActive";
 import { collectAutoOpenContractSymbols, fetchAutoOpenMarkPrices } from "./autoOpenMarkPrices";
 import {
   fetchFuturesAccountAssetList,
@@ -918,8 +922,9 @@ export async function liffGetAutoOpenOrderHistory(
     ...r,
     conflictWith: resolveAutoOpenLogConflictWith(r, conflictSets, statsConflictIndex),
   }));
-  const rowsActive = await attachAutoOpenMexcActiveFlags(userId, rowsWithConflict);
-  const rows = rowsActive.map((r) => {
+  const mexcCtx = await resolveAutoOpenMexcOpenContextForUser(userId);
+  const rowsActive = annotateAutoOpenRowsWithMexcActive(rowsWithConflict, mexcCtx.activeKeys);
+  const rowsWithStrategy = rowsActive.map((r) => {
     const plan = resolveTpSlPlanForUserId(userId, r.source, settingsMap);
     return withAutoOpenTpStrategyDisplayFields(r, plan);
   });
@@ -927,8 +932,13 @@ export async function liffGetAutoOpenOrderHistory(
     source: opts?.source,
     reversalAlertSide: opts?.reversalAlertSide,
   });
-  const symbols = collectAutoOpenContractSymbols(rows.map((r) => r.contractSymbol));
+  const symbols = collectAutoOpenContractSymbols(rowsWithStrategy.map((r) => r.contractSymbol));
   const markPrices = await fetchAutoOpenMarkPrices(symbols);
+  const rows = await attachAutoOpenMexcOpenPnlSnapshots(
+    rowsWithStrategy,
+    mexcCtx.openPositions,
+    markPrices,
+  );
 
   let mexcBalance: AutoOpenOrderLogApiPayload["mexcBalance"] = null;
   const credsRow = settingsMap[userId];

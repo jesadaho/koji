@@ -42,6 +42,7 @@ import {
   summarizeAutoOpenMexcRealisedPnl,
   type AutoOpenMexcRealisedSummary,
 } from "@/lib/autoOpenMexcRealPnl";
+import { resolveAutoOpenMexcLivePnlUsdt } from "@/lib/autoOpenMexcLivePnl";
 import type { MexcUsdtBalanceSnapshot } from "@/src/mexcFuturesClient";
 import {
   statsStrategyExitReasonForHorizon,
@@ -560,21 +561,35 @@ function fmtMarginCell(row: AutoOpenOrderLogRow): ReactNode {
   );
 }
 
-function fmtMexcRealPnlCell(row: AutoOpenOrderLogRow): ReactNode {
+function fmtMexcRealPnlCell(row: AutoOpenOrderLogRow, markPrice: number | undefined): ReactNode {
   if (row.outcome !== "success") return "—";
-  const pnl = row.mexcRealisedPnlUsdt;
-  if (pnl == null || !Number.isFinite(pnl)) return "—";
+  const closed = row.mexcRealisedPnlUsdt;
+  if (closed != null && Number.isFinite(closed)) {
+    return (
+      <span
+        style={{ whiteSpace: "nowrap", ...pnlAmountStyle(closed) }}
+        title="Realised P/L จาก MEXC เมื่อปิด position (รวม funding)"
+      >
+        {formatStatsStrategyProfitDollarAmount(closed)}
+        {row.mexcClosedAtMs != null && Number.isFinite(row.mexcClosedAtMs) ? (
+          <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
+            {formatBkk(row.mexcClosedAtMs)}
+          </span>
+        ) : null}
+      </span>
+    );
+  }
+  const live = resolveAutoOpenMexcLivePnlUsdt(row, markPrice);
+  if (live == null || !Number.isFinite(live)) return "—";
   return (
     <span
-      style={{ whiteSpace: "nowrap", ...pnlAmountStyle(pnl) }}
-      title="Realised P/L จาก MEXC เมื่อปิด position (รวม funding)"
+      style={{ whiteSpace: "nowrap", ...pnlAmountStyle(live) }}
+      title="P/L จาก MEXC — realised ส่วนที่ปิดแล้ว + floating ส่วนที่เหลือ + funding"
     >
-      {formatStatsStrategyProfitDollarAmount(pnl)}
-      {row.mexcClosedAtMs != null && Number.isFinite(row.mexcClosedAtMs) ? (
-        <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
-          {formatBkk(row.mexcClosedAtMs)}
-        </span>
-      ) : null}
+      {formatStatsStrategyProfitDollarAmount(live)}
+      <span className="sub" style={{ display: "block", fontSize: "0.88em", opacity: 0.85 }}>
+        เปิดอยู่
+      </span>
     </span>
   );
 }
@@ -776,7 +791,7 @@ function renderAutoOpenHistoryTableBody(
         <td>{fmtEntryCell(r, nowPx)}</td>
         <td>{fmtPrice(nowPx)}</td>
         <td>{fmtPnlCell(r, nowPx)}</td>
-        <td title="Realised P/L จาก MEXC เมื่อปิด position">{fmtMexcRealPnlCell(r)}</td>
+        <td title="P/L จาก MEXC — เปิดอยู่แสดง live · ปิดแล้วแสดง realised">{fmtMexcRealPnlCell(r, nowPx)}</td>
         <td title="เหตุผลปิดบน MEXC (จำลองจาก TP/SL ตาม Settings · อ้างอิงช่วงถือจริง)">
           {fmtMexcCloseReasonCell(r)}
         </td>
@@ -860,7 +875,7 @@ function AutoOpenHistoryTable({
             <th title="⏳ = Limit รอแตะ (รวมสั่งไม่สำเร็จแต่จำลองรอ fill) · ✕ = ล้มเหลวอื่น">Entry</th>
             <th>ปัจจุบัน</th>
             <th>P/L</th>
-            <th title="Realised P/L จาก MEXC เมื่อปิด position (อัปเดตทุก ~15 นาที)">
+            <th title="P/L จาก MEXC — เปิดอยู่แสดง live (realised + floating + funding) · ปิดแล้วแสดง realised">
               MEXC P/L
             </th>
             <th title="เหตุผลปิด — จากจำลอง TP/SL (เช่น ครบ 24h · TP2 · SL@entry)">
@@ -1272,10 +1287,14 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       days: dayFilter !== "all" ? Number(dayFilter) : undefined,
     });
     const qs = q.toString();
-    await downloadCsv(statsCsvFilename("auto-open-history"), autoOpenOrderLogToCsv(displayRows), {
-      telegramExportPath: `/api/tma/auto-open-history.csv${qs ? `?${qs}` : ""}`,
-    });
-  }, [displayRows, dayFilter, sourceFilter]);
+    await downloadCsv(
+      statsCsvFilename("auto-open-history"),
+      autoOpenOrderLogToCsv(displayRows, markPrices),
+      {
+        telegramExportPath: `/api/tma/auto-open-history.csv${qs ? `?${qs}` : ""}`,
+      },
+    );
+  }, [displayRows, dayFilter, sourceFilter, markPrices]);
 
   if (phase === "loading") {
     return (

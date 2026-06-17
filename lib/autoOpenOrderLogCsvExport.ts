@@ -7,6 +7,7 @@ import {
   autoOpenStrategyOutcomeLabel,
   type AutoOpenStrategyOutcome,
 } from "@/lib/autoOpenStrategyOutcome";
+import { resolveAutoOpenMexcLivePnlUsdt } from "@/lib/autoOpenMexcLivePnl";
 import {
   autoOpenOutcomeLabel,
   autoOpenReasonLabel,
@@ -58,7 +59,10 @@ function fmtPctCsv(p: number | null | undefined): string {
   return `${s}${p.toFixed(2)}%`;
 }
 
-export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
+export function autoOpenOrderLogToCsv(
+  rows: AutoOpenOrderLogRow[],
+  markPrices?: Record<string, number>,
+): string {
   const body = rows.map((r) => {
     const signalLabel = autoOpenSignalSideLabel(r);
     return [
@@ -102,7 +106,11 @@ export function autoOpenOrderLogToCsv(rows: AutoOpenOrderLogRow[]): string {
     r.strategyExitReason ?? "",
     r.mexcRealisedPnlUsdt != null && Number.isFinite(r.mexcRealisedPnlUsdt)
       ? String(r.mexcRealisedPnlUsdt)
-      : "",
+      : (() => {
+          const sym = r.contractSymbol.trim().toUpperCase();
+          const live = resolveAutoOpenMexcLivePnlUsdt(r, markPrices?.[sym]);
+          return live != null && Number.isFinite(live) ? String(live) : "";
+        })(),
     autoOpenMexcCloseReasonShort(resolveAutoOpenMexcCloseExitReason(r)),
     r.mexcTotalFeeUsdt != null && Number.isFinite(r.mexcTotalFeeUsdt)
       ? String(r.mexcTotalFeeUsdt)

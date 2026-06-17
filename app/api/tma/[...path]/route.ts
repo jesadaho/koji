@@ -263,7 +263,7 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       if (!auth.ok) return json({ error: auth.error }, auth.status);
       const hq = autoOpenHistoryQueryFromSearchParams(req.nextUrl.searchParams);
       const data = await liffGetAutoOpenOrderHistory(auth.userId, hq);
-      const csv = autoOpenOrderLogToCsv(data.rows);
+      const csv = autoOpenOrderLogToCsv(data.rows, data.markPrices);
       return statsCsvAttachmentResponse(csv, statsCsvFilename("auto-open-history"));
     }
     if (segs.length === 1 && a === "divergence-stats") {

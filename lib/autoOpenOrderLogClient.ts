@@ -90,6 +90,8 @@ export type AutoOpenOrderLogRow = {
   mexcTotalFeeUsdt?: number | null;
   /** ยังมี position เปิดอยู่บน MEXC (แถว success ล่าสุดของเหรียญ+ทิศ) */
   mexcActive?: boolean;
+  /** Snapshot จาก MEXC open position — ใช้คำนวณ live P/L (ไม่ persist) */
+  mexcOpenPnlSnapshot?: import("@/lib/autoOpenMexcLivePnl").AutoOpenMexcOpenPnlSnapshot | null;
   /** Limit บน MEXC fill แล้ว (จาก limit tick) — ไม่แสดง ⏳ รอแตะ */
   limitFilledAtMs?: number | null;
 };
