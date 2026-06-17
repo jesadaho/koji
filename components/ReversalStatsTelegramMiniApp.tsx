@@ -23,6 +23,7 @@ import {
   pumpCycleSwingLowSourceLabel,
   pumpCycleSwingLowTimeIso,
   pumpCycleTrendGainPctLabel,
+  pumpCycleTrendVelocityLabel,
 } from "@/lib/pumpCycleSwingLow";
 import {
   statsPsar4hDistPctLabel,
@@ -435,7 +436,7 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 16;
+  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 17;
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -534,6 +535,13 @@ function ReversalStatsSection({
               label="Trend%"
               sortKey="trendGain"
               title="Trend Gain % — (Entry − Swing Low) / Swing Low × 100"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Vel"
+              sortKey="trendVelocity"
+              title="Trend Velocity — Trend Gain % ÷ Age of Trend (Hours) (%/h)"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -802,6 +810,9 @@ function ReversalStatsSection({
                   <td>{fmtPrice(r.swingLowPrice)}</td>
                   <td>{pumpCycleAgeHoursLabel(r.ageOfTrendHours)}</td>
                   <td>{pumpCycleTrendGainPctLabel(r.trendGainPct)}</td>
+                  <td title="Trend Gain % ÷ Age of Trend (Hours)">
+                    {pumpCycleTrendVelocityLabel(r.trendGainPct, r.ageOfTrendHours)}
+                  </td>
                   <td>{pumpCycleSwingLowSourceLabel(r.swingLowSource)}</td>
                   <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>

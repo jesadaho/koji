@@ -2,6 +2,7 @@
 
 import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
 import type { PumpCycleSwingLowSource } from "@/lib/pumpCycleSwingLow";
+import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 import { statsEmaSlopePctLabel } from "@/lib/statsEmaSlope";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
@@ -269,6 +270,7 @@ export type CandleReversalStatsSortKey =
   | "swingLowPrice"
   | "ageOfTrend"
   | "trendGain"
+  | "trendVelocity"
   | "swingLowSource"
   | "vol24"
   | "mcap"
@@ -388,6 +390,11 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.ageOfTrendHours, b.ageOfTrendHours);
     case "trendGain":
       return cmpNumNullLast(a.trendGainPct, b.trendGainPct);
+    case "trendVelocity":
+      return cmpNumNullLast(
+        computePumpCycleTrendVelocity(a.trendGainPct, a.ageOfTrendHours),
+        computePumpCycleTrendVelocity(b.trendGainPct, b.ageOfTrendHours),
+      );
     case "swingLowSource":
       return cmpStr(a.swingLowSource ?? "", b.swingLowSource ?? "");
     case "vol24":

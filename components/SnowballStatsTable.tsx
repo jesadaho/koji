@@ -15,6 +15,7 @@ import {
   pumpCycleSwingLowSourceLabel,
   pumpCycleSwingLowTimeIso,
   pumpCycleTrendGainPctLabel,
+  pumpCycleTrendVelocityLabel,
 } from "@/lib/pumpCycleSwingLow";
 import {
   statsPsar4hDistPctLabel,
@@ -245,6 +246,13 @@ export function SnowballStatsTable({
               label="Trend%"
               sortKey="trendGain"
               title="Trend Gain % — (Entry − Swing Low) / Swing Low × 100"
+              activeSort={sort}
+              onSort={onSort}
+            />
+            <SortTh
+              label="Vel"
+              sortKey="trendVelocity"
+              title="Trend Velocity — Trend Gain % ÷ Age of Trend (Hours) (%/h)"
               activeSort={sort}
               onSort={onSort}
             />
@@ -534,6 +542,9 @@ export function SnowballStatsTable({
                 <td>{fmtPrice(r.swingLowPrice)}</td>
                 <td>{pumpCycleAgeHoursLabel(r.ageOfTrendHours)}</td>
                 <td>{pumpCycleTrendGainPctLabel(r.trendGainPct)}</td>
+                <td title="Trend Gain % ÷ Age of Trend (Hours)">
+                  {pumpCycleTrendVelocityLabel(r.trendGainPct, r.ageOfTrendHours)}
+                </td>
                 <td>{pumpCycleSwingLowSourceLabel(r.swingLowSource)}</td>
                 <td>{snowballStatsVolScoreLabel(r.rangeScore)}</td>
                 <td>{snowballStatsVolScoreLabel(r.wickScore)}</td>

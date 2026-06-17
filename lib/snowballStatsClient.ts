@@ -8,6 +8,7 @@ import {
   snowballStatsGradeChecklistFooter,
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
+import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 import { statsFmtPctCell } from "@/lib/statsCsv";
 import { formatFunding } from "@/src/marketsFormat";
 import {
@@ -1031,6 +1032,7 @@ export type SnowballStatsSortKey =
   | "swingLowPrice"
   | "ageOfTrend"
   | "trendGain"
+  | "trendVelocity"
   | "swingLowSource"
   | "range"
   | "wick"
@@ -1173,6 +1175,11 @@ function compareSnowballStatsRows(
       return statsCmpNumNullLast(a.ageOfTrendHours, b.ageOfTrendHours);
     case "trendGain":
       return statsCmpNumNullLast(a.trendGainPct, b.trendGainPct);
+    case "trendVelocity":
+      return statsCmpNumNullLast(
+        computePumpCycleTrendVelocity(a.trendGainPct, a.ageOfTrendHours),
+        computePumpCycleTrendVelocity(b.trendGainPct, b.ageOfTrendHours),
+      );
     case "swingLowSource":
       return statsCmpStr(a.swingLowSource ?? "", b.swingLowSource ?? "");
     case "range":

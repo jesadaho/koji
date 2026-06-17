@@ -224,6 +224,43 @@ export function pumpCycleTrendGainCsvCell(pct: number | null | undefined): strin
   return pct.toFixed(2);
 }
 
+/** Trend Velocity = Trend Gain % ÷ Age of Trend (Hours) — %/h */
+export function computePumpCycleTrendVelocity(
+  trendGainPct: number | null | undefined,
+  ageOfTrendHours: number | null | undefined,
+): number | null {
+  if (
+    trendGainPct == null ||
+    !Number.isFinite(trendGainPct) ||
+    ageOfTrendHours == null ||
+    !Number.isFinite(ageOfTrendHours) ||
+    ageOfTrendHours <= 0
+  ) {
+    return null;
+  }
+  const v = trendGainPct / ageOfTrendHours;
+  return Number.isFinite(v) ? v : null;
+}
+
+export function pumpCycleTrendVelocityLabel(
+  trendGainPct: number | null | undefined,
+  ageOfTrendHours: number | null | undefined,
+): string {
+  const v = computePumpCycleTrendVelocity(trendGainPct, ageOfTrendHours);
+  if (v == null) return "—";
+  const sign = v >= 0 ? "+" : "";
+  return `${sign}${v.toFixed(2)}%/h`;
+}
+
+export function pumpCycleTrendVelocityCsvCell(
+  trendGainPct: number | null | undefined,
+  ageOfTrendHours: number | null | undefined,
+): string {
+  const v = computePumpCycleTrendVelocity(trendGainPct, ageOfTrendHours);
+  if (v == null) return "";
+  return v.toFixed(4);
+}
+
 export function pumpCycleSwingLowFieldsFromResult(
   result: PumpCycleSwingLowResult,
 ): {

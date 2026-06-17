@@ -44,6 +44,7 @@ import {
   pumpCycleSwingLowSourceCsvCell,
   pumpCycleSwingLowTimeCsvCell,
   pumpCycleTrendGainCsvCell,
+  pumpCycleTrendVelocityCsvCell,
 } from "@/lib/pumpCycleSwingLow";
 
 const HEADERS = [
@@ -61,6 +62,7 @@ const HEADERS = [
   "Swing Low Price",
   "Age of Trend (Hours)",
   "Trend Gain %",
+  "Trend Velocity (%/h)",
   "Swing Low Source",
   "Vol 24h",
   "Mcap",
@@ -137,6 +139,7 @@ function candleReversalStatsRowToCsvCells(
     pumpCycleSwingLowPriceCsvCell(r.swingLowPrice),
     pumpCycleAgeHoursCsvCell(r.ageOfTrendHours),
     pumpCycleTrendGainCsvCell(r.trendGainPct),
+    pumpCycleTrendVelocityCsvCell(r.trendGainPct, r.ageOfTrendHours),
     pumpCycleSwingLowSourceCsvCell(r.swingLowSource),
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),

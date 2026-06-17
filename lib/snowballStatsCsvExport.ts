@@ -49,6 +49,7 @@ import {
   pumpCycleSwingLowSourceCsvCell,
   pumpCycleSwingLowTimeCsvCell,
   pumpCycleTrendGainCsvCell,
+  pumpCycleTrendVelocityCsvCell,
 } from "@/lib/pumpCycleSwingLow";
 
 const HEADERS = [
@@ -66,6 +67,7 @@ const HEADERS = [
   "Swing Low Price",
   "Age of Trend (Hours)",
   "Trend Gain %",
+  "Trend Velocity (%/h)",
   "Swing Low Source",
   "Range",
   "Wick",
@@ -135,6 +137,7 @@ function snowballStatsRowToCsvCells(r: SnowballStatsRow, sizing?: StatsStrategyC
     pumpCycleSwingLowPriceCsvCell(r.swingLowPrice),
     pumpCycleAgeHoursCsvCell(r.ageOfTrendHours),
     pumpCycleTrendGainCsvCell(r.trendGainPct),
+    pumpCycleTrendVelocityCsvCell(r.trendGainPct, r.ageOfTrendHours),
     pumpCycleSwingLowSourceCsvCell(r.swingLowSource),
     snowballStatsVolScoreLabel(r.rangeScore),
     snowballStatsVolScoreLabel(r.wickScore),
