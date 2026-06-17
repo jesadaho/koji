@@ -1060,9 +1060,7 @@ export function buildCandleReversalAlertMessage(
       tradeSide: sig.tradeSide,
       trendGainPct: qualityCtx.trendGainPct,
       ageOfTrendHours: qualityCtx.ageOfTrendHours,
-      btcEma1dSlopePct7d: qualityCtx.btcEma1dSlopePct7d,
       btcEma4hSlopePct7d: qualityCtx.btcEma4hSlopePct7d,
-      atrPct14d: qualityCtx.atrPct14d,
     });
 
   const assetFooter = candleReversalAlertAssetFooterLines(qualityCtx);

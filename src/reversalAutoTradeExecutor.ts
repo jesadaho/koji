@@ -69,9 +69,7 @@ export function reversalAutotradePassesEntryGate(input: {
   alertTradeSide: CandleReversalTradeSide;
   trendGainPct?: number | null;
   ageOfTrendHours?: number | null;
-  btcEma1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;
-  atrPct14d?: number | null;
   allowQualitySignal?: boolean;
 }): boolean {
   if (input.allowQualitySignal === false) return false;
@@ -80,9 +78,7 @@ export function reversalAutotradePassesEntryGate(input: {
     tradeSide: input.alertTradeSide,
     trendGainPct: input.trendGainPct,
     ageOfTrendHours: input.ageOfTrendHours,
-    btcEma1dSlopePct7d: input.btcEma1dSlopePct7d,
     btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
-    atrPct14d: input.atrPct14d,
   });
 }
 
@@ -637,9 +633,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         alertTradeSide,
         trendGainPct: input.trendGainPct,
         ageOfTrendHours: input.ageOfTrendHours,
-        btcEma1dSlopePct7d: input.btcEma1dSlopePct7d,
         btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
-        atrPct14d: input.atrPct14d,
         allowQualitySignal: allowQuality,
       })
     ) {

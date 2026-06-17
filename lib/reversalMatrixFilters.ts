@@ -22,18 +22,14 @@ export const REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE = 1.4;
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
-  "((BTC∠1d > −8% (fade SHORT) OR BTC∠4h > −13%) OR ATR%14D < 8) and BTC∠4h < 3% and ATR%14D < 40";
+  "Trend Gain < 20% · Velocity < 2%/h · BTC EMA4H slope < 0%";
 
-/** Long 1H stats — BTC EMA(12) 1d slope ต้องสูงกว่า (exclusive) */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MIN_PCT = -8;
-/** Long 1H stats — BTC EMA(12) 4h slope ต้องสูงกว่า (exclusive) */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MIN_PCT = -13;
-/** Long 1H stats — BTC EMA(12) 4h slope ต้องต่ำกว่า (exclusive) */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MAX_PCT = 3;
-/** Long 1H stats — ATR(14) 1d ÷ close ต้องต่ำกว่า (exclusive) — ทางเลือกใน OR */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_MAX_PCT = 8;
-/** Long 1H stats — ATR(14) 1d ÷ close ต้องต่ำกว่า (exclusive) — gate บังคับทุก path */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_CEILING_PCT = 40;
+/** Trend Gain % — exclusive */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_EXCLUSIVE = 20;
+/** Trend Velocity (%/h) — exclusive */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_VELOCITY_MAX_EXCLUSIVE = 2;
+/** BTC EMA(12) 4h slope 7d % — exclusive */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MAX_EXCLUSIVE = 0;
 
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
@@ -68,16 +64,6 @@ function ema4hSlopeBelow(maxExclusive: number, ema4hSlopePct7d?: number | null):
   return pct != null && Number.isFinite(pct) && pct < maxExclusive;
 }
 
-function emaSlopeAbove(minExclusive: number, slopePct?: number | null): boolean {
-  const pct = slopePct;
-  return pct != null && Number.isFinite(pct) && pct > minExclusive;
-}
-
-function atrPct14dBelow(maxExclusive: number, atrPct14d?: number | null): boolean {
-  const v = atrPct14d;
-  return v != null && Number.isFinite(v) && v > 0 && v < maxExclusive;
-}
-
 function trendVelocityAboveMin(
   trendGainPct?: number | null,
   ageOfTrendHours?: number | null,
@@ -86,44 +72,22 @@ function trendVelocityAboveMin(
   return v != null && v > REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE;
 }
 
-/** BTC∠1d > −8% OR BTC∠4h > −13% */
-function reversalMatchesQualitySignalLong1hBtcBranch(input: {
-  btcEma1dSlopePct7d?: number | null;
-  btcEma4hSlopePct7d?: number | null;
-}): boolean {
-  return (
-    emaSlopeAbove(
-      REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MIN_PCT,
-      input.btcEma1dSlopePct7d,
-    ) ||
-    emaSlopeAbove(
-      REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MIN_PCT,
-      input.btcEma4hSlopePct7d,
-    )
-  );
-}
-
 /** ✨ Quality Signal — สถิติ Reversal · Long 1H */
 export function reversalMatchesQualitySignalLong1h(input: {
-  btcEma1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;
-  atrPct14d?: number | null;
+  trendGainPct?: number | null;
+  ageOfTrendHours?: number | null;
 }): boolean {
-  if (
-    !ema4hSlopeBelow(
-      REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MAX_PCT,
-      input.btcEma4hSlopePct7d,
-    )
-  ) {
-    return false;
-  }
-  if (!atrPct14dBelow(REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_CEILING_PCT, input.atrPct14d)) {
-    return false;
-  }
-  if (atrPct14dBelow(REVERSAL_QUALITY_SIGNAL_LONG_1H_ATR_MAX_PCT, input.atrPct14d)) {
-    return true;
-  }
-  return reversalMatchesQualitySignalLong1hBtcBranch(input);
+  const gain = input.trendGainPct;
+  const vel = computePumpCycleTrendVelocity(input.trendGainPct, input.ageOfTrendHours);
+  return (
+    gain != null &&
+    Number.isFinite(gain) &&
+    gain < REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_EXCLUSIVE &&
+    vel != null &&
+    vel < REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_VELOCITY_MAX_EXCLUSIVE &&
+    ema4hSlopeBelow(REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MAX_EXCLUSIVE, input.btcEma4hSlopePct7d)
+  );
 }
 
 /** ✨ Quality Signal — Reversal Short (และ 1D) */
@@ -147,15 +111,13 @@ export function reversalMatchesQualitySignalForAlert(input: {
   tradeSide?: CandleReversalTradeSide | null;
   trendGainPct?: number | null;
   ageOfTrendHours?: number | null;
-  btcEma1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;
-  atrPct14d?: number | null;
 }): boolean {
   if (reversalUsesLong1hQualitySignal(input.signalBarTf, input.tradeSide)) {
     return reversalMatchesQualitySignalLong1h({
-      btcEma1dSlopePct7d: input.btcEma1dSlopePct7d,
       btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
-      atrPct14d: input.atrPct14d,
+      trendGainPct: input.trendGainPct,
+      ageOfTrendHours: input.ageOfTrendHours,
     });
   }
   return reversalMatchesQualitySignal({
@@ -171,9 +133,7 @@ export function reversalRowMatchesQualitySignalMatrix(row: CandleReversalStatsRo
     tradeSide: row.tradeSide,
     trendGainPct: row.trendGainPct,
     ageOfTrendHours: row.ageOfTrendHours,
-    btcEma1dSlopePct7d: row.btcEma1dSlopePct7d,
     btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
-    atrPct14d: row.atrPct14d,
   });
 }
 
