@@ -10,8 +10,6 @@ import {
   parseSlEntryOffsetPct,
 } from "@/lib/tpSlBreakevenPlan";
 import {
-  REVERSAL_TP_STRATEGY_12H_BE_MIN_PCT,
-  reversalTpStrategyLive12hShouldArmBe,
   reversalTpStrategyLive12hShouldClose,
   reversalTpStrategyLive24hShouldArmBe,
   reversalTpStrategyLive24hShouldClose,
@@ -186,17 +184,13 @@ async function handleReversal24hStrategyClose(ctx: TpSlContext): Promise<{ close
   return { closed: true };
 }
 
-type SlBreakevenArmReason = "12h_be" | "24h_hold";
-
 async function handleSlAtEntryOnRoi(
   ctx: TpSlContext,
-  opts?: { reason?: SlBreakevenArmReason },
 ): Promise<{ ok: boolean; slOrderId?: string; slBreakevenAttempted?: boolean }> {
   const { userId, creds, active, position, markPrice, positionMode } = ctx;
   if (active.slBreakevenArmed || active.slPlanOrderId?.trim()) {
     return { ok: true, slOrderId: active.slPlanOrderId };
   }
-  const reason = opts?.reason ?? "12h_be";
   const drop = pricePctDrop(active.side, active.mexcAvgEntryPrice, markPrice);
   const entry = active.mexcAvgEntryPrice;
   const slOffset = parseSlEntryOffsetPct(active.slEntryOffsetPct, DEFAULT_SL_ENTRY_OFFSET_PCT);
@@ -224,10 +218,7 @@ async function handleSlAtEntryOnRoi(
       ? String((slRes.data as { orderId: unknown }).orderId)
       : undefined;
 
-  const headline =
-    reason === "24h_hold"
-      ? `🛡️ ครบ 24 ชม. ชนะ + EMA4H<0 — ถือต่อ · ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`
-      : `🛡️ ครบ 12 ชม. กำไร > ${REVERSAL_TP_STRATEGY_12H_BE_MIN_PCT}% — ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`;
+  const headline = `🛡️ ครบ 24 ชม. ชนะ + EMA4H<0 — ถือต่อ · ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`;
 
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
@@ -356,13 +347,6 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
             }
             continue;
           }
-          if (reversalTpStrategyLive12hShouldArmBe(dropForTp)) {
-            const r = await handleSlAtEntryOnRoi(ctx, { reason: "12h_be" });
-            if (r.slBreakevenAttempted) {
-              state = withReversalSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
-              actionsCount += 1;
-            }
-          }
           continue;
         }
 
@@ -388,7 +372,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
               ema4hSlopePct7d: a.ema4hSlopePct7d,
             })
           ) {
-            const r = await handleSlAtEntryOnRoi(ctx, { reason: "24h_hold" });
+            const r = await handleSlAtEntryOnRoi(ctx);
             if (r.slBreakevenAttempted) {
               state = withReversalSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
               actionsCount += 1;
