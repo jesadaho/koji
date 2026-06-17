@@ -1739,7 +1739,7 @@ function parseSnowballAutoTradeNested(
     const out: SnowballAutoTradeGradeKey[] = [];
     for (const g of qsGradesRaw) {
       if (
-        (g === "S" || g === "A" || g === "B" || g === "C" || g === "F") &&
+        (g === "S" || g === "A" || g === "B" || g === "C" || g === "D" || g === "F") &&
         valid.has(g) &&
         !out.includes(g)
       ) {

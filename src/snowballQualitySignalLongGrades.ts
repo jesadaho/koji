@@ -8,6 +8,7 @@ export const SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS: SnowballAutoTradeGradeK
   "A",
   "B",
   "C",
+  "D",
   "F",
 ];
 
@@ -17,6 +18,7 @@ function isSnowballAutoTradeGradeKey(v: unknown): v is SnowballAutoTradeGradeKey
     v === "A" ||
     v === "B" ||
     v === "C" ||
+    v === "D" ||
     v === "F"
   );
 }

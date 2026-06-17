@@ -72,7 +72,7 @@ export type SnowballDetectTrendGradeInput = Required<
     | "greenDaysBeforeSignal"
   >
 > &
-  Pick<ClassifySnowballTrendGradeInput, "fundingRate">;
+  Pick<ClassifySnowballTrendGradeInput, "fundingRate" | "trendGainPct" | "ageOfTrendHours">;
 
 function detectTrendGradeClassifyInput(
   trendGradeInput: SnowballDetectTrendGradeInput | undefined,
@@ -90,6 +90,8 @@ function detectTrendGradeClassifyInput(
     psar4hTrend: trendGradeInput?.psar4hTrend ?? null,
     greenDaysBeforeSignal: trendGradeInput?.greenDaysBeforeSignal ?? null,
     fundingRate: trendGradeInput?.fundingRate ?? null,
+    trendGainPct: trendGradeInput?.trendGainPct ?? null,
+    ageOfTrendHours: trendGradeInput?.ageOfTrendHours ?? null,
     ...extra,
   };
 }

@@ -139,6 +139,7 @@ export const SNOWBALL_GRADE_FILTER_OPTIONS: ReadonlyArray<{
   { value: "A", label: "A" },
   { value: "B+", label: "B+" },
   { value: "B", label: "B" },
+  { value: "D", label: "D" },
   { value: "C", label: "C" },
   { value: "F", label: "F" },
 ];

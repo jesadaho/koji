@@ -32,7 +32,7 @@ export type SnowballAutoTradeDirection = "both" | "long_only" | "short_only";
 
 export type SnowballAutoTradeAlertSide = "long" | "bear";
 
-export type SnowballAutoTradeGradeKey = "S" | "A" | "B" | "C" | "F";
+export type SnowballAutoTradeGradeKey = "S" | "A" | "B" | "C" | "D" | "F";
 
 /** ค่าใน map = ทิศที่เปิด · ไม่มี key = ปิดเกรดนั้น */
 export type SnowballAutoTradeGradeRulesMap = Partial<

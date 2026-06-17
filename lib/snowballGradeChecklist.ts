@@ -10,7 +10,9 @@ import {
   normalizeSnowballQualityTier,
   SNOWBALL_TREND_GRADE_A_CRITERIA,
   SNOWBALL_TREND_GRADE_B_CRITERIA,
+  SNOWBALL_TREND_GRADE_D_CRITERIA,
   SNOWBALL_TREND_GRADE_F_CRITERIA,
+  snowballIsTrendGradeD,
 } from "@/src/snowballTrendGrade";
 import {
   snowballLongStructureTierShortLabel,
@@ -499,6 +501,12 @@ function snowballTrendGradeChecklistItems(
     ...(psarItem ? [psarItem] : []),
     {
       id: "confirm",
+      title: "Grade D",
+      status: grade === "d" ? "pass" : grade ? "fail" : "unknown",
+      detail: SNOWBALL_TREND_GRADE_D_CRITERIA,
+    },
+    {
+      id: "confirm",
       title: "Grade F",
       status: grade === "f" ? "pass" : grade ? "fail" : "unknown",
       detail: SNOWBALL_TREND_GRADE_F_CRITERIA,
@@ -968,6 +976,8 @@ export function snowballStatsGradeChecklistFooter(
     );
     if (snowballIsTrendGradeF(grade)) {
       lines.push(`เหตุผล F: ${SNOWBALL_TREND_GRADE_F_CRITERIA} · auto-open: ไม่สั่ง (Grade F)`);
+    } else if (snowballIsTrendGradeD(grade)) {
+      lines.push(`เหตุผล D: ${SNOWBALL_TREND_GRADE_D_CRITERIA} · action plan: Light (0.5×)`);
     }
   }
   const alertAt = row.alertQualityTier ?? grade;

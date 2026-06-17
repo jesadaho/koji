@@ -3,7 +3,7 @@ import { migrateSnowballAutoTradeGradeKey, snowballTrendGradeToDisplay } from ".
 import { snowballAutoTradeGradeKeyFromDisplay } from "./snowballCompositeGrade";
 import type { SnowballAutoTradeGradeKey } from "./tradingViewCloseSettingsStore";
 
-const GRADE_KEY_SET = new Set<string>(["S", "A", "B", "C", "F"]);
+const GRADE_KEY_SET = new Set<string>(["S", "A", "B", "C", "D", "F"]);
 
 export function isSnowballAutoTradeGradeKey(k: string): k is SnowballAutoTradeGradeKey {
   return GRADE_KEY_SET.has(k);

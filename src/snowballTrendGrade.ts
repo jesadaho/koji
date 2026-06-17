@@ -1,18 +1,20 @@
 /**
- * Snowball trend grade — ลำดับ: A · B · F (fallback)
+ * Snowball trend grade — ลำดับ: A · B · D · F (fallback)
  * A: EMA4h > 10% · Funding > −0.10% · R% ก่อน 10–20%
- * B: EMA4h > 10% · Funding > −0.10%
+ * B: EMA4h < 10% · R% ก่อน 10–20%
+ * D: Trend Gain 20–50% · Velocity 0.5–1.5 %/h
  * F: fallback
  * 4h LONG: + (HH200+VAH) และ ⚠️ (Max DD>7%) เป็น modifier ใน composite
  */
 
+import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
 import {
   SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C,
   snowballVolSmaMeetsGradeCMin,
 } from "./snowballLongGrade4hPipeline";
 
-export type SnowballTrendGrade = "s" | "a" | "b" | "c" | "f";
+export type SnowballTrendGrade = "s" | "a" | "b" | "d" | "c" | "f";
 
 /** @deprecated alias — ใช้ SnowballTrendGrade */
 export type SnowballLongBreakoutGrade = SnowballTrendGrade;
@@ -24,6 +26,7 @@ export type SnowballTrendGradeDisplay =
   | "A"
   | "B+"
   | "B"
+  | "D"
   | "C+"
   | "C"
   | "F";
@@ -36,6 +39,7 @@ export function isSnowballTrendGradeDisplay(v: string | undefined | null): v is 
     v === "A" ||
     v === "B+" ||
     v === "B" ||
+    v === "D" ||
     v === "C+" ||
     v === "C" ||
     v === "F"
@@ -97,6 +101,10 @@ export type ClassifySnowballTrendGradeInput = {
   fundingRate?: number | null;
   /** R% แท่งก่อนสัญญาณ */
   barRangePctPrev?: number | null;
+  /** Pump-cycle Trend Gain % */
+  trendGainPct?: number | null;
+  /** Pump-cycle Age of Trend (hours) */
+  ageOfTrendHours?: number | null;
   /** Vol แท่งสัญญาณ ÷ SMA — legacy composite gate */
   signalVolVsSma?: number | null;
   psar4hTrend?: SnowballTrendPsar4hTrend | null;
@@ -145,9 +153,32 @@ function matchesGradeB(input: ClassifySnowballTrendGradeInput): boolean {
   );
 }
 
+function matchesGradeD(input: ClassifySnowballTrendGradeInput): boolean {
+  const gain = input.trendGainPct;
+  const vel = computePumpCycleTrendVelocity(input.trendGainPct, input.ageOfTrendHours);
+  return (
+    gain != null &&
+    Number.isFinite(gain) &&
+    gain >= SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT &&
+    gain <= SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT &&
+    vel != null &&
+    vel >= SNOWBALL_TREND_GRADE_D_VELOCITY_MIN &&
+    vel <= SNOWBALL_TREND_GRADE_D_VELOCITY_MAX
+  );
+}
+
 export const SNOWBALL_TREND_GRADE_A_CRITERIA = `EMA4h > ${SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE}% · Funding > −0.10% · R% ก่อน ${SNOWBALL_TREND_GRADE_A_R_PREV_MIN}–${SNOWBALL_TREND_GRADE_A_R_PREV_MAX}%`;
 
 export const SNOWBALL_TREND_GRADE_B_CRITERIA = `EMA4h < ${SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE}% · R% ก่อน ${SNOWBALL_TREND_GRADE_A_R_PREV_MIN}–${SNOWBALL_TREND_GRADE_A_R_PREV_MAX}%`;
+
+/** D — Trend Gain % inclusive */
+export const SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT = 20;
+export const SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT = 50;
+/** D — Velocity %/h inclusive */
+export const SNOWBALL_TREND_GRADE_D_VELOCITY_MIN = 0.5;
+export const SNOWBALL_TREND_GRADE_D_VELOCITY_MAX = 1.5;
+
+export const SNOWBALL_TREND_GRADE_D_CRITERIA = `Trend Gain ${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT}–${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT}% · Velocity ${SNOWBALL_TREND_GRADE_D_VELOCITY_MIN}–${SNOWBALL_TREND_GRADE_D_VELOCITY_MAX}%/h`;
 
 export const SNOWBALL_TREND_GRADE_F_CRITERIA = "fallback";
 
@@ -179,6 +210,7 @@ export function snowballTrendGradeCriteriaLegend(): string {
   return [
     `A: ${SNOWBALL_TREND_GRADE_A_CRITERIA}`,
     `B: ${SNOWBALL_TREND_GRADE_B_CRITERIA}`,
+    `D: ${SNOWBALL_TREND_GRADE_D_CRITERIA}`,
     `F: ${SNOWBALL_TREND_GRADE_F_CRITERIA}`,
   ].join(" · ");
 }
@@ -218,10 +250,11 @@ export function snowballEma4hSlopeMatchesTrendGradeF(
   );
 }
 
-/** ลำดับ: A · B · F (fallback) */
+/** ลำดับ: A · B · D · F (fallback) */
 export function classifySnowballTrendGrade(input: ClassifySnowballTrendGradeInput): SnowballTrendGrade {
   if (matchesGradeA(input)) return "a";
   if (matchesGradeB(input)) return "b";
+  if (matchesGradeD(input)) return "d";
   return "f";
 }
 
@@ -239,6 +272,7 @@ export function snowballTrendGradeToDisplay(grade: SnowballTrendGrade): Snowball
   if (grade === "s") return "S";
   if (grade === "a") return "A";
   if (grade === "b") return "B";
+  if (grade === "d") return "D";
   if (grade === "f") return "F";
   return "C";
 }
@@ -254,10 +288,11 @@ export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDispla
   const base = grade.endsWith("+") ? grade.slice(0, -1) : grade;
   const plusNote = grade.endsWith("+") ? " · HH200+VAH" : "";
   if (base === "F") return `${SNOWBALL_TREND_GRADE_F_CRITERIA}${plusNote}`;
+  if (base === "D") return `${SNOWBALL_TREND_GRADE_D_CRITERIA}${plusNote}`;
   if (base === "A") return `${SNOWBALL_TREND_GRADE_A_CRITERIA}${plusNote}`;
   if (base === "B") return `${SNOWBALL_TREND_GRADE_B_CRITERIA}${plusNote}`;
   if (base === "S" || base === "C") return `legacy · ไม่ใช้ในเกรดใหม่${plusNote}`;
-  return `นอกเหนือเกณฑ์ A / B / F`;
+  return `นอกเหนือเกณฑ์ A / B / D / F`;
 }
 
 export function snowballTrendGradeFilterTitle(filter: SnowballTrendGradeFilter): string {
@@ -285,6 +320,10 @@ export function snowballIsTrendGradeF(grade: SnowballTrendGrade | undefined): bo
   return grade === "f";
 }
 
+export function snowballIsTrendGradeD(grade: SnowballTrendGrade | undefined): boolean {
+  return grade === "d";
+}
+
 /** ทุกเกรดใช้ dedupe เดียวกัน — กันยิงซ้ำแท่ง/เหรียญเดิม */
 export function snowballTrendGradeSkipsFeedDedupe(_grade: SnowballTrendGrade | undefined): boolean {
   return false;
@@ -292,7 +331,7 @@ export function snowballTrendGradeSkipsFeedDedupe(_grade: SnowballTrendGrade | u
 
 export function snowballTrendGradeActionPlan(grade: SnowballTrendGrade): SnowballTrendActionPlan {
   if (grade === "a") return "standard";
-  if (grade === "b") return "light";
+  if (grade === "b" || grade === "d") return "light";
   return "monitor";
 }
 
@@ -360,7 +399,7 @@ export function isLegacySnowballQualityTier(t: string | undefined): t is LegacyS
 }
 
 export function isSnowballTrendGrade(t: string | undefined): t is SnowballTrendGrade {
-  return t === "s" || t === "a" || t === "b" || t === "c" || t === "f";
+  return t === "s" || t === "a" || t === "b" || t === "d" || t === "c" || t === "f";
 }
 
 /** แปลง legacy tier เป็นป้าย display (ไม่ recompute slope) */
@@ -392,11 +431,11 @@ export function normalizeSnowballQualityTier(
 export function migrateSnowballAutoTradeGradeKey(key: string): SnowballTrendGradeDisplay | null {
   const k = key.trim();
   if (k === "S+" || k === "A+" || k === "B+" || k === "C+") return k as SnowballTrendGradeDisplay;
-  if (k === "S" || k === "A" || k === "B" || k === "C" || k === "F") return k;
+  if (k === "S" || k === "A" || k === "B" || k === "C" || k === "D" || k === "F") return k;
   if (k.startsWith("A")) return "A";
   if (k.startsWith("B")) return "B";
   if (k.startsWith("C")) return "C";
-  if (k === "D" || k === "D+") return "C";
+  if (k === "D+" || k.startsWith("D")) return "D";
   if (k.startsWith("F")) return "F";
   return null;
 }

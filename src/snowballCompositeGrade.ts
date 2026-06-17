@@ -132,6 +132,7 @@ export function displayGradeToBaseTier(display: SnowballTrendGradeDisplay): Snow
   if (display === "S+" || display === "S") return "s";
   if (display === "A+" || display === "A") return "a";
   if (display === "B+" || display === "B") return "b";
+  if (display === "D") return "d";
   if (display === "C+" || display === "C") return "c";
   if (display === "F") return "f";
   return "c";
@@ -139,13 +140,14 @@ export function displayGradeToBaseTier(display: SnowballTrendGradeDisplay): Snow
 
 export function snowballAutoTradeGradeKeyFromDisplay(
   display: SnowballTrendGradeDisplay | string | null | undefined,
-): "S" | "A" | "B" | "C" | "F" | null {
+): "S" | "A" | "B" | "C" | "D" | "F" | null {
   if (!display) return null;
   const d = snowballTrendGradeDisplayLabelBase(display.trim());
   if (d === "S+" || d === "S") return "S";
   if (d === "A+" || d === "A") return "A";
   if (d === "B+" || d === "B") return "B";
   if (d === "C+" || d === "C") return "C";
+  if (d === "D") return "D";
   if (d === "F") return "F";
   return null;
 }

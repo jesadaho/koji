@@ -3332,9 +3332,17 @@ export async function runPublicIndicatorFeedInternal(
         });
         const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
 
-        const [longGreenDaysForAlert, longMktCtxForAlert] = await Promise.all([
+        const [longGreenDaysForAlert, longMktCtxForAlert, longPumpCycleForGrade] = await Promise.all([
           fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf),
           fetchSnowballAlertMarketContext(symbol),
+          resolvePumpCycleSwingLowFields({
+            symbol,
+            signalAtSec: snowballStatsAnchorCloseSec({
+              signalBarOpenSec,
+              signalBarTf: snowTf,
+            }),
+            entryPrice: entryClosePx,
+          }),
         ]);
         const longVolSnapForGrade = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
         const longTrendGradeInput = {
@@ -3347,6 +3355,8 @@ export async function runPublicIndicatorFeedInternal(
           greenDaysBeforeSignal: longGreenDaysForAlert,
           fundingRate: longMktCtxForAlert?.fundingRate ?? null,
           barRangePctPrev: longVolSnapForGrade.barRangePctPrev,
+          trendGainPct: longPumpCycleForGrade.trendGainPct,
+          ageOfTrendHours: longPumpCycleForGrade.ageOfTrendHours,
           signalVolVsSma:
             typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
           psar4hTrend: longMktCtxForAlert?.psar4hTrend ?? null,
@@ -3769,15 +3779,7 @@ export async function runPublicIndicatorFeedInternal(
                   longStatsBarOpenSec,
                   longStatsBarTf,
                 );
-                const longPumpCycleFields = await resolvePumpCycleSwingLowFields({
-                  symbol,
-                  signalAtSec: snowballStatsAnchorCloseSec({
-                    signalBarOpenSec: longStatsBarOpenSec,
-                    signalBarTf: longStatsBarTf,
-                  }),
-                  entryPrice: entryClosePx,
-                  pack1h: pack1hTrend,
-                });
+                const longPumpCycleFields = longPumpCycleForGrade;
                 await appendSnowballStatsRow({
                   symbol,
                   side: longStatsTradeSide,
@@ -4111,9 +4113,17 @@ export async function runPublicIndicatorFeedInternal(
           }
         }
 
-        const [bearGreenDaysForAlert, bearMktCtxForAlert] = await Promise.all([
+        const [bearGreenDaysForAlert, bearMktCtxForAlert, bearPumpCycleForGrade] = await Promise.all([
           fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf),
           fetchSnowballAlertMarketContext(symbol),
+          resolvePumpCycleSwingLowFields({
+            symbol,
+            signalAtSec: snowballStatsAnchorCloseSec({
+              signalBarOpenSec,
+              signalBarTf: snowTf,
+            }),
+            entryPrice: clE!,
+          }),
         ]);
         const bearQualitySignal = snowballMatchesQualitySignal({
           ema4hSlopePct7d: bearMktCtxForAlert?.ema4hSlopePct7d ?? null,
@@ -4133,6 +4143,8 @@ export async function runPublicIndicatorFeedInternal(
           btcEma1dSlopePct7d: bearMktCtxForAlert?.btcEma1dSlopePct7d ?? null,
           fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
           barRangePctPrev: bearVolSnapAuto.barRangePctPrev,
+          trendGainPct: bearPumpCycleForGrade.trendGainPct,
+          ageOfTrendHours: bearPumpCycleForGrade.ageOfTrendHours,
           psar4hTrend: bearMktCtxForAlert?.psar4hTrend ?? null,
           signalBarTf: snowTf,
           signalVolVsSma: bearSignalVolVsSma,

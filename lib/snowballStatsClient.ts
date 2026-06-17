@@ -445,7 +445,7 @@ export function snowballStatsGradeMatchesFilter(
   if (filter === "S+" || filter === "A+" || filter === "B+" || filter === "C+") {
     return snowballStatsGradeLabelMatchesPlusTier(label, filter);
   }
-  if (filter === "S" || filter === "A" || filter === "B" || filter === "C" || filter === "F") {
+  if (filter === "S" || filter === "A" || filter === "B" || filter === "C" || filter === "D" || filter === "F") {
     return snowballStatsGradeLabelMatchesBaseTier(label, filter);
   }
   return snowballStatsGradeLabelMatchesBaseTier(label, filter);
@@ -1094,8 +1094,9 @@ const QUALITY_TIER_SORT_ORDER: Record<SnowballStatsQualityTier, number> = {
   s: 0,
   a: 1,
   b: 2,
-  c: 3,
-  f: 4,
+  d: 3,
+  c: 4,
+  f: 5,
 };
 
 const OUTCOME_SORT_ORDER: Record<SnowballStatsOutcome, number> = {
