@@ -67,10 +67,8 @@ export function isReversalAutotradeEnabled(): boolean {
 export function reversalAutotradePassesEntryGate(input: {
   signalBarTf: CandleReversalTf;
   alertTradeSide: CandleReversalTradeSide;
-  wickRatio: number;
-  greenDaysBeforeSignal?: number | null;
-  rangeScore?: number | null;
-  ema4hSlopePct7d?: number | null;
+  trendGainPct?: number | null;
+  ageOfTrendHours?: number | null;
   btcEma1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;
   atrPct14d?: number | null;
@@ -80,10 +78,8 @@ export function reversalAutotradePassesEntryGate(input: {
   return reversalMatchesQualitySignalForAlert({
     signalBarTf: input.signalBarTf,
     tradeSide: input.alertTradeSide,
-    wickRatio: input.wickRatio,
-    greenDaysBeforeSignal: input.greenDaysBeforeSignal,
-    rangeScore: input.rangeScore,
-    ema4hSlopePct7d: input.ema4hSlopePct7d,
+    trendGainPct: input.trendGainPct,
+    ageOfTrendHours: input.ageOfTrendHours,
     btcEma1dSlopePct7d: input.btcEma1dSlopePct7d,
     btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
     atrPct14d: input.atrPct14d,
@@ -223,6 +219,10 @@ export type ReversalAutoTradeInput = {
   btcEma4hSlopePct7d?: number | null;
   /** Wilder ATR(14) 1d ÷ close × 100 — Long 1H fade SHORT Quality Signal */
   atrPct14d?: number | null;
+  /** Pump-cycle Trend Gain % — Short Quality Signal */
+  trendGainPct?: number | null;
+  /** Pump-cycle Age of Trend (hours) — Short Quality Signal */
+  ageOfTrendHours?: number | null;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
   signalClosePrice?: number;
 };
@@ -635,10 +635,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
       !reversalAutotradePassesEntryGate({
         signalBarTf: input.signalBarTf,
         alertTradeSide,
-        wickRatio,
-        greenDaysBeforeSignal: input.greenDaysBeforeSignal,
-        rangeScore: input.rangeScore,
-        ema4hSlopePct7d: input.ema4hSlopePct7d,
+        trendGainPct: input.trendGainPct,
+        ageOfTrendHours: input.ageOfTrendHours,
         btcEma1dSlopePct7d: input.btcEma1dSlopePct7d,
         btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
         atrPct14d: input.atrPct14d,

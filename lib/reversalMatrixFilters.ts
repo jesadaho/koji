@@ -7,6 +7,7 @@ import type {
   CandleReversalStatsRow,
   CandleReversalTradeSide,
 } from "@/lib/candleReversalStatsClient";
+import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 
 export type ReversalMatrixFilter = "all" | "qualitySignal";
 
@@ -14,19 +15,18 @@ export type ReversalMatrixFilter = "all" | "qualitySignal";
 export type ReversalQualitySignalProfile = "short" | "long1h";
 
 /** ข้อความเกณฑ์ Quality Signal (stats + auto-open) — Reversal Short */
-export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
-  "(เขียว ≥ 1 วัน · Wick ≤ 0.20 · Range < 4.5 · EMA4H < 30%) หรือ EMA4H < 80%";
+export const REVERSAL_QUALITY_SIGNAL_CRITERIA = "Trend Gain 20–50% · Velocity > 2%/h";
+
+/** Trend Gain % — inclusive */
+export const REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MIN_PCT = 20;
+export const REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MAX_PCT = 50;
+/** Trend Velocity (%/h) — exclusive */
+export const REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE = 2;
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
   "((BTC∠1d > −8% (fade SHORT) OR BTC∠4h > −13%) OR ATR%14D < 8) and BTC∠4h < 3% and ATR%14D < 40";
 
-export const REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO = 0.2;
-export const REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE = 4.5;
-/** EMA(12) 4h slope 7d — classic path ต้องต่ำกว่า (exclusive) */
-export const REVERSAL_QUALITY_SIGNAL_CLASSIC_EMA4H_MAX_PCT = 30;
-/** EMA(12) 4h slope 7d — ทางเลือก (exclusive) — ไม่ต้องผ่าน classic path */
-export const REVERSAL_QUALITY_SIGNAL_EMA4H_ALT_MAX_PCT = 80;
 /** Long 1H stats — BTC EMA(12) 1d slope ต้องสูงกว่า (exclusive) */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA1D_MIN_PCT = -8;
 /** Long 1H stats — BTC EMA(12) 4h slope ต้องสูงกว่า (exclusive) */
@@ -66,36 +66,6 @@ export function reversalMatrixFilterTitle(
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
 
-function greenDaysBeforeSignalAtLeast(
-  row: Pick<CandleReversalStatsRow, "greenDaysBeforeSignal">,
-  minDays: number,
-): boolean {
-  const g = row.greenDaysBeforeSignal;
-  return g != null && Number.isFinite(g) && Math.floor(g) >= minDays;
-}
-
-/** ไส้บน ÷ ช่วงแท่ง — ทศนิยม 0–1 (หรือ % 0–100 auto-detect) */
-function wickRatioAtMost(
-  input: {
-    wickRatio?: number | null;
-    wickRatioPct?: number | null;
-  },
-  maxRatio: number,
-): boolean {
-  let w = input.wickRatio;
-  if (w == null && input.wickRatioPct != null && Number.isFinite(input.wickRatioPct)) {
-    w = input.wickRatioPct <= 1 ? input.wickRatioPct : input.wickRatioPct / 100;
-  }
-  if (w == null || !Number.isFinite(w)) return false;
-  const ratio = w <= 1 ? w : w / 100;
-  return ratio <= maxRatio;
-}
-
-function rangeScoreBelow(maxExclusive: number, rangeScore?: number | null): boolean {
-  const r = rangeScore;
-  return r != null && Number.isFinite(r) && r < maxExclusive;
-}
-
 function ema4hSlopeBelow(maxExclusive: number, ema4hSlopePct7d?: number | null): boolean {
   const pct = ema4hSlopePct7d;
   return pct != null && Number.isFinite(pct) && pct < maxExclusive;
@@ -111,28 +81,22 @@ function atrPct14dBelow(maxExclusive: number, atrPct14d?: number | null): boolea
   return v != null && Number.isFinite(v) && v > 0 && v < maxExclusive;
 }
 
-/** เขียว ≥ 1 · Wick ≤ 0.20 · Range < 4.5 · EMA4H < 30% */
-function reversalMatchesQualitySignalClassic(input: {
-  greenDaysBeforeSignal?: number | null;
-  wickRatio?: number | null;
-  wickRatioPct?: number | null;
-  rangeScore?: number | null;
-  ema4hSlopePct7d?: number | null;
-}): boolean {
-  if (!greenDaysBeforeSignalAtLeast({ greenDaysBeforeSignal: input.greenDaysBeforeSignal }, 1)) {
-    return false;
-  }
-  if (!wickRatioAtMost(input, REVERSAL_QUALITY_SIGNAL_MAX_WICK_RATIO)) return false;
-  if (!rangeScoreBelow(REVERSAL_QUALITY_SIGNAL_MAX_RANGE_SCORE, input.rangeScore)) return false;
-  if (!ema4hSlopeBelow(REVERSAL_QUALITY_SIGNAL_CLASSIC_EMA4H_MAX_PCT, input.ema4hSlopePct7d)) {
-    return false;
-  }
-  return true;
+function trendGainInBand(trendGainPct?: number | null): boolean {
+  const pct = trendGainPct;
+  return (
+    pct != null &&
+    Number.isFinite(pct) &&
+    pct >= REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MIN_PCT &&
+    pct <= REVERSAL_QUALITY_SIGNAL_TREND_GAIN_MAX_PCT
+  );
 }
 
-/** EMA(12) 4h slope 7d < 80% */
-function reversalMatchesQualitySignalEma4hAlt(ema4hSlopePct7d?: number | null): boolean {
-  return ema4hSlopeBelow(REVERSAL_QUALITY_SIGNAL_EMA4H_ALT_MAX_PCT, ema4hSlopePct7d);
+function trendVelocityAboveMin(
+  trendGainPct?: number | null,
+  ageOfTrendHours?: number | null,
+): boolean {
+  const v = computePumpCycleTrendVelocity(trendGainPct, ageOfTrendHours);
+  return v != null && v > REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE;
 }
 
 /** BTC∠1d > −8% OR BTC∠4h > −13% */
@@ -177,24 +141,10 @@ export function reversalMatchesQualitySignalLong1h(input: {
 
 /** ✨ Quality Signal — Reversal Short (และ 1D) */
 export function reversalMatchesQualitySignal(input: {
-  greenDaysBeforeSignal?: number | null;
-  /** ไส้บน / range — ทศนิยม 0–1 หรือ % 0–100 (auto-detect) */
-  wickRatio?: number | null;
-  wickRatioPct?: number | null;
-  /** ช่วงแท่ง ÷ ATR100 (คอลัมน์ Range ในสถิติ) */
-  rangeScore?: number | null;
-  /** EMA(12) 4h slope 7 วัน % */
-  ema4hSlopePct7d?: number | null;
+  trendGainPct?: number | null;
+  ageOfTrendHours?: number | null;
 }): boolean {
-  return (
-    reversalMatchesQualitySignalClassic({
-      greenDaysBeforeSignal: input.greenDaysBeforeSignal,
-      wickRatio: input.wickRatio,
-      wickRatioPct: input.wickRatioPct,
-      rangeScore: input.rangeScore,
-      ema4hSlopePct7d: input.ema4hSlopePct7d,
-    }) || reversalMatchesQualitySignalEma4hAlt(input.ema4hSlopePct7d)
-  );
+  return trendGainInBand(input.trendGainPct) && trendVelocityAboveMin(input.trendGainPct, input.ageOfTrendHours);
 }
 
 export function reversalUsesLong1hQualitySignal(
@@ -208,11 +158,8 @@ export function reversalUsesLong1hQualitySignal(
 export function reversalMatchesQualitySignalForAlert(input: {
   signalBarTf?: CandleReversalSignalBarTf | null;
   tradeSide?: CandleReversalTradeSide | null;
-  greenDaysBeforeSignal?: number | null;
-  wickRatio?: number | null;
-  wickRatioPct?: number | null;
-  rangeScore?: number | null;
-  ema4hSlopePct7d?: number | null;
+  trendGainPct?: number | null;
+  ageOfTrendHours?: number | null;
   btcEma1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;
   atrPct14d?: number | null;
@@ -225,11 +172,8 @@ export function reversalMatchesQualitySignalForAlert(input: {
     });
   }
   return reversalMatchesQualitySignal({
-    greenDaysBeforeSignal: input.greenDaysBeforeSignal,
-    wickRatio: input.wickRatio,
-    wickRatioPct: input.wickRatioPct,
-    rangeScore: input.rangeScore,
-    ema4hSlopePct7d: input.ema4hSlopePct7d,
+    trendGainPct: input.trendGainPct,
+    ageOfTrendHours: input.ageOfTrendHours,
   });
 }
 
@@ -238,10 +182,8 @@ export function reversalRowMatchesQualitySignalMatrix(row: CandleReversalStatsRo
   return reversalMatchesQualitySignalForAlert({
     signalBarTf: row.signalBarTf,
     tradeSide: row.tradeSide,
-    greenDaysBeforeSignal: row.greenDaysBeforeSignal,
-    wickRatioPct: row.wickRatioPct,
-    rangeScore: row.rangeScore,
-    ema4hSlopePct7d: row.ema4hSlopePct7d,
+    trendGainPct: row.trendGainPct,
+    ageOfTrendHours: row.ageOfTrendHours,
     btcEma1dSlopePct7d: row.btcEma1dSlopePct7d,
     btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
     atrPct14d: row.atrPct14d,

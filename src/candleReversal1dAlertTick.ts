@@ -696,7 +696,18 @@ async function notifyResults(
           : null;
       const binSym = row.symbol.trim().toUpperCase();
       const assetMeta = assetMetaMap.get(binSym) ?? null;
-      const mexcContract = await resolveMexcContractFromBinanceSymbolAsync(binSym);
+      const anchorCloseSec = candleReversalStatsAnchorCloseSec({
+        signalBarOpenSec: sig.barOpenSec,
+        signalBarTf: sig.tf,
+      });
+      const [mexcContract, pumpCycleFields] = await Promise.all([
+        resolveMexcContractFromBinanceSymbolAsync(binSym),
+        resolvePumpCycleSwingLowFields({
+          symbol: row.symbol,
+          signalAtSec: anchorCloseSec,
+          entryPrice: sig.c,
+        }),
+      ]);
       const msg = buildCandleReversalAlertMessage(row.symbol, sig, {
         greenDaysBeforeSignal,
         rangeScore: row.evals.rangeScore,
@@ -704,20 +715,13 @@ async function notifyResults(
         btcEma1dSlopePct7d,
         btcEma4hSlopePct7d,
         atrPct14d,
+        trendGainPct: pumpCycleFields.trendGainPct,
+        ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
         assetMeta,
         mexcContractSymbol: mexcContract,
       });
       const ok = await sendPublicReversalFeedToSparkGroup(msg);
       if (ok && isCandleReversalStatsEnabled()) {
-        const anchorCloseSec = candleReversalStatsAnchorCloseSec({
-          signalBarOpenSec: sig.barOpenSec,
-          signalBarTf: sig.tf,
-        });
-        const pumpCycleFields = await resolvePumpCycleSwingLowFields({
-          symbol: row.symbol,
-          signalAtSec: anchorCloseSec,
-          entryPrice: sig.c,
-        });
         const appended = await appendCandleReversalStatsRow({
           symbol: row.symbol,
           model: sig.model,
@@ -782,6 +786,8 @@ async function notifyResults(
             btcEma1dSlopePct7d,
             btcEma4hSlopePct7d,
             atrPct14d,
+            trendGainPct: pumpCycleFields.trendGainPct,
+            ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
             signalClosePrice: sig.c,
           });
         } catch (e) {

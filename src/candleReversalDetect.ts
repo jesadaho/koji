@@ -17,6 +17,8 @@ export type CandleReversalAlertQualityContext = {
   btcEma1dSlopePct7d?: number | null;
   btcEma4hSlopePct7d?: number | null;
   atrPct14d?: number | null;
+  trendGainPct?: number | null;
+  ageOfTrendHours?: number | null;
   /** จาก Binance exchangeInfo */
   assetMeta?: BinanceUsdmSymbolMeta | null;
   /** สัญญา MEXC ที่ resolve ได้ (ถ้ามี) */
@@ -1056,10 +1058,8 @@ export function buildCandleReversalAlertMessage(
     reversalMatchesQualitySignalForAlert({
       signalBarTf: sig.tf,
       tradeSide: sig.tradeSide,
-      greenDaysBeforeSignal: qualityCtx.greenDaysBeforeSignal,
-      wickRatio: sig.wickRatio,
-      rangeScore: qualityCtx.rangeScore,
-      ema4hSlopePct7d: qualityCtx.ema4hSlopePct7d,
+      trendGainPct: qualityCtx.trendGainPct,
+      ageOfTrendHours: qualityCtx.ageOfTrendHours,
       btcEma1dSlopePct7d: qualityCtx.btcEma1dSlopePct7d,
       btcEma4hSlopePct7d: qualityCtx.btcEma4hSlopePct7d,
       atrPct14d: qualityCtx.atrPct14d,
