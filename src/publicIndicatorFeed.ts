@@ -3615,8 +3615,7 @@ export async function runPublicIndicatorFeedInternal(
                       : null,
                   vol: vE!,
                   volSma: vsE!,
-                  actionPlan:
-                    longQualitySignal || longGradeFFade ? null : longActionPlan,
+                  actionPlan: longQualitySignal ? null : longActionPlan,
                   greenDaysBeforeSignal: longGreenDaysForAlert,
                   fundingRate: longMktCtxForAlert?.fundingRate ?? null,
                   barRangePctPrev: longVolSnapForGrade.barRangePctPrev,

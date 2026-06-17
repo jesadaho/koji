@@ -182,6 +182,9 @@ function resolveSnowballAutoOpenSide(
   if (isBearAlert && !shortSignalOn && longGateOn) {
     return null;
   }
+  if (isLongAlert && gradeFMatch) {
+    return null;
+  }
   return defaultSide;
 }
 
@@ -572,7 +575,9 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     const shortSignalOn = snowballShortSignalShortEnabled(row);
     const userQualitySignalLong =
       qualitySignalMatch && snowballQualitySignalLongGradeAllowed(row, gradeKey);
-    const userForceMatrixOpenLong = userQualitySignalLong || gradeFFadeMatch;
+    const userGradeFFadeMatch =
+      snowballGradeFFadeShortEnabled(row) && gradeFFadeMatch;
+    const userForceMatrixOpenLong = userQualitySignalLong || userGradeFFadeMatch;
     if (
       input.actionPlan === "monitor" &&
       !userForceMatrixOpenLong &&
