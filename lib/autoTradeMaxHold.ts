@@ -142,3 +142,74 @@ export function resolveAutoTradeHoldCheckpoint(input: {
   }
   return { action: "continue" };
 }
+
+export type AutoOpenMaxHoldSafetyDue = {
+  due: true;
+  reason: "checkpoint_force_close" | "past_absolute_max" | "orphan_past_phase1";
+  holdHours: number;
+  phase?: 1 | 2;
+};
+
+/** Safety cron — ปิดไม้ live ที่เกิน max hold (orphan / primary tick พลาด) */
+export function evaluateAutoOpenMaxHoldSafetyClose(input: {
+  openedAtMs: number;
+  phase1Hours: number;
+  extendRedHours: number;
+  extendIfRedEnabled: boolean;
+  holdExtendedForRed: boolean;
+  inBotState: boolean;
+  markPnlPct: number;
+  nowMs?: number;
+  graceMs?: number;
+}): AutoOpenMaxHoldSafetyDue | null {
+  const now = input.nowMs ?? Date.now();
+  const graceMs = input.graceMs ?? 30 * 60 * 1000;
+  const p1 = input.phase1Hours > 0 ? input.phase1Hours : 48;
+  const ext =
+    typeof input.extendRedHours === "number" && Number.isFinite(input.extendRedHours) && input.extendRedHours > 0
+      ? input.extendRedHours
+      : p1;
+  const p1Ms = autoTradePhase1HoldMs(p1);
+  const totalMs = input.extendIfRedEnabled ? autoTradeTotalMaxHoldMs(p1, ext) : p1Ms;
+  const age = now - input.openedAtMs;
+  if (!(input.openedAtMs > 0) || age < 0) return null;
+
+  const checkpoint = resolveAutoTradeHoldCheckpoint({
+    openedAtMs: input.openedAtMs,
+    phase1Hours: p1,
+    extendRedHours: ext,
+    extendIfRedEnabled: input.extendIfRedEnabled,
+    holdExtendedForRed: input.holdExtendedForRed,
+    markPnlPct: input.markPnlPct,
+    nowMs: now,
+  });
+
+  if (input.inBotState && checkpoint.action === "force_close") {
+    return {
+      due: true,
+      reason: "checkpoint_force_close",
+      holdHours: checkpoint.holdHours,
+      phase: checkpoint.phase,
+    };
+  }
+
+  if (age >= totalMs + graceMs) {
+    return {
+      due: true,
+      reason: "past_absolute_max",
+      holdHours: input.extendIfRedEnabled ? p1 + ext : p1,
+      phase: input.extendIfRedEnabled ? 2 : 1,
+    };
+  }
+
+  if (!input.inBotState && age >= p1Ms + graceMs) {
+    return {
+      due: true,
+      reason: "orphan_past_phase1",
+      holdHours: p1,
+      phase: 1,
+    };
+  }
+
+  return null;
+}

@@ -18,6 +18,7 @@ import { runSnowballAutoTradeTpSlTick } from "./snowballAutoTradeTpSlTick";
 import { runSnowballAutoTradeLimitTick } from "./snowballAutoTradeLimitTick";
 import { runSnowballAutoTrade24hGuardTick } from "./snowballAutoTrade24hGuardTick";
 import { runAutoTradeConflictCloseTick } from "./autoTradeConflictCloseTick";
+import { runAutoOpenMaxHoldSafetyTick } from "./autoOpenMaxHoldSafetyTick";
 import { runReversalAutoTradeTpSlTick } from "./reversalAutoTradeTpSlTick";
 import { runReversalAutoTradeLimitTick } from "./reversalAutoTradeLimitTick";
 import { runDownsideReversalAlertTick } from "./downsideReversalAlertTick";
@@ -385,6 +386,7 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   const snowball24hClosed = await runSnowballAutoTrade24hGuardTick(now);
   const reversalLimitActions = await runReversalAutoTradeLimitTick(now);
   const reversalTpSlActions = await runReversalAutoTradeTpSlTick(now);
+  const autoOpenMaxHoldSafetyActions = await runAutoOpenMaxHoldSafetyTick(now);
   const watch612 = await runEma612ContractWatchAlertTick(client);
   const downsideN = await runDownsideReversalAlertTick();
   const candleReversalRes = await runCandleReversalAlertTick(now);
@@ -407,6 +409,7 @@ export async function runIndicatorAlertTick(client: Client): Promise<{ notified:
   if (snowball24hClosed > 0) parts.push(`snowball 24h close ${snowball24hClosed}`);
   if (reversalLimitActions > 0) parts.push(`reversal limit ${reversalLimitActions}`);
   if (reversalTpSlActions > 0) parts.push(`reversal TP/SL ${reversalTpSlActions}`);
+  if (autoOpenMaxHoldSafetyActions > 0) parts.push(`max-hold safety ${autoOpenMaxHoldSafetyActions}`);
   if (watch612 > 0) parts.push(`EMA6/12·15m ติดตาม ${watch612}`);
   if (downsideN > 0) parts.push(`downside reversal (Binance) ${downsideN}`);
   if (candleReversalN > 0) parts.push(`candle reversal ${candleReversalN}`);
