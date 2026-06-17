@@ -3299,9 +3299,15 @@ export async function runPublicIndicatorFeedInternal(
           Number.isFinite(emaLongSlope2Arr?.[iPrev] as number) &&
           (emaLongSlope2Arr![iSig]! > emaLongSlope2Arr![iPrev]!);
 
+        const entryClosePx =
+          longBreakout1h && breakout1hEval && Number.isFinite(breakout1hEval.close)
+            ? breakout1hEval.close
+            : twoBarInline
+              ? c15[iConf]!
+              : clE!;
+
         let master4hTradePlan: SnowballMaster4hLongTradePlan | null = null;
         const planBarIdx = twoBarInline ? iConf : iSig;
-        const planEntryPx = twoBarInline ? c15[iConf]! : clE!;
         if (snowTf === "4h") {
           try {
             master4hTradePlan = await buildSnowballMaster4hLongTradePlan(
@@ -3313,7 +3319,7 @@ export async function runPublicIndicatorFeedInternal(
               planBarIdx,
               swingLb,
               swingEx,
-              planEntryPx
+              entryClosePx
             );
           } catch (e) {
             console.error("[indicatorPublicFeed] snowball 4h trade plan", symbol, e);
@@ -3459,12 +3465,6 @@ export async function runPublicIndicatorFeedInternal(
           longBreakout1h && breakout1hEval
             ? `📎 Breakout Entry (1H confirm): ปิด ~ ${formatClosedCandleBkk(breakout1hEval.barOpenSec)} @ ${formatUsdPrice(breakout1hEval.close)} USDT · ${breakout1hEval.detail}`
             : undefined;
-        const entryClosePx =
-          longBreakout1h && breakout1hEval && Number.isFinite(breakout1hEval.close)
-            ? breakout1hEval.close
-            : twoBarInline
-              ? c15[iConf]!
-              : clE!;
 
         if (!intrabar && snowTf === "4h") {
           const alertBarOpen = twoBarInline ? t15[iConf]! : signalBarOpenSec;
