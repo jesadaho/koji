@@ -12,6 +12,7 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
   statsStrategyProfitCacheKey,
+  statsStrategyProfitCacheKeyMatchesDefault,
   statsStrategyProfitFromHorizonPct,
   type StatsStrategyProfitHorizon,
 } from "@/lib/statsStrategyProfitClient";
@@ -267,9 +268,12 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
   anchorCloseSec: (row: T) => number;
   sideForRow: (row: T) => "long" | "short";
   includeRow: (row: T) => boolean;
+  maxRows?: number;
 }): Promise<number> {
   const packCache = new Map<string, BinanceKlinePack | null>();
   let dirty = 0;
+  let enriched = 0;
+  const maxRows = opts.maxRows ?? Number.POSITIVE_INFINITY;
 
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
     const planAtHorizon: ViewerStatsTpSlPlan = {
@@ -337,7 +341,11 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
         pctAtPhase1: pctPhase1,
         plan: planAtHorizon,
       });
-      if (applyHorizonFields(row, holdHours, cacheKey, computed)) dirty += 1;
+      if (applyHorizonFields(row, holdHours, cacheKey, computed)) {
+        dirty += 1;
+        enriched += 1;
+        if (enriched >= maxRows) return dirty;
+      }
     }
   }
 
@@ -402,6 +410,7 @@ async function enrichReversalRowsStrategyProfit(rows: CandleReversalStatsRow[]):
 export async function enrichSnowballStatsWithViewerStrategyProfit(
   rows: SnowballStatsRow[],
   plan: ViewerStatsTpSlPlan,
+  opts?: { maxRows?: number },
 ): Promise<number> {
   return enrichRowsWithViewerStrategyProfit({
     rows,
@@ -409,6 +418,7 @@ export async function enrichSnowballStatsWithViewerStrategyProfit(
     anchorCloseSec: snowballStatsAnchorCloseSec,
     sideForRow: (row) => row.side,
     includeRow: () => true,
+    maxRows: opts?.maxRows,
   });
 }
 
@@ -476,7 +486,11 @@ export function withViewerStrategyProfitDisplayFields<
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
     const cacheKey = statsStrategyProfitCacheKey(plan, holdHours);
     const fallbackKey = statsStrategyProfitCacheKey(DEFAULT_STATS_TPSL_PLAN, holdHours);
-    const cached = row.strategyProfitByPlan?.[cacheKey] ?? row.strategyProfitByPlan?.[fallbackKey];
+    const canFallbackToDefault =
+      plan.tpSlEnabled && statsStrategyProfitCacheKeyMatchesDefault(plan, holdHours);
+    const cached =
+      row.strategyProfitByPlan?.[cacheKey] ??
+      (canFallbackToDefault ? row.strategyProfitByPlan?.[fallbackKey] : undefined);
     if (!cached) {
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
         if (out.strategyProfitPct24h != null || out.strategyExitReason24h != null) {

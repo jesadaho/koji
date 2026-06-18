@@ -858,6 +858,13 @@ export async function liffGetSnowballStats(telegramUserId?: number): Promise<Sno
 
   // store จำกัดที่ SNOWBALL_STATS_MAX_ROWS (ดีฟอลต์ 400) — ส่งครบทุกแถว ไม่ slice ซ้ำ
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs);
+  if (telegramUserId != null) {
+    const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "snowball");
+    const strategyDirty = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan, {
+      maxRows: 80,
+    });
+    if (strategyDirty > 0) await saveSnowballStatsState(st);
+  }
   return buildSnowballStatsPayload(rows, telegramUserId);
 }
 

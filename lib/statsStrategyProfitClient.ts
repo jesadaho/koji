@@ -56,6 +56,17 @@ export function statsStrategyProfitCacheKey(
   return base;
 }
 
+/** cache key ตรง default plan — ใช้ตัดสิน fallback ตอนแสดงผล */
+export function statsStrategyProfitCacheKeyMatchesDefault(
+  plan: StatsTpSlPlan,
+  holdHours: StatsStrategyProfitHorizon,
+): boolean {
+  return (
+    statsStrategyProfitCacheKey(plan, holdHours) ===
+    statsStrategyProfitCacheKey(DEFAULT_STATS_TPSL_PLAN, holdHours)
+  );
+}
+
 export const STATS_STRATEGY_PROFIT_COLUMN_TITLE = statsTpSlPlanSummary(DEFAULT_STATS_TPSL_PLAN);
 
 export const STATS_STRATEGY_PROFIT_COLUMN_TITLE_24H = statsTpSlPlanSummary(

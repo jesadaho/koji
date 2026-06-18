@@ -108,9 +108,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     ]);
 
     const rows = [...result.rows];
-    if (plan.tpSlEnabled) {
-      await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
-    }
+    await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
     const displayRows = rows.map((r) => withViewerStrategyProfitDisplayFields(r, plan));
 
     const payload: SnowballBacktestApiPayload = {
