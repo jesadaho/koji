@@ -40,10 +40,8 @@ import { computeSnowballSignalLenPercentile } from "./statsLenPercentile";
 import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 import { snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { buildSnowballLongConfirmGateStepsForStats } from "./snowballStatsGateSteps";
-import {
-  computePumpCycleSwingLowFromPack,
-  pumpCycleSwingLowFieldsFromResult,
-} from "@/lib/pumpCycleSwingLow";
+import { pumpCycleSwingLowFieldsFromResult } from "@/lib/pumpCycleSwingLow";
+import { computePumpCycleSwingLowFromPack } from "./statsPumpCycleSwingLow";
 import { snowballStatsAnchorCloseSec, snowballStatsConfirmVolFieldsFrom1hEval } from "@/lib/snowballStatsClient";
 import {
   evaluateSnowballWaveGate,
