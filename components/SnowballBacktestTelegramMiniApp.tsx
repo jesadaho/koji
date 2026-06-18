@@ -44,6 +44,8 @@ import type { SnowballBtcPsarFilter } from "@/lib/snowballBtcPsarFilter";
 import type { SnowballStructureFilter } from "@/lib/snowballStructureFilter";
 import type { SnowballBarRange2Filter } from "@/lib/snowballBarRange2Filter";
 import type { SnowballBarRangePrevFilter } from "@/lib/snowballBarRangePrevFilter";
+import type { SnowballTrendGainFilter } from "@/lib/snowballTrendGainFilter";
+import type { SnowballTrendVelocityFilter } from "@/lib/snowballTrendVelocityFilter";
 import type { SnowballEfficiencyScoreFilter } from "@/lib/snowballEfficiencyScoreFilter";
 import type { SnowballSignalMaxDdFilter } from "@/lib/snowballSignalMaxDdFilter";
 import {
@@ -189,6 +191,8 @@ export default function SnowballBacktestTelegramMiniApp() {
   const [structureFilter, setStructureFilter] = useState<SnowballStructureFilter>("all");
   const [greenDaysFilter, setGreenDaysFilter] = useState<SnowballGreenDaysFilter>("all");
   const [conflictFilter, setConflictFilter] = useState<StatsConflictFilter>("all");
+  const [trendGainFilter, setTrendGainFilter] = useState<SnowballTrendGainFilter>("all");
+  const [trendVelocityFilter, setTrendVelocityFilter] = useState<SnowballTrendVelocityFilter>("all");
   const [sort, setSort] = useState<SnowballStatsSort>(SNOWBALL_STATS_DEFAULT_SORT);
   const [splitByWeek, setSplitByWeek] = useState(false);
 
@@ -215,6 +219,8 @@ export default function SnowballBacktestTelegramMiniApp() {
       structureFilter,
       greenDaysFilter,
       conflictFilter,
+      trendGainFilter,
+      trendVelocityFilter,
     }),
     [
       sideFilter,
@@ -237,6 +243,8 @@ export default function SnowballBacktestTelegramMiniApp() {
       structureFilter,
       greenDaysFilter,
       conflictFilter,
+      trendGainFilter,
+      trendVelocityFilter,
     ],
   );
 
@@ -613,6 +621,8 @@ export default function SnowballBacktestTelegramMiniApp() {
             onStructureFilterChange={setStructureFilter}
             onGreenDaysFilterChange={setGreenDaysFilter}
             onConflictFilterChange={setConflictFilter}
+            onTrendGainFilterChange={setTrendGainFilter}
+            onTrendVelocityFilterChange={setTrendVelocityFilter}
             monthKeys={monthKeys}
             monthFilter={monthFilter}
             onMonthFilterChange={setMonthFilter}

@@ -80,6 +80,20 @@ import {
   type SnowballSignalMaxDdFilter,
 } from "@/lib/snowballSignalMaxDdFilter";
 import {
+  SNOWBALL_TREND_GAIN_FILTER_OPTIONS,
+  snowballTrendGainFilterLabel,
+  snowballTrendGainFilterTitle,
+  snowballStatsRowMatchesTrendGainFilter,
+  type SnowballTrendGainFilter,
+} from "@/lib/snowballTrendGainFilter";
+import {
+  SNOWBALL_TREND_VELOCITY_FILTER_OPTIONS,
+  snowballTrendVelocityFilterLabel,
+  snowballTrendVelocityFilterTitle,
+  snowballStatsRowMatchesTrendVelocityFilter,
+  type SnowballTrendVelocityFilter,
+} from "@/lib/snowballTrendVelocityFilter";
+import {
   snowballStatsRowMatchesFundingFilter,
   snowballStatsRowMatchesGreenDaysFilter,
   snowballStatsRowMatchesSideFilter,
@@ -177,6 +191,8 @@ export type SnowballStatsFilterState = {
   structureFilter: SnowballStructureFilter;
   greenDaysFilter: SnowballGreenDaysFilter;
   conflictFilter: StatsConflictFilter;
+  trendGainFilter: SnowballTrendGainFilter;
+  trendVelocityFilter: SnowballTrendVelocityFilter;
 };
 
 /** BKK = UTC+7 (no DST) — 0 = Sunday, 1 = Monday, ..., 6 = Saturday */
@@ -296,6 +312,16 @@ export function filterSnowballStatsRows(
     result = result.filter((r) => statsRowMatchesConflictFilter(r, filters.conflictFilter));
   }
 
+  if (filters.trendGainFilter !== "all") {
+    result = result.filter((r) => snowballStatsRowMatchesTrendGainFilter(r, filters.trendGainFilter));
+  }
+
+  if (filters.trendVelocityFilter !== "all") {
+    result = result.filter((r) =>
+      snowballStatsRowMatchesTrendVelocityFilter(r, filters.trendVelocityFilter),
+    );
+  }
+
   return result;
 }
 
@@ -318,6 +344,8 @@ export type SnowballStatsEmptyFilterLabels = {
   signalMaxDd: string;
   volRank: string;
   conflict: string;
+  trendGain: string;
+  trendVelocity: string;
 };
 
 export function snowballStatsEmptyFilterLabels(filters: SnowballStatsFilterState): SnowballStatsEmptyFilterLabels {
@@ -340,6 +368,8 @@ export function snowballStatsEmptyFilterLabels(filters: SnowballStatsFilterState
     signalMaxDd: snowballSignalMaxDdFilterLabel(filters.signalMaxDdFilter),
     volRank: snowballStatsVolRankFilterLabel(filters.volRankFilter),
     conflict: statsConflictFilterLabel(filters.conflictFilter),
+    trendGain: snowballTrendGainFilterLabel(filters.trendGainFilter),
+    trendVelocity: snowballTrendVelocityFilterLabel(filters.trendVelocityFilter),
   };
 }
 
@@ -366,6 +396,8 @@ type Props = {
   onStructureFilterChange: (v: SnowballStructureFilter) => void;
   onGreenDaysFilterChange: (v: SnowballGreenDaysFilter) => void;
   onConflictFilterChange: (v: StatsConflictFilter) => void;
+  onTrendGainFilterChange: (v: SnowballTrendGainFilter) => void;
+  onTrendVelocityFilterChange: (v: SnowballTrendVelocityFilter) => void;
   monthKeys: string[];
   monthFilter: string;
   onMonthFilterChange: (v: string) => void;
@@ -400,6 +432,8 @@ export function SnowballStatsFilters({
   onStructureFilterChange,
   onGreenDaysFilterChange,
   onConflictFilterChange,
+  onTrendGainFilterChange,
+  onTrendVelocityFilterChange,
   monthKeys,
   monthFilter,
   onMonthFilterChange,
@@ -820,6 +854,46 @@ export function SnowballStatsFilters({
           title={snowballMatrixFilterTitle(filters.matrixFilter)}
         >
           {SNOWBALL_MATRIX_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label
+        className="sub"
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+      >
+        Trend Gain
+        <select
+          value={filters.trendGainFilter}
+          onChange={(e) => onTrendGainFilterChange(e.currentTarget.value as SnowballTrendGainFilter)}
+          className="tmaInput"
+          style={{ width: "auto", minWidth: "7rem" }}
+          title={snowballTrendGainFilterTitle(filters.trendGainFilter)}
+        >
+          {SNOWBALL_TREND_GAIN_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label
+        className="sub"
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+      >
+        Velocity
+        <select
+          value={filters.trendVelocityFilter}
+          onChange={(e) =>
+            onTrendVelocityFilterChange(e.currentTarget.value as SnowballTrendVelocityFilter)
+          }
+          className="tmaInput"
+          style={{ width: "auto", minWidth: "7.5rem" }}
+          title={snowballTrendVelocityFilterTitle(filters.trendVelocityFilter)}
+        >
+          {SNOWBALL_TREND_VELOCITY_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>
