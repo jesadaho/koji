@@ -301,6 +301,8 @@ type SnowballStatsGradeDerivationFields = Partial<
     | "signalMaxDdPct"
     | "signalVolVsSma"
     | "psar4hTrend"
+    | "trendGainPct"
+    | "ageOfTrendHours"
   >
 >;
 
@@ -342,6 +344,8 @@ function snowballStatsTrendGradeInputFromRow(
     signalVolVsSma: row.signalVolVsSma,
     psar4hTrend: row.psar4hTrend ?? null,
     signalBarTf: row.signalBarTf ?? null,
+    trendGainPct: row.trendGainPct,
+    ageOfTrendHours: row.ageOfTrendHours,
   };
 }
 
@@ -549,6 +553,7 @@ export function snowballStatsGradeCellClass(
   if (tier === "s") return "snowGradeCell snowGradeCell--s";
   if (tier === "a") return "snowGradeCell snowGradeCell--a";
   if (tier === "b") return "snowGradeCell snowGradeCell--b";
+  if (tier === "d") return "snowGradeCell snowGradeCell--d";
   if (tier === "c") return "snowGradeCell snowGradeCell--c";
   return "snowGradeCell";
 }

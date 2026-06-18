@@ -2,12 +2,11 @@
  * Snowball trend grade — ลำดับ: A · B · D · F (fallback)
  * A: EMA4h > 10% · Funding > −0.10% · R% ก่อน 10–20%
  * B: EMA4h < 10% · R% ก่อน 10–20%
- * D: Trend Gain 20–50% · Velocity 0.5–1.5 %/h
+ * D: Trend Gain 20–50%
  * F: fallback
  * 4h LONG: + (HH200+VAH) และ ⚠️ (Max DD>7%) เป็น modifier ใน composite
  */
 
-import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 import type { SnowballAutoTradeAlertSide } from "./tradingViewCloseSettingsStore";
 import {
   SNOWBALL_4H_VOL_SMA_MIN_FOR_GRADE_C,
@@ -155,15 +154,11 @@ function matchesGradeB(input: ClassifySnowballTrendGradeInput): boolean {
 
 function matchesGradeD(input: ClassifySnowballTrendGradeInput): boolean {
   const gain = input.trendGainPct;
-  const vel = computePumpCycleTrendVelocity(input.trendGainPct, input.ageOfTrendHours);
   return (
     gain != null &&
     Number.isFinite(gain) &&
     gain >= SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT &&
-    gain <= SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT &&
-    vel != null &&
-    vel >= SNOWBALL_TREND_GRADE_D_VELOCITY_MIN &&
-    vel <= SNOWBALL_TREND_GRADE_D_VELOCITY_MAX
+    gain <= SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT
   );
 }
 
@@ -174,11 +169,12 @@ export const SNOWBALL_TREND_GRADE_B_CRITERIA = `EMA4h < ${SNOWBALL_TREND_GRADE_A
 /** D — Trend Gain % inclusive */
 export const SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT = 20;
 export const SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT = 50;
-/** D — Velocity %/h inclusive */
+/** @deprecated ไม่ใช้ในเกรด D แล้ว — คงไว้สำหรับฟิลเตอร์ Velocity */
 export const SNOWBALL_TREND_GRADE_D_VELOCITY_MIN = 0.5;
+/** @deprecated ไม่ใช้ในเกรด D แล้ว — คงไว้สำหรับฟิลเตอร์ Velocity */
 export const SNOWBALL_TREND_GRADE_D_VELOCITY_MAX = 1.5;
 
-export const SNOWBALL_TREND_GRADE_D_CRITERIA = `Trend Gain ${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT}–${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT}% · Velocity ${SNOWBALL_TREND_GRADE_D_VELOCITY_MIN}–${SNOWBALL_TREND_GRADE_D_VELOCITY_MAX}%/h`;
+export const SNOWBALL_TREND_GRADE_D_CRITERIA = `Trend Gain ${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT}–${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT}%`;
 
 export const SNOWBALL_TREND_GRADE_F_CRITERIA = "fallback";
 

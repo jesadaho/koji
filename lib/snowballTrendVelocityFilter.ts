@@ -59,7 +59,7 @@ export function snowballTrendVelocityFilterTitle(filter: SnowballTrendVelocityFi
   if (filter === "has") return "มีค่า Trend Velocity (%/h)";
   if (filter === "none") return "ไม่มีค่า Trend Velocity (%/h)";
   if (filter === "vel05_15") {
-    return `Velocity ${SNOWBALL_TREND_GRADE_D_VELOCITY_MIN}–${SNOWBALL_TREND_GRADE_D_VELOCITY_MAX}%/h (เกรด D)`;
+    return `Velocity ${SNOWBALL_TREND_GRADE_D_VELOCITY_MIN}–${SNOWBALL_TREND_GRADE_D_VELOCITY_MAX}%/h`;
   }
   return `Trend Velocity ${snowballTrendVelocityFilterLabel(filter)}`;
 }

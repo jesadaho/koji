@@ -511,7 +511,7 @@ function snowballTrendGradeChecklistItems(
       id: "confirm",
       title: "Grade D",
       status: grade === "d" ? "pass" : grade ? "fail" : "unknown",
-      detail: `Trend ${pumpCycleTrendGainPctLabel(row.trendGainPct)} · Vel ${pumpCycleTrendVelocityLabel(row.trendGainPct, row.ageOfTrendHours)} · ต้อง ${SNOWBALL_TREND_GRADE_D_CRITERIA}`,
+      detail: `Trend ${pumpCycleTrendGainPctLabel(row.trendGainPct)} · ต้อง ${SNOWBALL_TREND_GRADE_D_CRITERIA}`,
     },
     {
       id: "confirm",
