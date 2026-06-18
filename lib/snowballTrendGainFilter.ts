@@ -67,7 +67,7 @@ export function snowballTrendGainFilterTitle(filter: SnowballTrendGainFilter): s
     return `Trend Gain ${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT}–${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT}% (เกรด D)`;
   }
   if (filter === "gt50") {
-    return `Trend Gain > ${SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE}% (เกรด S — ต้อง Weekend ด้วย)`;
+    return `Trend Gain > ${SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE}% (เกรด S/B — S ต้อง Weekend ด้วย)`;
   }
   return `Trend Gain ${snowballTrendGainFilterLabel(filter)}`;
 }

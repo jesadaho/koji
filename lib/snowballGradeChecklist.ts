@@ -10,6 +10,7 @@ import {
   normalizeSnowballQualityTier,
   SNOWBALL_TREND_GRADE_A_CRITERIA,
   SNOWBALL_TREND_GRADE_B_CRITERIA,
+  SNOWBALL_TREND_GRADE_C_CRITERIA,
   SNOWBALL_TREND_GRADE_S_CRITERIA,
   SNOWBALL_TREND_GRADE_D_CRITERIA,
   SNOWBALL_TREND_GRADE_F_CRITERIA,
@@ -540,7 +541,7 @@ function snowballTrendGradeChecklistItems(
       id: "confirm",
       title: "Grade B",
       status: grade === "b" ? "pass" : grade ? "fail" : "unknown",
-      detail: `R% สัญญาณ ${snowballStatsBarRangePctLabel(row.barRangePctSignal)} · ต้อง ${SNOWBALL_TREND_GRADE_B_CRITERIA}`,
+      detail: `Trend ${pumpCycleTrendGainPctLabel(row.trendGainPct)} · EMA4h ${fmtSlope(ema4h)} · ต้อง ${SNOWBALL_TREND_GRADE_B_CRITERIA}`,
     },
     ...(greenDaysItem ? [greenDaysItem] : []),
     ...(volSabItem ? [volSabItem] : []),
@@ -550,6 +551,12 @@ function snowballTrendGradeChecklistItems(
       title: "Grade D",
       status: grade === "d" ? "pass" : grade ? "fail" : "unknown",
       detail: `Trend ${pumpCycleTrendGainPctLabel(row.trendGainPct)} · ต้อง ${SNOWBALL_TREND_GRADE_D_CRITERIA}`,
+    },
+    {
+      id: "confirm",
+      title: "Grade C",
+      status: grade === "c" ? "pass" : grade ? "fail" : "unknown",
+      detail: `R% สัญญาณ ${snowballStatsBarRangePctLabel(row.barRangePctSignal)} · ต้อง ${SNOWBALL_TREND_GRADE_C_CRITERIA}`,
     },
     {
       id: "confirm",
@@ -1043,12 +1050,14 @@ export function snowballStatsGradeChecklistFooter(
           ? ` · Trend ${pumpCycleTrendGainPctLabel(row.trendGainPct)} · Vel ${pumpCycleTrendVelocityLabel(row.trendGainPct, row.ageOfTrendHours)}`
           : "";
       lines.push(
-        `เหตุผล F: ไม่ผ่าน S / A / B / D${trendPart} · ${SNOWBALL_TREND_GRADE_F_CRITERIA} · auto-open: ไม่สั่ง (Grade F)`,
+        `เหตุผล F: ไม่ผ่าน S / A / B / D / C${trendPart} · ${SNOWBALL_TREND_GRADE_F_CRITERIA} · auto-open: ไม่สั่ง (Grade F)`,
       );
     } else if (grade === "s") {
       lines.push(`เหตุผล S: ${SNOWBALL_TREND_GRADE_S_CRITERIA} · action plan: Full (1.0×)`);
     } else if (grade === "b") {
       lines.push(`เหตุผล B: ${SNOWBALL_TREND_GRADE_B_CRITERIA} · action plan: Light (0.5×)`);
+    } else if (grade === "c") {
+      lines.push(`เหตุผล C: ${SNOWBALL_TREND_GRADE_C_CRITERIA} · action plan: Monitor (no auto-open)`);
     } else if (snowballIsTrendGradeD(grade)) {
       lines.push(`เหตุผล D: ${SNOWBALL_TREND_GRADE_D_CRITERIA} · action plan: Light (0.5×)`);
     }

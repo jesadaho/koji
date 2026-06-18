@@ -1,9 +1,10 @@
 /**
- * Snowball trend grade — ลำดับ: S · A · B · D · F (fallback)
+ * Snowball trend grade — ลำดับ: S · A · B · D · C · F (fallback)
  * S: Trend Gain > 50% · Weekend (เสาร์–อาทิตย์ BKK)
  * A: EMA4h > 10% · Funding > −0.10% · R% ก่อน 10–20%
- * B: R% สัญญาณ > 30%
+ * B: Trend Gain > 50% · EMA4h > 20%
  * D: Trend Gain 20–50%
+ * C: R% สัญญาณ > 30%
  * F: fallback
  * 4h LONG: + (HH200+VAH) และ ⚠️ (Max DD>7%) เป็น modifier ใน composite
  */
@@ -78,8 +79,8 @@ export const SNOWBALL_TREND_GRADE_A_GREEN_MAX = 3;
 export const SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE = SNOWBALL_TREND_GRADE_A_GREEN_MAX;
 /** @deprecated */
 export const SNOWBALL_TREND_GRADE_C_GREEN_MIN_EXCLUSIVE = SNOWBALL_TREND_GRADE_B_GREEN_MIN_EXCLUSIVE;
-/** @deprecated */
-export const SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE = SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE;
+/** B — EMA(12) 4h slope 7d (%) exclusive */
+export const SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE = 20;
 /** @deprecated */
 export const SNOWBALL_TREND_GRADE_F_EMA4H_MAX_EXCLUSIVE = 0;
 /** @deprecated */
@@ -139,14 +140,20 @@ function barRangePrevInR1020Range(barRangePctPrev?: number | null): boolean {
   );
 }
 
-/** B — R% แท่งสัญญาณ (%) exclusive */
-export const SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE = 30;
-/** @deprecated ใช้ SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE */
+/** C — R% แท่งสัญญาณ (%) exclusive */
+export const SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE = 30;
+/** @deprecated ใช้ SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE */
+export const SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE =
+  SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE;
+/** @deprecated */
 export const SNOWBALL_TREND_GRADE_S_R_SIGNAL_MIN_EXCLUSIVE =
-  SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE;
+  SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE;
 
-/** S — Trend Gain % exclusive */
+/** S/B — Trend Gain % exclusive */
 export const SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE = 50;
+/** @deprecated alias */
+export const SNOWBALL_TREND_GRADE_B_TREND_GAIN_MIN_EXCLUSIVE =
+  SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE;
 
 /** BKK = UTC+7 (no DST) — 0 = Sunday, 6 = Saturday */
 export function snowballTrendGradeBkkDayOfWeekIndex(ms: number): number {
@@ -160,23 +167,30 @@ export function snowballTrendGradeIsBkkWeekendMs(ms: number | null | undefined):
   return dow === 0 || dow === 6;
 }
 
-function barRangeSignalGtMin(barRangePctSignal?: number | null): boolean {
-  const raw = barRangePctSignal;
-  return (
-    raw != null &&
-    Number.isFinite(raw) &&
-    raw > SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE
-  );
-}
-
-function trendGainGtMinForGradeS(trendGainPct?: number | null): boolean {
+function trendGainGtMinForGradeSB(trendGainPct?: number | null): boolean {
   return (
     finitePct(trendGainPct) && trendGainPct > SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE
   );
 }
 
+function barRangeSignalGtMinForGradeC(barRangePctSignal?: number | null): boolean {
+  const raw = barRangePctSignal;
+  return (
+    raw != null &&
+    Number.isFinite(raw) &&
+    raw > SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE
+  );
+}
+
+function ema4hGtMinForGradeB(ema4hSlopePct7d?: number | null): boolean {
+  return (
+    finitePct(ema4hSlopePct7d) &&
+    ema4hSlopePct7d > SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE
+  );
+}
+
 function matchesGradeS(input: ClassifySnowballTrendGradeInput): boolean {
-  return trendGainGtMinForGradeS(input.trendGainPct) && snowballTrendGradeIsBkkWeekendMs(input.alertedAtMs);
+  return trendGainGtMinForGradeSB(input.trendGainPct) && snowballTrendGradeIsBkkWeekendMs(input.alertedAtMs);
 }
 
 function meetsGradeABase(input: ClassifySnowballTrendGradeInput): boolean {
@@ -189,7 +203,7 @@ function matchesGradeA(input: ClassifySnowballTrendGradeInput): boolean {
 }
 
 function matchesGradeB(input: ClassifySnowballTrendGradeInput): boolean {
-  return barRangeSignalGtMin(input.barRangePctSignal);
+  return trendGainGtMinForGradeSB(input.trendGainPct) && ema4hGtMinForGradeB(input.ema4hSlopePct7d);
 }
 
 function matchesGradeD(input: ClassifySnowballTrendGradeInput): boolean {
@@ -202,9 +216,13 @@ function matchesGradeD(input: ClassifySnowballTrendGradeInput): boolean {
   );
 }
 
+function matchesGradeC(input: ClassifySnowballTrendGradeInput): boolean {
+  return barRangeSignalGtMinForGradeC(input.barRangePctSignal);
+}
+
 export const SNOWBALL_TREND_GRADE_A_CRITERIA = `EMA4h > ${SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE}% · Funding > −0.10% · R% ก่อน ${SNOWBALL_TREND_GRADE_A_R_PREV_MIN}–${SNOWBALL_TREND_GRADE_A_R_PREV_MAX}%`;
 
-export const SNOWBALL_TREND_GRADE_B_CRITERIA = `R% สัญญาณ > ${SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE}%`;
+export const SNOWBALL_TREND_GRADE_B_CRITERIA = `Trend Gain > ${SNOWBALL_TREND_GRADE_B_TREND_GAIN_MIN_EXCLUSIVE}% · EMA4h > ${SNOWBALL_TREND_GRADE_B_EMA4H_MIN_EXCLUSIVE}%`;
 
 export const SNOWBALL_TREND_GRADE_S_CRITERIA = `Trend Gain > ${SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE}% · Weekend (เสาร์–อาทิตย์ BKK)`;
 
@@ -217,6 +235,8 @@ export const SNOWBALL_TREND_GRADE_D_VELOCITY_MIN = 0.5;
 export const SNOWBALL_TREND_GRADE_D_VELOCITY_MAX = 1.5;
 
 export const SNOWBALL_TREND_GRADE_D_CRITERIA = `Trend Gain ${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT}–${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT}%`;
+
+export const SNOWBALL_TREND_GRADE_C_CRITERIA = `R% สัญญาณ > ${SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE}%`;
 
 export const SNOWBALL_TREND_GRADE_F_CRITERIA = "fallback";
 
@@ -250,6 +270,7 @@ export function snowballTrendGradeCriteriaLegend(): string {
     `A: ${SNOWBALL_TREND_GRADE_A_CRITERIA}`,
     `B: ${SNOWBALL_TREND_GRADE_B_CRITERIA}`,
     `D: ${SNOWBALL_TREND_GRADE_D_CRITERIA}`,
+    `C: ${SNOWBALL_TREND_GRADE_C_CRITERIA}`,
     `F: ${SNOWBALL_TREND_GRADE_F_CRITERIA}`,
   ].join(" · ");
 }
@@ -289,12 +310,13 @@ export function snowballEma4hSlopeMatchesTrendGradeF(
   );
 }
 
-/** ลำดับ: S · A · B · D · F (fallback) */
+/** ลำดับ: S · A · B · D · C · F (fallback) */
 export function classifySnowballTrendGrade(input: ClassifySnowballTrendGradeInput): SnowballTrendGrade {
   if (matchesGradeS(input)) return "s";
   if (matchesGradeA(input)) return "a";
   if (matchesGradeB(input)) return "b";
   if (matchesGradeD(input)) return "d";
+  if (matchesGradeC(input)) return "c";
   return "f";
 }
 
@@ -313,8 +335,9 @@ export function snowballTrendGradeToDisplay(grade: SnowballTrendGrade): Snowball
   if (grade === "a") return "A";
   if (grade === "b") return "B";
   if (grade === "d") return "D";
+  if (grade === "c") return "C";
   if (grade === "f") return "F";
-  return "C";
+  return "F";
 }
 
 export type SnowballTrendGradeFilter =
@@ -332,8 +355,8 @@ export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDispla
   if (base === "S") return `${SNOWBALL_TREND_GRADE_S_CRITERIA}${plusNote}`;
   if (base === "A") return `${SNOWBALL_TREND_GRADE_A_CRITERIA}${plusNote}`;
   if (base === "B") return `${SNOWBALL_TREND_GRADE_B_CRITERIA}${plusNote}`;
-  if (base === "C") return `legacy · ไม่ใช้ในเกรดใหม่${plusNote}`;
-  return `นอกเหนือเกณฑ์ S / A / B / D / F`;
+  if (base === "C") return `${SNOWBALL_TREND_GRADE_C_CRITERIA}${plusNote}`;
+  return `นอกเหนือเกณฑ์ S / A / B / D / C / F`;
 }
 
 export function snowballTrendGradeFilterTitle(filter: SnowballTrendGradeFilter): string {
@@ -367,6 +390,10 @@ export function snowballIsTrendGradeD(grade: SnowballTrendGrade | undefined): bo
 
 export function snowballIsTrendGradeS(grade: SnowballTrendGrade | undefined): boolean {
   return grade === "s";
+}
+
+export function snowballIsTrendGradeC(grade: SnowballTrendGrade | undefined): boolean {
+  return grade === "c";
 }
 
 /** ทุกเกรดใช้ dedupe เดียวกัน — กันยิงซ้ำแท่ง/เหรียญเดิม */
@@ -444,6 +471,9 @@ export function snowballTrendGradeFootnote(input: SnowballTrendGradeFootnoteInpu
     return `📎 Grade ${g}: Trend Gain ${fmtBarRangePct(input.trendGainPct)} · Weekend BKK · ${plan}`;
   }
   if (input.grade === "b") {
+    return `📎 Grade ${g}: Trend Gain ${fmtBarRangePct(input.trendGainPct)} · EMA4h ${ema4h} · ${plan}`;
+  }
+  if (input.grade === "c") {
     return `📎 Grade ${g}: R% สัญญาณ ${rSignal} · ${plan}`;
   }
   return `📎 Grade ${g}: EMA4h ${ema4h} · Funding ${funding} · R% ก่อน ${rPrev} · ${plan}`;

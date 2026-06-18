@@ -1,7 +1,7 @@
 /** ตัวกรอง R% สัญญาณ (barRangePctSignal) — Snowball stats */
 
 import type { SnowballStatsRow } from "@/lib/snowballStatsClient";
-import { SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE } from "@/src/snowballTrendGrade";
+import { SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE } from "@/src/snowballTrendGrade";
 
 export type SnowballBarRangeSignalFilter =
   | "all"
@@ -46,7 +46,7 @@ export const SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS: ReadonlyArray<{
   { value: "all", label: "ทั้งหมด" },
   {
     value: "gt30",
-    label: `> ${SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE}%`,
+    label: `> ${SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE}%`,
   },
   { value: "ge5", label: "≥ 5%" },
   { value: "ge8", label: "≥ 8%" },
@@ -73,7 +73,7 @@ export function snowballBarRangeSignalFilterTitle(filter: SnowballBarRangeSignal
   if (filter === "has") return "มีค่า R% แท่งสัญญาณ";
   if (filter === "none") return "ไม่มีค่า R% แท่งสัญญาณ";
   if (filter === "gt30") {
-    return `R% สัญญาณ > ${SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE}% (เกรด B)`;
+    return `R% สัญญาณ > ${SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE}% (เกรด C)`;
   }
   return `R% สัญญาณ ${snowballBarRangeSignalFilterLabel(filter)}`;
 }
@@ -88,7 +88,7 @@ export function snowballStatsRowMatchesBarRangeSignalFilter(
   if (filter === "none") return !has;
   if (filter === "has") return has;
   if (!has) return false;
-  if (filter === "gt30") return raw > SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE;
+  if (filter === "gt30") return raw > SNOWBALL_TREND_GRADE_C_R_SIGNAL_MIN_EXCLUSIVE;
   if (filter in BAR_RANGE_SIGNAL_GE) {
     return raw >= BAR_RANGE_SIGNAL_GE[filter as keyof typeof BAR_RANGE_SIGNAL_GE];
   }
