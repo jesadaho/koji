@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { slAtEntryArmPctFromPlan } from "@/lib/tpSlBreakevenPlan";
 import {
   DEFAULT_STATS_TPSL_PLAN,
   simulateStatsTpSlProfit,
@@ -131,7 +132,20 @@ export type StatsStrategyLiquidationMetrics = {
   maxDrawdownPct?: number | null;
   /** Adv max — สวนสูงสุดตลอด follow-up จาก entry */
   followUpMaxAdversePct?: number | null;
+  /** MFE หลังแจ้ง — ใช้ตัดสินว่า SL@entry ควร arm แล้ว */
+  maxRoiPct?: number | null;
 };
+
+/** MFE ถึง TP1 + เกณฑ์ย้าย SL → BE ควรคุ้มครอง (ไม่ liquidate ทั้งก้อน) */
+export function statsStrategyMaxRoiWouldArmBreakeven(
+  maxRoiPct: number | null | undefined,
+  plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
+): boolean {
+  if (maxRoiPct == null || !Number.isFinite(maxRoiPct)) return false;
+  const tp1 = plan.tp1PricePct;
+  const slArm = slAtEntryArmPctFromPlan(plan);
+  return maxRoiPct + 1e-6 >= tp1 && maxRoiPct + 1e-6 >= slArm;
+}
 
 export function maxRowAdversePctForLiquidation(
   metrics: StatsStrategyLiquidationMetrics,
@@ -147,8 +161,10 @@ export function maxRowAdversePctForLiquidation(
 export function rowExceedsIsolatedLiquidationThreshold(
   metrics: StatsStrategyLiquidationMetrics,
   leverage: number | null | undefined,
+  plan: StatsTpSlPlan = DEFAULT_STATS_TPSL_PLAN,
 ): boolean {
   if (leverage == null || !Number.isFinite(leverage) || leverage <= 0) return false;
+  if (statsStrategyMaxRoiWouldArmBreakeven(metrics.maxRoiPct, plan)) return false;
   const adv = maxRowAdversePctForLiquidation(metrics);
   if (adv == null) return false;
   return adv > maxAdversePricePctForLeverage(leverage);
@@ -177,15 +193,17 @@ export function resolveStatsStrategyProfitOutcome(input: {
   exitReason?: StatsTpSlExitReason | null;
   leverage?: number | null;
   liquidationMetrics?: StatsStrategyLiquidationMetrics;
+  plan?: StatsTpSlPlan;
 }): { profitPct: number; exitReason: StatsTpSlExitReason | null | undefined } {
   const lev = input.leverage;
+  const plan = input.plan ?? DEFAULT_STATS_TPSL_PLAN;
   if (
     !statsStrategyProfitExemptFromRowLiquidationOverride(input.exitReason) &&
     input.liquidationMetrics &&
     lev != null &&
     Number.isFinite(lev) &&
     lev > 0 &&
-    rowExceedsIsolatedLiquidationThreshold(input.liquidationMetrics, lev)
+    rowExceedsIsolatedLiquidationThreshold(input.liquidationMetrics, lev, plan)
   ) {
     return {
       profitPct: isolatedLiquidationStrategyProfitPct(lev),
@@ -363,12 +381,14 @@ export function resolveStatsStrategyDisplayPct(
   leverage: number | null | undefined,
   liquidationMetrics?: StatsStrategyLiquidationMetrics,
   exitReason?: StatsTpSlExitReason | null,
+  plan?: StatsTpSlPlan,
 ): number {
   return resolveStatsStrategyProfitOutcome({
     profitPct,
     leverage,
     liquidationMetrics,
     exitReason,
+    plan,
   }).profitPct;
 }
 
@@ -387,6 +407,7 @@ export function statsStrategyProfitCellTitle(
     exitReason,
     leverage: sizing?.leverage,
     liquidationMetrics,
+    plan,
   });
   const tag = statsStrategyExitReasonShort(resolved.exitReason);
   const displayPct = resolved.profitPct;
@@ -460,6 +481,7 @@ export type StatsStrategyProfitRowSlice = StatsStrategyLiquidationMetrics & {
   strategyProfitPct24h?: number | null;
   strategyExitReason?: StatsTpSlExitReason | null;
   strategyExitReason24h?: StatsTpSlExitReason | null;
+  maxRoiPct?: number | null;
 };
 
 export function statsStrategyExitReasonForHorizon(
@@ -482,6 +504,7 @@ export function statsStrategyProfitResolvedForHorizon(
   row: StatsStrategyProfitRowSlice,
   holdHours: StatsStrategyProfitHorizon,
   leverage?: number | null,
+  plan?: StatsTpSlPlan,
 ): { profitPct: number; exitReason: StatsTpSlExitReason } | null {
   if (!statsStrategyProfitFinalizedAtHorizon(row, holdHours)) return null;
 
@@ -494,6 +517,7 @@ export function statsStrategyProfitResolvedForHorizon(
       exitReason,
       leverage,
       liquidationMetrics: row,
+      plan,
     });
     return {
       profitPct: resolved.profitPct,

@@ -6,8 +6,11 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_48H,
   STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
   formatStatsStrategyProfitSummaryText,
+  statsStrategyProfitResolvedForHorizon,
   summarizeStatsStrategyProfit,
+  type StatsStrategyProfitResolveFn,
 } from "@/lib/statsStrategyProfitClient";
+import type { StatsTpSlPlan } from "@/lib/tpSlStrategySimulate";
 import {
   snowballHorizonWinrateSummary,
   type SnowballStatsRow,
@@ -40,6 +43,7 @@ type StrategySizing = {
 type Props = {
   scopedRows: SnowballStatsRow[];
   strategySizing: StrategySizing;
+  tpSlPlan?: StatsTpSlPlan | null;
   gradeFilter: SnowballTrendGradeFilter;
   matrixFilter: SnowballMatrixFilter;
   conflictFilter: StatsConflictFilter;
@@ -49,11 +53,18 @@ type Props = {
 export function SnowballStatsSummary({
   scopedRows,
   strategySizing,
+  tpSlPlan,
   gradeFilter,
   matrixFilter,
   conflictFilter,
   splitByWeek,
 }: Props) {
+  const resolveStrategyProfit = useMemo((): StatsStrategyProfitResolveFn | undefined => {
+    if (!tpSlPlan) return undefined;
+    return (row, holdHours, leverage) =>
+      statsStrategyProfitResolvedForHorizon(row, holdHours, leverage, tpSlPlan);
+  }, [tpSlPlan]);
+
   const horizonWinrateText = useMemo(
     () => snowballHorizonWinrateSummary(scopedRows, SNOWBALL_HORIZON_WR),
     [scopedRows],
@@ -67,10 +78,11 @@ export function SnowballStatsSummary({
           strategySizing,
           STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
           STATS_STRATEGY_PROFIT_HOLD_48H,
+          resolveStrategyProfit,
         ),
         STATS_STRATEGY_PROFIT_HOLD_48H,
       ),
-    [scopedRows, strategySizing],
+    [scopedRows, strategySizing, resolveStrategyProfit],
   );
 
   const strategyProfitSummaryText24h = useMemo(
@@ -81,10 +93,11 @@ export function SnowballStatsSummary({
           strategySizing,
           STATS_STRATEGY_SNOWBALL_WIN_LOSS_BAND,
           STATS_STRATEGY_PROFIT_HOLD_24H,
+          resolveStrategyProfit,
         ),
         STATS_STRATEGY_PROFIT_HOLD_24H,
       ),
-    [scopedRows, strategySizing],
+    [scopedRows, strategySizing, resolveStrategyProfit],
   );
 
   return (

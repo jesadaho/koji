@@ -262,15 +262,20 @@ export function simulateStatsTpSlProfit(input: {
     if (rem <= 0) break;
     const hi = input.high[i]!;
     const lo = input.low[i]!;
-    const beProtected = slAtEntryArmed || tp1Done;
+    const fav = favorablePctInBar(input.side, entry, hi, lo);
+    if (!Number.isFinite(fav)) continue;
+
+    // แท่งเดียว: ถ้า fav ถึง TP1/เกณฑ์ย้าย SL ก่อน — ไม่นับ liquidation ทั้งก้อน (SL@entry คุ้มครอง)
+    const wouldTp1ThisBar = !tp1Done && fav + 1e-9 >= tp1;
+    const wouldArmBeThisBar =
+      (tp1Done || wouldTp1ThisBar || fav + 1e-9 >= tp1) && fav + 1e-9 >= slArm;
+    const beProtected = slAtEntryArmed || tp1Done || wouldArmBeThisBar || wouldTp1ThisBar;
     if (liqPct != null && !beProtected) {
       const adv = adversePctInBar(input.side, entry, hi, lo);
       if (Number.isFinite(adv) && adv > liqPct) {
         return { profitPct: -liqPct, exitReason: "liquidated" };
       }
     }
-    const fav = favorablePctInBar(input.side, entry, hi, lo);
-    if (!Number.isFinite(fav)) continue;
 
     if (!tp1Done && fav >= tp2) {
       profit += rem * tp2;

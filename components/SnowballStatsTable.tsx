@@ -618,6 +618,7 @@ export function SnowballStatsTable({
                     tpSlPlan={payload?.viewerTpSlPlan}
                     maxDrawdownPct={r.maxDrawdownPct}
                     followUpMaxAdversePct={r.followUpMaxAdversePct}
+                    maxRoiPct={r.maxRoiPct}
                   />
                 </td>
                 <td>
@@ -632,6 +633,7 @@ export function SnowballStatsTable({
                     tpSlPlan={payload?.viewerTpSlPlan}
                     maxDrawdownPct={r.maxDrawdownPct}
                     followUpMaxAdversePct={r.followUpMaxAdversePct}
+                    maxRoiPct={r.maxRoiPct}
                   />
                 </td>
                 <td>{outcomeLabel(r.outcome)}</td>

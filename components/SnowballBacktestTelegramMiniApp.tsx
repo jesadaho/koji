@@ -641,6 +641,7 @@ export default function SnowballBacktestTelegramMiniApp() {
           <SnowballStatsSummary
             scopedRows={scopedRows}
             strategySizing={strategySizing}
+            tpSlPlan={payload?.viewerTpSlPlan}
             gradeFilter={gradeFilter}
             matrixFilter={matrixFilter}
             conflictFilter={conflictFilter}

@@ -29,6 +29,7 @@ export function StatsStrategyProfitCell(props: {
   tpSlPlan?: StatsTpSlPlan;
   maxDrawdownPct?: number | null;
   followUpMaxAdversePct?: number | null;
+  maxRoiPct?: number | null;
   resolveProfit?: StatsStrategyProfitResolveFn;
 }) {
   const holdHours = props.holdHours ?? STATS_STRATEGY_PROFIT_HOLD_48H;
@@ -36,10 +37,13 @@ export function StatsStrategyProfitCell(props: {
   const pctHorizon = holdHours === 24 ? props.pct24h : props.pct48h;
   const profitPct = holdHours === 24 ? props.strategyProfitPct24h : props.strategyProfitPct;
   const exitReason = holdHours === 24 ? props.strategyExitReason24h : props.strategyExitReason;
-  const resolveProfit = props.resolveProfit ?? statsStrategyProfitResolvedForHorizon;
+  const resolveProfit =
+    props.resolveProfit ??
+    ((row, h, lev) => statsStrategyProfitResolvedForHorizon(row, h, lev, plan));
   const liquidationMetrics = {
     maxDrawdownPct: props.maxDrawdownPct,
     followUpMaxAdversePct: props.followUpMaxAdversePct,
+    maxRoiPct: props.maxRoiPct,
   };
 
   if (
@@ -61,6 +65,7 @@ export function StatsStrategyProfitCell(props: {
       strategyExitReason24h: props.strategyExitReason24h,
       maxDrawdownPct: props.maxDrawdownPct,
       followUpMaxAdversePct: props.followUpMaxAdversePct,
+      maxRoiPct: props.maxRoiPct,
     },
     holdHours,
     props.leverage,
