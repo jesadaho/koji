@@ -91,9 +91,11 @@ import {
   buildReversalStatsCsvSearchParams,
   BTC_EMA4H_FILTER_OPTIONS,
   REVERSAL_DAY_FILTER_OPTIONS,
+  REVERSAL_DOW_FILTER_OPTIONS,
   REVERSAL_LEN_RANK_FILTER_OPTIONS,
   reversalBtcEma4hFilterTitle,
   reversalDayFilterLabel,
+  reversalDowFilterLabel,
   REVERSAL_EMA4H_FILTER_OPTIONS,
   REVERSAL_EMA1D_FILTER_OPTIONS,
   reversalEma4hFilterLabel,
@@ -104,6 +106,7 @@ import {
   reversalRowMatchesAtrPct14dFilter,
   reversalRowMatchesBtcEma4hFilter,
   reversalRowMatchesDayFilter,
+  reversalRowMatchesDowFilter,
   reversalRowMatchesEma4hFilter,
   reversalRowMatchesEma1dFilter,
   reversalRowMatchesLenRankFilter,
@@ -116,6 +119,7 @@ import {
   type BtcEma4hFilter,
   type StatsAtrPct14dFilter,
   type ReversalDayFilter,
+  type ReversalDowFilter,
   type ReversalEma4hFilter,
   type ReversalEma1dFilter,
   type ReversalLenRankFilter,
@@ -341,6 +345,7 @@ function ReversalStatsSection({
   const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
   const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
   const [dayFilter, setDayFilter] = useState<ReversalDayFilter>("all");
+  const [dowFilter, setDowFilter] = useState<ReversalDowFilter>("all");
   const [lenRankFilter, setLenRankFilter] = useState<ReversalLenRankFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<ReversalVolVsSmaFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<ReversalMatrixFilter>("all");
@@ -363,6 +368,7 @@ function ReversalStatsSection({
         (r) =>
           reversalRowMatchesShapeFilter(r, shapeFilter) &&
           reversalRowMatchesDayFilter(r, dayFilter) &&
+          reversalRowMatchesDowFilter(r, dowFilter) &&
           reversalRowMatchesLenRankFilter(r, lenRankFilter) &&
           reversalRowMatchesVolVsSmaFilter(r, volVsSmaFilter) &&
           reversalRowMatchesEma4hFilter(r, ema4hFilter) &&
@@ -371,7 +377,7 @@ function ReversalStatsSection({
           reversalRowMatchesAtrPct14dFilter(r, atrFilter) &&
           reversalStatsRowMatchesMatrixFilter(r, matrixFilter),
       ),
-    [rawRows, shapeFilter, dayFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -449,6 +455,7 @@ function ReversalStatsSection({
       tf,
       ...(side ? { side } : {}),
       days: dayFilter,
+      dow: dowFilter,
       shape: shapeFilter,
       lenRank: lenRankFilter,
       vol: volVsSmaFilter,
@@ -458,7 +465,7 @@ function ReversalStatsSection({
       atr: atrFilter,
       matrix: matrixFilter,
     };
-  }, [csvQuery, dayFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, dowFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -774,7 +781,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -931,6 +938,22 @@ function ReversalStatsSection({
             style={{ width: "auto", minWidth: "7rem" }}
           >
             {REVERSAL_DAY_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          วัน
+          <select
+            value={dowFilter}
+            onChange={(e) => setDowFilter(e.currentTarget.value as ReversalDowFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "7rem" }}
+            title="วันในสัปดาห์ที่ส่งสัญญาณ (อิง BKK timezone)"
+          >
+            {REVERSAL_DOW_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>

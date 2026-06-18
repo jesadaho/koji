@@ -56,6 +56,8 @@ export {
 
 export type ReversalShapeFilter = "all" | "wick80" | "body80" | "wickOrBody80";
 export type ReversalDayFilter = "all" | "3" | "7" | "30" | "90";
+/** BKK = UTC+7 — 0 = Sunday, 1 = Monday, ..., 6 = Saturday */
+export type ReversalDowFilter = "all" | "0" | "1" | "2" | "3" | "4" | "5" | "6";
 export type ReversalLenRankFilter = "all" | "rank3to15";
 
 export const REVERSAL_DAY_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalDayFilter; label: string }> = [
@@ -74,10 +76,22 @@ export const REVERSAL_LEN_RANK_FILTER_OPTIONS: ReadonlyArray<{
   { value: "rank3to15", label: "อันดับ 3–15" },
 ];
 
+export const REVERSAL_DOW_FILTER_OPTIONS: ReadonlyArray<{ value: ReversalDowFilter; label: string }> = [
+  { value: "all", label: "ทุกวัน" },
+  { value: "1", label: "จันทร์" },
+  { value: "2", label: "อังคาร" },
+  { value: "3", label: "พุธ" },
+  { value: "4", label: "พฤหัส" },
+  { value: "5", label: "ศุกร์" },
+  { value: "6", label: "เสาร์" },
+  { value: "0", label: "อาทิตย์" },
+];
+
 export type ReversalStatsFilterQuery = {
   tf?: "1d" | "1h";
   side?: "long" | "short";
   days?: ReversalDayFilter;
+  dow?: ReversalDowFilter;
   shape?: ReversalShapeFilter;
   lenRank?: ReversalLenRankFilter;
   vol?: StatsVolVsSmaFilter;
@@ -101,6 +115,15 @@ export function reversalDayFilterLabel(filter: ReversalDayFilter): string {
 
 export function reversalLenRankFilterLabel(filter: ReversalLenRankFilter): string {
   return REVERSAL_LEN_RANK_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function reversalDowFilterLabel(filter: ReversalDowFilter): string {
+  return REVERSAL_DOW_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+function bkkDayOfWeekIndex(ms: number): number {
+  if (!Number.isFinite(ms)) return -1;
+  return new Date(ms + 7 * 3600 * 1000).getUTCDay();
 }
 
 function reversalAlertedAtMs(row: CandleReversalStatsRow): number {
@@ -130,6 +153,16 @@ export function reversalRowMatchesDayFilter(
   const cutoffMs = Date.now() - days * 24 * 3600 * 1000;
   const ms = reversalAlertedAtMs(row);
   return Number.isFinite(ms) && ms >= cutoffMs;
+}
+
+export function reversalRowMatchesDowFilter(
+  row: CandleReversalStatsRow,
+  filter: ReversalDowFilter,
+): boolean {
+  if (filter === "all") return true;
+  const targetDow = Number(filter);
+  const ms = reversalAlertedAtMs(row);
+  return Number.isFinite(ms) && bkkDayOfWeekIndex(ms) === targetDow;
 }
 
 export function reversalRowMatchesLenRankFilter(
@@ -165,6 +198,7 @@ export function filterCandleReversalStatsRows(
     if (q.tf && (r.signalBarTf ?? "1d") !== q.tf) return false;
     if (q.side && (r.tradeSide ?? "short") !== q.side) return false;
     if (q.days && q.days !== "all" && !reversalRowMatchesDayFilter(r, q.days)) return false;
+    if (q.dow && q.dow !== "all" && !reversalRowMatchesDowFilter(r, q.dow)) return false;
     if (q.shape && q.shape !== "all" && !reversalRowMatchesShapeFilter(r, q.shape)) return false;
     if (q.lenRank && q.lenRank !== "all" && !reversalRowMatchesLenRankFilter(r, q.lenRank)) return false;
     if (q.vol && q.vol !== "all" && !reversalRowMatchesVolVsSmaFilter(r, q.vol)) return false;
@@ -179,6 +213,7 @@ export function filterCandleReversalStatsRows(
 
 const SHAPE_SET = new Set<string>(["all", "wick80", "body80", "wickOrBody80"]);
 const DAY_SET = new Set<string>(["all", "3", "7", "30", "90"]);
+const DOW_SET = new Set<string>(["all", "0", "1", "2", "3", "4", "5", "6"]);
 const LEN_SET = new Set<string>(["all", "rank3to15"]);
 const VOL_SET = new Set(STATS_VOL_VS_SMA_FILTER_OPTIONS.map((o) => o.value));
 const ATR_SET = new Set(STATS_ATR_PCT14D_FILTER_OPTIONS.map((o) => o.value));
@@ -230,6 +265,7 @@ export function reversalStatsFilterQueryFromSearchParams(
   if (tfRaw === "1d" || tfRaw === "1h") q.tf = tfRaw;
   if (sideRaw === "long" || sideRaw === "short") q.side = sideRaw;
   q.days = pickEnum(sp.get("days"), DAY_SET, "all");
+  q.dow = pickEnum(sp.get("dow"), DOW_SET, "all");
   q.shape = pickEnum(sp.get("shape"), SHAPE_SET, "all");
   q.lenRank = pickEnum(sp.get("lenRank"), LEN_SET, "all");
   q.vol = pickEnum(sp.get("vol"), VOL_SET, "all");
@@ -246,6 +282,7 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.tf) p.set("tf", q.tf);
   if (q.side) p.set("side", q.side);
   if (q.days && q.days !== "all") p.set("days", q.days);
+  if (q.dow && q.dow !== "all") p.set("dow", q.dow);
   if (q.shape && q.shape !== "all") p.set("shape", q.shape);
   if (q.lenRank && q.lenRank !== "all") p.set("lenRank", q.lenRank);
   if (q.vol && q.vol !== "all") p.set("vol", q.vol);
