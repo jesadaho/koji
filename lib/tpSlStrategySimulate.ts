@@ -137,7 +137,8 @@ function minFavorablePctForTpExit(
   plan: StatsTpSlPlan,
 ): number | null {
   if (reason === "tp2_full" || reason === "tp1_tp2") return plan.tp2PricePct;
-  if (reason === "tp1_only" || reason === "tp1_be" || reason === "tp1_24h" || reason === "tp1_48h") {
+  if (reason === "tp1_be") return slAtEntryArmPctFromPlan(plan);
+  if (reason === "tp1_only" || reason === "tp1_24h" || reason === "tp1_48h") {
     return plan.tp1PricePct;
   }
   return null;
@@ -265,10 +266,9 @@ export function simulateStatsTpSlProfit(input: {
     const fav = favorablePctInBar(input.side, entry, hi, lo);
     if (!Number.isFinite(fav)) continue;
 
-    // แท่งเดียว: ถ้า fav ถึง TP1/เกณฑ์ย้าย SL ก่อน — ไม่นับ liquidation ทั้งก้อน (SL@entry คุ้มครอง)
+    // แท่งเดียว: fav ถึง slArm → คุ้มครอง liquidation (SL@entry ตั้งได้ก่อน TP1 — ตรง live)
     const wouldTp1ThisBar = !tp1Done && fav + 1e-9 >= tp1;
-    const wouldArmBeThisBar =
-      (tp1Done || wouldTp1ThisBar || fav + 1e-9 >= tp1) && fav + 1e-9 >= slArm;
+    const wouldArmBeThisBar = fav + 1e-9 >= slArm;
     const beProtected = slAtEntryArmed || tp1Done || wouldArmBeThisBar || wouldTp1ThisBar;
     if (liqPct != null && !beProtected) {
       const adv = adversePctInBar(input.side, entry, hi, lo);
@@ -295,8 +295,8 @@ export function simulateStatsTpSlProfit(input: {
       }
     }
 
-    // อย่าย้าย SL@entry ก่อนแตะ TP1 — กัน ROI ค้างระหว่าง slArm กับ tp1 แล้วโดน BE
-    if ((tp1Done || fav >= tp1) && fav >= slArm) {
+    // ROI ≥ slArm → ตั้ง SL@entry ได้ทันที (ไม่รอ partial TP1 — ตรง live snowball/reversal tick)
+    if (fav >= slArm) {
       slAtEntryArmed = true;
     }
 
