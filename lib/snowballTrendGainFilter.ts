@@ -13,6 +13,7 @@ export type SnowballTrendGainFilter =
   | "ge30"
   | "ge50"
   | "lt20"
+  | "lt10"
   | "lt50"
   | "has"
   | "none";
@@ -24,6 +25,7 @@ const TREND_GAIN_GE: Record<Extract<SnowballTrendGainFilter, `ge${string}`>, num
 };
 
 const TREND_GAIN_LT: Record<Extract<SnowballTrendGainFilter, `lt${string}`>, number> = {
+  lt10: 10,
   lt20: 20,
   lt50: 50,
 };
@@ -41,6 +43,7 @@ export const SNOWBALL_TREND_GAIN_FILTER_OPTIONS: ReadonlyArray<{
   { value: "ge30", label: "≥ 30%" },
   { value: "ge50", label: "≥ 50%" },
   { value: "lt20", label: "< 20%" },
+  { value: "lt10", label: "< 10%" },
   { value: "lt50", label: "< 50%" },
   { value: "has", label: "มีข้อมูล" },
   { value: "none", label: "ไม่มีข้อมูล" },
