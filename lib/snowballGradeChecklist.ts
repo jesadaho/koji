@@ -15,6 +15,10 @@ import {
   snowballIsTrendGradeD,
 } from "@/src/snowballTrendGrade";
 import {
+  pumpCycleTrendGainPctLabel,
+  pumpCycleTrendVelocityLabel,
+} from "@/lib/pumpCycleSwingLow";
+import {
   snowballLongStructureTierShortLabel,
   type SnowballLongStructureTier,
 } from "@/src/snowballLongBreakoutGrade";
@@ -396,6 +400,8 @@ function snowballTrendGradeChecklistItems(
     | "greenDaysBeforeSignal"
     | "fundingRate"
     | "barRangePctPrev"
+    | "trendGainPct"
+    | "ageOfTrendHours"
     | "qualityTier"
     | "alertQualityTier"
     | "signalVolVsSma"
@@ -424,6 +430,8 @@ function snowballTrendGradeChecklistItems(
     greenDaysBeforeSignal: green,
     fundingRate: row.fundingRate,
     barRangePctPrev: row.barRangePctPrev,
+    trendGainPct: row.trendGainPct,
+    ageOfTrendHours: row.ageOfTrendHours,
     signalVolVsSma: row.signalVolVsSma,
     psar4hTrend: row.psar4hTrend ?? null,
     signalBarTf: row.signalBarTf ?? null,
@@ -503,7 +511,7 @@ function snowballTrendGradeChecklistItems(
       id: "confirm",
       title: "Grade D",
       status: grade === "d" ? "pass" : grade ? "fail" : "unknown",
-      detail: SNOWBALL_TREND_GRADE_D_CRITERIA,
+      detail: `Trend ${pumpCycleTrendGainPctLabel(row.trendGainPct)} · Vel ${pumpCycleTrendVelocityLabel(row.trendGainPct, row.ageOfTrendHours)} · ต้อง ${SNOWBALL_TREND_GRADE_D_CRITERIA}`,
     },
     {
       id: "confirm",
@@ -965,7 +973,12 @@ export function snowballStatsStagedPopupText(row: StagedPopupRow): string | null
 export function snowballStatsGradeChecklistFooter(
   row: Pick<
     SnowballStatsRow,
-    "qualityTier" | "alertQualityTier" | "qualityTier4hAdjusted" | "ema1hSlopePct7d"
+    | "qualityTier"
+    | "alertQualityTier"
+    | "qualityTier4hAdjusted"
+    | "ema1hSlopePct7d"
+    | "trendGainPct"
+    | "ageOfTrendHours"
   >,
 ): string[] {
   const grade = effectiveQualityTier(row);
@@ -975,7 +988,13 @@ export function snowballStatsGradeChecklistFooter(
       `เกรดสุทธิที่แจ้ง: ${snowballTrendGradeDisplayLabel(grade, "long")} [${snowballTrendGradeShortLabel(grade)}]`,
     );
     if (snowballIsTrendGradeF(grade)) {
-      lines.push(`เหตุผล F: ${SNOWBALL_TREND_GRADE_F_CRITERIA} · auto-open: ไม่สั่ง (Grade F)`);
+      const trendPart =
+        row.trendGainPct != null || row.ageOfTrendHours != null
+          ? ` · Trend ${pumpCycleTrendGainPctLabel(row.trendGainPct)} · Vel ${pumpCycleTrendVelocityLabel(row.trendGainPct, row.ageOfTrendHours)}`
+          : "";
+      lines.push(
+        `เหตุผล F: ไม่ผ่าน A / B / D${trendPart} · ${SNOWBALL_TREND_GRADE_F_CRITERIA} · auto-open: ไม่สั่ง (Grade F)`,
+      );
     } else if (snowballIsTrendGradeD(grade)) {
       lines.push(`เหตุผล D: ${SNOWBALL_TREND_GRADE_D_CRITERIA} · action plan: Light (0.5×)`);
     }

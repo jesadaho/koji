@@ -20,7 +20,9 @@ import { fetchSnowballAlertMarketContextAt } from "./snowballMarketContext";
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
 import { classifySnowballGradeWithFallback } from "./snowballCompositeGrade";
 import {
+  classifySnowballTrendGrade,
   snowballTrendGradeActionPlan,
+  snowballTrendGradeToDisplay,
 } from "./snowballTrendGrade";
 import { snowballStatsSignalDedupeKey, type AppendSnowballStatsInput } from "./snowballStatsStore";
 import { pumpCycleSwingLowFieldsFromResult } from "@/lib/pumpCycleSwingLow";
@@ -136,18 +138,37 @@ async function processHit(
       ? countGreenDaysBeforeSignalBar(pack1d, hit.signalBarOpenSec, snowTf)
       : await fetchGreenDaysBeforeSignalBar(symbol, hit.signalBarOpenSec, snowTf);
 
+  const pumpCycleFields = pumpCycleSwingLowFieldsFromResult(
+    computePumpCycleSwingLowFromPack(
+      pack1h,
+      snowballStatsAnchorCloseSec({
+        signalBarOpenSec: hit.signalBarOpenSec,
+        signalBarTf: snowTf,
+      }),
+      hit.entryPrice,
+    ),
+  );
+
+  const trendGradeBase = {
+    ema1hSlopePct7d: mktCtx.ema1hSlopePct7d,
+    ema4hSlopePct7d: mktCtx.ema4hSlopePct7d,
+    ema1dSlopePct7d: mktCtx.ema1dSlopePct7d,
+    btcEma4hSlopePct7d: mktCtx.btcEma4hSlopePct7d,
+    btcEma1dSlopePct7d: mktCtx.btcEma1dSlopePct7d,
+    greenDaysBeforeSignal: greenDays,
+    fundingRate: mktCtx.fundingRate,
+    barRangePctPrev: hit.statsInput.barRangePctPrev ?? null,
+    trendGainPct: pumpCycleFields.trendGainPct,
+    ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
+    signalVolVsSma: hit.statsInput.signalVolVsSma,
+    psar4hTrend: mktCtx.psar4hTrend,
+    signalBarTf: snowTf,
+  };
+
   if (hit.alertSide === "long") {
     const composite = classifySnowballGradeWithFallback({
+      ...trendGradeBase,
       alertSide: "long",
-      ema1hSlopePct7d: mktCtx.ema1hSlopePct7d,
-      ema4hSlopePct7d: mktCtx.ema4hSlopePct7d,
-      ema1dSlopePct7d: mktCtx.ema1dSlopePct7d,
-      btcEma4hSlopePct7d: mktCtx.btcEma4hSlopePct7d,
-      btcEma1dSlopePct7d: mktCtx.btcEma1dSlopePct7d,
-      greenDaysBeforeSignal: greenDays,
-      signalBarTf: snowTf,
-      signalVolVsSma: hit.statsInput.signalVolVsSma,
-      psar4hTrend: mktCtx.psar4hTrend,
       swing200Ok: hit.statsInput.swing200Ok,
       structureTier: hit.statsInput.structureTier,
       signalMaxDdPct: hit.statsInput.signalMaxDdPct,
@@ -160,6 +181,14 @@ async function processHit(
     hit.statsInput.momentumFailGradeF = grade === "f";
     if (composite.dangerous) hit.statsInput.gradeDangerous = true;
     else delete hit.statsInput.gradeDangerous;
+  } else {
+    const grade = classifySnowballTrendGrade({ ...trendGradeBase, alertSide: "bear" });
+    hit.statsInput.qualityTier = grade;
+    hit.statsInput.alertQualityTier = grade;
+    hit.statsInput.displayGrade = snowballTrendGradeToDisplay(grade);
+    hit.statsInput.actionPlan = snowballTrendGradeActionPlan(grade);
+    hit.statsInput.momentumFailGradeF = grade === "f";
+    delete hit.statsInput.gradeDangerous;
   }
 
   const appendInput: AppendSnowballStatsInput = {
@@ -169,16 +198,7 @@ async function processHit(
     greenDaysBeforeSignal: greenDays,
     ...hit.statsInput,
     ...mktCtxToStatsFields(mktCtx),
-    ...pumpCycleSwingLowFieldsFromResult(
-      computePumpCycleSwingLowFromPack(
-        pack1h,
-        snowballStatsAnchorCloseSec({
-          signalBarOpenSec: hit.signalBarOpenSec,
-          signalBarTf: snowTf,
-        }),
-        hit.entryPrice,
-      ),
-    ),
+    ...pumpCycleFields,
   };
 
   const row = buildSnowballStatsRow(appendInput);

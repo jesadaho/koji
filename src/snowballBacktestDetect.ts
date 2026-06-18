@@ -40,7 +40,11 @@ import { computeSnowballSignalLenPercentile } from "./statsLenPercentile";
 import { resolveSnowballStatsTradeSide } from "./snowballStatsTradeSide";
 import { snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { buildSnowballLongConfirmGateStepsForStats } from "./snowballStatsGateSteps";
-import { snowballStatsConfirmVolFieldsFrom1hEval } from "@/lib/snowballStatsClient";
+import {
+  computePumpCycleSwingLowFromPack,
+  pumpCycleSwingLowFieldsFromResult,
+} from "@/lib/pumpCycleSwingLow";
+import { snowballStatsAnchorCloseSec, snowballStatsConfirmVolFieldsFrom1hEval } from "@/lib/snowballStatsClient";
 import {
   evaluateSnowballWaveGate,
   snowballBinanceTf,
@@ -73,6 +77,25 @@ export type SnowballDetectTrendGradeInput = Required<
   >
 > &
   Pick<ClassifySnowballTrendGradeInput, "fundingRate" | "trendGainPct" | "ageOfTrendHours">;
+
+function detectPumpCycleFieldsForGrade(
+  pack1h: BinanceKlinePack | null,
+  signalBarOpenSec: number,
+  snowTf: SnowballBinanceTf,
+  entryPrice: number,
+): Pick<ClassifySnowballTrendGradeInput, "trendGainPct" | "ageOfTrendHours"> {
+  const fields = pumpCycleSwingLowFieldsFromResult(
+    computePumpCycleSwingLowFromPack(
+      pack1h,
+      snowballStatsAnchorCloseSec({ signalBarOpenSec, signalBarTf: snowTf }),
+      entryPrice,
+    ),
+  );
+  return {
+    trendGainPct: fields.trendGainPct,
+    ageOfTrendHours: fields.ageOfTrendHours,
+  };
+}
 
 function detectTrendGradeClassifyInput(
   trendGradeInput: SnowballDetectTrendGradeInput | undefined,
@@ -485,6 +508,13 @@ function detectSnowballLongClosed(
   const trendMomentum = calculateTrendMomentumMetrics(pack1h, { pack15m });
   const sustainedBuyingPressure = isSustainedBuyingPressure(trendMomentum);
   const volSnapForGrade = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
+  const entryClosePxForGrade = twoBarInline ? c15[iConf]! : clE!;
+  const pumpCycleForGrade = detectPumpCycleFieldsForGrade(
+    pack1h,
+    signalBarOpenSec,
+    snowTf,
+    entryClosePxForGrade,
+  );
   const gradeResolution = resolveSnowballLongFinalGrade({
     snowTf,
     swing48,
@@ -503,19 +533,22 @@ function detectSnowballLongClosed(
     volumeStrictOk: volStrictOk,
     volumeNearMissOnly: volNearMissOnly,
     gradeDPlusNearMissVolumeEnabled: snowballGradeBNearMissVolumeEnabled(),
-    trendGradeInput: detectTrendGradeClassifyInput(trendGradeInput, {
-      alertSide: "long",
-      signalBarTf: snowTf,
-      signalVolVsSma:
-        typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
-      barRangePctPrev: volSnapForGrade.barRangePctPrev,
-    }),
+    trendGradeInput: detectTrendGradeClassifyInput(
+      { ...trendGradeInput, ...pumpCycleForGrade },
+      {
+        alertSide: "long",
+        signalBarTf: snowTf,
+        signalVolVsSma:
+          typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
+        barRangePctPrev: volSnapForGrade.barRangePctPrev,
+      },
+    ),
   });
 
   const longBreakoutGrade = gradeResolution.grade;
   const longDisplayGrade = gradeResolution.displayGrade;
   const longGradeDangerous = gradeResolution.gradeDangerous;
-  const entryClosePx = twoBarInline ? c15[iConf]! : clE!;
+  const entryClosePx = entryClosePxForGrade;
   const trig = swing48 && vahOk ? "both" : swing48 ? "swing_hh" : "vah_break";
   const longSignalLow = l15[iSig];
   const longSignalHigh = h15[iSig];
@@ -695,17 +728,20 @@ function detectSnowballBearClosed(
   }
 
   const volSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
-  const bearTrendGrade = classifySnowballTrendGrade(
-    detectTrendGradeClassifyInput(trendGradeInput, {
-      alertSide: "bear",
-      signalBarTf: snowTf,
-      signalVolVsSma:
-        typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
-      barRangePctPrev: volSnap.barRangePctPrev,
-    }),
-  );
-
   const entryPx = twoBarInline ? c15[iConf]! : clE!;
+  const pumpCycleForGrade = detectPumpCycleFieldsForGrade(pack1h, signalBarOpenSec, snowTf, entryPx);
+  const bearTrendGrade = classifySnowballTrendGrade(
+    detectTrendGradeClassifyInput(
+      { ...trendGradeInput, ...pumpCycleForGrade },
+      {
+        alertSide: "bear",
+        signalBarTf: snowTf,
+        signalVolVsSma:
+          typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
+        barRangePctPrev: volSnap.barRangePctPrev,
+      },
+    ),
+  );
   const bearSignalHigh = h15[iSig];
   const bearSignalLow = l15[iSig];
   const lenSnap = computeSnowballSignalLenPercentile(pack, iSig);
