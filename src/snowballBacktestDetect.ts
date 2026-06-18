@@ -96,7 +96,7 @@ function detectPumpCycleFieldsForGrade(
 }
 
 function detectTrendGradeClassifyInput(
-  trendGradeInput: SnowballDetectTrendGradeInput | undefined,
+  trendGradeInput: Partial<SnowballDetectTrendGradeInput> | undefined,
   extra: Pick<ClassifySnowballTrendGradeInput, "alertSide" | "signalBarTf"> & {
     signalVolVsSma?: number | null;
     barRangePctPrev?: number | null;
