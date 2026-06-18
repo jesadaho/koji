@@ -69,6 +69,7 @@ export function reversalAutotradePassesEntryGate(input: {
   alertTradeSide: CandleReversalTradeSide;
   trendGainPct?: number | null;
   ageOfTrendHours?: number | null;
+  signalVolVsSma?: number | null;
   /** open time (sec) ของแท่งสัญญาณ — ใช้หาวัน BKK สำหรับ Quality Signal */
   signalBarOpenSec?: number;
   btcEma4hSlopePct7d?: number | null;
@@ -80,6 +81,7 @@ export function reversalAutotradePassesEntryGate(input: {
     tradeSide: input.alertTradeSide,
     trendGainPct: input.trendGainPct,
     ageOfTrendHours: input.ageOfTrendHours,
+    signalVolVsSma: input.signalVolVsSma,
     btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
     signalBarOpenSec: input.signalBarOpenSec,
   });
@@ -222,6 +224,8 @@ export type ReversalAutoTradeInput = {
   trendGainPct?: number | null;
   /** Pump-cycle Age of Trend (hours) — Short Quality Signal */
   ageOfTrendHours?: number | null;
+  /** Vol แท่งสัญญาณ ÷ SMA(volume) — Long 1H Quality Signal */
+  signalVolVsSma?: number | null;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
   signalClosePrice?: number;
 };
@@ -636,6 +640,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         alertTradeSide,
         trendGainPct: input.trendGainPct,
         ageOfTrendHours: input.ageOfTrendHours,
+        signalVolVsSma: input.signalVolVsSma,
         signalBarOpenSec: input.signalBarOpenSec,
         btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
         allowQualitySignal: allowQuality,

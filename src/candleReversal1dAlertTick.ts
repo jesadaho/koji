@@ -717,6 +717,7 @@ async function notifyResults(
         atrPct14d,
         trendGainPct: pumpCycleFields.trendGainPct,
         ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
+        signalVolVsSma: row.evals.signalVolVsSma,
         alertedAtMs: anchorCloseSec * 1000,
         assetMeta,
         mexcContractSymbol: mexcContract,
@@ -789,6 +790,7 @@ async function notifyResults(
             atrPct14d,
             trendGainPct: pumpCycleFields.trendGainPct,
             ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
+            signalVolVsSma: row.evals.signalVolVsSma,
             signalClosePrice: sig.c,
           });
         } catch (e) {

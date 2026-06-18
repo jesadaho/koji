@@ -79,10 +79,7 @@ import {
   snowballTwoBarInlinePullbackMaxFrac,
   type SnowballTwoBarInlineEval,
 } from "./snowballTwoBarInline";
-import {
-  snowballMatchesQualityShortSignal,
-  snowballMatchesQualitySignal,
-} from "@/lib/snowballMatrixFilters";
+import { snowballMatchesQualitySignal } from "@/lib/snowballMatrixFilters";
 import { withQualitySignalAlertHeader } from "@/lib/qualitySignalAlertHeader";
 import { fetchSnowballAlertMarketContext, resetSnowballBtcPsar4hCache } from "./snowballMarketContext";
 import { computeSnowballSignalLenPercentile } from "./statsLenPercentile";
@@ -3589,11 +3586,7 @@ export async function runPublicIndicatorFeedInternal(
               typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 && Number.isFinite(vE!)
                 ? vE! / vsE
                 : null;
-            const longGradeFFade = snowballMatchesQualityShortSignal({
-              ema4hSlopePct7d: longMktCtxForAlert?.ema4hSlopePct7d ?? null,
-              fundingRate: longMktCtxForAlert?.fundingRate ?? null,
-              barRangePctPrev: longVolSnapForGrade.barRangePctPrev,
-            });
+            const longGradeFFade = snowballIsGradeF(longBreakoutGrade);
             const runLongAutoOpenNow =
               !intrabar &&
               (!skipSnowballTgForPending || longQualitySignal || longGradeFFade);

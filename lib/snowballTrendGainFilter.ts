@@ -9,6 +9,7 @@ import {
 
 export type SnowballTrendGainFilter =
   | "all"
+  | "gain5_20"
   | "gain20_50"
   | "gt50"
   | "ge20"
@@ -37,6 +38,7 @@ export const SNOWBALL_TREND_GAIN_FILTER_OPTIONS: ReadonlyArray<{
   label: string;
 }> = [
   { value: "all", label: "ทั้งหมด" },
+  { value: "gain5_20", label: "5–20%" },
   {
     value: "gain20_50",
     label: `${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT}–${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT}%`,
@@ -63,6 +65,7 @@ export function snowballTrendGainFilterTitle(filter: SnowballTrendGainFilter): s
   if (filter === "all") return "ไม่กรอง Trend Gain";
   if (filter === "has") return "มีค่า Trend Gain %";
   if (filter === "none") return "ไม่มีค่า Trend Gain %";
+  if (filter === "gain5_20") return "Trend Gain 5–20% (Reversal Quality Long 1H)";
   if (filter === "gain20_50") {
     return `Trend Gain ${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT}–${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT}% (เกรด D)`;
   }
@@ -82,6 +85,7 @@ export function snowballStatsRowMatchesTrendGainFilter(
   if (filter === "none") return !has;
   if (filter === "has") return has;
   if (!has) return false;
+  if (filter === "gain5_20") return raw >= 5 && raw <= 20;
   if (filter === "gain20_50") {
     return (
       raw >= SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT &&

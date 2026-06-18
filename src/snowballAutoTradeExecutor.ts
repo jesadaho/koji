@@ -44,7 +44,6 @@ import {
   SNOWBALL_GRADE_F_FADE_SHORT_CRITERIA,
   SNOWBALL_SHORT_SIGNAL_CRITERIA,
   SNOWBALL_QUALITY_SIGNAL_CRITERIA,
-  snowballMatchesQualityShortSignal,
   snowballMatchesQualitySignal,
 } from "@/lib/snowballMatrixFilters";
 import { resolveSnowballAutoTradeReferenceEntryPrice } from "./snowballReferenceEma20_1h";
@@ -109,18 +108,6 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
   await notifyTradingViewWebhookTelegram(userId, lines.filter(Boolean).join("\n"));
 }
 
-function snowballAutoOpenMatchesQualityShortSignal(input: {
-  ema4hSlopePct7d?: number | null;
-  fundingRate?: number | null;
-  barRangePctPrev?: number | null;
-}): boolean {
-  return snowballMatchesQualityShortSignal({
-    ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
-    fundingRate: input.fundingRate ?? null,
-    barRangePctPrev: input.barRangePctPrev ?? null,
-  });
-}
-
 function snowballGradeFFadeShortEnabled(row: TradingViewMexcUserSettings): boolean {
   return (
     row.snowballAutoTradeGradeFFadeShortEnabled === true ||
@@ -161,13 +148,13 @@ function resolveSnowballAutoOpenSide(
     fundingRate: input.fundingRate ?? null,
   });
   const qsGradeAllowed = qsOn && snowballQualitySignalLongGradeAllowed(row, gradeKey);
-  const gradeFMatch = snowballAutoOpenMatchesQualityShortSignal(input);
+  const gradeFSignal = gradeKey === "F";
   const longGateOn = qsOn || gradeFFadeOn;
 
   if (isLongAlert && qsGradeAllowed && qsMatch) {
     return "long";
   }
-  if (isLongAlert && gradeFFadeOn && gradeFMatch) {
+  if (isLongAlert && gradeFFadeOn && gradeFSignal) {
     return "short";
   }
   if (row.snowballAutoTradeSundayAllShortEnabled === true && bkkIsSundayNow()) {
@@ -176,13 +163,13 @@ function resolveSnowballAutoOpenSide(
   if (isBearAlert && shortSignalOn) {
     return "short";
   }
-  if (isLongAlert && longGateOn && !qsMatch && !(gradeFFadeOn && gradeFMatch)) {
+  if (isLongAlert && longGateOn && !qsMatch && !(gradeFFadeOn && gradeFSignal)) {
     return null;
   }
   if (isBearAlert && !shortSignalOn && longGateOn) {
     return null;
   }
-  if (isLongAlert && gradeFMatch) {
+  if (isLongAlert && gradeFSignal) {
     return null;
   }
   return defaultSide;
@@ -324,13 +311,6 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
     fundingRate: input.fundingRate ?? null,
   });
-  const gradeFFadeMatch =
-    input.alertSide !== "bear" &&
-    snowballAutoOpenMatchesQualityShortSignal({
-      ema4hSlopePct7d: input.ema4hSlopePct7d ?? null,
-      fundingRate: input.fundingRate ?? null,
-      barRangePctPrev: input.barRangePctPrev ?? null,
-    });
   const isBearAlert = input.alertSide === "bear";
 
   const sym = input.contractSymbol.trim();
@@ -361,6 +341,8 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     momentumDowngrade: input.momentumDowngrade,
   };
   const gradeKey = snowballAutoTradeGradeKeyFromAlert(gradeInput);
+  const gradeIsF = gradeKey === "F";
+  const gradeFFadeMatch = input.alertSide !== "bear" && gradeIsF;
   const qualityShortInput = {
     greenDaysBeforeSignal: input.greenDaysBeforeSignal,
     ema1dSlopePct7d: input.ema1dSlopePct7d,
@@ -578,8 +560,11 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     const userGradeFFadeMatch =
       snowballGradeFFadeShortEnabled(row) && gradeFFadeMatch;
     const userForceMatrixOpenLong = userQualitySignalLong || userGradeFFadeMatch;
+    const effectiveActionPlan =
+      input.actionPlan ??
+      (gradeIsF ? ("monitor" as SnowballTrendActionPlan) : null);
     if (
-      input.actionPlan === "monitor" &&
+      effectiveActionPlan === "monitor" &&
       !userForceMatrixOpenLong &&
       !(isBearAlert && shortSignalOn)
     ) {

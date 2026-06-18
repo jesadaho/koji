@@ -26,14 +26,14 @@ export const REVERSAL_QUALITY_SIGNAL_SHORT_BKK_DOW_INDICES = [5, 6] as const;
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
-  "Trend Gain < 20% · Velocity < 2%/h · BTC EMA4H slope < 0%";
+  "Trend Gain 5–20% · Vol×SMA 2–5×";
 
-/** Trend Gain % — exclusive */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_EXCLUSIVE = 20;
-/** Trend Velocity (%/h) — exclusive */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_VELOCITY_MAX_EXCLUSIVE = 2;
-/** BTC EMA(12) 4h slope 7d % — exclusive */
-export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MAX_EXCLUSIVE = 0;
+/** Trend Gain % — inclusive */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MIN_PCT = 5;
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT = 20;
+/** Vol×SMA — inclusive */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN = 2;
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX = 5;
 
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
@@ -63,9 +63,24 @@ export function reversalMatrixFilterTitle(
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
 
-function ema4hSlopeBelow(maxExclusive: number, ema4hSlopePct7d?: number | null): boolean {
-  const pct = ema4hSlopePct7d;
-  return pct != null && Number.isFinite(pct) && pct < maxExclusive;
+function trendGainInLong1hQualityRange(trendGainPct?: number | null): boolean {
+  const gain = trendGainPct;
+  return (
+    gain != null &&
+    Number.isFinite(gain) &&
+    gain >= REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MIN_PCT &&
+    gain <= REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT
+  );
+}
+
+function volVsSmaInLong1hQualityRange(signalVolVsSma?: number | null): boolean {
+  const vol = signalVolVsSma;
+  return (
+    vol != null &&
+    Number.isFinite(vol) &&
+    vol >= REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN &&
+    vol <= REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX
+  );
 }
 
 /** BKK = UTC+7 — 0 = Sunday … 6 = Saturday */
@@ -104,19 +119,12 @@ function trendVelocityAboveMin(
 
 /** ✨ Quality Signal — สถิติ Reversal · Long 1H */
 export function reversalMatchesQualitySignalLong1h(input: {
-  btcEma4hSlopePct7d?: number | null;
   trendGainPct?: number | null;
-  ageOfTrendHours?: number | null;
+  signalVolVsSma?: number | null;
 }): boolean {
-  const gain = input.trendGainPct;
-  const vel = computePumpCycleTrendVelocity(input.trendGainPct, input.ageOfTrendHours);
   return (
-    gain != null &&
-    Number.isFinite(gain) &&
-    gain < REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_EXCLUSIVE &&
-    vel != null &&
-    vel < REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_VELOCITY_MAX_EXCLUSIVE &&
-    ema4hSlopeBelow(REVERSAL_QUALITY_SIGNAL_LONG_1H_BTC_EMA4H_MAX_EXCLUSIVE, input.btcEma4hSlopePct7d)
+    trendGainInLong1hQualityRange(input.trendGainPct) &&
+    volVsSmaInLong1hQualityRange(input.signalVolVsSma)
   );
 }
 
@@ -146,15 +154,15 @@ export function reversalMatchesQualitySignalForAlert(input: {
   tradeSide?: CandleReversalTradeSide | null;
   trendGainPct?: number | null;
   ageOfTrendHours?: number | null;
+  signalVolVsSma?: number | null;
   btcEma4hSlopePct7d?: number | null;
   alertedAtMs?: number | null;
   signalBarOpenSec?: number | null;
 }): boolean {
   if (reversalUsesLong1hQualitySignal(input.signalBarTf, input.tradeSide)) {
     return reversalMatchesQualitySignalLong1h({
-      btcEma4hSlopePct7d: input.btcEma4hSlopePct7d,
       trendGainPct: input.trendGainPct,
-      ageOfTrendHours: input.ageOfTrendHours,
+      signalVolVsSma: input.signalVolVsSma,
     });
   }
   return reversalMatchesQualitySignal({
@@ -177,6 +185,7 @@ export function reversalRowMatchesQualitySignalMatrix(row: CandleReversalStatsRo
     tradeSide: row.tradeSide,
     trendGainPct: row.trendGainPct,
     ageOfTrendHours: row.ageOfTrendHours,
+    signalVolVsSma: row.signalVolVsSma,
     btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
     alertedAtMs: Number.isFinite(alertedAtMs) ? alertedAtMs : undefined,
   });

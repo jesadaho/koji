@@ -12,6 +12,7 @@ import { BKK_DAY_TZ_OFFSET_SEC, fetchGreenDaysBeforeSignalBar } from "./greenDay
 import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
 import { runSnowballAutoTradeAfterSnowballAlert } from "./snowballAutoTradeExecutor";
 import { snowballEma20_1hReferencePrice } from "./snowballReferenceEma20_1h";
+import { snowballTrendGradeActionPlan } from "./snowballTrendGrade";
 import {
   isPublicSnowballTripleCheckEnabled,
   snowballConfirmBarEnabled,
@@ -482,6 +483,7 @@ export async function runSnowballConfirmFollowUpTick(nowMs: number): Promise<num
               qualityTier: item.qualityTier,
               momentumFailGradeF: item.qualityTier === "f",
               momentumDowngrade: false,
+              actionPlan: item.qualityTier ? snowballTrendGradeActionPlan(item.qualityTier) : "monitor",
               referenceEntryPrice: cl,
               referenceEntryPriceEma20_1h: snowballEma20_1hReferencePrice(
                 pack1hTrend,

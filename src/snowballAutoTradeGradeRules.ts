@@ -37,3 +37,7 @@ export function snowballAutoTradeGradeKeyFromAlert(
   }
   return null;
 }
+
+export function snowballAlertIsGradeF(input: SnowballAutoTradeAlertGradeInput): boolean {
+  return snowballAutoTradeGradeKeyFromAlert(input) === "F";
+}

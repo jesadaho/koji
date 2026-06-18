@@ -19,6 +19,8 @@ export type CandleReversalAlertQualityContext = {
   atrPct14d?: number | null;
   trendGainPct?: number | null;
   ageOfTrendHours?: number | null;
+  /** Vol แท่งสัญญาณ ÷ SMA(volume) — Long 1H Quality Signal */
+  signalVolVsSma?: number | null;
   /** เวลาแจ้ง (ms) — ใช้หาวัน BKK สำหรับ Quality Signal */
   alertedAtMs?: number | null;
   /** จาก Binance exchangeInfo */
@@ -1062,6 +1064,7 @@ export function buildCandleReversalAlertMessage(
       tradeSide: sig.tradeSide,
       trendGainPct: qualityCtx.trendGainPct,
       ageOfTrendHours: qualityCtx.ageOfTrendHours,
+      signalVolVsSma: qualityCtx.signalVolVsSma,
       btcEma4hSlopePct7d: qualityCtx.btcEma4hSlopePct7d,
       alertedAtMs: qualityCtx.alertedAtMs,
       signalBarOpenSec: sig.barOpenSec,
