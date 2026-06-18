@@ -135,6 +135,20 @@ import {
   type ReversalQualitySignalProfile,
 } from "@/lib/reversalMatrixFilters";
 import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
+import {
+  SNOWBALL_TREND_GAIN_FILTER_OPTIONS,
+  snowballTrendGainFilterLabel,
+  snowballTrendGainFilterTitle,
+  snowballStatsRowMatchesTrendGainFilter,
+  type SnowballTrendGainFilter,
+} from "@/lib/snowballTrendGainFilter";
+import {
+  SNOWBALL_TREND_VELOCITY_FILTER_OPTIONS,
+  snowballTrendVelocityFilterLabel,
+  snowballTrendVelocityFilterTitle,
+  snowballStatsRowMatchesTrendVelocityFilter,
+  type SnowballTrendVelocityFilter,
+} from "@/lib/snowballTrendVelocityFilter";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -353,6 +367,9 @@ function ReversalStatsSection({
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
   const [btcEma4hFilter, setBtcEma4hFilter] = useState<BtcEma4hFilter>("all");
   const [atrFilter, setAtrFilter] = useState<StatsAtrPct14dFilter>("all");
+  const [trendGainFilter, setTrendGainFilter] = useState<SnowballTrendGainFilter>("all");
+  const [trendVelocityFilter, setTrendVelocityFilter] = useState<SnowballTrendVelocityFilter>("all");
+  const showPumpCycleFilters = qualitySignalProfile === "long1h";
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -375,9 +392,11 @@ function ReversalStatsSection({
           reversalRowMatchesEma1dFilter(r, ema1dFilter) &&
           reversalRowMatchesBtcEma4hFilter(r, btcEma4hFilter) &&
           reversalRowMatchesAtrPct14dFilter(r, atrFilter) &&
-          reversalStatsRowMatchesMatrixFilter(r, matrixFilter),
+          reversalStatsRowMatchesMatrixFilter(r, matrixFilter) &&
+          (!showPumpCycleFilters || snowballStatsRowMatchesTrendGainFilter(r, trendGainFilter)) &&
+          (!showPumpCycleFilters || snowballStatsRowMatchesTrendVelocityFilter(r, trendVelocityFilter)),
       ),
-    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -781,7 +800,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -1070,6 +1089,50 @@ function ReversalStatsSection({
             ))}
           </select>
         </label>
+        {showPumpCycleFilters ? (
+          <>
+            <label
+              className="sub"
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+            >
+              Trend Gain
+              <select
+                value={trendGainFilter}
+                onChange={(e) => setTrendGainFilter(e.currentTarget.value as SnowballTrendGainFilter)}
+                className="tmaInput"
+                style={{ width: "auto", minWidth: "7rem" }}
+                title={snowballTrendGainFilterTitle(trendGainFilter)}
+              >
+                {SNOWBALL_TREND_GAIN_FILTER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              className="sub"
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+            >
+              Velocity
+              <select
+                value={trendVelocityFilter}
+                onChange={(e) =>
+                  setTrendVelocityFilter(e.currentTarget.value as SnowballTrendVelocityFilter)
+                }
+                className="tmaInput"
+                style={{ width: "auto", minWidth: "7.5rem" }}
+                title={snowballTrendVelocityFilterTitle(trendVelocityFilter)}
+              >
+                {SNOWBALL_TREND_VELOCITY_FILTER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
+        ) : null}
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
           Matrix
           <select

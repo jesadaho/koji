@@ -2,6 +2,7 @@
 
 export type StatsVolVsSmaFilter =
   | "all"
+  | "vol2_3"
   | "ge1"
   | "ge15"
   | "ge2"
@@ -57,6 +58,7 @@ export const STATS_VOL_VS_SMA_FILTER_OPTIONS: ReadonlyArray<{
   { value: "ge1", label: "≥ 1.0×" },
   { value: "ge15", label: "≥ 1.5×" },
   { value: "ge2", label: "≥ 2.0×" },
+  { value: "vol2_3", label: "2–3×" },
   { value: "ge25", label: "≥ 2.5×" },
   { value: "ge3", label: "≥ 3×" },
   { value: "ge4", label: "≥ 4×" },
@@ -86,6 +88,7 @@ export function statsRowMatchesVolVsSmaFilter(
 ): boolean {
   if (filter === "all") return true;
   if (ratio == null || !Number.isFinite(ratio)) return false;
+  if (filter === "vol2_3") return ratio >= 2 && ratio <= 3;
   if (filter in VOL_VS_SMA_GE) {
     return ratio >= VOL_VS_SMA_GE[filter as keyof typeof VOL_VS_SMA_GE];
   }
