@@ -860,9 +860,12 @@ export async function liffGetSnowballStats(telegramUserId?: number): Promise<Sno
   const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs);
   if (telegramUserId != null) {
     const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "snowball");
-    const strategyDirty = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan, {
-      maxRows: 80,
-    });
+    let strategyDirty = 0;
+    for (let pass = 0; pass < 20; pass++) {
+      const n = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
+      strategyDirty += n;
+      if (n === 0) break;
+    }
     if (strategyDirty > 0) await saveSnowballStatsState(st);
   }
   return buildSnowballStatsPayload(rows, telegramUserId);
@@ -893,9 +896,13 @@ export async function liffBackfillSnowballStats(
     let strategyProfitEnriched = 0;
     if (!backfill.hasMore) {
       const st = await loadSnowballStatsState();
-      const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs).slice(0, 60);
+      const rows = [...st.rows].sort((a, b) => b.alertedAtMs - a.alertedAtMs);
       const plan = await resolveViewerStatsTpSlPlan(telegramUserId, "snowball");
-      strategyProfitEnriched = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
+      for (let pass = 0; pass < 20; pass++) {
+        const n = await enrichSnowballStatsWithViewerStrategyProfit(rows, plan);
+        strategyProfitEnriched += n;
+        if (n === 0) break;
+      }
       if (strategyProfitEnriched > 0) {
         await saveSnowballStatsState(st);
       }
