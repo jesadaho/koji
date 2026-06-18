@@ -717,6 +717,7 @@ async function notifyResults(
         atrPct14d,
         trendGainPct: pumpCycleFields.trendGainPct,
         ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
+        alertedAtMs: anchorCloseSec * 1000,
         assetMeta,
         mexcContractSymbol: mexcContract,
       });

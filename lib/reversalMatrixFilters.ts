@@ -15,10 +15,14 @@ export type ReversalMatrixFilter = "all" | "qualitySignal";
 export type ReversalQualitySignalProfile = "short" | "long1h";
 
 /** ข้อความเกณฑ์ Quality Signal (stats + auto-open) — Reversal Short */
-export const REVERSAL_QUALITY_SIGNAL_CRITERIA = "Velocity > 1.4%/h";
+export const REVERSAL_QUALITY_SIGNAL_CRITERIA =
+  "Velocity > 1.4%/h · หรือ ศ/ส (BKK)";
 
 /** Trend Velocity (%/h) — exclusive */
 export const REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE = 1.4;
+
+/** วัน BKK ที่ผ่าน Quality Signal Short โดยไม่ต้องดู Velocity — 5=ศุกร์ · 6=เสาร์ */
+export const REVERSAL_QUALITY_SIGNAL_SHORT_BKK_DOW_INDICES = [5, 6] as const;
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
@@ -64,6 +68,32 @@ function ema4hSlopeBelow(maxExclusive: number, ema4hSlopePct7d?: number | null):
   return pct != null && Number.isFinite(pct) && pct < maxExclusive;
 }
 
+/** BKK = UTC+7 — 0 = Sunday … 6 = Saturday */
+function bkkDayOfWeekIndex(ms: number): number {
+  if (!Number.isFinite(ms)) return -1;
+  return new Date(ms + 7 * 3600 * 1000).getUTCDay();
+}
+
+export function reversalQualitySignalShortBkkDowPass(alertedAtMs?: number | null): boolean {
+  const ms = alertedAtMs ?? Date.now();
+  const dow = bkkDayOfWeekIndex(ms);
+  return (REVERSAL_QUALITY_SIGNAL_SHORT_BKK_DOW_INDICES as readonly number[]).includes(dow);
+}
+
+function reversalQualitySignalAlertedAtMs(input: {
+  alertedAtMs?: number | null;
+  signalBarOpenSec?: number | null;
+  signalBarTf?: CandleReversalSignalBarTf | null;
+}): number {
+  if (input.alertedAtMs != null && Number.isFinite(input.alertedAtMs)) return input.alertedAtMs;
+  const open = input.signalBarOpenSec;
+  if (open != null && Number.isFinite(open) && open > 0) {
+    const barSec = (input.signalBarTf ?? "1d") === "1h" ? 3600 : 86400;
+    return (open + barSec) * 1000;
+  }
+  return Date.now();
+}
+
 function trendVelocityAboveMin(
   trendGainPct?: number | null,
   ageOfTrendHours?: number | null,
@@ -94,7 +124,12 @@ export function reversalMatchesQualitySignalLong1h(input: {
 export function reversalMatchesQualitySignal(input: {
   trendGainPct?: number | null;
   ageOfTrendHours?: number | null;
+  alertedAtMs?: number | null;
+  signalBarOpenSec?: number | null;
+  signalBarTf?: CandleReversalSignalBarTf | null;
 }): boolean {
+  const atMs = reversalQualitySignalAlertedAtMs(input);
+  if (reversalQualitySignalShortBkkDowPass(atMs)) return true;
   return trendVelocityAboveMin(input.trendGainPct, input.ageOfTrendHours);
 }
 
@@ -112,6 +147,8 @@ export function reversalMatchesQualitySignalForAlert(input: {
   trendGainPct?: number | null;
   ageOfTrendHours?: number | null;
   btcEma4hSlopePct7d?: number | null;
+  alertedAtMs?: number | null;
+  signalBarOpenSec?: number | null;
 }): boolean {
   if (reversalUsesLong1hQualitySignal(input.signalBarTf, input.tradeSide)) {
     return reversalMatchesQualitySignalLong1h({
@@ -123,17 +160,25 @@ export function reversalMatchesQualitySignalForAlert(input: {
   return reversalMatchesQualitySignal({
     trendGainPct: input.trendGainPct,
     ageOfTrendHours: input.ageOfTrendHours,
+    alertedAtMs: input.alertedAtMs,
+    signalBarOpenSec: input.signalBarOpenSec,
+    signalBarTf: input.signalBarTf,
   });
 }
 
 /** ✨ Quality Signal (แถวสถิติ) */
 export function reversalRowMatchesQualitySignalMatrix(row: CandleReversalStatsRow): boolean {
+  const alertedAtMs =
+    row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)
+      ? row.alertedAtMs
+      : Date.parse(row.alertedAtIso);
   return reversalMatchesQualitySignalForAlert({
     signalBarTf: row.signalBarTf,
     tradeSide: row.tradeSide,
     trendGainPct: row.trendGainPct,
     ageOfTrendHours: row.ageOfTrendHours,
     btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
+    alertedAtMs: Number.isFinite(alertedAtMs) ? alertedAtMs : undefined,
   });
 }
 

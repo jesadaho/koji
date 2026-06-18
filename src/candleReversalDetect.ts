@@ -19,6 +19,8 @@ export type CandleReversalAlertQualityContext = {
   atrPct14d?: number | null;
   trendGainPct?: number | null;
   ageOfTrendHours?: number | null;
+  /** เวลาแจ้ง (ms) — ใช้หาวัน BKK สำหรับ Quality Signal */
+  alertedAtMs?: number | null;
   /** จาก Binance exchangeInfo */
   assetMeta?: BinanceUsdmSymbolMeta | null;
   /** สัญญา MEXC ที่ resolve ได้ (ถ้ามี) */
@@ -1061,6 +1063,8 @@ export function buildCandleReversalAlertMessage(
       trendGainPct: qualityCtx.trendGainPct,
       ageOfTrendHours: qualityCtx.ageOfTrendHours,
       btcEma4hSlopePct7d: qualityCtx.btcEma4hSlopePct7d,
+      alertedAtMs: qualityCtx.alertedAtMs,
+      signalBarOpenSec: sig.barOpenSec,
     });
 
   const assetFooter = candleReversalAlertAssetFooterLines(qualityCtx);
