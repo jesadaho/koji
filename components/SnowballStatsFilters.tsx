@@ -66,6 +66,13 @@ import {
   type SnowballBarRangePrevFilter,
 } from "@/lib/snowballBarRangePrevFilter";
 import {
+  SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS,
+  snowballBarRangeSignalFilterLabel,
+  snowballBarRangeSignalFilterTitle,
+  snowballStatsRowMatchesBarRangeSignalFilter,
+  type SnowballBarRangeSignalFilter,
+} from "@/lib/snowballBarRangeSignalFilter";
+import {
   SNOWBALL_EFFICIENCY_SCORE_FILTER_OPTIONS,
   snowballEfficiencyScoreFilterLabel,
   snowballEfficiencyScoreFilterTitle,
@@ -176,6 +183,7 @@ export type SnowballStatsFilterState = {
   dowFilter: SnowballDowFilter;
   volVsSmaFilter: SnowballVolVsSmaFilter;
   barRangePrevFilter: SnowballBarRangePrevFilter;
+  barRangeSignalFilter: SnowballBarRangeSignalFilter;
   barRange2Filter: SnowballBarRange2Filter;
   efficiencyFilter: SnowballEfficiencyScoreFilter;
   signalMaxDdFilter: SnowballSignalMaxDdFilter;
@@ -245,6 +253,12 @@ export function filterSnowballStatsRows(
   if (filters.barRangePrevFilter !== "all") {
     result = result.filter((r) =>
       snowballStatsRowMatchesBarRangePrevFilter(r, filters.barRangePrevFilter),
+    );
+  }
+
+  if (filters.barRangeSignalFilter !== "all") {
+    result = result.filter((r) =>
+      snowballStatsRowMatchesBarRangeSignalFilter(r, filters.barRangeSignalFilter),
     );
   }
 
@@ -339,6 +353,7 @@ export type SnowballStatsEmptyFilterLabels = {
   atr: string;
   volVsSma: string;
   barRangePrev: string;
+  barRangeSignal: string;
   barRange2: string;
   efficiency: string;
   signalMaxDd: string;
@@ -363,6 +378,7 @@ export function snowballStatsEmptyFilterLabels(filters: SnowballStatsFilterState
     atr: statsAtrPct14dFilterLabel(filters.atrFilter),
     volVsSma: snowballStatsVolVsSmaFilterLabel(filters.volVsSmaFilter),
     barRangePrev: snowballBarRangePrevFilterLabel(filters.barRangePrevFilter),
+    barRangeSignal: snowballBarRangeSignalFilterLabel(filters.barRangeSignalFilter),
     barRange2: snowballBarRange2FilterLabel(filters.barRange2Filter),
     efficiency: snowballEfficiencyScoreFilterLabel(filters.efficiencyFilter),
     signalMaxDd: snowballSignalMaxDdFilterLabel(filters.signalMaxDdFilter),
@@ -381,6 +397,7 @@ type Props = {
   onDowFilterChange: (v: SnowballDowFilter) => void;
   onVolVsSmaFilterChange: (v: SnowballVolVsSmaFilter) => void;
   onBarRangePrevFilterChange: (v: SnowballBarRangePrevFilter) => void;
+  onBarRangeSignalFilterChange: (v: SnowballBarRangeSignalFilter) => void;
   onBarRange2FilterChange: (v: SnowballBarRange2Filter) => void;
   onEfficiencyFilterChange: (v: SnowballEfficiencyScoreFilter) => void;
   onSignalMaxDdFilterChange: (v: SnowballSignalMaxDdFilter) => void;
@@ -417,6 +434,7 @@ export function SnowballStatsFilters({
   onDowFilterChange,
   onVolVsSmaFilterChange,
   onBarRangePrevFilterChange,
+  onBarRangeSignalFilterChange,
   onBarRange2FilterChange,
   onEfficiencyFilterChange,
   onSignalMaxDdFilterChange,
@@ -584,6 +602,27 @@ export function SnowballStatsFilters({
           title={snowballBarRangePrevFilterTitle(filters.barRangePrevFilter)}
         >
           {SNOWBALL_BAR_RANGE_PREV_FILTER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label
+        className="sub"
+        style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+      >
+        R% สัญญาณ
+        <select
+          value={filters.barRangeSignalFilter}
+          onChange={(e) =>
+            onBarRangeSignalFilterChange(e.currentTarget.value as SnowballBarRangeSignalFilter)
+          }
+          className="tmaInput"
+          style={{ width: "auto", minWidth: "7rem" }}
+          title={snowballBarRangeSignalFilterTitle(filters.barRangeSignalFilter)}
+        >
+          {SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
               {opt.label}
             </option>

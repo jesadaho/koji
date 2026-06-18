@@ -4,11 +4,13 @@ import type { SnowballStatsRow } from "@/lib/snowballStatsClient";
 import {
   SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT,
   SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT,
+  SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE,
 } from "@/src/snowballTrendGrade";
 
 export type SnowballTrendGainFilter =
   | "all"
   | "gain20_50"
+  | "gt50"
   | "ge20"
   | "ge30"
   | "ge50"
@@ -39,6 +41,10 @@ export const SNOWBALL_TREND_GAIN_FILTER_OPTIONS: ReadonlyArray<{
     value: "gain20_50",
     label: `${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT}–${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT}%`,
   },
+  {
+    value: "gt50",
+    label: `> ${SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE}%`,
+  },
   { value: "ge20", label: "≥ 20%" },
   { value: "ge30", label: "≥ 30%" },
   { value: "ge50", label: "≥ 50%" },
@@ -60,6 +66,9 @@ export function snowballTrendGainFilterTitle(filter: SnowballTrendGainFilter): s
   if (filter === "gain20_50") {
     return `Trend Gain ${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT}–${SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT}% (เกรด D)`;
   }
+  if (filter === "gt50") {
+    return `Trend Gain > ${SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE}% (เกรด S — ต้อง Weekend ด้วย)`;
+  }
   return `Trend Gain ${snowballTrendGainFilterLabel(filter)}`;
 }
 
@@ -79,6 +88,7 @@ export function snowballStatsRowMatchesTrendGainFilter(
       raw <= SNOWBALL_TREND_GRADE_D_TREND_GAIN_MAX_PCT
     );
   }
+  if (filter === "gt50") return raw > SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE;
   if (filter in TREND_GAIN_GE) {
     return raw >= TREND_GAIN_GE[filter as keyof typeof TREND_GAIN_GE];
   }

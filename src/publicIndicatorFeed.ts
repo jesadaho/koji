@@ -3361,12 +3361,15 @@ export async function runPublicIndicatorFeedInternal(
           greenDaysBeforeSignal: longGreenDaysForAlert,
           fundingRate: longMktCtxForAlert?.fundingRate ?? null,
           barRangePctPrev: longVolSnapForGrade.barRangePctPrev,
+          barRangePctSignal: longVolSnapForGrade.barRangePctSignal,
           trendGainPct: longPumpCycleForGrade.trendGainPct,
           ageOfTrendHours: longPumpCycleForGrade.ageOfTrendHours,
           signalVolVsSma:
             typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
           psar4hTrend: longMktCtxForAlert?.psar4hTrend ?? null,
           signalBarTf: snowTf,
+          alertedAtMs:
+            snowballStatsAnchorCloseSec({ signalBarOpenSec, signalBarTf: snowTf }) * 1000,
         };
 
         const gradeResolution: SnowballLongGradeResolution = !intrabar
@@ -4143,11 +4146,14 @@ export async function runPublicIndicatorFeedInternal(
           btcEma1dSlopePct7d: bearMktCtxForAlert?.btcEma1dSlopePct7d ?? null,
           fundingRate: bearMktCtxForAlert?.fundingRate ?? null,
           barRangePctPrev: bearVolSnapAuto.barRangePctPrev,
+          barRangePctSignal: bearVolSnapAuto.barRangePctSignal,
           trendGainPct: bearPumpCycleForGrade.trendGainPct,
           ageOfTrendHours: bearPumpCycleForGrade.ageOfTrendHours,
           psar4hTrend: bearMktCtxForAlert?.psar4hTrend ?? null,
           signalBarTf: snowTf,
           signalVolVsSma: bearSignalVolVsSma,
+          alertedAtMs:
+            snowballStatsAnchorCloseSec({ signalBarOpenSec, signalBarTf: snowTf }) * 1000,
         });
 
         const msg = buildSnowballTripleCheckMessage(symbol, "bear", signalBarOpenSec, {

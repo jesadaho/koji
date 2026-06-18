@@ -293,6 +293,7 @@ type SnowballStatsGradeDerivationFields = Partial<
     | "greenDaysBeforeSignal"
     | "fundingRate"
     | "barRangePctPrev"
+    | "barRangePctSignal"
     | "alertSide"
     | "triggerKind"
     | "structureTier"
@@ -303,6 +304,8 @@ type SnowballStatsGradeDerivationFields = Partial<
     | "psar4hTrend"
     | "trendGainPct"
     | "ageOfTrendHours"
+    | "alertedAtMs"
+    | "alertedAtIso"
   >
 >;
 
@@ -341,11 +344,18 @@ function snowballStatsTrendGradeInputFromRow(
     greenDaysBeforeSignal: row.greenDaysBeforeSignal,
     fundingRate: row.fundingRate,
     barRangePctPrev: row.barRangePctPrev,
+    barRangePctSignal: row.barRangePctSignal,
     signalVolVsSma: row.signalVolVsSma,
     psar4hTrend: row.psar4hTrend ?? null,
     signalBarTf: row.signalBarTf ?? null,
     trendGainPct: row.trendGainPct,
     ageOfTrendHours: row.ageOfTrendHours,
+    alertedAtMs:
+      row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)
+        ? row.alertedAtMs
+        : row.alertedAtIso && Number.isFinite(Date.parse(row.alertedAtIso))
+          ? Date.parse(row.alertedAtIso)
+          : null,
   };
 }
 

@@ -1,7 +1,8 @@
 /**
- * Snowball trend grade — ลำดับ: A · B · D · F (fallback)
+ * Snowball trend grade — ลำดับ: S · A · B · D · F (fallback)
+ * S: Trend Gain > 50% · Weekend (เสาร์–อาทิตย์ BKK)
  * A: EMA4h > 10% · Funding > −0.10% · R% ก่อน 10–20%
- * B: EMA4h < 10% · R% ก่อน 10–20%
+ * B: R% สัญญาณ > 30%
  * D: Trend Gain 20–50%
  * F: fallback
  * 4h LONG: + (HH200+VAH) และ ⚠️ (Max DD>7%) เป็น modifier ใน composite
@@ -100,6 +101,8 @@ export type ClassifySnowballTrendGradeInput = {
   fundingRate?: number | null;
   /** R% แท่งก่อนสัญญาณ */
   barRangePctPrev?: number | null;
+  /** R% แท่งสัญญาณ */
+  barRangePctSignal?: number | null;
   /** Pump-cycle Trend Gain % */
   trendGainPct?: number | null;
   /** Pump-cycle Age of Trend (hours) */
@@ -108,6 +111,8 @@ export type ClassifySnowballTrendGradeInput = {
   signalVolVsSma?: number | null;
   psar4hTrend?: SnowballTrendPsar4hTrend | null;
   signalBarTf?: "15m" | "1h" | "4h" | null;
+  /** เวลาแจ้ง (ms) — ใช้เกรด S (weekend BKK) */
+  alertedAtMs?: number | null;
 };
 
 function isLongSide(alertSide: ClassifySnowballTrendGradeInput["alertSide"]): boolean {
@@ -134,6 +139,46 @@ function barRangePrevInR1020Range(barRangePctPrev?: number | null): boolean {
   );
 }
 
+/** B — R% แท่งสัญญาณ (%) exclusive */
+export const SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE = 30;
+/** @deprecated ใช้ SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE */
+export const SNOWBALL_TREND_GRADE_S_R_SIGNAL_MIN_EXCLUSIVE =
+  SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE;
+
+/** S — Trend Gain % exclusive */
+export const SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE = 50;
+
+/** BKK = UTC+7 (no DST) — 0 = Sunday, 6 = Saturday */
+export function snowballTrendGradeBkkDayOfWeekIndex(ms: number): number {
+  if (!Number.isFinite(ms)) return -1;
+  return new Date(ms + 7 * 3600 * 1000).getUTCDay();
+}
+
+export function snowballTrendGradeIsBkkWeekendMs(ms: number | null | undefined): boolean {
+  if (ms == null || !Number.isFinite(ms)) return false;
+  const dow = snowballTrendGradeBkkDayOfWeekIndex(ms);
+  return dow === 0 || dow === 6;
+}
+
+function barRangeSignalGtMin(barRangePctSignal?: number | null): boolean {
+  const raw = barRangePctSignal;
+  return (
+    raw != null &&
+    Number.isFinite(raw) &&
+    raw > SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE
+  );
+}
+
+function trendGainGtMinForGradeS(trendGainPct?: number | null): boolean {
+  return (
+    finitePct(trendGainPct) && trendGainPct > SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE
+  );
+}
+
+function matchesGradeS(input: ClassifySnowballTrendGradeInput): boolean {
+  return trendGainGtMinForGradeS(input.trendGainPct) && snowballTrendGradeIsBkkWeekendMs(input.alertedAtMs);
+}
+
 function meetsGradeABase(input: ClassifySnowballTrendGradeInput): boolean {
   const pct = input.ema4hSlopePct7d;
   return finitePct(pct) && pct > SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE && fundingRateGtNeg010(input.fundingRate);
@@ -144,12 +189,7 @@ function matchesGradeA(input: ClassifySnowballTrendGradeInput): boolean {
 }
 
 function matchesGradeB(input: ClassifySnowballTrendGradeInput): boolean {
-  const pct = input.ema4hSlopePct7d;
-  return (
-    finitePct(pct) &&
-    pct < SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE &&
-    barRangePrevInR1020Range(input.barRangePctPrev)
-  );
+  return barRangeSignalGtMin(input.barRangePctSignal);
 }
 
 function matchesGradeD(input: ClassifySnowballTrendGradeInput): boolean {
@@ -164,7 +204,9 @@ function matchesGradeD(input: ClassifySnowballTrendGradeInput): boolean {
 
 export const SNOWBALL_TREND_GRADE_A_CRITERIA = `EMA4h > ${SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE}% · Funding > −0.10% · R% ก่อน ${SNOWBALL_TREND_GRADE_A_R_PREV_MIN}–${SNOWBALL_TREND_GRADE_A_R_PREV_MAX}%`;
 
-export const SNOWBALL_TREND_GRADE_B_CRITERIA = `EMA4h < ${SNOWBALL_TREND_GRADE_AB_EMA4H_MIN_EXCLUSIVE}% · R% ก่อน ${SNOWBALL_TREND_GRADE_A_R_PREV_MIN}–${SNOWBALL_TREND_GRADE_A_R_PREV_MAX}%`;
+export const SNOWBALL_TREND_GRADE_B_CRITERIA = `R% สัญญาณ > ${SNOWBALL_TREND_GRADE_B_R_SIGNAL_MIN_EXCLUSIVE}%`;
+
+export const SNOWBALL_TREND_GRADE_S_CRITERIA = `Trend Gain > ${SNOWBALL_TREND_GRADE_S_TREND_GAIN_MIN_EXCLUSIVE}% · Weekend (เสาร์–อาทิตย์ BKK)`;
 
 /** D — Trend Gain % inclusive */
 export const SNOWBALL_TREND_GRADE_D_TREND_GAIN_MIN_PCT = 20;
@@ -204,6 +246,7 @@ export function snowballTrendGradeMeetsSabVolAndPsar(input: ClassifySnowballTren
 /** สรุปเกณฑ์เกรดทั้งหมด — footer Mini App / tooltip */
 export function snowballTrendGradeCriteriaLegend(): string {
   return [
+    `S: ${SNOWBALL_TREND_GRADE_S_CRITERIA}`,
     `A: ${SNOWBALL_TREND_GRADE_A_CRITERIA}`,
     `B: ${SNOWBALL_TREND_GRADE_B_CRITERIA}`,
     `D: ${SNOWBALL_TREND_GRADE_D_CRITERIA}`,
@@ -246,8 +289,9 @@ export function snowballEma4hSlopeMatchesTrendGradeF(
   );
 }
 
-/** ลำดับ: A · B · D · F (fallback) */
+/** ลำดับ: S · A · B · D · F (fallback) */
 export function classifySnowballTrendGrade(input: ClassifySnowballTrendGradeInput): SnowballTrendGrade {
+  if (matchesGradeS(input)) return "s";
   if (matchesGradeA(input)) return "a";
   if (matchesGradeB(input)) return "b";
   if (matchesGradeD(input)) return "d";
@@ -285,10 +329,11 @@ export function snowballTrendGradeFilterCriteria(grade: SnowballTrendGradeDispla
   const plusNote = grade.endsWith("+") ? " · HH200+VAH" : "";
   if (base === "F") return `${SNOWBALL_TREND_GRADE_F_CRITERIA}${plusNote}`;
   if (base === "D") return `${SNOWBALL_TREND_GRADE_D_CRITERIA}${plusNote}`;
+  if (base === "S") return `${SNOWBALL_TREND_GRADE_S_CRITERIA}${plusNote}`;
   if (base === "A") return `${SNOWBALL_TREND_GRADE_A_CRITERIA}${plusNote}`;
   if (base === "B") return `${SNOWBALL_TREND_GRADE_B_CRITERIA}${plusNote}`;
-  if (base === "S" || base === "C") return `legacy · ไม่ใช้ในเกรดใหม่${plusNote}`;
-  return `นอกเหนือเกณฑ์ A / B / D / F`;
+  if (base === "C") return `legacy · ไม่ใช้ในเกรดใหม่${plusNote}`;
+  return `นอกเหนือเกณฑ์ S / A / B / D / F`;
 }
 
 export function snowballTrendGradeFilterTitle(filter: SnowballTrendGradeFilter): string {
@@ -320,12 +365,17 @@ export function snowballIsTrendGradeD(grade: SnowballTrendGrade | undefined): bo
   return grade === "d";
 }
 
+export function snowballIsTrendGradeS(grade: SnowballTrendGrade | undefined): boolean {
+  return grade === "s";
+}
+
 /** ทุกเกรดใช้ dedupe เดียวกัน — กันยิงซ้ำแท่ง/เหรียญเดิม */
 export function snowballTrendGradeSkipsFeedDedupe(_grade: SnowballTrendGrade | undefined): boolean {
   return false;
 }
 
 export function snowballTrendGradeActionPlan(grade: SnowballTrendGrade): SnowballTrendActionPlan {
+  if (grade === "s") return "full";
   if (grade === "a") return "standard";
   if (grade === "b" || grade === "d") return "light";
   return "monitor";
@@ -377,13 +427,25 @@ function fmtBarRangePrev(v: number | null | undefined): string {
   return `${v.toFixed(2)}%`;
 }
 
+function fmtBarRangePct(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `${v.toFixed(2)}%`;
+}
+
 /** ข้อความ footnote สำหรับ alert / stats */
 export function snowballTrendGradeFootnote(input: SnowballTrendGradeFootnoteInput): string {
   const g = snowballTrendGradeToDisplay(input.grade);
   const ema4h = fmtSlopePct(input.ema4hSlopePct7d);
   const funding = fmtFunding(input.fundingRate);
   const rPrev = fmtBarRangePrev(input.barRangePctPrev);
+  const rSignal = fmtBarRangePct(input.barRangePctSignal);
   const plan = snowballTrendActionPlanLabel(snowballTrendGradeActionPlan(input.grade));
+  if (input.grade === "s") {
+    return `📎 Grade ${g}: Trend Gain ${fmtBarRangePct(input.trendGainPct)} · Weekend BKK · ${plan}`;
+  }
+  if (input.grade === "b") {
+    return `📎 Grade ${g}: R% สัญญาณ ${rSignal} · ${plan}`;
+  }
   return `📎 Grade ${g}: EMA4h ${ema4h} · Funding ${funding} · R% ก่อน ${rPrev} · ${plan}`;
 }
 

@@ -39,7 +39,7 @@ import {
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
 
 /** แถวที่ recompute trend grade (S/A/B/C/F) จาก snapshot ณ alertedAtMs แล้ว */
-export const STATS_TREND_GRADE_VERSION = 19;
+export const STATS_TREND_GRADE_VERSION = 21;
 
 export function snowballStatsRowAlertSide(row: Pick<SnowballStatsRow, "alertSide" | "triggerKind">): SnowballStatsAlertSide {
   return row.alertSide ?? (row.triggerKind === "swing_ll" ? "bear" : "long");
@@ -56,11 +56,18 @@ export function snowballStatsRowTrendGradeInput(row: SnowballStatsRow): Classify
     greenDaysBeforeSignal: row.greenDaysBeforeSignal,
     fundingRate: row.fundingRate,
     barRangePctPrev: row.barRangePctPrev,
+    barRangePctSignal: row.barRangePctSignal,
     trendGainPct: row.trendGainPct,
     ageOfTrendHours: row.ageOfTrendHours,
     signalVolVsSma: row.signalVolVsSma,
     psar4hTrend: row.psar4hTrend ?? null,
     signalBarTf: row.signalBarTf ?? null,
+    alertedAtMs:
+      row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)
+        ? row.alertedAtMs
+        : Number.isFinite(Date.parse(row.alertedAtIso))
+          ? Date.parse(row.alertedAtIso)
+          : null,
   };
 }
 

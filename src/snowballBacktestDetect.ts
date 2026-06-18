@@ -100,6 +100,8 @@ function detectTrendGradeClassifyInput(
   extra: Pick<ClassifySnowballTrendGradeInput, "alertSide" | "signalBarTf"> & {
     signalVolVsSma?: number | null;
     barRangePctPrev?: number | null;
+    barRangePctSignal?: number | null;
+    alertedAtMs?: number | null;
   },
 ): ClassifySnowballTrendGradeInput {
   return {
@@ -539,6 +541,9 @@ function detectSnowballLongClosed(
         signalVolVsSma:
           typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
         barRangePctPrev: volSnapForGrade.barRangePctPrev,
+        barRangePctSignal: volSnapForGrade.barRangePctSignal,
+        alertedAtMs:
+          snowballStatsAnchorCloseSec({ signalBarOpenSec, signalBarTf: snowTf }) * 1000,
       },
     ),
   });
@@ -737,6 +742,9 @@ function detectSnowballBearClosed(
         signalVolVsSma:
           typeof vsE === "number" && Number.isFinite(vsE) && vsE > 0 ? vE! / vsE : null,
         barRangePctPrev: volSnap.barRangePctPrev,
+        barRangePctSignal: volSnap.barRangePctSignal,
+        alertedAtMs:
+          snowballStatsAnchorCloseSec({ signalBarOpenSec, signalBarTf: snowTf }) * 1000,
       },
     ),
   );

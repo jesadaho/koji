@@ -10,9 +10,11 @@ import {
   normalizeSnowballQualityTier,
   SNOWBALL_TREND_GRADE_A_CRITERIA,
   SNOWBALL_TREND_GRADE_B_CRITERIA,
+  SNOWBALL_TREND_GRADE_S_CRITERIA,
   SNOWBALL_TREND_GRADE_D_CRITERIA,
   SNOWBALL_TREND_GRADE_F_CRITERIA,
   snowballIsTrendGradeD,
+  snowballTrendGradeIsBkkWeekendMs,
 } from "@/src/snowballTrendGrade";
 import {
   pumpCycleTrendGainPctLabel,
@@ -43,6 +45,8 @@ import {
 } from "@/src/snowballTrendMomentumMetrics";
 import {
   snowballStatsActionPlanLabel,
+  snowballStatsBarRangePctLabel,
+  snowballStatsDayOfWeekBkk,
   snowballStatsDerivedDisplayGrade,
   snowballStatsGradeAtAlertLabel,
   snowballStatsVolVsSmaDisplay,
@@ -400,8 +404,11 @@ function snowballTrendGradeChecklistItems(
     | "greenDaysBeforeSignal"
     | "fundingRate"
     | "barRangePctPrev"
+    | "barRangePctSignal"
     | "trendGainPct"
     | "ageOfTrendHours"
+    | "alertedAtIso"
+    | "alertedAtMs"
     | "qualityTier"
     | "alertQualityTier"
     | "signalVolVsSma"
@@ -430,8 +437,15 @@ function snowballTrendGradeChecklistItems(
     greenDaysBeforeSignal: green,
     fundingRate: row.fundingRate,
     barRangePctPrev: row.barRangePctPrev,
+    barRangePctSignal: row.barRangePctSignal,
     trendGainPct: row.trendGainPct,
     ageOfTrendHours: row.ageOfTrendHours,
+    alertedAtMs:
+      row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)
+        ? row.alertedAtMs
+        : row.alertedAtIso && Number.isFinite(Date.parse(row.alertedAtIso))
+          ? Date.parse(row.alertedAtIso)
+          : null,
     signalVolVsSma: row.signalVolVsSma,
     psar4hTrend: row.psar4hTrend ?? null,
     signalBarTf: row.signalBarTf ?? null,
@@ -499,10 +513,34 @@ function snowballTrendGradeChecklistItems(
     },
     {
       id: "confirm",
+      title: "Grade S",
+      status: grade === "s" ? "pass" : grade ? "fail" : "unknown",
+      detail: (() => {
+        const alertMs =
+          row.alertedAtMs != null && Number.isFinite(row.alertedAtMs)
+            ? row.alertedAtMs
+            : row.alertedAtIso && Number.isFinite(Date.parse(row.alertedAtIso))
+              ? Date.parse(row.alertedAtIso)
+              : null;
+        const weekend =
+          alertMs != null && snowballTrendGradeIsBkkWeekendMs(alertMs)
+            ? snowballStatsDayOfWeekBkk(row.alertedAtIso ?? "", alertMs)
+            : "ไม่ใช่เสาร์–อาทิตย์";
+        return `Trend ${pumpCycleTrendGainPctLabel(row.trendGainPct)} · ${weekend} · ต้อง ${SNOWBALL_TREND_GRADE_S_CRITERIA}`;
+      })(),
+    },
+    {
+      id: "confirm",
       title: "EMA4h / Funding / R% ก่อน",
       status:
         ema4h != null && Number.isFinite(ema4h) ? "pass" : "unknown",
-      detail: `${fmtSlope(ema4h)} · A: ${SNOWBALL_TREND_GRADE_A_CRITERIA} · B: ${SNOWBALL_TREND_GRADE_B_CRITERIA}`,
+      detail: `${fmtSlope(ema4h)} · A: ${SNOWBALL_TREND_GRADE_A_CRITERIA}`,
+    },
+    {
+      id: "confirm",
+      title: "Grade B",
+      status: grade === "b" ? "pass" : grade ? "fail" : "unknown",
+      detail: `R% สัญญาณ ${snowballStatsBarRangePctLabel(row.barRangePctSignal)} · ต้อง ${SNOWBALL_TREND_GRADE_B_CRITERIA}`,
     },
     ...(greenDaysItem ? [greenDaysItem] : []),
     ...(volSabItem ? [volSabItem] : []),
@@ -993,8 +1031,12 @@ export function snowballStatsGradeChecklistFooter(
           ? ` · Trend ${pumpCycleTrendGainPctLabel(row.trendGainPct)} · Vel ${pumpCycleTrendVelocityLabel(row.trendGainPct, row.ageOfTrendHours)}`
           : "";
       lines.push(
-        `เหตุผล F: ไม่ผ่าน A / B / D${trendPart} · ${SNOWBALL_TREND_GRADE_F_CRITERIA} · auto-open: ไม่สั่ง (Grade F)`,
+        `เหตุผล F: ไม่ผ่าน S / A / B / D${trendPart} · ${SNOWBALL_TREND_GRADE_F_CRITERIA} · auto-open: ไม่สั่ง (Grade F)`,
       );
+    } else if (grade === "s") {
+      lines.push(`เหตุผล S: ${SNOWBALL_TREND_GRADE_S_CRITERIA} · action plan: Full (1.0×)`);
+    } else if (grade === "b") {
+      lines.push(`เหตุผล B: ${SNOWBALL_TREND_GRADE_B_CRITERIA} · action plan: Light (0.5×)`);
     } else if (snowballIsTrendGradeD(grade)) {
       lines.push(`เหตุผล D: ${SNOWBALL_TREND_GRADE_D_CRITERIA} · action plan: Light (0.5×)`);
     }
