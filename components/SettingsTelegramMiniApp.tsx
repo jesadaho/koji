@@ -1675,7 +1675,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>จุดอ้างอิง = EMA20 @1h</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              ใช้ค่า EMA20 แท่ง 1h ปิดล่าสุดเป็นจุดอ้างอิงใน Telegram / ประวัติ / 24h guard (เมื่อดึงราคา MEXC ไม่ได้) — แยกจากโหมด entry ด้านบน · TP/SL ยังอิงราคาเข้าเฉลี่ย MEXC
+              ใช้ค่า EMA20 แท่ง 1h ปิดล่าสุดเป็นจุดอ้างอิงใน Telegram / ประวัติ (เมื่อดึงราคา MEXC ไม่ได้) — แยกจากโหมด entry ด้านบน · TP/SL ยังอิงราคาเข้าเฉลี่ย MEXC
             </span>
           </span>
         </label>
@@ -1892,10 +1892,6 @@ export default function SettingsTelegramMiniApp() {
             </span>
           </label>
         </div>
-
-        <p className="sub" style={{ marginTop: "0.85rem" }}>
-          กติกาเสริม: <strong>ครบ 24 ชั่วโมง</strong> แล้วถ้ายังติดลบและไม่เข้าเกณฑ์ “รันเทรน” ระบบจะพยายามปิด market ทันที (แยกจาก max hold ด้านบน)
-        </p>
 
         <p style={{ marginTop: "0.95rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
           <button

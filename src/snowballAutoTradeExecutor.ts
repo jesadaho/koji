@@ -1010,7 +1010,6 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
               ]
             : ["⚠️ กลยุทธ์ TP/SL เปิดอยู่แต่ดึงราคาเข้า MEXC ไม่ได้ — จะไม่ track TP/SL รอบนี้"]
           : ["กลยุทธ์ TP/SL: ปิด (ตั้งใน Mini App)"]),
-        "กติกา 24h: ถ้าครบ 24 ชม. แล้วยังติดลบและไม่เข้าเกณฑ์รันเทรน ระบบจะพยายามปิด market",
         "ครั้งถัดไปในวันนี้: จะไม่เปิดจาก Snowball ซ้ำในเหรียญนี้ (1 order/เหรียญ/วัน)",
       ]);
     } catch (e) {
