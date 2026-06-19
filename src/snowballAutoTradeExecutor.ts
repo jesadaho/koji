@@ -172,6 +172,10 @@ function resolveSnowballAutoOpenSide(
   if (isLongAlert && gradeFSignal) {
     return null;
   }
+  /** Quality Signal → Long เปิดอยู่ = ไม่ fallback LONG เกรดนอกรายการ (เช่น D/C แม้ EMA/Funding ผ่าน) */
+  if (isLongAlert && qsOn) {
+    return null;
+  }
   return defaultSide;
 }
 
@@ -555,11 +559,18 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     }
 
     const shortSignalOn = snowballShortSignalShortEnabled(row);
+    const qsLongOnlyMode = snowballQualitySignalLongFeatureEnabled(row);
     const userQualitySignalLong =
       qualitySignalMatch && snowballQualitySignalLongGradeAllowed(row, gradeKey);
     const userGradeFFadeMatch =
       snowballGradeFFadeShortEnabled(row) && gradeFFadeMatch;
     const userForceMatrixOpenLong = userQualitySignalLong || userGradeFFadeMatch;
+    const sundayAllShort =
+      row.snowballAutoTradeSundayAllShortEnabled === true && bkkIsSundayNow();
+    if (qsLongOnlyMode && !isBearAlert && !userForceMatrixOpenLong && !sundayAllShort) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "quality_signal_grade_mode");
+      continue;
+    }
     const effectiveActionPlan =
       input.actionPlan ??
       (gradeIsF ? ("monitor" as SnowballTrendActionPlan) : null);
@@ -575,6 +586,15 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
     const side = resolveSnowballAutoOpenSide(row, input.alertSide, gradeKey, qualitySideInput);
     if (side === null) {
       logSnowballAutoOpen(userId, logSignal, "skipped", "quality_filter_no_match");
+      continue;
+    }
+
+    if (
+      side === "long" &&
+      qsLongOnlyMode &&
+      (!snowballQualitySignalLongGradeAllowed(row, gradeKey) || !qualitySignalMatch)
+    ) {
+      logSnowballAutoOpen(userId, logSignal, "skipped", "grade_not_in_quality_signal_list", { side });
       continue;
     }
 
