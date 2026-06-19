@@ -22,7 +22,7 @@ export function hasDualPendingConflict(sets: PendingConflictSets, symbol: string
   return sets.snowballPending.has(k) && sets.reversalPending.has(k);
 }
 
-/** Reversal เกิดหลัง Snowball (alert ช้ากว่า) */
+/** Reversal เกิดพร้อมหรือหลัง Snowball (alert ช้ากว่าหรือเท่ากัน) */
 export function isReversalAfterPendingSnowball(
   snowballAtMs: number | null,
   reversalAtMs: number | null,
@@ -32,7 +32,7 @@ export function isReversalAfterPendingSnowball(
     reversalAtMs != null &&
     Number.isFinite(snowballAtMs) &&
     Number.isFinite(reversalAtMs) &&
-    reversalAtMs > snowballAtMs
+    reversalAtMs >= snowballAtMs
   );
 }
 

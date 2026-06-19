@@ -236,6 +236,8 @@ export async function shouldSkipAutoOpenForPendingConflict(
   const k = pendingConflictSymbolKey(binanceSymbol);
   if (!k) return false;
   if (self === "snowball") return sets.reversalPending.has(k);
+  // Reversal ยัง auto-open ได้แม้ Snowball pending (ทิศสวน · ไม่ conflict-close position)
+  if (self === "reversal") return false;
   if (!sets.snowballPending.has(k)) return false;
 
   const atMs = opts?.atMs ?? Date.now();

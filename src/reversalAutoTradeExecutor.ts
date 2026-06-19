@@ -106,14 +106,6 @@ async function notifyLines(userId: string, lines: string[]): Promise<void> {
   await notifyTradingViewWebhookTelegram(userId, lines.filter(Boolean).join("\n"));
 }
 
-function hasActiveUsdtPosition(
-  positions: Awaited<ReturnType<typeof getOpenPositions>>,
-  contractSymbol: string
-): boolean {
-  const sym = contractSymbol.trim();
-  return positions.some((p) => p.symbol === sym && p.state === 1 && Number(p.holdVol) > 0);
-}
-
 function findMexcOpenPositionShort(
   positions: OpenPositionRow[],
   contractSymbol: string,
@@ -122,6 +114,13 @@ function findMexcOpenPositionShort(
   return positions.find(
     (x) => x.symbol === sym && x.state === 1 && Number(x.holdVol) > 0 && x.positionType === 2,
   );
+}
+
+function hasActiveShortPosition(
+  positions: Awaited<ReturnType<typeof getOpenPositions>>,
+  contractSymbol: string,
+): boolean {
+  return findMexcOpenPositionShort(positions, contractSymbol) != null;
 }
 
 function readMexcAvgEntryPriceShort(
@@ -226,6 +225,8 @@ export type ReversalAutoTradeInput = {
   ageOfTrendHours?: number | null;
   /** Vol แท่งสัญญาณ ÷ SMA(volume) — Long 1H Quality Signal */
   signalVolVsSma?: number | null;
+  /** เวลาแจ้ง alert (ms) — ใช้ conflict check */
+  alertedAtMs?: number;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
   signalClosePrice?: number;
 };
@@ -393,7 +394,10 @@ export async function runReversalAutoTradeAfterReversalAlert(
   const sym = contractSymbol;
 
   try {
-    if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "reversal", { atMs: Date.now() })) {
+    const conflictAtMs =
+      input.alertedAtMs != null && Number.isFinite(input.alertedAtMs) ? input.alertedAtMs : Date.now();
+    if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "reversal", { atMs: conflictAtMs })) {
+      console.info("[reversalAutoTrade] skip auto-open (pending conflict w/ Snowball)", binanceSymbol);
       return { usersAttempted: 0, usersSucceeded: 0 };
     }
   } catch {
@@ -736,7 +740,9 @@ export async function runReversalAutoTradeAfterReversalAlert(
       ]);
       continue;
     }
-    if (hasActiveUsdtPosition(positions, contractSymbol)) {
+    if (hasActiveShortPosition(positions, contractSymbol)) {
+      const active = findMexcOpenPositionShort(positions, contractSymbol);
+      const hv = active != null ? Number(active.holdVol) : NaN;
       logReversalAutoOpen(userId, logSignal, "skipped", "existing_position", {
         marginUsdt,
         leverage: Math.floor(leverage),
@@ -744,9 +750,10 @@ export async function runReversalAutoTradeAfterReversalAlert(
       });
       await notifyLines(userId, [
         tgTitle,
-        "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชันคู่สัญญานี้อยู่แล้ว",
-        `[${shortContractLabel(contractSymbol)}]/USDT (SHORT)`,
-        "ระบบจึงไม่เปิดซ้ำ (กันซ้อน margin / order ซ้ำ)",
+        "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชัน SHORT คู่สัญญานี้อยู่แล้ว",
+        `[${shortContractLabel(contractSymbol)}]/USDT`,
+        Number.isFinite(hv) && hv > 0 ? `holdVol ~${hv}` : "",
+        "LONG จาก Snowball ไม่บล็อก Reversal Short",
       ]);
       continue;
     }

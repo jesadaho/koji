@@ -791,6 +791,7 @@ async function notifyResults(
             trendGainPct: pumpCycleFields.trendGainPct,
             ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
             signalVolVsSma: row.evals.signalVolVsSma,
+            alertedAtMs: nowMs,
             signalClosePrice: sig.c,
           });
         } catch (e) {
