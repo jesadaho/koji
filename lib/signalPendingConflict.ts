@@ -37,8 +37,7 @@ export function isReversalAfterPendingSnowball(
 }
 
 /**
- * ควร conflict-close หรือไม่ — ไม่ปิด position/limit เมื่อ Reversal + Snowball conflict
- * (Reversal หลัง Snowball ยังเปิด/ถือต่อได้ · ไม่ market-close ฝั่งใดเมื่อเจอ Reversal)
+ * ควร conflict-close หรือไม่ — ปิดใช้งาน (ไม่ปิด position/limit เมื่อ Reversal + Snowball conflict)
  */
 export function shouldDualPendingConflictClose(
   _snowballAtMs: number | null,

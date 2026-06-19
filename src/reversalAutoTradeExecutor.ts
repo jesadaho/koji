@@ -26,7 +26,6 @@ import {
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } from "./candleReversalDetect";
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
-import { shouldSkipAutoOpenForPendingConflict } from "./signalPendingConflictServer";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
 import { reversalMatchesQualitySignalForAlert } from "@/lib/reversalMatrixFilters";
@@ -392,17 +391,6 @@ export async function runReversalAutoTradeAfterReversalAlert(
     return { usersAttempted: 0, usersSucceeded: 0 };
   }
   const sym = contractSymbol;
-
-  try {
-    const conflictAtMs =
-      input.alertedAtMs != null && Number.isFinite(input.alertedAtMs) ? input.alertedAtMs : Date.now();
-    if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "reversal", { atMs: conflictAtMs })) {
-      console.info("[reversalAutoTrade] skip auto-open (pending conflict w/ Snowball)", binanceSymbol);
-      return { usersAttempted: 0, usersSucceeded: 0 };
-    }
-  } catch {
-    /* ignore */
-  }
 
   const alertTradeSide: CandleReversalTradeSide = input.alertTradeSide === "long" ? "long" : "short";
   const tgTitle = reversalAutoOpenTelegramTitle(alertTradeSide);

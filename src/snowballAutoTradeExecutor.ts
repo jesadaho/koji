@@ -24,7 +24,6 @@ import {
   resolveSnowballQualityShortTpSlPlanFromRow,
   resolveSnowballTpSlPlanFromRow,
 } from "./snowballAutoTradeTpSlPlan";
-import { shouldSkipAutoOpenForPendingConflict } from "./signalPendingConflictServer";
 import {
   bkkIsSundayNow,
   bkkSnowballAutoTradeDayKeyNow,
@@ -321,15 +320,6 @@ export async function runSnowballAutoTradeAfterSnowballAlert(input: {
   if (!sym) return { usersAttempted: 0, usersSucceeded: 0 };
   const binanceSymbol = input.binanceSymbol.trim().toUpperCase();
   if (!binanceSymbol) return { usersAttempted: 0, usersSucceeded: 0 };
-
-  // Reversal pending / conflict สองฝั่ง — ไม่ auto-open (Reversal หลัง Snowball ยังเปิดได้)
-  try {
-    if (await shouldSkipAutoOpenForPendingConflict(binanceSymbol, "snowball")) {
-      return { usersAttempted: 0, usersSucceeded: 0 };
-    }
-  } catch {
-    /* ignore: fallback to allow snowball */
-  }
 
   if (!(input.referenceEntryPrice > 0) || !Number.isFinite(input.referenceEntryPrice)) {
     return { usersAttempted: 0, usersSucceeded: 0 };

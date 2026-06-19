@@ -18,7 +18,7 @@ export function PendingConflictBadge({
         marginTop: "0.12rem",
         whiteSpace: "nowrap",
       }}
-      title={`เคย conflict กับ ${conflictWith} ตอนแจ้ง — Reversal หลัง Snowball ยังเปิดได้ · cron ไม่ปิด position/limit เมื่อ conflict`}
+      title={`เคย conflict กับ ${conflictWith} ตอนแจ้ง — ไม่ skip/ปิด auto-open (Snowball ↔ Reversal เปิดได้อิสระ)`}
     >
       {text}
     </span>

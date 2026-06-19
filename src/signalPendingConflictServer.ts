@@ -3,10 +3,8 @@ import "server-only";
 import { snowballAlertRepeatGuardMs } from "@/lib/snowballAlertRepeatGuard";
 import {
   buildStatsConflictIndex,
-  isReversalAfterPendingSnowball,
   pendingConflictSymbolKey,
   pendingConflictWithLabel,
-  shouldDualPendingConflictClose,
   type PendingConflictSets,
   type PendingStrategy,
   type StatsConflictIndex,
@@ -226,35 +224,20 @@ export async function loadStatsConflictIndex(): Promise<StatsConflictIndex> {
   return buildStatsConflictIndex(entries);
 }
 
-/** ข้าม auto-open เมื่อฝั่งตรงข้ามยัง pending (รวมกรณี conflict สองฝั่ง) */
+/** ข้าม auto-open เมื่อ conflict — ปิดใช้งาน (Snowball ↔ Reversal เปิดได้อิสระ) */
 export async function shouldSkipAutoOpenForPendingConflict(
-  binanceSymbol: string,
-  self: PendingStrategy,
-  opts?: { atMs?: number },
+  _binanceSymbol: string,
+  _self: PendingStrategy,
+  _opts?: { atMs?: number },
 ): Promise<boolean> {
-  const sets = await loadPendingConflictSets();
-  const k = pendingConflictSymbolKey(binanceSymbol);
-  if (!k) return false;
-  if (self === "snowball") return sets.reversalPending.has(k);
-  // Reversal ยัง auto-open ได้แม้ Snowball pending (ทิศสวน · ไม่ conflict-close position)
-  if (self === "reversal") return false;
-  if (!sets.snowballPending.has(k)) return false;
-
-  const atMs = opts?.atMs ?? Date.now();
-  const snowballMs = await getLatestPendingSnowballAtMsForSymbol(binanceSymbol, atMs);
-  if (snowballMs == null) return false;
-  if (isReversalAfterPendingSnowball(snowballMs, atMs)) return false;
-  return true;
+  return false;
 }
 
-/** ควร conflict-close สำหรับเหรียญนี้หรือไม่ — ปัจจุบันไม่ปิดเมื่อ Reversal + Snowball conflict */
+/** ควร conflict-close หรือไม่ — ปิดใช้งาน (ไม่ปิด position/limit เมื่อ conflict) */
 export async function shouldConflictCloseDualPendingForSymbol(
-  symbol: string,
-  sets: PendingConflictSets,
+  _symbol: string,
+  _sets: PendingConflictSets,
   _nowMs = Date.now(),
 ): Promise<boolean> {
-  const k = pendingConflictSymbolKey(symbol);
-  if (!k) return false;
-  if (!sets.snowballPending.has(k) || !sets.reversalPending.has(k)) return false;
-  return shouldDualPendingConflictClose(null, null);
+  return false;
 }

@@ -31,9 +31,7 @@ import { loadTradingViewMexcSettingsFullMap } from "./tradingViewCloseSettingsSt
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 
 export function isAutoTradeConflictCloseEnabled(): boolean {
-  const v = process.env.AUTO_TRADE_PENDING_CONFLICT_CLOSE?.trim().toLowerCase();
-  if (v === "0" || v === "false" || v === "off" || v === "no") return false;
-  return true;
+  return false;
 }
 
 function shortContractLabel(contractSymbol: string): string {

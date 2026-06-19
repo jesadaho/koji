@@ -26,7 +26,10 @@ export const REVERSAL_QUALITY_SIGNAL_SHORT_BKK_DOW_INDICES = [5, 6] as const;
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
-  "Trend Gain 5–20% · Vol×SMA 2–5×";
+  "Trend Gain 5–20% · Vol×SMA 2–5× · หรือ ศ (BKK)";
+
+/** วัน BKK ที่ผ่าน Quality Signal Long 1H โดยไม่ต้องดู Trend Gain / Vol×SMA — 5=ศุกร์ */
+export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BKK_DOW_INDICES = [5] as const;
 
 /** Trend Gain % — inclusive */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MIN_PCT = 5;
@@ -95,6 +98,22 @@ export function reversalQualitySignalShortBkkDowPass(alertedAtMs?: number | null
   return (REVERSAL_QUALITY_SIGNAL_SHORT_BKK_DOW_INDICES as readonly number[]).includes(dow);
 }
 
+export function reversalQualitySignalLong1hBkkDowPass(alertedAtMs?: number | null): boolean {
+  const ms = alertedAtMs ?? Date.now();
+  const dow = bkkDayOfWeekIndex(ms);
+  return (REVERSAL_QUALITY_SIGNAL_LONG_1H_BKK_DOW_INDICES as readonly number[]).includes(dow);
+}
+
+function reversalLong1hMetricsPass(input: {
+  trendGainPct?: number | null;
+  signalVolVsSma?: number | null;
+}): boolean {
+  return (
+    trendGainInLong1hQualityRange(input.trendGainPct) &&
+    volVsSmaInLong1hQualityRange(input.signalVolVsSma)
+  );
+}
+
 function reversalQualitySignalAlertedAtMs(input: {
   alertedAtMs?: number | null;
   signalBarOpenSec?: number | null;
@@ -121,11 +140,13 @@ function trendVelocityAboveMin(
 export function reversalMatchesQualitySignalLong1h(input: {
   trendGainPct?: number | null;
   signalVolVsSma?: number | null;
+  alertedAtMs?: number | null;
+  signalBarOpenSec?: number | null;
+  signalBarTf?: CandleReversalSignalBarTf | null;
 }): boolean {
-  return (
-    trendGainInLong1hQualityRange(input.trendGainPct) &&
-    volVsSmaInLong1hQualityRange(input.signalVolVsSma)
-  );
+  const atMs = reversalQualitySignalAlertedAtMs(input);
+  if (reversalQualitySignalLong1hBkkDowPass(atMs)) return true;
+  return reversalLong1hMetricsPass(input);
 }
 
 /** ✨ Quality Signal — Reversal Short (และ 1D) */
@@ -163,6 +184,9 @@ export function reversalMatchesQualitySignalForAlert(input: {
     return reversalMatchesQualitySignalLong1h({
       trendGainPct: input.trendGainPct,
       signalVolVsSma: input.signalVolVsSma,
+      alertedAtMs: input.alertedAtMs,
+      signalBarOpenSec: input.signalBarOpenSec,
+      signalBarTf: input.signalBarTf,
     });
   }
   return reversalMatchesQualitySignal({
@@ -188,6 +212,7 @@ export function reversalRowMatchesQualitySignalMatrix(row: CandleReversalStatsRo
     signalVolVsSma: row.signalVolVsSma,
     btcEma4hSlopePct7d: row.btcEma4hSlopePct7d,
     alertedAtMs: Number.isFinite(alertedAtMs) ? alertedAtMs : undefined,
+    signalBarOpenSec: row.signalBarOpenSec,
   });
 }
 
