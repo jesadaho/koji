@@ -1032,6 +1032,64 @@ export async function closeAllOpenForSymbol(
   };
 }
 
+/**
+ * ปิด open position เฉพาะทิศ long/short ของ symbol นี้
+ */
+export async function closeOpenPositionForSymbolSide(
+  creds: MexcCredentials,
+  contractSymbol: string,
+  side: "long" | "short",
+): Promise<{
+  success: boolean;
+  closed: { positionId: number; orderId?: string; error?: string }[];
+  message?: string;
+}> {
+  const sym = contractSymbol.trim().toUpperCase();
+  const wantType = side === "long" ? 1 : 2;
+  const positionMode = await getFuturesUserPositionMode(creds);
+  const positions = await getOpenPositions(creds, sym);
+  const actives = positions.filter(
+    (x) =>
+      x.state === 1 &&
+      x.holdVol > 0 &&
+      x.symbol === sym &&
+      x.positionType === wantType,
+  );
+  if (actives.length === 0) {
+    return { success: true, closed: [], message: "no_open_position" };
+  }
+  const mark = await getContractLastPricePublic(sym);
+  const markPrice = mark != null && mark > 0 ? mark : 1;
+  const closed: { positionId: number; orderId?: string; error?: string }[] = [];
+  for (const pos of actives) {
+    const r = await createCloseOrder(creds, {
+      symbol: sym,
+      position: pos,
+      markPrice,
+      positionMode,
+    });
+    if (r.success) {
+      const d = r.data;
+      const oid =
+        d && typeof d === "object" && d !== null && "orderId" in d
+          ? String((d as { orderId: unknown }).orderId)
+          : undefined;
+      closed.push({ positionId: pos.positionId, orderId: oid });
+    } else {
+      closed.push({
+        positionId: pos.positionId,
+        error: r.message ?? `code ${r.code}`,
+      });
+    }
+  }
+  const allOk = closed.every((c) => !c.error);
+  return {
+    success: allOk,
+    closed,
+    message: allOk ? undefined : "some_orders_failed",
+  };
+}
+
 export type MexcHistoricalPositionRow = {
   positionId: number;
   symbol: string;

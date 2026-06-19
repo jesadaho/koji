@@ -992,6 +992,17 @@ export async function liffClearSkippedAutoOpenOrderLogs(
   return { ok: true, removed };
 }
 
+export async function liffManualCloseAutoOpenPosition(
+  userId: string,
+  logId: string,
+): Promise<
+  | { ok: true; alreadyClosed?: boolean }
+  | { ok: false; status: number; error: string }
+> {
+  const { manualCloseAutoOpenPosition } = await import("./autoOpenManualClose");
+  return manualCloseAutoOpenPosition(userId, logId);
+}
+
 export async function liffDeleteSnowballStatsRow(
   telegramUserId: number,
   rowId: string,

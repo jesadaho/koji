@@ -756,11 +756,13 @@ function renderAutoOpenHistoryTableBody(
   markPrices: Record<string, number>,
   emptyMessage: string,
   nowMs: number,
+  onManualClose?: (row: AutoOpenOrderLogRow) => void,
+  closingLogIds?: ReadonlySet<string>,
 ): ReactNode {
   if (rows.length === 0) {
     return (
       <tr>
-        <td colSpan={23} className="sub">
+        <td colSpan={24} className="sub">
           {emptyMessage}
         </td>
       </tr>
@@ -768,6 +770,7 @@ function renderAutoOpenHistoryTableBody(
   }
   return rows.map((r) => {
     const nowPx = markPrices[contractKey(r.contractSymbol)];
+    const closing = closingLogIds?.has(r.id) ?? false;
     return (
       <tr key={r.id}>
         <td>
@@ -818,6 +821,22 @@ function renderAutoOpenHistoryTableBody(
         <td>{fmtHorizonCell(r, 24, r.price24h, r.pct24h)}</td>
         <td>{fmtHorizonCell(r, 48, r.price48h, r.pct48h)}</td>
         <td title="Max drawdown % ถึง MFE ในกรอบ 48h (15m)">{fmtMaxDdCell(r)}</td>
+        <td style={{ whiteSpace: "nowrap" }}>
+          {r.mexcActive && onManualClose ? (
+            <button
+              type="button"
+              className="danger"
+              style={{ fontSize: "0.88em", padding: "0.2rem 0.45rem" }}
+              disabled={closing}
+              title="ปิด position บน MEXC (market) — เคลียร์ state บอทถ้ามี"
+              onClick={() => onManualClose(r)}
+            >
+              {closing ? "กำลังปิด…" : "ปิด"}
+            </button>
+          ) : (
+            "—"
+          )}
+        </td>
       </tr>
     );
   });
@@ -849,10 +868,14 @@ function AutoOpenHistoryTable({
   rows,
   markPrices,
   emptyMessage = "ยังไม่มีบันทึกในช่วงนี้",
+  onManualClose,
+  closingLogIds,
 }: {
   rows: AutoOpenOrderLogRow[];
   markPrices: Record<string, number>;
   emptyMessage?: string;
+  onManualClose?: (row: AutoOpenOrderLogRow) => void;
+  closingLogIds?: ReadonlySet<string>;
 }) {
   const nowMs = useOrderPeriodNowMs(rows, markPrices);
   return (
@@ -895,9 +918,19 @@ function AutoOpenHistoryTable({
             <th>24h</th>
             <th>48h</th>
             <th title="Max drawdown % ถึง MFE ในกรอบ 48h">Max DD</th>
+            <th title="ปิด position บน MEXC ด้วยตนเอง (เฉพาะไม้ที่เปิดอยู่ ●)">ปิด</th>
           </tr>
         </thead>
-        <tbody>{renderAutoOpenHistoryTableBody(rows, markPrices, emptyMessage, nowMs)}</tbody>
+        <tbody>
+          {renderAutoOpenHistoryTableBody(
+            rows,
+            markPrices,
+            emptyMessage,
+            nowMs,
+            onManualClose,
+            closingLogIds,
+          )}
+        </tbody>
       </table>
     </div>
   );
@@ -907,10 +940,14 @@ function AutoOpenWeekSection({
   weekLabel,
   rows,
   markPrices,
+  onManualClose,
+  closingLogIds,
 }: {
   weekLabel: string;
   rows: AutoOpenOrderLogRow[];
   markPrices: Record<string, number>;
+  onManualClose?: (row: AutoOpenOrderLogRow) => void;
+  closingLogIds?: ReadonlySet<string>;
 }) {
   const summaryRows = useMemo(() => excludePendingConflictRows(rows), [rows]);
   const orderSummary = useMemo(() => summarizeAutoOpenOrderLogs(summaryRows), [summaryRows]);
@@ -955,7 +992,12 @@ function AutoOpenWeekSection({
           {summaryNode}
         </div>
       ) : null}
-      <AutoOpenHistoryTable rows={rows} markPrices={markPrices} />
+      <AutoOpenHistoryTable
+        rows={rows}
+        markPrices={markPrices}
+        onManualClose={onManualClose}
+        closingLogIds={closingLogIds}
+      />
     </section>
   );
 }
@@ -971,6 +1013,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   const [hideLimitPending, setHideLimitPending] = useState(false);
   const [mexcLiveOnly, setMexcLiveOnly] = useState(false);
   const [clearingSkipped, setClearingSkipped] = useState(false);
+  const [closingLogIds, setClosingLogIds] = useState<Set<string>>(() => new Set());
 
   const apiGet = useCallback(async (path: string) => {
     const initData = getTelegramInitData();
@@ -1074,6 +1117,34 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       setClearingSkipped(false);
     }
   }, [apiPost, loadHistory, payload?.skippedTotal, sourceFilter]);
+
+  const manualClose = useCallback(
+    async (row: AutoOpenOrderLogRow) => {
+      const coin = coinLabel(row.binanceSymbol || row.contractSymbol);
+      const side = row.side?.toUpperCase() ?? "—";
+      const ok = window.confirm(
+        `ปิด position ${coin} (${side}) บน MEXC ทันที?\n\nระบบจะสั่งปิด market · ยกเลิก plan TP/SL ถ้ามี · เคลียร์ state บอท`,
+      );
+      if (!ok) return;
+      setClosingLogIds((prev) => new Set(prev).add(row.id));
+      try {
+        const r = (await apiPost("/auto-open-history/close-position", { logId: row.id })) as {
+          alreadyClosed?: boolean;
+        };
+        await loadHistory();
+        window.alert(r.alreadyClosed ? "ไม่มี position เปิดอยู่แล้ว — รีเฟรชประวัติแล้ว" : "ปิด position แล้ว");
+      } catch (e) {
+        window.alert(e instanceof Error ? e.message : String(e));
+      } finally {
+        setClosingLogIds((prev) => {
+          const next = new Set(prev);
+          next.delete(row.id);
+          return next;
+        });
+      }
+    },
+    [apiPost, loadHistory],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1496,6 +1567,8 @@ export default function AutoOpenHistoryTelegramMiniApp() {
                 weekLabel={g.weekLabel}
                 rows={g.rows}
                 markPrices={markPrices}
+                onManualClose={manualClose}
+                closingLogIds={closingLogIds}
               />
             ))
           )
@@ -1503,6 +1576,8 @@ export default function AutoOpenHistoryTelegramMiniApp() {
           <AutoOpenHistoryTable
             rows={displayRows}
             markPrices={markPrices}
+            onManualClose={manualClose}
+            closingLogIds={closingLogIds}
             emptyMessage={
               mexcLiveOnly && limitFilteredRows.length > 0 && displayRows.length === 0
                 ? "ไม่มี position เปิดอยู่บน MEXC ในช่วงที่เลือก — ปิดตัวกรองเพื่อดูทั้งหมด"

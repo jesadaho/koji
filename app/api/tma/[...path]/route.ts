@@ -61,6 +61,7 @@ import {
   liffGetAutoOpenOrderHistory,
   liffGetAutoOpenMarkPrices,
   liffClearSkippedAutoOpenOrderLogs,
+  liffManualCloseAutoOpenPosition,
 } from "@/src/liffService";
 import { autoOpenOrderLogToCsv } from "@/lib/autoOpenOrderLogCsvExport";
 import {
@@ -515,6 +516,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       }
       const r = await liffClearSkippedAutoOpenOrderLogs(auth.userId, { source, reversalAlertSide });
       return json(r);
+    }
+    if (segs.length === 2 && a === "auto-open-history" && segs[1] === "close-position") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      let logId = "";
+      try {
+        const body = (await req.json()) as { logId?: unknown } | null;
+        if (body && typeof body === "object" && typeof body.logId === "string") {
+          logId = body.logId.trim();
+        }
+      } catch {
+        return json({ error: "JSON ไม่ถูกต้อง" }, 400);
+      }
+      if (!logId) return json({ error: "ต้องระบุ logId" }, 400);
+      const r = await liffManualCloseAutoOpenPosition(auth.userId, logId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({ ok: true, alreadyClosed: r.alreadyClosed === true });
     }
     if (segs.length === 1 && a === "snowball-stats") {
       const auth = await authenticateTmaRequest(req.headers.get("authorization"));
