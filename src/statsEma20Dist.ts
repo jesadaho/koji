@@ -9,17 +9,21 @@ import {
   computeEmaSlopePctFromPackAt,
   STATS_EMA1H_SLOPE_LOOKBACK_BARS,
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
-  statsEmaSlopeMinKlineBars,
 } from "./statsEmaSlope";
 
 export const STATS_EMA20_DIST_PERIOD = 20;
 
-/** แถวที่คำนวณ EMA20 metrics ณ alertedAtMs แล้ว — v2 = รวม slope */
-export const STATS_EMA20_DIST_VERSION = 2;
+/** แถวที่คำนวณ EMA20 metrics ณ alertedAtMs แล้ว — v3 = แก้ min bars สำหรับ EMA20 slope */
+export const STATS_EMA20_DIST_VERSION = 3;
 
 const BTC_USDT = "BTCUSDT";
 const LIVE_ALERT_MAX_AGE_MS = 10 * 60_000;
 const BTC_EMA20_4H_SLOPE_CACHE_MS = 5 * 60 * 1000;
+
+/** แท่งปิดล่าสุด + lookback + EMA20 warm-up */
+export function statsEma20SlopeMinKlineBars(lookbackBars: number): number {
+  return STATS_EMA20_DIST_PERIOD + lookbackBars + 8;
+}
 
 function tfBarDurSec(tf: "1h" | "4h"): number {
   return tf === "1h" ? 3600 : 4 * 3600;
@@ -68,7 +72,7 @@ async function fetchKlinePackThrough(
   lookbackBars: number,
 ): Promise<BinanceKlinePack | null> {
   const barDur = tfBarDurSec(tf);
-  const minBars = Math.max(statsEma20DistMinKlineBars(), statsEmaSlopeMinKlineBars(lookbackBars));
+  const minBars = Math.max(statsEma20DistMinKlineBars(), statsEma20SlopeMinKlineBars(lookbackBars));
   const atSec = Math.floor(atMs / 1000);
   const startMs = (atSec - minBars * barDur) * 1000;
   return fetchBinanceUsdmKlinesRange(symbol.trim().toUpperCase(), tf, {
@@ -96,7 +100,7 @@ async function fetchSymbolEma20_1hMetricsAtMs(
 
   const ageMs = Date.now() - atMs;
   if (ageMs >= 0 && ageMs < LIVE_ALERT_MAX_AGE_MS) {
-    const limit = statsEmaSlopeMinKlineBars(STATS_EMA1H_SLOPE_LOOKBACK_BARS);
+    const limit = statsEma20SlopeMinKlineBars(STATS_EMA1H_SLOPE_LOOKBACK_BARS);
     const pack = await fetchBinanceUsdmKlines(sym, "1h", limit);
     if (!pack) return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
     const now = Date.now();
@@ -142,7 +146,7 @@ async function fetchBtcEma20_4hSlopeAtMs(atMs: number): Promise<number | null> {
     if (btcEma20_4hSlopeCache && now - btcEma20_4hSlopeCache.atMs < BTC_EMA20_4H_SLOPE_CACHE_MS) {
       return btcEma20_4hSlopeCache.slope;
     }
-    const limit = statsEmaSlopeMinKlineBars(STATS_EMA4H_SLOPE_LOOKBACK_BARS);
+    const limit = statsEma20SlopeMinKlineBars(STATS_EMA4H_SLOPE_LOOKBACK_BARS);
     const pack = await fetchBinanceUsdmKlines(BTC_USDT, "4h", limit);
     const slope = pack
       ? computeEmaSlopePctFromPackAt(
@@ -204,7 +208,11 @@ export type StatsRowWithEma20Dist = {
 };
 
 export function statsRowNeedsEma20DistBackfill(row: StatsRowWithEma20Dist): boolean {
-  return row.ema20DistV !== STATS_EMA20_DIST_VERSION;
+  if (row.ema20DistV !== STATS_EMA20_DIST_VERSION) return true;
+  const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
+  if (finite(row.priceVsEma20_1hPct) && !finite(row.ema20_1hSlopePct7d)) return true;
+  if (finite(row.priceVsEma20_1hPct) && !finite(row.btcEma20_4hSlopePct7d)) return true;
+  return false;
 }
 
 export async function backfillStatsRowsEma20Dist<T extends StatsRowWithEma20Dist>(
