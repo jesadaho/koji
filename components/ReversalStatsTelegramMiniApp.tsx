@@ -133,6 +133,7 @@ import {
   REVERSAL_MATRIX_FILTER_OPTIONS,
   reversalLongCandidateFilterLabel,
   reversalLongCandidateFilterTitle,
+  reversalLongCandidateDebugTitle,
   reversalMatrixFilterLabel,
   reversalMatrixFilterTitle,
   reversalRowMatchesLongCandidateFilter,
@@ -164,7 +165,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const FOOTNOTE_1D =
   "Binance USDT-M · Short bias · 1D: follow-up 1d/3d/7d (ปิด Day) · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
 const FOOTNOTE_1H_SHORT =
-  "Binance USDT-M · Short · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · winrate แยก 12h/24h/48h · ทิศแนะนำ Long candidate: EMA1H > 50% · EMA20 Diff 15–30% · ไม่ส่ง Telegram follow-up";
+  "Binance USDT-M · Short · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · winrate แยก 12h/24h/48h · ทิศแนะนำ Long candidate: EMA20∠1h > 50% · EMA20Δ1h 15–30% · ไม่ส่ง Telegram follow-up";
 
 const FOOTNOTE_1H_LONG =
   "Binance USDT-M · สัญญาณ Long · วัดผล fade SHORT · 1H follow-up 4h/12h/24h/48h (ปิด 15m) · MFE/Max DD/Adv max ฝั่ง Short · ผลที่ 24h · winrate/กำไรกลยุทธ์ อิงทิศ SHORT · ไม่ส่ง Telegram follow-up";
@@ -847,7 +848,7 @@ function ReversalStatsSection({
                       title={
                         reversalRowIsLongCandidate(r)
                           ? `Long candidate — ${REVERSAL_LONG_CANDIDATE_CRITERIA}`
-                          : "แนะนำ Short — ไม่ผ่านเกณฑ์ Long candidate"
+                          : `แนะนำ Short — ${reversalLongCandidateDebugTitle(r)}`
                       }
                     >
                       {reversalSuggestedTradeSideLabel(r)}
