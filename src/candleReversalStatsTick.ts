@@ -423,9 +423,10 @@ function applyReversal1hStrategyProfitAtHorizon(
     pct48h: row.pct48h,
     ema4hSlopePct7d: row.ema4hSlopePct7d,
     maxHorizonHours: holdHours,
+    close12hEnabled: true,
   });
   if (sim) {
-    const key = reversalTpStrategyCacheKey(holdHours);
+    const key = reversalTpStrategyCacheKey(holdHours, { close12hEnabled: true });
     row.strategyProfitByPlan = {
       ...row.strategyProfitByPlan,
       [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
@@ -447,9 +448,10 @@ function applyReversal1hStrategyProfitAtHorizon(
     pct48h: reversalStatsLongHorizonPct(row.pct48h),
     ema4hSlopePct7d: row.ema4hSlopePct7d,
     maxHorizonHours: holdHours,
+    close12hEnabled: true,
   });
   if (!simLong) return;
-  const longKey = reversalTpStrategyCacheKeyLong(holdHours);
+  const longKey = reversalTpStrategyCacheKeyLong(holdHours, { close12hEnabled: true });
   row.strategyProfitByPlan = {
     ...row.strategyProfitByPlan,
     [longKey]: { profitPct: simLong.profitPct, exitReason: simLong.exitReason },

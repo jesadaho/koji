@@ -96,7 +96,7 @@ import {
   withReversalStrategyProfitDisplayFields,
   withViewerStrategyProfitDisplayFields,
 } from "./statsStrategyProfitEnrich";
-import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
+import { reversalTpStrategySummary } from "@/lib/reversalTpStrategy";
 import {
   correctCandleReversalStatsOutcome,
   runCandleReversalStatsFollowUpTick,
@@ -1083,22 +1083,29 @@ export async function liffGetCandleReversalStats(
   let viewerStrategyMarginUsdt: number | null | undefined;
   let viewerStrategyLeverage: number | null | undefined;
   let viewerStrategyLongDynamicLeverageEnabled: boolean | undefined;
+  let viewerReversalTp12hCloseEnabled: boolean | undefined;
   if (telegramUserId != null) {
     const [plan, sizing] = await Promise.all([
       resolveViewerStatsTpSlPlan(telegramUserId, "reversal"),
       resolveViewerStatsTradeSizing(telegramUserId, "reversal"),
     ]);
-    viewerTpSlPlanSummary = REVERSAL_TP_STRATEGY_SUMMARY;
+    viewerTpSlPlanSummary = reversalTpStrategySummary({
+      close12hEnabled: plan.reversalTp12hCloseEnabled !== false,
+    });
     viewerTpSlPlan = viewerStatsTpSlPlanPayload(plan);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
     viewerStrategyLongDynamicLeverageEnabled = sizing.reversalLongDynamicLeverageEnabled === true;
+    viewerReversalTp12hCloseEnabled = plan.reversalTp12hCloseEnabled !== false;
+    const reversalSimOpts = {
+      close12hEnabled: plan.reversalTp12hCloseEnabled !== false,
+    };
     const dirty = await enrichCandleReversalStatsWithViewerStrategyProfit(rows, plan);
     if (dirty > 0) {
       await saveCandleReversalStatsState(st);
     }
     for (let i = 0; i < rows.length; i++) {
-      rows[i] = withReversalStrategyProfitDisplayFields(rows[i]!);
+      rows[i] = withReversalStrategyProfitDisplayFields(rows[i]!, reversalSimOpts);
     }
   }
   return {
@@ -1111,6 +1118,11 @@ export async function liffGetCandleReversalStats(
     ...(viewerStrategyLongDynamicLeverageEnabled
       ? { viewerStrategyLongDynamicLeverageEnabled: true }
       : {}),
+    ...(viewerReversalTp12hCloseEnabled === false
+      ? { viewerReversalTp12hCloseEnabled: false }
+      : viewerReversalTp12hCloseEnabled === true
+        ? { viewerReversalTp12hCloseEnabled: true }
+        : {}),
   };
 }
 
@@ -1350,6 +1362,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     slEntryOffsetPct: row.reversalAutoTradeSlEntryOffsetPct ?? null,
     slAtEntryAfter24hIfGreenEnabled:
       row.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== false,
+    tp12hCloseEnabled: row.reversalAutoTradeTp12hCloseEnabled !== false,
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
     longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
@@ -2055,6 +2068,15 @@ function parseReversalAutoTradeNested(
     slAtEntryAfter24hIfGreenEnabled = false;
   }
 
+  let tp12hCloseEnabled: boolean | undefined;
+  if (typeof o.tp12hCloseEnabled === "boolean") {
+    tp12hCloseEnabled = o.tp12hCloseEnabled;
+  } else if (o.tp12hCloseEnabled === "1" || o.tp12hCloseEnabled === 1 || o.tp12hCloseEnabled === "true") {
+    tp12hCloseEnabled = true;
+  } else if (o.tp12hCloseEnabled === "0" || o.tp12hCloseEnabled === 0 || o.tp12hCloseEnabled === "false") {
+    tp12hCloseEnabled = false;
+  }
+
   const parseGateBool = (key: string, defaultOn: boolean): boolean => {
     if (!(key in o)) return defaultOn;
     const x = o[key];
@@ -2112,6 +2134,9 @@ function parseReversalAutoTradeNested(
   }
   if (slAtEntryAfter24hIfGreenEnabled !== undefined) {
     patchPart.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled = slAtEntryAfter24hIfGreenEnabled;
+  }
+  if (tp12hCloseEnabled !== undefined) {
+    patchPart.reversalAutoTradeTp12hCloseEnabled = tp12hCloseEnabled;
   }
 
   const parseReversalEntryEmaPatch = (

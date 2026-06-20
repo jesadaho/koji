@@ -17,6 +17,8 @@ export type StatsTpSlPlanSource = "reversal" | "snowball";
 
 export type ViewerStatsTpSlPlan = StatsTpSlPlan & {
   tpSlEnabled: boolean;
+  /** Reversal — กฎปิด @12h (ROI<0 + EMA4H>0) · default เปิด */
+  reversalTp12hCloseEnabled?: boolean;
 };
 
 export { statsTpSlPlanCacheKey };
@@ -68,6 +70,7 @@ function reversalTpSlPlanFromSettings(
       row.reversalAutoTradeSlEntryOffsetPct,
       DEFAULT_SL_ENTRY_OFFSET_PCT,
     ),
+    reversalTp12hCloseEnabled: row.reversalAutoTradeTp12hCloseEnabled !== false,
   };
 }
 
@@ -100,6 +103,7 @@ export function resolveTpSlPlanForUserId(
       ...DEFAULT_STATS_TPSL_PLAN,
       slAtEntryArmRoiPct: DEFAULT_SL_ARM_ROI_PCT,
       slAtEntryOffsetPct: DEFAULT_SL_ENTRY_OFFSET_PCT,
+      reversalTp12hCloseEnabled: true,
     };
   }
   return source === "reversal"

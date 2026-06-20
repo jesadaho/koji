@@ -190,6 +190,8 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeSlArmRoiPct?: number;
   reversalAutoTradeSlEntryOffsetPct?: number;
   reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
+  /** กฎปิด @12h: ROI<0 + EMA4H>0 — default เปิด */
+  reversalAutoTradeTp12hCloseEnabled?: boolean;
   /** @deprecated ใช้ gateQualitySignal */
   reversalAutoTradeGateBodyWick80?: boolean;
   /** @deprecated ใช้ gateQualitySignal */
@@ -391,6 +393,8 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeSlArmRoiPct?: number | null;
   reversalAutoTradeSlEntryOffsetPct?: number | null;
   reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
+  /** กฎปิด @12h: ROI<0 + EMA4H>0 — default เปิด */
+  reversalAutoTradeTp12hCloseEnabled?: boolean;
   reversalAutoTradeGateBodyWick80?: boolean;
   reversalAutoTradeGateLenRank315?: boolean;
   reversalAutoTradeGateQualitySignal?: boolean;

@@ -159,6 +159,8 @@ export type CandleReversalStatsApiPayload = {
   viewerStrategyLeverage?: number | null;
   /** เปิดใน Settings → Dynamic leverage (Long → SHORT) */
   viewerStrategyLongDynamicLeverageEnabled?: boolean;
+  /** เปิดกฎปิด @12h ในกลยุทธ์ Reversal (default เปิด) */
+  viewerReversalTp12hCloseEnabled?: boolean;
 };
 
 export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): string {

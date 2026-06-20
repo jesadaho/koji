@@ -118,7 +118,11 @@ export function autoOpenTpStrategyCacheKey(
   holdHours: StatsStrategyProfitHorizon,
   source?: AutoOpenOrderLogRow["source"],
 ): string {
-  if (source === "reversal") return reversalTpStrategyCacheKey(holdHours);
+  if (source === "reversal") {
+    return reversalTpStrategyCacheKey(holdHours, {
+      close12hEnabled: plan.reversalTp12hCloseEnabled !== false,
+    });
+  }
   return statsTpSlPlanCacheKey(viewerStatsTpSlPlanPayload(plan), holdHours);
 }
 
@@ -156,6 +160,7 @@ export function computeAutoOpenTpStrategyAtHorizon(input: {
       ema4hSlopePct7d: ema4h,
       maxHorizonHours: holdHours,
       leverage: input.row.leverage,
+      close12hEnabled: input.plan.reversalTp12hCloseEnabled !== false,
     });
     if (!sim) return null;
     const resolved = resolveStatsStrategyProfitOutcome({

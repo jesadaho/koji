@@ -146,6 +146,7 @@ export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings)
   slArmRoiPct: number;
   slEntryOffsetPct: number;
   slAtEntryAfter24hIfGreenEnabled: boolean;
+  tp12hCloseEnabled: boolean;
 } {
   const en = row.reversalAutoTradeTpSlEnabled !== false;
   const t1 =
@@ -186,6 +187,7 @@ export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings)
     slAtEntryAfter24hIfGreenEnabled: slAtEntryAfter24hIfGreenEnabledFromSetting(
       row.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled,
     ),
+    tp12hCloseEnabled: row.reversalAutoTradeTp12hCloseEnabled !== false,
   };
 }
 

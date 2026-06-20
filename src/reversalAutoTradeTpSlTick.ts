@@ -334,6 +334,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
         if (!a.reversalTp12hChecked && nowMs >= a.openedAtMs + MS_12H) {
           state = withReversalTp12hChecked(state, userId, a.contractSymbol, a.side);
           if (
+            tpPlan.tp12hCloseEnabled &&
             reversalTpStrategyLive12hShouldClose({
               dropPct: dropForTp,
               ema4hSlopePct7d: a.ema4hSlopePct7d,

@@ -35,17 +35,43 @@ export const REVERSAL_TP_STRATEGY_24H_ROI_HOLD_SL_MIN_EXCLUSIVE = 3;
 export const REVERSAL_TP_STRATEGY_SUMMARY =
   "12h ROI<0+EMA4H>0→ปิด · 24h ROI<3%+EMA4H>0→ปิด · 24h ROI>3%+EMA4H<0→ถือ+SL@entry · 24–48h SL@entry→0% · 48h force";
 
-export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revRoi3v1";
+export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revRoi3v2";
+
+export type ReversalTpStrategySimOptions = {
+  /** default true — ปิด @12h เมื่อ ROI<0 + EMA4H>0 */
+  close12hEnabled?: boolean;
+};
+
+export type ReversalTpStrategyCacheOpts = ReversalTpStrategySimOptions & {
+  long?: boolean;
+};
+
+export function reversalTp12hCloseEnabled(opts?: ReversalTpStrategySimOptions): boolean {
+  return opts?.close12hEnabled !== false;
+}
+
+export function reversalTpStrategySummary(opts?: ReversalTpStrategySimOptions): string {
+  const twelve = reversalTp12hCloseEnabled(opts) ? "12h ROI<0+EMA4H>0→ปิด · " : "";
+  return `${twelve}24h ROI<3%+EMA4H>0→ปิด · 24h ROI>3%+EMA4H<0→ถือ+SL@entry · 24–48h SL@entry→0% · 48h force`;
+}
 
 export type ReversalTpStrategyProfitBand = "win" | "flat_profit" | "flat_loss" | "loss";
 
-export function reversalTpStrategyCacheKey(holdHours: StatsStrategyProfitHorizon): string {
-  return `${REVERSAL_TP_STRATEGY_CACHE_VERSION}:${holdHours}h`;
+export function reversalTpStrategyCacheKey(
+  holdHours: StatsStrategyProfitHorizon,
+  opts?: ReversalTpStrategyCacheOpts,
+): string {
+  const twelve = reversalTp12hCloseEnabled(opts) ? "12h1" : "12h0";
+  const long = opts?.long ? ":long" : "";
+  return `${REVERSAL_TP_STRATEGY_CACHE_VERSION}:${holdHours}h${long}:${twelve}`;
 }
 
 /** cache กำไรกลยุทธ์ฝั่ง Long (fade) — ตาราง Reversal Short 1H · ทิศแนะนำ 🟢 Long */
-export function reversalTpStrategyCacheKeyLong(holdHours: StatsStrategyProfitHorizon): string {
-  return `${REVERSAL_TP_STRATEGY_CACHE_VERSION}:${holdHours}h:long`;
+export function reversalTpStrategyCacheKeyLong(
+  holdHours: StatsStrategyProfitHorizon,
+  opts?: ReversalTpStrategySimOptions,
+): string {
+  return reversalTpStrategyCacheKey(holdHours, { ...opts, long: true });
 }
 
 export function reversalStatsLongHorizonPct(shortPct: number): number {
@@ -234,6 +260,7 @@ export function simulateReversalTpStrategyProfit(input: {
   maxHorizonHours?: StatsStrategyProfitHorizon;
   slEntryOffsetPct?: number;
   leverage?: number | null;
+  close12hEnabled?: boolean;
 }): { profitPct: number; exitReason: StatsTpSlExitReason } | null {
   const entry = input.entry;
   if (!(entry > 0) || input.iFirst < 0 || input.iLast < input.iFirst) return null;
@@ -302,6 +329,7 @@ export function simulateReversalTpStrategyProfit(input: {
   }
 
   if (
+    reversalTp12hCloseEnabled(input) &&
     reversalTpStrategyLive12hShouldClose({
       dropPct: input.pct12h,
       ema4hSlopePct7d: input.ema4hSlopePct7d,
