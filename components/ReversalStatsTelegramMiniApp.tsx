@@ -1807,7 +1807,7 @@ export default function ReversalStatsTelegramMiniApp() {
           tf="1h"
           title="สถิติ Reversal · 1H Short"
           subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
-          strategyPlanTitle={REVERSAL_TP_STRATEGY_SUMMARY}
+          strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
@@ -1833,7 +1833,7 @@ export default function ReversalStatsTelegramMiniApp() {
           tf="1h"
           title="สถิติ Reversal · Long 1H (fade SHORT)"
           subtitle="สัญญาณ Long · วัดผลฝั่ง Short (fade) · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
-          strategyPlanTitle={REVERSAL_TP_STRATEGY_SUMMARY}
+          strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}

@@ -14,7 +14,7 @@ import {
   REVERSAL_QUALITY_SIGNAL_CRITERIA,
   REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA,
 } from "@/lib/reversalMatrixFilters";
-import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
+import { reversalTpStrategySummary } from "@/lib/reversalTpStrategy";
 import { SNOWBALL_QUALITY_SIGNAL_LONG_GRADE_OPTIONS } from "@/src/snowballQualitySignalLongGrades";
 import type { SnowballAutoTradeGradeKey } from "@/src/tradingViewCloseSettingsStore";
 import {
@@ -155,6 +155,7 @@ type ReversalAutoTradeApiBundle = {
   slArmRoiPct?: number | null;
   slEntryOffsetPct?: number | null;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
+  tp12hCloseEnabled?: boolean;
   gateQualitySignal?: boolean;
   saturdayAllSignalsEnabled?: boolean;
   longSignalShortEnabled?: boolean;
@@ -259,6 +260,7 @@ export default function SettingsTelegramMiniApp() {
   const [revSlArmRoiPct, setRevSlArmRoiPct] = useState("");
   const [revSlEntryOffsetPct, setRevSlEntryOffsetPct] = useState("");
   const [revSlAtEntryAfter24hIfGreen, setRevSlAtEntryAfter24hIfGreen] = useState(true);
+  const [revTp12hCloseEnabled, setRevTp12hCloseEnabled] = useState(true);
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revLongSignalShort, setRevLongSignalShort] = useState(false);
@@ -417,6 +419,7 @@ export default function SettingsTelegramMiniApp() {
       st.slEntryOffsetPct != null && Number.isFinite(st.slEntryOffsetPct) ? String(st.slEntryOffsetPct) : ""
     );
     setRevSlAtEntryAfter24hIfGreen(st.slAtEntryAfter24hIfGreenEnabled !== false);
+    setRevTp12hCloseEnabled(st.tp12hCloseEnabled !== false);
     setRevGateQualitySignal(st.gateQualitySignal !== false);
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
     setRevLongSignalShort(Boolean(st.longSignalShortEnabled));
@@ -1066,6 +1069,7 @@ export default function SettingsTelegramMiniApp() {
         slArmRoiPct: revSlArmRoiPct.trim() ? slArmParsed : null,
         slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
         slAtEntryAfter24hIfGreenEnabled: revSlAtEntryAfter24hIfGreen,
+        tp12hCloseEnabled: revTp12hCloseEnabled,
         entryMode: revShortEntryMode,
         entryEmaPeriod:
           revShortEntryMode === "hybrid_ema" ? Math.floor(shortEntryEmaPeriodParsed) : null,
@@ -2126,10 +2130,13 @@ export default function SettingsTelegramMiniApp() {
           กลยุทธ์ TP/SL (EMA4H + profit band)
         </p>
         <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.92 }}>
-          {REVERSAL_TP_STRATEGY_SUMMARY}
+          {reversalTpStrategySummary({ close12hEnabled: revTp12hCloseEnabled })}
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
-          <li><strong>12 ชม.</strong>: ROI &lt; 0 + EMA4H &gt; 0 → ปิดทันที</li>
+          <li>
+            <strong>12 ชม.</strong>: ROI &lt; 0 + EMA4H &gt; 0 → ปิดทันที
+            {revTp12hCloseEnabled ? "" : " (ปิดใช้งาน)"}
+          </li>
           <li><strong>24 ชม.</strong>: ROI &lt; 3% + EMA4H &gt; 0 → ปิดทันที</li>
           <li><strong>24 ชม.</strong>: ROI &gt; 3% + EMA4H &lt; 0 → ถือต่อ + SL@entry (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code>)</li>
           <li><strong>24–48 ชม.</strong>: แตะ SL@entry → ออก ~0%</li>
@@ -2148,6 +2155,21 @@ export default function SettingsTelegramMiniApp() {
             <strong style={{ fontWeight: 600 }}>เปิดใช้กลยุทธ์ TP/SL</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
               ถ้าปิด ระบบจะเปิด SHORT อย่างเดียว ไม่ tick TP/SL ให้ · max hold ยังใช้ค่าด้านล่าง
+            </span>
+          </span>
+        </label>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.5rem" }}>
+          <input
+            type="checkbox"
+            checked={revTp12hCloseEnabled}
+            onChange={(e) => setRevTp12hCloseEnabled(e.target.checked)}
+            disabled={!revTpSlEnabled}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>เปิดกฎปิด @12 ชม.</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              ROI &lt; 0 และ EMA4H &gt; 0 → ปิดทันทีที่ครบ 12 ชม. — ใช้ทั้ง auto-open และตารางสถิติ
             </span>
           </span>
         </label>
