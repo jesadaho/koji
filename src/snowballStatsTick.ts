@@ -3,6 +3,7 @@ import {
   backfillAllStatsRowsBtcEmaSlopes,
   backfillAllStatsRowsSymbolEmaSlopes,
 } from "./statsEmaSlope";
+import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
 import {
   computeFollowUpMaxAdversePct,
   firstFollowUpKlineIndexAfterAnchorClose,
@@ -491,6 +492,7 @@ export async function runSnowballStatsFollowUpTick(
   const emaSlopes = await backfillSnowballEmaSlopes(state.rows, symbolFilter);
   dirty += emaSlopes;
   dirty += await backfillAllStatsRowsBtcEmaSlopes(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
+  dirty += await backfillAllStatsRowsEma20Dist(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsPsar4h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   const trendGrades = await backfillSnowballTrendGradesForTick(state.rows, symbolFilter);
   dirty += trendGrades;

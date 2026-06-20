@@ -120,11 +120,11 @@ export function reversalEma4hFilterTitle(filter: ReversalEma4hFilter): string {
 }
 
 export function reversalEma1hFilterTitle(filter: ReversalEma1hFilter): string {
-  if (filter === "all") return "ไม่กรอง EMA1h slope 7 วัน";
-  if (filter === "gt0lt30") return "EMA(12) 1h slope 7 วัน > 0% และ < 30%";
-  if (filter === "gtm10lt0") return "EMA(12) 1h slope 7 วัน > -10% และ < 0%";
+  if (filter === "all") return "ไม่กรอง EMA20 1h dist %";
+  if (filter === "gt0lt30") return "EMA20 1h dist > 0% และ < 30%";
+  if (filter === "gtm10lt0") return "EMA20 1h dist > -10% และ < 0%";
   const label = reversalEma1hFilterLabel(filter);
-  return `EMA(12) 1h slope 7 วัน ${label}%`;
+  return `EMA20 1h dist ${label}%`;
 }
 
 export function reversalEma1dFilterTitle(filter: ReversalEma1dFilter): string {
@@ -143,10 +143,10 @@ export function reversalRowMatchesEma4hFilter(
 }
 
 export function reversalRowMatchesEma1hFilter(
-  row: { ema1hSlopePct7d?: number | null },
+  row: { priceVsEma20_1hPct?: number | null },
   filter: ReversalEma1hFilter,
 ): boolean {
-  return emaSlopePctMatchesFilter(row.ema1hSlopePct7d, filter);
+  return emaSlopePctMatchesFilter(row.priceVsEma20_1hPct, filter);
 }
 
 export function reversalRowMatchesEma1dFilter(
@@ -162,17 +162,17 @@ export type BtcEma4hFilter = ReversalEmaSlopeFilter;
 export const BTC_EMA4H_FILTER_OPTIONS = REVERSAL_EMA_SLOPE_FILTER_OPTIONS;
 
 export function reversalBtcEma4hFilterTitle(filter: BtcEma4hFilter): string {
-  if (filter === "all") return "ไม่กรอง BTC EMA(12) 4h slope 7 วัน";
-  if (filter === "gt0lt30") return "BTC EMA(12) 4h slope 7 วัน > 0% และ < 30%";
-  if (filter === "gtm10lt0") return "BTC EMA(12) 4h slope 7 วัน > -10% และ < 0%";
-  if (filter === "gtm14") return "BTC EMA(12) 4h slope 7 วัน > -14%";
+  if (filter === "all") return "ไม่กรอง BTC EMA20 4h dist %";
+  if (filter === "gt0lt30") return "BTC EMA20 4h dist > 0% และ < 30%";
+  if (filter === "gtm10lt0") return "BTC EMA20 4h dist > -10% และ < 0%";
+  if (filter === "gtm14") return "BTC EMA20 4h dist > -14%";
   const label = reversalEmaSlopeFilterLabel(filter);
-  return `BTC EMA(12) 4h slope 7 วัน ${label}%`;
+  return `BTC EMA20 4h dist ${label}%`;
 }
 
 export function reversalRowMatchesBtcEma4hFilter(
-  row: Pick<CandleReversalStatsRow, "btcEma4hSlopePct7d">,
+  row: Pick<CandleReversalStatsRow, "btcPriceVsEma20_4hPct">,
   filter: BtcEma4hFilter,
 ): boolean {
-  return emaSlopePctMatchesFilter(row.btcEma4hSlopePct7d, filter);
+  return emaSlopePctMatchesFilter(row.btcPriceVsEma20_4hPct, filter);
 }

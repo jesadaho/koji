@@ -5,6 +5,7 @@ import {
   STATS_BTC_EMA_SLOPES_VERSION,
   STATS_SYMBOL_EMA_SLOPES_VERSION,
 } from "./statsEmaSlope";
+import { STATS_EMA20_DIST_VERSION } from "./statsEma20Dist";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import {
@@ -171,6 +172,18 @@ export function buildSnowballStatsRow(input: AppendSnowballStatsInput): Snowball
       input.btcEma1dSlopePct7d != null && Number.isFinite(input.btcEma1dSlopePct7d)
         ? input.btcEma1dSlopePct7d
         : null,
+    priceVsEma20_1hPct:
+      input.priceVsEma20_1hPct != null && Number.isFinite(input.priceVsEma20_1hPct)
+        ? input.priceVsEma20_1hPct
+        : null,
+    btcPriceVsEma20_4hPct:
+      input.btcPriceVsEma20_4hPct != null && Number.isFinite(input.btcPriceVsEma20_4hPct)
+        ? input.btcPriceVsEma20_4hPct
+        : null,
+    ...(input.priceVsEma20_1hPct != null && Number.isFinite(input.priceVsEma20_1hPct) ||
+    (input.btcPriceVsEma20_4hPct != null && Number.isFinite(input.btcPriceVsEma20_4hPct))
+      ? { ema20DistV: STATS_EMA20_DIST_VERSION }
+      : {}),
     psar4hTrend:
       input.psar4hTrend === "up" || input.psar4hTrend === "down" ? input.psar4hTrend : null,
     psar4hDistPct:

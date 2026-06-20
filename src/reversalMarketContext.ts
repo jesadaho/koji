@@ -5,6 +5,7 @@
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 import { fetchStatsQuoteVol24hUsdt } from "./statsQuoteVol24h";
+import { fetchStatsEma20DistAtMs } from "./statsEma20Dist";
 import { fetchBtcEmaSlopesAtMs, fetchSymbolEmaSlopesAtMs } from "./statsEmaSlope";
 import { fetchSymbolPsar4hAtMs } from "./statsPsar4h";
 
@@ -41,6 +42,10 @@ export type ReversalAlertMarketSnapshot = {
   btcEma4hSlopePct7d: number | null;
   /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
   btcEma1dSlopePct7d: number | null;
+  /** (close − EMA20) / EMA20 × 100 บน 1h ของคู่สัญญาณ */
+  priceVsEma20_1hPct: number | null;
+  /** BTC — (close − EMA20) / EMA20 × 100 บน 4h */
+  btcPriceVsEma20_4hPct: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d: number | null;
   /** PSAR 4h — ทิศ SAR (up/down) */
@@ -56,13 +61,14 @@ export async function fetchReversalAlertMarketSnapshot(
 ): Promise<ReversalAlertMarketSnapshot> {
   const sym = binanceSymbol.trim().toUpperCase();
   const base = binanceUsdtPerpBase(sym);
-  const [quoteVol24hUsdt, marketCapUsd, symbolEma, atrPct14d, btcEma, psar4h] = await Promise.all([
+  const [quoteVol24hUsdt, marketCapUsd, symbolEma, atrPct14d, btcEma, psar4h, ema20Dist] = await Promise.all([
     fetchStatsQuoteVol24hUsdt(sym),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
     fetchSymbolEmaSlopesAtMs(sym, atMs),
     fetchSymbolAtrPct14d(sym),
     fetchBtcEmaSlopesAtMs(atMs),
     fetchSymbolPsar4hAtMs(sym, atMs),
+    fetchStatsEma20DistAtMs(sym, atMs),
   ]);
   return {
     quoteVol24hUsdt,
@@ -72,6 +78,8 @@ export async function fetchReversalAlertMarketSnapshot(
     ema1dSlopePct7d: symbolEma.ema1dSlopePct7d,
     btcEma4hSlopePct7d: btcEma.btcEma4hSlopePct7d,
     btcEma1dSlopePct7d: btcEma.btcEma1dSlopePct7d,
+    priceVsEma20_1hPct: ema20Dist.priceVsEma20_1hPct,
+    btcPriceVsEma20_4hPct: ema20Dist.btcPriceVsEma20_4hPct,
     atrPct14d,
     psar4hTrend: psar4h?.trend ?? null,
     psar4hDistPct: psar4h?.distPct ?? null,

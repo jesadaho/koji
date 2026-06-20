@@ -129,6 +129,12 @@ export type SnowballStatsRow = {
   btcEma4hSlopePct7d?: number | null;
   /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
   btcEma1dSlopePct7d?: number | null;
+  /** (close − EMA20) / EMA20 × 100 บน 1h ของคู่สัญญาณ */
+  priceVsEma20_1hPct?: number | null;
+  /** BTC — (close − EMA20) / EMA20 × 100 บน 4h */
+  btcPriceVsEma20_4hPct?: number | null;
+  /** 1 = price vs EMA20 dist คำนวณ ณ alertedAtMs */
+  ema20DistV?: number;
   /** PSAR 4h ของคู่ — ทิศ SAR */
   psar4hTrend?: "up" | "down" | null;
   /** PSAR 4h — (close − SAR) / close × 100 */
@@ -1224,13 +1230,13 @@ function compareSnowballStatsRows(
     case "atr14d":
       return statsCmpNumNullLast(a.atrPct14d, b.atrPct14d);
     case "ema1h":
-      return statsCmpNumNullLast(a.ema1hSlopePct7d, b.ema1hSlopePct7d);
+      return statsCmpNumNullLast(a.priceVsEma20_1hPct, b.priceVsEma20_1hPct);
     case "ema4h":
       return statsCmpNumNullLast(a.ema4hSlopePct7d, b.ema4hSlopePct7d);
     case "ema1d":
       return statsCmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
     case "btcEma4h":
-      return statsCmpNumNullLast(a.btcEma4hSlopePct7d, b.btcEma4hSlopePct7d);
+      return statsCmpNumNullLast(a.btcPriceVsEma20_4hPct, b.btcPriceVsEma20_4hPct);
     case "btcEma1d":
       return statsCmpNumNullLast(a.btcEma1dSlopePct7d, b.btcEma1dSlopePct7d);
     case "psar4h": {

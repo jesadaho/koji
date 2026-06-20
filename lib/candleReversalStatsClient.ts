@@ -50,6 +50,12 @@ export type CandleReversalStatsRow = {
   btcEma4hSlopePct7d?: number | null;
   /** BTC — EMA(12) 1d slope % ย้อนหลัง 7 แท่ง */
   btcEma1dSlopePct7d?: number | null;
+  /** (close − EMA20) / EMA20 × 100 บน 1h ของคู่สัญญาณ */
+  priceVsEma20_1hPct?: number | null;
+  /** BTC — (close − EMA20) / EMA20 × 100 บน 4h */
+  btcPriceVsEma20_4hPct?: number | null;
+  /** 1 = price vs EMA20 dist คำนวณ ณ alertedAtMs */
+  ema20DistV?: number;
   /** PSAR 4h — ทิศ SAR (up/down) */
   psar4hTrend?: "up" | "down" | null;
   /** PSAR 4h — (close − SAR) / close × 100 */
@@ -402,13 +408,13 @@ function compareCandleReversalStatsRows(
     case "mcap":
       return cmpNumNullLast(a.marketCapUsd, b.marketCapUsd);
     case "ema1h":
-      return cmpNumNullLast(a.ema1hSlopePct7d, b.ema1hSlopePct7d);
+      return cmpNumNullLast(a.priceVsEma20_1hPct, b.priceVsEma20_1hPct);
     case "ema4h":
       return cmpNumNullLast(a.ema4hSlopePct7d, b.ema4hSlopePct7d);
     case "ema1d":
       return cmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
     case "btcEma4h":
-      return cmpNumNullLast(a.btcEma4hSlopePct7d, b.btcEma4hSlopePct7d);
+      return cmpNumNullLast(a.btcPriceVsEma20_4hPct, b.btcPriceVsEma20_4hPct);
     case "btcEma1d":
       return cmpNumNullLast(a.btcEma1dSlopePct7d, b.btcEma1dSlopePct7d);
     case "psar4h": {
@@ -486,7 +492,7 @@ export function candleReversalGreenDaysLabel(v: number | null | undefined): stri
   return `${Math.floor(v)} วัน`;
 }
 
-export function candleReversalEma1hSlopeLabel(pct: CandleReversalStatsRow["ema1hSlopePct7d"]): string {
+export function candleReversalEma1hSlopeLabel(pct: CandleReversalStatsRow["priceVsEma20_1hPct"]): string {
   return statsEmaSlopePctLabel(pct);
 }
 

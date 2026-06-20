@@ -116,6 +116,8 @@ function mktCtxToStatsFields(ctx: Awaited<ReturnType<typeof fetchSnowballAlertMa
     ema1dSlopePct7d: ctx.ema1dSlopePct7d,
     btcEma4hSlopePct7d: ctx.btcEma4hSlopePct7d,
     btcEma1dSlopePct7d: ctx.btcEma1dSlopePct7d,
+    priceVsEma20_1hPct: ctx.priceVsEma20_1hPct,
+    btcPriceVsEma20_4hPct: ctx.btcPriceVsEma20_4hPct,
     psar4hTrend: ctx.psar4hTrend,
     psar4hDistPct: ctx.psar4hDistPct,
   };

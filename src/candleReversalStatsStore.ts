@@ -10,6 +10,7 @@ import {
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
 import { STATS_BTC_EMA_SLOPES_VERSION } from "./statsEmaSlope";
+import { STATS_EMA20_DIST_VERSION } from "./statsEma20Dist";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
@@ -138,6 +139,8 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     ema1dSlopePct7d: nullNum(r.ema1dSlopePct7d),
     btcEma4hSlopePct7d: nullNum(r.btcEma4hSlopePct7d),
     btcEma1dSlopePct7d: nullNum(r.btcEma1dSlopePct7d),
+    priceVsEma20_1hPct: nullNum(r.priceVsEma20_1hPct),
+    btcPriceVsEma20_4hPct: nullNum(r.btcPriceVsEma20_4hPct),
     psar4hTrend:
       r.psar4hTrend === "up" || r.psar4hTrend === "down" ? r.psar4hTrend : null,
     psar4hDistPct: nullNum(r.psar4hDistPct),
@@ -331,6 +334,8 @@ export async function appendCandleReversalStatsRow(
   let ema1dSlopePct7d: CandleReversalStatsRow["ema1dSlopePct7d"] = null;
   let btcEma4hSlopePct7d: CandleReversalStatsRow["btcEma4hSlopePct7d"] = null;
   let btcEma1dSlopePct7d: CandleReversalStatsRow["btcEma1dSlopePct7d"] = null;
+  let priceVsEma20_1hPct: CandleReversalStatsRow["priceVsEma20_1hPct"] = null;
+  let btcPriceVsEma20_4hPct: CandleReversalStatsRow["btcPriceVsEma20_4hPct"] = null;
   let psar4hTrend: CandleReversalStatsRow["psar4hTrend"] = null;
   let psar4hDistPct: CandleReversalStatsRow["psar4hDistPct"] = null;
   let atrPct14d: number | null = null;
@@ -357,6 +362,14 @@ export async function appendCandleReversalStatsRow(
     btcEma1dSlopePct7d =
       snap.btcEma1dSlopePct7d != null && Number.isFinite(snap.btcEma1dSlopePct7d)
         ? snap.btcEma1dSlopePct7d
+        : null;
+    priceVsEma20_1hPct =
+      snap.priceVsEma20_1hPct != null && Number.isFinite(snap.priceVsEma20_1hPct)
+        ? snap.priceVsEma20_1hPct
+        : null;
+    btcPriceVsEma20_4hPct =
+      snap.btcPriceVsEma20_4hPct != null && Number.isFinite(snap.btcPriceVsEma20_4hPct)
+        ? snap.btcPriceVsEma20_4hPct
         : null;
     psar4hTrend =
       snap.psar4hTrend === "up" || snap.psar4hTrend === "down" ? snap.psar4hTrend : null;
@@ -399,6 +412,11 @@ export async function appendCandleReversalStatsRow(
     ema1dSlopePct7d,
     btcEma4hSlopePct7d,
     btcEma1dSlopePct7d,
+    priceVsEma20_1hPct,
+    btcPriceVsEma20_4hPct,
+    ...(priceVsEma20_1hPct != null || btcPriceVsEma20_4hPct != null
+      ? { ema20DistV: STATS_EMA20_DIST_VERSION }
+      : {}),
     btcEmaSlopesV: STATS_BTC_EMA_SLOPES_VERSION,
     psar4hTrend,
     psar4hDistPct,

@@ -713,7 +713,7 @@ export function SnowballStatsFilters({
         className="sub"
         style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
       >
-        EMA1h∠7d
+        EMA20 1h
         <select
           value={filters.ema1hFilter}
           onChange={(e) => onEma1hFilterChange(e.currentTarget.value as ReversalEma1hFilter)}
@@ -770,7 +770,7 @@ export function SnowballStatsFilters({
         className="sub"
         style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
       >
-        BTC∠4h
+        BTC EMA20 4h
         <select
           value={filters.btcEma4hFilter}
           onChange={(e) => onBtcEma4hFilterChange(e.currentTarget.value as BtcEma4hFilter)}
