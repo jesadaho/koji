@@ -43,6 +43,62 @@ export function reversalTpStrategyCacheKey(holdHours: StatsStrategyProfitHorizon
   return `${REVERSAL_TP_STRATEGY_CACHE_VERSION}:${holdHours}h`;
 }
 
+/** cache กำไรกลยุทธ์ฝั่ง Long (fade) — ตาราง Reversal Short 1H · ทิศแนะนำ 🟢 Long */
+export function reversalTpStrategyCacheKeyLong(holdHours: StatsStrategyProfitHorizon): string {
+  return `${REVERSAL_TP_STRATEGY_CACHE_VERSION}:${holdHours}h:long`;
+}
+
+export function reversalStatsLongHorizonPct(shortPct: number): number {
+  return -shortPct;
+}
+
+export type ReversalLongStrategyProfitRowSlice = StatsStrategyProfitRowSlice & {
+  strategyProfitPctLong?: number | null;
+  strategyProfitPctLong24h?: number | null;
+  strategyExitReasonLong?: StatsTpSlExitReason | null;
+  strategyExitReasonLong24h?: StatsTpSlExitReason | null;
+};
+
+function reversalStatsStrategyProfitPctLongForHorizon(
+  row: Pick<ReversalLongStrategyProfitRowSlice, "strategyProfitPctLong" | "strategyProfitPctLong24h">,
+  holdHours: StatsStrategyProfitHorizon,
+): number | null | undefined {
+  return holdHours === STATS_STRATEGY_PROFIT_HOLD_24H
+    ? row.strategyProfitPctLong24h
+    : row.strategyProfitPctLong;
+}
+
+function reversalStatsStrategyExitReasonLongForHorizon(
+  row: Pick<ReversalLongStrategyProfitRowSlice, "strategyExitReasonLong" | "strategyExitReasonLong24h">,
+  holdHours: StatsStrategyProfitHorizon,
+): StatsTpSlExitReason | null | undefined {
+  return holdHours === STATS_STRATEGY_PROFIT_HOLD_24H
+    ? row.strategyExitReasonLong24h
+    : row.strategyExitReasonLong;
+}
+
+/** กำไรกลยุทธ์ Reversal ฝั่ง Long (fade) — ใช้ผลจำลอง EMA4H/BE บน ROI ฝั่ง Long */
+export function reversalStatsStrategyProfitLongResolvedForHorizon(
+  row: ReversalLongStrategyProfitRowSlice,
+  holdHours: StatsStrategyProfitHorizon,
+  leverage?: number | null,
+): { profitPct: number; exitReason: StatsTpSlExitReason } | null {
+  if (!statsStrategyProfitFinalizedAtHorizon(row, holdHours)) return null;
+
+  const raw = reversalStatsStrategyProfitPctLongForHorizon(row, holdHours);
+  const exitReason = reversalStatsStrategyExitReasonLongForHorizon(row, holdHours);
+
+  if (raw != null && Number.isFinite(raw)) {
+    return {
+      profitPct: capStrategyProfitPctForLeverage(raw, leverage),
+      exitReason:
+        exitReason ?? (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H ? "time_24h" : "time_48h"),
+    };
+  }
+
+  return null;
+}
+
 export function reversalTpStrategyProfitBand(pct: number): ReversalTpStrategyProfitBand {
   const { winMinPct, lossMaxPct } = STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND;
   if (pct >= winMinPct) return "win";

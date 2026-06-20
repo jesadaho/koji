@@ -132,6 +132,16 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
       typeof r.strategyExitReason24h === "string" && r.strategyExitReason24h.trim()
         ? (r.strategyExitReason24h.trim() as CandleReversalStatsRow["strategyExitReason24h"])
         : null,
+    strategyProfitPctLong: nullNum(r.strategyProfitPctLong),
+    strategyExitReasonLong:
+      typeof r.strategyExitReasonLong === "string" && r.strategyExitReasonLong.trim()
+        ? (r.strategyExitReasonLong.trim() as CandleReversalStatsRow["strategyExitReasonLong"])
+        : null,
+    strategyProfitPctLong24h: nullNum(r.strategyProfitPctLong24h),
+    strategyExitReasonLong24h:
+      typeof r.strategyExitReasonLong24h === "string" && r.strategyExitReasonLong24h.trim()
+        ? (r.strategyExitReasonLong24h.trim() as CandleReversalStatsRow["strategyExitReasonLong24h"])
+        : null,
     strategyProfitByPlan:
       r.strategyProfitByPlan && typeof r.strategyProfitByPlan === "object"
         ? r.strategyProfitByPlan
@@ -513,6 +523,10 @@ export async function appendCandleReversalStatsRow(
     strategyExitReason: null,
     strategyProfitPct24h: null,
     strategyExitReason24h: null,
+    strategyProfitPctLong: null,
+    strategyExitReasonLong: null,
+    strategyProfitPctLong24h: null,
+    strategyExitReasonLong24h: null,
     outcome: "pending",
   };
 

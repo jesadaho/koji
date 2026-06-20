@@ -19,12 +19,22 @@ import {
   type CandleReversalStatsRow,
 } from "@/lib/candleReversalStatsClient";
 import {
+  formatStatsStrategyProfitPct,
+  formatStatsStrategyProfitUsdt,
+  statsStrategyExitReasonShort,
   statsStrategyProfitCsvCell,
+  statsStrategyProfitFinalizedAtHorizon,
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
   type StatsStrategyCsvSizing,
+  type StatsStrategyProfitHorizon,
 } from "@/lib/statsStrategyProfitClient";
-import { reversalStatsStrategyProfitResolvedForHorizon } from "@/lib/reversalTpStrategy";
+import {
+  reversalStatsStrategyProfitLongResolvedForHorizon,
+  reversalStatsStrategyProfitResolvedForHorizon,
+  type ReversalLongStrategyProfitRowSlice,
+} from "@/lib/reversalTpStrategy";
+import { reversalRowIsLongCandidate } from "@/lib/reversalMatrixFilters";
 
 export type { StatsStrategyCsvSizing } from "@/lib/statsStrategyProfitClient";
 import {
@@ -99,6 +109,8 @@ const HEADERS = [
   "Sentiment",
   "กำไรกลยุทธ์ 24h",
   "กำไรกลยุทธ์ 48h",
+  "กำไร Long 24h",
+  "กำไร Long 48h",
   "ผล",
 ];
 
@@ -118,6 +130,39 @@ function reversalHorizonCsvCells(r: CandleReversalStatsRow): [string, string, st
     statsFmtPctCell(r.price7d, r.pct7d),
     "",
   ];
+}
+
+function reversalLongStrategyProfitCsvCell(
+  r: CandleReversalStatsRow,
+  sizing: StatsStrategyCsvSizing | undefined,
+  holdHours: StatsStrategyProfitHorizon,
+): string {
+  const rowSlice: ReversalLongStrategyProfitRowSlice = {
+    pct24h: r.pct24h,
+    pct48h: r.pct48h,
+    strategyProfitPctLong24h: r.strategyProfitPctLong24h,
+    strategyProfitPctLong: r.strategyProfitPctLong,
+    strategyExitReasonLong24h: r.strategyExitReasonLong24h,
+    strategyExitReasonLong: r.strategyExitReasonLong,
+    maxDrawdownPct: r.maxDrawdownPct,
+    followUpMaxAdversePct: r.followUpMaxAdversePct,
+  };
+  if (!statsStrategyProfitFinalizedAtHorizon(rowSlice, holdHours)) return "";
+  const resolved = reversalStatsStrategyProfitLongResolvedForHorizon(
+    rowSlice,
+    holdHours,
+    sizing?.leverage,
+  );
+  if (!resolved) return "";
+  const tag = statsStrategyExitReasonShort(resolved.exitReason);
+  const pctPart = formatStatsStrategyProfitPct(resolved.profitPct);
+  const usdtPart = formatStatsStrategyProfitUsdt(
+    sizing?.marginUsdt,
+    sizing?.leverage,
+    resolved.profitPct,
+  );
+  const core = tag ? `${pctPart} (${tag})` : pctPart;
+  return usdtPart ? `${core} · ${usdtPart}` : core;
 }
 
 function candleReversalStatsRowToCsvCells(
@@ -199,6 +244,12 @@ function candleReversalStatsRowToCsvCells(
       { maxDrawdownPct: r.maxDrawdownPct, followUpMaxAdversePct: r.followUpMaxAdversePct },
       reversalStatsStrategyProfitResolvedForHorizon,
     ),
+    reversalRowIsLongCandidate(r)
+      ? reversalLongStrategyProfitCsvCell(r, sizing, STATS_STRATEGY_PROFIT_HOLD_24H)
+      : "",
+    reversalRowIsLongCandidate(r)
+      ? reversalLongStrategyProfitCsvCell(r, sizing, STATS_STRATEGY_PROFIT_HOLD_48H)
+      : "",
     candleReversalOutcomeLabel(r.outcome),
   ];
 }

@@ -134,6 +134,11 @@ export type CandleReversalStatsRow = {
   strategyExitReason?: StatsTpSlExitReason | null;
   strategyProfitPct24h?: number | null;
   strategyExitReason24h?: StatsTpSlExitReason | null;
+  /** กำไรกลยุทธ์ฝั่ง Long (fade) — ตาราง Short 1H · ทิศแนะนำ 🟢 Long */
+  strategyProfitPctLong?: number | null;
+  strategyExitReasonLong?: StatsTpSlExitReason | null;
+  strategyProfitPctLong24h?: number | null;
+  strategyExitReasonLong24h?: StatsTpSlExitReason | null;
   /** cache ตามชุด TP/SL (key = tp1-tp1p-tp2-maxH) */
   strategyProfitByPlan?: StrategyProfitByPlanMap | null;
   outcome: CandleReversalOutcome;

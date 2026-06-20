@@ -56,7 +56,9 @@ export function StatsWeekStrategyProfitBlock(props: {
   show24h?: boolean;
   show48h?: boolean;
   resolveProfit?: StatsStrategyProfitResolveFn;
+  strategyLabel?: string;
 }) {
+  const labelOpts = props.strategyLabel ? { strategyLabel: props.strategyLabel } : undefined;
   const text24h =
     props.show24h !== false
       ? formatStatsStrategyProfitSummaryText(
@@ -68,6 +70,7 @@ export function StatsWeekStrategyProfitBlock(props: {
             props.resolveProfit,
           ),
           STATS_STRATEGY_PROFIT_HOLD_24H,
+          labelOpts,
         )
       : null;
   const text48h =
@@ -81,6 +84,7 @@ export function StatsWeekStrategyProfitBlock(props: {
             props.resolveProfit,
           ),
           STATS_STRATEGY_PROFIT_HOLD_48H,
+          labelOpts,
         )
       : null;
   if (!text24h && !text48h) return null;

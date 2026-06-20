@@ -11,8 +11,11 @@ import {
 import { favorablePctInBar } from "@/lib/tpSlStrategySimulate";
 import {
   reversalTpStrategyCacheKey,
+  reversalTpStrategyCacheKeyLong,
+  reversalStatsLongHorizonPct,
   simulateReversalTpStrategyProfit,
 } from "@/lib/reversalTpStrategy";
+import { reversalLong1hStatsFilterPass } from "@/lib/reversalMatrixFilters";
 import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
@@ -421,11 +424,35 @@ function applyReversal1hStrategyProfitAtHorizon(
     ema4hSlopePct7d: row.ema4hSlopePct7d,
     maxHorizonHours: holdHours,
   });
-  if (!sim) return;
-  const key = reversalTpStrategyCacheKey(holdHours);
+  if (sim) {
+    const key = reversalTpStrategyCacheKey(holdHours);
+    row.strategyProfitByPlan = {
+      ...row.strategyProfitByPlan,
+      [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
+    };
+  }
+
+  if (!reversalLong1hStatsFilterPass(row)) return;
+  const simLong = simulateReversalTpStrategyProfit({
+    side: "long",
+    entry: row.entryPrice,
+    high,
+    low,
+    timeSec,
+    anchorCloseSec,
+    iFirst,
+    iLast,
+    pct12h: reversalStatsLongHorizonPct(row.pct12h),
+    pct24h: reversalStatsLongHorizonPct(row.pct24h),
+    pct48h: reversalStatsLongHorizonPct(row.pct48h),
+    ema4hSlopePct7d: row.ema4hSlopePct7d,
+    maxHorizonHours: holdHours,
+  });
+  if (!simLong) return;
+  const longKey = reversalTpStrategyCacheKeyLong(holdHours);
   row.strategyProfitByPlan = {
     ...row.strategyProfitByPlan,
-    [key]: { profitPct: sim.profitPct, exitReason: sim.exitReason },
+    [longKey]: { profitPct: simLong.profitPct, exitReason: simLong.exitReason },
   };
   /* ไม่เขียน strategyProfitPct* ระดับแถว — enrich ตามแผนผู้ชม */
 }
@@ -542,6 +569,8 @@ async function followUpCandleReversal1hRow(
   } else if (nowSec < h24End) {
     row.strategyProfitPct24h = null;
     row.strategyExitReason24h = null;
+    row.strategyProfitPctLong24h = null;
+    row.strategyExitReasonLong24h = null;
   }
 
   if (row.pct48h != null && nowSec >= h48End) {
@@ -561,6 +590,8 @@ async function followUpCandleReversal1hRow(
   } else if (nowSec < h48End) {
     row.strategyProfitPct = null;
     row.strategyExitReason = null;
+    row.strategyProfitPctLong = null;
+    row.strategyExitReasonLong = null;
   }
 
   // Reversal 1H: ปิดผลเร็วขึ้นที่ 24h (ใช้ pct24h)
@@ -590,6 +621,20 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
     if (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC) return true;
     if (row.pct24h != null && row.strategyProfitPct24h == null) return true;
     if (row.pct48h != null && row.strategyProfitPct == null) return true;
+    if (
+      reversalLong1hStatsFilterPass(row) &&
+      row.pct24h != null &&
+      row.strategyProfitPctLong24h == null
+    ) {
+      return true;
+    }
+    if (
+      reversalLong1hStatsFilterPass(row) &&
+      row.pct48h != null &&
+      row.strategyProfitPctLong == null
+    ) {
+      return true;
+    }
     if (row.pct12h == null && nowSec >= ac + 12 * HOUR_SEC) return true;
     return false;
   }

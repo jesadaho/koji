@@ -18,8 +18,11 @@ import {
 } from "@/lib/statsStrategyProfitClient";
 import {
   reversalTpStrategyCacheKey,
+  reversalTpStrategyCacheKeyLong,
+  reversalStatsLongHorizonPct,
   simulateReversalTpStrategyProfit,
 } from "@/lib/reversalTpStrategy";
+import { reversalLong1hStatsFilterPass } from "@/lib/reversalMatrixFilters";
 import { firstFollowUpKlineIndexAfterAnchorClose } from "@/lib/statsFollowUpAdverse";
 import {
   DEFAULT_STATS_TPSL_PLAN,
@@ -104,6 +107,36 @@ function simulateReversalFromPack(input: {
   });
   if (!sim) return null;
   return { profitPct: sim.profitPct, exitReason: sim.exitReason };
+}
+
+function simulateReversalLongFromPack(input: {
+  entry: number;
+  pack: BinanceKlinePack;
+  ac: number;
+  windowEndSec: number;
+  row: Pick<
+    CandleReversalStatsRow,
+    "pct12h" | "pct24h" | "pct48h" | "ema4hSlopePct7d"
+  >;
+  holdHours: StatsStrategyProfitHorizon;
+}): StrategyProfitByPlanEntry | null {
+  if (input.row.pct12h == null || input.row.pct24h == null || input.row.pct48h == null) {
+    return null;
+  }
+  return simulateReversalFromPack({
+    side: "long",
+    entry: input.entry,
+    pack: input.pack,
+    ac: input.ac,
+    windowEndSec: input.windowEndSec,
+    row: {
+      pct12h: reversalStatsLongHorizonPct(input.row.pct12h),
+      pct24h: reversalStatsLongHorizonPct(input.row.pct24h),
+      pct48h: reversalStatsLongHorizonPct(input.row.pct48h),
+      ema4hSlopePct7d: input.row.ema4hSlopePct7d,
+    },
+    holdHours: input.holdHours,
+  });
 }
 
 function simulateFromPack(input: {
@@ -214,6 +247,64 @@ function applyHorizonFields(
   return true;
 }
 
+function applyHorizonFieldsLong(
+  row: {
+    strategyProfitByPlan?: StrategyProfitByPlanMap | null;
+    strategyProfitPctLong?: number | null;
+    strategyExitReasonLong?: StrategyProfitByPlanEntry["exitReason"] | null;
+    strategyProfitPctLong24h?: number | null;
+    strategyExitReasonLong24h?: StrategyProfitByPlanEntry["exitReason"] | null;
+  },
+  holdHours: StatsStrategyProfitHorizon,
+  cacheKey: string,
+  computed: StrategyProfitByPlanEntry | null,
+): boolean {
+  if (!computed) return false;
+  const prev = row.strategyProfitByPlan?.[cacheKey];
+  const sameCached =
+    prev &&
+    prev.profitPct === computed.profitPct &&
+    prev.exitReason === computed.exitReason;
+  const sameFields =
+    holdHours === STATS_STRATEGY_PROFIT_HOLD_24H
+      ? row.strategyProfitPctLong24h === computed.profitPct &&
+        row.strategyExitReasonLong24h === computed.exitReason
+      : row.strategyProfitPctLong === computed.profitPct &&
+        row.strategyExitReasonLong === computed.exitReason;
+  if (sameCached && sameFields) return false;
+
+  row.strategyProfitByPlan = { ...row.strategyProfitByPlan, [cacheKey]: computed };
+  if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+    row.strategyProfitPctLong24h = computed.profitPct;
+    row.strategyExitReasonLong24h = computed.exitReason;
+  } else {
+    row.strategyProfitPctLong = computed.profitPct;
+    row.strategyExitReasonLong = computed.exitReason;
+  }
+  return true;
+}
+
+function clearReversalLongStrategyProfitFields<
+  T extends {
+    strategyProfitPctLong?: number | null;
+    strategyExitReasonLong?: StrategyProfitByPlanEntry["exitReason"] | null;
+    strategyProfitPctLong24h?: number | null;
+    strategyExitReasonLong24h?: StrategyProfitByPlanEntry["exitReason"] | null;
+    strategyProfitByPlan?: StrategyProfitByPlanMap | null;
+  },
+>(row: T): void {
+  row.strategyProfitPctLong = null;
+  row.strategyExitReasonLong = null;
+  row.strategyProfitPctLong24h = null;
+  row.strategyExitReasonLong24h = null;
+  if (!row.strategyProfitByPlan) return;
+  const rest = { ...row.strategyProfitByPlan };
+  for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
+    delete rest[reversalTpStrategyCacheKeyLong(holdHours)];
+  }
+  row.strategyProfitByPlan = Object.keys(rest).length > 0 ? rest : undefined;
+}
+
 /** อัปเดต Max ROI จาก 15m สำหรับแถวเก่าที่ยังใช้ค่าจากแท่ง 1H */
 async function refreshCandleReversal1hMaxRoiFrom15m(rows: CandleReversalStatsRow[]): Promise<number> {
   const packCache = new Map<string, BinanceKlinePack | null>();
@@ -255,6 +346,7 @@ async function refreshCandleReversal1hMaxRoiFrom15m(rows: CandleReversalStatsRow
       row.strategyProfitPct24h = null;
       row.strategyExitReason = null;
       row.strategyExitReason24h = null;
+      clearReversalLongStrategyProfitFields(row);
       dirty += 1;
     }
   }
@@ -366,19 +458,14 @@ async function enrichReversalRowsStrategyProfit(rows: CandleReversalStatsRow[]):
   let dirty = 0;
 
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
-    const cacheKey = reversalTpStrategyCacheKey(holdHours);
+    const shortCacheKey = reversalTpStrategyCacheKey(holdHours);
+    const longCacheKey = reversalTpStrategyCacheKeyLong(holdHours);
 
     for (const row of rows) {
       if (row.signalBarTf !== "1h") continue;
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H && row.pct24h == null) continue;
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_48H && row.pct48h == null) continue;
       if (row.pct12h == null) continue;
-
-      const cached = row.strategyProfitByPlan?.[cacheKey];
-      if (cached) {
-        if (applyHorizonFields(row, holdHours, cacheKey, cached)) dirty += 1;
-        continue;
-      }
 
       const ac = reversalAnchorCloseSec(row);
       const windowEndSec = ac + holdHours * HOUR_SEC;
@@ -389,18 +476,52 @@ async function enrichReversalRowsStrategyProfit(rows: CandleReversalStatsRow[]):
         pack = await fetchPackForRow(sym, row.signalBarOpenSec, windowEndSec);
         packCache.set(pKey, pack);
       }
-      if (!pack?.timeSec.length) continue;
 
-      const computed = simulateReversalFromPack({
-        side: reversalStatsMeasureSide(row),
-        entry: row.entryPrice,
-        pack,
-        ac,
-        windowEndSec,
-        row,
-        holdHours,
-      });
-      if (applyHorizonFields(row, holdHours, cacheKey, computed)) dirty += 1;
+      const shortCached = row.strategyProfitByPlan?.[shortCacheKey];
+      if (shortCached) {
+        if (applyHorizonFields(row, holdHours, shortCacheKey, shortCached)) dirty += 1;
+      } else if (pack?.timeSec.length) {
+        const computed = simulateReversalFromPack({
+          side: reversalStatsMeasureSide(row),
+          entry: row.entryPrice,
+          pack,
+          ac,
+          windowEndSec,
+          row,
+          holdHours,
+        });
+        if (applyHorizonFields(row, holdHours, shortCacheKey, computed)) dirty += 1;
+      }
+
+      const isLongCandidate = reversalLong1hStatsFilterPass(row);
+      if (!isLongCandidate) {
+        if (
+          row.strategyProfitPctLong != null ||
+          row.strategyProfitPctLong24h != null ||
+          row.strategyExitReasonLong != null ||
+          row.strategyExitReasonLong24h != null ||
+          row.strategyProfitByPlan?.[longCacheKey]
+        ) {
+          clearReversalLongStrategyProfitFields(row);
+          dirty += 1;
+        }
+        continue;
+      }
+
+      const longCached = row.strategyProfitByPlan?.[longCacheKey];
+      if (longCached) {
+        if (applyHorizonFieldsLong(row, holdHours, longCacheKey, longCached)) dirty += 1;
+      } else if (pack?.timeSec.length) {
+        const computedLong = simulateReversalLongFromPack({
+          entry: row.entryPrice,
+          pack,
+          ac,
+          windowEndSec,
+          row,
+          holdHours,
+        });
+        if (applyHorizonFieldsLong(row, holdHours, longCacheKey, computedLong)) dirty += 1;
+      }
     }
   }
 
@@ -430,6 +551,10 @@ export function withReversalStrategyProfitDisplayFields<
     strategyExitReason?: StrategyProfitByPlanEntry["exitReason"] | null;
     strategyProfitPct24h?: number | null;
     strategyExitReason24h?: StrategyProfitByPlanEntry["exitReason"] | null;
+    strategyProfitPctLong?: number | null;
+    strategyExitReasonLong?: StrategyProfitByPlanEntry["exitReason"] | null;
+    strategyProfitPctLong24h?: number | null;
+    strategyExitReasonLong24h?: StrategyProfitByPlanEntry["exitReason"] | null;
   },
 >(row: T): T {
   let out = row;
@@ -444,20 +569,17 @@ export function withReversalStrategyProfitDisplayFields<
       } else if (out.strategyProfitPct != null || out.strategyExitReason != null) {
         out = { ...out, strategyProfitPct: null, strategyExitReason: null };
       }
-      continue;
-    }
-    if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+    } else if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
       if (
-        out.strategyProfitPct24h === cached.profitPct &&
-        out.strategyExitReason24h === cached.exitReason
+        out.strategyProfitPct24h !== cached.profitPct ||
+        out.strategyExitReason24h !== cached.exitReason
       ) {
-        continue;
+        out = {
+          ...out,
+          strategyProfitPct24h: cached.profitPct,
+          strategyExitReason24h: cached.exitReason,
+        };
       }
-      out = {
-        ...out,
-        strategyProfitPct24h: cached.profitPct,
-        strategyExitReason24h: cached.exitReason,
-      };
     } else if (
       out.strategyProfitPct !== cached.profitPct ||
       out.strategyExitReason !== cached.exitReason
@@ -466,6 +588,38 @@ export function withReversalStrategyProfitDisplayFields<
         ...out,
         strategyProfitPct: cached.profitPct,
         strategyExitReason: cached.exitReason,
+      };
+    }
+
+    const longCacheKey = reversalTpStrategyCacheKeyLong(holdHours);
+    const longCached = row.strategyProfitByPlan?.[longCacheKey];
+    if (!longCached) {
+      if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+        if (out.strategyProfitPctLong24h != null || out.strategyExitReasonLong24h != null) {
+          out = { ...out, strategyProfitPctLong24h: null, strategyExitReasonLong24h: null };
+        }
+      } else if (out.strategyProfitPctLong != null || out.strategyExitReasonLong != null) {
+        out = { ...out, strategyProfitPctLong: null, strategyExitReasonLong: null };
+      }
+    } else if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+      if (
+        out.strategyProfitPctLong24h !== longCached.profitPct ||
+        out.strategyExitReasonLong24h !== longCached.exitReason
+      ) {
+        out = {
+          ...out,
+          strategyProfitPctLong24h: longCached.profitPct,
+          strategyExitReasonLong24h: longCached.exitReason,
+        };
+      }
+    } else if (
+      out.strategyProfitPctLong !== longCached.profitPct ||
+      out.strategyExitReasonLong !== longCached.exitReason
+    ) {
+      out = {
+        ...out,
+        strategyProfitPctLong: longCached.profitPct,
+        strategyExitReasonLong: longCached.exitReason,
       };
     }
   }

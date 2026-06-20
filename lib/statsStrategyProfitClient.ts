@@ -648,6 +648,7 @@ export function summarizeStatsStrategyProfit(
 export function formatStatsStrategyProfitSummaryText(
   summary: StatsStrategyProfitSummary,
   holdHours?: StatsStrategyProfitHorizon,
+  opts?: { strategyLabel?: string },
 ): string | null {
   if (summary.trades === 0 && summary.pending === 0) return null;
   const horizonTag =
@@ -656,7 +657,8 @@ export function formatStatsStrategyProfitSummaryText(
       : holdHours === STATS_STRATEGY_PROFIT_HOLD_48H
         ? "48h"
         : "";
-  const prefix = horizonTag ? `กลยุทธ์ ${horizonTag}` : "กลยุทธ์";
+  const baseLabel = opts?.strategyLabel?.trim() || "กลยุทธ์";
+  const prefix = horizonTag ? `${baseLabel} ${horizonTag}` : baseLabel;
   if (summary.trades === 0) {
     return summary.pending > 0 ? `${prefix}: รอผล ${summary.pending} ไม้` : null;
   }
