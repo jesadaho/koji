@@ -853,7 +853,7 @@ export async function liffGetSnowballStats(telegramUserId?: number): Promise<Sno
 
   const msDirty = await backfillAllStatsMarketSentiment(st.rows);
   const btcEmaDirty = await backfillAllStatsRowsBtcEmaSlopes(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
-  const ema20Dirty = await backfillAllStatsRowsEma20Dist(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
+  const ema20Dirty = await backfillAllStatsRowsEma20Dist(st.rows, { maxRowsPerPass: 40, maxPasses: 10 });
   const psar4hDirty = await backfillAllStatsRowsPsar4h(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
   const vol24hDirty = await backfillAllStatsRowsQuoteVol24h(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
   if (msDirty > 0 || btcEmaDirty > 0 || ema20Dirty > 0 || psar4hDirty > 0 || vol24hDirty > 0) {
@@ -1064,7 +1064,7 @@ export async function liffGetCandleReversalStats(
   const st = await loadCandleReversalStatsState();
   const msDirty = await backfillAllStatsMarketSentiment(st.rows);
   const btcEmaDirty = await backfillAllStatsRowsBtcEmaSlopes(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
-  const ema20Dirty = await backfillAllStatsRowsEma20Dist(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
+  const ema20Dirty = await backfillAllStatsRowsEma20Dist(st.rows, { maxRowsPerPass: 40, maxPasses: 10 });
   const psar4hDirty = await backfillAllStatsRowsPsar4h(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
   const vol24hDirty = await backfillAllStatsRowsQuoteVol24h(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
   if (msDirty > 0 || btcEmaDirty > 0 || ema20Dirty > 0 || psar4hDirty > 0 || vol24hDirty > 0) {

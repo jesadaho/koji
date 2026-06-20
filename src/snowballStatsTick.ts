@@ -492,7 +492,7 @@ export async function runSnowballStatsFollowUpTick(
   const emaSlopes = await backfillSnowballEmaSlopes(state.rows, symbolFilter);
   dirty += emaSlopes;
   dirty += await backfillAllStatsRowsBtcEmaSlopes(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
-  dirty += await backfillAllStatsRowsEma20Dist(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
+  dirty += await backfillAllStatsRowsEma20Dist(state.rows, { maxRowsPerPass: 30, maxPasses: 8 });
   dirty += await backfillAllStatsRowsPsar4h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   const trendGrades = await backfillSnowballTrendGradesForTick(state.rows, symbolFilter);
   dirty += trendGrades;

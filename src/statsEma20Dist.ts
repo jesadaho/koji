@@ -1,3 +1,4 @@
+import { computeEmaLast } from "./emaUtils";
 import { emaLine } from "./indicatorMath";
 import {
   fetchBinanceUsdmKlinesPaginated,
@@ -43,7 +44,7 @@ export function priceVsEmaDistPct(close: number, ema: number): number | null {
   return ((close - ema) / ema) * 100;
 }
 
-/** EMA20 slope % ณ atMs — ใช้ emaLine บน pack เต็ม (สอดคล้อง dist) */
+/** EMA20 slope % ณ atMs — slice ถึงแท่งปิดล่าสุด (สอดคล้อง EMA12 slope) */
 export function computeEma20SlopePctFromPackAt(
   pack: BinanceKlinePack,
   tf: "1h" | "4h",
@@ -56,13 +57,14 @@ export function computeEma20SlopePctFromPackAt(
   const atSec = Math.floor(atMs / 1000);
   const iClosed = lastClosedBarIndexAt(pack, barDur, atSec);
   const lb = Math.floor(lookbackBars);
-  if (iClosed < 0 || lb < 1 || iClosed < period - 1 + lb) return null;
-  const iAgo = iClosed - lb;
-  if (iAgo < period - 1) return null;
-  const emaArr = emaLine(pack.close, period);
-  const emaToday = emaArr[iClosed];
-  const emaAgo = emaArr[iAgo];
-  if (!Number.isFinite(emaToday) || !Number.isFinite(emaAgo) || emaAgo <= 0) return null;
+  if (iClosed < 0 || lb < 1) return null;
+  const closes = pack.close.slice(0, iClosed + 1);
+  if (closes.length < period + lb + 1) return null;
+  const iEnd = closes.length - 1;
+  const iAgo = iEnd - lb;
+  const emaToday = computeEmaLast(closes.slice(0, iEnd + 1), period);
+  const emaAgo = computeEmaLast(closes.slice(0, iAgo + 1), period);
+  if (emaToday == null || emaAgo == null || emaAgo <= 0) return null;
   return ((emaToday - emaAgo) / emaAgo) * 100;
 }
 
@@ -173,6 +175,11 @@ export type StatsRowWithEma20Dist = {
   ema20DistV?: number;
 };
 
+export function statsEma20MetricsComplete(row: StatsRowWithEma20Dist): boolean {
+  const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
+  return finite(row.ema20_1hSlopePct7d) && finite(row.btcEma20_4hSlopePct7d);
+}
+
 export function statsRowNeedsEma20DistBackfill(row: StatsRowWithEma20Dist): boolean {
   if (row.ema20DistV !== STATS_EMA20_DIST_VERSION) return true;
   const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
@@ -187,16 +194,26 @@ export async function backfillStatsRowsEma20Dist<T extends StatsRowWithEma20Dist
 ): Promise<number> {
   const maxRows = opts?.maxRows;
   let updated = 0;
-  for (const row of rows) {
+  const candidates = rows
+    .filter(
+      (row) =>
+        statsRowNeedsEma20DistBackfill(row) &&
+        Number.isFinite(row.alertedAtMs) &&
+        row.alertedAtMs > 0,
+    )
+    .sort((a, b) => b.alertedAtMs - a.alertedAtMs);
+  for (const row of candidates) {
     if (maxRows != null && updated >= maxRows) break;
-    if (!statsRowNeedsEma20DistBackfill(row)) continue;
-    if (!Number.isFinite(row.alertedAtMs) || row.alertedAtMs <= 0) continue;
     try {
       const metrics = await fetchStatsEma20MetricsAtMs(row.symbol, row.alertedAtMs);
       row.ema20_1hSlopePct7d = metrics.ema20_1hSlopePct7d;
       row.priceVsEma20_1hPct = metrics.priceVsEma20_1hPct;
       row.btcEma20_4hSlopePct7d = metrics.btcEma20_4hSlopePct7d;
-      row.ema20DistV = STATS_EMA20_DIST_VERSION;
+      if (statsEma20MetricsComplete(row)) {
+        row.ema20DistV = STATS_EMA20_DIST_VERSION;
+      } else {
+        delete row.ema20DistV;
+      }
       updated += 1;
     } catch (e) {
       console.error("[statsEma20Dist] backfill", row.symbol, row.alertedAtMs, e);

@@ -37,7 +37,7 @@ import {
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
-import { fetchStatsEma20MetricsAtMs, STATS_EMA20_DIST_VERSION } from "./statsEma20Dist";
+import { fetchStatsEma20MetricsAtMs, STATS_EMA20_DIST_VERSION, statsEma20MetricsComplete } from "./statsEma20Dist";
 
 /** แถวที่ recompute trend grade (S/A/B/C/F) จาก snapshot ณ alertedAtMs แล้ว */
 export const STATS_TREND_GRADE_VERSION = 23;
@@ -614,12 +614,7 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       if (ema20.btcEma20_4hSlopePct7d != null && Number.isFinite(ema20.btcEma20_4hSlopePct7d)) {
         row.btcEma20_4hSlopePct7d = ema20.btcEma20_4hSlopePct7d;
       }
-      if (
-        row.ema20_1hSlopePct7d != null &&
-        Number.isFinite(row.ema20_1hSlopePct7d) &&
-        row.btcEma20_4hSlopePct7d != null &&
-        Number.isFinite(row.btcEma20_4hSlopePct7d)
-      ) {
+      if (statsEma20MetricsComplete(row)) {
         row.ema20DistV = STATS_EMA20_DIST_VERSION;
       } else {
         delete row.ema20DistV;

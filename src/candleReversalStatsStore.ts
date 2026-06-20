@@ -10,12 +10,11 @@ import {
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
 import { STATS_BTC_EMA_SLOPES_VERSION } from "./statsEmaSlope";
-import { STATS_EMA20_DIST_VERSION } from "./statsEma20Dist";
-import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
-import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
-import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
-import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
-import { fetchStatsEma20MetricsAtMs } from "./statsEma20Dist";
+import {
+  fetchStatsEma20MetricsAtMs,
+  STATS_EMA20_DIST_VERSION,
+  statsEma20MetricsComplete,
+} from "./statsEma20Dist";
 
 export type { CandleReversalStatsApiPayload, CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 
@@ -530,12 +529,7 @@ export async function appendCandleReversalStatsRow(
       if (ema20.btcEma20_4hSlopePct7d != null && Number.isFinite(ema20.btcEma20_4hSlopePct7d)) {
         row.btcEma20_4hSlopePct7d = ema20.btcEma20_4hSlopePct7d;
       }
-      if (
-        row.ema20_1hSlopePct7d != null &&
-        Number.isFinite(row.ema20_1hSlopePct7d) &&
-        row.btcEma20_4hSlopePct7d != null &&
-        Number.isFinite(row.btcEma20_4hSlopePct7d)
-      ) {
+      if (statsEma20MetricsComplete(row)) {
         row.ema20DistV = STATS_EMA20_DIST_VERSION;
       } else {
         delete row.ema20DistV;
