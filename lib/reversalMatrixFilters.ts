@@ -28,6 +28,15 @@ export const REVERSAL_QUALITY_SIGNAL_SHORT_BKK_DOW_INDICES = [5, 6] as const;
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
   "Trend Gain 5–20% · Vol×SMA 2–5× · หรือ ศ (BKK)";
 
+/** เกณฑ์กรองสัญญาณ Long ในตาราง 1H รวม (stats) */
+export const REVERSAL_LONG_1H_STATS_FILTER_CRITERIA = "EMA1H > 50% · EMA20 Diff 15–30%";
+
+/** EMA20 1h slope 7d — exclusive lower bound */
+export const REVERSAL_LONG_1H_STATS_EMA1H_SLOPE_MIN_EXCLUSIVE = 50;
+/** EMA20 dist % บน 1h — inclusive */
+export const REVERSAL_LONG_1H_STATS_EMA20_DIST_MIN_PCT = 15;
+export const REVERSAL_LONG_1H_STATS_EMA20_DIST_MAX_PCT = 30;
+
 /** วัน BKK ที่ผ่าน Quality Signal Long 1H โดยไม่ต้องดู Trend Gain / Vol×SMA — 5=ศุกร์ */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_BKK_DOW_INDICES = [5] as const;
 
@@ -222,4 +231,27 @@ export function reversalStatsRowMatchesMatrixFilter(
 ): boolean {
   if (filter === "all") return true;
   return reversalRowMatchesQualitySignalMatrix(row);
+}
+
+/** กรองสัญญาณ Long 1H ในตารางรวม — EMA1H > 50% · EMA20 Diff 15–30% */
+export function reversalLong1hStatsFilterPass(
+  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d" | "priceVsEma20_1hPct">,
+): boolean {
+  const slope = row.ema20_1hSlopePct7d;
+  const dist = row.priceVsEma20_1hPct;
+  return (
+    slope != null &&
+    Number.isFinite(slope) &&
+    slope > REVERSAL_LONG_1H_STATS_EMA1H_SLOPE_MIN_EXCLUSIVE &&
+    dist != null &&
+    Number.isFinite(dist) &&
+    dist >= REVERSAL_LONG_1H_STATS_EMA20_DIST_MIN_PCT &&
+    dist <= REVERSAL_LONG_1H_STATS_EMA20_DIST_MAX_PCT
+  );
+}
+
+/** ตาราง 1H รวม — Short ผ่านตามตัวกรองทั่วไป · Long ต้องผ่านเกณฑ์ EMA เพิ่ม */
+export function reversalCombined1hRowPassesSideFilter(row: CandleReversalStatsRow): boolean {
+  if ((row.tradeSide ?? "short") !== "long") return true;
+  return reversalLong1hStatsFilterPass(row);
 }
