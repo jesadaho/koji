@@ -176,12 +176,17 @@ export function buildSnowballStatsRow(input: AppendSnowballStatsInput): Snowball
       input.priceVsEma20_1hPct != null && Number.isFinite(input.priceVsEma20_1hPct)
         ? input.priceVsEma20_1hPct
         : null,
-    btcPriceVsEma20_4hPct:
-      input.btcPriceVsEma20_4hPct != null && Number.isFinite(input.btcPriceVsEma20_4hPct)
-        ? input.btcPriceVsEma20_4hPct
+    ema20_1hSlopePct7d:
+      input.ema20_1hSlopePct7d != null && Number.isFinite(input.ema20_1hSlopePct7d)
+        ? input.ema20_1hSlopePct7d
         : null,
-    ...(input.priceVsEma20_1hPct != null && Number.isFinite(input.priceVsEma20_1hPct) ||
-    (input.btcPriceVsEma20_4hPct != null && Number.isFinite(input.btcPriceVsEma20_4hPct))
+    btcEma20_4hSlopePct7d:
+      input.btcEma20_4hSlopePct7d != null && Number.isFinite(input.btcEma20_4hSlopePct7d)
+        ? input.btcEma20_4hSlopePct7d
+        : null,
+    ...((input.priceVsEma20_1hPct != null && Number.isFinite(input.priceVsEma20_1hPct)) ||
+    (input.ema20_1hSlopePct7d != null && Number.isFinite(input.ema20_1hSlopePct7d)) ||
+    (input.btcEma20_4hSlopePct7d != null && Number.isFinite(input.btcEma20_4hSlopePct7d))
       ? { ema20DistV: STATS_EMA20_DIST_VERSION }
       : {}),
     psar4hTrend:

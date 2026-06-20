@@ -5,15 +5,21 @@ import {
   isBinanceIndicatorFapiEnabled,
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
+import {
+  computeEmaSlopePctFromPackAt,
+  STATS_EMA1H_SLOPE_LOOKBACK_BARS,
+  STATS_EMA4H_SLOPE_LOOKBACK_BARS,
+  statsEmaSlopeMinKlineBars,
+} from "./statsEmaSlope";
 
 export const STATS_EMA20_DIST_PERIOD = 20;
 
-/** แถวที่คำนวณ price vs EMA20 ณ alertedAtMs แล้ว */
-export const STATS_EMA20_DIST_VERSION = 1;
+/** แถวที่คำนวณ EMA20 metrics ณ alertedAtMs แล้ว — v2 = รวม slope */
+export const STATS_EMA20_DIST_VERSION = 2;
 
 const BTC_USDT = "BTCUSDT";
 const LIVE_ALERT_MAX_AGE_MS = 10 * 60_000;
-const BTC_EMA20_4H_DIST_CACHE_MS = 5 * 60 * 1000;
+const BTC_EMA20_4H_SLOPE_CACHE_MS = 5 * 60 * 1000;
 
 function tfBarDurSec(tf: "1h" | "4h"): number {
   return tf === "1h" ? 3600 : 4 * 3600;
@@ -59,9 +65,10 @@ async function fetchKlinePackThrough(
   symbol: string,
   tf: "1h" | "4h",
   atMs: number,
+  lookbackBars: number,
 ): Promise<BinanceKlinePack | null> {
   const barDur = tfBarDurSec(tf);
-  const minBars = statsEma20DistMinKlineBars();
+  const minBars = Math.max(statsEma20DistMinKlineBars(), statsEmaSlopeMinKlineBars(lookbackBars));
   const atSec = Math.floor(atMs / 1000);
   const startMs = (atSec - minBars * barDur) * 1000;
   return fetchBinanceUsdmKlinesRange(symbol.trim().toUpperCase(), tf, {
@@ -71,76 +78,128 @@ async function fetchKlinePackThrough(
   });
 }
 
-export type StatsEma20DistSnapshot = {
+export type StatsEma20MetricsSnapshot = {
+  ema20_1hSlopePct7d: number | null;
   priceVsEma20_1hPct: number | null;
-  btcPriceVsEma20_4hPct: number | null;
+  btcEma20_4hSlopePct7d: number | null;
 };
 
-async function fetchSymbolPriceVsEma20_1hAtMs(symbol: string, atMs: number): Promise<number | null> {
-  if (!isBinanceIndicatorFapiEnabled()) return null;
+async function fetchSymbolEma20_1hMetricsAtMs(
+  symbol: string,
+  atMs: number,
+): Promise<{ ema20_1hSlopePct7d: number | null; priceVsEma20_1hPct: number | null }> {
+  if (!isBinanceIndicatorFapiEnabled()) {
+    return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
+  }
   const sym = symbol.trim().toUpperCase();
-  if (!sym) return null;
+  if (!sym) return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
 
   const ageMs = Date.now() - atMs;
   if (ageMs >= 0 && ageMs < LIVE_ALERT_MAX_AGE_MS) {
-    const pack = await fetchBinanceUsdmKlines(sym, "1h", statsEma20DistMinKlineBars());
-    if (!pack) return null;
-    return computePriceVsEma20FromPackAt(pack, "1h", Date.now());
+    const limit = statsEmaSlopeMinKlineBars(STATS_EMA1H_SLOPE_LOOKBACK_BARS);
+    const pack = await fetchBinanceUsdmKlines(sym, "1h", limit);
+    if (!pack) return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
+    const now = Date.now();
+    return {
+      ema20_1hSlopePct7d: computeEmaSlopePctFromPackAt(
+        pack,
+        "1h",
+        STATS_EMA1H_SLOPE_LOOKBACK_BARS,
+        now,
+        STATS_EMA20_DIST_PERIOD,
+      ),
+      priceVsEma20_1hPct: computePriceVsEma20FromPackAt(pack, "1h", now),
+    };
   }
 
-  const pack = await fetchKlinePackThrough(sym, "1h", atMs);
-  return pack ? computePriceVsEma20FromPackAt(pack, "1h", atMs) : null;
+  const pack = await fetchKlinePackThrough(sym, "1h", atMs, STATS_EMA1H_SLOPE_LOOKBACK_BARS);
+  if (!pack) return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
+  return {
+    ema20_1hSlopePct7d: computeEmaSlopePctFromPackAt(
+      pack,
+      "1h",
+      STATS_EMA1H_SLOPE_LOOKBACK_BARS,
+      atMs,
+      STATS_EMA20_DIST_PERIOD,
+    ),
+    priceVsEma20_1hPct: computePriceVsEma20FromPackAt(pack, "1h", atMs),
+  };
 }
 
-let btcEma20_4hDistCache: { atMs: number; pct: number | null } | null = null;
+let btcEma20_4hSlopeCache: { atMs: number; slope: number | null } | null = null;
 
 export function resetBtcEma20_4hDistCache(): void {
-  btcEma20_4hDistCache = null;
+  btcEma20_4hSlopeCache = null;
 }
 
-async function fetchBtcPriceVsEma20_4hAtMs(atMs: number): Promise<number | null> {
+async function fetchBtcEma20_4hSlopeAtMs(atMs: number): Promise<number | null> {
   if (!isBinanceIndicatorFapiEnabled()) return null;
   if (!Number.isFinite(atMs) || atMs <= 0) return null;
 
   const ageMs = Date.now() - atMs;
   if (ageMs >= 0 && ageMs < LIVE_ALERT_MAX_AGE_MS) {
     const now = Date.now();
-    if (btcEma20_4hDistCache && now - btcEma20_4hDistCache.atMs < BTC_EMA20_4H_DIST_CACHE_MS) {
-      return btcEma20_4hDistCache.pct;
+    if (btcEma20_4hSlopeCache && now - btcEma20_4hSlopeCache.atMs < BTC_EMA20_4H_SLOPE_CACHE_MS) {
+      return btcEma20_4hSlopeCache.slope;
     }
-    const pack = await fetchBinanceUsdmKlines(BTC_USDT, "4h", statsEma20DistMinKlineBars());
-    const pct = pack ? computePriceVsEma20FromPackAt(pack, "4h", now) : null;
-    btcEma20_4hDistCache = { atMs: now, pct };
-    return pct;
+    const limit = statsEmaSlopeMinKlineBars(STATS_EMA4H_SLOPE_LOOKBACK_BARS);
+    const pack = await fetchBinanceUsdmKlines(BTC_USDT, "4h", limit);
+    const slope = pack
+      ? computeEmaSlopePctFromPackAt(
+          pack,
+          "4h",
+          STATS_EMA4H_SLOPE_LOOKBACK_BARS,
+          now,
+          STATS_EMA20_DIST_PERIOD,
+        )
+      : null;
+    btcEma20_4hSlopeCache = { atMs: now, slope };
+    return slope;
   }
 
-  const pack = await fetchKlinePackThrough(BTC_USDT, "4h", atMs);
-  return pack ? computePriceVsEma20FromPackAt(pack, "4h", atMs) : null;
+  const pack = await fetchKlinePackThrough(BTC_USDT, "4h", atMs, STATS_EMA4H_SLOPE_LOOKBACK_BARS);
+  return pack
+    ? computeEmaSlopePctFromPackAt(
+        pack,
+        "4h",
+        STATS_EMA4H_SLOPE_LOOKBACK_BARS,
+        atMs,
+        STATS_EMA20_DIST_PERIOD,
+      )
+    : null;
 }
 
-/** Symbol EMA20 1h dist + BTC EMA20 4h dist ณ alertedAtMs */
-export async function fetchStatsEma20DistAtMs(
+/** Symbol EMA20 1h slope+dist + BTC EMA20 4h slope ณ alertedAtMs */
+export async function fetchStatsEma20MetricsAtMs(
   symbol: string,
   atMs: number,
-): Promise<StatsEma20DistSnapshot> {
+): Promise<StatsEma20MetricsSnapshot> {
   if (!isBinanceIndicatorFapiEnabled()) {
-    return { priceVsEma20_1hPct: null, btcPriceVsEma20_4hPct: null };
+    return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null, btcEma20_4hSlopePct7d: null };
   }
   if (!Number.isFinite(atMs) || atMs <= 0) {
-    return { priceVsEma20_1hPct: null, btcPriceVsEma20_4hPct: null };
+    return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null, btcEma20_4hSlopePct7d: null };
   }
-  const [priceVsEma20_1hPct, btcPriceVsEma20_4hPct] = await Promise.all([
-    fetchSymbolPriceVsEma20_1hAtMs(symbol, atMs),
-    fetchBtcPriceVsEma20_4hAtMs(atMs),
+  const [symbol1h, btcEma20_4hSlopePct7d] = await Promise.all([
+    fetchSymbolEma20_1hMetricsAtMs(symbol, atMs),
+    fetchBtcEma20_4hSlopeAtMs(atMs),
   ]);
-  return { priceVsEma20_1hPct, btcPriceVsEma20_4hPct };
+  return {
+    ema20_1hSlopePct7d: symbol1h.ema20_1hSlopePct7d,
+    priceVsEma20_1hPct: symbol1h.priceVsEma20_1hPct,
+    btcEma20_4hSlopePct7d,
+  };
 }
+
+/** @deprecated alias */
+export const fetchStatsEma20DistAtMs = fetchStatsEma20MetricsAtMs;
 
 export type StatsRowWithEma20Dist = {
   symbol: string;
   alertedAtMs: number;
+  ema20_1hSlopePct7d?: number | null;
   priceVsEma20_1hPct?: number | null;
-  btcPriceVsEma20_4hPct?: number | null;
+  btcEma20_4hSlopePct7d?: number | null;
   ema20DistV?: number;
 };
 
@@ -159,9 +218,10 @@ export async function backfillStatsRowsEma20Dist<T extends StatsRowWithEma20Dist
     if (!statsRowNeedsEma20DistBackfill(row)) continue;
     if (!Number.isFinite(row.alertedAtMs) || row.alertedAtMs <= 0) continue;
     try {
-      const dist = await fetchStatsEma20DistAtMs(row.symbol, row.alertedAtMs);
-      row.priceVsEma20_1hPct = dist.priceVsEma20_1hPct;
-      row.btcPriceVsEma20_4hPct = dist.btcPriceVsEma20_4hPct;
+      const metrics = await fetchStatsEma20MetricsAtMs(row.symbol, row.alertedAtMs);
+      row.ema20_1hSlopePct7d = metrics.ema20_1hSlopePct7d;
+      row.priceVsEma20_1hPct = metrics.priceVsEma20_1hPct;
+      row.btcEma20_4hSlopePct7d = metrics.btcEma20_4hSlopePct7d;
       row.ema20DistV = STATS_EMA20_DIST_VERSION;
       updated += 1;
     } catch (e) {

@@ -311,7 +311,8 @@ export type AppendSnowballStatsInput = {
   btcEma4hSlopePct7d?: number | null;
   btcEma1dSlopePct7d?: number | null;
   priceVsEma20_1hPct?: number | null;
-  btcPriceVsEma20_4hPct?: number | null;
+  ema20_1hSlopePct7d?: number | null;
+  btcEma20_4hSlopePct7d?: number | null;
   psar4hTrend?: "up" | "down" | null;
   psar4hDistPct?: number | null;
   signalVolVsSma?: number | null;

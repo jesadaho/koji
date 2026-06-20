@@ -7,6 +7,7 @@ import {
   candleReversalEma1hSlopeLabel,
   candleReversalEma4hSlopeLabel,
   candleReversalEma1dSlopeLabel,
+  candleReversalPriceVsEma20_1hLabel,
 } from "@/lib/candleReversalStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
@@ -311,8 +312,15 @@ export function SnowballStatsTable({
               onSort={onSort}
             />
             <SortTh
-              label="EMA20 1h"
+              label="EMA20∠1h"
               sortKey="ema1h"
+              title="EMA20 1h slope % ย้อนหลัง 7 วัน (168 แท่ง)"
+              activeSort={sort}
+              onSort={onSort}
+            />
+            <SortTh
+              label="EMA20Δ1h"
+              sortKey="ema20_1hDist"
               title="(close − EMA20) / EMA20 × 100 บน 1h — บวก = เหนือเส้น"
               activeSort={sort}
               onSort={onSort}
@@ -332,9 +340,9 @@ export function SnowballStatsTable({
               onSort={onSort}
             />
             <SortTh
-              label="BTC EMA20 4h"
+              label="BTC EMA20∠4h"
               sortKey="btcEma4h"
-              title="BTC (close − EMA20) / EMA20 × 100 บน 4h — บวก = เหนือเส้น"
+              title="BTC EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
               activeSort={sort}
               onSort={onSort}
             />
@@ -503,7 +511,7 @@ export function SnowballStatsTable({
               <td colSpan={showDelete ? 51 : 50} className="sub">
                 {allRowsCount === 0
                   ? emptyMessageNoRows
-                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุกทิศ / ทุก grade / เขียว ${emptyFilterLabels.greenDays} / Funding ${emptyFilterLabels.funding} / โครงสร้าง ${emptyFilterLabels.structure} / BTC SAR ${emptyFilterLabels.btcPsar} / Matrix ${emptyFilterLabels.matrix} / EMA20 1h ${emptyFilterLabels.ema1h} / EMA4h ${emptyFilterLabels.ema4h} / EMA1d ${emptyFilterLabels.ema1d} / BTC EMA20 4h ${emptyFilterLabels.btcEma4h} / ATR ${emptyFilterLabels.atr} / Vol×SMA ${emptyFilterLabels.volVsSma} / R% ก่อน ${emptyFilterLabels.barRangePrev} / R% สัญญาณ ${emptyFilterLabels.barRangeSignal} / R% 2แท่ง ${emptyFilterLabels.barRange2} / Efficiency ${emptyFilterLabels.efficiency} / Max DD ก่อน ${emptyFilterLabels.signalMaxDd} / Vol rank ${emptyFilterLabels.volRank} / Trend Gain ${emptyFilterLabels.trendGain} / Velocity ${emptyFilterLabels.trendVelocity}`}
+                  : `ไม่มีแถวที่ตรงกับ filter — ลองเลือก ทั้งหมด / ทุกทิศ / ทุก grade / เขียว ${emptyFilterLabels.greenDays} / Funding ${emptyFilterLabels.funding} / โครงสร้าง ${emptyFilterLabels.structure} / BTC SAR ${emptyFilterLabels.btcPsar} / Matrix ${emptyFilterLabels.matrix} / EMA20∠1h ${emptyFilterLabels.ema1h} / EMA4h ${emptyFilterLabels.ema4h} / EMA1d ${emptyFilterLabels.ema1d} / BTC EMA20∠4h ${emptyFilterLabels.btcEma4h} / ATR ${emptyFilterLabels.atr} / Vol×SMA ${emptyFilterLabels.volVsSma} / R% ก่อน ${emptyFilterLabels.barRangePrev} / R% สัญญาณ ${emptyFilterLabels.barRangeSignal} / R% 2แท่ง ${emptyFilterLabels.barRange2} / Efficiency ${emptyFilterLabels.efficiency} / Max DD ก่อน ${emptyFilterLabels.signalMaxDd} / Vol rank ${emptyFilterLabels.volRank} / Trend Gain ${emptyFilterLabels.trendGain} / Velocity ${emptyFilterLabels.trendVelocity}`}
               </td>
             </tr>
           ) : (
@@ -557,10 +565,11 @@ export function SnowballStatsTable({
                 <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                 <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                 <td>{statsAtrPct14dLabel(r.atrPct14d)}</td>
-                <td title="(close − EMA20) / EMA20 × 100 บน 1h">{candleReversalEma1hSlopeLabel(r.priceVsEma20_1hPct)}</td>
+                <td title="EMA20 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema20_1hSlopePct7d)}</td>
+                <td title="(close − EMA20) / EMA20 × 100 บน 1h">{candleReversalPriceVsEma20_1hLabel(r.priceVsEma20_1hPct)}</td>
                 <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
                 <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
-                <td title="BTC (close − EMA20) / EMA20 × 100 บน 4h">{candleReversalEma4hSlopeLabel(r.btcPriceVsEma20_4hPct)}</td>
+                <td title="BTC EMA20 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma20_4hSlopePct7d)}</td>
                 <td title="BTC EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.btcEma1dSlopePct7d)}</td>
                 <td title="PSAR 4h trend">{statsPsar4hTrendLabel(r.psar4hTrend)}</td>
                 <td title="PSAR 4h distance">{statsPsar4hDistPctLabel(r.psar4hDistPct)}</td>

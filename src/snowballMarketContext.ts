@@ -21,7 +21,7 @@ import {
   STATS_EMA1D_SLOPE_LOOKBACK_BARS,
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
 } from "./statsEmaSlope";
-import { fetchStatsEma20DistAtMs, resetBtcEma20_4hDistCache } from "./statsEma20Dist";
+import { fetchStatsEma20MetricsAtMs, resetBtcEma20_4hDistCache } from "./statsEma20Dist";
 import { fetchSymbolPsar4hAtMs } from "./statsPsar4h";
 
 const BTC_SYMBOL = "BTCUSDT";
@@ -61,8 +61,10 @@ export type SnowballAlertMarketContext = {
   btcEma1dSlopePct7d: number | null;
   /** (close − EMA20) / EMA20 × 100 บน 1h ของคู่สัญญาณ */
   priceVsEma20_1hPct: number | null;
-  /** BTC — (close − EMA20) / EMA20 × 100 บน 4h */
-  btcPriceVsEma20_4hPct: number | null;
+  /** EMA20 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
+  ema20_1hSlopePct7d: number | null;
+  /** BTC — EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง) */
+  btcEma20_4hSlopePct7d: number | null;
   /** PSAR 4h ของคู่สัญญาณ — ทิศ SAR */
   psar4hTrend: "up" | "down" | null;
   /** PSAR 4h — (close − SAR) / close × 100 */
@@ -211,7 +213,7 @@ export async function fetchSnowballAlertMarketContextAt(
       fetchSymbolAtrPct14d(sym),
       fetchBtcEmaSlopesAtMs(atMs),
       fetchSymbolPsar4hAtMs(sym, atMs),
-      fetchStatsEma20DistAtMs(sym, atMs),
+      fetchStatsEma20MetricsAtMs(sym, atMs),
     ]);
   const quoteVol24hUsdt = await fetchStatsQuoteVol24hUsdt(sym, mexcTicker);
   const fr = mexcTicker?.fundingRate;
@@ -231,7 +233,8 @@ export async function fetchSnowballAlertMarketContextAt(
     btcEma4hSlopePct7d: btcEma.btcEma4hSlopePct7d,
     btcEma1dSlopePct7d: btcEma.btcEma1dSlopePct7d,
     priceVsEma20_1hPct: ema20Dist.priceVsEma20_1hPct,
-    btcPriceVsEma20_4hPct: ema20Dist.btcPriceVsEma20_4hPct,
+    ema20_1hSlopePct7d: ema20Dist.ema20_1hSlopePct7d,
+    btcEma20_4hSlopePct7d: ema20Dist.btcEma20_4hSlopePct7d,
     psar4hTrend: psar4h?.trend ?? null,
     psar4hDistPct: psar4h?.distPct ?? null,
   };

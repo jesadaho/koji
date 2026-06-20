@@ -52,9 +52,11 @@ export type CandleReversalStatsRow = {
   btcEma1dSlopePct7d?: number | null;
   /** (close − EMA20) / EMA20 × 100 บน 1h ของคู่สัญญาณ */
   priceVsEma20_1hPct?: number | null;
-  /** BTC — (close − EMA20) / EMA20 × 100 บน 4h */
-  btcPriceVsEma20_4hPct?: number | null;
-  /** 1 = price vs EMA20 dist คำนวณ ณ alertedAtMs */
+  /** EMA20 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
+  ema20_1hSlopePct7d?: number | null;
+  /** BTC — EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง) */
+  btcEma20_4hSlopePct7d?: number | null;
+  /** 2 = EMA20 slope+dist คำนวณ ณ alertedAtMs */
   ema20DistV?: number;
   /** PSAR 4h — ทิศ SAR (up/down) */
   psar4hTrend?: "up" | "down" | null;
@@ -281,6 +283,7 @@ export type CandleReversalStatsSortKey =
   | "vol24"
   | "mcap"
   | "ema1h"
+  | "ema20_1hDist"
   | "ema4h"
   | "ema1d"
   | "btcEma4h"
@@ -408,13 +411,15 @@ function compareCandleReversalStatsRows(
     case "mcap":
       return cmpNumNullLast(a.marketCapUsd, b.marketCapUsd);
     case "ema1h":
+      return cmpNumNullLast(a.ema20_1hSlopePct7d, b.ema20_1hSlopePct7d);
+    case "ema20_1hDist":
       return cmpNumNullLast(a.priceVsEma20_1hPct, b.priceVsEma20_1hPct);
     case "ema4h":
       return cmpNumNullLast(a.ema4hSlopePct7d, b.ema4hSlopePct7d);
     case "ema1d":
       return cmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
     case "btcEma4h":
-      return cmpNumNullLast(a.btcPriceVsEma20_4hPct, b.btcPriceVsEma20_4hPct);
+      return cmpNumNullLast(a.btcEma20_4hSlopePct7d, b.btcEma20_4hSlopePct7d);
     case "btcEma1d":
       return cmpNumNullLast(a.btcEma1dSlopePct7d, b.btcEma1dSlopePct7d);
     case "psar4h": {
@@ -492,7 +497,13 @@ export function candleReversalGreenDaysLabel(v: number | null | undefined): stri
   return `${Math.floor(v)} วัน`;
 }
 
-export function candleReversalEma1hSlopeLabel(pct: CandleReversalStatsRow["priceVsEma20_1hPct"]): string {
+export function candleReversalEma1hSlopeLabel(pct: CandleReversalStatsRow["ema20_1hSlopePct7d"]): string {
+  return statsEmaSlopePctLabel(pct);
+}
+
+export function candleReversalPriceVsEma20_1hLabel(
+  pct: CandleReversalStatsRow["priceVsEma20_1hPct"],
+): string {
   return statsEmaSlopePctLabel(pct);
 }
 

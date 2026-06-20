@@ -55,6 +55,7 @@ import {
   candleReversalEma1hSlopeLabel,
   candleReversalEma4hSlopeLabel,
   candleReversalEma1dSlopeLabel,
+  candleReversalPriceVsEma20_1hLabel,
   candleReversalGreenDaysLabel,
   candleReversalHorizonWinrateSummary,
   CANDLE_REVERSAL_MODEL_SHORT_LEGEND,
@@ -593,8 +594,15 @@ function ReversalStatsSection({
               onSort={onSortColumn}
             />
             <SortTh
-              label="EMA20 1h"
+              label="EMA20∠1h"
               sortKey="ema1h"
+              title="EMA20 1h slope % ย้อนหลัง 7 วัน (168 แท่ง)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="EMA20Δ1h"
+              sortKey="ema20_1hDist"
               title="(close − EMA20) / EMA20 × 100 บน 1h — บวก = เหนือเส้น"
               activeSort={sort}
               onSort={onSortColumn}
@@ -614,9 +622,9 @@ function ReversalStatsSection({
               onSort={onSortColumn}
             />
             <SortTh
-              label="BTC EMA20 4h"
+              label="BTC EMA20∠4h"
               sortKey="btcEma4h"
-              title="BTC (close − EMA20) / EMA20 × 100 บน 4h — บวก = เหนือเส้น"
+              title="BTC EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -800,7 +808,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20 4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -842,10 +850,11 @@ function ReversalStatsSection({
                   <td>{pumpCycleSwingLowSourceLabel(r.swingLowSource)}</td>
                   <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
-                  <td title="(close − EMA20) / EMA20 × 100 บน 1h">{candleReversalEma1hSlopeLabel(r.priceVsEma20_1hPct)}</td>
+                  <td title="EMA20 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema20_1hSlopePct7d)}</td>
+                  <td title="(close − EMA20) / EMA20 × 100 บน 1h">{candleReversalPriceVsEma20_1hLabel(r.priceVsEma20_1hPct)}</td>
                   <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
                   <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
-                  <td title="BTC (close − EMA20) / EMA20 × 100 บน 4h">{candleReversalEma4hSlopeLabel(r.btcPriceVsEma20_4hPct)}</td>
+                  <td title="BTC EMA20 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma20_4hSlopePct7d)}</td>
                   <td title="BTC EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.btcEma1dSlopePct7d)}</td>
                   <td title="PSAR 4h trend">{statsPsar4hTrendLabel(r.psar4hTrend)}</td>
                   <td title="PSAR 4h distance">{statsPsar4hDistPctLabel(r.psar4hDistPct)}</td>
@@ -1058,7 +1067,7 @@ function ReversalStatsSection({
           </select>
         </label>
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
-          BTC EMA20 4h
+          BTC EMA20∠4h
           <select
             value={btcEma4hFilter}
             onChange={(e) => setBtcEma4hFilter(e.currentTarget.value as BtcEma4hFilter)}
