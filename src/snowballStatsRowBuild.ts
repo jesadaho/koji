@@ -184,8 +184,7 @@ export function buildSnowballStatsRow(input: AppendSnowballStatsInput): Snowball
       input.btcEma20_4hSlopePct7d != null && Number.isFinite(input.btcEma20_4hSlopePct7d)
         ? input.btcEma20_4hSlopePct7d
         : null,
-    ...((input.priceVsEma20_1hPct != null && Number.isFinite(input.priceVsEma20_1hPct)) ||
-    (input.ema20_1hSlopePct7d != null && Number.isFinite(input.ema20_1hSlopePct7d)) ||
+    ...((input.ema20_1hSlopePct7d != null && Number.isFinite(input.ema20_1hSlopePct7d)) &&
     (input.btcEma20_4hSlopePct7d != null && Number.isFinite(input.btcEma20_4hSlopePct7d))
       ? { ema20DistV: STATS_EMA20_DIST_VERSION }
       : {}),

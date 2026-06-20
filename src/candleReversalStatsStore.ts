@@ -15,6 +15,7 @@ import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
+import { fetchStatsEma20MetricsAtMs } from "./statsEma20Dist";
 
 export type { CandleReversalStatsApiPayload, CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 
@@ -421,7 +422,10 @@ export async function appendCandleReversalStatsRow(
     priceVsEma20_1hPct,
     ema20_1hSlopePct7d,
     btcEma20_4hSlopePct7d,
-    ...(priceVsEma20_1hPct != null || ema20_1hSlopePct7d != null || btcEma20_4hSlopePct7d != null
+    ...(ema20_1hSlopePct7d != null &&
+    Number.isFinite(ema20_1hSlopePct7d) &&
+    btcEma20_4hSlopePct7d != null &&
+    Number.isFinite(btcEma20_4hSlopePct7d)
       ? { ema20DistV: STATS_EMA20_DIST_VERSION }
       : {}),
     btcEmaSlopesV: STATS_BTC_EMA_SLOPES_VERSION,
@@ -508,6 +512,38 @@ export async function appendCandleReversalStatsRow(
     strategyExitReason24h: null,
     outcome: "pending",
   };
+
+  const ema20Incomplete =
+    row.ema20_1hSlopePct7d == null ||
+    !Number.isFinite(row.ema20_1hSlopePct7d) ||
+    row.btcEma20_4hSlopePct7d == null ||
+    !Number.isFinite(row.btcEma20_4hSlopePct7d);
+  if (ema20Incomplete && Number.isFinite(input.alertedAtMs) && input.alertedAtMs > 0) {
+    try {
+      const ema20 = await fetchStatsEma20MetricsAtMs(input.symbol, input.alertedAtMs);
+      if (ema20.ema20_1hSlopePct7d != null && Number.isFinite(ema20.ema20_1hSlopePct7d)) {
+        row.ema20_1hSlopePct7d = ema20.ema20_1hSlopePct7d;
+      }
+      if (ema20.priceVsEma20_1hPct != null && Number.isFinite(ema20.priceVsEma20_1hPct)) {
+        row.priceVsEma20_1hPct = ema20.priceVsEma20_1hPct;
+      }
+      if (ema20.btcEma20_4hSlopePct7d != null && Number.isFinite(ema20.btcEma20_4hSlopePct7d)) {
+        row.btcEma20_4hSlopePct7d = ema20.btcEma20_4hSlopePct7d;
+      }
+      if (
+        row.ema20_1hSlopePct7d != null &&
+        Number.isFinite(row.ema20_1hSlopePct7d) &&
+        row.btcEma20_4hSlopePct7d != null &&
+        Number.isFinite(row.btcEma20_4hSlopePct7d)
+      ) {
+        row.ema20DistV = STATS_EMA20_DIST_VERSION;
+      } else {
+        delete row.ema20DistV;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
   try {
     const { stampPendingConflictOnStatsAppend } = await import("./signalPendingConflictServer");

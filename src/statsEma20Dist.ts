@@ -1,6 +1,5 @@
 import { emaLine } from "./indicatorMath";
 import {
-  fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesPaginated,
   isBinanceIndicatorFapiEnabled,
   type BinanceKlinePack,
@@ -12,12 +11,10 @@ import {
 
 export const STATS_EMA20_DIST_PERIOD = 20;
 
-/** แถวที่คำนวณ EMA20 metrics ณ alertedAtMs แล้ว — v4 = slope ใช้ emaLine เหมือน dist */
-export const STATS_EMA20_DIST_VERSION = 4;
+/** แถวที่คำนวณ EMA20 metrics ณ alertedAtMs แล้ว — v5 = ไม่ใช้ live shortcut (สัญญาณใหม่ฟิล slope) */
+export const STATS_EMA20_DIST_VERSION = 5;
 
 const BTC_USDT = "BTCUSDT";
-const LIVE_ALERT_MAX_AGE_MS = 10 * 60_000;
-const BTC_EMA20_4H_SLOPE_CACHE_MS = 5 * 60 * 1000;
 
 /** แท่งปิดล่าสุด + lookback + EMA20 warm-up */
 export function statsEma20SlopeMinKlineBars(lookbackBars: number): number {
@@ -116,23 +113,6 @@ async function fetchSymbolEma20_1hMetricsAtMs(
   const sym = symbol.trim().toUpperCase();
   if (!sym) return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
 
-  const ageMs = Date.now() - atMs;
-  if (ageMs >= 0 && ageMs < LIVE_ALERT_MAX_AGE_MS) {
-    const limit = statsEma20SlopeMinKlineBars(STATS_EMA1H_SLOPE_LOOKBACK_BARS);
-    const pack = await fetchBinanceUsdmKlines(sym, "1h", limit);
-    if (!pack) return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
-    const now = Date.now();
-    return {
-      ema20_1hSlopePct7d: computeEma20SlopePctFromPackAt(
-        pack,
-        "1h",
-        STATS_EMA1H_SLOPE_LOOKBACK_BARS,
-        now,
-      ),
-      priceVsEma20_1hPct: computePriceVsEma20FromPackAt(pack, "1h", now),
-    };
-  }
-
   const pack = await fetchKlinePackThrough(sym, "1h", atMs, STATS_EMA1H_SLOPE_LOOKBACK_BARS);
   if (!pack) return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
   return {
@@ -146,30 +126,12 @@ async function fetchSymbolEma20_1hMetricsAtMs(
   };
 }
 
-let btcEma20_4hSlopeCache: { atMs: number; slope: number | null } | null = null;
-
-export function resetBtcEma20_4hDistCache(): void {
-  btcEma20_4hSlopeCache = null;
-}
+/** @deprecated — cache ถูกลบเมื่อเลิกใช้ live shortcut */
+export function resetBtcEma20_4hDistCache(): void {}
 
 async function fetchBtcEma20_4hSlopeAtMs(atMs: number): Promise<number | null> {
   if (!isBinanceIndicatorFapiEnabled()) return null;
   if (!Number.isFinite(atMs) || atMs <= 0) return null;
-
-  const ageMs = Date.now() - atMs;
-  if (ageMs >= 0 && ageMs < LIVE_ALERT_MAX_AGE_MS) {
-    const now = Date.now();
-    if (btcEma20_4hSlopeCache && now - btcEma20_4hSlopeCache.atMs < BTC_EMA20_4H_SLOPE_CACHE_MS) {
-      return btcEma20_4hSlopeCache.slope;
-    }
-    const limit = statsEma20SlopeMinKlineBars(STATS_EMA4H_SLOPE_LOOKBACK_BARS);
-    const pack = await fetchBinanceUsdmKlines(BTC_USDT, "4h", limit);
-    const slope = pack
-      ? computeEma20SlopePctFromPackAt(pack, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS, now)
-      : null;
-    btcEma20_4hSlopeCache = { atMs: now, slope };
-    return slope;
-  }
 
   const pack = await fetchKlinePackThrough(BTC_USDT, "4h", atMs, STATS_EMA4H_SLOPE_LOOKBACK_BARS);
   return pack

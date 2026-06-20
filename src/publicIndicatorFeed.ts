@@ -3337,7 +3337,7 @@ export async function runPublicIndicatorFeedInternal(
 
         const [longGreenDaysForAlert, longMktCtxForAlert, longPumpCycleForGrade] = await Promise.all([
           fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf),
-          fetchSnowballAlertMarketContext(symbol),
+          fetchSnowballAlertMarketContext(symbol, now),
           resolvePumpCycleSwingLowFields({
             symbol,
             signalAtSec: snowballStatsAnchorCloseSec({
@@ -3647,7 +3647,7 @@ export async function runPublicIndicatorFeedInternal(
             const longVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
             const longLenSnap = packSb ? computeSnowballSignalLenPercentile(packSb, iSig) : null;
             if (!intrabar && longMktCtx == null) {
-              longMktCtx = await fetchSnowballAlertMarketContext(symbol);
+              longMktCtx = await fetchSnowballAlertMarketContext(symbol, now);
             }
             const longConfirmGateSteps = buildSnowballLongConfirmGateStepsForStats(
               snowTf,
@@ -4114,7 +4114,7 @@ export async function runPublicIndicatorFeedInternal(
 
         const [bearGreenDaysForAlert, bearMktCtxForAlert, bearPumpCycleForGrade] = await Promise.all([
           fetchGreenDaysBeforeSignalBar(symbol, signalBarOpenSec, snowTf),
-          fetchSnowballAlertMarketContext(symbol),
+          fetchSnowballAlertMarketContext(symbol, now),
           resolvePumpCycleSwingLowFields({
             symbol,
             signalAtSec: snowballStatsAnchorCloseSec({
@@ -4256,7 +4256,7 @@ export async function runPublicIndicatorFeedInternal(
             }
             const bearVolSnap = snowballVolatilitySnapshotAt(h15, l15, c15, o15, iSig);
             const bearLenSnap = packSb ? computeSnowballSignalLenPercentile(packSb, iSig) : null;
-            const bearMktCtx = !intrabar ? await fetchSnowballAlertMarketContext(symbol) : null;
+            const bearMktCtx = !intrabar ? await fetchSnowballAlertMarketContext(symbol, now) : null;
             const pack1hTrendBear = packsDiv1hExtra[idx] ?? pack1hForTwoBar;
             const trendMomentumBear = calculateTrendMomentumMetrics(pack1hTrendBear, {
               pack15m: packs15mMomentum[idx] ?? null,
