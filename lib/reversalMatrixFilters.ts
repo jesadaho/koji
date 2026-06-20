@@ -28,8 +28,11 @@ export const REVERSAL_QUALITY_SIGNAL_SHORT_BKK_DOW_INDICES = [5, 6] as const;
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
   "Trend Gain 5–20% · Vol×SMA 2–5× · หรือ ศ (BKK)";
 
-/** เกณฑ์กรองสัญญาณ Long ในตาราง 1H รวม (stats) */
-export const REVERSAL_LONG_1H_STATS_FILTER_CRITERIA = "EMA1H > 50% · EMA20 Diff 15–30%";
+/** เกณฑ์ Long candidate ในตาราง Reversal Short 1H */
+export const REVERSAL_LONG_CANDIDATE_CRITERIA = "EMA1H > 50% · EMA20 Diff 15–30%";
+
+/** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_CRITERIA */
+export const REVERSAL_LONG_1H_STATS_FILTER_CRITERIA = REVERSAL_LONG_CANDIDATE_CRITERIA;
 
 /** EMA20 1h slope 7d — exclusive lower bound */
 export const REVERSAL_LONG_1H_STATS_EMA1H_SLOPE_MIN_EXCLUSIVE = 50;
@@ -233,7 +236,30 @@ export function reversalStatsRowMatchesMatrixFilter(
   return reversalRowMatchesQualitySignalMatrix(row);
 }
 
-/** กรองสัญญาณ Long 1H ในตารางรวม — EMA1H > 50% · EMA20 Diff 15–30% */
+export type ReversalLongCandidateFilter = "all" | "longCandidate" | "notLongCandidate";
+
+export const REVERSAL_LONG_CANDIDATE_FILTER_OPTIONS: ReadonlyArray<{
+  value: ReversalLongCandidateFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "longCandidate", label: "Long candidate" },
+  { value: "notLongCandidate", label: "ไม่ใช่ Long candidate" },
+];
+
+export function reversalLongCandidateFilterLabel(filter: ReversalLongCandidateFilter): string {
+  return REVERSAL_LONG_CANDIDATE_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function reversalLongCandidateFilterTitle(filter: ReversalLongCandidateFilter): string {
+  if (filter === "all") return "ไม่กรอง Long candidate";
+  if (filter === "longCandidate") {
+    return `Long candidate — ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
+  }
+  return `ไม่ใช่ Long candidate — ไม่ผ่าน ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
+}
+
+/** กรอง Long candidate — EMA1H > 50% · EMA20 Diff 15–30% */
 export function reversalLong1hStatsFilterPass(
   row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d" | "priceVsEma20_1hPct">,
 ): boolean {
@@ -250,8 +276,29 @@ export function reversalLong1hStatsFilterPass(
   );
 }
 
-/** ตาราง 1H รวม — Short ผ่านตามตัวกรองทั่วไป · Long ต้องผ่านเกณฑ์ EMA เพิ่ม */
-export function reversalCombined1hRowPassesSideFilter(row: CandleReversalStatsRow): boolean {
-  if ((row.tradeSide ?? "short") !== "long") return true;
+export function reversalRowIsLongCandidate(
+  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d" | "priceVsEma20_1hPct">,
+): boolean {
   return reversalLong1hStatsFilterPass(row);
+}
+
+export function reversalSuggestedTradeSide(
+  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d" | "priceVsEma20_1hPct">,
+): CandleReversalTradeSide {
+  return reversalRowIsLongCandidate(row) ? "long" : "short";
+}
+
+export function reversalSuggestedTradeSideLabel(
+  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d" | "priceVsEma20_1hPct">,
+): string {
+  return reversalSuggestedTradeSide(row) === "long" ? "🟢 Long" : "🔴 Short";
+}
+
+export function reversalRowMatchesLongCandidateFilter(
+  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d" | "priceVsEma20_1hPct">,
+  filter: ReversalLongCandidateFilter,
+): boolean {
+  if (filter === "all") return true;
+  const isCandidate = reversalRowIsLongCandidate(row);
+  return filter === "longCandidate" ? isCandidate : !isCandidate;
 }

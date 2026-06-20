@@ -38,7 +38,6 @@ import {
   formatStatsStrategyProfitSummaryText,
   statsStrategyProfitColumnTitle,
   summarizeStatsStrategyProfit,
-  type StatsStrategyProfitHorizon,
   type StatsStrategyProfitRowSlice,
 } from "@/lib/statsStrategyProfitClient";
 import { reversalStatsStrategyProfitResolvedForHorizon } from "@/lib/reversalTpStrategy";
@@ -69,7 +68,6 @@ import {
   candleReversalStatsSortDefaultDir,
   sortCandleReversalStatsRows,
   candleReversalSignalVolVsSmaLabel,
-  candleReversalTradeSideLabel,
   candleReversalVolScoreLabel,
   candleReversalWickRatioPctLabel,
   type CandleReversalSignalBarTf,
@@ -130,12 +128,18 @@ import {
   type ReversalStatsFilterQuery,
 } from "@/lib/candleReversalStatsFilters";
 import {
-  REVERSAL_LONG_1H_STATS_FILTER_CRITERIA,
+  REVERSAL_LONG_CANDIDATE_CRITERIA,
+  REVERSAL_LONG_CANDIDATE_FILTER_OPTIONS,
   REVERSAL_MATRIX_FILTER_OPTIONS,
-  reversalCombined1hRowPassesSideFilter,
+  reversalLongCandidateFilterLabel,
+  reversalLongCandidateFilterTitle,
   reversalMatrixFilterLabel,
   reversalMatrixFilterTitle,
+  reversalRowMatchesLongCandidateFilter,
+  reversalRowIsLongCandidate,
   reversalStatsRowMatchesMatrixFilter,
+  reversalSuggestedTradeSideLabel,
+  type ReversalLongCandidateFilter,
   type ReversalMatrixFilter,
   type ReversalQualitySignalProfile,
 } from "@/lib/reversalMatrixFilters";
@@ -160,9 +164,12 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const FOOTNOTE_1D =
   "Binance USDT-M · Short bias · 1D: follow-up 1d/3d/7d (ปิด Day) · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
 const FOOTNOTE_1H_SHORT =
-  "Binance USDT-M · Short + Long แยกทิศ · Short: follow-up ฝั่ง Short · Long: วัดผล fade SHORT · กรอง Long: EMA1H > 50% · EMA20 Diff 15–30% · follow-up 4h/12h/24h/48h (ปิด 15m) · ผลที่ 24h · winrate/กำไรกลยุทธ์ แยกทิศ · ไม่ส่ง Telegram follow-up";
+  "Binance USDT-M · Short · 1H: follow-up 4h/12h/24h/48h (ปิด 15m) · MFE แท่ง 1H · ผลที่ 24h · winrate แยก 12h/24h/48h · ทิศแนะนำ Long candidate: EMA1H > 50% · EMA20 Diff 15–30% · ไม่ส่ง Telegram follow-up";
 
-type ReversalStatsTabId = "1d" | "1h";
+const FOOTNOTE_1H_LONG =
+  "Binance USDT-M · สัญญาณ Long · วัดผล fade SHORT · 1H follow-up 4h/12h/24h/48h (ปิด 15m) · MFE/Max DD/Adv max ฝั่ง Short · ผลที่ 24h · winrate/กำไรกลยุทธ์ อิงทิศ SHORT · ไม่ส่ง Telegram follow-up";
+
+type ReversalStatsTabId = "1d" | "1h-short" | "1h-long";
 
 function coinLabel(symbol: string): string {
   const u = symbol.toUpperCase();
@@ -313,12 +320,8 @@ type ReversalStatsSectionProps = {
   qualitySignalProfile?: ReversalQualitySignalProfile;
   /** tooltip คอลัมน์ผล */
   outcomeColumnTitle?: string;
-  /** แสดงคอลัมน์ทิศสัญญาณ (Short / Long) */
-  showTradeSideColumn?: boolean;
-  /** กรองสัญญาณ Long ด้วย EMA1H > 50% · EMA20 Diff 15–30% */
-  applyLongSideFilter?: boolean;
-  /** สรุปกำไรกลยุทธ์แยก Short / Long */
-  splitStrategyProfitBySide?: boolean;
+  /** คอลัมน์ทิศแนะนำ + ตัวกรอง Long candidate (ตาราง 1H Short) */
+  showSuggestedSideColumn?: boolean;
   /** อยู่ในแท็บย่อย — ไม่เว้น margin ด้านบน */
   embedded?: boolean;
 };
@@ -342,9 +345,7 @@ function ReversalStatsSection({
   strategyLongDynamicLeverageEnabled = false,
   strategyTpSlPlan,
   outcomeColumnTitle,
-  showTradeSideColumn = false,
-  applyLongSideFilter = false,
-  splitStrategyProfitBySide = false,
+  showSuggestedSideColumn = false,
   embedded = false,
 }: ReversalStatsSectionProps) {
   const resolveRowLeverage = useCallback(
@@ -380,7 +381,8 @@ function ReversalStatsSection({
   const [atrFilter, setAtrFilter] = useState<StatsAtrPct14dFilter>("all");
   const [trendGainFilter, setTrendGainFilter] = useState<SnowballTrendGainFilter>("all");
   const [trendVelocityFilter, setTrendVelocityFilter] = useState<SnowballTrendVelocityFilter>("all");
-  const showPumpCycleFilters = qualitySignalProfile === "long1h" || applyLongSideFilter;
+  const [longCandidateFilter, setLongCandidateFilter] = useState<ReversalLongCandidateFilter>("all");
+  const showPumpCycleFilters = qualitySignalProfile === "long1h";
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
     setSort((prev) =>
@@ -404,11 +406,11 @@ function ReversalStatsSection({
           reversalRowMatchesBtcEma4hFilter(r, btcEma4hFilter) &&
           reversalRowMatchesAtrPct14dFilter(r, atrFilter) &&
           reversalStatsRowMatchesMatrixFilter(r, matrixFilter) &&
-          (!applyLongSideFilter || reversalCombined1hRowPassesSideFilter(r)) &&
+          (!showSuggestedSideColumn || reversalRowMatchesLongCandidateFilter(r, longCandidateFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendGainFilter(r, trendGainFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendVelocityFilter(r, trendVelocityFilter)),
       ),
-    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter, applyLongSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter, showSuggestedSideColumn, longCandidateFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -460,29 +462,6 @@ function ReversalStatsSection({
     );
   }, [scopedRows, strategySizing, tf]);
 
-  const strategyProfitBySide = useMemo(() => {
-    if (!splitStrategyProfitBySide || tf !== "1h") return null;
-    const shortRows = scopedRows.filter((r) => (r.tradeSide ?? "short") === "short");
-    const longRows = scopedRows.filter((r) => r.tradeSide === "long");
-    const summarize = (rows: CandleReversalStatsRow[], hold: StatsStrategyProfitHorizon) =>
-      formatStatsStrategyProfitSummaryText(
-        summarizeStatsStrategyProfit(
-          rows,
-          strategySizing,
-          STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
-          hold,
-          reversalStatsStrategyProfitResolvedForHorizon,
-        ),
-        hold,
-      );
-    return {
-      short24h: summarize(shortRows, STATS_STRATEGY_PROFIT_HOLD_24H),
-      short48h: summarize(shortRows, STATS_STRATEGY_PROFIT_HOLD_48H),
-      long24h: summarize(longRows, STATS_STRATEGY_PROFIT_HOLD_24H),
-      long48h: summarize(longRows, STATS_STRATEGY_PROFIT_HOLD_48H),
-    };
-  }, [scopedRows, splitStrategyProfitBySide, strategySizing, tf]);
-
   const horizonLabels = useMemo<[string, string, string, string | null]>(
     () => (tf === "1h" ? ["4h", "12h", "24h", "48h"] : ["1d", "3d", "7d", null]),
     [tf],
@@ -496,14 +475,12 @@ function ReversalStatsSection({
   );
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 17 + (showTradeSideColumn ? 1 : 0);
+  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 17 + (showSuggestedSideColumn ? 1 : 0);
   const followUpAdverseTitle =
     adverseTitle ??
-    (showHighRank && showLowRank
-      ? "Max adverse ตลอดช่วง follow-up (Short: high สูงสุด · Long: low ต่ำสุดจาก entry)"
-      : showLowRank
-        ? "Max adverse ตลอดช่วง follow-up (long: low ต่ำสุดจาก entry)"
-        : "Max adverse ตลอดช่วง follow-up (short: high สูงสุดจาก entry)");
+    (showLowRank
+      ? "Max adverse ตลอดช่วง follow-up (long: low ต่ำสุดจาก entry)"
+      : "Max adverse ตลอดช่วง follow-up (short: high สูงสุดจาก entry)");
 
   const exportFilterQuery = useMemo((): ReversalStatsFilterQuery => {
     const side = parseSideFromCsvQuery(csvQuery);
@@ -550,14 +527,13 @@ function ReversalStatsSection({
         <thead>
           <tr>
             <SortTh label="เหรียญ" sortKey="symbol" activeSort={sort} onSort={onSortColumn} />
-            {showTradeSideColumn ? (
-              <SortTh
-                label="ทิศ"
-                sortKey="side"
-                title="ทิศสัญญาณ Reversal — Short / Long (Long วัดผล fade SHORT)"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
+            {showSuggestedSideColumn ? (
+              <th
+                scope="col"
+                title={`ทิศแนะนำจากเกณฑ์ Long candidate — ${REVERSAL_LONG_CANDIDATE_CRITERIA}`}
+              >
+                ทิศแนะนำ
+              </th>
             ) : null}
             <SortTh
               label="โมเดล"
@@ -853,7 +829,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${applyLongSideFilter ? ` · Long: ${REVERSAL_LONG_1H_STATS_FILTER_CRITERIA}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && longCandidateFilter !== "all" ? ` · Long candidate ${reversalLongCandidateFilterLabel(longCandidateFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -866,9 +842,15 @@ function ReversalStatsSection({
                     {coinLabel(r.symbol)}
                     <PendingConflictBadge conflictWith={r.conflictWith} />
                   </td>
-                  {showTradeSideColumn ? (
-                    <td title={(r.tradeSide ?? "short") === "long" ? "สัญญาณ Long · วัดผล fade SHORT" : "สัญญาณ Short"}>
-                      {candleReversalTradeSideLabel(r.tradeSide ?? "short")}
+                  {showSuggestedSideColumn ? (
+                    <td
+                      title={
+                        reversalRowIsLongCandidate(r)
+                          ? `Long candidate — ${REVERSAL_LONG_CANDIDATE_CRITERIA}`
+                          : "แนะนำ Short — ไม่ผ่านเกณฑ์ Long candidate"
+                      }
+                    >
+                      {reversalSuggestedTradeSideLabel(r)}
                     </td>
                   ) : null}
                   <td title={candleReversalModelLabel(r.model)}>
@@ -1192,6 +1174,26 @@ function ReversalStatsSection({
             </label>
           </>
         ) : null}
+        {showSuggestedSideColumn ? (
+          <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+            Long candidate
+            <select
+              value={longCandidateFilter}
+              onChange={(e) =>
+                setLongCandidateFilter(e.currentTarget.value as ReversalLongCandidateFilter)
+              }
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "9rem" }}
+              title={reversalLongCandidateFilterTitle(longCandidateFilter)}
+            >
+              {REVERSAL_LONG_CANDIDATE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
           Matrix
           <select
@@ -1223,13 +1225,13 @@ function ReversalStatsSection({
             {reversalMatrixFilterTitle(matrixFilter, qualitySignalProfile)}
           </p>
         ) : null}
-        {applyLongSideFilter ? (
+        {showSuggestedSideColumn && longCandidateFilter !== "all" ? (
           <p
             className="sub"
             style={{ width: "100%", margin: 0 }}
-            title={`กรองสัญญาณ Long อัตโนมัติ — ${REVERSAL_LONG_1H_STATS_FILTER_CRITERIA}`}
+            title={reversalLongCandidateFilterTitle(longCandidateFilter)}
           >
-            Long: {REVERSAL_LONG_1H_STATS_FILTER_CRITERIA}
+            {reversalLongCandidateFilterTitle(longCandidateFilter)}
           </p>
         ) : null}
         <span className="sub">
@@ -1246,32 +1248,7 @@ function ReversalStatsSection({
           </span>
         ) : null}
         <StatsWeekSplitHint splitByWeek={splitByWeek}>
-          {splitStrategyProfitBySide && strategyProfitBySide ? (
-            <>
-              {strategyProfitBySide.short24h || strategyProfitBySide.short48h ? (
-                <span
-                  className="sub"
-                  title="สรุปกำไรกลยุทธ์ฝั่ง Short"
-                  style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
-                >
-                  Short
-                  {strategyProfitBySide.short24h ? ` · ${strategyProfitBySide.short24h}` : ""}
-                  {strategyProfitBySide.short48h ? ` · ${strategyProfitBySide.short48h}` : ""}
-                </span>
-              ) : null}
-              {strategyProfitBySide.long24h || strategyProfitBySide.long48h ? (
-                <span
-                  className="sub"
-                  title="สรุปกำไรกลยุทธ์ฝั่ง Long (fade SHORT)"
-                  style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
-                >
-                  Long
-                  {strategyProfitBySide.long24h ? ` · ${strategyProfitBySide.long24h}` : ""}
-                  {strategyProfitBySide.long48h ? ` · ${strategyProfitBySide.long48h}` : ""}
-                </span>
-              ) : null}
-            </>
-          ) : strategyProfitSummaryText24h || strategyProfitSummaryText48h ? (
+          {strategyProfitSummaryText24h || strategyProfitSummaryText48h ? (
             <>
               {strategyProfitSummaryText24h ? (
                 <span
@@ -1310,28 +1287,7 @@ function ReversalStatsSection({
                 rowCount={g.rows.length}
                 extra={reversalWinrateSummary(g.rows)}
               />
-              {tf === "1h" && splitStrategyProfitBySide ? (
-                <>
-                  <p className="sub" style={{ margin: "0 0 0.25rem", fontWeight: 600 }}>
-                    Short
-                  </p>
-                  <StatsWeekStrategyProfitBlock
-                    rows={g.rows.filter((r) => (r.tradeSide ?? "short") === "short")}
-                    sizing={strategySizing}
-                    band={STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND}
-                    resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
-                  />
-                  <p className="sub" style={{ margin: "0.5rem 0 0.25rem", fontWeight: 600 }}>
-                    Long (fade SHORT)
-                  </p>
-                  <StatsWeekStrategyProfitBlock
-                    rows={g.rows.filter((r) => r.tradeSide === "long")}
-                    sizing={strategySizing}
-                    band={STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND}
-                    resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
-                  />
-                </>
-              ) : tf === "1h" ? (
+              {tf === "1h" ? (
                 <StatsWeekStrategyProfitBlock
                   rows={g.rows}
                   sizing={strategySizing}
@@ -1388,17 +1344,16 @@ export default function ReversalStatsTelegramMiniApp() {
     () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1d"),
     [allRows],
   );
-  const hour1hRows = useMemo(
-    () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1h"),
+  const hourShortRows = useMemo(
+    () =>
+      allRows.filter(
+        (r) => (r.signalBarTf ?? "1d") === "1h" && (r.tradeSide ?? "short") === "short",
+      ),
     [allRows],
   );
-  const hour1hShortCount = useMemo(
-    () => hour1hRows.filter((r) => (r.tradeSide ?? "short") === "short").length,
-    [hour1hRows],
-  );
-  const hour1hLongCount = useMemo(
-    () => hour1hRows.filter((r) => r.tradeSide === "long").length,
-    [hour1hRows],
+  const hourLongRows = useMemo(
+    () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1h" && r.tradeSide === "long"),
+    [allRows],
   );
 
   const api = useCallback(async (path: string, init?: RequestInit) => {
@@ -1564,7 +1519,7 @@ export default function ReversalStatsTelegramMiniApp() {
       <h1 className="sparkStatsMatrixSectionTitle">
         สถิติ Reversal
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-          แท็บ 1D · 1H (Short + Long) · โดจิ · ทุบ · แดงยาว · เขียวยาว
+          แท็บ 1D · 1H Short · Long 1H (fade SHORT) · โดจิ · ทุบ · แดงยาว · เขียวยาว
         </span>
       </h1>
 
@@ -1636,17 +1591,28 @@ export default function ReversalStatsTelegramMiniApp() {
         <button
           type="button"
           className="tmaTab"
-          id="reversal-tab-1h"
+          id="reversal-tab-1h-short"
           role="tab"
-          aria-selected={activeTab === "1h"}
-          aria-controls="reversal-panel-1h"
-          tabIndex={activeTab === "1h" ? 0 : -1}
-          onClick={() => setActiveTab("1h")}
+          aria-selected={activeTab === "1h-short"}
+          aria-controls="reversal-panel-1h-short"
+          tabIndex={activeTab === "1h-short" ? 0 : -1}
+          onClick={() => setActiveTab("1h-short")}
         >
-          <span>1H</span>
-          <span className="tmaTabEn">
-            Short {hour1hShortCount} · Long {hour1hLongCount}
-          </span>
+          <span>1H Short</span>
+          <span className="tmaTabEn">{hourShortRows.length} แถว</span>
+        </button>
+        <button
+          type="button"
+          className="tmaTab"
+          id="reversal-tab-1h-long"
+          role="tab"
+          aria-selected={activeTab === "1h-long"}
+          aria-controls="reversal-panel-1h-long"
+          tabIndex={activeTab === "1h-long" ? 0 : -1}
+          onClick={() => setActiveTab("1h-long")}
+        >
+          <span>Long 1H</span>
+          <span className="tmaTabEn">fade SHORT · {hourLongRows.length}</span>
         </button>
       </div>
 
@@ -1671,31 +1637,56 @@ export default function ReversalStatsTelegramMiniApp() {
 
       <div
         className="tmaTabPanel"
-        id="reversal-panel-1h"
+        id="reversal-panel-1h-short"
         role="tabpanel"
-        aria-labelledby="reversal-tab-1h"
-        hidden={activeTab !== "1h"}
+        aria-labelledby="reversal-tab-1h-short"
+        hidden={activeTab !== "1h-short"}
       >
         <ReversalStatsSection
           embedded
           tf="1h"
-          title="สถิติ Reversal · 1H"
-          subtitle="Short + Long แยกทิศ · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
+          title="สถิติ Reversal · 1H Short"
+          subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
           strategyPlanTitle={REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
           strategyTpSlPlan={payload?.viewerTpSlPlan}
-          emptyHint="ยังไม่มีแถว 1H — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
+          emptyHint="ยังไม่มีแถว 1H Short — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
           footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_SHORT}`}
-          csvPrefix="reversal-stats-1h"
-          rows={hour1hRows}
-          showTradeSideColumn
-          applyLongSideFilter
-          splitStrategyProfitBySide
-          showHighRank
+          csvPrefix="reversal-stats-1h-short"
+          csvQuery="&side=short"
+          rows={hourShortRows}
+          showSuggestedSideColumn
+        />
+      </div>
+
+      <div
+        className="tmaTabPanel"
+        id="reversal-panel-1h-long"
+        role="tabpanel"
+        aria-labelledby="reversal-tab-1h-long"
+        hidden={activeTab !== "1h-long"}
+      >
+        <ReversalStatsSection
+          embedded
+          tf="1h"
+          title="สถิติ Reversal · Long 1H (fade SHORT)"
+          subtitle="สัญญาณ Long · วัดผลฝั่ง Short (fade) · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
+          strategyPlanTitle={REVERSAL_TP_STRATEGY_SUMMARY}
+          strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
+          strategyLeverage={payload?.viewerStrategyLeverage}
+          strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
+          strategyTpSlPlan={payload?.viewerTpSlPlan}
+          emptyHint="ยังไม่มีแถว Long 1H — รอสัญญาณ Reversal Long ส่งสำเร็จ (CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED)"
+          footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_LONG}`}
+          csvPrefix="reversal-stats-1h-long"
+          csvQuery="&side=long"
+          qualitySignalProfile="long1h"
+          outcomeColumnTitle="ผล fade SHORT @24h (ปิดเร็ว) · winrate/กำไรกลยุทธ์ ฝั่ง Short"
+          rows={hourLongRows}
+          showHighRank={false}
           showLowRank
-          outcomeColumnTitle="ผลที่ 24h — Short = ฝั่ง Short · Long = fade SHORT"
         />
       </div>
     </div>
