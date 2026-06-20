@@ -320,3 +320,35 @@ export function reversalRowMatchesLongCandidateFilter(
   const isCandidate = reversalRowIsLongCandidate(row);
   return filter === "longCandidate" ? isCandidate : !isCandidate;
 }
+
+/** กรองตามคอลัมน์ทิศแนะนำ — ตาราง Reversal Short 1H */
+export type ReversalSuggestedSideFilter = "all" | "long" | "short";
+
+export const REVERSAL_SUGGESTED_SIDE_FILTER_OPTIONS: ReadonlyArray<{
+  value: ReversalSuggestedSideFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทุกทิศ" },
+  { value: "long", label: "🟢 Long" },
+  { value: "short", label: "🔴 Short" },
+];
+
+export function reversalSuggestedSideFilterLabel(filter: ReversalSuggestedSideFilter): string {
+  return REVERSAL_SUGGESTED_SIDE_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function reversalSuggestedSideFilterTitle(filter: ReversalSuggestedSideFilter): string {
+  if (filter === "all") return "ไม่กรองทิศแนะนำ";
+  if (filter === "long") {
+    return `ทิศแนะนำ Long — ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
+  }
+  return `ทิศแนะนำ Short — ไม่ผ่าน ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
+}
+
+export function reversalRowMatchesSuggestedSideFilter(
+  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d" | "priceVsEma20_1hPct">,
+  filter: ReversalSuggestedSideFilter,
+): boolean {
+  if (filter === "all") return true;
+  return reversalSuggestedTradeSide(row) === filter;
+}

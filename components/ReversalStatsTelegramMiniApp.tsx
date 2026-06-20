@@ -129,20 +129,20 @@ import {
 } from "@/lib/candleReversalStatsFilters";
 import {
   REVERSAL_LONG_CANDIDATE_CRITERIA,
-  REVERSAL_LONG_CANDIDATE_FILTER_OPTIONS,
   REVERSAL_MATRIX_FILTER_OPTIONS,
-  reversalLongCandidateFilterLabel,
-  reversalLongCandidateFilterTitle,
+  REVERSAL_SUGGESTED_SIDE_FILTER_OPTIONS,
   reversalLongCandidateDebugTitle,
   reversalMatrixFilterLabel,
   reversalMatrixFilterTitle,
-  reversalRowMatchesLongCandidateFilter,
   reversalRowIsLongCandidate,
+  reversalRowMatchesSuggestedSideFilter,
   reversalStatsRowMatchesMatrixFilter,
+  reversalSuggestedSideFilterLabel,
+  reversalSuggestedSideFilterTitle,
   reversalSuggestedTradeSideLabel,
-  type ReversalLongCandidateFilter,
   type ReversalMatrixFilter,
   type ReversalQualitySignalProfile,
+  type ReversalSuggestedSideFilter,
 } from "@/lib/reversalMatrixFilters";
 import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
 import {
@@ -382,7 +382,7 @@ function ReversalStatsSection({
   const [atrFilter, setAtrFilter] = useState<StatsAtrPct14dFilter>("all");
   const [trendGainFilter, setTrendGainFilter] = useState<SnowballTrendGainFilter>("all");
   const [trendVelocityFilter, setTrendVelocityFilter] = useState<SnowballTrendVelocityFilter>("all");
-  const [longCandidateFilter, setLongCandidateFilter] = useState<ReversalLongCandidateFilter>("all");
+  const [suggestedSideFilter, setSuggestedSideFilter] = useState<ReversalSuggestedSideFilter>("all");
   const showPumpCycleFilters = qualitySignalProfile === "long1h";
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
@@ -407,11 +407,11 @@ function ReversalStatsSection({
           reversalRowMatchesBtcEma4hFilter(r, btcEma4hFilter) &&
           reversalRowMatchesAtrPct14dFilter(r, atrFilter) &&
           reversalStatsRowMatchesMatrixFilter(r, matrixFilter) &&
-          (!showSuggestedSideColumn || reversalRowMatchesLongCandidateFilter(r, longCandidateFilter)) &&
+          (!showSuggestedSideColumn || reversalRowMatchesSuggestedSideFilter(r, suggestedSideFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendGainFilter(r, trendGainFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendVelocityFilter(r, trendVelocityFilter)),
       ),
-    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter, showSuggestedSideColumn, longCandidateFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -830,7 +830,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && longCandidateFilter !== "all" ? ` · Long candidate ${reversalLongCandidateFilterLabel(longCandidateFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -1177,17 +1177,17 @@ function ReversalStatsSection({
         ) : null}
         {showSuggestedSideColumn ? (
           <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
-            Long candidate
+            ทิศแนะนำ
             <select
-              value={longCandidateFilter}
+              value={suggestedSideFilter}
               onChange={(e) =>
-                setLongCandidateFilter(e.currentTarget.value as ReversalLongCandidateFilter)
+                setSuggestedSideFilter(e.currentTarget.value as ReversalSuggestedSideFilter)
               }
               className="tmaInput"
-              style={{ width: "auto", minWidth: "9rem" }}
-              title={reversalLongCandidateFilterTitle(longCandidateFilter)}
+              style={{ width: "auto", minWidth: "8rem" }}
+              title={reversalSuggestedSideFilterTitle(suggestedSideFilter)}
             >
-              {REVERSAL_LONG_CANDIDATE_FILTER_OPTIONS.map((opt) => (
+              {REVERSAL_SUGGESTED_SIDE_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -1226,13 +1226,13 @@ function ReversalStatsSection({
             {reversalMatrixFilterTitle(matrixFilter, qualitySignalProfile)}
           </p>
         ) : null}
-        {showSuggestedSideColumn && longCandidateFilter !== "all" ? (
+        {showSuggestedSideColumn && suggestedSideFilter !== "all" ? (
           <p
             className="sub"
             style={{ width: "100%", margin: 0 }}
-            title={reversalLongCandidateFilterTitle(longCandidateFilter)}
+            title={reversalSuggestedSideFilterTitle(suggestedSideFilter)}
           >
-            {reversalLongCandidateFilterTitle(longCandidateFilter)}
+            {reversalSuggestedSideFilterTitle(suggestedSideFilter)}
           </p>
         ) : null}
         <span className="sub">
