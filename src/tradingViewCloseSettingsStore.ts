@@ -1024,7 +1024,7 @@ export async function saveTradingViewMexcSettings(
           ? input.reversalAutoTradeLongEntryMode
           : prev?.reversalAutoTradeLongEntryMode ??
             prev?.reversalAutoTradeEntryMode ??
-            "hybrid_ema",
+            "market",
 
     reversalAutoTradeLongEntryEmaPeriod:
       input.reversalAutoTradeLongEntryEmaPeriod === null

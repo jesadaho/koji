@@ -13,6 +13,10 @@ import {
 import type { ReversalStatsPlaySide } from "@/lib/reversalMatrixFilters";
 import { normalizeReversalStatsPlaySide } from "@/lib/reversalMatrixFilters";
 import { resolveSnowballTpSlPlanFromRow } from "@/src/snowballAutoTradeTpSlPlan";
+import {
+  loadTradingViewMexcSettingsFullMap,
+  type TradingViewMexcUserSettings,
+} from "@/src/tradingViewCloseSettingsStore";
 
 export type StatsTpSlPlanSource = "reversal" | "snowball";
 
@@ -24,9 +28,7 @@ export type ViewerStatsTpSlPlan = StatsTpSlPlan & {
 
 export { statsTpSlPlanCacheKey };
 
-function reversalTpSlPlanFromSettings(
-  row: NonNullable<Awaited<ReturnType<typeof loadTradingViewMexcSettingsFullMap>>[string]>,
-): ViewerStatsTpSlPlan {
+function reversalTpSlPlanFromSettings(row: TradingViewMexcUserSettings): ViewerStatsTpSlPlan {
   const en = row.reversalAutoTradeTpSlEnabled !== false;
   const t1 =
     typeof row.reversalAutoTradeTp1PricePct === "number" &&
@@ -75,9 +77,7 @@ function reversalTpSlPlanFromSettings(
   };
 }
 
-function snowballTpSlPlanFromSettings(
-  row: NonNullable<Awaited<ReturnType<typeof loadTradingViewMexcSettingsFullMap>>[string]>,
-): ViewerStatsTpSlPlan {
+function snowballTpSlPlanFromSettings(row: TradingViewMexcUserSettings): ViewerStatsTpSlPlan {
   const p = resolveSnowballTpSlPlanFromRow(row);
   return {
     tpSlEnabled: p.enabled,
@@ -95,7 +95,7 @@ function snowballTpSlPlanFromSettings(
 export function resolveTpSlPlanForUserId(
   userId: string,
   source: StatsTpSlPlanSource,
-  map: Awaited<ReturnType<typeof loadTradingViewMexcSettingsFullMap>>,
+  map: Record<string, TradingViewMexcUserSettings>,
 ): ViewerStatsTpSlPlan {
   const row = map[userId.trim()];
   if (!row) {

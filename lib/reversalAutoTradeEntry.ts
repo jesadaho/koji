@@ -51,7 +51,7 @@ export function reversalEntrySettingsFromRow(
   const legacy = reversalLegacyEntrySettings(row);
   if (signalKind === "long") {
     return {
-      mode: parseReversalAutoTradeEntryMode(row.reversalAutoTradeLongEntryMode, legacy.mode),
+      mode: "market",
       emaPeriod: parseReversalAutoTradeEntryEmaPeriod(
         row.reversalAutoTradeLongEntryEmaPeriod,
         legacy.emaPeriod,

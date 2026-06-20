@@ -269,7 +269,7 @@ export default function SettingsTelegramMiniApp() {
   const [revLongDynamicLeverage, setRevLongDynamicLeverage] = useState(false);
   const [revShortEntryMode, setRevShortEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
   const [revShortEntryEmaPeriod, setRevShortEntryEmaPeriod] = useState("20");
-  const [revLongEntryMode, setRevLongEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
+  const [revLongEntryMode, setRevLongEntryMode] = useState<"hybrid_ema" | "market">("market");
   const [revLongEntryEmaPeriod, setRevLongEntryEmaPeriod] = useState("20");
   const [revSaveErr, setRevSaveErr] = useState("");
   const [revSaveOk, setRevSaveOk] = useState("");
@@ -430,7 +430,7 @@ export default function SettingsTelegramMiniApp() {
     const shortMode = st.shortEntryMode ?? st.entryMode;
     const longMode = st.longEntryMode ?? st.entryMode;
     setRevShortEntryMode(shortMode === "market" ? "market" : "hybrid_ema");
-    setRevLongEntryMode(longMode === "market" ? "market" : "hybrid_ema");
+    setRevLongEntryMode("market");
     setRevShortEntryEmaPeriod(
       (st.shortEntryEmaPeriod ?? st.entryEmaPeriod) != null &&
         Number.isFinite(st.shortEntryEmaPeriod ?? st.entryEmaPeriod)
@@ -1047,10 +1047,6 @@ export default function SettingsTelegramMiniApp() {
       setRevSaveErr("EMA period (สัญญาณ Short) ต้องเป็นจำนวนเต็ม 5–200");
       return;
     }
-    if (revLongEntryMode === "hybrid_ema" && !validEmaPeriod(longEntryEmaPeriodParsed)) {
-      setRevSaveErr("EMA period (สัญญาณ Long) ต้องเป็นจำนวนเต็ม 5–200");
-      return;
-    }
 
     setRevSaving(true);
     try {
@@ -1080,9 +1076,8 @@ export default function SettingsTelegramMiniApp() {
         shortEntryMode: revShortEntryMode,
         shortEntryEmaPeriod:
           revShortEntryMode === "hybrid_ema" ? Math.floor(shortEntryEmaPeriodParsed) : null,
-        longEntryMode: revLongEntryMode,
-        longEntryEmaPeriod:
-          revLongEntryMode === "hybrid_ema" ? Math.floor(longEntryEmaPeriodParsed) : null,
+        longEntryMode: "market",
+        longEntryEmaPeriod: null,
       };
       const body: Record<string, unknown> = {
         rotateWebhookToken: false,
@@ -2062,40 +2057,9 @@ export default function SettingsTelegramMiniApp() {
         <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
           Entry — สัญญาณ Long (fade SHORT)
         </p>
-        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
-          <label className="sub" style={{ display: "block" }}>
-            โหมด entry (Long)
-            <select
-              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
-              value={revLongEntryMode}
-              onChange={(e) =>
-                setRevLongEntryMode(e.target.value === "market" ? "market" : "hybrid_ema")
-              }
-            >
-              <option value="hybrid_ema">Hybrid (EMA retest บน 15m)</option>
-              <option value="market">Market ตลอด</option>
-            </select>
-          </label>
-          {revLongEntryMode === "hybrid_ema" ? (
-            <label className="sub" style={{ display: "block" }}>
-              EMA period (TF 15m, default 20)
-              <input
-                type="text"
-                inputMode="numeric"
-                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
-                autoComplete="off"
-                placeholder="20"
-                value={revLongEntryEmaPeriod}
-                onChange={(e) => setRevLongEntryEmaPeriod(e.target.value)}
-              />
-            </label>
-          ) : null}
-        </div>
-        {revLongEntryMode === "hybrid_ema" ? (
-          <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.9 }}>
-            ใช้เฉพาะสัญญาณ Long → SHORT — แยกจาก Short ด้านบน
-          </p>
-        ) : null}
+        <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.9 }}>
+          Market ตลอด — ไม่ใช้ Limit ที่ EMA (สัญญาณ Long 1H → เปิด SHORT)
+        </p>
 
         <p className="sub" style={{ marginTop: "0.85rem", fontWeight: 600 }}>
           Margin / เลเวเรจ
@@ -2190,7 +2154,7 @@ export default function SettingsTelegramMiniApp() {
             <option value="long">Long — ทิศแนะนำ 🟢 (fade)</option>
           </select>
           <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-            กำหนดทิศหลักในตารางสถิติ · Long = กรองทิศแนะนำ 🟢 และสรุปกำไรกลยุทธ์ฝั่ง Long
+            กำหนดทิศหลักในตารางสถิติ + auto-open · Long = กรองทิศแนะนำ 🟢 · เปิด Market LONG (ไม่ใช้ Limit EMA)
           </span>
         </label>
 

@@ -28,7 +28,7 @@ import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } f
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
-import { reversalMatchesQualitySignalForAlert } from "@/lib/reversalMatrixFilters";
+import { reversalMatchesQualitySignalForAlert, reversalRowIsLongCandidate, normalizeReversalStatsPlaySide } from "@/lib/reversalMatrixFilters";
 import {
   resolveReversalLongTradeLeverage,
   reversalLongDynamicLeverageNote,
@@ -42,6 +42,7 @@ import {
 } from "@/lib/tpSlBreakevenPlan";
 import { bkkIsSaturdayNow } from "./snowballAutoTradeStateStore";
 import {
+  REVERSAL_ENTRY_EMA_PERIOD_DEFAULT,
   REVERSAL_LIMIT_EXPIRE_MS,
   reversalEma15mLabel,
   reversalEntrySettingsFromRow,
@@ -226,6 +227,10 @@ export type ReversalAutoTradeInput = {
   ageOfTrendHours?: number | null;
   /** Vol แท่งสัญญาณ ÷ SMA(volume) — Long 1H Quality Signal */
   signalVolVsSma?: number | null;
+  /** (close − EMA20) / EMA20 × 100 บน 1h — Long candidate */
+  priceVsEma20_1hPct?: number | null;
+  /** EMA20 1h slope 7d % — Long candidate */
+  ema20_1hSlopePct7d?: number | null;
   /** เวลาแจ้ง alert (ms) — ใช้ conflict check */
   alertedAtMs?: number;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
@@ -249,7 +254,13 @@ type ReversalAutoOpenLogSignal = {
   rangeRankInLookback?: number | null;
 };
 
-function reversalAutoOpenTelegramTitle(alertTradeSide: CandleReversalTradeSide): string {
+function reversalAutoOpenTelegramTitle(
+  alertTradeSide: CandleReversalTradeSide,
+  openMexcLong = false,
+): string {
+  if (openMexcLong) {
+    return "Koji — Reversal auto-open (MEXC) · LONG (ทิศแนะนำ 🟢)";
+  }
   return alertTradeSide === "long"
     ? "Koji — Reversal auto-open (MEXC) · Long → SHORT"
     : "Koji — Reversal auto-open (MEXC)";
@@ -317,11 +328,42 @@ function resolveReversalLogEntryPrice(
   return undefined;
 }
 
+function findMexcOpenPositionLong(
+  positions: OpenPositionRow[],
+  contractSymbol: string,
+): OpenPositionRow | undefined {
+  const sym = contractSymbol.trim();
+  return positions.find(
+    (x) => x.symbol === sym && x.state === 1 && Number(x.holdVol) > 0 && x.positionType === 1,
+  );
+}
+
+function hasActiveLongPosition(
+  positions: Awaited<ReturnType<typeof getOpenPositions>>,
+  contractSymbol: string,
+): boolean {
+  return findMexcOpenPositionLong(positions, contractSymbol) != null;
+}
+
+function readMexcAvgEntryPriceLong(
+  positions: OpenPositionRow[],
+  contractSymbol: string,
+): number | null {
+  const p = findMexcOpenPositionLong(positions, contractSymbol);
+  if (!p) return null;
+  const o = Number(p.openAvgPrice);
+  if (Number.isFinite(o) && o > 0) return o;
+  const h = Number(p.holdAvgPrice);
+  if (Number.isFinite(h) && h > 0) return h;
+  return null;
+}
+
 function logReversalAutoOpen(
   userId: string,
   signal: ReversalAutoOpenLogSignal,
   outcome: AutoOpenOutcome,
   reasonCode: string,
+  mexcSide: "short" | "long",
   extra?: {
     reasonDetail?: string;
     marginUsdt?: number;
@@ -347,7 +389,7 @@ function logReversalAutoOpen(
     reasonCode,
     contractSymbol: signal.contractSymbol,
     binanceSymbol: signal.binanceSymbol,
-    side: "short",
+    side: mexcSide,
     reversalAlertSide: signal.alertTradeSide,
     signalBarTf: signal.signalBarTf,
     model: signal.model,
@@ -362,11 +404,11 @@ function logReversalAutoOpen(
 
 /**
  * Auto-open SHORT บน MEXC หลัง Reversal alert สำเร็จ
- * - สัญญาณ Short: `reversalAutoTradeEnabled` · สัญญาณ Long (fade): `reversalAutoTradeLongSignalShortEnabled`
+ * - สัญญาณ Short: `reversalAutoTradeEnabled` · ทิศที่เล่น Long → Market LONG (Long candidate) · สัญญาณ Long (fade): `reversalAutoTradeLongSignalShortEnabled`
  * - มี MEXC creds
  * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — ดู REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA
- * - entry ตั้งค่าต่อ user: Hybrid (EMA period บน 15m, default 20) หรือ Market ตลอด
- *   - Hybrid: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.)
+ * - entry Short: Hybrid (EMA 15m) หรือ Market · Long (fade + ทิศที่เล่น Long): Market ตลอด
+ *   - Hybrid Short: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.)
  * - TP ใช้ cron tick ปิด market (ไม่วาง plan TP บน MEXC)
  * - 1 order/เหรียญ/วัน (BKK) — ปลดล็อกเมื่อ Limit หมดอายุโดยไม่ fill
  */
@@ -395,7 +437,6 @@ export async function runReversalAutoTradeAfterReversalAlert(
   const sym = contractSymbol;
 
   const alertTradeSide: CandleReversalTradeSide = input.alertTradeSide === "long" ? "long" : "short";
-  const tgTitle = reversalAutoOpenTelegramTitle(alertTradeSide);
 
   const logSignal: ReversalAutoOpenLogSignal = {
     contractSymbol,
@@ -607,6 +648,23 @@ export async function runReversalAutoTradeAfterReversalAlert(
   for (const [userId, rowRaw] of Object.entries(map)) {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
+    const statsPlaySide = normalizeReversalStatsPlaySide(row.reversalStatsPlaySide);
+    const openMexcLong =
+      alertTradeSide === "short" &&
+      input.signalBarTf === "1h" &&
+      statsPlaySide === "long";
+    const mexcSide: "short" | "long" = openMexcLong ? "long" : "short";
+    const userTgTitle = reversalAutoOpenTelegramTitle(alertTradeSide, openMexcLong);
+
+    if (
+      statsPlaySide === "long" &&
+      alertTradeSide === "short" &&
+      input.signalBarTf !== "1h"
+    ) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "play_long_requires_1h", "long");
+      continue;
+    }
+
     const userEnabledForAlert =
       alertTradeSide === "long"
         ? row.reversalAutoTradeLongSignalShortEnabled === true
@@ -617,8 +675,23 @@ export async function runReversalAutoTradeAfterReversalAlert(
         logSignal,
         "skipped",
         alertTradeSide === "long" ? "long_fade_disabled" : "user_disabled",
+        mexcSide,
       );
       continue;
+    }
+
+    if (openMexcLong) {
+      if (
+        !reversalRowIsLongCandidate({
+          trendGainPct: input.trendGainPct,
+          signalVolVsSma: input.signalVolVsSma,
+          priceVsEma20_1hPct: input.priceVsEma20_1hPct,
+          ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
+        })
+      ) {
+        logReversalAutoOpen(userId, logSignal, "skipped", "not_long_candidate", mexcSide);
+        continue;
+      }
     }
 
     const saturdayAllSignals =
@@ -640,12 +713,12 @@ export async function runReversalAutoTradeAfterReversalAlert(
         allowQualitySignal: allowQuality,
       })
     ) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "quality_signal_gate");
+      logReversalAutoOpen(userId, logSignal, "skipped", "quality_signal_gate", mexcSide);
       continue;
     }
 
     if (hasPlacedReversalContractToday(state[userId], contractSymbol, dayKey)) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "already_opened_today");
+      logReversalAutoOpen(userId, logSignal, "skipped", "already_opened_today", mexcSide);
       continue;
     }
 
@@ -654,18 +727,18 @@ export async function runReversalAutoTradeAfterReversalAlert(
         ? { apiKey: row.mexcApiKey.trim(), secret: row.mexcSecret.trim() }
         : null;
     if (!creds) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "no_mexc_creds");
+      logReversalAutoOpen(userId, logSignal, "skipped", "no_mexc_creds", mexcSide);
       continue;
     }
 
     const marginUsdt = row.reversalAutoTradeMarginUsdt ?? NaN;
     const baseLeverage = row.reversalAutoTradeLeverage ?? NaN;
     if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage");
+      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", mexcSide);
       continue;
     }
     if (!(typeof baseLeverage === "number" && Number.isFinite(baseLeverage) && baseLeverage >= 1)) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", {
+      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", mexcSide, {
         marginUsdt,
       });
       continue;
@@ -673,7 +746,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
 
     const baseLev = Math.floor(baseLeverage);
     const leveragePick = resolveReversalLongTradeLeverage({
-      alertTradeSide,
+      alertTradeSide: openMexcLong ? "long" : alertTradeSide,
       baseLeverage: baseLev,
       dynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
       atrPct14d: input.atrPct14d,
@@ -691,7 +764,32 @@ export async function runReversalAutoTradeAfterReversalAlert(
         : {}),
     };
 
-    const entryRes = await resolveReversalEntryForUser(row);
+    let entryRes: EntryResolve;
+    if (openMexcLong) {
+      const markRes = await ensureMarkPrice();
+      if (!markRes.ok) {
+        entryRes = {
+          ok: false,
+          reasonCode: "mark_unavailable",
+          error: markRes.error,
+        };
+      } else {
+        entryRes = {
+          ok: true,
+          mode: "market",
+          emaPeriod: REVERSAL_ENTRY_EMA_PERIOD_DEFAULT,
+          entryEma: null,
+          mark: markRes.mark,
+          useMarket: true,
+          aboveEma: true,
+          emaFallbackMarket: true,
+          markSource: markRes.markSource,
+          emaLabel: reversalEma15mLabel(REVERSAL_ENTRY_EMA_PERIOD_DEFAULT),
+        };
+      }
+    } else {
+      entryRes = await resolveReversalEntryForUser(row);
+    }
     const emaLogExtra = entryRes.ok
       ? {
           entryMode: entryRes.mode,
@@ -713,6 +811,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         logSignal,
         "failed",
         "position_check_failed",
+        mexcSide,
         {
           reasonDetail: detail.slice(0, 400),
           marginUsdt,
@@ -723,27 +822,31 @@ export async function runReversalAutoTradeAfterReversalAlert(
         signalClosePrice,
       );
       await notifyLines(userId, [
-        tgTitle,
+        userTgTitle,
         "❌ เช็คโพซิชันจาก MEXC ไม่สำเร็จ — จึงไม่สั่งเปิด (ป้องกันซ้ำ)",
-        `[${shortContractLabel(contractSymbol)}]/USDT (SHORT)`,
+        `[${shortContractLabel(contractSymbol)}]/USDT (${mexcSide.toUpperCase()})`,
         `รายละเอียด: ${detail.slice(0, 320)}`,
       ]);
       continue;
     }
-    if (hasActiveShortPosition(positions, contractSymbol)) {
-      const active = findMexcOpenPositionShort(positions, contractSymbol);
+    if (openMexcLong ? hasActiveLongPosition(positions, contractSymbol) : hasActiveShortPosition(positions, contractSymbol)) {
+      const active = openMexcLong
+        ? findMexcOpenPositionLong(positions, contractSymbol)
+        : findMexcOpenPositionShort(positions, contractSymbol);
       const hv = active != null ? Number(active.holdVol) : NaN;
-      logReversalAutoOpen(userId, logSignal, "skipped", "existing_position", {
+      logReversalAutoOpen(userId, logSignal, "skipped", "existing_position", mexcSide, {
         marginUsdt,
         leverage: Math.floor(leverage),
         ...leverageLogExtra,
       });
       await notifyLines(userId, [
-        tgTitle,
-        "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชัน SHORT คู่สัญญานี้อยู่แล้ว",
+        userTgTitle,
+        openMexcLong
+          ? "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชัน LONG คู่สัญญานี้อยู่แล้ว"
+          : "ℹ️ ไม่สั่งเปิด — MEXC มีโพซิชัน SHORT คู่สัญญานี้อยู่แล้ว",
         `[${shortContractLabel(contractSymbol)}]/USDT`,
         Number.isFinite(hv) && hv > 0 ? `holdVol ~${hv}` : "",
-        "LONG จาก Snowball ไม่บล็อก Reversal Short",
+        openMexcLong ? "" : "LONG จาก Snowball ไม่บล็อก Reversal Short",
       ]);
       continue;
     }
@@ -754,6 +857,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         logSignal,
         "failed",
         entryRes.reasonCode,
+        mexcSide,
         {
           reasonDetail: entryRes.error.slice(0, 400),
           marginUsdt,
@@ -763,9 +867,9 @@ export async function runReversalAutoTradeAfterReversalAlert(
         signalClosePrice,
       );
       await notifyLines(userId, [
-        tgTitle,
+        userTgTitle,
         "❌ สั่งเปิดไม่สำเร็จ",
-        `[${shortContractLabel(contractSymbol)}]/USDT (SHORT)`,
+        `[${shortContractLabel(contractSymbol)}]/USDT (${mexcSide.toUpperCase()})`,
         entryRes.error,
       ]);
       continue;
@@ -792,14 +896,14 @@ export async function runReversalAutoTradeAfterReversalAlert(
       const om = useMarket
         ? await createOpenMarketOrder(creds, {
             contractSymbol,
-            long: false,
+            long: openMexcLong,
             marginUsdt,
             leverage: lev,
             openType: 1,
           })
         : await createOpenLimitOrder(creds, {
             contractSymbol,
-            long: false,
+            long: openMexcLong,
             marginUsdt,
             leverage: lev,
             limitPrice: entryEma!,
@@ -813,6 +917,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           logSignal,
           "failed",
           "mexc_order_rejected",
+          mexcSide,
           {
             reasonDetail: msg.slice(0, 400),
             marginUsdt,
@@ -828,15 +933,17 @@ export async function runReversalAutoTradeAfterReversalAlert(
           signalClosePrice,
         );
         await notifyLines(userId, [
-          tgTitle,
-          entryMode === "market"
-            ? "❌ สั่งเปิดไม่สำเร็จ (Market SHORT · โหมด Market ตลอด)"
-            : emaFallbackMarket
-              ? `❌ สั่งเปิดไม่สำเร็จ (Market SHORT · ไม่มี ${emaLabel})`
-              : `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น SHORT${useMarket ? ` · Market (เหนือ ${emaLabel})` : ` · Limit retest ${emaLabel}`})`,
+          userTgTitle,
+          openMexcLong
+            ? "❌ สั่งเปิดไม่สำเร็จ (Market LONG)"
+            : entryMode === "market"
+              ? "❌ สั่งเปิดไม่สำเร็จ (Market SHORT · โหมด Market ตลอด)"
+              : emaFallbackMarket
+                ? `❌ สั่งเปิดไม่สำเร็จ (Market SHORT · ไม่มี ${emaLabel})`
+                : `❌ สั่งเปิดไม่สำเร็จ (ตั้งใจให้เป็น SHORT${useMarket ? ` · Market (เหนือ ${emaLabel})` : ` · Limit retest ${emaLabel}`})`,
           `[${shortContractLabel(contractSymbol)}]/USDT`,
           `Margin ~${marginUsdt} USDT · ${lev}x`,
-          entryMode === "market"
+          openMexcLong || entryMode === "market"
             ? `ราคาอ้างอิง ~${fmtReversalAutoTradePrice(markPrice)} (${markSource})`
             : emaFallbackMarket
               ? `ราคาอ้างอิง ~${fmtReversalAutoTradePrice(markPrice)} (${markSource})`
@@ -862,6 +969,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         logSignal,
         "success",
         useMarket ? "open_success_market" : "open_success_limit",
+        mexcSide,
         {
           marginUsdt,
           leverage: lev,
@@ -896,7 +1004,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
       const plan = resolveReversalTpSlPlanFromRow(row);
       const placedAtMs = Date.now();
 
-      if (!useMarket && limitOrderId) {
+      if (!useMarket && limitOrderId && !openMexcLong) {
         state = withReversalPendingLimitAdded(
           state,
           userId,
@@ -927,7 +1035,9 @@ export async function runReversalAutoTradeAfterReversalAlert(
       if (useMarket && plan.enabled) {
         try {
           const posAfter = await getOpenPositions(creds, contractSymbol);
-          mexcAvgEntry = readMexcAvgEntryPriceShort(posAfter, contractSymbol);
+          mexcAvgEntry = openMexcLong
+            ? readMexcAvgEntryPriceLong(posAfter, contractSymbol)
+            : readMexcAvgEntryPriceShort(posAfter, contractSymbol);
         } catch (e) {
           console.error("[reversalAutoTrade] getOpenPositions after open", contractSymbol, userId, e);
         }
@@ -940,7 +1050,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             {
               contractSymbol,
               binanceSymbol,
-              side: "short",
+              side: mexcSide,
               openedAtMs: placedAtMs,
               referenceEntryPrice: markPrice,
               mexcAvgEntryPrice: entryForTrack,
@@ -983,22 +1093,26 @@ export async function runReversalAutoTradeAfterReversalAlert(
       }
 
       await notifyLines(userId, [
-        tgTitle,
-        entryMode === "market"
-          ? "✅ เปิด Market SHORT (โหมด Market ตลอด)"
-          : emaFallbackMarket
-            ? `✅ เปิด Market SHORT (ไม่มี ${emaLabel} → Market โดยตรง)`
-            : useMarket
-              ? `✅ เปิด Market SHORT (ราคาเหนือ ${emaLabel})`
-              : `✅ ตั้ง Limit SHORT รอรีเทสต์ที่ ${emaLabel}`,
+        userTgTitle,
+        openMexcLong
+          ? "✅ เปิด Market LONG (ทิศแนะนำ 🟢 · Market ตลอด)"
+          : entryMode === "market"
+            ? "✅ เปิด Market SHORT (โหมด Market ตลอด)"
+            : emaFallbackMarket
+              ? `✅ เปิด Market SHORT (ไม่มี ${emaLabel} → Market โดยตรง)`
+              : useMarket
+                ? `✅ เปิด Market SHORT (ราคาเหนือ ${emaLabel})`
+                : `✅ ตั้ง Limit SHORT รอรีเทสต์ที่ ${emaLabel}`,
         `[${shortContractLabel(contractSymbol)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${lev}x`,
         ...(leverageDynamicNote ? [leverageDynamicNote] : []),
         `สัญญาณ Reversal: ${input.model} · TF ${input.signalBarTf.toUpperCase()}`,
-        saturdayAllSignals
-          ? "เกณฑ์: วันเสาร์ (เวลาไทย) — auto-open ทุกสัญญาณ Reversal"
-          : `Quality Signal ✓ · Wick ${wickPct.toFixed(1)}%${greenDays != null ? ` · เขียว ${greenDays}d` : ""}${rangeScore != null ? ` · Range ${rangeScore.toFixed(2)}` : ""}${ema4hPct != null ? ` · EMA4h ${ema4hPct.toFixed(1)}%` : ""}${lenRank != null ? ` · Len# ${lenRank}` : ""} · Body ${bodyPct.toFixed(1)}%`,
-        entryMode === "market"
+        openMexcLong
+          ? "ทิศที่เล่น: Long — fade สัญญาณ Short · Long candidate ✓"
+          : saturdayAllSignals
+            ? "เกณฑ์: วันเสาร์ (เวลาไทย) — auto-open ทุกสัญญาณ Reversal"
+            : `Quality Signal ✓ · Wick ${wickPct.toFixed(1)}%${greenDays != null ? ` · เขียว ${greenDays}d` : ""}${rangeScore != null ? ` · Range ${rangeScore.toFixed(2)}` : ""}${ema4hPct != null ? ` · EMA4h ${ema4hPct.toFixed(1)}%` : ""}${lenRank != null ? ` · Len# ${lenRank}` : ""} · Body ${bodyPct.toFixed(1)}%`,
+        openMexcLong || entryMode === "market"
           ? `ราคาอ้างอิง ~${fmtReversalAutoTradePrice(markPrice)} (${markSource})`
           : emaFallbackMarket
             ? `ราคาอ้างอิง ~${fmtReversalAutoTradePrice(markPrice)} (${markSource})`
@@ -1017,6 +1131,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         logSignal,
         "failed",
         "network_error",
+        mexcSide,
         {
           reasonDetail: detail.slice(0, 400),
           marginUsdt,
@@ -1032,8 +1147,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
         signalClosePrice,
       );
       await notifyLines(userId, [
-        tgTitle,
-        `❌ สั่งเปิดล้มเหลวจากข้อผิดพลาดระหว่างเรียก MEXC / เครือข่าย (ตั้งใจให้เป็น SHORT)`,
+        userTgTitle,
+        `❌ สั่งเปิดล้มเหลวจากข้อผิดพลาดระหว่างเรียก MEXC / เครือข่าย (ตั้งใจให้เป็น ${mexcSide.toUpperCase()})`,
         `[${shortContractLabel(contractSymbol)}]/USDT`,
         `Margin ~${marginUsdt} USDT · ${lev}x`,
         `รายละเอียด: ${detail.slice(0, 400)}`,
