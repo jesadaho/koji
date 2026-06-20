@@ -156,6 +156,7 @@ type ReversalAutoTradeApiBundle = {
   slEntryOffsetPct?: number | null;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
   tp12hCloseEnabled?: boolean;
+  statsPlaySide?: "short" | "long";
   gateQualitySignal?: boolean;
   saturdayAllSignalsEnabled?: boolean;
   longSignalShortEnabled?: boolean;
@@ -261,6 +262,7 @@ export default function SettingsTelegramMiniApp() {
   const [revSlEntryOffsetPct, setRevSlEntryOffsetPct] = useState("");
   const [revSlAtEntryAfter24hIfGreen, setRevSlAtEntryAfter24hIfGreen] = useState(true);
   const [revTp12hCloseEnabled, setRevTp12hCloseEnabled] = useState(true);
+  const [revStatsPlaySide, setRevStatsPlaySide] = useState<"short" | "long">("short");
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revLongSignalShort, setRevLongSignalShort] = useState(false);
@@ -420,6 +422,7 @@ export default function SettingsTelegramMiniApp() {
     );
     setRevSlAtEntryAfter24hIfGreen(st.slAtEntryAfter24hIfGreenEnabled !== false);
     setRevTp12hCloseEnabled(st.tp12hCloseEnabled !== false);
+    setRevStatsPlaySide(st.statsPlaySide === "long" ? "long" : "short");
     setRevGateQualitySignal(st.gateQualitySignal !== false);
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
     setRevLongSignalShort(Boolean(st.longSignalShortEnabled));
@@ -1070,6 +1073,7 @@ export default function SettingsTelegramMiniApp() {
         slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
         slAtEntryAfter24hIfGreenEnabled: revSlAtEntryAfter24hIfGreen,
         tp12hCloseEnabled: revTp12hCloseEnabled,
+        statsPlaySide: revStatsPlaySide,
         entryMode: revShortEntryMode,
         entryEmaPeriod:
           revShortEntryMode === "hybrid_ema" ? Math.floor(shortEntryEmaPeriodParsed) : null,
@@ -2171,6 +2175,22 @@ export default function SettingsTelegramMiniApp() {
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
               ROI &lt; 0 และ EMA4H &gt; 0 → ปิดทันทีที่ครบ 12 ชม. — ใช้ทั้ง auto-open และตารางสถิติ
             </span>
+          </span>
+        </label>
+
+        <label className="sub" style={{ display: "block", marginTop: "0.75rem" }}>
+          ทิศที่เล่น (ตาราง 1H Short)
+          <select
+            value={revStatsPlaySide}
+            onChange={(e) => setRevStatsPlaySide(e.currentTarget.value as "short" | "long")}
+            className="tmaInput"
+            style={{ display: "block", width: "100%", marginTop: "0.25rem", maxWidth: "min(32rem, 100%)" }}
+          >
+            <option value="short">Short — ตามสัญญาณ Reversal</option>
+            <option value="long">Long — ทิศแนะนำ 🟢 (fade)</option>
+          </select>
+          <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+            กำหนดทิศหลักในตารางสถิติ · Long = กรองทิศแนะนำ 🟢 และสรุปกำไรกลยุทธ์ฝั่ง Long
           </span>
         </label>
 

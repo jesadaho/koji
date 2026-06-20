@@ -140,12 +140,15 @@ import {
   reversalMatrixFilterTitle,
   reversalRowIsLongCandidate,
   reversalRowMatchesSuggestedSideFilter,
+  reversalStatsDefaultSuggestedSideFilter,
+  reversalStatsPlaySideLabel,
   reversalStatsRowMatchesMatrixFilter,
   reversalSuggestedSideFilterLabel,
   reversalSuggestedSideFilterTitle,
   reversalSuggestedTradeSideLabel,
   type ReversalMatrixFilter,
   type ReversalQualitySignalProfile,
+  type ReversalStatsPlaySide,
   type ReversalSuggestedSideFilter,
 } from "@/lib/reversalMatrixFilters";
 import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
@@ -327,6 +330,8 @@ type ReversalStatsSectionProps = {
   outcomeColumnTitle?: string;
   /** คอลัมน์ทิศแนะนำ + ตัวกรอง Long candidate (ตาราง 1H Short) */
   showSuggestedSideColumn?: boolean;
+  /** ทิศที่เล่น — จาก Settings */
+  statsPlaySide?: ReversalStatsPlaySide;
   /** อยู่ในแท็บย่อย — ไม่เว้น margin ด้านบน */
   embedded?: boolean;
 };
@@ -351,6 +356,7 @@ function ReversalStatsSection({
   strategyTpSlPlan,
   outcomeColumnTitle,
   showSuggestedSideColumn = false,
+  statsPlaySide = "short",
   embedded = false,
 }: ReversalStatsSectionProps) {
   const resolveRowLeverage = useCallback(
@@ -406,7 +412,12 @@ function ReversalStatsSection({
   const [atrFilter, setAtrFilter] = useState<StatsAtrPct14dFilter>("all");
   const [trendGainFilter, setTrendGainFilter] = useState<SnowballTrendGainFilter>("all");
   const [trendVelocityFilter, setTrendVelocityFilter] = useState<SnowballTrendVelocityFilter>("all");
-  const [suggestedSideFilter, setSuggestedSideFilter] = useState<ReversalSuggestedSideFilter>("all");
+  const [suggestedSideFilter, setSuggestedSideFilter] = useState<ReversalSuggestedSideFilter>(
+    () => reversalStatsDefaultSuggestedSideFilter(statsPlaySide),
+  );
+  useEffect(() => {
+    setSuggestedSideFilter(reversalStatsDefaultSuggestedSideFilter(statsPlaySide));
+  }, [statsPlaySide]);
   const showPumpCycleFilters = qualitySignalProfile === "long1h";
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
@@ -535,6 +546,7 @@ function ReversalStatsSection({
         : ["1D follow-up 1d (%)", "1D follow-up 3d (%)", "1D follow-up 7d (%)", null],
     [tf],
   );
+  const playingLong = showSuggestedSideColumn && statsPlaySide === "long";
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 17 + (showSuggestedSideColumn ? 3 : 0);
@@ -1111,6 +1123,20 @@ function ReversalStatsSection({
         >
           {subtitle}
         </span>
+        {showSuggestedSideColumn ? (
+          <span
+            className="tmaTabEn"
+            style={{
+              display: "block",
+              fontWeight: playingLong ? 600 : "normal",
+              marginTop: "0.15rem",
+              color: playingLong ? "var(--accent, #2e7d32)" : undefined,
+            }}
+            title="ตั้งค่าได้ที่ Settings → Reversal TP/SL"
+          >
+            ทิศที่เล่น: {reversalStatsPlaySideLabel(statsPlaySide)}
+          </span>
+        ) : null}
       </h2>
       <div
         className="sparkStatsActionRow"
@@ -1380,42 +1406,67 @@ function ReversalStatsSection({
           strategyProfitLongSummaryText24h ||
           strategyProfitLongSummaryText48h ? (
             <>
-              {strategyProfitSummaryText24h ? (
-                <span
-                  className="sub"
-                  title="สรุปคอลัมน์กำไรกลยุทธ์ Short 24h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
-                  style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
-                >
-                  {strategyProfitSummaryText24h}
-                </span>
-              ) : null}
-              {strategyProfitSummaryText48h ? (
-                <span
-                  className="sub"
-                  title="สรุปคอลัมน์กำไรกลยุทธ์ Short 48h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
-                  style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
-                >
-                  {strategyProfitSummaryText48h}
-                </span>
-              ) : null}
-              {strategyProfitLongSummaryText24h ? (
-                <span
-                  className="sub"
-                  title="สรุปคอลัมน์กำไร Long 24h — เฉพาะแถว 🟢 Long · ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR"
-                  style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
-                >
-                  {strategyProfitLongSummaryText24h}
-                </span>
-              ) : null}
-              {strategyProfitLongSummaryText48h ? (
-                <span
-                  className="sub"
-                  title="สรุปคอลัมน์กำไร Long 48h — เฉพาะแถว 🟢 Long · ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR"
-                  style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
-                >
-                  {strategyProfitLongSummaryText48h}
-                </span>
-              ) : null}
+              {playingLong ? (
+                <>
+                  {strategyProfitLongSummaryText24h ? (
+                    <span
+                      className="sub"
+                      title="สรุปคอลัมน์กำไร Long 24h — เฉพาะแถว 🟢 Long · ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR"
+                      style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+                    >
+                      {strategyProfitLongSummaryText24h}
+                    </span>
+                  ) : null}
+                  {strategyProfitLongSummaryText48h ? (
+                    <span
+                      className="sub"
+                      title="สรุปคอลัมน์กำไร Long 48h — เฉพาะแถว 🟢 Long · ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR"
+                      style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+                    >
+                      {strategyProfitLongSummaryText48h}
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {strategyProfitSummaryText24h ? (
+                    <span
+                      className="sub"
+                      title="สรุปคอลัมน์กำไรกลยุทธ์ Short 24h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
+                      style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+                    >
+                      {strategyProfitSummaryText24h}
+                    </span>
+                  ) : null}
+                  {strategyProfitSummaryText48h ? (
+                    <span
+                      className="sub"
+                      title="สรุปคอลัมน์กำไรกลยุทธ์ Short 48h — ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR (Win ≥ +2% · Loss ≤ −2%)"
+                      style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+                    >
+                      {strategyProfitSummaryText48h}
+                    </span>
+                  ) : null}
+                  {strategyProfitLongSummaryText24h ? (
+                    <span
+                      className="sub"
+                      title="สรุปคอลัมน์กำไร Long 24h — เฉพาะแถว 🟢 Long · ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR"
+                      style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+                    >
+                      {strategyProfitLongSummaryText24h}
+                    </span>
+                  ) : null}
+                  {strategyProfitLongSummaryText48h ? (
+                    <span
+                      className="sub"
+                      title="สรุปคอลัมน์กำไร Long 48h — เฉพาะแถว 🟢 Long · ชนะ/แพ้/เสมอ ใช้เกณฑ์เดียวกับ WR"
+                      style={{ display: "block", marginTop: "0.15rem", fontWeight: 600 }}
+                    >
+                      {strategyProfitLongSummaryText48h}
+                    </span>
+                  ) : null}
+                </>
+              )}
             </>
           ) : null}
         </StatsWeekSplitHint>
@@ -1437,14 +1488,7 @@ function ReversalStatsSection({
               />
               {tf === "1h" ? (
                 <>
-                  <StatsWeekStrategyProfitBlock
-                    rows={g.rows}
-                    sizing={strategySizing}
-                    band={STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND}
-                    resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
-                    strategyLabel={showSuggestedSideColumn ? "กลยุทธ์ Short" : undefined}
-                  />
-                  {showSuggestedSideColumn ? (
+                  {playingLong ? (
                     <StatsWeekStrategyProfitBlock
                       rows={g.rows.filter(reversalRowIsLongCandidate)}
                       sizing={longStrategySizing}
@@ -1452,7 +1496,26 @@ function ReversalStatsSection({
                       resolveProfit={reversalStatsStrategyProfitLongResolvedForHorizon}
                       strategyLabel="กลยุทธ์ Long"
                     />
-                  ) : null}
+                  ) : (
+                    <>
+                      <StatsWeekStrategyProfitBlock
+                        rows={g.rows}
+                        sizing={strategySizing}
+                        band={STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND}
+                        resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
+                        strategyLabel={showSuggestedSideColumn ? "กลยุทธ์ Short" : undefined}
+                      />
+                      {showSuggestedSideColumn ? (
+                        <StatsWeekStrategyProfitBlock
+                          rows={g.rows.filter(reversalRowIsLongCandidate)}
+                          sizing={longStrategySizing}
+                          band={STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND}
+                          resolveProfit={reversalStatsStrategyProfitLongResolvedForHorizon}
+                          strategyLabel="กลยุทธ์ Long"
+                        />
+                      ) : null}
+                    </>
+                  )}
                 </>
               ) : null}
               {renderTable(sortCandleReversalStatsRows(g.rows, sort))}
@@ -1806,7 +1869,11 @@ export default function ReversalStatsTelegramMiniApp() {
           embedded
           tf="1h"
           title="สถิติ Reversal · 1H Short"
-          subtitle="Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
+          subtitle={
+            (payload?.viewerReversalStatsPlaySide ?? "short") === "long"
+              ? "Long (fade สัญญาณ Short) · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
+              : "Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
+          }
           strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
@@ -1818,6 +1885,7 @@ export default function ReversalStatsTelegramMiniApp() {
           csvQuery="&side=short"
           rows={hourShortRows}
           showSuggestedSideColumn
+          statsPlaySide={payload?.viewerReversalStatsPlaySide ?? "short"}
         />
       </div>
 

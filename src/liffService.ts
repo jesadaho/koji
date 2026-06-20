@@ -1084,6 +1084,7 @@ export async function liffGetCandleReversalStats(
   let viewerStrategyLeverage: number | null | undefined;
   let viewerStrategyLongDynamicLeverageEnabled: boolean | undefined;
   let viewerReversalTp12hCloseEnabled: boolean | undefined;
+  let viewerReversalStatsPlaySide: import("@/lib/reversalMatrixFilters").ReversalStatsPlaySide | undefined;
   if (telegramUserId != null) {
     const [plan, sizing] = await Promise.all([
       resolveViewerStatsTpSlPlan(telegramUserId, "reversal"),
@@ -1097,6 +1098,7 @@ export async function liffGetCandleReversalStats(
     viewerStrategyLeverage = sizing.leverage;
     viewerStrategyLongDynamicLeverageEnabled = sizing.reversalLongDynamicLeverageEnabled === true;
     viewerReversalTp12hCloseEnabled = plan.reversalTp12hCloseEnabled !== false;
+    viewerReversalStatsPlaySide = sizing.reversalStatsPlaySide ?? "short";
     const reversalSimOpts = {
       close12hEnabled: plan.reversalTp12hCloseEnabled !== false,
     };
@@ -1123,6 +1125,7 @@ export async function liffGetCandleReversalStats(
       : viewerReversalTp12hCloseEnabled === true
         ? { viewerReversalTp12hCloseEnabled: true }
         : {}),
+    ...(viewerReversalStatsPlaySide ? { viewerReversalStatsPlaySide } : {}),
   };
 }
 
@@ -1363,6 +1366,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     slAtEntryAfter24hIfGreenEnabled:
       row.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== false,
     tp12hCloseEnabled: row.reversalAutoTradeTp12hCloseEnabled !== false,
+    statsPlaySide: row.reversalStatsPlaySide === "long" ? "long" : "short",
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
     longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
@@ -2137,6 +2141,14 @@ function parseReversalAutoTradeNested(
   }
   if (tp12hCloseEnabled !== undefined) {
     patchPart.reversalAutoTradeTp12hCloseEnabled = tp12hCloseEnabled;
+  }
+  if ("statsPlaySide" in o) {
+    const raw = o.statsPlaySide;
+    if (raw === "long" || raw === "short") {
+      patchPart.reversalStatsPlaySide = raw;
+    } else if (raw === null || raw === "") {
+      patchPart.reversalStatsPlaySide = null;
+    }
   }
 
   const parseReversalEntryEmaPatch = (

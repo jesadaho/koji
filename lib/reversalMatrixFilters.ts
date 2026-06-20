@@ -389,3 +389,28 @@ export function reversalRowMatchesSuggestedSideFilter(
   if (filter === "all") return true;
   return reversalSuggestedTradeSide(row) === filter;
 }
+
+/** ทิศที่ผู้ใช้เลือกเล่น — ตาราง Reversal Short 1H */
+export type ReversalStatsPlaySide = "short" | "long";
+
+export const REVERSAL_STATS_PLAY_SIDE_OPTIONS: ReadonlyArray<{
+  value: ReversalStatsPlaySide;
+  label: string;
+}> = [
+  { value: "short", label: "Short — ตามสัญญาณ" },
+  { value: "long", label: "Long — ทิศแนะนำ 🟢" },
+];
+
+export function reversalStatsPlaySideLabel(side: ReversalStatsPlaySide): string {
+  return REVERSAL_STATS_PLAY_SIDE_OPTIONS.find((o) => o.value === side)?.label ?? side;
+}
+
+export function normalizeReversalStatsPlaySide(value: unknown): ReversalStatsPlaySide {
+  return value === "long" ? "long" : "short";
+}
+
+export function reversalStatsDefaultSuggestedSideFilter(
+  playSide: ReversalStatsPlaySide,
+): ReversalSuggestedSideFilter {
+  return playSide === "long" ? "long" : "all";
+}

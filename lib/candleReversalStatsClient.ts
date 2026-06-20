@@ -161,6 +161,8 @@ export type CandleReversalStatsApiPayload = {
   viewerStrategyLongDynamicLeverageEnabled?: boolean;
   /** เปิดกฎปิด @12h ในกลยุทธ์ Reversal (default เปิด) */
   viewerReversalTp12hCloseEnabled?: boolean;
+  /** ทิศที่เล่น — ตาราง Reversal Short 1H */
+  viewerReversalStatsPlaySide?: import("@/lib/reversalMatrixFilters").ReversalStatsPlaySide;
 };
 
 export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): string {

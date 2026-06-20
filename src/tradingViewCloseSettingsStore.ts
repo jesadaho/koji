@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { dirname, join } from "node:path";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
+import type { ReversalStatsPlaySide } from "../lib/reversalMatrixFilters.js";
 import type { ReversalAutoTradeEntryMode } from "../lib/reversalAutoTradeEntry.js";
 import type { SnowballAutoTradeEntryMode } from "../lib/snowballAutoTradeEntry.js";
 import { snowballAutoTradeGradeKeyFromMigratedRawKey } from "./snowballAutoTradeGradeRules";
@@ -192,6 +193,8 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
   /** กฎปิด @12h: ROI<0 + EMA4H>0 — default เปิด */
   reversalAutoTradeTp12hCloseEnabled?: boolean;
+  /** ทิศที่เล่นในตาราง Reversal Short 1H */
+  reversalStatsPlaySide?: ReversalStatsPlaySide;
   /** @deprecated ใช้ gateQualitySignal */
   reversalAutoTradeGateBodyWick80?: boolean;
   /** @deprecated ใช้ gateQualitySignal */
@@ -395,6 +398,7 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
   /** กฎปิด @12h: ROI<0 + EMA4H>0 — default เปิด */
   reversalAutoTradeTp12hCloseEnabled?: boolean;
+  reversalStatsPlaySide?: ReversalStatsPlaySide | null;
   reversalAutoTradeGateBodyWick80?: boolean;
   reversalAutoTradeGateLenRank315?: boolean;
   reversalAutoTradeGateQualitySignal?: boolean;
@@ -505,6 +509,7 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeSlEntryOffsetPct !== undefined ||
     input.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== undefined ||
     input.reversalAutoTradeTp12hCloseEnabled !== undefined ||
+    input.reversalStatsPlaySide !== undefined ||
     input.reversalAutoTradeGateBodyWick80 !== undefined ||
     input.reversalAutoTradeGateLenRank315 !== undefined ||
     input.reversalAutoTradeGateQualitySignal !== undefined ||
@@ -946,6 +951,13 @@ export async function saveTradingViewMexcSettings(
       input.reversalAutoTradeTp12hCloseEnabled !== undefined
         ? input.reversalAutoTradeTp12hCloseEnabled
         : prev?.reversalAutoTradeTp12hCloseEnabled,
+
+    reversalStatsPlaySide:
+      input.reversalStatsPlaySide === null
+        ? undefined
+        : input.reversalStatsPlaySide !== undefined
+          ? input.reversalStatsPlaySide
+          : prev?.reversalStatsPlaySide,
 
     reversalAutoTradeGateBodyWick80:
       input.reversalAutoTradeGateBodyWick80 !== undefined
