@@ -28,8 +28,9 @@ export const REVERSAL_QUALITY_SIGNAL_SHORT_BKK_DOW_INDICES = [5, 6] as const;
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
   "Trend Gain 5–20% · Vol×SMA 2–5× · หรือ ศ (BKK)";
 
-/** เกณฑ์ Long candidate ในตาราง Reversal Short 1H — ตรงคอลัมน์ EMA20∠1h / EMA20Δ1h */
-export const REVERSAL_LONG_CANDIDATE_CRITERIA = "EMA20∠1h > 50% · EMA20Δ1h 15–30%";
+/** เกณฑ์ Long candidate ในตาราง Reversal Short 1H — ตรงคอลัมน์ EMA20∠1h / EMA20Δ1h (OR) */
+export const REVERSAL_LONG_CANDIDATE_CRITERIA =
+  "EMA20∠1h > 50% หรือ EMA20Δ1h 15–30%";
 
 /** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_CRITERIA */
 export const REVERSAL_LONG_1H_STATS_FILTER_CRITERIA = REVERSAL_LONG_CANDIDATE_CRITERIA;
@@ -266,21 +267,34 @@ export function reversalLongCandidateFilterTitle(filter: ReversalLongCandidateFi
   return `ไม่ใช่ Long candidate — ไม่ผ่าน ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
 }
 
-/** กรอง Long candidate — EMA20∠1h > 50% · EMA20Δ1h 15–30% */
-export function reversalLong1hStatsFilterPass(
-  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d" | "priceVsEma20_1hPct">,
+/** กรอง Long candidate — EMA20∠1h > 50% หรือ EMA20Δ1h 15–30% */
+export function reversalLongCandidateEma20SlopePass(
+  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d">,
 ): boolean {
   const slope = row.ema20_1hSlopePct7d;
-  const dist = row.priceVsEma20_1hPct;
   return (
     slope != null &&
     Number.isFinite(slope) &&
-    slope > REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE &&
+    slope > REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE
+  );
+}
+
+export function reversalLongCandidateEma20DistPass(
+  row: Pick<CandleReversalStatsRow, "priceVsEma20_1hPct">,
+): boolean {
+  const dist = row.priceVsEma20_1hPct;
+  return (
     dist != null &&
     Number.isFinite(dist) &&
     dist >= REVERSAL_LONG_1H_STATS_EMA20_DIST_MIN_PCT &&
     dist <= REVERSAL_LONG_1H_STATS_EMA20_DIST_MAX_PCT
   );
+}
+
+export function reversalLong1hStatsFilterPass(
+  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d" | "priceVsEma20_1hPct">,
+): boolean {
+  return reversalLongCandidateEma20SlopePass(row) || reversalLongCandidateEma20DistPass(row);
 }
 
 export function reversalLongCandidateDebugTitle(
@@ -291,7 +305,9 @@ export function reversalLongCandidateDebugTitle(
   const slopeLabel =
     slope != null && Number.isFinite(slope) ? `${slope.toFixed(1)}%` : "—";
   const distLabel = dist != null && Number.isFinite(dist) ? `${dist.toFixed(1)}%` : "—";
-  return `EMA20∠1h ${slopeLabel} (ต้อง > ${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE}%) · EMA20Δ1h ${distLabel} (ต้อง ${REVERSAL_LONG_1H_STATS_EMA20_DIST_MIN_PCT}–${REVERSAL_LONG_1H_STATS_EMA20_DIST_MAX_PCT}%)`;
+  const slopeOk = reversalLongCandidateEma20SlopePass(row);
+  const distOk = reversalLongCandidateEma20DistPass(row);
+  return `ต้อง EMA20∠1h > ${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE}% หรือ EMA20Δ1h ${REVERSAL_LONG_1H_STATS_EMA20_DIST_MIN_PCT}–${REVERSAL_LONG_1H_STATS_EMA20_DIST_MAX_PCT}% · ตอนนี้ ∠1h ${slopeLabel}${slopeOk ? " ✓" : ""} · Δ1h ${distLabel}${distOk ? " ✓" : ""}`;
 }
 
 export function reversalRowIsLongCandidate(
