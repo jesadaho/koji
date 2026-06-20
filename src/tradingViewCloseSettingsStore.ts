@@ -504,6 +504,7 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeSlArmRoiPct !== undefined ||
     input.reversalAutoTradeSlEntryOffsetPct !== undefined ||
     input.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== undefined ||
+    input.reversalAutoTradeTp12hCloseEnabled !== undefined ||
     input.reversalAutoTradeGateBodyWick80 !== undefined ||
     input.reversalAutoTradeGateLenRank315 !== undefined ||
     input.reversalAutoTradeGateQualitySignal !== undefined ||
@@ -940,6 +941,11 @@ export async function saveTradingViewMexcSettings(
       input.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== undefined
         ? input.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled
         : prev?.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled,
+
+    reversalAutoTradeTp12hCloseEnabled:
+      input.reversalAutoTradeTp12hCloseEnabled !== undefined
+        ? input.reversalAutoTradeTp12hCloseEnabled
+        : prev?.reversalAutoTradeTp12hCloseEnabled,
 
     reversalAutoTradeGateBodyWick80:
       input.reversalAutoTradeGateBodyWick80 !== undefined

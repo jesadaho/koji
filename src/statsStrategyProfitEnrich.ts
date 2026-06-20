@@ -504,6 +504,18 @@ async function enrichReversalRowsStrategyProfit(
           close12hEnabled,
         });
         if (applyHorizonFields(row, holdHours, shortCacheKey, computed)) dirty += 1;
+      } else if (!close12hEnabled) {
+        if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+          if (row.strategyProfitPct24h != null || row.strategyExitReason24h != null) {
+            row.strategyProfitPct24h = null;
+            row.strategyExitReason24h = null;
+            dirty += 1;
+          }
+        } else if (row.strategyProfitPct != null || row.strategyExitReason != null) {
+          row.strategyProfitPct = null;
+          row.strategyExitReason = null;
+          dirty += 1;
+        }
       }
 
       const isLongCandidate = reversalLong1hStatsFilterPass(row);
@@ -521,7 +533,14 @@ async function enrichReversalRowsStrategyProfit(
         continue;
       }
 
-      const longCached = row.strategyProfitByPlan?.[longCacheKey];
+      let longCached = row.strategyProfitByPlan?.[longCacheKey];
+      if (longCached?.exitReason === "time_12h" && !close12hEnabled) {
+        const rest = { ...row.strategyProfitByPlan };
+        delete rest[longCacheKey];
+        row.strategyProfitByPlan = Object.keys(rest).length > 0 ? rest : undefined;
+        longCached = undefined;
+        dirty += 1;
+      }
       if (longCached) {
         if (applyHorizonFieldsLong(row, holdHours, longCacheKey, longCached)) dirty += 1;
       } else if (pack?.timeSec.length) {
@@ -535,6 +554,18 @@ async function enrichReversalRowsStrategyProfit(
           close12hEnabled,
         });
         if (applyHorizonFieldsLong(row, holdHours, longCacheKey, computedLong)) dirty += 1;
+      } else if (!close12hEnabled) {
+        if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
+          if (row.strategyProfitPctLong24h != null || row.strategyExitReasonLong24h != null) {
+            row.strategyProfitPctLong24h = null;
+            row.strategyExitReasonLong24h = null;
+            dirty += 1;
+          }
+        } else if (row.strategyProfitPctLong != null || row.strategyExitReasonLong != null) {
+          row.strategyProfitPctLong = null;
+          row.strategyExitReasonLong = null;
+          dirty += 1;
+        }
       }
     }
   }
