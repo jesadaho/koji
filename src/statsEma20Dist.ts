@@ -1,20 +1,19 @@
 import { emaLine } from "./indicatorMath";
 import {
   fetchBinanceUsdmKlines,
-  fetchBinanceUsdmKlinesRange,
+  fetchBinanceUsdmKlinesPaginated,
   isBinanceIndicatorFapiEnabled,
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 import {
-  computeEmaSlopePctFromPackAt,
   STATS_EMA1H_SLOPE_LOOKBACK_BARS,
   STATS_EMA4H_SLOPE_LOOKBACK_BARS,
 } from "./statsEmaSlope";
 
 export const STATS_EMA20_DIST_PERIOD = 20;
 
-/** แถวที่คำนวณ EMA20 metrics ณ alertedAtMs แล้ว — v3 = แก้ min bars สำหรับ EMA20 slope */
-export const STATS_EMA20_DIST_VERSION = 3;
+/** แถวที่คำนวณ EMA20 metrics ณ alertedAtMs แล้ว — v4 = slope ใช้ emaLine เหมือน dist */
+export const STATS_EMA20_DIST_VERSION = 4;
 
 const BTC_USDT = "BTCUSDT";
 const LIVE_ALERT_MAX_AGE_MS = 10 * 60_000;
@@ -47,6 +46,29 @@ export function priceVsEmaDistPct(close: number, ema: number): number | null {
   return ((close - ema) / ema) * 100;
 }
 
+/** EMA20 slope % ณ atMs — ใช้ emaLine บน pack เต็ม (สอดคล้อง dist) */
+export function computeEma20SlopePctFromPackAt(
+  pack: BinanceKlinePack,
+  tf: "1h" | "4h",
+  lookbackBars: number,
+  atMs: number,
+  period = STATS_EMA20_DIST_PERIOD,
+): number | null {
+  if (!pack.close.length || pack.close.length < period) return null;
+  const barDur = tfBarDurSec(tf);
+  const atSec = Math.floor(atMs / 1000);
+  const iClosed = lastClosedBarIndexAt(pack, barDur, atSec);
+  const lb = Math.floor(lookbackBars);
+  if (iClosed < 0 || lb < 1 || iClosed < period - 1 + lb) return null;
+  const iAgo = iClosed - lb;
+  if (iAgo < period - 1) return null;
+  const emaArr = emaLine(pack.close, period);
+  const emaToday = emaArr[iClosed];
+  const emaAgo = emaArr[iAgo];
+  if (!Number.isFinite(emaToday) || !Number.isFinite(emaAgo) || emaAgo <= 0) return null;
+  return ((emaToday - emaAgo) / emaAgo) * 100;
+}
+
 export function computePriceVsEma20FromPackAt(
   pack: BinanceKlinePack,
   tf: "1h" | "4h",
@@ -61,7 +83,7 @@ export function computePriceVsEma20FromPackAt(
   const emaArr = emaLine(pack.close, period);
   const ema = emaArr[iClosed];
   const close = pack.close[iClosed];
-  if (typeof ema !== "number" || typeof close !== "number") return null;
+  if (!Number.isFinite(ema) || !Number.isFinite(close)) return null;
   return priceVsEmaDistPct(close, ema);
 }
 
@@ -75,11 +97,7 @@ async function fetchKlinePackThrough(
   const minBars = Math.max(statsEma20DistMinKlineBars(), statsEma20SlopeMinKlineBars(lookbackBars));
   const atSec = Math.floor(atMs / 1000);
   const startMs = (atSec - minBars * barDur) * 1000;
-  return fetchBinanceUsdmKlinesRange(symbol.trim().toUpperCase(), tf, {
-    startTimeMs: startMs,
-    endTimeMs: atMs,
-    limit: Math.min(1500, minBars + 20),
-  });
+  return fetchBinanceUsdmKlinesPaginated(symbol.trim().toUpperCase(), tf, startMs, atMs);
 }
 
 export type StatsEma20MetricsSnapshot = {
@@ -105,12 +123,11 @@ async function fetchSymbolEma20_1hMetricsAtMs(
     if (!pack) return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
     const now = Date.now();
     return {
-      ema20_1hSlopePct7d: computeEmaSlopePctFromPackAt(
+      ema20_1hSlopePct7d: computeEma20SlopePctFromPackAt(
         pack,
         "1h",
         STATS_EMA1H_SLOPE_LOOKBACK_BARS,
         now,
-        STATS_EMA20_DIST_PERIOD,
       ),
       priceVsEma20_1hPct: computePriceVsEma20FromPackAt(pack, "1h", now),
     };
@@ -119,12 +136,11 @@ async function fetchSymbolEma20_1hMetricsAtMs(
   const pack = await fetchKlinePackThrough(sym, "1h", atMs, STATS_EMA1H_SLOPE_LOOKBACK_BARS);
   if (!pack) return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null };
   return {
-    ema20_1hSlopePct7d: computeEmaSlopePctFromPackAt(
+    ema20_1hSlopePct7d: computeEma20SlopePctFromPackAt(
       pack,
       "1h",
       STATS_EMA1H_SLOPE_LOOKBACK_BARS,
       atMs,
-      STATS_EMA20_DIST_PERIOD,
     ),
     priceVsEma20_1hPct: computePriceVsEma20FromPackAt(pack, "1h", atMs),
   };
@@ -149,13 +165,7 @@ async function fetchBtcEma20_4hSlopeAtMs(atMs: number): Promise<number | null> {
     const limit = statsEma20SlopeMinKlineBars(STATS_EMA4H_SLOPE_LOOKBACK_BARS);
     const pack = await fetchBinanceUsdmKlines(BTC_USDT, "4h", limit);
     const slope = pack
-      ? computeEmaSlopePctFromPackAt(
-          pack,
-          "4h",
-          STATS_EMA4H_SLOPE_LOOKBACK_BARS,
-          now,
-          STATS_EMA20_DIST_PERIOD,
-        )
+      ? computeEma20SlopePctFromPackAt(pack, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS, now)
       : null;
     btcEma20_4hSlopeCache = { atMs: now, slope };
     return slope;
@@ -163,13 +173,7 @@ async function fetchBtcEma20_4hSlopeAtMs(atMs: number): Promise<number | null> {
 
   const pack = await fetchKlinePackThrough(BTC_USDT, "4h", atMs, STATS_EMA4H_SLOPE_LOOKBACK_BARS);
   return pack
-    ? computeEmaSlopePctFromPackAt(
-        pack,
-        "4h",
-        STATS_EMA4H_SLOPE_LOOKBACK_BARS,
-        atMs,
-        STATS_EMA20_DIST_PERIOD,
-      )
+    ? computeEma20SlopePctFromPackAt(pack, "4h", STATS_EMA4H_SLOPE_LOOKBACK_BARS, atMs)
     : null;
 }
 
@@ -211,7 +215,7 @@ export function statsRowNeedsEma20DistBackfill(row: StatsRowWithEma20Dist): bool
   if (row.ema20DistV !== STATS_EMA20_DIST_VERSION) return true;
   const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
   if (finite(row.priceVsEma20_1hPct) && !finite(row.ema20_1hSlopePct7d)) return true;
-  if (finite(row.priceVsEma20_1hPct) && !finite(row.btcEma20_4hSlopePct7d)) return true;
+  if (!finite(row.btcEma20_4hSlopePct7d)) return true;
   return false;
 }
 
@@ -243,8 +247,8 @@ export async function backfillAllStatsRowsEma20Dist<T extends StatsRowWithEma20D
   rows: T[],
   opts?: { maxRowsPerPass?: number; maxPasses?: number },
 ): Promise<number> {
-  const maxPasses = opts?.maxPasses ?? 10;
-  const maxRowsPerPass = opts?.maxRowsPerPass ?? 40;
+  const maxPasses = opts?.maxPasses ?? 20;
+  const maxRowsPerPass = opts?.maxRowsPerPass ?? 60;
   let total = 0;
   for (let pass = 0; pass < maxPasses; pass++) {
     const n = await backfillStatsRowsEma20Dist(rows, { maxRows: maxRowsPerPass });
