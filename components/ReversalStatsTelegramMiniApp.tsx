@@ -41,6 +41,7 @@ import {
   type StatsStrategyProfitRowSlice,
 } from "@/lib/statsStrategyProfitClient";
 import {
+  reversalStatsStrategyProfitLongResolvedForCell,
   reversalStatsStrategyProfitLongResolvedForHorizon,
   reversalStatsStrategyProfitResolvedForHorizon,
 } from "@/lib/reversalTpStrategy";
@@ -1057,7 +1058,7 @@ function ReversalStatsSection({
                               tpSlPlan={strategyTpSlPlan}
                               maxDrawdownPct={r.maxDrawdownPct}
                               followUpMaxAdversePct={r.followUpMaxAdversePct}
-                              resolveProfit={reversalStatsStrategyProfitLongResolvedForHorizon}
+                              resolveProfit={reversalStatsStrategyProfitLongResolvedForCell}
                             />
                           ) : (
                             "—"
@@ -1078,7 +1079,7 @@ function ReversalStatsSection({
                               tpSlPlan={strategyTpSlPlan}
                               maxDrawdownPct={r.maxDrawdownPct}
                               followUpMaxAdversePct={r.followUpMaxAdversePct}
-                              resolveProfit={reversalStatsStrategyProfitLongResolvedForHorizon}
+                              resolveProfit={reversalStatsStrategyProfitLongResolvedForCell}
                             />
                           ) : (
                             "—"

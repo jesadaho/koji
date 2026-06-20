@@ -99,6 +99,32 @@ export function reversalStatsStrategyProfitLongResolvedForHorizon(
   return null;
 }
 
+/**
+ * ใช้ใน StatsStrategyProfitCell — เซลล์ส่งค่า Long ผ่าน prop strategyProfitPct* มาตรฐาน
+ * (ไม่ใช่ strategyProfitPctLong*) จึงต้อง map ก่อน resolve
+ */
+export function reversalStatsStrategyProfitLongResolvedForCell(
+  row: StatsStrategyProfitRowSlice,
+  holdHours: StatsStrategyProfitHorizon,
+  leverage?: number | null,
+): { profitPct: number; exitReason: StatsTpSlExitReason } | null {
+  return reversalStatsStrategyProfitLongResolvedForHorizon(
+    {
+      pct24h: row.pct24h,
+      pct48h: row.pct48h,
+      strategyProfitPctLong24h: row.strategyProfitPct24h,
+      strategyProfitPctLong: row.strategyProfitPct,
+      strategyExitReasonLong24h: row.strategyExitReason24h,
+      strategyExitReasonLong: row.strategyExitReason,
+      maxDrawdownPct: row.maxDrawdownPct,
+      followUpMaxAdversePct: row.followUpMaxAdversePct,
+      maxRoiPct: row.maxRoiPct,
+    },
+    holdHours,
+    leverage,
+  );
+}
+
 export function reversalTpStrategyProfitBand(pct: number): ReversalTpStrategyProfitBand {
   const { winMinPct, lossMaxPct } = STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND;
   if (pct >= winMinPct) return "win";
