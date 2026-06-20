@@ -30,15 +30,19 @@ export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
 
 /** เกณฑ์ Long candidate ในตาราง Reversal Short 1H */
 export const REVERSAL_LONG_CANDIDATE_CRITERIA =
-  "Trend Gain 5–20% + Vol×SMA 2–5× หรือ EMA20Δ1h 15–30% หรือ EMA20∠1h > 50%";
+  "Trend Gain 5–20% + Vol×SMA 2–5× หรือ EMA20Δ1h 15–30% หรือ EMA20∠1h 50–66%";
 
 /** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_CRITERIA */
 export const REVERSAL_LONG_1H_STATS_FILTER_CRITERIA = REVERSAL_LONG_CANDIDATE_CRITERIA;
 
-/** EMA20 1h slope 7d (คอลัมน์ EMA20∠1h) — exclusive lower bound */
+/** EMA20 1h slope 7d (คอลัมน์ EMA20∠1h) — inclusive */
+export const REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT = 50;
+export const REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MAX_PCT = 66;
+
+/** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT */
 export const REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE = 50;
 
-/** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE */
+/** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT */
 export const REVERSAL_LONG_CANDIDATE_EMA1H_SLOPE_MIN_EXCLUSIVE =
   REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE;
 /** @deprecated */
@@ -272,7 +276,7 @@ export function reversalLongCandidateFilterTitle(filter: ReversalLongCandidateFi
   return `ไม่ใช่ Long candidate — ไม่ผ่าน ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
 }
 
-/** กรอง Long candidate — (Trend+Vol) หรือ EMA20Δ1h หรือ EMA20∠1h > 50% */
+/** กรอง Long candidate — (Trend+Vol) หรือ EMA20Δ1h หรือ EMA20∠1h 50–66% */
 export type ReversalLongCandidateRowSlice = Pick<
   CandleReversalStatsRow,
   "trendGainPct" | "signalVolVsSma" | "priceVsEma20_1hPct" | "ema20_1hSlopePct7d"
@@ -303,7 +307,8 @@ export function reversalLongCandidateEma20_1hSlopePass(
   return (
     slope != null &&
     Number.isFinite(slope) &&
-    slope > REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE
+    slope >= REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT &&
+    slope <= REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MAX_PCT
   );
 }
 
@@ -332,7 +337,7 @@ export function reversalLongCandidateDebugTitle(row: ReversalLongCandidateRowSli
   const distOk = reversalLongCandidateEma20DistPass(row);
   const slopeOk = reversalLongCandidateEma20_1hSlopePass(row);
   return (
-    `ต้อง Trend ${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MIN_PCT}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT}% + Vol×SMA ${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX} หรือ EMA20Δ1h ${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MAX_PCT}% หรือ EMA20∠1h > ${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE}% · ` +
+    `ต้อง Trend ${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MIN_PCT}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT}% + Vol×SMA ${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX} หรือ EMA20Δ1h ${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MAX_PCT}% หรือ EMA20∠1h ${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MAX_PCT}% · ` +
     `Trend ${gainLabel}${gainOk ? " ✓" : ""} · Vol ${volLabel}${volOk ? " ✓" : ""}${trendVolOk ? " (ชุด✓)" : ""} · Δ1h ${distLabel}${distOk ? " ✓" : ""} · ∠1h ${slopeLabel}${slopeOk ? " ✓" : ""}`
   );
 }
