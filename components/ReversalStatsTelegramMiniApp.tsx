@@ -38,6 +38,7 @@ import {
   formatStatsStrategyProfitSummaryText,
   statsStrategyProfitColumnTitle,
   summarizeStatsStrategyProfit,
+  type StatsStrategyProfitHorizon,
   type StatsStrategyProfitRowSlice,
 } from "@/lib/statsStrategyProfitClient";
 import { reversalStatsStrategyProfitResolvedForHorizon } from "@/lib/reversalTpStrategy";
@@ -463,7 +464,7 @@ function ReversalStatsSection({
     if (!splitStrategyProfitBySide || tf !== "1h") return null;
     const shortRows = scopedRows.filter((r) => (r.tradeSide ?? "short") === "short");
     const longRows = scopedRows.filter((r) => r.tradeSide === "long");
-    const summarize = (rows: CandleReversalStatsRow[], hold: typeof STATS_STRATEGY_PROFIT_HOLD_24H) =>
+    const summarize = (rows: CandleReversalStatsRow[], hold: StatsStrategyProfitHorizon) =>
       formatStatsStrategyProfitSummaryText(
         summarizeStatsStrategyProfit(
           rows,
