@@ -37,7 +37,7 @@ import {
   snowballStatsLegacyBreakout1hConfirmFailIgnored,
 } from "@/lib/snowballGradeChecklist";
 import { buildSnowballStatsRow } from "./snowballStatsRowBuild";
-import { fetchStatsEma20MetricsAtMs, STATS_EMA20_DIST_VERSION, statsEma20MetricsComplete } from "./statsEma20Dist";
+import { fetchStatsEma20MetricsPartialAtMs, STATS_EMA20_DIST_VERSION, statsEma20MetricsComplete, statsEma20MetricsNeedForRow, mergeStatsEma20MetricsIntoRow } from "./statsEma20Dist";
 
 /** แถวที่ recompute trend grade (S/A/B/C/F) จาก snapshot ณ alertedAtMs แล้ว */
 export const STATS_TREND_GRADE_VERSION = 23;
@@ -599,36 +599,12 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
   if (existing) return existing;
 
   const row = buildSnowballStatsRow(input);
-  const ema20Incomplete =
-    row.ema20_1hSlopePct7d == null ||
-    !Number.isFinite(row.ema20_1hSlopePct7d) ||
-    row.ema20_4hSlopePct7d == null ||
-    !Number.isFinite(row.ema20_4hSlopePct7d) ||
-    row.btcEma20_4hSlopePct7d == null ||
-    !Number.isFinite(row.btcEma20_4hSlopePct7d);
+  const ema20Incomplete = !statsEma20MetricsComplete(row);
   if (ema20Incomplete && Number.isFinite(input.alertedAtMs) && input.alertedAtMs > 0) {
     try {
-      const ema20 = await fetchStatsEma20MetricsAtMs(input.symbol, input.alertedAtMs);
-      if (ema20.ema20_1hSlopePct7d != null && Number.isFinite(ema20.ema20_1hSlopePct7d)) {
-        row.ema20_1hSlopePct7d = ema20.ema20_1hSlopePct7d;
-      }
-      if (ema20.priceVsEma20_1hPct != null && Number.isFinite(ema20.priceVsEma20_1hPct)) {
-        row.priceVsEma20_1hPct = ema20.priceVsEma20_1hPct;
-      }
-      if (ema20.ema20_4hSlopePct7d != null && Number.isFinite(ema20.ema20_4hSlopePct7d)) {
-        row.ema20_4hSlopePct7d = ema20.ema20_4hSlopePct7d;
-      }
-      if (ema20.priceVsEma20_4hPct != null && Number.isFinite(ema20.priceVsEma20_4hPct)) {
-        row.priceVsEma20_4hPct = ema20.priceVsEma20_4hPct;
-      }
-      if (ema20.btcEma20_4hSlopePct7d != null && Number.isFinite(ema20.btcEma20_4hSlopePct7d)) {
-        row.btcEma20_4hSlopePct7d = ema20.btcEma20_4hSlopePct7d;
-      }
-      if (statsEma20MetricsComplete(row)) {
-        row.ema20DistV = STATS_EMA20_DIST_VERSION;
-      } else {
-        delete row.ema20DistV;
-      }
+      const need = statsEma20MetricsNeedForRow(row);
+      const ema20 = await fetchStatsEma20MetricsPartialAtMs(input.symbol, input.alertedAtMs, need);
+      mergeStatsEma20MetricsIntoRow(row, ema20);
     } catch {
       /* ignore */
     }

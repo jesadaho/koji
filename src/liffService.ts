@@ -1067,13 +1067,14 @@ function reversalStatsRowForClient(row: CandleReversalStatsRow): CandleReversalS
   return rest;
 }
 
-/** สถิติ Reversal — โหลดเร็ว ไม่ backfill Binance บน GET (ใช้ tick / admin backfill) */
+/** สถิติ Reversal — backfill EMA20 แบบจำกัดบน GET (โหลดเร็ว · ไม่ยิง Binance ทั้งก้อน) */
 export async function liffGetCandleReversalStats(
   telegramUserId?: number,
 ): Promise<CandleReversalStatsApiPayload> {
   const st = await loadCandleReversalStatsState();
   const barRangeDirty = backfillReversalBarRangePctSignalEstimate(st.rows);
-  if (barRangeDirty > 0) await saveCandleReversalStatsState(st);
+  const ema20Dirty = await backfillAllStatsRowsEma20Dist(st.rows, { maxRowsPerPass: 12, maxPasses: 2 });
+  if (barRangeDirty > 0 || ema20Dirty > 0) await saveCandleReversalStatsState(st);
 
   const conflictSets = await loadPendingConflictSets();
   const rows = [...st.rows]

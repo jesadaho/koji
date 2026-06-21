@@ -208,22 +208,91 @@ export type StatsRowWithEma20Dist = {
   ema20DistV?: number;
 };
 
-export function statsEma20MetricsComplete(row: StatsRowWithEma20Dist): boolean {
+export type StatsEma20MetricsFields = Pick<
+  StatsRowWithEma20Dist,
+  | "ema20_1hSlopePct7d"
+  | "priceVsEma20_1hPct"
+  | "ema20_4hSlopePct7d"
+  | "priceVsEma20_4hPct"
+  | "btcEma20_4hSlopePct7d"
+>;
+
+export function statsEma20MetricsComplete(row: StatsEma20MetricsFields): boolean {
   const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
   return (
     finite(row.ema20_1hSlopePct7d) &&
+    finite(row.priceVsEma20_1hPct) &&
     finite(row.ema20_4hSlopePct7d) &&
+    finite(row.priceVsEma20_4hPct) &&
     finite(row.btcEma20_4hSlopePct7d)
   );
 }
 
 export function statsRowNeedsEma20DistBackfill(row: StatsRowWithEma20Dist): boolean {
   if (row.ema20DistV !== STATS_EMA20_DIST_VERSION) return true;
+  return !statsEma20MetricsComplete(row);
+}
+
+export type StatsEma20MetricsNeed = {
+  need1h: boolean;
+  need4h: boolean;
+  needBtc: boolean;
+};
+
+export function statsEma20MetricsNeedForRow(row: StatsEma20MetricsFields): StatsEma20MetricsNeed {
   const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
-  if (finite(row.priceVsEma20_1hPct) && !finite(row.ema20_1hSlopePct7d)) return true;
-  if (!finite(row.ema20_4hSlopePct7d)) return true;
-  if (!finite(row.btcEma20_4hSlopePct7d)) return true;
-  return false;
+  return {
+    need1h: !finite(row.ema20_1hSlopePct7d) || !finite(row.priceVsEma20_1hPct),
+    need4h: !finite(row.ema20_4hSlopePct7d) || !finite(row.priceVsEma20_4hPct),
+    needBtc: !finite(row.btcEma20_4hSlopePct7d),
+  };
+}
+
+export async function fetchStatsEma20MetricsPartialAtMs(
+  symbol: string,
+  atMs: number,
+  need: StatsEma20MetricsNeed,
+): Promise<StatsEma20MetricsSnapshot> {
+  const empty: StatsEma20MetricsSnapshot = {
+    ema20_1hSlopePct7d: null,
+    priceVsEma20_1hPct: null,
+    ema20_4hSlopePct7d: null,
+    priceVsEma20_4hPct: null,
+    btcEma20_4hSlopePct7d: null,
+  };
+  if (!isBinanceIndicatorFapiEnabled()) return empty;
+  if (!Number.isFinite(atMs) || atMs <= 0) return empty;
+
+  const [symbol1h, symbol4h, btcEma20_4hSlopePct7d] = await Promise.all([
+    need.need1h ? fetchSymbolEma20_1hMetricsAtMs(symbol, atMs) : Promise.resolve(null),
+    need.need4h ? fetchSymbolEma20_4hMetricsAtMs(symbol, atMs) : Promise.resolve(null),
+    need.needBtc ? fetchBtcEma20_4hSlopeAtMs(atMs) : Promise.resolve(null),
+  ]);
+
+  return {
+    ema20_1hSlopePct7d: symbol1h?.ema20_1hSlopePct7d ?? null,
+    priceVsEma20_1hPct: symbol1h?.priceVsEma20_1hPct ?? null,
+    ema20_4hSlopePct7d: symbol4h?.ema20_4hSlopePct7d ?? null,
+    priceVsEma20_4hPct: symbol4h?.priceVsEma20_4hPct ?? null,
+    btcEma20_4hSlopePct7d,
+  };
+}
+
+export function mergeStatsEma20MetricsIntoRow<T extends StatsRowWithEma20Dist>(
+  row: T,
+  metrics: StatsEma20MetricsSnapshot,
+): void {
+  const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
+  if (finite(metrics.ema20_1hSlopePct7d)) row.ema20_1hSlopePct7d = metrics.ema20_1hSlopePct7d;
+  if (finite(metrics.priceVsEma20_1hPct)) row.priceVsEma20_1hPct = metrics.priceVsEma20_1hPct;
+  if (finite(metrics.ema20_4hSlopePct7d)) row.ema20_4hSlopePct7d = metrics.ema20_4hSlopePct7d;
+  if (finite(metrics.priceVsEma20_4hPct)) row.priceVsEma20_4hPct = metrics.priceVsEma20_4hPct;
+  if (finite(metrics.btcEma20_4hSlopePct7d)) row.btcEma20_4hSlopePct7d = metrics.btcEma20_4hSlopePct7d;
+  if (statsEma20MetricsComplete(row)) {
+    row.ema20DistV = STATS_EMA20_DIST_VERSION;
+  } else {
+    delete row.ema20DistV;
+  }
 }
 
 export async function backfillStatsRowsEma20Dist<T extends StatsRowWithEma20Dist>(
@@ -243,17 +312,9 @@ export async function backfillStatsRowsEma20Dist<T extends StatsRowWithEma20Dist
   for (const row of candidates) {
     if (maxRows != null && updated >= maxRows) break;
     try {
-      const metrics = await fetchStatsEma20MetricsAtMs(row.symbol, row.alertedAtMs);
-      row.ema20_1hSlopePct7d = metrics.ema20_1hSlopePct7d;
-      row.priceVsEma20_1hPct = metrics.priceVsEma20_1hPct;
-      row.ema20_4hSlopePct7d = metrics.ema20_4hSlopePct7d;
-      row.priceVsEma20_4hPct = metrics.priceVsEma20_4hPct;
-      row.btcEma20_4hSlopePct7d = metrics.btcEma20_4hSlopePct7d;
-      if (statsEma20MetricsComplete(row)) {
-        row.ema20DistV = STATS_EMA20_DIST_VERSION;
-      } else {
-        delete row.ema20DistV;
-      }
+      const need = statsEma20MetricsNeedForRow(row);
+      const metrics = await fetchStatsEma20MetricsPartialAtMs(row.symbol, row.alertedAtMs, need);
+      mergeStatsEma20MetricsIntoRow(row, metrics);
       updated += 1;
     } catch (e) {
       console.error("[statsEma20Dist] backfill", row.symbol, row.alertedAtMs, e);

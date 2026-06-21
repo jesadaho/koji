@@ -11,9 +11,11 @@ import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import { resolveMarketSentimentForStats } from "./marketSentimentSnapshotStore";
 import { STATS_BTC_EMA_SLOPES_VERSION } from "./statsEmaSlope";
 import {
-  fetchStatsEma20MetricsAtMs,
+  fetchStatsEma20MetricsPartialAtMs,
+  mergeStatsEma20MetricsIntoRow,
   STATS_EMA20_DIST_VERSION,
   statsEma20MetricsComplete,
+  statsEma20MetricsNeedForRow,
 } from "./statsEma20Dist";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
@@ -451,12 +453,13 @@ export async function appendCandleReversalStatsRow(
     priceVsEma20_4hPct,
     ema20_4hSlopePct7d,
     btcEma20_4hSlopePct7d,
-    ...(ema20_1hSlopePct7d != null &&
-    Number.isFinite(ema20_1hSlopePct7d) &&
-    ema20_4hSlopePct7d != null &&
-    Number.isFinite(ema20_4hSlopePct7d) &&
-    btcEma20_4hSlopePct7d != null &&
-    Number.isFinite(btcEma20_4hSlopePct7d)
+    ...(statsEma20MetricsComplete({
+      ema20_1hSlopePct7d,
+      priceVsEma20_1hPct,
+      ema20_4hSlopePct7d,
+      priceVsEma20_4hPct,
+      btcEma20_4hSlopePct7d,
+    })
       ? { ema20DistV: STATS_EMA20_DIST_VERSION }
       : {}),
     btcEmaSlopesV: STATS_BTC_EMA_SLOPES_VERSION,
@@ -552,36 +555,12 @@ export async function appendCandleReversalStatsRow(
     outcome: "pending",
   };
 
-  const ema20Incomplete =
-    row.ema20_1hSlopePct7d == null ||
-    !Number.isFinite(row.ema20_1hSlopePct7d) ||
-    row.ema20_4hSlopePct7d == null ||
-    !Number.isFinite(row.ema20_4hSlopePct7d) ||
-    row.btcEma20_4hSlopePct7d == null ||
-    !Number.isFinite(row.btcEma20_4hSlopePct7d);
+  const ema20Incomplete = !statsEma20MetricsComplete(row);
   if (ema20Incomplete && Number.isFinite(input.alertedAtMs) && input.alertedAtMs > 0) {
     try {
-      const ema20 = await fetchStatsEma20MetricsAtMs(input.symbol, input.alertedAtMs);
-      if (ema20.ema20_1hSlopePct7d != null && Number.isFinite(ema20.ema20_1hSlopePct7d)) {
-        row.ema20_1hSlopePct7d = ema20.ema20_1hSlopePct7d;
-      }
-      if (ema20.priceVsEma20_1hPct != null && Number.isFinite(ema20.priceVsEma20_1hPct)) {
-        row.priceVsEma20_1hPct = ema20.priceVsEma20_1hPct;
-      }
-      if (ema20.ema20_4hSlopePct7d != null && Number.isFinite(ema20.ema20_4hSlopePct7d)) {
-        row.ema20_4hSlopePct7d = ema20.ema20_4hSlopePct7d;
-      }
-      if (ema20.priceVsEma20_4hPct != null && Number.isFinite(ema20.priceVsEma20_4hPct)) {
-        row.priceVsEma20_4hPct = ema20.priceVsEma20_4hPct;
-      }
-      if (ema20.btcEma20_4hSlopePct7d != null && Number.isFinite(ema20.btcEma20_4hSlopePct7d)) {
-        row.btcEma20_4hSlopePct7d = ema20.btcEma20_4hSlopePct7d;
-      }
-      if (statsEma20MetricsComplete(row)) {
-        row.ema20DistV = STATS_EMA20_DIST_VERSION;
-      } else {
-        delete row.ema20DistV;
-      }
+      const need = statsEma20MetricsNeedForRow(row);
+      const ema20 = await fetchStatsEma20MetricsPartialAtMs(input.symbol, input.alertedAtMs, need);
+      mergeStatsEma20MetricsIntoRow(row, ema20);
     } catch {
       /* ignore */
     }
