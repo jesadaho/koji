@@ -1061,18 +1061,8 @@ export async function liffCorrectSnowballStatsOutcome(
 
 /** ตัดฟิลด์ที่ไม่แสดงในตาราง Reversal — ลด payload ตอนโหลด Mini App */
 function reversalStatsRowForClient(row: CandleReversalStatsRow): CandleReversalStatsRow {
-  const {
-    ema4hSlopePct7d: _ema4h,
-    ema20_4hSlopePct7d: _ema20_4hSlope,
-    priceVsEma20_4hPct: _ema20_4hDist,
-    ...rest
-  } = row as CandleReversalStatsRow & {
-    ema20_4hSlopePct7d?: number | null;
-    priceVsEma20_4hPct?: number | null;
-  };
+  const { ema4hSlopePct7d: _ema4h, ...rest } = row;
   void _ema4h;
-  void _ema20_4hSlope;
-  void _ema20_4hDist;
   return rest;
 }
 

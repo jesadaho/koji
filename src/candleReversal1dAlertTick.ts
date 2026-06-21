@@ -36,6 +36,7 @@ import {
   loadCandleReversalStatsState,
 } from "./candleReversalStatsStore";
 import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
+import { statsBarRangePctSignal } from "@/lib/statsBarRangePct";
 import { resolvePumpCycleSwingLowFields } from "./statsPumpCycleSwingLow";
 import { formatCandleReversalTfDebugBlock } from "./candleReversalDebugFormat";
 import {
@@ -745,6 +746,7 @@ async function notifyResults(
           lowRankInLookback: sig.lowRankInLookback ?? null,
           rangeRankInLookback: sig.rangeRankInLookback ?? null,
           lookbackBars: sig.lookbackBars ?? null,
+          barRangePctSignal: statsBarRangePctSignal(sig.h, sig.l, sig.c),
           volRankInLookback: sig.volRankInLookback ?? null,
           signalVolVsSma: row.evals.signalVolVsSma,
           rangeScore: row.evals.rangeScore,

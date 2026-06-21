@@ -313,6 +313,8 @@ export type AppendSnowballStatsInput = {
   btcEma1dSlopePct7d?: number | null;
   priceVsEma20_1hPct?: number | null;
   ema20_1hSlopePct7d?: number | null;
+  priceVsEma20_4hPct?: number | null;
+  ema20_4hSlopePct7d?: number | null;
   btcEma20_4hSlopePct7d?: number | null;
   psar4hTrend?: "up" | "down" | null;
   psar4hDistPct?: number | null;
@@ -600,6 +602,8 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
   const ema20Incomplete =
     row.ema20_1hSlopePct7d == null ||
     !Number.isFinite(row.ema20_1hSlopePct7d) ||
+    row.ema20_4hSlopePct7d == null ||
+    !Number.isFinite(row.ema20_4hSlopePct7d) ||
     row.btcEma20_4hSlopePct7d == null ||
     !Number.isFinite(row.btcEma20_4hSlopePct7d);
   if (ema20Incomplete && Number.isFinite(input.alertedAtMs) && input.alertedAtMs > 0) {
@@ -610,6 +614,12 @@ export async function appendSnowballStatsRow(input: AppendSnowballStatsInput): P
       }
       if (ema20.priceVsEma20_1hPct != null && Number.isFinite(ema20.priceVsEma20_1hPct)) {
         row.priceVsEma20_1hPct = ema20.priceVsEma20_1hPct;
+      }
+      if (ema20.ema20_4hSlopePct7d != null && Number.isFinite(ema20.ema20_4hSlopePct7d)) {
+        row.ema20_4hSlopePct7d = ema20.ema20_4hSlopePct7d;
+      }
+      if (ema20.priceVsEma20_4hPct != null && Number.isFinite(ema20.priceVsEma20_4hPct)) {
+        row.priceVsEma20_4hPct = ema20.priceVsEma20_4hPct;
       }
       if (ema20.btcEma20_4hSlopePct7d != null && Number.isFinite(ema20.btcEma20_4hSlopePct7d)) {
         row.btcEma20_4hSlopePct7d = ema20.btcEma20_4hSlopePct7d;

@@ -4,6 +4,7 @@ import {
   type CandleReversalSignalBarTf,
 } from "@/lib/candleReversalStatsClient";
 import { lenPercentilePctFromRank, statsRangeRankInWindow, statsValueRankInWindow } from "@/lib/statsLenPercentile";
+import { statsBarRangePctSignal } from "@/lib/statsBarRangePct";
 import {
   computeFollowUpMaxAdversePct,
   firstFollowUpKlineIndexAfterAnchorClose,
@@ -263,14 +264,15 @@ async function backfillLookbackRanksInWindow(rows: CandleReversalStatsRow[]): Pr
   for (const row of rows) {
     const needRange = row.rangeRankInLookback == null || !Number.isFinite(row.rangeRankInLookback);
     const needVol = row.volRankInLookback == null || !Number.isFinite(row.volRankInLookback);
-    if (!needRange && !needVol) continue;
+    const needBarRange = row.barRangePctSignal == null || !Number.isFinite(row.barRangePctSignal);
+    if (!needRange && !needVol && !needBarRange) continue;
 
     const lb = resolveReversalLookbackBars(row);
-    if (lb == null) continue;
+    if (lb == null && !needBarRange) continue;
 
     const tf = signalBarTf(row);
     const barDur = signalBarDurationSecByTf(tf);
-    const windowStartSec = row.signalBarOpenSec - (lb + 2) * barDur;
+    const windowStartSec = row.signalBarOpenSec - ((lb ?? 20) + 2) * barDur;
     const windowEndSec = row.signalBarOpenSec + barDur;
 
     try {
@@ -284,21 +286,28 @@ async function backfillLookbackRanksInWindow(rows: CandleReversalStatsRow[]): Pr
       if (iSig < 0) continue;
 
       let rowTouched = false;
-      if (needRange) {
+      if (needRange && lb != null) {
         const rank = computeRangeRankInLookbackFromPack(pack, iSig, lb);
         if (rank != null) {
           row.rangeRankInLookback = rank;
           rowTouched = true;
         }
       }
-      if (needVol) {
+      if (needVol && lb != null) {
         const volRank = computeVolRankInLookbackFromPack(pack, iSig, lb);
         if (volRank != null) {
           row.volRankInLookback = volRank;
           rowTouched = true;
         }
       }
-      if (row.lookbackBars == null && rowTouched) {
+      if (needBarRange) {
+        const barRange = statsBarRangePctSignal(pack.high[iSig], pack.low[iSig], pack.close[iSig]);
+        if (barRange != null) {
+          row.barRangePctSignal = barRange;
+          rowTouched = true;
+        }
+      }
+      if (row.lookbackBars == null && rowTouched && lb != null) {
         row.lookbackBars = lb;
       }
       if (rowTouched) updated += 1;

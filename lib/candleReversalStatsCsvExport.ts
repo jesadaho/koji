@@ -43,6 +43,7 @@ import {
 } from "@/lib/snowballStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
+import { snowballStatsBarRangePctLabel } from "@/lib/snowballStatsClient";
 import {
   statsPsar4hDistPctCsv,
   statsPsar4hTrendLabel,
@@ -78,6 +79,8 @@ const HEADERS = [
   "Mcap",
   "EMA20 1h slope 7d %",
   "EMA20 1h dist %",
+  "EMA20 4h slope 7d %",
+  "EMA20 4h dist %",
   "EMA1d slope 7d %",
   "BTC EMA20 4h slope 7d %",
   "BTC EMA1d slope 7d %",
@@ -91,6 +94,7 @@ const HEADERS = [
   "เนื้อ%",
   "Len#",
   "Len%",
+  "R% สัญญาณ",
   "Vol#",
   "Vol×SMA",
   "High#",
@@ -190,6 +194,8 @@ function candleReversalStatsRowToCsvCells(
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
     candleReversalEmaSlopeCsvLabel(r.ema20_1hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.priceVsEma20_1hPct),
+    candleReversalEmaSlopeCsvLabel(r.ema20_4hSlopePct7d),
+    candleReversalEmaSlopeCsvLabel(r.priceVsEma20_4hPct),
     candleReversalEmaSlopeCsvLabel(r.ema1dSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.btcEma20_4hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.btcEma1dSlopePct7d),
@@ -207,6 +213,7 @@ function candleReversalStatsRowToCsvCells(
     r.bodyPct != null && Number.isFinite(r.bodyPct) ? `${r.bodyPct.toFixed(1)}%` : "",
     candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars),
     statsLenPercentileLabel(r.lenPercentilePct),
+    snowballStatsBarRangePctLabel(r.barRangePctSignal),
     candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars),
     candleReversalSignalVolVsSmaLabel(r.signalVolVsSma),
     candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars),
