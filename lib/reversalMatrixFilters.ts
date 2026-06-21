@@ -15,10 +15,7 @@ export type ReversalMatrixFilter = "all" | "qualitySignal";
 export type ReversalQualitySignalProfile = "short" | "long1h";
 
 /** ข้อความเกณฑ์ Quality Signal (stats + auto-open) — Reversal Short */
-export const REVERSAL_QUALITY_SIGNAL_CRITERIA = "Velocity > 1.4%/h";
-
-/** Trend Velocity (%/h) — exclusive */
-export const REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE = 1.4;
+export const REVERSAL_QUALITY_SIGNAL_CRITERIA = "ทิศ Short ทั้งหมด";
 
 /** ข้อความเกณฑ์ Quality Signal — Reversal Long 1H → fade SHORT */
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
@@ -170,12 +167,11 @@ function reversalQualitySignalAlertedAtMs(input: {
   return Date.now();
 }
 
-function trendVelocityAboveMin(
-  trendGainPct?: number | null,
-  ageOfTrendHours?: number | null,
-): boolean {
-  const v = computePumpCycleTrendVelocity(trendGainPct, ageOfTrendHours);
-  return v != null && v > REVERSAL_QUALITY_SIGNAL_TREND_VELOCITY_MIN_EXCLUSIVE;
+/** ✨ Quality Signal — Reversal Short (1H / 1D) */
+export function reversalMatchesQualitySignal(input: {
+  tradeSide?: CandleReversalTradeSide | null;
+}): boolean {
+  return (input.tradeSide ?? "short") === "short";
 }
 
 /** ✨ Quality Signal — สถิติ Reversal · Long 1H */
@@ -189,17 +185,6 @@ export function reversalMatchesQualitySignalLong1h(input: {
   const atMs = reversalQualitySignalAlertedAtMs(input);
   if (reversalQualitySignalLong1hBkkDowPass(atMs)) return true;
   return reversalLong1hMetricsPass(input);
-}
-
-/** ✨ Quality Signal — Reversal Short (และ 1D) */
-export function reversalMatchesQualitySignal(input: {
-  trendGainPct?: number | null;
-  ageOfTrendHours?: number | null;
-  alertedAtMs?: number | null;
-  signalBarOpenSec?: number | null;
-  signalBarTf?: CandleReversalSignalBarTf | null;
-}): boolean {
-  return trendVelocityAboveMin(input.trendGainPct, input.ageOfTrendHours);
 }
 
 export function reversalUsesLong1hQualitySignal(
@@ -230,11 +215,7 @@ export function reversalMatchesQualitySignalForAlert(input: {
     });
   }
   return reversalMatchesQualitySignal({
-    trendGainPct: input.trendGainPct,
-    ageOfTrendHours: input.ageOfTrendHours,
-    alertedAtMs: input.alertedAtMs,
-    signalBarOpenSec: input.signalBarOpenSec,
-    signalBarTf: input.signalBarTf,
+    tradeSide: input.tradeSide,
   });
 }
 
