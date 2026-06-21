@@ -60,8 +60,6 @@ import {
   candleReversalEma4hSlopeLabel,
   candleReversalEma1dSlopeLabel,
   candleReversalPriceVsEma20_1hLabel,
-  candleReversalEma20_4hSlopeLabel,
-  candleReversalPriceVsEma20_4hLabel,
   candleReversalGreenDaysLabel,
   candleReversalHorizonWinrateSummary,
   CANDLE_REVERSAL_MODEL_SHORT_LEGEND,
@@ -106,7 +104,6 @@ import {
   REVERSAL_EMA4H_FILTER_OPTIONS,
   REVERSAL_EMA1D_FILTER_OPTIONS,
   reversalEma4hFilterLabel,
-  reversalEma4hFilterTitle,
   reversalEma1dFilterLabel,
   reversalEma1dFilterTitle,
   reversalLenRankFilterLabel,
@@ -114,7 +111,6 @@ import {
   reversalRowMatchesBtcEma4hFilter,
   reversalRowMatchesDayFilter,
   reversalRowMatchesDowFilter,
-  reversalRowMatchesEma4hFilter,
   reversalRowMatchesEma1dFilter,
   reversalRowMatchesLenRankFilter,
   reversalRowMatchesShapeFilter,
@@ -127,7 +123,6 @@ import {
   type StatsAtrPct14dFilter,
   type ReversalDayFilter,
   type ReversalDowFilter,
-  type ReversalEma4hFilter,
   type ReversalEma1dFilter,
   type ReversalLenRankFilter,
   type ReversalShapeFilter,
@@ -411,7 +406,6 @@ function ReversalStatsSection({
   const [lenRankFilter, setLenRankFilter] = useState<ReversalLenRankFilter>("all");
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<ReversalVolVsSmaFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<ReversalMatrixFilter>("all");
-  const [ema4hFilter, setEma4hFilter] = useState<ReversalEma4hFilter>("all");
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
   const [btcEma4hFilter, setBtcEma4hFilter] = useState<BtcEma4hFilter>("all");
   const [atrFilter, setAtrFilter] = useState<StatsAtrPct14dFilter>("all");
@@ -442,7 +436,6 @@ function ReversalStatsSection({
           reversalRowMatchesDowFilter(r, dowFilter) &&
           reversalRowMatchesLenRankFilter(r, lenRankFilter) &&
           reversalRowMatchesVolVsSmaFilter(r, volVsSmaFilter) &&
-          reversalRowMatchesEma4hFilter(r, ema4hFilter) &&
           reversalRowMatchesEma1dFilter(r, ema1dFilter) &&
           reversalRowMatchesBtcEma4hFilter(r, btcEma4hFilter) &&
           reversalRowMatchesAtrPct14dFilter(r, atrFilter) &&
@@ -451,7 +444,7 @@ function ReversalStatsSection({
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendGainFilter(r, trendGainFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendVelocityFilter(r, trendVelocityFilter)),
       ),
-    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -571,13 +564,12 @@ function ReversalStatsSection({
       shape: shapeFilter,
       lenRank: lenRankFilter,
       vol: volVsSmaFilter,
-      ema4h: ema4hFilter,
       ema1d: ema1dFilter,
       btcEma4h: btcEma4hFilter,
       atr: atrFilter,
       matrix: matrixFilter,
     };
-  }, [csvQuery, dayFilter, dowFilter, ema4hFilter, ema1dFilter, btcEma4hFilter, atrFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, dowFilter, ema1dFilter, btcEma4hFilter, atrFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -704,27 +696,6 @@ function ReversalStatsSection({
               label="EMA20Δ1h"
               sortKey="ema20_1hDist"
               title="(close − EMA20) / EMA20 × 100 บน 1h — บวก = เหนือเส้น"
-              activeSort={sort}
-              onSort={onSortColumn}
-            />
-            <SortTh
-              label="EMA20∠4h"
-              sortKey="ema20_4h"
-              title="EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
-              activeSort={sort}
-              onSort={onSortColumn}
-            />
-            <SortTh
-              label="EMA20Δ4h"
-              sortKey="ema20_4hDist"
-              title="(close − EMA20) / EMA20 × 100 บน 4h — บวก = เหนือเส้น"
-              activeSort={sort}
-              onSort={onSortColumn}
-            />
-            <SortTh
-              label="EMA4h∠7d"
-              sortKey="ema4h"
-              title="EMA(12) 4h slope % ย้อนหลัง 7 วัน (42 แท่ง) — (EMAวันนี้−EMA7วันก่อน)/EMA7วันก่อน×100"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -945,7 +916,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA4h ${reversalEma4hFilterLabel(ema4hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -1000,9 +971,6 @@ function ReversalStatsSection({
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                   <td title="EMA20 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema20_1hSlopePct7d)}</td>
                   <td title="(close − EMA20) / EMA20 × 100 บน 1h">{candleReversalPriceVsEma20_1hLabel(r.priceVsEma20_1hPct)}</td>
-                  <td title="EMA20 4h slope 7d">{candleReversalEma20_4hSlopeLabel(r.ema20_4hSlopePct7d)}</td>
-                  <td title="(close − EMA20) / EMA20 × 100 บน 4h">{candleReversalPriceVsEma20_4hLabel(r.priceVsEma20_4hPct)}</td>
-                  <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
                   <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
                   <td title="BTC EMA20 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma20_4hSlopePct7d)}</td>
                   <td title="BTC EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.btcEma1dSlopePct7d)}</td>
@@ -1234,22 +1202,6 @@ function ReversalStatsSection({
             title="Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด"
           >
             {STATS_VOL_VS_SMA_FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
-          EMA4h∠7d
-          <select
-            value={ema4hFilter}
-            onChange={(e) => setEma4hFilter(e.currentTarget.value as ReversalEma4hFilter)}
-            className="tmaInput"
-            style={{ width: "auto", minWidth: "5.5rem" }}
-            title={reversalEma4hFilterTitle(ema4hFilter)}
-          >
-            {REVERSAL_EMA4H_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>

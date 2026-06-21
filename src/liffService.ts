@@ -106,7 +106,7 @@ import {
   correctRsiDivergenceStatsOutcome,
   runRsiDivergenceStatsFollowUpTick,
 } from "./rsiDivergenceStatsTick";
-import type { CandleReversalStatsApiPayload } from "@/lib/candleReversalStatsClient";
+import type { CandleReversalStatsApiPayload, CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 import {
   loadRsiDivergenceStatsState,
   resetRsiDivergenceStatsState,
@@ -1059,18 +1059,28 @@ export async function liffCorrectSnowballStatsOutcome(
   }
 }
 
+/** ตัดฟิลด์ที่ไม่แสดงในตาราง Reversal — ลด payload ตอนโหลด Mini App */
+function reversalStatsRowForClient(row: CandleReversalStatsRow): CandleReversalStatsRow {
+  const {
+    ema4hSlopePct7d: _ema4h,
+    ema20_4hSlopePct7d: _ema20_4hSlope,
+    priceVsEma20_4hPct: _ema20_4hDist,
+    ...rest
+  } = row as CandleReversalStatsRow & {
+    ema20_4hSlopePct7d?: number | null;
+    priceVsEma20_4hPct?: number | null;
+  };
+  void _ema4h;
+  void _ema20_4hSlope;
+  void _ema20_4hDist;
+  return rest;
+}
+
+/** สถิติ Reversal — โหลดเร็ว ไม่ backfill Binance บน GET (ใช้ tick / admin backfill) */
 export async function liffGetCandleReversalStats(
   telegramUserId?: number,
 ): Promise<CandleReversalStatsApiPayload> {
   const st = await loadCandleReversalStatsState();
-  const msDirty = await backfillAllStatsMarketSentiment(st.rows);
-  const btcEmaDirty = await backfillAllStatsRowsBtcEmaSlopes(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
-  const ema20Dirty = await backfillAllStatsRowsEma20Dist(st.rows, { maxRowsPerPass: 40, maxPasses: 10 });
-  const psar4hDirty = await backfillAllStatsRowsPsar4h(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
-  const vol24hDirty = await backfillAllStatsRowsQuoteVol24h(st.rows, { maxRowsPerPass: 25, maxPasses: 8 });
-  if (msDirty > 0 || btcEmaDirty > 0 || ema20Dirty > 0 || psar4hDirty > 0 || vol24hDirty > 0) {
-    await saveCandleReversalStatsState(st);
-  }
 
   const conflictSets = await loadPendingConflictSets();
   const rows = [...st.rows]
@@ -1115,7 +1125,7 @@ export async function liffGetCandleReversalStats(
     }
   }
   return {
-    rows,
+    rows: rows.map(reversalStatsRowForClient),
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
     ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
     ...(viewerTpSlPlan ? { viewerTpSlPlan } : {}),

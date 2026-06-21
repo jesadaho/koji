@@ -63,10 +63,6 @@ export type SnowballAlertMarketContext = {
   priceVsEma20_1hPct: number | null;
   /** EMA20 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
   ema20_1hSlopePct7d: number | null;
-  /** (close − EMA20) / EMA20 × 100 บน 4h ของคู่สัญญาณ */
-  priceVsEma20_4hPct: number | null;
-  /** EMA20 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
-  ema20_4hSlopePct7d: number | null;
   /** BTC — EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง) */
   btcEma20_4hSlopePct7d: number | null;
   /** PSAR 4h ของคู่สัญญาณ — ทิศ SAR */
@@ -238,8 +234,6 @@ export async function fetchSnowballAlertMarketContextAt(
     btcEma1dSlopePct7d: btcEma.btcEma1dSlopePct7d,
     priceVsEma20_1hPct: ema20Dist.priceVsEma20_1hPct,
     ema20_1hSlopePct7d: ema20Dist.ema20_1hSlopePct7d,
-    priceVsEma20_4hPct: ema20Dist.priceVsEma20_4hPct,
-    ema20_4hSlopePct7d: ema20Dist.ema20_4hSlopePct7d,
     btcEma20_4hSlopePct7d: ema20Dist.btcEma20_4hSlopePct7d,
     psar4hTrend: psar4h?.trend ?? null,
     psar4hDistPct: psar4h?.distPct ?? null,
