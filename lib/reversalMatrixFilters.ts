@@ -30,7 +30,7 @@ export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
 
 /** เกณฑ์ Long candidate ในตาราง Reversal Short 1H */
 export const REVERSAL_LONG_CANDIDATE_CRITERIA =
-  "Trend Gain 5–20% + Vol×SMA 2–5× หรือ (EMA20Δ1h 15–30% และ EMA20∠1h <66%) หรือ EMA20∠1h 50–66%";
+  "Trend Gain 5–20% + Vol×SMA 2–5× หรือ EMA20Δ1h 15–30% หรือ EMA20∠1h 50–66% หรือ Trend Gain<16% + Vol×SMA 2–12×";
 
 /** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_CRITERIA */
 export const REVERSAL_LONG_1H_STATS_FILTER_CRITERIA = REVERSAL_LONG_CANDIDATE_CRITERIA;
@@ -38,8 +38,14 @@ export const REVERSAL_LONG_1H_STATS_FILTER_CRITERIA = REVERSAL_LONG_CANDIDATE_CR
 /** EMA20 1h slope 7d (คอลัมน์ EMA20∠1h) — inclusive */
 export const REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT = 50;
 export const REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MAX_PCT = 66;
-/** ใช้คู่กับ EMA20Δ1h 15–30% — exclusive upper bound */
-export const REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_DIST_PAIR_MAX_EXCLUSIVE = 66;
+
+/** Trend Gain < 16% + Vol×SMA 2–12× — Long candidate ชุดที่ 4 */
+export const REVERSAL_LONG_CANDIDATE_LOW_TREND_GAIN_MAX_EXCLUSIVE = 16;
+export const REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN = 2;
+export const REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX = 12;
+
+/** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN */
+export const REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN_EXCLUSIVE = 2;
 
 /** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT */
 export const REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_EXCLUSIVE = 50;
@@ -278,7 +284,7 @@ export function reversalLongCandidateFilterTitle(filter: ReversalLongCandidateFi
   return `ไม่ใช่ Long candidate — ไม่ผ่าน ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
 }
 
-/** กรอง Long candidate — (Trend+Vol) หรือ (EMA20Δ1h + ∠1h<66%) หรือ EMA20∠1h 50–66% */
+/** กรอง Long candidate — (Trend+Vol) หรือ EMA20Δ1h หรือ EMA20∠1h 50–66% หรือ Trend<16%+Vol 2–12× */
 export type ReversalLongCandidateRowSlice = Pick<
   CandleReversalStatsRow,
   "trendGainPct" | "signalVolVsSma" | "priceVsEma20_1hPct" | "ema20_1hSlopePct7d"
@@ -302,23 +308,19 @@ export function reversalLongCandidateEma20DistPass(
   );
 }
 
-export function reversalLongCandidateEma20_1hSlopeLtDistPairMaxPass(
-  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d">,
+export function reversalLongCandidateLowTrendHighVolPass(
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "signalVolVsSma">,
 ): boolean {
-  const slope = row.ema20_1hSlopePct7d;
+  const gain = row.trendGainPct;
+  const vol = row.signalVolVsSma;
   return (
-    slope != null &&
-    Number.isFinite(slope) &&
-    slope < REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_DIST_PAIR_MAX_EXCLUSIVE
-  );
-}
-
-export function reversalLongCandidateEma20DistWithSlopeLtPass(
-  row: Pick<CandleReversalStatsRow, "priceVsEma20_1hPct" | "ema20_1hSlopePct7d">,
-): boolean {
-  return (
-    reversalLongCandidateEma20DistPass(row) &&
-    reversalLongCandidateEma20_1hSlopeLtDistPairMaxPass(row)
+    gain != null &&
+    Number.isFinite(gain) &&
+    gain < REVERSAL_LONG_CANDIDATE_LOW_TREND_GAIN_MAX_EXCLUSIVE &&
+    vol != null &&
+    Number.isFinite(vol) &&
+    vol >= REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN &&
+    vol <= REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX
   );
 }
 
@@ -337,8 +339,9 @@ export function reversalLongCandidateEma20_1hSlopePass(
 export function reversalLong1hStatsFilterPass(row: ReversalLongCandidateRowSlice): boolean {
   return (
     reversalLongCandidateTrendVolPass(row) ||
-    reversalLongCandidateEma20DistWithSlopeLtPass(row) ||
-    reversalLongCandidateEma20_1hSlopePass(row)
+    reversalLongCandidateEma20DistPass(row) ||
+    reversalLongCandidateEma20_1hSlopePass(row) ||
+    reversalLongCandidateLowTrendHighVolPass(row)
   );
 }
 
@@ -354,15 +357,21 @@ export function reversalLongCandidateDebugTitle(row: ReversalLongCandidateRowSli
   const slopeLabel =
     slope != null && Number.isFinite(slope) ? `${slope.toFixed(1)}%` : "—";
   const trendVolOk = reversalLongCandidateTrendVolPass(row);
+  const lowTrendHighVolOk = reversalLongCandidateLowTrendHighVolPass(row);
   const gainOk = trendGainInLong1hQualityRange(gain);
   const volOk = volVsSmaInLong1hQualityRange(vol);
+  const gainLt16 =
+    gain != null && Number.isFinite(gain) && gain < REVERSAL_LONG_CANDIDATE_LOW_TREND_GAIN_MAX_EXCLUSIVE;
+  const volIn212 =
+    vol != null &&
+    Number.isFinite(vol) &&
+    vol >= REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN &&
+    vol <= REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX;
   const distOk = reversalLongCandidateEma20DistPass(row);
-  const slopeLtOk = reversalLongCandidateEma20_1hSlopeLtDistPairMaxPass(row);
-  const distSlopeComboOk = reversalLongCandidateEma20DistWithSlopeLtPass(row);
   const slopeRangeOk = reversalLongCandidateEma20_1hSlopePass(row);
   return (
-    `ต้อง Trend ${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MIN_PCT}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT}% + Vol×SMA ${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX} หรือ (EMA20Δ1h ${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MAX_PCT}% และ EMA20∠1h <${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_DIST_PAIR_MAX_EXCLUSIVE}%) หรือ EMA20∠1h ${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MAX_PCT}% · ` +
-    `Trend ${gainLabel}${gainOk ? " ✓" : ""} · Vol ${volLabel}${volOk ? " ✓" : ""}${trendVolOk ? " (ชุด✓)" : ""} · Δ1h ${distLabel}${distOk ? " ✓" : ""} · ∠1h ${slopeLabel}${slopeLtOk ? " <66✓" : ""}${distSlopeComboOk ? " (Δ+∠✓)" : ""}${slopeRangeOk ? " (50–66✓)" : ""}`
+    `ต้อง Trend ${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MIN_PCT}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT}% + Vol×SMA ${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX} หรือ EMA20Δ1h ${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MAX_PCT}% หรือ EMA20∠1h ${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MAX_PCT}% หรือ Trend <${REVERSAL_LONG_CANDIDATE_LOW_TREND_GAIN_MAX_EXCLUSIVE}% + Vol×SMA ${REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN}–${REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX}× · ` +
+    `Trend ${gainLabel}${gainOk ? " ✓" : ""}${gainLt16 ? " <16✓" : ""} · Vol ${volLabel}${volOk ? " ✓" : ""}${volIn212 ? " 2–12✓" : ""}${trendVolOk ? " (ชุด1✓)" : ""}${lowTrendHighVolOk ? " (ชุด4✓)" : ""} · Δ1h ${distLabel}${distOk ? " ✓" : ""} · ∠1h ${slopeLabel}${slopeRangeOk ? " (50–66✓)" : ""}`
   );
 }
 
