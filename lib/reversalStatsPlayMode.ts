@@ -1,6 +1,5 @@
 import type {
   CandleReversalSignalBarTf,
-  CandleReversalStatsRow,
   CandleReversalTradeSide,
 } from "@/lib/candleReversalStatsClient";
 
@@ -20,15 +19,15 @@ export function reversalShort1hIsObserveSignal(input: {
   return r != null && Number.isFinite(r) && r >= 0 && r < REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX;
 }
 
-export function reversalStatsRowIsObserve(
-  row: Pick<CandleReversalStatsRow, "statsPlayMode">,
-): boolean {
+export function reversalStatsRowIsObserve(row: {
+  statsPlayMode?: ReversalStatsPlayMode | null;
+}): boolean {
   return row.statsPlayMode === "observe";
 }
 
-export function reversalStatsPlayModeLabel(
-  row: Pick<CandleReversalStatsRow, "statsPlayMode">,
-): ReversalStatsPlayMode {
+export function reversalStatsPlayModeLabel(row: {
+  statsPlayMode?: ReversalStatsPlayMode | null;
+}): ReversalStatsPlayMode {
   return reversalStatsRowIsObserve(row) ? "observe" : "play";
 }
 
@@ -40,8 +39,8 @@ export function reversalStatsRowBlocksPlayPending(row: {
   return row.outcome === "pending" && !reversalStatsRowIsObserve(row);
 }
 
-export function excludeObserveStatsRows<T extends Pick<CandleReversalStatsRow, "statsPlayMode">>(
-  rows: readonly T[],
-): T[] {
+export function excludeObserveStatsRows<
+  T extends { statsPlayMode?: ReversalStatsPlayMode | null },
+>(rows: readonly T[]): T[] {
   return rows.filter((r) => !reversalStatsRowIsObserve(r));
 }
