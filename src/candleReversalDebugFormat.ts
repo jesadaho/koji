@@ -1,5 +1,6 @@
 import { emaLine } from "./indicatorMath";
 import type { BinanceKlinePack } from "./binanceIndicatorKline";
+import { statsRangeRankInWindow } from "@/lib/statsLenPercentile";
 import {
   candleReversalBarVolVsSma,
   candleReversalModelLabelTh,
@@ -9,6 +10,8 @@ import {
   isLongestRedBody1hEmaZoneOk,
   longestGreenBody1hEmaDistancePct,
   longestRedBody1hEmaDistancePct,
+  longestRedBody1hHighRankMaxForBar,
+  longestRedBody1hHighRankPass,
   type CandleReversal1dDetectEnv,
   type CandleReversal1hDetectEnv,
   type CandleReversal1hLongDetectEnv,
@@ -161,7 +164,9 @@ export function analyzeCandleReversal1hLongestRedBody(
   const need = maxRedBody * env.longestRedBodyMinRatio;
   const longestOk = Number.isFinite(maxRedBody) && maxRedBody > eps && body > need;
   const highRank = highRankInWindow(h, start, i, i);
-  const highRankOk = highRank <= env.longestRedBodyHighRankMax;
+  const rangeRank = statsRangeRankInWindow(h, l, start, i, i);
+  const highRankMax = longestRedBody1hHighRankMaxForBar(rangeRank, env);
+  const highRankOk = longestRedBody1hHighRankPass(highRank, rangeRank, env);
   const barVol = vol[i];
   const volRank =
     Number.isFinite(barVol) && barVol! > 0 ? volumeRankInWindow(vol, start, i, i) : NaN;
@@ -183,8 +188,8 @@ export function analyzeCandleReversal1hLongestRedBody(
       ok: highRankOk,
       label: "High Rank",
       detail: highRankOk
-        ? `อันดับ ${highRank} (ผ่านเกณฑ์ ≤ ${env.longestRedBodyHighRankMax})`
-        : `อันดับ ${highRank} (เกณฑ์ต้อง ≤ ${env.longestRedBodyHighRankMax})`,
+        ? `อันดับ ${highRank} (Len# ${rangeRank} · ผ่านเกณฑ์ ≤ ${highRankMax})`
+        : `อันดับ ${highRank} (Len# ${rangeRank} · เกณฑ์ต้อง ≤ ${highRankMax})`,
     },
     {
       ok: Number.isFinite(volRank),

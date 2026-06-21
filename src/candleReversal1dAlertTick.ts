@@ -218,6 +218,12 @@ function detectEnv1h(): CandleReversal1hDetectEnv {
   if (Number.isFinite(highRankMax) && highRankMax >= 1 && highRankMax <= 5) {
     env.longestRedBodyHighRankMax = Math.floor(highRankMax);
   }
+  const highRankMaxLen1 = Number(
+    process.env.CANDLE_REVERSAL_1H_LONGEST_RED_HIGH_RANK_MAX_WHEN_LEN_RANK_1?.trim(),
+  );
+  if (Number.isFinite(highRankMaxLen1) && highRankMaxLen1 >= 1 && highRankMaxLen1 <= 20) {
+    env.longestRedBodyHighRankMaxWhenLenRank1 = Math.floor(highRankMaxLen1);
+  }
   const emaAbove = Number(process.env.CANDLE_REVERSAL_1H_LONGEST_RED_EMA_ABOVE_MAX_PCT?.trim());
   if (Number.isFinite(emaAbove) && emaAbove >= 0 && emaAbove <= 30) {
     env.longestRedBodyEmaDistAboveMaxPct = emaAbove;

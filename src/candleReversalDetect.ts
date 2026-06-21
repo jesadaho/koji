@@ -150,6 +150,29 @@ export function longestRedBody1hEmaDistancePct(close: number, ema: number): numb
   return ((close - ema) / ema) * 100;
 }
 
+export function longestRedBody1hHighRankMaxForBar(
+  rangeRankInLookback: number,
+  env: Pick<
+    CandleReversal1hDetectEnv,
+    "longestRedBodyHighRankMax" | "longestRedBodyHighRankMaxWhenLenRank1"
+  >,
+): number {
+  return rangeRankInLookback === 1
+    ? env.longestRedBodyHighRankMaxWhenLenRank1
+    : env.longestRedBodyHighRankMax;
+}
+
+export function longestRedBody1hHighRankPass(
+  highRank: number,
+  rangeRankInLookback: number,
+  env: Pick<
+    CandleReversal1hDetectEnv,
+    "longestRedBodyHighRankMax" | "longestRedBodyHighRankMaxWhenLenRank1"
+  >,
+): boolean {
+  return highRank <= longestRedBody1hHighRankMaxForBar(rangeRankInLookback, env);
+}
+
 export function isLongestRedBody1hEmaZoneOk(
   close: number,
   ema: number,
@@ -214,6 +237,8 @@ export type CandleReversal1hDetectEnv = {
   longestRedBodyMinRatio: number;
   /** high ของแท่งต้องอยู่อันดับ 1..N ในรอบ longestRedBodyLookback (ดีฟอลต์ 3) */
   longestRedBodyHighRankMax: number;
+  /** ถ้า Len# = 1 (แท่งยาวสุดในรอบ) — ยอม high อันดับ 1..N (ดีฟอลต์ 10) */
+  longestRedBodyHighRankMaxWhenLenRank1: number;
   emaPeriod: number;
   /** ยอมให้ปิดเหนือ EMA ไม่เกิน X% (ม้วนลงมาหาเส้น) */
   longestRedBodyEmaDistAboveMaxPct: number;
@@ -260,6 +285,7 @@ export const DEFAULT_CANDLE_REVERSAL_1H_ENV: CandleReversal1hDetectEnv = {
   longestRedBodyLookback: 200,
   longestRedBodyMinRatio: 0.8,
   longestRedBodyHighRankMax: 3,
+  longestRedBodyHighRankMaxWhenLenRank1: 10,
   emaPeriod: 20,
   longestRedBodyEmaDistAboveMaxPct: 13,
   longestRedBodyEmaDistBelowMaxPct: 10,
@@ -529,7 +555,8 @@ export function evalLongestRedBody1h(
   if (body <= maxRedBody * env.longestRedBodyMinRatio) return null;
 
   const highRank = highRankInWindow(h, start, i, i);
-  if (highRank > env.longestRedBodyHighRankMax) return null;
+  const rangeRank = statsRangeRankInWindow(h, l, start, i, i);
+  if (!longestRedBody1hHighRankPass(highRank, rangeRank, env)) return null;
 
   const barVol = vol[i];
   const volRank =
@@ -546,6 +573,7 @@ export function evalLongestRedBody1h(
   const wickRatio = candleUpperWickRatio(pack, i);
   return buildSignal("1h", "longest_red_body", pack, i, wickRatio, body / range, retestPrice, slPrice, hadRecentInvertedDoji, {
     highRankInLookback: highRank,
+    rangeRankInLookback: rangeRank,
     volRankInLookback: volRank,
     lookbackBars: env.longestRedBodyLookback,
   });
@@ -702,7 +730,7 @@ export function candleReversal1hLongestRedBodyCheckLines(
   const { open: o, high: h, low: l, close: c, volume: vol } = pack;
   const lines: string[] = [];
   lines.push(
-    `เกณฑ์ longest_red_body (lookback ${env.longestRedBodyLookback} แท่ง · min ${(env.longestRedBodyMinRatio * 100).toFixed(0)}% เนื้อแดง · high อันดับ≤${env.longestRedBodyHighRankMax} · EMA${env.emaPeriod} ${-env.longestRedBodyEmaDistBelowMaxPct}%..+${env.longestRedBodyEmaDistAboveMaxPct}%):`,
+    `เกณฑ์ longest_red_body (lookback ${env.longestRedBodyLookback} แท่ง · min ${(env.longestRedBodyMinRatio * 100).toFixed(0)}% เนื้อแดง · high อันดับ≤${env.longestRedBodyHighRankMax} (Len#1 → ≤${env.longestRedBodyHighRankMaxWhenLenRank1}) · EMA${env.emaPeriod} ${-env.longestRedBodyEmaDistBelowMaxPct}%..+${env.longestRedBodyEmaDistAboveMaxPct}%):`,
   );
 
   const red = c[i]! < o[i]!;
@@ -723,9 +751,11 @@ export function candleReversal1hLongestRedBodyCheckLines(
   );
 
   const highRank = highRankInWindow(h, start, i, i);
-  const highRankOk = highRank <= env.longestRedBodyHighRankMax;
+  const rangeRank = statsRangeRankInWindow(h, l, start, i, i);
+  const highRankMax = longestRedBody1hHighRankMaxForBar(rangeRank, env);
+  const highRankOk = longestRedBody1hHighRankPass(highRank, rangeRank, env);
   lines.push(
-    `  high อันดับในรอบ: ${checkMark(highRankOk)} (อันดับ ${highRank} · H ${fmtReversalPrice(h[i]!)} · ต้อง≤${env.longestRedBodyHighRankMax})`,
+    `  high อันดับในรอบ: ${checkMark(highRankOk)} (อันดับ ${highRank} · H ${fmtReversalPrice(h[i]!)} · Len# ${rangeRank} · ต้อง≤${highRankMax})`,
   );
 
   const barVol = vol[i];
