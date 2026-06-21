@@ -123,7 +123,11 @@ import {
   reversalEma1dFilterLabel,
   reversalEma1dFilterTitle,
   reversalLenRankFilterLabel,
+  REVERSAL_BAR_RANGE_SIGNAL_FILTER_OPTIONS,
+  reversalBarRangeSignalFilterLabel,
+  reversalBarRangeSignalFilterTitle,
   reversalRowMatchesAtrPct14dFilter,
+  reversalRowMatchesBarRangeSignalFilter,
   reversalRowMatchesBtcEma4hFilter,
   reversalRowMatchesDayFilter,
   reversalRowMatchesDowFilter,
@@ -137,6 +141,7 @@ import {
   statsAtrPct14dFilterTitle,
   type BtcEma4hFilter,
   type StatsAtrPct14dFilter,
+  type ReversalBarRangeSignalFilter,
   type ReversalDayFilter,
   type ReversalDowFilter,
   type ReversalEma1dFilter,
@@ -425,6 +430,8 @@ function ReversalStatsSection({
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
   const [btcEma4hFilter, setBtcEma4hFilter] = useState<BtcEma4hFilter>("all");
   const [atrFilter, setAtrFilter] = useState<StatsAtrPct14dFilter>("all");
+  const [barRangeSignalFilter, setBarRangeSignalFilter] =
+    useState<ReversalBarRangeSignalFilter>("all");
   const [trendGainFilter, setTrendGainFilter] = useState<SnowballTrendGainFilter>("all");
   const [trendVelocityFilter, setTrendVelocityFilter] = useState<SnowballTrendVelocityFilter>("all");
   const [suggestedSideFilter, setSuggestedSideFilter] = useState<ReversalSuggestedSideFilter>(
@@ -455,12 +462,13 @@ function ReversalStatsSection({
           reversalRowMatchesEma1dFilter(r, ema1dFilter) &&
           reversalRowMatchesBtcEma4hFilter(r, btcEma4hFilter) &&
           reversalRowMatchesAtrPct14dFilter(r, atrFilter) &&
+          reversalRowMatchesBarRangeSignalFilter(r, barRangeSignalFilter) &&
           reversalStatsRowMatchesMatrixFilter(r, matrixFilter) &&
           (!showSuggestedSideColumn || reversalRowMatchesSuggestedSideFilter(r, suggestedSideFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendGainFilter(r, trendGainFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendVelocityFilter(r, trendVelocityFilter)),
       ),
-    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1dFilter, btcEma4hFilter, atrFilter, matrixFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, matrixFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -587,9 +595,10 @@ function ReversalStatsSection({
       ema1d: ema1dFilter,
       btcEma4h: btcEma4hFilter,
       atr: atrFilter,
+      rSignal: barRangeSignalFilter,
       matrix: matrixFilter,
     };
-  }, [csvQuery, dayFilter, dowFilter, ema1dFilter, btcEma4hFilter, atrFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, dowFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lenRankFilter, matrixFilter, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -971,7 +980,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · R% ${reversalBarRangeSignalFilterLabel(barRangeSignalFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -1309,6 +1318,24 @@ function ReversalStatsSection({
             title={reversalBtcEma4hFilterTitle(btcEma4hFilter)}
           >
             {BTC_EMA4H_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          R% สัญญาณ
+          <select
+            value={barRangeSignalFilter}
+            onChange={(e) =>
+              setBarRangeSignalFilter(e.currentTarget.value as ReversalBarRangeSignalFilter)
+            }
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "7rem" }}
+            title={reversalBarRangeSignalFilterTitle(barRangeSignalFilter)}
+          >
+            {REVERSAL_BAR_RANGE_SIGNAL_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
                 {opt.label}
               </option>

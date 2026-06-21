@@ -13,6 +13,7 @@ import {
   reversalTpStrategyLive12hShouldClose,
   reversalTpStrategyLive24hShouldArmBe,
   reversalTpStrategyLive24hShouldClose,
+  reversalTpStrategyResolvedEma20_1hSlope,
 } from "@/lib/reversalTpStrategy";
 import {
   cancelActiveTpSlPlanOrders,
@@ -153,7 +154,7 @@ async function handleReversal12hStrategyClose(ctx: TpSlContext): Promise<{ close
   }
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
-    `⏰ ครบ 12 ชม. — กลยุทธ์ปิดทันที (ติดลบ + EMA4H>0)`,
+    `⏰ ครบ 12 ชม. — กลยุทธ์ปิดทันที (ติดลบ + EMA20∠1h>0)`,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${drop.toFixed(2)}%`,
   ]);
@@ -177,7 +178,7 @@ async function handleReversal24hStrategyClose(ctx: TpSlContext): Promise<{ close
   }
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
-    `⏰ ครบ 24 ชม. — กลยุทธ์ปิดทันที (ROI < 3% + EMA4H>0)`,
+    `⏰ ครบ 24 ชม. — กลยุทธ์ปิดทันที (ROI < 3% + EMA20∠1h>0)`,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${drop.toFixed(2)}%`,
   ]);
@@ -218,7 +219,7 @@ async function handleSlAtEntryOnRoi(
       ? String((slRes.data as { orderId: unknown }).orderId)
       : undefined;
 
-  const headline = `🛡️ ครบ 24 ชม. ROI > 3% + EMA4H<0 — ถือต่อ · ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`;
+  const headline = `🛡️ ครบ 24 ชม. ROI > 3% + EMA20∠1h<0 — ถือต่อ · ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`;
 
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
@@ -331,13 +332,18 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
 
         const dropForTp = pricePctDrop(a.side, a.mexcAvgEntryPrice, mark);
 
+        const emaSlope = reversalTpStrategyResolvedEma20_1hSlope({
+          ema20_1hSlopePct7d: a.ema20_1hSlopePct7d,
+          ema4hSlopePct7d: a.ema4hSlopePct7d,
+        });
+
         if (!a.reversalTp12hChecked && nowMs >= a.openedAtMs + MS_12H) {
           state = withReversalTp12hChecked(state, userId, a.contractSymbol, a.side);
           if (
             tpPlan.tp12hCloseEnabled &&
             reversalTpStrategyLive12hShouldClose({
               dropPct: dropForTp,
-              ema4hSlopePct7d: a.ema4hSlopePct7d,
+              ema20_1hSlopePct7d: emaSlope,
             })
           ) {
             const r = await handleReversal12hStrategyClose(ctx);
@@ -355,7 +361,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           if (
             reversalTpStrategyLive24hShouldClose({
               dropPct: dropForTp,
-              ema4hSlopePct7d: a.ema4hSlopePct7d,
+              ema20_1hSlopePct7d: emaSlope,
             })
           ) {
             const r = await handleReversal24hStrategyClose(ctx);
@@ -368,7 +374,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           if (
             reversalTpStrategyLive24hShouldArmBe({
               dropPct: dropForTp,
-              ema4hSlopePct7d: a.ema4hSlopePct7d,
+              ema20_1hSlopePct7d: emaSlope,
             })
           ) {
             const r = await handleSlAtEntryOnRoi(ctx);

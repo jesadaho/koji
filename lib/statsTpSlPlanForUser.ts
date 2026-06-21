@@ -22,7 +22,7 @@ export type StatsTpSlPlanSource = "reversal" | "snowball";
 
 export type ViewerStatsTpSlPlan = StatsTpSlPlan & {
   tpSlEnabled: boolean;
-  /** Reversal — กฎปิด @12h (ROI<0 + EMA4H>0) · default เปิด */
+  /** Reversal — กฎปิด @12h (ROI<0 + EMA20∠1h>0) · default เปิด */
   reversalTp12hCloseEnabled?: boolean;
 };
 

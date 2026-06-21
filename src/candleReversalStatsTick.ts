@@ -430,7 +430,7 @@ function applyReversal1hStrategyProfitAtHorizon(
     pct12h: row.pct12h,
     pct24h: row.pct24h,
     pct48h: row.pct48h,
-    ema4hSlopePct7d: row.ema4hSlopePct7d,
+    ema20_1hSlopePct7d: row.ema20_1hSlopePct7d,
     maxHorizonHours: holdHours,
     close12hEnabled: true,
   });
@@ -455,7 +455,7 @@ function applyReversal1hStrategyProfitAtHorizon(
     pct12h: reversalStatsLongHorizonPct(row.pct12h),
     pct24h: reversalStatsLongHorizonPct(row.pct24h),
     pct48h: reversalStatsLongHorizonPct(row.pct48h),
-    ema4hSlopePct7d: row.ema4hSlopePct7d,
+    ema20_1hSlopePct7d: row.ema20_1hSlopePct7d,
     maxHorizonHours: holdHours,
     close12hEnabled: true,
   });

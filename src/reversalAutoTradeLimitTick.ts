@@ -101,7 +101,7 @@ async function promotePendingToActive(args: {
       slArmRoiPct: pending.slArmRoiPct,
       slEntryOffsetPct: pending.slEntryOffsetPct,
       slAtEntryAfter24hIfGreenEnabled: pending.slAtEntryAfter24hIfGreenEnabled,
-      ema4hSlopePct7d: pending.ema4hSlopePct7d,
+      ema20_1hSlopePct7d: pending.ema20_1hSlopePct7d ?? pending.ema4hSlopePct7d,
     },
     dayKey,
   );

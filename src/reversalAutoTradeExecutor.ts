@@ -1012,9 +1012,9 @@ export async function runReversalAutoTradeAfterReversalAlert(
           : null;
       const rangeScore =
         input.rangeScore != null && Number.isFinite(input.rangeScore) ? input.rangeScore : null;
-      const ema4hPct =
-        input.ema4hSlopePct7d != null && Number.isFinite(input.ema4hSlopePct7d)
-          ? input.ema4hSlopePct7d
+      const ema20_1hPct =
+        input.ema20_1hSlopePct7d != null && Number.isFinite(input.ema20_1hSlopePct7d)
+          ? input.ema20_1hSlopePct7d
           : null;
 
       const plan = resolveReversalTpSlPlanFromRow(row);
@@ -1040,7 +1040,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             slArmRoiPct: plan.slArmRoiPct,
             slEntryOffsetPct: plan.slEntryOffsetPct,
             slAtEntryAfter24hIfGreenEnabled: plan.slAtEntryAfter24hIfGreenEnabled,
-            ema4hSlopePct7d: ema4hPct ?? undefined,
+            ema20_1hSlopePct7d: ema20_1hPct ?? undefined,
           },
           dayKey,
         );
@@ -1078,7 +1078,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
               slArmRoiPct: plan.slArmRoiPct,
               slEntryOffsetPct: plan.slEntryOffsetPct,
               slAtEntryAfter24hIfGreenEnabled: plan.slAtEntryAfter24hIfGreenEnabled,
-              ema4hSlopePct7d: ema4hPct ?? undefined,
+              ema20_1hSlopePct7d: ema20_1hPct ?? undefined,
             },
             dayKey,
           );

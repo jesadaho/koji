@@ -25,6 +25,13 @@ import {
   STATS_VOL_VS_SMA_FILTER_OPTIONS,
   type StatsVolVsSmaFilter,
 } from "@/lib/statsVolVsSmaFilter";
+import {
+  snowballBarRangeSignalFilterLabel,
+  snowballBarRangeSignalFilterTitle,
+  snowballStatsRowMatchesBarRangeSignalFilter,
+  SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS,
+  type SnowballBarRangeSignalFilter,
+} from "@/lib/snowballBarRangeSignalFilter";
 
 export type { StatsAtrPct14dFilter } from "@/lib/statsAtrPct14dFilter";
 export {
@@ -33,6 +40,13 @@ export {
   statsAtrPct14dFilterTitle,
   statsRowMatchesAtrPct14dFilter,
 } from "@/lib/statsAtrPct14dFilter";
+
+export type ReversalBarRangeSignalFilter = SnowballBarRangeSignalFilter;
+export {
+  SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS as REVERSAL_BAR_RANGE_SIGNAL_FILTER_OPTIONS,
+  snowballBarRangeSignalFilterLabel as reversalBarRangeSignalFilterLabel,
+  snowballBarRangeSignalFilterTitle as reversalBarRangeSignalFilterTitle,
+};
 
 export type {
   BtcEma4hFilter,
@@ -99,6 +113,8 @@ export type ReversalStatsFilterQuery = {
   ema1d?: ReversalEma1dFilter;
   btcEma4h?: BtcEma4hFilter;
   atr?: StatsAtrPct14dFilter;
+  /** R% สัญญาณ (barRangePctSignal) */
+  rSignal?: ReversalBarRangeSignalFilter;
   matrix?: ReversalMatrixFilter;
 };
 
@@ -190,6 +206,13 @@ export function reversalRowMatchesAtrPct14dFilter(
   return statsRowMatchesAtrPct14dFilter(row.atrPct14d, filter);
 }
 
+export function reversalRowMatchesBarRangeSignalFilter(
+  row: CandleReversalStatsRow,
+  filter: ReversalBarRangeSignalFilter,
+): boolean {
+  return snowballStatsRowMatchesBarRangeSignalFilter(row, filter);
+}
+
 export function filterCandleReversalStatsRows(
   rows: CandleReversalStatsRow[],
   q: ReversalStatsFilterQuery,
@@ -206,6 +229,9 @@ export function filterCandleReversalStatsRows(
     if (q.ema1d && q.ema1d !== "all" && !reversalRowMatchesEma1dFilter(r, q.ema1d)) return false;
     if (q.btcEma4h && q.btcEma4h !== "all" && !reversalRowMatchesBtcEma4hFilter(r, q.btcEma4h)) return false;
     if (q.atr && q.atr !== "all" && !reversalRowMatchesAtrPct14dFilter(r, q.atr)) return false;
+    if (q.rSignal && q.rSignal !== "all" && !reversalRowMatchesBarRangeSignalFilter(r, q.rSignal)) {
+      return false;
+    }
     if (q.matrix && q.matrix !== "all" && !reversalStatsRowMatchesMatrixFilter(r, q.matrix)) return false;
     return true;
   });
@@ -217,6 +243,7 @@ const DOW_SET = new Set<string>(["all", "0", "1", "2", "3", "4", "5", "6"]);
 const LEN_SET = new Set<string>(["all", "rank3to15"]);
 const VOL_SET = new Set(STATS_VOL_VS_SMA_FILTER_OPTIONS.map((o) => o.value));
 const ATR_SET = new Set(STATS_ATR_PCT14D_FILTER_OPTIONS.map((o) => o.value));
+const R_SIGNAL_SET = new Set(SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS.map((o) => o.value));
 const MATRIX_SET = new Set<string>(["all", "qualitySignal"]);
 
 function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
@@ -273,6 +300,7 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.ema1d = parseReversalEmaSlopeFilterParam(sp.get("ema1d"));
   q.btcEma4h = parseReversalEmaSlopeFilterParam(sp.get("btcEma4h"));
   q.atr = pickEnum(sp.get("atr"), ATR_SET, "all");
+  q.rSignal = pickEnum(sp.get("rSignal"), R_SIGNAL_SET, "all");
   q.matrix = pickEnum(sp.get("matrix"), MATRIX_SET, "all");
   return q;
 }
@@ -290,6 +318,7 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.ema1d && q.ema1d !== "all") p.set("ema1d", q.ema1d);
   if (q.btcEma4h && q.btcEma4h !== "all") p.set("btcEma4h", q.btcEma4h);
   if (q.atr && q.atr !== "all") p.set("atr", q.atr);
+  if (q.rSignal && q.rSignal !== "all") p.set("rSignal", q.rSignal);
   if (q.matrix && q.matrix !== "all") p.set("matrix", q.matrix);
   const s = p.toString();
   return s ? `?${s}` : "";

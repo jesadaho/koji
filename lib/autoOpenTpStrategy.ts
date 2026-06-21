@@ -144,7 +144,10 @@ export function computeAutoOpenTpStrategyAtHorizon(input: {
     if (iFirst < 0) return null;
     const iLast = indexRangeThrough(timeSec, KLINE_15M_SEC, iFirst, input.ac + holdHours * HOUR_SEC);
     if (iLast < iFirst) return null;
-    const ema4h = undefined;
+    const ema20_1h =
+      row.ema20_1hSlopePct7d != null && Number.isFinite(row.ema20_1hSlopePct7d)
+        ? row.ema20_1hSlopePct7d
+        : undefined;
     const sim = simulateReversalTpStrategyProfit({
       side: input.side,
       entry: input.entry,
@@ -157,7 +160,7 @@ export function computeAutoOpenTpStrategyAtHorizon(input: {
       pct12h: row.pct12h,
       pct24h: row.pct24h,
       pct48h: row.pct48h,
-      ema4hSlopePct7d: ema4h,
+      ema20_1hSlopePct7d: ema20_1h,
       maxHorizonHours: holdHours,
       leverage: input.row.leverage,
       close12hEnabled: input.plan.reversalTp12hCloseEnabled !== false,

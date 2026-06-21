@@ -2111,18 +2111,18 @@ export default function SettingsTelegramMiniApp() {
         </div>
 
         <p className="sub" style={{ marginTop: "1.1rem", fontWeight: 600 }}>
-          กลยุทธ์ TP/SL (EMA4H + profit band)
+          กลยุทธ์ TP/SL (EMA20∠1h + profit band)
         </p>
         <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.92 }}>
           {reversalTpStrategySummary({ close12hEnabled: revTp12hCloseEnabled })}
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
           <li>
-            <strong>12 ชม.</strong>: ROI &lt; 0 + EMA4H &gt; 0 → ปิดทันที
+            <strong>12 ชม.</strong>: ROI &lt; 0 + EMA20∠1h &gt; 0 → ปิดทันที
             {revTp12hCloseEnabled ? "" : " (ปิดใช้งาน)"}
           </li>
-          <li><strong>24 ชม.</strong>: ROI &lt; 3% + EMA4H &gt; 0 → ปิดทันที</li>
-          <li><strong>24 ชม.</strong>: ROI &gt; 3% + EMA4H &lt; 0 → ถือต่อ + SL@entry (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code>)</li>
+          <li><strong>24 ชม.</strong>: ROI &lt; 3% + EMA20∠1h &gt; 0 → ปิดทันที</li>
+          <li><strong>24 ชม.</strong>: ROI &gt; 3% + EMA20∠1h &lt; 0 → ถือต่อ + SL@entry (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code>)</li>
           <li><strong>24–48 ชม.</strong>: แตะ SL@entry → ออก ~0%</li>
           <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ปิดทั้งหมด (force)</li>
           <li><strong>จังหวะ 2 (option)</strong>: ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {revHoldExtendRedHours.trim() || revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
@@ -2153,7 +2153,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>เปิดกฎปิด @12 ชม.</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              ROI &lt; 0 และ EMA4H &gt; 0 → ปิดทันทีที่ครบ 12 ชม. — ใช้ทั้ง auto-open และตารางสถิติ
+              ROI &lt; 0 และ EMA20∠1h &gt; 0 → ปิดทันทีที่ครบ 12 ชม. — ใช้ทั้ง auto-open และตารางสถิติ
             </span>
           </span>
         </label>

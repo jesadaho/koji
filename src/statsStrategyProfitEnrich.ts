@@ -80,7 +80,7 @@ function simulateReversalFromPack(input: {
   windowEndSec: number;
   row: Pick<
     CandleReversalStatsRow,
-    "pct12h" | "pct24h" | "pct48h" | "ema4hSlopePct7d"
+    "pct12h" | "pct24h" | "pct48h" | "ema20_1hSlopePct7d"
   >;
   holdHours: StatsStrategyProfitHorizon;
   close12hEnabled?: boolean;
@@ -105,7 +105,7 @@ function simulateReversalFromPack(input: {
     pct12h: input.row.pct12h,
     pct24h: input.row.pct24h,
     pct48h: input.row.pct48h,
-    ema4hSlopePct7d: input.row.ema4hSlopePct7d,
+    ema20_1hSlopePct7d: input.row.ema20_1hSlopePct7d,
     maxHorizonHours: input.holdHours,
     close12hEnabled: input.close12hEnabled,
   });
@@ -120,7 +120,7 @@ function simulateReversalLongFromPack(input: {
   windowEndSec: number;
   row: Pick<
     CandleReversalStatsRow,
-    "pct12h" | "pct24h" | "pct48h" | "ema4hSlopePct7d"
+    "pct12h" | "pct24h" | "pct48h" | "ema20_1hSlopePct7d"
   >;
   holdHours: StatsStrategyProfitHorizon;
   close12hEnabled?: boolean;
@@ -138,7 +138,7 @@ function simulateReversalLongFromPack(input: {
       pct12h: reversalStatsLongHorizonPct(input.row.pct12h),
       pct24h: reversalStatsLongHorizonPct(input.row.pct24h),
       pct48h: reversalStatsLongHorizonPct(input.row.pct48h),
-      ema4hSlopePct7d: input.row.ema4hSlopePct7d,
+      ema20_1hSlopePct7d: input.row.ema20_1hSlopePct7d,
     },
     holdHours: input.holdHours,
     close12hEnabled: input.close12hEnabled,

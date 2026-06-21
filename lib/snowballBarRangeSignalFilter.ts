@@ -12,6 +12,7 @@ export type SnowballBarRangeSignalFilter =
   | "ge15"
   | "ge20"
   | "ge30"
+  | "lt3"
   | "lt5"
   | "lt8"
   | "lt10"
@@ -31,6 +32,7 @@ const BAR_RANGE_SIGNAL_GE: Record<Extract<SnowballBarRangeSignalFilter, `ge${str
 };
 
 const BAR_RANGE_SIGNAL_LT: Record<Extract<SnowballBarRangeSignalFilter, `lt${string}`>, number> = {
+  lt3: 3,
   lt5: 5,
   lt8: 8,
   lt10: 10,
@@ -54,6 +56,7 @@ export const SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS: ReadonlyArray<{
   { value: "ge15", label: "≥ 15%" },
   { value: "ge20", label: "≥ 20%" },
   { value: "ge30", label: "≥ 30%" },
+  { value: "lt3", label: "< 3%" },
   { value: "lt5", label: "< 5%" },
   { value: "lt8", label: "< 8%" },
   { value: "lt10", label: "< 10%" },

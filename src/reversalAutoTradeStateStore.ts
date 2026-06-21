@@ -47,7 +47,9 @@ export type ReversalAutoTradeActive = {
   slArmRoiPct?: number;
   slEntryOffsetPct?: number;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
-  /** EMA(12) 4h slope 7d % ณ เวลาแจ้ง — Reversal TP strategy @ 24h */
+  /** EMA20 1h slope 7d % ณ เวลาแจ้ง — Reversal TP strategy @ 12h/24h */
+  ema20_1hSlopePct7d?: number;
+  /** @deprecated legacy — fallback เมื่อเปิดก่อน migrate */
   ema4hSlopePct7d?: number;
   /** ตรวจ 12h checkpoint แล้ว */
   reversalTp12hChecked?: boolean;
@@ -79,6 +81,8 @@ export type ReversalAutoTradePendingLimit = {
   slArmRoiPct: number;
   slEntryOffsetPct: number;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
+  ema20_1hSlopePct7d?: number;
+  /** @deprecated legacy */
   ema4hSlopePct7d?: number;
 };
 
@@ -190,6 +194,13 @@ function normalizePendingLimits(raw: unknown): ReversalAutoTradePendingLimit[] {
     if (typeof o.slAtEntryAfter24hIfGreenEnabled === "boolean") {
       pendingRow.slAtEntryAfter24hIfGreenEnabled = o.slAtEntryAfter24hIfGreenEnabled;
     }
+    const ema20 =
+      typeof o.ema20_1hSlopePct7d === "number" && Number.isFinite(o.ema20_1hSlopePct7d)
+        ? o.ema20_1hSlopePct7d
+        : typeof o.ema4hSlopePct7d === "number" && Number.isFinite(o.ema4hSlopePct7d)
+          ? o.ema4hSlopePct7d
+          : undefined;
+    if (ema20 != null) pendingRow.ema20_1hSlopePct7d = ema20;
     out.push(pendingRow);
   }
   const byKey = new Map<string, ReversalAutoTradePendingLimit>();
@@ -298,11 +309,13 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
     if (initHold != null) row.initialHoldVol = initHold;
     if (tp1PlanVol != null) row.tp1PlanVol = tp1PlanVol;
     if (holdExtendedForRed) row.holdExtendedForRed = true;
-    const ema4h =
-      typeof o.ema4hSlopePct7d === "number" && Number.isFinite(o.ema4hSlopePct7d)
-        ? o.ema4hSlopePct7d
-        : undefined;
-    if (ema4h != null) row.ema4hSlopePct7d = ema4h;
+    const ema20 =
+      typeof o.ema20_1hSlopePct7d === "number" && Number.isFinite(o.ema20_1hSlopePct7d)
+        ? o.ema20_1hSlopePct7d
+        : typeof o.ema4hSlopePct7d === "number" && Number.isFinite(o.ema4hSlopePct7d)
+          ? o.ema4hSlopePct7d
+          : undefined;
+    if (ema20 != null) row.ema20_1hSlopePct7d = ema20;
     if (o.reversalTp12hChecked === true) row.reversalTp12hChecked = true;
     if (o.reversalTp24hChecked === true) row.reversalTp24hChecked = true;
     out.push(row);
@@ -531,6 +544,8 @@ export function withReversalActiveOpen(
     slArmRoiPct: number;
     slEntryOffsetPct: number;
     slAtEntryAfter24hIfGreenEnabled?: boolean;
+    ema20_1hSlopePct7d?: number;
+    /** @deprecated legacy */
     ema4hSlopePct7d?: number;
     tp1PlanOrderId?: string;
     tp2PlanOrderId?: string;
@@ -567,8 +582,10 @@ export function withReversalActiveOpen(
   if (typeof p.slAtEntryAfter24hIfGreenEnabled === "boolean") {
     row.slAtEntryAfter24hIfGreenEnabled = p.slAtEntryAfter24hIfGreenEnabled;
   }
-  if (typeof p.ema4hSlopePct7d === "number" && Number.isFinite(p.ema4hSlopePct7d)) {
-    row.ema4hSlopePct7d = p.ema4hSlopePct7d;
+  if (typeof p.ema20_1hSlopePct7d === "number" && Number.isFinite(p.ema20_1hSlopePct7d)) {
+    row.ema20_1hSlopePct7d = p.ema20_1hSlopePct7d;
+  } else if (typeof p.ema4hSlopePct7d === "number" && Number.isFinite(p.ema4hSlopePct7d)) {
+    row.ema20_1hSlopePct7d = p.ema4hSlopePct7d;
   }
   if (p.tp1PlanOrderId?.trim()) row.tp1PlanOrderId = p.tp1PlanOrderId.trim();
   if (p.tp2PlanOrderId?.trim()) row.tp2PlanOrderId = p.tp2PlanOrderId.trim();
