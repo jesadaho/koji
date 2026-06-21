@@ -304,7 +304,7 @@ export const DEFAULT_CANDLE_REVERSAL_1H_LONG_ENV: CandleReversal1hLongDetectEnv 
 
 type CandleReversalSignalLookbackMeta = Pick<
   CandleReversalSignal,
-  "highRankInLookback" | "lowRankInLookback" | "volRankInLookback" | "lookbackBars"
+  "highRankInLookback" | "lowRankInLookback" | "rangeRankInLookback" | "volRankInLookback" | "lookbackBars"
 >;
 
 /** ไส้บนต่อช่วงแท่ง (0–1) — ใช้แสดงไส้% ใน stats ทุกโมเดล */
