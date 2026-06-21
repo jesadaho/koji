@@ -95,7 +95,12 @@ import {
   statsVolVsSmaFilterLabel,
   type StatsVolVsSmaFilter,
 } from "@/lib/statsVolVsSmaFilter";
-import { copyCsvToClipboard, downloadCsv, statsCsvFilename } from "@/lib/statsCsv";
+import {
+  clearStatsClientStaleCache,
+  formatStatsStaleCacheAge,
+  readStatsClientStaleCache,
+  writeStatsClientStaleCache,
+} from "@/lib/statsClientStaleCache";
 import {
   buildReversalStatsCsvSearchParams,
   BTC_EMA4H_FILTER_OPTIONS,
@@ -1554,10 +1559,26 @@ function ReversalStatsSection({
   );
 }
 
+const REVERSAL_STATS_STALE_CACHE_SCOPE = "reversal-stats-v1";
+
+function readReversalStatsStaleCache():
+  | { data: CandleReversalStatsApiPayload; cachedAtMs: number }
+  | null {
+  if (typeof window === "undefined") return null;
+  return readStatsClientStaleCache<CandleReversalStatsApiPayload>(REVERSAL_STATS_STALE_CACHE_SCOPE);
+}
+
 export default function ReversalStatsTelegramMiniApp() {
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [phase, setPhase] = useState<Phase>(() => (readReversalStatsStaleCache() ? "ready" : "loading"));
   const [setupBody, setSetupBody] = useState<ReactNode>(null);
-  const [payload, setPayload] = useState<CandleReversalStatsApiPayload | null>(null);
+  const [payload, setPayload] = useState<CandleReversalStatsApiPayload | null>(
+    () => readReversalStatsStaleCache()?.data ?? null,
+  );
+  const [statsRefreshing, setStatsRefreshing] = useState(false);
+  const [statsCachedAtMs, setStatsCachedAtMs] = useState<number | null>(
+    () => readReversalStatsStaleCache()?.cachedAtMs ?? null,
+  );
+  const [statsRefreshError, setStatsRefreshError] = useState<string | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
@@ -1624,11 +1645,47 @@ export default function ReversalStatsTelegramMiniApp() {
     return parsed as CandleReversalStatsApiPayload;
   }, []);
 
-  const loadStats = useCallback(async () => {
-    const data = await api("/reversal-stats");
+  const fetchStatsPayload = useCallback(async () => {
+    return await api("/reversal-stats");
+  }, [api]);
+
+  const applyStatsPayload = useCallback((data: CandleReversalStatsApiPayload) => {
     setPayload(data);
     setResetError(null);
-  }, [api]);
+  }, []);
+
+  const loadStats = useCallback(
+    async (opts?: { mode?: "default" | "background" | "force" }) => {
+      const mode = opts?.mode ?? "default";
+      if (mode !== "default") setStatsRefreshing(true);
+
+      try {
+        const data = await fetchStatsPayload();
+        writeStatsClientStaleCache(REVERSAL_STATS_STALE_CACHE_SCOPE, data);
+        applyStatsPayload(data);
+        setStatsCachedAtMs(Date.now());
+        setStatsRefreshError(null);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (mode === "background" || mode === "force") {
+          setStatsRefreshError(msg);
+        } else {
+          throw e;
+        }
+      } finally {
+        if (mode !== "default") setStatsRefreshing(false);
+      }
+    },
+    [applyStatsPayload, fetchStatsPayload],
+  );
+
+  const loadStatsInitial = useCallback(async () => {
+    if (readReversalStatsStaleCache()) {
+      await loadStats({ mode: "background" });
+      return;
+    }
+    await loadStats({ mode: "default" });
+  }, [loadStats]);
 
   const backfillStats = useCallback(async () => {
     if (
@@ -1660,7 +1717,7 @@ export default function ReversalStatsTelegramMiniApp() {
         kind: "ok",
         text: `ปรับเสร็จ — ลบซ้ำ ${removedDupes} · backfill ${updated} แถว · สแกน ${scanned} · เปลี่ยน outcome ${changedOutcome}`,
       });
-      await loadStats();
+      await loadStats({ mode: "force" });
     } catch (e) {
       setBackfillMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -1680,7 +1737,9 @@ export default function ReversalStatsTelegramMiniApp() {
     setResetError(null);
     try {
       await api("/reversal-stats", { method: "POST" });
-      await loadStats();
+      clearStatsClientStaleCache(REVERSAL_STATS_STALE_CACHE_SCOPE);
+      setStatsCachedAtMs(null);
+      await loadStats({ mode: "force" });
     } catch (e) {
       setResetError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1715,7 +1774,7 @@ export default function ReversalStatsTelegramMiniApp() {
           }
           return;
         }
-        await loadStats();
+        await loadStatsInitial();
         if (!cancelled) setPhase("ready");
       } catch (e) {
         if (!cancelled) {
@@ -1729,7 +1788,7 @@ export default function ReversalStatsTelegramMiniApp() {
     return () => {
       cancelled = true;
     };
-  }, [loadStats]);
+  }, [loadStatsInitial]);
 
   if (phase === "loading") {
     return (
@@ -1767,8 +1826,13 @@ export default function ReversalStatsTelegramMiniApp() {
       <MiniAppStatsNav style={{ marginTop: "0.35rem" }} />
 
       <p className="sparkStatsActionRow" style={{ marginTop: "0.75rem" }}>
-        <button type="button" className="sparkStatsRefreshBtn" onClick={() => void loadStats()}>
-          รีเฟรช
+        <button
+          type="button"
+          className="sparkStatsRefreshBtn"
+          disabled={statsRefreshing}
+          onClick={() => void loadStats({ mode: "force" })}
+        >
+          {statsRefreshing ? "กำลังอัปเดต…" : "รีเฟรช"}
         </button>
         {payload?.isAdmin ? (
           <button
@@ -1801,6 +1865,18 @@ export default function ReversalStatsTelegramMiniApp() {
           }}
         >
           {backfillMsg.text}
+        </p>
+      ) : null}
+      {statsCachedAtMs != null ? (
+        <p className="sub" style={{ marginTop: "0.35rem" }}>
+          {statsRefreshing
+            ? `แสดงข้อมูลในเครื่อง (${formatStatsStaleCacheAge(statsCachedAtMs)}) — กำลังดึงข้อมูลใหม่…`
+            : `อัปเดตล่าสุด: ${formatStatsStaleCacheAge(statsCachedAtMs)}`}
+        </p>
+      ) : null}
+      {statsRefreshError ? (
+        <p className="sub" style={{ marginTop: "0.35rem", color: "var(--danger)" }}>
+          อัปเดตจากเซิร์ฟเวอร์ไม่สำเร็จ (ยังแสดงข้อมูลในเครื่อง): {statsRefreshError}
         </p>
       ) : null}
       {resetError ? (
