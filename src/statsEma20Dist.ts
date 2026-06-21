@@ -12,8 +12,8 @@ import {
 
 export const STATS_EMA20_DIST_PERIOD = 20;
 
-/** แถวที่คำนวณ EMA20 metrics ณ alertedAtMs แล้ว — v5 = ไม่ใช้ live shortcut (สัญญาณใหม่ฟิล slope) */
-export const STATS_EMA20_DIST_VERSION = 5;
+/** แถวที่คำนวณ EMA20 metrics ณ alertedAtMs แล้ว — v6 = เพิ่ม symbol EMA20 4h */
+export const STATS_EMA20_DIST_VERSION = 6;
 
 const BTC_USDT = "BTCUSDT";
 
@@ -102,6 +102,8 @@ async function fetchKlinePackThrough(
 export type StatsEma20MetricsSnapshot = {
   ema20_1hSlopePct7d: number | null;
   priceVsEma20_1hPct: number | null;
+  ema20_4hSlopePct7d: number | null;
+  priceVsEma20_4hPct: number | null;
   btcEma20_4hSlopePct7d: number | null;
 };
 
@@ -128,6 +130,29 @@ async function fetchSymbolEma20_1hMetricsAtMs(
   };
 }
 
+async function fetchSymbolEma20_4hMetricsAtMs(
+  symbol: string,
+  atMs: number,
+): Promise<{ ema20_4hSlopePct7d: number | null; priceVsEma20_4hPct: number | null }> {
+  if (!isBinanceIndicatorFapiEnabled()) {
+    return { ema20_4hSlopePct7d: null, priceVsEma20_4hPct: null };
+  }
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return { ema20_4hSlopePct7d: null, priceVsEma20_4hPct: null };
+
+  const pack = await fetchKlinePackThrough(sym, "4h", atMs, STATS_EMA4H_SLOPE_LOOKBACK_BARS);
+  if (!pack) return { ema20_4hSlopePct7d: null, priceVsEma20_4hPct: null };
+  return {
+    ema20_4hSlopePct7d: computeEma20SlopePctFromPackAt(
+      pack,
+      "4h",
+      STATS_EMA4H_SLOPE_LOOKBACK_BARS,
+      atMs,
+    ),
+    priceVsEma20_4hPct: computePriceVsEma20FromPackAt(pack, "4h", atMs),
+  };
+}
+
 /** @deprecated — cache ถูกลบเมื่อเลิกใช้ live shortcut */
 export function resetBtcEma20_4hDistCache(): void {}
 
@@ -141,24 +166,39 @@ async function fetchBtcEma20_4hSlopeAtMs(atMs: number): Promise<number | null> {
     : null;
 }
 
-/** Symbol EMA20 1h slope+dist + BTC EMA20 4h slope ณ alertedAtMs */
+/** Symbol EMA20 1h/4h slope+dist + BTC EMA20 4h slope ณ alertedAtMs */
 export async function fetchStatsEma20MetricsAtMs(
   symbol: string,
   atMs: number,
 ): Promise<StatsEma20MetricsSnapshot> {
   if (!isBinanceIndicatorFapiEnabled()) {
-    return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null, btcEma20_4hSlopePct7d: null };
+    return {
+      ema20_1hSlopePct7d: null,
+      priceVsEma20_1hPct: null,
+      ema20_4hSlopePct7d: null,
+      priceVsEma20_4hPct: null,
+      btcEma20_4hSlopePct7d: null,
+    };
   }
   if (!Number.isFinite(atMs) || atMs <= 0) {
-    return { ema20_1hSlopePct7d: null, priceVsEma20_1hPct: null, btcEma20_4hSlopePct7d: null };
+    return {
+      ema20_1hSlopePct7d: null,
+      priceVsEma20_1hPct: null,
+      ema20_4hSlopePct7d: null,
+      priceVsEma20_4hPct: null,
+      btcEma20_4hSlopePct7d: null,
+    };
   }
-  const [symbol1h, btcEma20_4hSlopePct7d] = await Promise.all([
+  const [symbol1h, symbol4h, btcEma20_4hSlopePct7d] = await Promise.all([
     fetchSymbolEma20_1hMetricsAtMs(symbol, atMs),
+    fetchSymbolEma20_4hMetricsAtMs(symbol, atMs),
     fetchBtcEma20_4hSlopeAtMs(atMs),
   ]);
   return {
     ema20_1hSlopePct7d: symbol1h.ema20_1hSlopePct7d,
     priceVsEma20_1hPct: symbol1h.priceVsEma20_1hPct,
+    ema20_4hSlopePct7d: symbol4h.ema20_4hSlopePct7d,
+    priceVsEma20_4hPct: symbol4h.priceVsEma20_4hPct,
     btcEma20_4hSlopePct7d,
   };
 }
@@ -171,19 +211,26 @@ export type StatsRowWithEma20Dist = {
   alertedAtMs: number;
   ema20_1hSlopePct7d?: number | null;
   priceVsEma20_1hPct?: number | null;
+  ema20_4hSlopePct7d?: number | null;
+  priceVsEma20_4hPct?: number | null;
   btcEma20_4hSlopePct7d?: number | null;
   ema20DistV?: number;
 };
 
 export function statsEma20MetricsComplete(row: StatsRowWithEma20Dist): boolean {
   const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
-  return finite(row.ema20_1hSlopePct7d) && finite(row.btcEma20_4hSlopePct7d);
+  return (
+    finite(row.ema20_1hSlopePct7d) &&
+    finite(row.ema20_4hSlopePct7d) &&
+    finite(row.btcEma20_4hSlopePct7d)
+  );
 }
 
 export function statsRowNeedsEma20DistBackfill(row: StatsRowWithEma20Dist): boolean {
   if (row.ema20DistV !== STATS_EMA20_DIST_VERSION) return true;
   const finite = (v: number | null | undefined) => v != null && Number.isFinite(v);
   if (finite(row.priceVsEma20_1hPct) && !finite(row.ema20_1hSlopePct7d)) return true;
+  if (!finite(row.ema20_4hSlopePct7d)) return true;
   if (!finite(row.btcEma20_4hSlopePct7d)) return true;
   return false;
 }
@@ -208,6 +255,8 @@ export async function backfillStatsRowsEma20Dist<T extends StatsRowWithEma20Dist
       const metrics = await fetchStatsEma20MetricsAtMs(row.symbol, row.alertedAtMs);
       row.ema20_1hSlopePct7d = metrics.ema20_1hSlopePct7d;
       row.priceVsEma20_1hPct = metrics.priceVsEma20_1hPct;
+      row.ema20_4hSlopePct7d = metrics.ema20_4hSlopePct7d;
+      row.priceVsEma20_4hPct = metrics.priceVsEma20_4hPct;
       row.btcEma20_4hSlopePct7d = metrics.btcEma20_4hSlopePct7d;
       if (statsEma20MetricsComplete(row)) {
         row.ema20DistV = STATS_EMA20_DIST_VERSION;

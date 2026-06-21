@@ -8,6 +8,8 @@ import {
   candleReversalEma4hSlopeLabel,
   candleReversalEma1dSlopeLabel,
   candleReversalPriceVsEma20_1hLabel,
+  candleReversalEma20_4hSlopeLabel,
+  candleReversalPriceVsEma20_4hLabel,
 } from "@/lib/candleReversalStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
@@ -326,6 +328,20 @@ export function SnowballStatsTable({
               onSort={onSort}
             />
             <SortTh
+              label="EMA20∠4h"
+              sortKey="ema20_4h"
+              title="EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
+              activeSort={sort}
+              onSort={onSort}
+            />
+            <SortTh
+              label="EMA20Δ4h"
+              sortKey="ema20_4hDist"
+              title="(close − EMA20) / EMA20 × 100 บน 4h — บวก = เหนือเส้น"
+              activeSort={sort}
+              onSort={onSort}
+            />
+            <SortTh
               label="EMA4h∠7d"
               sortKey="ema4h"
               title="EMA(12) 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
@@ -567,6 +583,8 @@ export function SnowballStatsTable({
                 <td>{statsAtrPct14dLabel(r.atrPct14d)}</td>
                 <td title="EMA20 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema20_1hSlopePct7d)}</td>
                 <td title="(close − EMA20) / EMA20 × 100 บน 1h">{candleReversalPriceVsEma20_1hLabel(r.priceVsEma20_1hPct)}</td>
+                <td title="EMA20 4h slope 7d">{candleReversalEma20_4hSlopeLabel(r.ema20_4hSlopePct7d)}</td>
+                <td title="(close − EMA20) / EMA20 × 100 บน 4h">{candleReversalPriceVsEma20_4hLabel(r.priceVsEma20_4hPct)}</td>
                 <td title="EMA(12) 4h slope 7d">{candleReversalEma4hSlopeLabel(r.ema4hSlopePct7d)}</td>
                 <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
                 <td title="BTC EMA20 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma20_4hSlopePct7d)}</td>

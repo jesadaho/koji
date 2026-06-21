@@ -155,6 +155,8 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     btcEma1dSlopePct7d: nullNum(r.btcEma1dSlopePct7d),
     priceVsEma20_1hPct: nullNum(r.priceVsEma20_1hPct),
     ema20_1hSlopePct7d: nullNum(r.ema20_1hSlopePct7d),
+    priceVsEma20_4hPct: nullNum(r.priceVsEma20_4hPct),
+    ema20_4hSlopePct7d: nullNum(r.ema20_4hSlopePct7d),
     btcEma20_4hSlopePct7d: nullNum(r.btcEma20_4hSlopePct7d),
     psar4hTrend:
       r.psar4hTrend === "up" || r.psar4hTrend === "down" ? r.psar4hTrend : null,
@@ -351,6 +353,8 @@ export async function appendCandleReversalStatsRow(
   let btcEma1dSlopePct7d: CandleReversalStatsRow["btcEma1dSlopePct7d"] = null;
   let priceVsEma20_1hPct: CandleReversalStatsRow["priceVsEma20_1hPct"] = null;
   let ema20_1hSlopePct7d: CandleReversalStatsRow["ema20_1hSlopePct7d"] = null;
+  let priceVsEma20_4hPct: CandleReversalStatsRow["priceVsEma20_4hPct"] = null;
+  let ema20_4hSlopePct7d: CandleReversalStatsRow["ema20_4hSlopePct7d"] = null;
   let btcEma20_4hSlopePct7d: CandleReversalStatsRow["btcEma20_4hSlopePct7d"] = null;
   let psar4hTrend: CandleReversalStatsRow["psar4hTrend"] = null;
   let psar4hDistPct: CandleReversalStatsRow["psar4hDistPct"] = null;
@@ -386,6 +390,14 @@ export async function appendCandleReversalStatsRow(
     ema20_1hSlopePct7d =
       snap.ema20_1hSlopePct7d != null && Number.isFinite(snap.ema20_1hSlopePct7d)
         ? snap.ema20_1hSlopePct7d
+        : null;
+    priceVsEma20_4hPct =
+      snap.priceVsEma20_4hPct != null && Number.isFinite(snap.priceVsEma20_4hPct)
+        ? snap.priceVsEma20_4hPct
+        : null;
+    ema20_4hSlopePct7d =
+      snap.ema20_4hSlopePct7d != null && Number.isFinite(snap.ema20_4hSlopePct7d)
+        ? snap.ema20_4hSlopePct7d
         : null;
     btcEma20_4hSlopePct7d =
       snap.btcEma20_4hSlopePct7d != null && Number.isFinite(snap.btcEma20_4hSlopePct7d)
@@ -434,9 +446,13 @@ export async function appendCandleReversalStatsRow(
     btcEma1dSlopePct7d,
     priceVsEma20_1hPct,
     ema20_1hSlopePct7d,
+    priceVsEma20_4hPct,
+    ema20_4hSlopePct7d,
     btcEma20_4hSlopePct7d,
     ...(ema20_1hSlopePct7d != null &&
     Number.isFinite(ema20_1hSlopePct7d) &&
+    ema20_4hSlopePct7d != null &&
+    Number.isFinite(ema20_4hSlopePct7d) &&
     btcEma20_4hSlopePct7d != null &&
     Number.isFinite(btcEma20_4hSlopePct7d)
       ? { ema20DistV: STATS_EMA20_DIST_VERSION }
@@ -533,6 +549,8 @@ export async function appendCandleReversalStatsRow(
   const ema20Incomplete =
     row.ema20_1hSlopePct7d == null ||
     !Number.isFinite(row.ema20_1hSlopePct7d) ||
+    row.ema20_4hSlopePct7d == null ||
+    !Number.isFinite(row.ema20_4hSlopePct7d) ||
     row.btcEma20_4hSlopePct7d == null ||
     !Number.isFinite(row.btcEma20_4hSlopePct7d);
   if (ema20Incomplete && Number.isFinite(input.alertedAtMs) && input.alertedAtMs > 0) {
@@ -543,6 +561,12 @@ export async function appendCandleReversalStatsRow(
       }
       if (ema20.priceVsEma20_1hPct != null && Number.isFinite(ema20.priceVsEma20_1hPct)) {
         row.priceVsEma20_1hPct = ema20.priceVsEma20_1hPct;
+      }
+      if (ema20.ema20_4hSlopePct7d != null && Number.isFinite(ema20.ema20_4hSlopePct7d)) {
+        row.ema20_4hSlopePct7d = ema20.ema20_4hSlopePct7d;
+      }
+      if (ema20.priceVsEma20_4hPct != null && Number.isFinite(ema20.priceVsEma20_4hPct)) {
+        row.priceVsEma20_4hPct = ema20.priceVsEma20_4hPct;
       }
       if (ema20.btcEma20_4hSlopePct7d != null && Number.isFinite(ema20.btcEma20_4hSlopePct7d)) {
         row.btcEma20_4hSlopePct7d = ema20.btcEma20_4hSlopePct7d;
