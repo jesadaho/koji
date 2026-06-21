@@ -21,8 +21,17 @@ import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
+import {
+  reversalStatsRowBlocksPlayPending,
+  type ReversalStatsPlayMode,
+} from "@/lib/reversalStatsPlayMode";
+import {
+  backfillReversalStatsWeeklyAlertFields,
+  computeReversalStatsWeeklyAlertFields,
+} from "@/lib/reversalStatsWeeklyAlert";
 
 export type { CandleReversalStatsApiPayload, CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
+export { backfillReversalStatsWeeklyAlertFields } from "@/lib/reversalStatsWeeklyAlert";
 
 const KV_KEY = "koji:candle_reversal_alert_stats";
 const filePath = join(process.cwd(), "data", "candle_reversal_alert_stats.json");
@@ -76,6 +85,7 @@ type LegacyCandleReversalRow = CandleReversalStatsRow & {
 type LegacyCandleReversalRowV1 = LegacyCandleReversalRow & {
   signalBarTf?: CandleReversalStatsRow["signalBarTf"];
   tradeSide?: CandleReversalStatsRow["tradeSide"];
+  statsPlayMode?: ReversalStatsPlayMode;
   rangeScore?: number | null;
   wickScore?: number | null;
   rangeRankInLookback?: number | null;
@@ -95,11 +105,17 @@ function normalizeTradeSide(raw: string | undefined): CandleReversalStatsRow["tr
   return raw === "long" ? "long" : "short";
 }
 
+function normalizeStatsPlayMode(raw: string | undefined): ReversalStatsPlayMode | undefined {
+  return raw === "observe" ? "observe" : undefined;
+}
+
 function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleReversalStatsRow {
+  const statsPlayMode = normalizeStatsPlayMode(r.statsPlayMode);
   return {
     ...r,
     signalBarTf: r.signalBarTf === "1h" ? "1h" : "1d",
     tradeSide: normalizeTradeSide(r.tradeSide),
+    ...(statsPlayMode ? { statsPlayMode } : {}),
     highRankInLookback: finiteRank(r.highRankInLookback),
     lowRankInLookback: finiteRank(r.lowRankInLookback),
     rangeRankInLookback: finiteRank(r.rangeRankInLookback),
@@ -166,6 +182,11 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     atrPct14d: nullNum(r.atrPct14d),
     lenPercentilePct: nullNum(r.lenPercentilePct),
     barRangePctSignal: nullNum(r.barRangePctSignal),
+    weeklyAlertNo:
+      r.weeklyAlertNo != null && Number.isFinite(r.weeklyAlertNo) && r.weeklyAlertNo >= 1
+        ? Math.floor(r.weeklyAlertNo)
+        : null,
+    priceDiffFromPrevAlertPct: nullNum(r.priceDiffFromPrevAlertPct),
   };
 }
 
@@ -234,6 +255,7 @@ export type AppendCandleReversalStatsInput = {
   trendGainPct?: number | null;
   swingLowSource?: CandleReversalStatsRow["swingLowSource"];
   pumpCycleSwingLowV?: number;
+  statsPlayMode?: ReversalStatsPlayMode;
 };
 
 function normalizeStatsSymbol(symbol: string): string {
@@ -249,7 +271,7 @@ function pendingReversalStatsKey(
   return `${normalizeStatsSymbol(symbol)}:${signalBarTf === "1h" ? "1h" : "1d"}:${side}`;
 }
 
-/** มีแถว pending อยู่แล้วสำหรับเหรียญ+TF+ทิศ นี้ */
+/** มีแถว play pending อยู่แล้วสำหรับเหรียญ+TF+ทิศ นี้ (observe pending ไม่นับ) */
 export function hasPendingCandleReversalStatsRow(
   rows: CandleReversalStatsRow[],
   symbol: string,
@@ -259,16 +281,16 @@ export function hasPendingCandleReversalStatsRow(
   const key = pendingReversalStatsKey(symbol, signalBarTf, tradeSide);
   return rows.some(
     (r) =>
-      r.outcome === "pending" &&
+      reversalStatsRowBlocksPlayPending(r) &&
       pendingReversalStatsKey(r.symbol, r.signalBarTf ?? "1d", r.tradeSide ?? "short") === key,
   );
 }
 
-/** คีย์ symbol:tf:side ของทุกแถว pending — ใช้กันยิงซ้ำระหว่างสแกน */
+/** คีย์ symbol:tf:side ของ play pending — ใช้กันยิง play ซ้ำระหว่างสแกน */
 export function candleReversalPendingStatsKeys(rows: CandleReversalStatsRow[]): Set<string> {
   const keys = new Set<string>();
   for (const r of rows) {
-    if (r.outcome !== "pending") continue;
+    if (!reversalStatsRowBlocksPlayPending(r)) continue;
     keys.add(pendingReversalStatsKey(r.symbol, r.signalBarTf ?? "1d", r.tradeSide ?? "short"));
   }
   return keys;
@@ -290,7 +312,7 @@ export function hasAnyPendingCandleReversalSymbol(
 }
 
 /**
- * ลบแถว pending ซ้ำ — ต่อเหรียญ+TF คงแถวที่แจ้งเร็วสุด (alertedAtMs น้อยสุด)
+ * ลบแถว play pending ซ้ำ — ต่อเหรียญ+TF คงแถวที่แจ้งเร็วสุด (observe ไม่ dedupe)
  */
 export async function removeCandleReversalStatsDuplicatePendingRows(opts?: {
   symbol?: string;
@@ -302,7 +324,7 @@ export async function removeCandleReversalStatsDuplicatePendingRows(opts?: {
 
   const byKey = new Map<string, CandleReversalStatsRow[]>();
   for (const r of rows) {
-    if (r.outcome !== "pending") continue;
+    if (!reversalStatsRowBlocksPlayPending(r)) continue;
     const sym = normalizeStatsSymbol(r.symbol);
     if (symbolFilter && sym !== symbolFilter) continue;
     const key = pendingReversalStatsKey(sym, r.signalBarTf ?? "1d", r.tradeSide ?? "short");
@@ -336,10 +358,16 @@ export async function appendCandleReversalStatsRow(
 
   const signalBarTf = input.signalBarTf === "1h" ? "1h" : "1d";
   const tradeSide = input.tradeSide === "long" ? "long" : "short";
+  const isObserve = input.statsPlayMode === "observe";
   const state = await loadCandleReversalStatsState();
-  if (hasPendingCandleReversalStatsRow(state.rows, input.symbol, signalBarTf, tradeSide)) {
-    return null;
-  }
+
+  const weeklyAlert = computeReversalStatsWeeklyAlertFields(state.rows, {
+    symbol: input.symbol,
+    signalBarTf,
+    tradeSide,
+    alertedAtMs: input.alertedAtMs,
+    entryPrice: input.entryPrice,
+  });
 
   let marketSentiment: CandleReversalStatsRow["marketSentiment"] = null;
   try {
@@ -553,6 +581,9 @@ export async function appendCandleReversalStatsRow(
     strategyProfitPctLong24h: null,
     strategyExitReasonLong24h: null,
     outcome: "pending",
+    weeklyAlertNo: weeklyAlert.weeklyAlertNo,
+    priceDiffFromPrevAlertPct: weeklyAlert.priceDiffFromPrevAlertPct,
+    ...(isObserve ? { statsPlayMode: "observe" as const } : {}),
   };
 
   const ema20Incomplete = !statsEma20MetricsComplete(row);

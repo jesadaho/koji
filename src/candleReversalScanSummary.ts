@@ -92,6 +92,9 @@ export type CandleReversalTfScanSummaryStats = {
   /** Short: ไส้ล่าง > ไส้บน — ข้ามแจ้งเตือน/stats/auto-open */
   skippedLowerWickDominant: number;
   skippedLowerWickDominantSymbols: string[];
+  /** 1H Short R% < 3 — เก็บ stats observe อย่างเดียว (ไม่ Telegram) */
+  observeStored: number;
+  observeStoredSymbols: string[];
   cappedByRunLimit: number;
   cappedByRunLimitSymbols: string[];
   sent: number;
@@ -119,6 +122,8 @@ export function emptyCandleReversalTfScanSummaryStats(tf: CandleReversalTf): Can
     dedupedSymbols: [],
     skippedLowerWickDominant: 0,
     skippedLowerWickDominantSymbols: [],
+    observeStored: 0,
+    observeStoredSymbols: [],
     cappedByRunLimit: 0,
     cappedByRunLimitSymbols: [],
     sent: 0,
@@ -191,7 +196,9 @@ export function formatCandleReversalScanSummaryMessage(opts: {
   lines.push("— ส่งแจ้งเตือน —");
   lines.push(`ข้าม Short (ไส้ล่าง > ไส้บน): ${stats.skippedLowerWickDominant}`);
   lines.push(...formatSymbolListLines("  ", stats.skippedLowerWickDominantSymbols));
-  lines.push(`ติด dedupe (แท่งเดิม / มี pending อยู่แล้ว): ${stats.deduped}`);
+  lines.push(`เก็บ Observe (1H Short R% < 3): ${stats.observeStored}`);
+  lines.push(...formatSymbolListLines("  ", stats.observeStoredSymbols));
+  lines.push(`ติด dedupe (แท่งเดิม): ${stats.deduped}`);
   lines.push(...formatSymbolListLines("  ", stats.dedupedSymbols));
   lines.push(`เกิน cap ต่อรอบ (${alertCapPerRun}/run): ${stats.cappedByRunLimit}`);
   lines.push(...formatSymbolListLines("  ", stats.cappedByRunLimitSymbols));

@@ -24,6 +24,7 @@ import {
   simulateReversalTpStrategyProfit,
 } from "@/lib/reversalTpStrategy";
 import { reversalLong1hStatsFilterPass } from "@/lib/reversalMatrixFilters";
+import { reversalStatsRowIsObserve } from "@/lib/reversalStatsPlayMode";
 import { firstFollowUpKlineIndexAfterAnchorClose } from "@/lib/statsFollowUpAdverse";
 import {
   DEFAULT_STATS_TPSL_PLAN,
@@ -319,6 +320,7 @@ async function refreshCandleReversal1hMaxRoiFrom15m(rows: CandleReversalStatsRow
   let dirty = 0;
 
   for (const row of rows) {
+    if (reversalStatsRowIsObserve(row)) continue;
     if (row.signalBarTf !== "1h" || row.pct24h == null) continue;
     if (row.maxRoi15mV === STATS_MAX_ROI_15M_VERSION && row.maxRoiPct != null) continue;
 
@@ -474,6 +476,7 @@ async function enrichReversalRowsStrategyProfit(
     const longCacheKey = reversalTpStrategyCacheKeyLong(holdHours, simOpts);
 
     for (const row of rows) {
+      if (reversalStatsRowIsObserve(row)) continue;
       if (row.signalBarTf !== "1h") continue;
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H && row.pct24h == null) continue;
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_48H && row.pct48h == null) continue;

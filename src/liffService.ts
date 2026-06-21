@@ -78,6 +78,7 @@ import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore"
 import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
 import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
 import { backfillReversalBarRangePctSignalEstimate } from "@/lib/statsBarRangePct";
+import { backfillReversalStatsWeeklyAlertFields } from "@/lib/reversalStatsWeeklyAlert";
 import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
 import { backfillAllStatsRowsQuoteVol24h } from "./statsQuoteVol24h";
 import {
@@ -1073,8 +1074,9 @@ export async function liffGetCandleReversalStats(
 ): Promise<CandleReversalStatsApiPayload> {
   const st = await loadCandleReversalStatsState();
   const barRangeDirty = backfillReversalBarRangePctSignalEstimate(st.rows);
+  const weeklyAlertDirty = backfillReversalStatsWeeklyAlertFields(st.rows);
   const ema20Dirty = await backfillAllStatsRowsEma20Dist(st.rows, { maxRowsPerPass: 12, maxPasses: 2 });
-  if (barRangeDirty > 0 || ema20Dirty > 0) await saveCandleReversalStatsState(st);
+  if (barRangeDirty > 0 || weeklyAlertDirty > 0 || ema20Dirty > 0) await saveCandleReversalStatsState(st);
 
   const conflictSets = await loadPendingConflictSets();
   const rows = [...st.rows]

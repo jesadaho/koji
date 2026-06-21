@@ -20,6 +20,8 @@ export type CandleReversalModel =
 
 export type CandleReversalOutcome = "pending" | "win" | "loss" | "flat";
 
+export type ReversalStatsPlayMode = "play" | "observe";
+
 /** bump เมื่อเปลี่ยนวิธีคำนวณ Max ROI — บังคับ follow-up แถวเก่า */
 export const STATS_MAX_ROI_15M_VERSION = 1;
 
@@ -149,6 +151,12 @@ export type CandleReversalStatsRow = {
   /** cache ตามชุด TP/SL (key = tp1-tp1p-tp2-maxH) */
   strategyProfitByPlan?: StrategyProfitByPlanMap | null;
   outcome: CandleReversalOutcome;
+  /** play = เล่นปกติ · observe = R% < 3 (1H Short) — เก็บ stats อย่างเดียว */
+  statsPlayMode?: ReversalStatsPlayMode;
+  /** ลำดับการแจ้งในรอบสัปดาห์ BKK (symbol+TF+side) — เริ่ม 1 */
+  weeklyAlertNo?: number | null;
+  /** (Entry − entry ครั้งก่อน) / entry ครั้งก่อน × 100 — symbol+TF+side */
+  priceDiffFromPrevAlertPct?: number | null;
   /** ฝั่งตรงข้ามที่เคย conflict (บันทึกตอนแจ้ง) — แสดง badge ถาวร */
   conflictWith?: string | null;
 };
@@ -292,6 +300,8 @@ export type CandleReversalStatsSortKey =
   | "greenDays"
   | "day"
   | "time"
+  | "weeklyAlertNo"
+  | "priceDiffPrev"
   | "entry"
   | "swingLowTime"
   | "swingLowPrice"
@@ -410,6 +420,10 @@ function compareCandleReversalStatsRows(
     }
     case "time":
       return cmpNumNullLast(a.alertedAtMs, b.alertedAtMs);
+    case "weeklyAlertNo":
+      return cmpNumNullLast(a.weeklyAlertNo, b.weeklyAlertNo);
+    case "priceDiffPrev":
+      return cmpNumNullLast(a.priceDiffFromPrevAlertPct, b.priceDiffFromPrevAlertPct);
     case "entry":
       return cmpNumNullLast(a.entryPrice, b.entryPrice);
     case "swingLowTime":

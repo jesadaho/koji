@@ -36,6 +36,11 @@ import {
   type ReversalLongStrategyProfitRowSlice,
 } from "@/lib/reversalTpStrategy";
 import { reversalRowIsLongCandidate } from "@/lib/reversalMatrixFilters";
+import { reversalStatsPlayModeLabel } from "@/lib/reversalStatsPlayMode";
+import {
+  reversalStatsPriceDiffFromPrevLabel,
+  reversalStatsWeeklyAlertNoLabel,
+} from "@/lib/reversalStatsWeeklyAlert";
 
 export type { StatsStrategyCsvSizing } from "@/lib/statsStrategyProfitClient";
 import {
@@ -64,6 +69,9 @@ const HEADERS = [
   "เหรียญ",
   "TF",
   "Side",
+  "PlayMode",
+  "#/สั.",
+  "Δ ครั้งก่อน",
   "โมเดล",
   "โมเดล (เต็ม)",
   "เขียว",
@@ -179,6 +187,9 @@ function candleReversalStatsRowToCsvCells(
     statsCoinLabel(r.symbol),
     candleReversalSignalBarTfLabel(r.signalBarTf ?? "1d"),
     candleReversalTradeSideLabel(r.tradeSide ?? "short"),
+    reversalStatsPlayModeLabel(r),
+    reversalStatsWeeklyAlertNoLabel(r.weeklyAlertNo),
+    reversalStatsPriceDiffFromPrevLabel(r.priceDiffFromPrevAlertPct),
     candleReversalModelShortLabel(r.model),
     candleReversalModelLabel(r.model),
     candleReversalGreenDaysLabel(r.greenDaysBeforeSignal),

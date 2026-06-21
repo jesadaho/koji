@@ -239,6 +239,8 @@ export type ReversalAutoTradeInput = {
   alertedAtMs?: number;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
   signalClosePrice?: number;
+  /** observe = stats-only (defense in depth) */
+  statsPlayMode?: "play" | "observe";
 };
 
 export type ReversalAutoTradeRunResult = {
@@ -420,6 +422,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
   input: ReversalAutoTradeInput
 ): Promise<ReversalAutoTradeRunResult> {
   if (!isReversalAutotradeEnabled()) return { usersAttempted: 0, usersSucceeded: 0 };
+  if (input.statsPlayMode === "observe") return { usersAttempted: 0, usersSucceeded: 0 };
 
   const binanceSymbol = input.binanceSymbol.trim().toUpperCase();
   if (!binanceSymbol) return { usersAttempted: 0, usersSucceeded: 0 };

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { MiniAppMainNav } from "@/components/MiniAppMainNav";
 import { MiniAppStatsNav } from "@/components/MiniAppStatsNav";
 import { PendingConflictBadge } from "@/components/PendingConflictBadge";
+import { ObserveBadge } from "@/components/ObserveBadge";
 import { StatsStrategyProfitCell } from "@/components/StatsStrategyProfitCell";
 import { StatsMonthPager } from "@/components/StatsMonthPager";
 import {
@@ -16,6 +17,11 @@ import {
 import { useStatsMonthFilter } from "@/lib/useStatsMonthFilter";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
+import { excludeObserveStatsRows, reversalStatsRowIsObserve } from "@/lib/reversalStatsPlayMode";
+import {
+  reversalStatsPriceDiffFromPrevLabel,
+  reversalStatsWeeklyAlertNoLabel,
+} from "@/lib/reversalStatsWeeklyAlert";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
@@ -295,7 +301,7 @@ function parseSideFromCsvQuery(csvQuery: string): "long" | "short" | undefined {
 }
 
 function reversalWinrateSummary(rows: CandleReversalStatsRow[]): string {
-  const scoped = excludePendingConflictRows(rows);
+  const scoped = excludeObserveStatsRows(excludePendingConflictRows(rows));
   const done = scoped.filter((r) => r.outcome !== "pending");
   const wins = done.filter((r) => r.outcome === "win").length;
   const losses = done.filter((r) => r.outcome === "loss").length;
@@ -460,6 +466,10 @@ function ReversalStatsSection({
     statsRowAlertedAtMs,
   );
   const rows = useMemo(() => sortCandleReversalStatsRows(scopedRows, sort), [scopedRows, sort]);
+  const playScopedRows = useMemo(
+    () => excludeObserveStatsRows(excludePendingConflictRows(scopedRows)),
+    [scopedRows],
+  );
   const [splitByWeek, setSplitByWeek] = useState(false);
   const weekGroups = useMemo(
     () => groupRowsByBkkWeek(scopedRows, statsRowAlertedAtMs),
@@ -469,19 +479,19 @@ function ReversalStatsSection({
   const horizonWinrateText = useMemo(
     () =>
       tf === "1h"
-        ? candleReversalHorizonWinrateSummary(scopedRows, [
+        ? candleReversalHorizonWinrateSummary(playScopedRows, [
             { label: "12h", pctKey: "pct12h" },
             { label: "24h", pctKey: "pct24h" },
             { label: "48h", pctKey: "pct48h" },
           ])
         : null,
-    [scopedRows, tf],
+    [playScopedRows, tf],
   );
   const strategyProfitSummaryText48h = useMemo(() => {
     if (tf !== "1h") return null;
     return formatStatsStrategyProfitSummaryText(
       summarizeStatsStrategyProfit(
-        scopedRows,
+        playScopedRows,
         strategySizing,
         STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
         STATS_STRATEGY_PROFIT_HOLD_48H,
@@ -490,13 +500,13 @@ function ReversalStatsSection({
       STATS_STRATEGY_PROFIT_HOLD_48H,
       { strategyLabel: showSuggestedSideColumn ? "กลยุทธ์ Short" : "กลยุทธ์" },
     );
-  }, [scopedRows, strategySizing, tf, showSuggestedSideColumn]);
+  }, [playScopedRows, strategySizing, tf, showSuggestedSideColumn]);
 
   const strategyProfitSummaryText24h = useMemo(() => {
     if (tf !== "1h") return null;
     return formatStatsStrategyProfitSummaryText(
       summarizeStatsStrategyProfit(
-        scopedRows,
+        playScopedRows,
         strategySizing,
         STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
         STATS_STRATEGY_PROFIT_HOLD_24H,
@@ -505,11 +515,11 @@ function ReversalStatsSection({
       STATS_STRATEGY_PROFIT_HOLD_24H,
       { strategyLabel: showSuggestedSideColumn ? "กลยุทธ์ Short" : "กลยุทธ์" },
     );
-  }, [scopedRows, strategySizing, tf, showSuggestedSideColumn]);
+  }, [playScopedRows, strategySizing, tf, showSuggestedSideColumn]);
 
   const longCandidateRows = useMemo(
-    () => (showSuggestedSideColumn ? scopedRows.filter(reversalRowIsLongCandidate) : []),
-    [scopedRows, showSuggestedSideColumn],
+    () => (showSuggestedSideColumn ? playScopedRows.filter(reversalRowIsLongCandidate) : []),
+    [playScopedRows, showSuggestedSideColumn],
   );
 
   const strategyProfitLongSummaryText48h = useMemo(() => {
@@ -556,7 +566,7 @@ function ReversalStatsSection({
   const playingLongOnly = showSuggestedSideColumn && statsPlaySides.long && !statsPlaySides.short;
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 20 + (showSuggestedSideColumn ? 3 : 0);
+  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 22 + (showSuggestedSideColumn ? 3 : 0);
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -637,6 +647,20 @@ function ReversalStatsSection({
             </th>
             <SortTh label="วัน" sortKey="day" title="วันในสัปดาห์ (BKK)" activeSort={sort} onSort={onSortColumn} />
             <SortTh label="เวลา" sortKey="time" title="เวลาแจ้ง (BKK)" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="#/สั."
+              sortKey="weeklyAlertNo"
+              title="ลำดับการแจ้งในรอบสัปดาห์ BKK (symbol+TF+side)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Δ ครั้งก่อน"
+              sortKey="priceDiffPrev"
+              title="(Entry − entry ครั้งก่อน) / entry ครั้งก่อน × 100 — symbol+TF+side"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
             <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
             <SortTh
               label="SL Time"
@@ -957,6 +981,7 @@ function ReversalStatsSection({
                 <tr key={r.id}>
                   <td>
                     {coinLabel(r.symbol)}
+                    {reversalStatsRowIsObserve(r) ? <ObserveBadge /> : null}
                     <PendingConflictBadge conflictWith={r.conflictWith} />
                   </td>
                   {showSuggestedSideColumn ? (
@@ -982,6 +1007,12 @@ function ReversalStatsSection({
                   <td>{candleReversalDayOfWeekBkk(r.alertedAtIso, r.alertedAtMs)}</td>
                   <td>
                     <span style={{ whiteSpace: "nowrap" }}>{formatBkk(r.alertedAtIso)}</span>
+                  </td>
+                  <td title="ลำดับการแจ้งในรอบสัปดาห์ BKK">
+                    {reversalStatsWeeklyAlertNoLabel(r.weeklyAlertNo)}
+                  </td>
+                  <td title="Entry diff จากครั้งก่อน (symbol+TF+side)">
+                    {reversalStatsPriceDiffFromPrevLabel(r.priceDiffFromPrevAlertPct)}
                   </td>
                   <td>{fmtPrice(r.entryPrice)}</td>
                   <td>
@@ -1051,34 +1082,42 @@ function ReversalStatsSection({
                   {has48h ? (
                     <>
                       <td>
-                        <StatsStrategyProfitCell
-                          holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
-                          pct24h={r.pct24h}
-                          pct48h={r.pct48h}
-                          strategyProfitPct24h={r.strategyProfitPct24h}
-                          strategyExitReason24h={r.strategyExitReason24h}
-                          marginUsdt={strategyMarginUsdt}
-                          leverage={resolveRowLeverage(r)}
-                          tpSlPlan={strategyTpSlPlan}
-                          maxDrawdownPct={r.maxDrawdownPct}
-                          followUpMaxAdversePct={r.followUpMaxAdversePct}
-                          resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
-                        />
+                        {reversalStatsRowIsObserve(r) ? (
+                          "—"
+                        ) : (
+                          <StatsStrategyProfitCell
+                            holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
+                            pct24h={r.pct24h}
+                            pct48h={r.pct48h}
+                            strategyProfitPct24h={r.strategyProfitPct24h}
+                            strategyExitReason24h={r.strategyExitReason24h}
+                            marginUsdt={strategyMarginUsdt}
+                            leverage={resolveRowLeverage(r)}
+                            tpSlPlan={strategyTpSlPlan}
+                            maxDrawdownPct={r.maxDrawdownPct}
+                            followUpMaxAdversePct={r.followUpMaxAdversePct}
+                            resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
+                          />
+                        )}
                       </td>
                       <td>
-                        <StatsStrategyProfitCell
-                          holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
-                          pct24h={r.pct24h}
-                          pct48h={r.pct48h}
-                          strategyProfitPct={r.strategyProfitPct}
-                          strategyExitReason={r.strategyExitReason}
-                          marginUsdt={strategyMarginUsdt}
-                          leverage={resolveRowLeverage(r)}
-                          tpSlPlan={strategyTpSlPlan}
-                          maxDrawdownPct={r.maxDrawdownPct}
-                          followUpMaxAdversePct={r.followUpMaxAdversePct}
-                          resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
-                        />
+                        {reversalStatsRowIsObserve(r) ? (
+                          "—"
+                        ) : (
+                          <StatsStrategyProfitCell
+                            holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
+                            pct24h={r.pct24h}
+                            pct48h={r.pct48h}
+                            strategyProfitPct={r.strategyProfitPct}
+                            strategyExitReason={r.strategyExitReason}
+                            marginUsdt={strategyMarginUsdt}
+                            leverage={resolveRowLeverage(r)}
+                            tpSlPlan={strategyTpSlPlan}
+                            maxDrawdownPct={r.maxDrawdownPct}
+                            followUpMaxAdversePct={r.followUpMaxAdversePct}
+                            resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
+                          />
+                        )}
                       </td>
                       {showSuggestedSideColumn ? (
                         <td>

@@ -31,11 +31,10 @@ import {
 } from "./candleReversalScanSummary";
 import {
   appendCandleReversalStatsRow,
-  candleReversalPendingStatsKeys,
   isCandleReversalStatsEnabled,
-  loadCandleReversalStatsState,
 } from "./candleReversalStatsStore";
 import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
+import { reversalShort1hIsObserveSignal } from "@/lib/reversalStatsPlayMode";
 import { statsBarRangePctSignal } from "@/lib/statsBarRangePct";
 import { resolvePumpCycleSwingLowFields } from "./statsPumpCycleSwingLow";
 import { formatCandleReversalTfDebugBlock } from "./candleReversalDebugFormat";
@@ -258,11 +257,6 @@ function detectEnv1hLong(): CandleReversal1hLongDetectEnv {
     env.longestGreenBodyEmaDistBelowMaxPct = emaBelow;
   }
   return env;
-}
-
-function reversalPendingStatsKey(symbol: string, tf: CandleReversalTf, tradeSide: "short" | "long"): string {
-  const side = tradeSide === "long" ? "long" : "short";
-  return `${symbol.trim().toUpperCase()}:${tf === "1h" ? "1h" : "1d"}:${side}`;
 }
 
 function emptySymState(): CandleReversalSymbolState {
@@ -646,18 +640,10 @@ async function notifyResults(
   scanStats: CandleReversalTfScanSummaryStats,
 ): Promise<number> {
   let notified = 0;
-  const pendingStatsKeys = isCandleReversalStatsEnabled()
-    ? candleReversalPendingStatsKeys((await loadCandleReversalStatsState()).rows)
-    : new Set<string>();
   const assetMetaMap = await buildBinanceUsdmSymbolMetaMap();
 
   for (const row of results) {
     if (!row.evals?.msg || !row.evals.signal) continue;
-    if (notified >= alertCap) {
-      scanStats.cappedByRunLimit += 1;
-      pushReversalScanSymList(scanStats.cappedByRunLimitSymbols, row.symbol);
-      continue;
-    }
 
     const sig = row.evals.signal;
     const tradeSide = sig.tradeSide ?? "short";
@@ -670,11 +656,20 @@ async function notifyResults(
         continue;
       }
     }
-    const pendingKey = reversalPendingStatsKey(row.symbol, sig.tf, tradeSide);
-    if (pendingStatsKeys.has(pendingKey)) {
-      scanStats.deduped += 1;
-      pushReversalScanSymList(scanStats.dedupedSymbols, row.symbol);
-      continue;
+
+    const barRangePctSignal = statsBarRangePctSignal(sig.h, sig.l, sig.c);
+    const isObserve = reversalShort1hIsObserveSignal({
+      signalBarTf: sig.tf,
+      tradeSide,
+      barRangePctSignal,
+    });
+
+    if (!isObserve) {
+      if (notified >= alertCap) {
+        scanStats.cappedByRunLimit += 1;
+        pushReversalScanSymList(scanStats.cappedByRunLimitSymbols, row.symbol);
+        continue;
+      }
     }
 
     try {
@@ -707,13 +702,60 @@ async function notifyResults(
         signalBarOpenSec: sig.barOpenSec,
         signalBarTf: sig.tf,
       });
-      const [mexcContract, pumpCycleFields] = await Promise.all([
+      const pumpCycleFields = await resolvePumpCycleSwingLowFields({
+        symbol: row.symbol,
+        signalAtSec: anchorCloseSec,
+        entryPrice: sig.c,
+      });
+
+      const statsAppendInput = {
+        symbol: row.symbol,
+        model: sig.model,
+        tradeSide,
+        signalBarTf: sig.tf,
+        alertedAtIso: new Date(nowMs).toISOString(),
+        alertedAtMs: nowMs,
+        signalBarOpenSec: sig.barOpenSec,
+        entryPrice: sig.c,
+        retestPrice: sig.retestPrice,
+        slPrice: sig.slPrice,
+        wickRatioPct: Number.isFinite(sig.wickRatio) ? sig.wickRatio * 100 : null,
+        lowerWickRatioPct:
+          tradeSide === "short" && sig.lowerWickRatio != null && Number.isFinite(sig.lowerWickRatio)
+            ? sig.lowerWickRatio * 100
+            : null,
+        bodyPct: sig.bodyRatio * 100,
+        highRankInLookback: sig.highRankInLookback ?? null,
+        lowRankInLookback: sig.lowRankInLookback ?? null,
+        rangeRankInLookback: sig.rangeRankInLookback ?? null,
+        lookbackBars: sig.lookbackBars ?? null,
+        barRangePctSignal,
+        volRankInLookback: sig.volRankInLookback ?? null,
+        signalVolVsSma: row.evals.signalVolVsSma,
+        rangeScore: row.evals.rangeScore,
+        wickScore: row.evals.wickScore,
+        afterInvertedDoji: sig.afterInvertedDoji,
+        greenDaysBeforeSignal,
+        greenDaysBeforeSignalBkk,
+        ...pumpCycleFields,
+      } as const;
+
+      if (isObserve) {
+        if (isCandleReversalStatsEnabled()) {
+          const appended = await appendCandleReversalStatsRow({
+            ...statsAppendInput,
+            statsPlayMode: "observe",
+          });
+          if (appended) {
+            scanStats.observeStored += 1;
+            pushReversalScanSymList(scanStats.observeStoredSymbols, row.symbol);
+          }
+        }
+        continue;
+      }
+
+      const [mexcContract] = await Promise.all([
         resolveMexcContractFromBinanceSymbolAsync(binSym),
-        resolvePumpCycleSwingLowFields({
-          symbol: row.symbol,
-          signalAtSec: anchorCloseSec,
-          entryPrice: sig.c,
-        }),
       ]);
       const msg = buildCandleReversalAlertMessage(row.symbol, sig, {
         greenDaysBeforeSignal,
@@ -731,40 +773,7 @@ async function notifyResults(
       });
       const ok = await sendPublicReversalFeedToSparkGroup(msg);
       if (ok && isCandleReversalStatsEnabled()) {
-        const appended = await appendCandleReversalStatsRow({
-          symbol: row.symbol,
-          model: sig.model,
-          tradeSide,
-          signalBarTf: sig.tf,
-          alertedAtIso: new Date(nowMs).toISOString(),
-          alertedAtMs: nowMs,
-          signalBarOpenSec: sig.barOpenSec,
-          entryPrice: sig.c,
-          retestPrice: sig.retestPrice,
-          slPrice: sig.slPrice,
-          wickRatioPct: Number.isFinite(sig.wickRatio) ? sig.wickRatio * 100 : null,
-          lowerWickRatioPct:
-            tradeSide === "short" && sig.lowerWickRatio != null && Number.isFinite(sig.lowerWickRatio)
-              ? sig.lowerWickRatio * 100
-              : null,
-          bodyPct: sig.bodyRatio * 100,
-          highRankInLookback: sig.highRankInLookback ?? null,
-          lowRankInLookback: sig.lowRankInLookback ?? null,
-          rangeRankInLookback: sig.rangeRankInLookback ?? null,
-          lookbackBars: sig.lookbackBars ?? null,
-          barRangePctSignal: statsBarRangePctSignal(sig.h, sig.l, sig.c),
-          volRankInLookback: sig.volRankInLookback ?? null,
-          signalVolVsSma: row.evals.signalVolVsSma,
-          rangeScore: row.evals.rangeScore,
-          wickScore: row.evals.wickScore,
-          afterInvertedDoji: sig.afterInvertedDoji,
-          greenDaysBeforeSignal,
-          greenDaysBeforeSignalBkk,
-          ...pumpCycleFields,
-        });
-        if (appended) {
-          pendingStatsKeys.add(pendingKey);
-        }
+        await appendCandleReversalStatsRow(statsAppendInput);
       }
       if (ok) {
         notified++;
