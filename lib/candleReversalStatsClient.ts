@@ -4,6 +4,7 @@ import type { MarketSentimentSnapshot } from "@/lib/marketSentiment";
 import type { PumpCycleSwingLowSource } from "@/lib/pumpCycleSwingLow";
 import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 import { statsEmaSlopePctLabel } from "@/lib/statsEmaSlope";
+import { reversalBarRangePctSignalResolved } from "@/lib/statsBarRangePct";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 
@@ -468,7 +469,10 @@ function compareCandleReversalStatsRows(
     case "lenPct":
       return cmpNumNullLast(a.lenPercentilePct, b.lenPercentilePct);
     case "barRangeSignal":
-      return cmpNumNullLast(a.barRangePctSignal, b.barRangePctSignal);
+      return cmpNumNullLast(
+        reversalBarRangePctSignalResolved(a),
+        reversalBarRangePctSignalResolved(b),
+      );
     case "volRank":
       return cmpNumNullLast(a.volRankInLookback, b.volRankInLookback);
     case "volVsSma":
@@ -550,6 +554,11 @@ export function candleReversalEma4hSlopeLabel(pct: CandleReversalStatsRow["ema4h
 export function candleReversalEma1dSlopeLabel(pct: CandleReversalStatsRow["ema1dSlopePct7d"]): string {
   return statsEmaSlopePctLabel(pct);
 }
+
+export {
+  reversalBarRangePctSignalEstimate,
+  reversalBarRangePctSignalResolved,
+} from "@/lib/statsBarRangePct";
 
 export function candleReversalEmaSlopeCsvLabel(pct: number | null | undefined): string {
   if (pct == null || !Number.isFinite(pct)) return "";

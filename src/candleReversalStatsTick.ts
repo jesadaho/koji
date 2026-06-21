@@ -4,7 +4,7 @@ import {
   type CandleReversalSignalBarTf,
 } from "@/lib/candleReversalStatsClient";
 import { lenPercentilePctFromRank, statsRangeRankInWindow, statsValueRankInWindow } from "@/lib/statsLenPercentile";
-import { statsBarRangePctSignal } from "@/lib/statsBarRangePct";
+import { backfillReversalBarRangePctSignalEstimate, statsBarRangePctSignal } from "@/lib/statsBarRangePct";
 import {
   computeFollowUpMaxAdversePct,
   firstFollowUpKlineIndexAfterAnchorClose,
@@ -857,6 +857,7 @@ export async function runCandleReversalStatsFollowUpTick(
   let dirty = 0;
   const nowSec = Math.floor(nowMs / 1000);
 
+  dirty += backfillReversalBarRangePctSignalEstimate(state.rows);
   dirty += await backfillRangeRankInLookback(state.rows);
   dirty += backfillLenPercentilePct(state.rows);
   dirty += await backfillReversalEmaSlopes(state.rows);

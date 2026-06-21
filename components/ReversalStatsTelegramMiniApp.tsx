@@ -73,6 +73,7 @@ import {
   candleReversalLookbackRankCell,
   candleReversalLowLookbackRankCell,
   candleReversalStatsSortDefaultDir,
+  reversalBarRangePctSignalResolved,
   sortCandleReversalStatsRows,
   candleReversalSignalVolVsSmaLabel,
   candleReversalVolScoreLabel,
@@ -1018,7 +1019,9 @@ function ReversalStatsSection({
                   <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
                   <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
                   <td title="Len percentile">{statsLenPercentileLabel(r.lenPercentilePct)}</td>
-                  <td title="(High − Low) / Close × 100">{snowballStatsBarRangePctLabel(r.barRangePctSignal)}</td>
+                  <td title="(High − Low) / Close × 100">
+                    {snowballStatsBarRangePctLabel(reversalBarRangePctSignalResolved(r))}
+                  </td>
                   <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
                   <td>{candleReversalSignalVolVsSmaLabel(r.signalVolVsSma)}</td>
                   {showHighRank ? (

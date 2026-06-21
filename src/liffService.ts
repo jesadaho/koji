@@ -77,6 +77,7 @@ import { isAdminTelegramUserId } from "./adminIds";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
 import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
+import { backfillReversalBarRangePctSignalEstimate } from "@/lib/statsBarRangePct";
 import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
 import { backfillAllStatsRowsQuoteVol24h } from "./statsQuoteVol24h";
 import {
@@ -1071,6 +1072,8 @@ export async function liffGetCandleReversalStats(
   telegramUserId?: number,
 ): Promise<CandleReversalStatsApiPayload> {
   const st = await loadCandleReversalStatsState();
+  const barRangeDirty = backfillReversalBarRangePctSignalEstimate(st.rows);
+  if (barRangeDirty > 0) await saveCandleReversalStatsState(st);
 
   const conflictSets = await loadPendingConflictSets();
   const rows = [...st.rows]

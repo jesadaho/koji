@@ -231,6 +231,10 @@ export type ReversalAutoTradeInput = {
   priceVsEma20_1hPct?: number | null;
   /** EMA20 1h slope 7d % — Long candidate */
   ema20_1hSlopePct7d?: number | null;
+  /** (close − EMA20) / EMA20 × 100 บน 4h — Long candidate */
+  priceVsEma20_4hPct?: number | null;
+  /** EMA20 4h slope 7d % — Long candidate */
+  ema20_4hSlopePct7d?: number | null;
   /** เวลาแจ้ง alert (ms) — ใช้ conflict check */
   alertedAtMs?: number;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
@@ -657,6 +661,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
         signalVolVsSma: input.signalVolVsSma,
         priceVsEma20_1hPct: input.priceVsEma20_1hPct,
         ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
+        priceVsEma20_4hPct: input.priceVsEma20_4hPct,
+        ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
         ageOfTrendHours: input.ageOfTrendHours,
       });
 

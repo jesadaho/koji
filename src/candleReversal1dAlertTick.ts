@@ -795,6 +795,8 @@ async function notifyResults(
             signalVolVsSma: row.evals.signalVolVsSma,
             priceVsEma20_1hPct: mktSnap.priceVsEma20_1hPct,
             ema20_1hSlopePct7d: mktSnap.ema20_1hSlopePct7d,
+            priceVsEma20_4hPct: mktSnap.priceVsEma20_4hPct,
+            ema20_4hSlopePct7d: mktSnap.ema20_4hSlopePct7d,
             alertedAtMs: nowMs,
             signalClosePrice: sig.c,
           });

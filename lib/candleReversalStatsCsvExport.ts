@@ -5,6 +5,7 @@ import {
 import {
   candleReversalDayOfWeekBkk,
   candleReversalEmaSlopeCsvLabel,
+  reversalBarRangePctSignalResolved,
   candleReversalGreenDaysLabel,
   candleReversalLookbackRankCell,
   candleReversalLowLookbackRankCell,
@@ -213,7 +214,7 @@ function candleReversalStatsRowToCsvCells(
     r.bodyPct != null && Number.isFinite(r.bodyPct) ? `${r.bodyPct.toFixed(1)}%` : "",
     candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars),
     statsLenPercentileLabel(r.lenPercentilePct),
-    snowballStatsBarRangePctLabel(r.barRangePctSignal),
+    snowballStatsBarRangePctLabel(reversalBarRangePctSignalResolved(r)),
     candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars),
     candleReversalSignalVolVsSmaLabel(r.signalVolVsSma),
     candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars),
