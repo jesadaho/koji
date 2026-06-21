@@ -156,6 +156,9 @@ type ReversalAutoTradeApiBundle = {
   slEntryOffsetPct?: number | null;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
   tp12hCloseEnabled?: boolean;
+  statsPlayShortEnabled?: boolean;
+  statsPlayLongEnabled?: boolean;
+  /** @deprecated */
   statsPlaySide?: "short" | "long";
   gateQualitySignal?: boolean;
   saturdayAllSignalsEnabled?: boolean;
@@ -262,7 +265,8 @@ export default function SettingsTelegramMiniApp() {
   const [revSlEntryOffsetPct, setRevSlEntryOffsetPct] = useState("");
   const [revSlAtEntryAfter24hIfGreen, setRevSlAtEntryAfter24hIfGreen] = useState(true);
   const [revTp12hCloseEnabled, setRevTp12hCloseEnabled] = useState(true);
-  const [revStatsPlaySide, setRevStatsPlaySide] = useState<"short" | "long">("short");
+  const [revStatsPlayShort, setRevStatsPlayShort] = useState(true);
+  const [revStatsPlayLong, setRevStatsPlayLong] = useState(false);
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revLongSignalShort, setRevLongSignalShort] = useState(false);
@@ -422,7 +426,13 @@ export default function SettingsTelegramMiniApp() {
     );
     setRevSlAtEntryAfter24hIfGreen(st.slAtEntryAfter24hIfGreenEnabled !== false);
     setRevTp12hCloseEnabled(st.tp12hCloseEnabled !== false);
-    setRevStatsPlaySide(st.statsPlaySide === "long" ? "long" : "short");
+    if (st.statsPlayShortEnabled !== undefined || st.statsPlayLongEnabled !== undefined) {
+      setRevStatsPlayShort(st.statsPlayShortEnabled !== false);
+      setRevStatsPlayLong(st.statsPlayLongEnabled === true);
+    } else {
+      setRevStatsPlayShort(st.statsPlaySide !== "long");
+      setRevStatsPlayLong(st.statsPlaySide === "long");
+    }
     setRevGateQualitySignal(st.gateQualitySignal !== false);
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
     setRevLongSignalShort(Boolean(st.longSignalShortEnabled));
@@ -1048,6 +1058,11 @@ export default function SettingsTelegramMiniApp() {
       return;
     }
 
+    if (!revStatsPlayShort && !revStatsPlayLong) {
+      setRevSaveErr("เลือกทิศที่เล่นอย่างน้อย 1 (Short หรือ Long)");
+      return;
+    }
+
     setRevSaving(true);
     try {
       const reversalAutoTrade: Record<string, unknown> = {
@@ -1069,7 +1084,8 @@ export default function SettingsTelegramMiniApp() {
         slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
         slAtEntryAfter24hIfGreenEnabled: revSlAtEntryAfter24hIfGreen,
         tp12hCloseEnabled: revTp12hCloseEnabled,
-        statsPlaySide: revStatsPlaySide,
+        statsPlayShortEnabled: revStatsPlayShort,
+        statsPlayLongEnabled: revStatsPlayLong,
         entryMode: revShortEntryMode,
         entryEmaPeriod:
           revShortEntryMode === "hybrid_ema" ? Math.floor(shortEntryEmaPeriodParsed) : null,
@@ -2142,21 +2158,38 @@ export default function SettingsTelegramMiniApp() {
           </span>
         </label>
 
-        <label className="sub" style={{ display: "block", marginTop: "0.75rem" }}>
+        <p className="sub" style={{ marginTop: "0.75rem", fontWeight: 600 }}>
           ทิศที่เล่น (ตาราง 1H Short)
-          <select
-            value={revStatsPlaySide}
-            onChange={(e) => setRevStatsPlaySide(e.currentTarget.value as "short" | "long")}
-            className="tmaInput"
-            style={{ display: "block", width: "100%", marginTop: "0.25rem", maxWidth: "min(32rem, 100%)" }}
-          >
-            <option value="short">Short — ตามสัญญาณ Reversal</option>
-            <option value="long">Long — ทิศแนะนำ 🟢 (fade)</option>
-          </select>
-          <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-            กำหนดทิศหลักในตารางสถิติ + auto-open · Long = กรองทิศแนะนำ 🟢 · เปิด Market LONG (ไม่ใช้ Limit EMA)
+        </p>
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.35rem" }}>
+          <input
+            type="checkbox"
+            checked={revStatsPlayShort}
+            onChange={(e) => setRevStatsPlayShort(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>Short — ตามสัญญาณ Reversal</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              สรุปกำไรกลยุทธ์ Short · auto-open Market SHORT
+            </span>
           </span>
         </label>
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.35rem" }}>
+          <input
+            type="checkbox"
+            checked={revStatsPlayLong}
+            onChange={(e) => setRevStatsPlayLong(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>Long — ทิศแนะนำ 🟢 (fade)</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              สรุปกำไร Long · auto-open Market LONG เฉพาะแถว Long candidate
+            </span>
+          </span>
+        </label>
+        <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.9 }}>
+          เลือกได้มากกว่า 1 ทิศ — ทั้งคู่ = แสดงสรุป Short + Long · Long candidate → เปิด LONG
+        </p>
 
         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
           <label className="sub" style={{ display: "block" }}>

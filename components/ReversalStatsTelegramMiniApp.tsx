@@ -140,14 +140,17 @@ import {
   reversalMatrixFilterTitle,
   reversalRowIsLongCandidate,
   reversalRowMatchesSuggestedSideFilter,
+  reversalStatsPlaySidesLabel,
+  reversalStatsPlaySubtitle,
   reversalStatsDefaultSuggestedSideFilter,
-  reversalStatsPlaySideLabel,
+  reversalStatsPlaySidesFromSettings,
   reversalStatsRowMatchesMatrixFilter,
   reversalSuggestedSideFilterLabel,
   reversalSuggestedSideFilterTitle,
   reversalSuggestedTradeSideLabel,
   type ReversalMatrixFilter,
   type ReversalQualitySignalProfile,
+  type ReversalStatsPlaySides,
   type ReversalStatsPlaySide,
   type ReversalSuggestedSideFilter,
 } from "@/lib/reversalMatrixFilters";
@@ -331,7 +334,7 @@ type ReversalStatsSectionProps = {
   /** คอลัมน์ทิศแนะนำ + ตัวกรอง Long candidate (ตาราง 1H Short) */
   showSuggestedSideColumn?: boolean;
   /** ทิศที่เล่น — จาก Settings */
-  statsPlaySide?: ReversalStatsPlaySide;
+  statsPlaySides?: ReversalStatsPlaySides;
   /** อยู่ในแท็บย่อย — ไม่เว้น margin ด้านบน */
   embedded?: boolean;
 };
@@ -356,7 +359,7 @@ function ReversalStatsSection({
   strategyTpSlPlan,
   outcomeColumnTitle,
   showSuggestedSideColumn = false,
-  statsPlaySide = "short",
+  statsPlaySides = { short: true, long: false },
   embedded = false,
 }: ReversalStatsSectionProps) {
   const resolveRowLeverage = useCallback(
@@ -413,11 +416,11 @@ function ReversalStatsSection({
   const [trendGainFilter, setTrendGainFilter] = useState<SnowballTrendGainFilter>("all");
   const [trendVelocityFilter, setTrendVelocityFilter] = useState<SnowballTrendVelocityFilter>("all");
   const [suggestedSideFilter, setSuggestedSideFilter] = useState<ReversalSuggestedSideFilter>(
-    () => reversalStatsDefaultSuggestedSideFilter(statsPlaySide),
+    () => reversalStatsDefaultSuggestedSideFilter(statsPlaySides),
   );
   useEffect(() => {
-    setSuggestedSideFilter(reversalStatsDefaultSuggestedSideFilter(statsPlaySide));
-  }, [statsPlaySide]);
+    setSuggestedSideFilter(reversalStatsDefaultSuggestedSideFilter(statsPlaySides));
+  }, [statsPlaySides]);
   const showPumpCycleFilters = qualitySignalProfile === "long1h";
 
   const onSortColumn = useCallback((key: CandleReversalStatsSortKey) => {
@@ -546,7 +549,7 @@ function ReversalStatsSection({
         : ["1D follow-up 1d (%)", "1D follow-up 3d (%)", "1D follow-up 7d (%)", null],
     [tf],
   );
-  const playingLong = showSuggestedSideColumn && statsPlaySide === "long";
+  const playingLongOnly = showSuggestedSideColumn && statsPlaySides.long && !statsPlaySides.short;
   const has48h = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 17 + (showSuggestedSideColumn ? 3 : 0);
@@ -1128,13 +1131,13 @@ function ReversalStatsSection({
             className="tmaTabEn"
             style={{
               display: "block",
-              fontWeight: playingLong ? 600 : "normal",
+              fontWeight: playingLongOnly ? 600 : "normal",
               marginTop: "0.15rem",
-              color: playingLong ? "var(--accent, #2e7d32)" : undefined,
+              color: playingLongOnly ? "var(--accent, #2e7d32)" : undefined,
             }}
             title="ตั้งค่าได้ที่ Settings → Reversal TP/SL"
           >
-            ทิศที่เล่น: {reversalStatsPlaySideLabel(statsPlaySide)}
+            ทิศที่เล่น: {reversalStatsPlaySidesLabel(statsPlaySides)}
           </span>
         ) : null}
       </h2>
@@ -1406,7 +1409,7 @@ function ReversalStatsSection({
           strategyProfitLongSummaryText24h ||
           strategyProfitLongSummaryText48h ? (
             <>
-              {playingLong ? (
+              {playingLongOnly ? (
                 <>
                   {strategyProfitLongSummaryText24h ? (
                     <span
@@ -1488,7 +1491,7 @@ function ReversalStatsSection({
               />
               {tf === "1h" ? (
                 <>
-                  {playingLong ? (
+                  {playingLongOnly ? (
                     <StatsWeekStrategyProfitBlock
                       rows={g.rows.filter(reversalRowIsLongCandidate)}
                       sizing={longStrategySizing}
@@ -1577,6 +1580,20 @@ export default function ReversalStatsTelegramMiniApp() {
   const hourLongRows = useMemo(
     () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1h" && r.tradeSide === "long"),
     [allRows],
+  );
+
+  const viewerPlaySides = useMemo(
+    () =>
+      reversalStatsPlaySidesFromSettings({
+        reversalStatsPlaySide: payload?.viewerReversalStatsPlaySide,
+        reversalStatsPlayShortEnabled: payload?.viewerReversalStatsPlayShortEnabled,
+        reversalStatsPlayLongEnabled: payload?.viewerReversalStatsPlayLongEnabled,
+      }),
+    [
+      payload?.viewerReversalStatsPlaySide,
+      payload?.viewerReversalStatsPlayShortEnabled,
+      payload?.viewerReversalStatsPlayLongEnabled,
+    ],
   );
 
   const api = useCallback(async (path: string, init?: RequestInit) => {
@@ -1869,11 +1886,7 @@ export default function ReversalStatsTelegramMiniApp() {
           embedded
           tf="1h"
           title="สถิติ Reversal · 1H Short"
-          subtitle={
-            (payload?.viewerReversalStatsPlaySide ?? "short") === "long"
-              ? "Long (fade สัญญาณ Short) · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
-              : "Short · follow-up 4h / 12h / 24h / 48h (ผลที่ 24h)"
-          }
+          subtitle={reversalStatsPlaySubtitle(viewerPlaySides)}
           strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
@@ -1885,7 +1898,7 @@ export default function ReversalStatsTelegramMiniApp() {
           csvQuery="&side=short"
           rows={hourShortRows}
           showSuggestedSideColumn
-          statsPlaySide={payload?.viewerReversalStatsPlaySide ?? "short"}
+          statsPlaySides={viewerPlaySides}
         />
       </div>
 

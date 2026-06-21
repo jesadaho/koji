@@ -162,6 +162,9 @@ export type CandleReversalStatsApiPayload = {
   /** เปิดกฎปิด @12h ในกลยุทธ์ Reversal (default เปิด) */
   viewerReversalTp12hCloseEnabled?: boolean;
   /** ทิศที่เล่น — ตาราง Reversal Short 1H */
+  viewerReversalStatsPlayShortEnabled?: boolean;
+  viewerReversalStatsPlayLongEnabled?: boolean;
+  /** @deprecated — ใช้ viewerReversalStatsPlayShort/LongEnabled */
   viewerReversalStatsPlaySide?: import("@/lib/reversalMatrixFilters").ReversalStatsPlaySide;
 };
 

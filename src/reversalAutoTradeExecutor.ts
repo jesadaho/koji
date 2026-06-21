@@ -28,7 +28,7 @@ import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } f
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
-import { reversalMatchesQualitySignalForAlert, reversalRowIsLongCandidate, normalizeReversalStatsPlaySide } from "@/lib/reversalMatrixFilters";
+import { reversalMatchesQualitySignalForAlert, reversalRowIsLongCandidate, reversalStatsPlaySidesFromSettings } from "@/lib/reversalMatrixFilters";
 import {
   resolveReversalLongTradeLeverage,
   reversalLongDynamicLeverageNote,
@@ -648,22 +648,43 @@ export async function runReversalAutoTradeAfterReversalAlert(
   for (const [userId, rowRaw] of Object.entries(map)) {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
-    const statsPlaySide = normalizeReversalStatsPlaySide(row.reversalStatsPlaySide);
-    const openMexcLong =
-      alertTradeSide === "short" &&
-      input.signalBarTf === "1h" &&
-      statsPlaySide === "long";
-    const mexcSide: "short" | "long" = openMexcLong ? "long" : "short";
-    const userTgTitle = reversalAutoOpenTelegramTitle(alertTradeSide, openMexcLong);
+    const playSides = reversalStatsPlaySidesFromSettings(row);
+    const is1hShortAlert = alertTradeSide === "short" && input.signalBarTf === "1h";
+    const isLongCandidate =
+      is1hShortAlert &&
+      reversalRowIsLongCandidate({
+        trendGainPct: input.trendGainPct,
+        signalVolVsSma: input.signalVolVsSma,
+        priceVsEma20_1hPct: input.priceVsEma20_1hPct,
+        ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
+        ageOfTrendHours: input.ageOfTrendHours,
+      });
 
     if (
-      statsPlaySide === "long" &&
+      playSides.long &&
+      !playSides.short &&
       alertTradeSide === "short" &&
       input.signalBarTf !== "1h"
     ) {
       logReversalAutoOpen(userId, logSignal, "skipped", "play_long_requires_1h", "long");
       continue;
     }
+
+    let openMexcLong = false;
+    if (is1hShortAlert) {
+      if (playSides.long && isLongCandidate) {
+        openMexcLong = true;
+      } else if (!playSides.short) {
+        logReversalAutoOpen(userId, logSignal, "skipped", "not_long_candidate", "long");
+        continue;
+      }
+    } else if (alertTradeSide === "short" && !playSides.short) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "play_short_disabled", "short");
+      continue;
+    }
+
+    const mexcSide: "short" | "long" = openMexcLong ? "long" : "short";
+    const userTgTitle = reversalAutoOpenTelegramTitle(alertTradeSide, openMexcLong);
 
     const userEnabledForAlert =
       alertTradeSide === "long"
@@ -678,20 +699,6 @@ export async function runReversalAutoTradeAfterReversalAlert(
         mexcSide,
       );
       continue;
-    }
-
-    if (openMexcLong) {
-      if (
-        !reversalRowIsLongCandidate({
-          trendGainPct: input.trendGainPct,
-          signalVolVsSma: input.signalVolVsSma,
-          priceVsEma20_1hPct: input.priceVsEma20_1hPct,
-          ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
-        })
-      ) {
-        logReversalAutoOpen(userId, logSignal, "skipped", "not_long_candidate", mexcSide);
-        continue;
-      }
     }
 
     const saturdayAllSignals =

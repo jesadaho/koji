@@ -10,8 +10,8 @@ import {
   statsTpSlPlanSummary,
   type StatsTpSlPlan,
 } from "@/lib/tpSlStrategySimulate";
-import type { ReversalStatsPlaySide } from "@/lib/reversalMatrixFilters";
-import { normalizeReversalStatsPlaySide } from "@/lib/reversalMatrixFilters";
+import type { ReversalStatsPlaySides } from "@/lib/reversalMatrixFilters";
+import { reversalStatsPlaySidesFromSettings } from "@/lib/reversalMatrixFilters";
 import { resolveSnowballTpSlPlanFromRow } from "@/src/snowballAutoTradeTpSlPlan";
 import {
   loadTradingViewMexcSettingsFullMap,
@@ -147,7 +147,7 @@ export type ViewerStatsTradeSizing = {
   /** Reversal Long → SHORT: ปรับ leverage ต่อแถวตาม ATR%14D (เหมือน auto-open) */
   reversalLongDynamicLeverageEnabled?: boolean;
   /** ทิศที่เล่น — ตาราง Reversal Short 1H */
-  reversalStatsPlaySide?: ReversalStatsPlaySide;
+  reversalStatsPlaySides?: ReversalStatsPlaySides;
 };
 
 function positiveNum(v: unknown): number | null {
@@ -169,7 +169,7 @@ export async function resolveViewerStatsTradeSizing(
       marginUsdt: positiveNum(row.reversalAutoTradeMarginUsdt),
       leverage: positiveNum(row.reversalAutoTradeLeverage),
       reversalLongDynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
-      reversalStatsPlaySide: normalizeReversalStatsPlaySide(row.reversalStatsPlaySide),
+      reversalStatsPlaySides: reversalStatsPlaySidesFromSettings(row),
     };
   }
   return {

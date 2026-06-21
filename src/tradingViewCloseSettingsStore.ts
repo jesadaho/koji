@@ -193,8 +193,12 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
   /** กฎปิด @12h: ROI<0 + EMA4H>0 — default เปิด */
   reversalAutoTradeTp12hCloseEnabled?: boolean;
-  /** ทิศที่เล่นในตาราง Reversal Short 1H */
+  /** ทิศที่เล่นในตาราง Reversal Short 1H — @deprecated ใช้ playShort/playLong */
   reversalStatsPlaySide?: ReversalStatsPlaySide;
+  /** เล่น Short ตามสัญญาณ — default เปิด */
+  reversalStatsPlayShortEnabled?: boolean;
+  /** เล่น Long ทิศแนะนำ 🟢 — default ปิด */
+  reversalStatsPlayLongEnabled?: boolean;
   /** @deprecated ใช้ gateQualitySignal */
   reversalAutoTradeGateBodyWick80?: boolean;
   /** @deprecated ใช้ gateQualitySignal */
@@ -399,6 +403,8 @@ export type SaveTradingViewMexcInput = {
   /** กฎปิด @12h: ROI<0 + EMA4H>0 — default เปิด */
   reversalAutoTradeTp12hCloseEnabled?: boolean;
   reversalStatsPlaySide?: ReversalStatsPlaySide | null;
+  reversalStatsPlayShortEnabled?: boolean | null;
+  reversalStatsPlayLongEnabled?: boolean | null;
   reversalAutoTradeGateBodyWick80?: boolean;
   reversalAutoTradeGateLenRank315?: boolean;
   reversalAutoTradeGateQualitySignal?: boolean;
@@ -510,6 +516,8 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== undefined ||
     input.reversalAutoTradeTp12hCloseEnabled !== undefined ||
     input.reversalStatsPlaySide !== undefined ||
+    input.reversalStatsPlayShortEnabled !== undefined ||
+    input.reversalStatsPlayLongEnabled !== undefined ||
     input.reversalAutoTradeGateBodyWick80 !== undefined ||
     input.reversalAutoTradeGateLenRank315 !== undefined ||
     input.reversalAutoTradeGateQualitySignal !== undefined ||
@@ -958,6 +966,22 @@ export async function saveTradingViewMexcSettings(
         : input.reversalStatsPlaySide !== undefined
           ? input.reversalStatsPlaySide
           : prev?.reversalStatsPlaySide,
+
+    reversalStatsPlayShortEnabled:
+      input.reversalStatsPlayShortEnabled === null
+        ? undefined
+        : input.reversalStatsPlayShortEnabled !== undefined
+          ? input.reversalStatsPlayShortEnabled
+          : prev?.reversalStatsPlayShortEnabled ??
+            (prev?.reversalStatsPlaySide === "long" ? false : true),
+
+    reversalStatsPlayLongEnabled:
+      input.reversalStatsPlayLongEnabled === null
+        ? undefined
+        : input.reversalStatsPlayLongEnabled !== undefined
+          ? input.reversalStatsPlayLongEnabled
+          : prev?.reversalStatsPlayLongEnabled ??
+            (prev?.reversalStatsPlaySide === "long" ? true : false),
 
     reversalAutoTradeGateBodyWick80:
       input.reversalAutoTradeGateBodyWick80 !== undefined

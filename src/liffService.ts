@@ -59,6 +59,7 @@ import {
 import {
   REVERSAL_QUALITY_SIGNAL_CRITERIA,
   REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA,
+  reversalStatsPlaySidesFromSettings,
 } from "@/lib/reversalMatrixFilters";
 import {
   applySnowballStatsRowMigrations,
@@ -1084,7 +1085,8 @@ export async function liffGetCandleReversalStats(
   let viewerStrategyLeverage: number | null | undefined;
   let viewerStrategyLongDynamicLeverageEnabled: boolean | undefined;
   let viewerReversalTp12hCloseEnabled: boolean | undefined;
-  let viewerReversalStatsPlaySide: import("@/lib/reversalMatrixFilters").ReversalStatsPlaySide | undefined;
+  let viewerReversalStatsPlayShortEnabled: boolean | undefined;
+  let viewerReversalStatsPlayLongEnabled: boolean | undefined;
   if (telegramUserId != null) {
     const [plan, sizing] = await Promise.all([
       resolveViewerStatsTpSlPlan(telegramUserId, "reversal"),
@@ -1098,7 +1100,9 @@ export async function liffGetCandleReversalStats(
     viewerStrategyLeverage = sizing.leverage;
     viewerStrategyLongDynamicLeverageEnabled = sizing.reversalLongDynamicLeverageEnabled === true;
     viewerReversalTp12hCloseEnabled = plan.reversalTp12hCloseEnabled !== false;
-    viewerReversalStatsPlaySide = sizing.reversalStatsPlaySide ?? "short";
+    const playSides = sizing.reversalStatsPlaySides ?? { short: true, long: false };
+    viewerReversalStatsPlayShortEnabled = playSides.short;
+    viewerReversalStatsPlayLongEnabled = playSides.long;
     const reversalSimOpts = {
       close12hEnabled: plan.reversalTp12hCloseEnabled !== false,
     };
@@ -1125,7 +1129,12 @@ export async function liffGetCandleReversalStats(
       : viewerReversalTp12hCloseEnabled === true
         ? { viewerReversalTp12hCloseEnabled: true }
         : {}),
-    ...(viewerReversalStatsPlaySide ? { viewerReversalStatsPlaySide } : {}),
+    ...(viewerReversalStatsPlayShortEnabled !== undefined
+      ? { viewerReversalStatsPlayShortEnabled }
+      : {}),
+    ...(viewerReversalStatsPlayLongEnabled !== undefined
+      ? { viewerReversalStatsPlayLongEnabled }
+      : {}),
   };
 }
 
@@ -1366,7 +1375,8 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     slAtEntryAfter24hIfGreenEnabled:
       row.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== false,
     tp12hCloseEnabled: row.reversalAutoTradeTp12hCloseEnabled !== false,
-    statsPlaySide: row.reversalStatsPlaySide === "long" ? "long" : "short",
+    statsPlayShortEnabled: reversalStatsPlaySidesFromSettings(row).short,
+    statsPlayLongEnabled: reversalStatsPlaySidesFromSettings(row).long,
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
     longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
@@ -2142,12 +2152,27 @@ function parseReversalAutoTradeNested(
   if (tp12hCloseEnabled !== undefined) {
     patchPart.reversalAutoTradeTp12hCloseEnabled = tp12hCloseEnabled;
   }
-  if ("statsPlaySide" in o) {
+  if ("statsPlayShortEnabled" in o || "statsPlayLongEnabled" in o) {
+    if ("statsPlayShortEnabled" in o) {
+      patchPart.reversalStatsPlayShortEnabled = o.statsPlayShortEnabled === true;
+    }
+    if ("statsPlayLongEnabled" in o) {
+      patchPart.reversalStatsPlayLongEnabled = o.statsPlayLongEnabled === true;
+    }
+  } else if ("statsPlaySide" in o) {
     const raw = o.statsPlaySide;
-    if (raw === "long" || raw === "short") {
-      patchPart.reversalStatsPlaySide = raw;
+    if (raw === "long") {
+      patchPart.reversalStatsPlaySide = "long";
+      patchPart.reversalStatsPlayShortEnabled = false;
+      patchPart.reversalStatsPlayLongEnabled = true;
+    } else if (raw === "short") {
+      patchPart.reversalStatsPlaySide = "short";
+      patchPart.reversalStatsPlayShortEnabled = true;
+      patchPart.reversalStatsPlayLongEnabled = false;
     } else if (raw === null || raw === "") {
       patchPart.reversalStatsPlaySide = null;
+      patchPart.reversalStatsPlayShortEnabled = null;
+      patchPart.reversalStatsPlayLongEnabled = null;
     }
   }
 
