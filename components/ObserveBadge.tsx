@@ -1,4 +1,4 @@
-export function ObserveBadge() {
+export function ObserveBadge({ title }: { title?: string }) {
   return (
     <span
       className="sub"
@@ -10,7 +10,10 @@ export function ObserveBadge() {
         marginTop: "0.12rem",
         whiteSpace: "nowrap",
       }}
-      title="R% < 3 — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram"
+      title={
+        title ??
+        "เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram"
+      }
     >
       👁 Observe
     </span>

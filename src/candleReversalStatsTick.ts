@@ -16,7 +16,8 @@ import {
   reversalStatsLongHorizonPct,
   simulateReversalTpStrategyProfit,
 } from "@/lib/reversalTpStrategy";
-import { reversalLong1hStatsFilterPass } from "@/lib/reversalMatrixFilters";
+import { reversalLong1hStatsFilterPass, reversalRowMatchesNeutralMatrix } from "@/lib/reversalMatrixFilters";
+import { reversalStatsRowIsObserve } from "@/lib/reversalStatsPlayMode";
 import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
@@ -752,6 +753,17 @@ async function followUpCandleReversal1dRow(
   return true;
 }
 
+function backfillNeutralObserveStatsPlayMode(rows: CandleReversalStatsRow[]): number {
+  let updated = 0;
+  for (const row of rows) {
+    if (reversalStatsRowIsObserve(row)) continue;
+    if (!reversalRowMatchesNeutralMatrix(row)) continue;
+    row.statsPlayMode = "observe";
+    updated += 1;
+  }
+  return updated;
+}
+
 async function backfillGreenDaysBeforeSignal(rows: CandleReversalStatsRow[]): Promise<number> {
   const need = rows.filter((r) => r.greenDaysBeforeSignal == null || r.greenDaysBeforeSignalBkk == null);
   if (need.length === 0) return 0;
@@ -870,6 +882,7 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillPumpCycleSwingLowForRows(state.rows, (row) =>
     candleReversalStatsAnchorCloseSec(row),
   );
+  dirty += backfillNeutralObserveStatsPlayMode(state.rows);
   dirty += backfill1hOutcomeTo24h(state.rows);
   dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
   if (opts?.forceLong1hFadeShort) {

@@ -33,6 +33,19 @@ import {
   type SnowballBarRangeSignalFilter,
 } from "@/lib/snowballBarRangeSignalFilter";
 
+import {
+  reversalStatsRowMatchesObserveFilter,
+  type ReversalObserveFilter,
+} from "@/lib/reversalStatsPlayMode";
+
+export type { ReversalObserveFilter } from "@/lib/reversalStatsPlayMode";
+export {
+  REVERSAL_OBSERVE_FILTER_OPTIONS,
+  reversalObserveFilterLabel,
+  reversalObserveFilterTitle,
+  reversalStatsRowMatchesObserveFilter,
+} from "@/lib/reversalStatsPlayMode";
+
 export type { StatsAtrPct14dFilter } from "@/lib/statsAtrPct14dFilter";
 export {
   STATS_ATR_PCT14D_FILTER_OPTIONS,
@@ -116,6 +129,7 @@ export type ReversalStatsFilterQuery = {
   /** R% สัญญาณ (barRangePctSignal) */
   rSignal?: ReversalBarRangeSignalFilter;
   matrix?: ReversalMatrixFilter;
+  observe?: ReversalObserveFilter;
 };
 
 export function reversalShapeFilterLabel(filter: ReversalShapeFilter): string {
@@ -233,6 +247,9 @@ export function filterCandleReversalStatsRows(
       return false;
     }
     if (q.matrix && q.matrix !== "all" && !reversalStatsRowMatchesMatrixFilter(r, q.matrix)) return false;
+    if (q.observe && q.observe !== "all" && !reversalStatsRowMatchesObserveFilter(r, q.observe)) {
+      return false;
+    }
     return true;
   });
 }
@@ -245,6 +262,7 @@ const VOL_SET = new Set(STATS_VOL_VS_SMA_FILTER_OPTIONS.map((o) => o.value));
 const ATR_SET = new Set(STATS_ATR_PCT14D_FILTER_OPTIONS.map((o) => o.value));
 const R_SIGNAL_SET = new Set(SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS.map((o) => o.value));
 const MATRIX_SET = new Set<string>(["all", "qualitySignal", "neutral", "slowMover"]);
+const OBSERVE_SET = new Set<string>(["all", "observe", "play"]);
 
 function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
   const k = raw?.trim().toLowerCase() ?? "";
@@ -302,6 +320,7 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.atr = pickEnum(sp.get("atr"), ATR_SET, "all");
   q.rSignal = pickEnum(sp.get("rSignal"), R_SIGNAL_SET, "all");
   q.matrix = pickEnum(sp.get("matrix"), MATRIX_SET, "all");
+  q.observe = pickEnum(sp.get("observe"), OBSERVE_SET, "all");
   return q;
 }
 
@@ -320,6 +339,7 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.atr && q.atr !== "all") p.set("atr", q.atr);
   if (q.rSignal && q.rSignal !== "all") p.set("rSignal", q.rSignal);
   if (q.matrix && q.matrix !== "all") p.set("matrix", q.matrix);
+  if (q.observe && q.observe !== "all") p.set("observe", q.observe);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

@@ -668,6 +668,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
         priceVsEma20_4hPct: input.priceVsEma20_4hPct,
         ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
+        ema4hSlopePct7d: input.ema4hSlopePct7d,
         ageOfTrendHours: input.ageOfTrendHours,
       });
 

@@ -92,7 +92,7 @@ export type CandleReversalTfScanSummaryStats = {
   /** Short: ไส้ล่าง > ไส้บน — ข้ามแจ้งเตือน/stats/auto-open */
   skippedLowerWickDominant: number;
   skippedLowerWickDominantSymbols: string[];
-  /** 1H Short R% < 3 — เก็บ stats observe อย่างเดียว (ไม่ Telegram) */
+  /** 1H Short R% < 3 · Neutral matrix — เก็บ stats observe อย่างเดียว (ไม่ Telegram) */
   observeStored: number;
   observeStoredSymbols: string[];
   cappedByRunLimit: number;
@@ -196,7 +196,7 @@ export function formatCandleReversalScanSummaryMessage(opts: {
   lines.push("— ส่งแจ้งเตือน —");
   lines.push(`ข้าม Short (ไส้ล่าง > ไส้บน): ${stats.skippedLowerWickDominant}`);
   lines.push(...formatSymbolListLines("  ", stats.skippedLowerWickDominantSymbols));
-  lines.push(`เก็บ Observe (1H Short R% < 3): ${stats.observeStored}`);
+  lines.push(`เก็บ Observe (R% < 3 · Neutral matrix): ${stats.observeStored}`);
   lines.push(...formatSymbolListLines("  ", stats.observeStoredSymbols));
   lines.push(`ติด dedupe (แท่งเดิม): ${stats.deduped}`);
   lines.push(...formatSymbolListLines("  ", stats.dedupedSymbols));

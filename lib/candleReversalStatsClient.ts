@@ -151,7 +151,7 @@ export type CandleReversalStatsRow = {
   /** cache ตามชุด TP/SL (key = tp1-tp1p-tp2-maxH) */
   strategyProfitByPlan?: StrategyProfitByPlanMap | null;
   outcome: CandleReversalOutcome;
-  /** play = เล่นปกติ · observe = R% < 3 (1H Short) — เก็บ stats อย่างเดียว */
+  /** play = เล่นปกติ · observe = เก็บ stats อย่างเดียว (R% < 3 · Neutral matrix) */
   statsPlayMode?: ReversalStatsPlayMode;
   /** ลำดับการแจ้งในรอบสัปดาห์ BKK (symbol+TF+side) — เริ่ม 1 */
   weeklyAlertNo?: number | null;

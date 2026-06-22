@@ -34,7 +34,7 @@ import {
   isCandleReversalStatsEnabled,
 } from "./candleReversalStatsStore";
 import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
-import { reversalShort1hIsObserveSignal } from "@/lib/reversalStatsPlayMode";
+import { reversalIsObserveSignal, reversalShort1hIsObserveSignal } from "@/lib/reversalStatsPlayMode";
 import { statsBarRangePctSignal } from "@/lib/statsBarRangePct";
 import { resolvePumpCycleSwingLowFields } from "./statsPumpCycleSwingLow";
 import { formatCandleReversalTfDebugBlock } from "./candleReversalDebugFormat";
@@ -658,13 +658,13 @@ async function notifyResults(
     }
 
     const barRangePctSignal = statsBarRangePctSignal(sig.h, sig.l, sig.c);
-    const isObserve = reversalShort1hIsObserveSignal({
+    const mightBeBarRangeObserve = reversalShort1hIsObserveSignal({
       signalBarTf: sig.tf,
       tradeSide,
       barRangePctSignal,
     });
 
-    if (!isObserve) {
+    if (!mightBeBarRangeObserve) {
       if (notified >= alertCap) {
         scanStats.cappedByRunLimit += 1;
         pushReversalScanSymList(scanStats.cappedByRunLimitSymbols, row.symbol);
@@ -739,6 +739,15 @@ async function notifyResults(
         greenDaysBeforeSignalBkk,
         ...pumpCycleFields,
       } as const;
+
+      const isObserve = reversalIsObserveSignal({
+        signalBarTf: sig.tf,
+        tradeSide,
+        barRangePctSignal,
+        trendGainPct: pumpCycleFields.trendGainPct,
+        ema20_4hSlopePct7d: mktSnap.ema20_4hSlopePct7d,
+        ema4hSlopePct7d: mktSnap.ema4hSlopePct7d,
+      });
 
       if (isObserve) {
         if (isCandleReversalStatsEnabled()) {
