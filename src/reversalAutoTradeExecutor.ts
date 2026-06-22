@@ -382,6 +382,7 @@ function logReversalAutoOpen(
     ema20_15m?: number;
     markPrice?: number;
     entryPrice?: number;
+    ema20_1hSlopePct7d?: number;
   },
   signalClosePrice?: number,
 ): void {
@@ -980,6 +981,11 @@ export async function runReversalAutoTradeAfterReversalAlert(
       state = withRecordedReversalPlaced(state, userId, contractSymbol, dayKey);
       usersSucceeded += 1;
 
+      const ema20_1hPct =
+        input.ema20_1hSlopePct7d != null && Number.isFinite(input.ema20_1hSlopePct7d)
+          ? input.ema20_1hSlopePct7d
+          : null;
+
       logReversalAutoOpen(
         userId,
         logSignal,
@@ -996,6 +1002,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           entryEma15m: entryEma ?? undefined,
           markPrice,
           entryPrice: intendedEntry,
+          ema20_1hSlopePct7d: ema20_1hPct ?? undefined,
         },
         signalClosePrice,
       );
@@ -1012,10 +1019,6 @@ export async function runReversalAutoTradeAfterReversalAlert(
           : null;
       const rangeScore =
         input.rangeScore != null && Number.isFinite(input.rangeScore) ? input.rangeScore : null;
-      const ema20_1hPct =
-        input.ema20_1hSlopePct7d != null && Number.isFinite(input.ema20_1hSlopePct7d)
-          ? input.ema20_1hSlopePct7d
-          : null;
 
       const plan = resolveReversalTpSlPlanFromRow(row);
       const placedAtMs = Date.now();

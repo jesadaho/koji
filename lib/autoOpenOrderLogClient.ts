@@ -84,6 +84,8 @@ export type AutoOpenOrderLogRow = {
   mexcRealisedPnlUsdt?: number | null;
   /** เวลาปิด position บน MEXC */
   mexcClosedAtMs?: number | null;
+  /** EMA20 1h slope 7d % ณ เปิด — Reversal TP strategy sim */
+  ema20_1hSlopePct7d?: number | null;
   /** positionId จาก MEXC history — กันจับคู่ซ้ำ */
   mexcPositionId?: number | null;
   /** ค่าธรรมเนียมสะสมจาก MEXC เมื่อปิด position */

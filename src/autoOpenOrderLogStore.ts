@@ -173,6 +173,8 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   }
   const mexcPnl = nullNum(o.mexcRealisedPnlUsdt);
   if (mexcPnl !== undefined) row.mexcRealisedPnlUsdt = mexcPnl;
+  const ema20_1h = nullNum(o.ema20_1hSlopePct7d);
+  if (ema20_1h !== undefined) row.ema20_1hSlopePct7d = ema20_1h;
   if (typeof o.mexcClosedAtMs === "number" && Number.isFinite(o.mexcClosedAtMs)) {
     row.mexcClosedAtMs = o.mexcClosedAtMs;
   } else if (o.mexcClosedAtMs === null) {
