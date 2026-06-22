@@ -9,7 +9,7 @@ import type {
 } from "@/lib/candleReversalStatsClient";
 import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 
-export type ReversalMatrixFilter = "all" | "qualitySignal";
+export type ReversalMatrixFilter = "all" | "qualitySignal" | "neutral";
 
 /** โปรไฟล์ Quality Signal ในตารางสถิติ (แต่ละ section) */
 export type ReversalQualitySignalProfile = "short" | "long1h";
@@ -83,12 +83,21 @@ export const REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT = 20;
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN = 2;
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX = 5;
 
+/** Matrix Neutral — Trend Gain 50–80% · EMA(12) 4h slope > 20% */
+export const REVERSAL_NEUTRAL_MATRIX_TREND_GAIN_MIN_EXCLUSIVE = 50;
+export const REVERSAL_NEUTRAL_MATRIX_TREND_GAIN_MAX_EXCLUSIVE = 80;
+export const REVERSAL_NEUTRAL_MATRIX_EMA4H_MIN_EXCLUSIVE = 20;
+
+export const REVERSAL_NEUTRAL_MATRIX_CRITERIA =
+  "Trend Gain >50% & <80% · EMA4H >20%";
+
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
   label: string;
 }> = [
   { value: "all", label: "ทั้งหมด" },
   { value: "qualitySignal", label: "✨ Quality Signal" },
+  { value: "neutral", label: "Neutral" },
 ];
 
 export function reversalMatrixFilterLabel(filter: ReversalMatrixFilter): string {
@@ -107,6 +116,9 @@ export function reversalMatrixFilterTitle(
 ): string {
   if (filter === "qualitySignal") {
     return `Quality Signal: ${reversalQualitySignalCriteria(profile)}`;
+  }
+  if (filter === "neutral") {
+    return `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA}`;
   }
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
@@ -237,11 +249,29 @@ export function reversalRowMatchesQualitySignalMatrix(row: CandleReversalStatsRo
   });
 }
 
+/** Matrix Neutral — Trend Gain >50% & <80% · EMA(12) 4h slope >20% */
+export function reversalRowMatchesNeutralMatrix(
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "ema4hSlopePct7d">,
+): boolean {
+  const gain = row.trendGainPct;
+  const ema4h = row.ema4hSlopePct7d;
+  return (
+    gain != null &&
+    Number.isFinite(gain) &&
+    gain > REVERSAL_NEUTRAL_MATRIX_TREND_GAIN_MIN_EXCLUSIVE &&
+    gain < REVERSAL_NEUTRAL_MATRIX_TREND_GAIN_MAX_EXCLUSIVE &&
+    ema4h != null &&
+    Number.isFinite(ema4h) &&
+    ema4h > REVERSAL_NEUTRAL_MATRIX_EMA4H_MIN_EXCLUSIVE
+  );
+}
+
 export function reversalStatsRowMatchesMatrixFilter(
   row: CandleReversalStatsRow,
   filter: ReversalMatrixFilter,
 ): boolean {
   if (filter === "all") return true;
+  if (filter === "neutral") return reversalRowMatchesNeutralMatrix(row);
   return reversalRowMatchesQualitySignalMatrix(row);
 }
 
@@ -514,6 +544,24 @@ export function reversalStatsPlaySidesFromSettings(row: {
   }
   if (row.reversalStatsPlaySide === "long") return { short: false, long: true };
   return { short: true, long: false };
+}
+
+/**
+ * ทิศที่ใช้ auto-open — แยกจาก stats table
+ * เปิด reversalAutoTradeEnabled → อนุญาต SHORT เสมอ (ยกเว้นโหมด Long-only)
+ */
+export function reversalAutoTradePlaySidesFromSettings(row: {
+  reversalAutoTradeEnabled?: boolean | null;
+  reversalStatsPlaySide?: ReversalStatsPlaySide | null;
+  reversalStatsPlayShortEnabled?: boolean | null;
+  reversalStatsPlayLongEnabled?: boolean | null;
+}): ReversalStatsPlaySides {
+  const statsSides = reversalStatsPlaySidesFromSettings(row);
+  const longOnly = statsSides.long && !statsSides.short;
+  if (row.reversalAutoTradeEnabled === true && !longOnly) {
+    return { short: true, long: statsSides.long };
+  }
+  return statsSides;
 }
 
 export function reversalStatsPlaySidesLabel(sides: ReversalStatsPlaySides): string {

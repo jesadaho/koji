@@ -1,4 +1,3 @@
-import { SNOWBALL_QUALITY_SIGNAL_CRITERIA } from "@/lib/snowballMatrixFilters";
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 
 export type AutoOpenSource = "snowball" | "reversal";
@@ -133,12 +132,16 @@ const REASON_LABELS: Record<string, string> = {
   ema_or_price_unavailable: "ดึง EMA20/mark ไม่ได้",
   mark_unavailable: "ดึงราคาตลาดไม่ได้",
   entry_gate: "สัญญาณไม่ผ่าน gate (legacy)",
-  quality_signal_gate: `สัญญาณไม่ผ่าน Quality Signal (${SNOWBALL_QUALITY_SIGNAL_CRITERIA})`,
+  quality_signal_gate: `สัญญาณไม่ผ่าน Quality Signal (Reversal Short)`,
   quality_filter_no_match: "ไม่ตรงเกณฑ์ Quality Signal / fade SHORT เกรด F / Snowball SHORT ที่เปิดไว้",
   network_error: "ข้อผิดพลาดเครือข่าย/MEXC",
   open_success_market: "เปิดสำเร็จ (Market)",
   open_success_limit: "ตั้ง Limit สำเร็จ",
   open_success_limit_filled: "Limit fill แล้ว (MEXC)",
+  play_short_disabled: "เลือกเล่น Long-only — ไม่เปิด SHORT",
+  not_long_candidate: "เลือก Long-only แต่ไม่ใช่ Long candidate",
+  play_long_requires_1h: "เลือก Long-only — สัญญาณ 1D ไม่เปิด",
+  long_fade_disabled: "ปิด auto-open สำหรับสัญญาณ Long (fade)",
 };
 
 export function autoOpenReasonLabel(code: string): string {

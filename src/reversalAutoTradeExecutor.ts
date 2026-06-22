@@ -28,7 +28,7 @@ import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } f
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
-import { reversalMatchesQualitySignalForAlert, reversalRowIsLongCandidate, reversalStatsPlaySidesFromSettings } from "@/lib/reversalMatrixFilters";
+import { reversalMatchesQualitySignalForAlert, reversalAutoTradePlaySidesFromSettings, reversalRowIsLongCandidate } from "@/lib/reversalMatrixFilters";
 import {
   resolveReversalLongTradeLeverage,
   reversalLongDynamicLeverageNote,
@@ -656,7 +656,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
   for (const [userId, rowRaw] of Object.entries(map)) {
     if (!/^tg:\d+$/.test(userId.trim())) continue;
     const row = rowRaw as TradingViewMexcUserSettings;
-    const playSides = reversalStatsPlaySidesFromSettings(row);
+    const playSides = reversalAutoTradePlaySidesFromSettings(row);
+    const longOnlyPlay = playSides.long && !playSides.short;
     const is1hShortAlert = alertTradeSide === "short" && input.signalBarTf === "1h";
     const isLongCandidate =
       is1hShortAlert &&
@@ -684,11 +685,11 @@ export async function runReversalAutoTradeAfterReversalAlert(
     if (is1hShortAlert) {
       if (playSides.long && isLongCandidate) {
         openMexcLong = true;
-      } else if (!playSides.short) {
+      } else if (longOnlyPlay) {
         logReversalAutoOpen(userId, logSignal, "skipped", "not_long_candidate", "long");
         continue;
       }
-    } else if (alertTradeSide === "short" && !playSides.short) {
+    } else if (alertTradeSide === "short" && longOnlyPlay) {
       logReversalAutoOpen(userId, logSignal, "skipped", "play_short_disabled", "short");
       continue;
     }
@@ -1130,7 +1131,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           ? "ทิศที่เล่น: Long — fade สัญญาณ Short · Long candidate ✓"
           : saturdayAllSignals
             ? "เกณฑ์: วันเสาร์ (เวลาไทย) — auto-open ทุกสัญญาณ Reversal"
-            : `Quality Signal ✓ · Wick ${wickPct.toFixed(1)}%${greenDays != null ? ` · เขียว ${greenDays}d` : ""}${rangeScore != null ? ` · Range ${rangeScore.toFixed(2)}` : ""}${ema4hPct != null ? ` · EMA4h ${ema4hPct.toFixed(1)}%` : ""}${lenRank != null ? ` · Len# ${lenRank}` : ""} · Body ${bodyPct.toFixed(1)}%`,
+            : `Quality Signal ✓ · Wick ${wickPct.toFixed(1)}%${greenDays != null ? ` · เขียว ${greenDays}d` : ""}${rangeScore != null ? ` · Range ${rangeScore.toFixed(2)}` : ""}${ema20_1hPct != null ? ` · EMA20∠1h ${ema20_1hPct.toFixed(1)}%` : ""}${lenRank != null ? ` · Len# ${lenRank}` : ""} · Body ${bodyPct.toFixed(1)}%`,
         openMexcLong || entryMode === "market"
           ? `ราคาอ้างอิง ~${fmtReversalAutoTradePrice(markPrice)} (${markSource})`
           : emaFallbackMarket
