@@ -83,20 +83,20 @@ export const REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT = 20;
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN = 2;
 export const REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX = 5;
 
-/** Matrix Neutral — Trend Gain 50–80% · EMA(12) 4h slope > 20% */
+/** Matrix Neutral — Trend Gain 50–80% · EMA20 4h slope >20% */
 export const REVERSAL_NEUTRAL_MATRIX_TREND_GAIN_MIN_EXCLUSIVE = 50;
 export const REVERSAL_NEUTRAL_MATRIX_TREND_GAIN_MAX_EXCLUSIVE = 80;
 export const REVERSAL_NEUTRAL_MATRIX_EMA4H_MIN_EXCLUSIVE = 20;
 
 export const REVERSAL_NEUTRAL_MATRIX_CRITERIA =
-  "Trend Gain >50% & <80% · EMA4H >20%";
+  "Trend Gain >50% & <80% · EMA20∠4h >20%";
 
-/** Matrix Slow mover — EMA(12) 4h slope >20% · Trend Velocity <0.5%/h */
+/** Matrix Slow mover — EMA20 4h slope >20% · Trend Velocity <0.5%/h */
 export const REVERSAL_SLOW_MOVER_MATRIX_EMA4H_MIN_EXCLUSIVE = 20;
 export const REVERSAL_SLOW_MOVER_MATRIX_VELOCITY_MAX_EXCLUSIVE = 0.5;
 
 export const REVERSAL_SLOW_MOVER_MATRIX_CRITERIA =
-  "EMA4H >20% · Velocity <0.5%/h";
+  "EMA20∠4h >20% · Velocity <0.5%/h";
 
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
@@ -260,32 +260,44 @@ export function reversalRowMatchesQualitySignalMatrix(row: CandleReversalStatsRo
   });
 }
 
-/** Matrix Neutral — Trend Gain >50% & <80% · EMA(12) 4h slope >20% */
+/** EMA 4h slope สำหรับ Matrix preset — ตรงคอลัมน์ EMA20∠4h ในตาราง (fallback EMA12 4h แถวเก่า) */
+function reversalMatrixCoinEma4hSlopePct7d(
+  row: Pick<CandleReversalStatsRow, "ema20_4hSlopePct7d" | "ema4hSlopePct7d">,
+): number | null {
+  const ema20 = row.ema20_4hSlopePct7d;
+  if (ema20 != null && Number.isFinite(ema20)) return ema20;
+  const ema12 = row.ema4hSlopePct7d;
+  if (ema12 != null && Number.isFinite(ema12)) return ema12;
+  return null;
+}
+
+/** Matrix Neutral — Trend Gain >50% & <80% · EMA20 4h slope >20% */
 export function reversalRowMatchesNeutralMatrix(
-  row: Pick<CandleReversalStatsRow, "trendGainPct" | "ema4hSlopePct7d">,
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "ema20_4hSlopePct7d" | "ema4hSlopePct7d">,
 ): boolean {
   const gain = row.trendGainPct;
-  const ema4h = row.ema4hSlopePct7d;
+  const ema4h = reversalMatrixCoinEma4hSlopePct7d(row);
   return (
     gain != null &&
     Number.isFinite(gain) &&
     gain > REVERSAL_NEUTRAL_MATRIX_TREND_GAIN_MIN_EXCLUSIVE &&
     gain < REVERSAL_NEUTRAL_MATRIX_TREND_GAIN_MAX_EXCLUSIVE &&
     ema4h != null &&
-    Number.isFinite(ema4h) &&
     ema4h > REVERSAL_NEUTRAL_MATRIX_EMA4H_MIN_EXCLUSIVE
   );
 }
 
-/** Matrix Slow mover — EMA(12) 4h slope >20% · Trend Velocity <0.5%/h */
+/** Matrix Slow mover — EMA20 4h slope >20% · Trend Velocity <0.5%/h */
 export function reversalRowMatchesSlowMoverMatrix(
-  row: Pick<CandleReversalStatsRow, "ema4hSlopePct7d" | "trendGainPct" | "ageOfTrendHours">,
+  row: Pick<
+    CandleReversalStatsRow,
+    "ema20_4hSlopePct7d" | "ema4hSlopePct7d" | "trendGainPct" | "ageOfTrendHours"
+  >,
 ): boolean {
-  const ema4h = row.ema4hSlopePct7d;
+  const ema4h = reversalMatrixCoinEma4hSlopePct7d(row);
   const velocity = computePumpCycleTrendVelocity(row.trendGainPct, row.ageOfTrendHours);
   return (
     ema4h != null &&
-    Number.isFinite(ema4h) &&
     ema4h > REVERSAL_SLOW_MOVER_MATRIX_EMA4H_MIN_EXCLUSIVE &&
     velocity != null &&
     Number.isFinite(velocity) &&
