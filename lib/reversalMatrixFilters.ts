@@ -9,7 +9,7 @@ import type {
 } from "@/lib/candleReversalStatsClient";
 import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 
-export type ReversalMatrixFilter = "all" | "qualitySignal" | "neutral";
+export type ReversalMatrixFilter = "all" | "qualitySignal" | "neutral" | "slowMover";
 
 /** โปรไฟล์ Quality Signal ในตารางสถิติ (แต่ละ section) */
 export type ReversalQualitySignalProfile = "short" | "long1h";
@@ -91,6 +91,13 @@ export const REVERSAL_NEUTRAL_MATRIX_EMA4H_MIN_EXCLUSIVE = 20;
 export const REVERSAL_NEUTRAL_MATRIX_CRITERIA =
   "Trend Gain >50% & <80% · EMA4H >20%";
 
+/** Matrix Slow mover — EMA(12) 4h slope >20% · Trend Velocity <0.5%/h */
+export const REVERSAL_SLOW_MOVER_MATRIX_EMA4H_MIN_EXCLUSIVE = 20;
+export const REVERSAL_SLOW_MOVER_MATRIX_VELOCITY_MAX_EXCLUSIVE = 0.5;
+
+export const REVERSAL_SLOW_MOVER_MATRIX_CRITERIA =
+  "EMA4H >20% · Velocity <0.5%/h";
+
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
   label: string;
@@ -98,6 +105,7 @@ export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   { value: "all", label: "ทั้งหมด" },
   { value: "qualitySignal", label: "✨ Quality Signal" },
   { value: "neutral", label: "Neutral" },
+  { value: "slowMover", label: "Slow mover" },
 ];
 
 export function reversalMatrixFilterLabel(filter: ReversalMatrixFilter): string {
@@ -119,6 +127,9 @@ export function reversalMatrixFilterTitle(
   }
   if (filter === "neutral") {
     return `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA}`;
+  }
+  if (filter === "slowMover") {
+    return `Slow mover: ${REVERSAL_SLOW_MOVER_MATRIX_CRITERIA}`;
   }
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
@@ -266,12 +277,29 @@ export function reversalRowMatchesNeutralMatrix(
   );
 }
 
+/** Matrix Slow mover — EMA(12) 4h slope >20% · Trend Velocity <0.5%/h */
+export function reversalRowMatchesSlowMoverMatrix(
+  row: Pick<CandleReversalStatsRow, "ema4hSlopePct7d" | "trendGainPct" | "ageOfTrendHours">,
+): boolean {
+  const ema4h = row.ema4hSlopePct7d;
+  const velocity = computePumpCycleTrendVelocity(row.trendGainPct, row.ageOfTrendHours);
+  return (
+    ema4h != null &&
+    Number.isFinite(ema4h) &&
+    ema4h > REVERSAL_SLOW_MOVER_MATRIX_EMA4H_MIN_EXCLUSIVE &&
+    velocity != null &&
+    Number.isFinite(velocity) &&
+    velocity < REVERSAL_SLOW_MOVER_MATRIX_VELOCITY_MAX_EXCLUSIVE
+  );
+}
+
 export function reversalStatsRowMatchesMatrixFilter(
   row: CandleReversalStatsRow,
   filter: ReversalMatrixFilter,
 ): boolean {
   if (filter === "all") return true;
   if (filter === "neutral") return reversalRowMatchesNeutralMatrix(row);
+  if (filter === "slowMover") return reversalRowMatchesSlowMoverMatrix(row);
   return reversalRowMatchesQualitySignalMatrix(row);
 }
 

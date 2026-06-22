@@ -244,7 +244,7 @@ const LEN_SET = new Set<string>(["all", "rank3to15"]);
 const VOL_SET = new Set(STATS_VOL_VS_SMA_FILTER_OPTIONS.map((o) => o.value));
 const ATR_SET = new Set(STATS_ATR_PCT14D_FILTER_OPTIONS.map((o) => o.value));
 const R_SIGNAL_SET = new Set(SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS.map((o) => o.value));
-const MATRIX_SET = new Set<string>(["all", "qualitySignal", "neutral"]);
+const MATRIX_SET = new Set<string>(["all", "qualitySignal", "neutral", "slowMover"]);
 
 function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
   const k = raw?.trim().toLowerCase() ?? "";
