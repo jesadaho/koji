@@ -486,6 +486,10 @@ function ReversalStatsSection({
     () => excludeObserveStatsRows(excludePendingConflictRows(scopedRows)),
     [scopedRows],
   );
+  const strategyProfitScopedRows = useMemo(
+    () => (observeFilter === "observe" ? scopedRows : playScopedRows),
+    [observeFilter, playScopedRows, scopedRows],
+  );
   const [splitByWeek, setSplitByWeek] = useState(false);
   const weekGroups = useMemo(
     () => groupRowsByBkkWeek(scopedRows, statsRowAlertedAtMs),
@@ -507,7 +511,7 @@ function ReversalStatsSection({
     if (tf !== "1h") return null;
     return formatStatsStrategyProfitSummaryText(
       summarizeStatsStrategyProfit(
-        playScopedRows,
+        strategyProfitScopedRows,
         strategySizing,
         STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
         STATS_STRATEGY_PROFIT_HOLD_48H,
@@ -516,13 +520,13 @@ function ReversalStatsSection({
       STATS_STRATEGY_PROFIT_HOLD_48H,
       { strategyLabel: showSuggestedSideColumn ? "กลยุทธ์ Short" : "กลยุทธ์" },
     );
-  }, [playScopedRows, strategySizing, tf, showSuggestedSideColumn]);
+  }, [strategyProfitScopedRows, strategySizing, tf, showSuggestedSideColumn]);
 
   const strategyProfitSummaryText24h = useMemo(() => {
     if (tf !== "1h") return null;
     return formatStatsStrategyProfitSummaryText(
       summarizeStatsStrategyProfit(
-        playScopedRows,
+        strategyProfitScopedRows,
         strategySizing,
         STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND,
         STATS_STRATEGY_PROFIT_HOLD_24H,
@@ -531,11 +535,12 @@ function ReversalStatsSection({
       STATS_STRATEGY_PROFIT_HOLD_24H,
       { strategyLabel: showSuggestedSideColumn ? "กลยุทธ์ Short" : "กลยุทธ์" },
     );
-  }, [playScopedRows, strategySizing, tf, showSuggestedSideColumn]);
+  }, [strategyProfitScopedRows, strategySizing, tf, showSuggestedSideColumn]);
 
   const longCandidateRows = useMemo(
-    () => (showSuggestedSideColumn ? playScopedRows.filter(reversalRowIsLongCandidate) : []),
-    [playScopedRows, showSuggestedSideColumn],
+    () =>
+      showSuggestedSideColumn ? strategyProfitScopedRows.filter(reversalRowIsLongCandidate) : [],
+    [strategyProfitScopedRows, showSuggestedSideColumn],
   );
 
   const strategyProfitLongSummaryText48h = useMemo(() => {
@@ -1102,42 +1107,34 @@ function ReversalStatsSection({
                   {has48h ? (
                     <>
                       <td>
-                        {reversalStatsRowIsObserve(r) ? (
-                          "—"
-                        ) : (
-                          <StatsStrategyProfitCell
-                            holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
-                            pct24h={r.pct24h}
-                            pct48h={r.pct48h}
-                            strategyProfitPct24h={r.strategyProfitPct24h}
-                            strategyExitReason24h={r.strategyExitReason24h}
-                            marginUsdt={strategyMarginUsdt}
-                            leverage={resolveRowLeverage(r)}
-                            tpSlPlan={strategyTpSlPlan}
-                            maxDrawdownPct={r.maxDrawdownPct}
-                            followUpMaxAdversePct={r.followUpMaxAdversePct}
-                            resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
-                          />
-                        )}
+                        <StatsStrategyProfitCell
+                          holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
+                          pct24h={r.pct24h}
+                          pct48h={r.pct48h}
+                          strategyProfitPct24h={r.strategyProfitPct24h}
+                          strategyExitReason24h={r.strategyExitReason24h}
+                          marginUsdt={strategyMarginUsdt}
+                          leverage={resolveRowLeverage(r)}
+                          tpSlPlan={strategyTpSlPlan}
+                          maxDrawdownPct={r.maxDrawdownPct}
+                          followUpMaxAdversePct={r.followUpMaxAdversePct}
+                          resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
+                        />
                       </td>
                       <td>
-                        {reversalStatsRowIsObserve(r) ? (
-                          "—"
-                        ) : (
-                          <StatsStrategyProfitCell
-                            holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
-                            pct24h={r.pct24h}
-                            pct48h={r.pct48h}
-                            strategyProfitPct={r.strategyProfitPct}
-                            strategyExitReason={r.strategyExitReason}
-                            marginUsdt={strategyMarginUsdt}
-                            leverage={resolveRowLeverage(r)}
-                            tpSlPlan={strategyTpSlPlan}
-                            maxDrawdownPct={r.maxDrawdownPct}
-                            followUpMaxAdversePct={r.followUpMaxAdversePct}
-                            resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
-                          />
-                        )}
+                        <StatsStrategyProfitCell
+                          holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
+                          pct24h={r.pct24h}
+                          pct48h={r.pct48h}
+                          strategyProfitPct={r.strategyProfitPct}
+                          strategyExitReason={r.strategyExitReason}
+                          marginUsdt={strategyMarginUsdt}
+                          leverage={resolveRowLeverage(r)}
+                          tpSlPlan={strategyTpSlPlan}
+                          maxDrawdownPct={r.maxDrawdownPct}
+                          followUpMaxAdversePct={r.followUpMaxAdversePct}
+                          resolveProfit={reversalStatsStrategyProfitResolvedForHorizon}
+                        />
                       </td>
                       {showSuggestedSideColumn ? (
                         <td>
