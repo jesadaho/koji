@@ -1467,6 +1467,15 @@ function ReversalStatsSection({
           onChange={setMonthFilter}
         />
         <StatsSplitByWeekCheckbox checked={splitByWeek} onChange={setSplitByWeek} />
+        {observeFilter !== "all" ? (
+          <p
+            className="sub"
+            style={{ width: "100%", margin: 0 }}
+            title={reversalObserveFilterTitle(observeFilter)}
+          >
+            {reversalObserveFilterTitle(observeFilter)}
+          </p>
+        ) : null}
         {matrixFilter !== "all" ? (
           <p
             className="sub"

@@ -15,6 +15,18 @@ export type ReversalObserveReason = "r_bar_range" | "neutral_matrix" | "lower_wi
 /** R% สัญญาณ — ต่ำกว่านี้ = Observe (1H Short) */
 export const REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX = 3;
 
+export const REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA = `R% สัญญาณ < ${REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX}% (1H Short)`;
+
+export const REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA =
+  "ไส้ล่าง > ไส้บน (Short → Observe Long / hammer)";
+
+/** สรุปเกณฑ์ Observe ทั้งหมด — คั่นด้วย · */
+export const REVERSAL_OBSERVE_CRITERIA_SUMMARY = [
+  REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA,
+  `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA}`,
+  REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA,
+].join(" · ");
+
 export function reversalShort1hIsObserveSignal(input: {
   signalBarTf?: CandleReversalSignalBarTf | null;
   tradeSide?: CandleReversalTradeSide | null;
@@ -156,13 +168,13 @@ export function reversalStatsObserveBadgeTitle(row: {
 }): string {
   const reason = reversalResolveObserveReason(row);
   if (reason === "lower_wick_long") {
-    return "Observe Long — ไส้ล่าง > ไส้บน (hammer) เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram";
+    return `Observe Long — ${REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA} · เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
   if (reason === "neutral_matrix") {
     return `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
   if (reason === "r_bar_range") {
-    return `R% < ${REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX}% (1H Short) — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
+    return `${REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
   return "เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram";
 }
@@ -225,9 +237,9 @@ export function reversalObserveFilterLabel(filter: ReversalObserveFilter): strin
 export function reversalObserveFilterTitle(filter: ReversalObserveFilter): string {
   if (filter === "all") return "ทั้งหมด — รวม Play และ Observe";
   if (filter === "observe") {
-    return "Observe — เก็บสถิติอย่างเดียว (R% < 3 · Neutral · ไส้ล่าง>บน→Long) · ไม่เล่น · ไม่ส่ง Telegram";
+    return `Observe — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram · ไม่ auto-open · เกณฑ์: ${REVERSAL_OBSERVE_CRITERIA_SUMMARY}`;
   }
-  return "Play — แถวที่เล่นจริง (ไม่รวม Observe)";
+  return "Play — แถวที่ส่ง Telegram / เล่นจริง (ไม่รวม Observe)";
 }
 
 export function reversalStatsRowMatchesObserveFilter(

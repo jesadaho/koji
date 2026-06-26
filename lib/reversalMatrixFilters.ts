@@ -120,9 +120,11 @@ export const REVERSAL_ACCELERATION_MATRIX_CRITERIA = "EMA20Δ1h 15–30%";
 /** Matrix Momentum — EMA20∠1h 50–66% */
 export const REVERSAL_MOMENTUM_MATRIX_CRITERIA = "EMA20∠1h 50–66%";
 
-/** Matrix Fresh Breakout — Trend Gain <16% · Vol×SMA 2–12× */
+/** Matrix Fresh Breakout — Trend Gain <16% · Vol×SMA 2–12× · R% สัญญาณ <15% */
+export const REVERSAL_FRESH_BREAKOUT_MATRIX_BAR_RANGE_PCT_MAX_EXCLUSIVE = 15;
+
 export const REVERSAL_FRESH_BREAKOUT_MATRIX_CRITERIA =
-  "Trend Gain <16% · Vol×SMA 2–12×";
+  "Trend Gain <16% · Vol×SMA 2–12× · R% สัญญาณ <15%";
 
 /** Matrix Healthy Pace — Velocity 0.2–0.3%/h */
 export const REVERSAL_HEALTHY_PACE_MATRIX_CRITERIA = "Velocity 0.2–0.3%/h";
@@ -404,11 +406,25 @@ export function reversalRowMatchesMomentumMatrix(
   return reversalLongCandidateEma20_1hSlopePass(row);
 }
 
-/** Matrix Fresh Breakout — Trend Gain <16% · Vol×SMA 2–12× */
-export function reversalRowMatchesFreshBreakoutMatrix(
-  row: Pick<CandleReversalStatsRow, "trendGainPct" | "signalVolVsSma">,
+/** Matrix Fresh Breakout — Trend Gain <16% · Vol×SMA 2–12× · R% สัญญาณ <15% */
+export function reversalFreshBreakoutPass(
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "signalVolVsSma" | "barRangePctSignal">,
 ): boolean {
-  return reversalLongCandidateLowTrendHighVolPass(row);
+  const r = row.barRangePctSignal;
+  return (
+    reversalLongCandidateLowTrendHighVolPass(row) &&
+    r != null &&
+    Number.isFinite(r) &&
+    r >= 0 &&
+    r < REVERSAL_FRESH_BREAKOUT_MATRIX_BAR_RANGE_PCT_MAX_EXCLUSIVE
+  );
+}
+
+/** Matrix Fresh Breakout — Trend Gain <16% · Vol×SMA 2–12× · R% สัญญาณ <15% */
+export function reversalRowMatchesFreshBreakoutMatrix(
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "signalVolVsSma" | "barRangePctSignal">,
+): boolean {
+  return reversalFreshBreakoutPass(row);
 }
 
 /** Matrix Healthy Pace — Velocity 0.2–0.3%/h */
