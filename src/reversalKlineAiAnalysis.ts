@@ -113,6 +113,15 @@ function openAiChatTokenParams(
   return { max_tokens: limit };
 }
 
+/** gpt-5 / o-series only support default temperature — omit the param. */
+function openAiChatTemperatureParam(model: string, temperature: number): { temperature?: number } {
+  const m = model.trim().toLowerCase();
+  if (/^gpt-5|^o[0-9]/.test(m)) {
+    return {};
+  }
+  return { temperature };
+}
+
 export function isReversalKlineAiEnabled(): boolean {
   const raw = process.env.CANDLE_REVERSAL_KLINE_AI_ENABLED?.trim().toLowerCase();
   if (raw === "0" || raw === "false" || raw === "off" || raw === "no") return false;
@@ -221,7 +230,7 @@ export async function analyzeReversalKlineWithOpenAi(
       body: JSON.stringify({
         model,
         messages: [{ role: "user", content: userContent }],
-        temperature: 0.25,
+        ...openAiChatTemperatureParam(model, 0.25),
         ...openAiChatTokenParams(model, 400),
         response_format: { type: "json_object" },
       }),
