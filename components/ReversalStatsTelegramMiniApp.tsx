@@ -127,6 +127,7 @@ import {
   REVERSAL_OBSERVE_FILTER_OPTIONS,
   reversalBarRangeSignalFilterLabel,
   reversalBarRangeSignalFilterTitle,
+  reversalObserveFilterDetail,
   reversalObserveFilterLabel,
   reversalObserveFilterTitle,
   reversalRowMatchesAtrPct14dFilter,
@@ -1471,9 +1472,18 @@ function ReversalStatsSection({
           <p
             className="sub"
             style={{ width: "100%", margin: 0 }}
-            title={reversalObserveFilterTitle(observeFilter)}
+            title={reversalObserveFilterDetail(observeFilter) ?? reversalObserveFilterTitle(observeFilter)}
           >
-            {reversalObserveFilterTitle(observeFilter)}
+            {reversalObserveFilterDetail(observeFilter) ?? reversalObserveFilterTitle(observeFilter)}
+          </p>
+        ) : null}
+        {barRangeSignalFilter === "lt3" ? (
+          <p
+            className="sub"
+            style={{ width: "100%", margin: 0 }}
+            title={reversalBarRangeSignalFilterTitle(barRangeSignalFilter)}
+          >
+            {reversalBarRangeSignalFilterTitle(barRangeSignalFilter)}
           </p>
         ) : null}
         {matrixFilter !== "all" ? (

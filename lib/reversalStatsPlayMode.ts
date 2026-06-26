@@ -20,12 +20,15 @@ export const REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA = `R% สัญญาณ < ${
 export const REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA =
   "ไส้ล่าง > ไส้บน (Short → Observe Long / hammer)";
 
-/** สรุปเกณฑ์ Observe ทั้งหมด — คั่นด้วย · */
+/** คั่นระหว่างชุดเกณฑ์ Observe ระดับบน — ผ่านอย่างใดอย่างหนึ่ง (OR) */
+export const REVERSAL_OBSERVE_CRITERIA_OR_JOIN = " หรือ ";
+
+/** สรุปเกณฑ์ Observe ทั้งหมด — OR ระหว่างชุด · Neutral ภายในใช้ AND (&) */
 export const REVERSAL_OBSERVE_CRITERIA_SUMMARY = [
   REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA,
-  `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA}`,
+  `Neutral (AND): ${REVERSAL_NEUTRAL_MATRIX_CRITERIA}`,
   REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA,
-].join(" · ");
+].join(REVERSAL_OBSERVE_CRITERIA_OR_JOIN);
 
 export function reversalShort1hIsObserveSignal(input: {
   signalBarTf?: CandleReversalSignalBarTf | null;
@@ -237,9 +240,23 @@ export function reversalObserveFilterLabel(filter: ReversalObserveFilter): strin
 export function reversalObserveFilterTitle(filter: ReversalObserveFilter): string {
   if (filter === "all") return "ทั้งหมด — รวม Play และ Observe";
   if (filter === "observe") {
-    return `Observe — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram · ไม่ auto-open · เกณฑ์: ${REVERSAL_OBSERVE_CRITERIA_SUMMARY}`;
+    return "Observe — แถวที่เก็บเป็น observe เท่านั้น (ไม่เล่น · ไม่ส่ง Telegram)";
   }
   return "Play — แถวที่ส่ง Telegram / เล่นจริง (ไม่รวม Observe)";
+}
+
+/** คำอธิบายเกณฑ์ Observe แบบเต็ม — แสดงใต้ตัวกรอง */
+export function reversalObserveFilterDetail(filter: ReversalObserveFilter): string | null {
+  if (filter === "all") return null;
+  if (filter === "observe") {
+    return [
+      "เกณฑ์ตอนแจ้ง (OR อย่างใดอย่างหนึ่ง):",
+      REVERSAL_OBSERVE_CRITERIA_SUMMARY,
+      "≠ ตัวกรอง R%<3% ด้านบน — ตัวกรอง R% รวมแถว Play ทุก TF/ทิศ",
+      "แถวเก่าก่อนมี Observe ที่ R%<3% ยังเป็น Play",
+    ].join(" · ");
+  }
+  return "รวมแถวที่ส่ง Telegram / เล่นจริง · แถวเก่า R%<3% ที่ยังไม่ถูก mark observe";
 }
 
 export function reversalStatsRowMatchesObserveFilter(

@@ -27,7 +27,7 @@ import {
 } from "@/lib/statsVolVsSmaFilter";
 import {
   snowballBarRangeSignalFilterLabel,
-  snowballBarRangeSignalFilterTitle,
+  snowballBarRangeSignalFilterTitle as snowballBarRangeSignalFilterTitleBase,
   snowballStatsRowMatchesBarRangeSignalFilter,
   SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS,
   type SnowballBarRangeSignalFilter,
@@ -41,6 +41,7 @@ import {
 export type { ReversalObserveFilter } from "@/lib/reversalStatsPlayMode";
 export {
   REVERSAL_OBSERVE_FILTER_OPTIONS,
+  reversalObserveFilterDetail,
   reversalObserveFilterLabel,
   reversalObserveFilterTitle,
   reversalStatsRowMatchesObserveFilter,
@@ -58,8 +59,17 @@ export type ReversalBarRangeSignalFilter = SnowballBarRangeSignalFilter;
 export {
   SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS as REVERSAL_BAR_RANGE_SIGNAL_FILTER_OPTIONS,
   snowballBarRangeSignalFilterLabel as reversalBarRangeSignalFilterLabel,
-  snowballBarRangeSignalFilterTitle as reversalBarRangeSignalFilterTitle,
 };
+
+export function reversalBarRangeSignalFilterTitle(
+  filter: ReversalBarRangeSignalFilter,
+): string {
+  const base = snowballBarRangeSignalFilterTitleBase(filter);
+  if (filter === "lt3") {
+    return `${base} — ทุกแถวที่มี R% ต่ำ (รวม Play ทุก TF/ทิศ) · ไม่ใช่ตัวกรอง Observe`;
+  }
+  return base;
+}
 
 export type {
   BtcEma4hFilter,

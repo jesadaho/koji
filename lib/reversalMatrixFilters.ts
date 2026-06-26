@@ -22,7 +22,8 @@ export type ReversalMatrixFilter =
   | "strongTrend"
   | "meanReversion"
   | "charging"
-  | "parabolic";
+  | "parabolic"
+  | "weakTrend";
 
 /** โปรไฟล์ Quality Signal ในตารางสถิติ (แต่ละ section) */
 export type ReversalQualitySignalProfile = "short" | "long1h";
@@ -150,6 +151,13 @@ export const REVERSAL_PARABOLIC_MATRIX_EMA4H_MIN_EXCLUSIVE = 300;
 export const REVERSAL_PARABOLIC_MATRIX_CRITERIA =
   "Trend Gain >150% · EMA20∠4h >300%";
 
+/** Matrix Weak Trend — R% สัญญาณ <3% · EMA20∠1h <15% */
+export const REVERSAL_WEAK_TREND_MATRIX_BAR_RANGE_PCT_MAX_EXCLUSIVE = 3;
+export const REVERSAL_WEAK_TREND_MATRIX_EMA20_1H_SLOPE_MAX_EXCLUSIVE = 15;
+
+export const REVERSAL_WEAK_TREND_MATRIX_CRITERIA =
+  "R% สัญญาณ <3% · EMA20∠1h <15%";
+
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
   label: string;
@@ -165,6 +173,7 @@ export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   { value: "parabolic", label: "Parabolic" },
   { value: "meanReversion", label: "Mean Reversion" },
   { value: "charging", label: "Charging" },
+  { value: "weakTrend", label: "Weak Trend" },
   { value: "neutral", label: "Neutral" },
 ];
 
@@ -214,6 +223,9 @@ export function reversalMatrixFilterTitle(
   }
   if (filter === "meanReversion") {
     return `Mean Reversion: ${REVERSAL_MEAN_REVERSION_MATRIX_CRITERIA} — ลงแรง มีโอกาสเด้งกลับ`;
+  }
+  if (filter === "weakTrend") {
+    return `Weak Trend: ${REVERSAL_WEAK_TREND_MATRIX_CRITERIA} — เทรนด์อ่อน แท่งเล็ก EMA 1h ยังไม่แรง`;
   }
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
@@ -486,6 +498,29 @@ export function reversalRowMatchesParabolicMatrix(
   return reversalParabolicPass(row);
 }
 
+/** Matrix Weak Trend — R% สัญญาณ <3% · EMA20∠1h <15% */
+export function reversalWeakTrendPass(
+  row: Pick<CandleReversalStatsRow, "barRangePctSignal" | "ema20_1hSlopePct7d">,
+): boolean {
+  const r = row.barRangePctSignal;
+  const slope = row.ema20_1hSlopePct7d;
+  return (
+    r != null &&
+    Number.isFinite(r) &&
+    r >= 0 &&
+    r < REVERSAL_WEAK_TREND_MATRIX_BAR_RANGE_PCT_MAX_EXCLUSIVE &&
+    slope != null &&
+    Number.isFinite(slope) &&
+    slope < REVERSAL_WEAK_TREND_MATRIX_EMA20_1H_SLOPE_MAX_EXCLUSIVE
+  );
+}
+
+export function reversalRowMatchesWeakTrendMatrix(
+  row: Pick<CandleReversalStatsRow, "barRangePctSignal" | "ema20_1hSlopePct7d">,
+): boolean {
+  return reversalWeakTrendPass(row);
+}
+
 export function reversalStatsRowMatchesMatrixFilter(
   row: CandleReversalStatsRow,
   filter: ReversalMatrixFilter,
@@ -503,6 +538,7 @@ export function reversalStatsRowMatchesMatrixFilter(
   if (filter === "strongTrend") return reversalRowMatchesStrongTrendMatrix(row);
   if (filter === "parabolic") return reversalRowMatchesParabolicMatrix(row);
   if (filter === "meanReversion") return reversalRowMatchesMeanReversionMatrix(row);
+  if (filter === "weakTrend") return reversalRowMatchesWeakTrendMatrix(row);
   return reversalRowMatchesQualitySignalMatrix(row);
 }
 
