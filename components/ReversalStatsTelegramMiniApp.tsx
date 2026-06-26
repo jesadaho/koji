@@ -18,6 +18,7 @@ import { useStatsMonthFilter } from "@/lib/useStatsMonthFilter";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
 import { formatTelegramMiniAppFetchError } from "@/lib/telegramMiniAppFetchError";
+import { excludeObserveStatsRows, reversalStatsObserveBadgeTitle, reversalStatsRowIsObserve } from "@/lib/reversalStatsPlayMode";
 import {
   reversalStatsPriceDiffFromPrevLabel,
   reversalStatsWeeklyAlertNoLabel,
