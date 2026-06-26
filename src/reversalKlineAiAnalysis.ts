@@ -96,9 +96,13 @@ function reversalKlineAiModel(): string {
   return m && m.length <= 80 ? m : "gpt-5.5";
 }
 
-function reversalKlineAiTimeoutMs(): number {
+function reversalKlineAiTimeoutMs(model?: string): number {
   const n = Number(process.env.CANDLE_REVERSAL_KLINE_AI_TIMEOUT_MS?.trim());
-  return Number.isFinite(n) && n >= 3000 && n <= 90000 ? Math.floor(n) : 25_000;
+  if (Number.isFinite(n) && n >= 3000 && n <= 180_000) return Math.floor(n);
+  const m = (model ?? reversalKlineAiModel()).trim().toLowerCase();
+  // Reasoning models often exceed 25s (kline payload + internal reasoning).
+  if (/^gpt-5|^o[0-9]/.test(m)) return 90_000;
+  return 25_000;
 }
 
 function reversalKlineAiCompletionTokenLimit(model: string): number {
@@ -258,9 +262,41 @@ export async function analyzeReversalKlineWithOpenAi(
   if (!key) return { ok: false, error: "missing OPENAI_API_KEY" };
 
   const model = reversalKlineAiModel();
-  const timeoutMs = reversalKlineAiTimeoutMs();
+  const baseTimeoutMs = reversalKlineAiTimeoutMs(model);
   const userContent = `${ANALYST_PROMPT}\n\nData:\n${JSON.stringify(payload)}`;
 
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const timeoutMs =
+      attempt === 0 ? baseTimeoutMs : Math.min(Math.round(baseTimeoutMs * 1.5), 180_000);
+    const result = await analyzeReversalKlineWithOpenAiOnce({
+      key,
+      model,
+      userContent,
+      timeoutMs,
+    });
+    if (result.ok) return result;
+    const isTimeout = result.error.includes("timeout (");
+    if (!isTimeout || attempt === 1) {
+      if (isTimeout && attempt === 1) {
+        return {
+          ok: false,
+          error: `openai request failed: timeout (${baseTimeoutMs}ms + retry ${timeoutMs}ms) (model ${model})`,
+        };
+      }
+      return result;
+    }
+  }
+
+  return { ok: false, error: `openai request failed (model ${model})` };
+}
+
+async function analyzeReversalKlineWithOpenAiOnce(input: {
+  key: string;
+  model: string;
+  userContent: string;
+  timeoutMs: number;
+}): Promise<ReversalKlineAiAnalysisResult> {
+  const { key, model, userContent, timeoutMs } = input;
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
 

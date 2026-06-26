@@ -2188,7 +2188,7 @@ export default function ReversalStatsTelegramMiniApp() {
         "Backfill AI สำหรับตาราง Reversal Short (แท็บ 1H Short)?\n\n" +
           "• ทีละ 3 แถวที่ยังไม่มี AI analysis (ใหม่สุดก่อน)\n" +
           "• ไม่รวมตาราง Long 1H (fade SHORT)\n" +
-          "• เรียก OpenAI (gpt-5.5) — อาจใช้เวลาหลายสิบวินาที\n" +
+          "• เรียก OpenAI (gpt-5.5) — แถวละ ~30–90s · timeout จะ retry อัตโนมัติ 1 ครั้ง\n" +
           "• ต้องมี OPENAI_API_KEY และเปิด CANDLE_REVERSAL_KLINE_AI_ENABLED\n\n" +
           "กดซ้ำได้จนกว่า remaining จะเป็น 0",
       )
