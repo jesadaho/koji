@@ -726,6 +726,10 @@ async function notifyResults(
         trendGainPct: pumpCycleFields.trendGainPct,
         ema20_4hSlopePct7d: mktSnap.ema20_4hSlopePct7d,
         ema4hSlopePct7d: mktSnap.ema4hSlopePct7d,
+        ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
+        signalVolVsSma: row.evals.signalVolVsSma,
+        priceVsEma20_1hPct: mktSnap.priceVsEma20_1hPct,
+        priceVsEma20_4hPct: mktSnap.priceVsEma20_4hPct,
         wickRatio: sig.wickRatio,
         lowerWickRatio: sig.lowerWickRatio,
       });
@@ -737,6 +741,10 @@ async function notifyResults(
         trendGainPct: pumpCycleFields.trendGainPct,
         ema20_4hSlopePct7d: mktSnap.ema20_4hSlopePct7d,
         ema4hSlopePct7d: mktSnap.ema4hSlopePct7d,
+        ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
+        signalVolVsSma: row.evals.signalVolVsSma,
+        priceVsEma20_1hPct: mktSnap.priceVsEma20_1hPct,
+        priceVsEma20_4hPct: mktSnap.priceVsEma20_4hPct,
         wickRatio: sig.wickRatio,
         lowerWickRatio: sig.lowerWickRatio,
       });

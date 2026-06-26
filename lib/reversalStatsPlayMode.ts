@@ -3,10 +3,13 @@ import type {
   CandleReversalTradeSide,
 } from "@/lib/candleReversalStatsClient";
 import {
+  REVERSAL_LONG_CANDIDATE_CRITERIA,
   REVERSAL_NEUTRAL_MATRIX_CRITERIA,
   REVERSAL_WEAK_TREND_MATRIX_CRITERIA,
+  reversalRowIsSuggestedLong,
   reversalRowMatchesNeutralMatrix,
   reversalWeakTrendPass,
+  type ReversalLongCandidateRowSlice,
 } from "@/lib/reversalMatrixFilters";
 
 export type ReversalStatsPlayMode = "play" | "observe";
@@ -25,12 +28,31 @@ export const REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA =
 /** คั่นระหว่างชุดเกณฑ์ Observe ระดับบน — ผ่านอย่างใดอย่างหนึ่ง (OR) */
 export const REVERSAL_OBSERVE_CRITERIA_OR_JOIN = " หรือ ";
 
-/** สรุปเกณฑ์ Observe ทั้งหมด — OR ระหว่างชุด · Neutral ภายในใช้ AND (&) */
-export const REVERSAL_OBSERVE_CRITERIA_SUMMARY = [
+export const REVERSAL_OBSERVE_SUGGESTED_LONG_CRITERIA = `ทิศแนะนำ Long (${REVERSAL_LONG_CANDIDATE_CRITERIA})`;
+
+/** OR ระหว่างชุดเกณฑ์ Observe (ก่อน AND ทิศ Long) */
+export const REVERSAL_OBSERVE_OR_CRITERIA_SUMMARY = [
   REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA,
   `Neutral (AND): ${REVERSAL_NEUTRAL_MATRIX_CRITERIA}`,
   REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA,
 ].join(REVERSAL_OBSERVE_CRITERIA_OR_JOIN);
+
+/** สรุปเกณฑ์ Observe ทั้งหมด — (OR ชุดด้านบน) AND ทิศแนะนำ Long */
+export const REVERSAL_OBSERVE_CRITERIA_SUMMARY = `(${REVERSAL_OBSERVE_OR_CRITERIA_SUMMARY}) · AND ${REVERSAL_OBSERVE_SUGGESTED_LONG_CRITERIA}`;
+
+export type ReversalObserveEvaluateInput = {
+  signalBarTf?: CandleReversalSignalBarTf | null;
+  tradeSide?: CandleReversalTradeSide | null;
+  barRangePctSignal?: number | null;
+  ema20_1hSlopePct7d?: number | null;
+  trendGainPct?: number | null;
+  ema20_4hSlopePct7d?: number | null;
+  ema4hSlopePct7d?: number | null;
+  wickRatio?: number | null;
+  lowerWickRatio?: number | null;
+  wickRatioPct?: number | null;
+  lowerWickRatioPct?: number | null;
+} & ReversalLongCandidateRowSlice;
 
 export function reversalShort1hIsObserveSignal(input: {
   signalBarTf?: CandleReversalSignalBarTf | null;
@@ -96,19 +118,7 @@ export function reversalNeutralMatrixIsObserveSignal(
   return reversalRowMatchesNeutralMatrix(row);
 }
 
-export function reversalIsObserveSignal(input: {
-  signalBarTf?: CandleReversalSignalBarTf | null;
-  tradeSide?: CandleReversalTradeSide | null;
-  barRangePctSignal?: number | null;
-  ema20_1hSlopePct7d?: number | null;
-  trendGainPct?: number | null;
-  ema20_4hSlopePct7d?: number | null;
-  ema4hSlopePct7d?: number | null;
-  wickRatio?: number | null;
-  lowerWickRatio?: number | null;
-  wickRatioPct?: number | null;
-  lowerWickRatioPct?: number | null;
-}): boolean {
+function reversalObserveOrCriterionPass(input: ReversalObserveEvaluateInput): boolean {
   if (
     reversalShortLowerWickDominantIsObserveSignal({
       tradeSide: input.tradeSide,
@@ -137,21 +147,20 @@ export function reversalIsObserveSignal(input: {
   });
 }
 
+function reversalObserveSuggestedLongPass(row: ReversalLongCandidateRowSlice): boolean {
+  return reversalRowIsSuggestedLong(row);
+}
+
+export function reversalIsObserveSignal(input: ReversalObserveEvaluateInput): boolean {
+  if (!reversalObserveOrCriterionPass(input)) return false;
+  return reversalObserveSuggestedLongPass(input);
+}
+
 export function reversalResolveObserveReason(input: {
   observeReason?: ReversalObserveReason | null;
-  signalBarTf?: CandleReversalSignalBarTf | null;
-  tradeSide?: CandleReversalTradeSide | null;
-  barRangePctSignal?: number | null;
-  ema20_1hSlopePct7d?: number | null;
-  trendGainPct?: number | null;
-  ema20_4hSlopePct7d?: number | null;
-  ema4hSlopePct7d?: number | null;
-  wickRatio?: number | null;
-  lowerWickRatio?: number | null;
-  wickRatioPct?: number | null;
-  lowerWickRatioPct?: number | null;
-}): ReversalObserveReason | undefined {
+} & ReversalObserveEvaluateInput): ReversalObserveReason | undefined {
   if (input.observeReason) return input.observeReason;
+  if (!reversalObserveSuggestedLongPass(input)) return undefined;
   if (
     reversalShortLowerWickDominantIsObserveSignal({
       tradeSide: input.tradeSide,
@@ -199,13 +208,13 @@ export function reversalStatsObserveBadgeTitle(row: {
 }): string {
   const reason = reversalResolveObserveReason(row);
   if (reason === "lower_wick_long") {
-    return `Observe Long — ${REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA} · เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
+    return `Observe Long — ${REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA} · ${REVERSAL_OBSERVE_SUGGESTED_LONG_CRITERIA} · เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
   if (reason === "neutral_matrix") {
-    return `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
+    return `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA} · ${REVERSAL_OBSERVE_SUGGESTED_LONG_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
   if (reason === "r_bar_range") {
-    return `${REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
+    return `${REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA} · ${REVERSAL_OBSERVE_SUGGESTED_LONG_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
   return "เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram";
 }
@@ -269,7 +278,7 @@ export function reversalObserveFilterLabel(filter: ReversalObserveFilter): strin
 export function reversalObserveFilterTitle(filter: ReversalObserveFilter): string {
   if (filter === "all") return "ทั้งหมด — รวม Play และ Observe";
   if (filter === "observe") {
-    return "Observe — แถวที่เก็บเป็น observe เท่านั้น (ไม่เล่น · ไม่ส่ง Telegram)";
+    return `Observe — แถวที่เก็บเป็น observe เท่านั้น (ทิศแนะนำ Long · ไม่เล่น · ไม่ส่ง Telegram)`;
   }
   return "Play — แถวที่ส่ง Telegram / เล่นจริง (ไม่รวม Observe)";
 }
@@ -280,7 +289,8 @@ export function reversalObserveFilterDetail(filter: ReversalObserveFilter): stri
   if (filter === "observe") {
     return [
       "เกณฑ์ตอนแจ้ง (OR อย่างใดอย่างหนึ่ง):",
-      REVERSAL_OBSERVE_CRITERIA_SUMMARY,
+      REVERSAL_OBSERVE_OR_CRITERIA_SUMMARY,
+      `AND ${REVERSAL_OBSERVE_SUGGESTED_LONG_CRITERIA}`,
       "≠ ตัวกรอง R%<3% ด้านบน — ตัวกรอง R% รวมแถว Play ทุก TF/ทิศ",
       "แถวเก่าก่อนมี Observe ที่ R%<3% ยังเป็น Play",
     ].join(" · ");

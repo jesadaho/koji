@@ -194,7 +194,7 @@ export function formatCandleReversalScanSummaryMessage(opts: {
 
   lines.push("");
   lines.push("— ส่งแจ้งเตือน —");
-  lines.push(`เก็บ Observe (OR: R%<3·!Weak · Neutral · ไส้ล่าง>บน): ${stats.observeStored}`);
+  lines.push(`เก็บ Observe (AND ทิศ Long · OR: R%<3·!Weak · Neutral · ไส้ล่าง>บน): ${stats.observeStored}`);
   lines.push(...formatSymbolListLines("  ", stats.observeStoredSymbols));
   lines.push(`ติด dedupe (แท่งเดิม): ${stats.deduped}`);
   lines.push(...formatSymbolListLines("  ", stats.dedupedSymbols));
