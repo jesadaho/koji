@@ -255,10 +255,9 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
       continue;
     }
 
-    const tpPlan = resolveReversalTpSlPlanFromRow(row, a.side);
-
     for (const a of actives) {
       try {
+        const tpPlan = resolveReversalTpSlPlanFromRow(row, a.side);
         const phase1H = resolveAutoTradeMaxHoldHours({
           activeMaxHoldHours: a.maxHoldHours,
           liveMaxHoldHours: tpPlan.maxHoldHours,
