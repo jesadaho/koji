@@ -25,6 +25,8 @@ import {
 
 export type ViewerStatsTpSlPlan = ReversalViewerStatsTpSlPlan;
 
+export type StatsTpSlPlanSource = "reversal" | "snowball";
+
 export type { ReversalViewerTpSlPlans } from "@/lib/reversalTpSlSettings";
 
 export { statsTpSlPlanCacheKey };
