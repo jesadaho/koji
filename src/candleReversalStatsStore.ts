@@ -199,6 +199,8 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
         ? Math.floor(r.weeklyAlertNo)
         : null,
     priceDiffFromPrevAlertPct: nullNum(r.priceDiffFromPrevAlertPct),
+    isTradFi: r.isTradFi === true ? true : r.isTradFi === false ? false : null,
+    isTradFiV: r.isTradFiV === 1 ? 1 : undefined,
   };
 }
 
@@ -269,6 +271,7 @@ export type AppendCandleReversalStatsInput = {
   pumpCycleSwingLowV?: number;
   statsPlayMode?: ReversalStatsPlayMode;
   observeReason?: ReversalObserveReason;
+  isTradFi?: boolean | null;
 };
 
 function normalizeStatsSymbol(symbol: string): string {
@@ -608,6 +611,8 @@ export async function appendCandleReversalStatsRow(
           ...(input.observeReason ? { observeReason: input.observeReason } : {}),
         }
       : {}),
+    ...(input.isTradFi === true ? { isTradFi: true } : input.isTradFi === false ? { isTradFi: false } : {}),
+    ...(input.isTradFi != null ? { isTradFiV: 1 } : {}),
   };
 
   const ema20Incomplete = !statsEma20MetricsComplete(row);

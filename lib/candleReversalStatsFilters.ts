@@ -39,6 +39,10 @@ import {
   reversalStatsRowMatchesObserveFilter,
   type ReversalObserveFilter,
 } from "@/lib/reversalStatsPlayMode";
+import {
+  reversalStatsRowMatchesTradFiFilter,
+  type ReversalTradFiFilter,
+} from "@/lib/reversalTradFiStatsFilter";
 
 export type { ReversalObserveFilter } from "@/lib/reversalStatsPlayMode";
 export {
@@ -48,6 +52,16 @@ export {
   reversalObserveFilterTitle,
   reversalStatsRowMatchesObserveFilter,
 } from "@/lib/reversalStatsPlayMode";
+
+export type { ReversalTradFiFilter } from "@/lib/reversalTradFiStatsFilter";
+export {
+  REVERSAL_TRADFI_FILTER_OPTIONS,
+  reversalStatsRowIsTradFi,
+  reversalStatsRowMatchesTradFiFilter,
+  reversalTradFiFilterDetail,
+  reversalTradFiFilterLabel,
+  reversalTradFiFilterTitle,
+} from "@/lib/reversalTradFiStatsFilter";
 
 export type { StatsAtrPct14dFilter } from "@/lib/statsAtrPct14dFilter";
 export {
@@ -148,6 +162,7 @@ export type ReversalStatsFilterQuery = {
   rSignal?: ReversalBarRangeSignalFilter;
   matrix?: ReversalMatrixFilter;
   observe?: ReversalObserveFilter;
+  tradFi?: ReversalTradFiFilter;
 };
 
 export function reversalShapeFilterLabel(filter: ReversalShapeFilter): string {
@@ -269,6 +284,9 @@ export function filterCandleReversalStatsRows(
     if (q.observe && q.observe !== "all" && !reversalStatsRowMatchesObserveFilter(r, q.observe)) {
       return false;
     }
+    if (q.tradFi && q.tradFi !== "all" && !reversalStatsRowMatchesTradFiFilter(r, q.tradFi)) {
+      return false;
+    }
     return true;
   });
 }
@@ -282,6 +300,7 @@ const ATR_SET = new Set(STATS_ATR_PCT14D_FILTER_OPTIONS.map((o) => o.value));
 const R_SIGNAL_SET = new Set(SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS.map((o) => o.value));
 const MATRIX_SET = new Set<string>(["all", "qualitySignal", "neutral", "slowMover"]);
 const OBSERVE_SET = new Set<string>(["all", "observe", "play"]);
+const TRADFI_SET = new Set<string>(["all", "crypto", "stock"]);
 
 function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
   const k = raw?.trim().toLowerCase() ?? "";
@@ -341,6 +360,7 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.rSignal = pickEnum(sp.get("rSignal"), R_SIGNAL_SET, "all");
   q.matrix = pickEnum(sp.get("matrix"), MATRIX_SET, "all");
   q.observe = pickEnum(sp.get("observe"), OBSERVE_SET, "all");
+  q.tradFi = pickEnum(sp.get("tradFi"), TRADFI_SET, "all");
   return q;
 }
 
@@ -361,6 +381,7 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.rSignal && q.rSignal !== "all") p.set("rSignal", q.rSignal);
   if (q.matrix && q.matrix !== "all") p.set("matrix", q.matrix);
   if (q.observe && q.observe !== "all") p.set("observe", q.observe);
+  if (q.tradFi && q.tradFi !== "all") p.set("tradFi", q.tradFi);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

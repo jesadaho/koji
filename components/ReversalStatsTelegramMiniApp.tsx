@@ -129,6 +129,7 @@ import {
   reversalLenRankFilterLabel,
   REVERSAL_BAR_RANGE_SIGNAL_FILTER_OPTIONS,
   REVERSAL_OBSERVE_FILTER_OPTIONS,
+  REVERSAL_TRADFI_FILTER_OPTIONS,
   reversalBarRangeSignalFilterLabel,
   reversalBarRangeSignalFilterTitle,
   reversalObserveFilterDetail,
@@ -145,7 +146,11 @@ import {
   reversalRowMatchesShapeFilter,
   reversalRowMatchesVolVsSmaFilter,
   reversalStatsRowMatchesObserveFilter,
+  reversalStatsRowMatchesTradFiFilter,
   reversalShapeFilterLabel,
+  reversalTradFiFilterDetail,
+  reversalTradFiFilterLabel,
+  reversalTradFiFilterTitle,
   STATS_ATR_PCT14D_FILTER_OPTIONS,
   statsAtrPct14dFilterLabel,
   statsAtrPct14dFilterTitle,
@@ -158,6 +163,7 @@ import {
   type ReversalEma1dFilter,
   type ReversalLenRankFilter,
   type ReversalObserveFilter,
+  type ReversalTradFiFilter,
   type ReversalShapeFilter,
   type ReversalStatsFilterQuery,
 } from "@/lib/candleReversalStatsFilters";
@@ -447,6 +453,7 @@ function ReversalStatsSection({
   const [volVsSmaFilter, setVolVsSmaFilter] = useState<ReversalVolVsSmaFilter>("all");
   const [matrixFilter, setMatrixFilter] = useState<ReversalMatrixFilter>("all");
   const [observeFilter, setObserveFilter] = useState<ReversalObserveFilter>("all");
+  const [tradFiFilter, setTradFiFilter] = useState<ReversalTradFiFilter>("all");
   const [ema1hFilter, setEma1hFilter] = useState<ReversalEma1hFilter>("all");
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
   const [btcEma4hFilter, setBtcEma4hFilter] = useState<BtcEma4hFilter>("all");
@@ -487,11 +494,12 @@ function ReversalStatsSection({
           reversalRowMatchesBarRangeSignalFilter(r, barRangeSignalFilter) &&
           reversalStatsRowMatchesMatrixFilter(r, matrixFilter) &&
           reversalStatsRowMatchesObserveFilter(r, observeFilter) &&
+          reversalStatsRowMatchesTradFiFilter(r, tradFiFilter) &&
           (!showSuggestedSideColumn || reversalRowMatchesSuggestedSideFilter(r, suggestedSideFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendGainFilter(r, trendGainFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendVelocityFilter(r, trendVelocityFilter)),
       ),
-    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, matrixFilter, observeFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, matrixFilter, observeFilter, tradFiFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -627,8 +635,9 @@ function ReversalStatsSection({
       rSignal: barRangeSignalFilter,
       matrix: matrixFilter,
       observe: observeFilter,
+      tradFi: tradFiFilter,
     };
-  }, [csvQuery, dayFilter, dowFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lenRankFilter, matrixFilter, observeFilter, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, dowFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lenRankFilter, matrixFilter, observeFilter, tradFiFilter, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -1017,7 +1026,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA20∠1h ${reversalEma1hFilterLabel(ema1hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · R% ${reversalBarRangeSignalFilterLabel(barRangeSignalFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)} · Observe ${reversalObserveFilterLabel(observeFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA20∠1h ${reversalEma1hFilterLabel(ema1hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · R% ${reversalBarRangeSignalFilterLabel(barRangeSignalFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)} · Observe ${reversalObserveFilterLabel(observeFilter)} · ประเภท ${reversalTradFiFilterLabel(tradFiFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -1465,6 +1474,22 @@ function ReversalStatsSection({
           </label>
         ) : null}
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+          ประเภท
+          <select
+            value={tradFiFilter}
+            onChange={(e) => setTradFiFilter(e.currentTarget.value as ReversalTradFiFilter)}
+            className="tmaInput"
+            style={{ width: "auto", minWidth: "8rem" }}
+            title={reversalTradFiFilterTitle(tradFiFilter)}
+          >
+            {REVERSAL_TRADFI_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
           Observe
           <select
             value={observeFilter}
@@ -1509,6 +1534,15 @@ function ReversalStatsSection({
             title={reversalObserveFilterDetail(observeFilter) ?? reversalObserveFilterTitle(observeFilter)}
           >
             {reversalObserveFilterDetail(observeFilter) ?? reversalObserveFilterTitle(observeFilter)}
+          </p>
+        ) : null}
+        {tradFiFilter !== "all" ? (
+          <p
+            className="sub"
+            style={{ width: "100%", margin: 0 }}
+            title={reversalTradFiFilterDetail(tradFiFilter) ?? reversalTradFiFilterTitle(tradFiFilter)}
+          >
+            {reversalTradFiFilterDetail(tradFiFilter) ?? reversalTradFiFilterTitle(tradFiFilter)}
           </p>
         ) : null}
         {barRangeSignalFilter === "lt3" ? (

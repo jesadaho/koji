@@ -43,6 +43,7 @@ import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
 import { backfillPumpCycleSwingLowForRows } from "./statsPumpCycleSwingLow";
+import { backfillAllStatsRowsTradFiFlag } from "./statsTradFiFlag";
 import {
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
@@ -887,6 +888,7 @@ export async function runCandleReversalStatsFollowUpTick(
   );
   dirty += backfillNeutralObserveStatsPlayMode(state.rows);
   dirty += backfill1hOutcomeTo24h(state.rows);
+  dirty += await backfillAllStatsRowsTradFiFlag(state.rows);
   dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
   if (opts?.forceLong1hFadeShort) {
     dirty += await refreshLong1hFadeShortFollowUp(state.rows, nowMs, nowSec);

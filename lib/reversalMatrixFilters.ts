@@ -144,12 +144,13 @@ export const REVERSAL_MEAN_REVERSION_MATRIX_CRITERIA =
 /** Matrix Charging — เทรนด์ขึ้นแต่พักสะสมพลัง (เดิม Slow mover) */
 export const REVERSAL_CHARGING_MATRIX_CRITERIA = REVERSAL_SLOW_MOVER_MATRIX_CRITERIA;
 
-/** Matrix Parabolic — Trend Gain >150% · EMA20∠4h >300% */
+/** Matrix Parabolic — Trend Gain >150% · EMA20∠4h >300% · R% >25% */
 export const REVERSAL_PARABOLIC_MATRIX_TREND_GAIN_MIN_EXCLUSIVE = 150;
 export const REVERSAL_PARABOLIC_MATRIX_EMA4H_MIN_EXCLUSIVE = 300;
+export const REVERSAL_PARABOLIC_MATRIX_BAR_RANGE_PCT_MIN_EXCLUSIVE = 25;
 
 export const REVERSAL_PARABOLIC_MATRIX_CRITERIA =
-  "Trend Gain >150% · EMA20∠4h >300%";
+  "Trend Gain >150% · EMA20∠4h >300% · R% >25%";
 
 /** Matrix Weak Trend — R% สัญญาณ <3% · EMA20∠1h <13% */
 export const REVERSAL_WEAK_TREND_MATRIX_BAR_RANGE_PCT_MAX_EXCLUSIVE = 3;
@@ -477,23 +478,33 @@ export function reversalRowMatchesChargingMatrix(
   return reversalSlowMoverPass(row);
 }
 
-/** Matrix Parabolic — Trend Gain >150% · EMA20∠4h >300% */
+/** Matrix Parabolic — Trend Gain >150% · EMA20∠4h >300% · R% >25% */
 export function reversalParabolicPass(
-  row: Pick<CandleReversalStatsRow, "trendGainPct" | "ema20_4hSlopePct7d" | "ema4hSlopePct7d">,
+  row: Pick<
+    CandleReversalStatsRow,
+    "trendGainPct" | "ema20_4hSlopePct7d" | "ema4hSlopePct7d" | "barRangePctSignal"
+  >,
 ): boolean {
   const gain = row.trendGainPct;
   const ema4h = reversalMatrixCoinEma4hSlopePct7d(row);
+  const r = row.barRangePctSignal;
   return (
     gain != null &&
     Number.isFinite(gain) &&
     gain > REVERSAL_PARABOLIC_MATRIX_TREND_GAIN_MIN_EXCLUSIVE &&
     ema4h != null &&
-    ema4h > REVERSAL_PARABOLIC_MATRIX_EMA4H_MIN_EXCLUSIVE
+    ema4h > REVERSAL_PARABOLIC_MATRIX_EMA4H_MIN_EXCLUSIVE &&
+    r != null &&
+    Number.isFinite(r) &&
+    r > REVERSAL_PARABOLIC_MATRIX_BAR_RANGE_PCT_MIN_EXCLUSIVE
   );
 }
 
 export function reversalRowMatchesParabolicMatrix(
-  row: Pick<CandleReversalStatsRow, "trendGainPct" | "ema20_4hSlopePct7d" | "ema4hSlopePct7d">,
+  row: Pick<
+    CandleReversalStatsRow,
+    "trendGainPct" | "ema20_4hSlopePct7d" | "ema4hSlopePct7d" | "barRangePctSignal"
+  >,
 ): boolean {
   return reversalParabolicPass(row);
 }

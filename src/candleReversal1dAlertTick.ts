@@ -714,6 +714,7 @@ async function notifyResults(
         afterInvertedDoji: sig.afterInvertedDoji,
         greenDaysBeforeSignal,
         greenDaysBeforeSignalBkk,
+        isTradFi: assetMeta?.isTradFi === true,
         ...pumpCycleFields,
       } as const;
 

@@ -163,6 +163,10 @@ export type CandleReversalStatsRow = {
   weeklyAlertNo?: number | null;
   /** (Entry − entry ครั้งก่อน) / entry ครั้งก่อน × 100 — symbol+TF+side */
   priceDiffFromPrevAlertPct?: number | null;
+  /** Binance TradFi/stock perp (underlying ≠ COIN) — ใช้กรอง stats / auto-open skip */
+  isTradFi?: boolean | null;
+  /** 1 = isTradFi backfill จาก exchangeInfo */
+  isTradFiV?: number;
   /** ฝั่งตรงข้ามที่เคย conflict (บันทึกตอนแจ้ง) — แสดง badge ถาวร */
   conflictWith?: string | null;
 };
