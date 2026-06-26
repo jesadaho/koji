@@ -9,6 +9,9 @@ import {
 
 export type ReversalStatsPlayMode = "play" | "observe";
 
+/** เหตุผลที่แถวเป็น observe */
+export type ReversalObserveReason = "r_bar_range" | "neutral_matrix" | "lower_wick_long";
+
 /** R% สัญญาณ — ต่ำกว่านี้ = Observe (1H Short) */
 export const REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX = 3;
 
@@ -21,6 +24,31 @@ export function reversalShort1hIsObserveSignal(input: {
   if ((input.tradeSide ?? "short") !== "short") return false;
   const r = input.barRangePctSignal;
   return r != null && Number.isFinite(r) && r >= 0 && r < REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX;
+}
+
+/** Short ที่ไส้ล่างยาวกว่าไส้บน → observe ฝั่ง Long (hammer / rejection ล่าง) */
+export function reversalShortLowerWickDominantIsObserveSignal(input: {
+  tradeSide?: CandleReversalTradeSide | null;
+  wickRatio?: number | null;
+  lowerWickRatio?: number | null;
+  wickRatioPct?: number | null;
+  lowerWickRatioPct?: number | null;
+}): boolean {
+  if ((input.tradeSide ?? "short") !== "short") return false;
+  if (
+    input.wickRatio != null &&
+    input.lowerWickRatio != null &&
+    Number.isFinite(input.wickRatio) &&
+    Number.isFinite(input.lowerWickRatio)
+  ) {
+    return input.lowerWickRatio > input.wickRatio;
+  }
+  const upper = input.wickRatioPct;
+  const lower = input.lowerWickRatioPct;
+  if (upper == null || lower == null || !Number.isFinite(upper) || !Number.isFinite(lower)) {
+    return false;
+  }
+  return lower > upper;
 }
 
 /** Neutral matrix — เก็บ stats observe ก่อนเล่น */
@@ -37,7 +65,22 @@ export function reversalIsObserveSignal(input: {
   trendGainPct?: number | null;
   ema20_4hSlopePct7d?: number | null;
   ema4hSlopePct7d?: number | null;
+  wickRatio?: number | null;
+  lowerWickRatio?: number | null;
+  wickRatioPct?: number | null;
+  lowerWickRatioPct?: number | null;
 }): boolean {
+  if (
+    reversalShortLowerWickDominantIsObserveSignal({
+      tradeSide: input.tradeSide,
+      wickRatio: input.wickRatio,
+      lowerWickRatio: input.lowerWickRatio,
+      wickRatioPct: input.wickRatioPct,
+      lowerWickRatioPct: input.lowerWickRatioPct,
+    })
+  ) {
+    return true;
+  }
   if (
     reversalShort1hIsObserveSignal({
       signalBarTf: input.signalBarTf,
@@ -54,24 +97,71 @@ export function reversalIsObserveSignal(input: {
   });
 }
 
-export function reversalStatsObserveBadgeTitle(row: {
+export function reversalResolveObserveReason(input: {
+  observeReason?: ReversalObserveReason | null;
   signalBarTf?: CandleReversalSignalBarTf | null;
   tradeSide?: CandleReversalTradeSide | null;
   barRangePctSignal?: number | null;
   trendGainPct?: number | null;
   ema20_4hSlopePct7d?: number | null;
   ema4hSlopePct7d?: number | null;
-}): string {
-  if (reversalNeutralMatrixIsObserveSignal(row)) {
-    return `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
+  wickRatio?: number | null;
+  lowerWickRatio?: number | null;
+  wickRatioPct?: number | null;
+  lowerWickRatioPct?: number | null;
+}): ReversalObserveReason | undefined {
+  if (input.observeReason) return input.observeReason;
+  if (
+    reversalShortLowerWickDominantIsObserveSignal({
+      tradeSide: input.tradeSide,
+      wickRatio: input.wickRatio,
+      lowerWickRatio: input.lowerWickRatio,
+      wickRatioPct: input.wickRatioPct,
+      lowerWickRatioPct: input.lowerWickRatioPct,
+    })
+  ) {
+    return "lower_wick_long";
   }
   if (
     reversalShort1hIsObserveSignal({
-      signalBarTf: row.signalBarTf,
-      tradeSide: row.tradeSide,
-      barRangePctSignal: row.barRangePctSignal,
+      signalBarTf: input.signalBarTf,
+      tradeSide: input.tradeSide,
+      barRangePctSignal: input.barRangePctSignal,
     })
   ) {
+    return "r_bar_range";
+  }
+  if (
+    reversalNeutralMatrixIsObserveSignal({
+      trendGainPct: input.trendGainPct,
+      ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
+      ema4hSlopePct7d: input.ema4hSlopePct7d,
+    })
+  ) {
+    return "neutral_matrix";
+  }
+  return undefined;
+}
+
+export function reversalStatsObserveBadgeTitle(row: {
+  observeReason?: ReversalObserveReason | null;
+  signalBarTf?: CandleReversalSignalBarTf | null;
+  tradeSide?: CandleReversalTradeSide | null;
+  barRangePctSignal?: number | null;
+  trendGainPct?: number | null;
+  ema20_4hSlopePct7d?: number | null;
+  ema4hSlopePct7d?: number | null;
+  wickRatioPct?: number | null;
+  lowerWickRatioPct?: number | null;
+}): string {
+  const reason = reversalResolveObserveReason(row);
+  if (reason === "lower_wick_long") {
+    return "Observe Long — ไส้ล่าง > ไส้บน (hammer) เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram";
+  }
+  if (reason === "neutral_matrix") {
+    return `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
+  }
+  if (reason === "r_bar_range") {
     return `R% < ${REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX}% (1H Short) — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
   return "เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram";
@@ -85,8 +175,22 @@ export function reversalStatsRowIsObserve(row: {
 
 export function reversalStatsPlayModeLabel(row: {
   statsPlayMode?: ReversalStatsPlayMode | null;
-}): ReversalStatsPlayMode {
-  return reversalStatsRowIsObserve(row) ? "observe" : "play";
+  observeReason?: ReversalObserveReason | null;
+  signalBarTf?: CandleReversalSignalBarTf | null;
+  tradeSide?: CandleReversalTradeSide | null;
+  barRangePctSignal?: number | null;
+  trendGainPct?: number | null;
+  ema20_4hSlopePct7d?: number | null;
+  ema4hSlopePct7d?: number | null;
+  wickRatioPct?: number | null;
+  lowerWickRatioPct?: number | null;
+}): string {
+  if (!reversalStatsRowIsObserve(row)) return "play";
+  const reason = reversalResolveObserveReason(row);
+  if (reason === "lower_wick_long") return "observe:long_wick";
+  if (reason === "neutral_matrix") return "observe:neutral";
+  if (reason === "r_bar_range") return "observe:r_low";
+  return "observe";
 }
 
 /** pending ที่บล็อก play ใหม่ — observe pending ไม่นับ */
@@ -121,7 +225,7 @@ export function reversalObserveFilterLabel(filter: ReversalObserveFilter): strin
 export function reversalObserveFilterTitle(filter: ReversalObserveFilter): string {
   if (filter === "all") return "ทั้งหมด — รวม Play และ Observe";
   if (filter === "observe") {
-    return "Observe — เก็บสถิติอย่างเดียว (R% < 3 · Neutral matrix) · ไม่เล่น · ไม่ส่ง Telegram";
+    return "Observe — เก็บสถิติอย่างเดียว (R% < 3 · Neutral · ไส้ล่าง>บน→Long) · ไม่เล่น · ไม่ส่ง Telegram";
   }
   return "Play — แถวที่เล่นจริง (ไม่รวม Observe)";
 }

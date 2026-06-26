@@ -9,7 +9,19 @@ import type {
 } from "@/lib/candleReversalStatsClient";
 import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 
-export type ReversalMatrixFilter = "all" | "qualitySignal" | "neutral" | "slowMover";
+export type ReversalMatrixFilter =
+  | "all"
+  | "qualitySignal"
+  | "neutral"
+  | "slowMover"
+  | "earlyTrend"
+  | "acceleration"
+  | "momentum"
+  | "freshBreakout"
+  | "healthyPace"
+  | "strongTrend"
+  | "meanReversion"
+  | "charging";
 
 /** โปรไฟล์ Quality Signal ในตารางสถิติ (แต่ละ section) */
 export type ReversalQualitySignalProfile = "short" | "long1h";
@@ -98,14 +110,49 @@ export const REVERSAL_SLOW_MOVER_MATRIX_VELOCITY_MAX_EXCLUSIVE = 0.5;
 export const REVERSAL_SLOW_MOVER_MATRIX_CRITERIA =
   "EMA20∠4h >20% · Velocity <0.5%/h";
 
+/** Matrix Early Trend — Trend Gain 5–20% · Vol×SMA 2–5× */
+export const REVERSAL_EARLY_TREND_MATRIX_CRITERIA =
+  "Trend Gain 5–20% · Vol×SMA 2–5×";
+
+/** Matrix Acceleration — EMA20Δ1h 15–30% */
+export const REVERSAL_ACCELERATION_MATRIX_CRITERIA = "EMA20Δ1h 15–30%";
+
+/** Matrix Momentum — EMA20∠1h 50–66% */
+export const REVERSAL_MOMENTUM_MATRIX_CRITERIA = "EMA20∠1h 50–66%";
+
+/** Matrix Fresh Breakout — Trend Gain <16% · Vol×SMA 2–12× */
+export const REVERSAL_FRESH_BREAKOUT_MATRIX_CRITERIA =
+  "Trend Gain <16% · Vol×SMA 2–12×";
+
+/** Matrix Healthy Pace — Velocity 0.2–0.3%/h */
+export const REVERSAL_HEALTHY_PACE_MATRIX_CRITERIA = "Velocity 0.2–0.3%/h";
+
+/** Matrix Strong Trend — EMA20∠4h 40–300% · EMA20Δ4h >20% */
+export const REVERSAL_STRONG_TREND_MATRIX_CRITERIA =
+  "EMA20∠4h 40–300% · EMA20Δ4h >20%";
+
+/** Matrix Mean Reversion — EMA20∠4h <−5% · EMA20Δ4h >30% */
+export const REVERSAL_MEAN_REVERSION_MATRIX_CRITERIA =
+  "EMA20∠4h <−5% · EMA20Δ4h >30%";
+
+/** Matrix Charging — เทรนด์ขึ้นแต่พักสะสมพลัง (เดิม Slow mover) */
+export const REVERSAL_CHARGING_MATRIX_CRITERIA = REVERSAL_SLOW_MOVER_MATRIX_CRITERIA;
+
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
   label: string;
 }> = [
   { value: "all", label: "ทั้งหมด" },
   { value: "qualitySignal", label: "✨ Quality Signal" },
+  { value: "earlyTrend", label: "Early Trend" },
+  { value: "acceleration", label: "Acceleration" },
+  { value: "momentum", label: "Momentum" },
+  { value: "freshBreakout", label: "Fresh Breakout" },
+  { value: "healthyPace", label: "Healthy Pace" },
+  { value: "strongTrend", label: "Strong Trend" },
+  { value: "meanReversion", label: "Mean Reversion" },
+  { value: "charging", label: "Charging" },
   { value: "neutral", label: "Neutral" },
-  { value: "slowMover", label: "Slow mover" },
 ];
 
 export function reversalMatrixFilterLabel(filter: ReversalMatrixFilter): string {
@@ -128,8 +175,29 @@ export function reversalMatrixFilterTitle(
   if (filter === "neutral") {
     return `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA}`;
   }
-  if (filter === "slowMover") {
-    return `Slow mover: ${REVERSAL_SLOW_MOVER_MATRIX_CRITERIA}`;
+  if (filter === "slowMover" || filter === "charging") {
+    return `Charging: ${REVERSAL_CHARGING_MATRIX_CRITERIA}`;
+  }
+  if (filter === "earlyTrend") {
+    return `Early Trend: ${REVERSAL_EARLY_TREND_MATRIX_CRITERIA} — เพิ่งเริ่มเป็นเทรนด์ มีแรงซื้อพอดี`;
+  }
+  if (filter === "acceleration") {
+    return `Acceleration: ${REVERSAL_ACCELERATION_MATRIX_CRITERIA} — EMA เริ่มเร่งตัวขึ้น`;
+  }
+  if (filter === "momentum") {
+    return `Momentum: ${REVERSAL_MOMENTUM_MATRIX_CRITERIA} — โมเมนตัมระยะสั้นแข็งแรง`;
+  }
+  if (filter === "freshBreakout") {
+    return `Fresh Breakout: ${REVERSAL_FRESH_BREAKOUT_MATRIX_CRITERIA} — เพิ่งเบรก ยังวิ่งไม่ไกล`;
+  }
+  if (filter === "healthyPace") {
+    return `Healthy Pace: ${REVERSAL_HEALTHY_PACE_MATRIX_CRITERIA} — ความเร็วกำลังดี ไม่ช้าไม่เร็ว`;
+  }
+  if (filter === "strongTrend") {
+    return `Strong Trend: ${REVERSAL_STRONG_TREND_MATRIX_CRITERIA} — เทรนด์หลักแข็งแรงมาก`;
+  }
+  if (filter === "meanReversion") {
+    return `Mean Reversion: ${REVERSAL_MEAN_REVERSION_MATRIX_CRITERIA} — ลงแรง มีโอกาสเด้งกลับ`;
   }
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
@@ -315,13 +383,81 @@ export function reversalRowMatchesSlowMoverMatrix(
   return reversalSlowMoverPass(row);
 }
 
+/** Matrix Early Trend — Trend Gain 5–20% · Vol×SMA 2–5× */
+export function reversalRowMatchesEarlyTrendMatrix(
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "signalVolVsSma">,
+): boolean {
+  return reversalLongCandidateTrendVolPass(row);
+}
+
+/** Matrix Acceleration — EMA20Δ1h 15–30% */
+export function reversalRowMatchesAccelerationMatrix(
+  row: Pick<CandleReversalStatsRow, "priceVsEma20_1hPct">,
+): boolean {
+  return reversalLongCandidateEma20DistPass(row);
+}
+
+/** Matrix Momentum — EMA20∠1h 50–66% */
+export function reversalRowMatchesMomentumMatrix(
+  row: Pick<CandleReversalStatsRow, "ema20_1hSlopePct7d">,
+): boolean {
+  return reversalLongCandidateEma20_1hSlopePass(row);
+}
+
+/** Matrix Fresh Breakout — Trend Gain <16% · Vol×SMA 2–12× */
+export function reversalRowMatchesFreshBreakoutMatrix(
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "signalVolVsSma">,
+): boolean {
+  return reversalLongCandidateLowTrendHighVolPass(row);
+}
+
+/** Matrix Healthy Pace — Velocity 0.2–0.3%/h */
+export function reversalRowMatchesHealthyPaceMatrix(
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "ageOfTrendHours">,
+): boolean {
+  return reversalLongCandidateTrendVelocityPass(row);
+}
+
+/** Matrix Strong Trend — EMA20∠4h 40–300% · EMA20Δ4h >20% */
+export function reversalRowMatchesStrongTrendMatrix(
+  row: Pick<CandleReversalStatsRow, "ema20_4hSlopePct7d" | "priceVsEma20_4hPct">,
+): boolean {
+  return reversalLongCandidateEma20_4hPass(row);
+}
+
+/** Matrix Mean Reversion — EMA20∠4h <−5% · EMA20Δ4h >30% */
+export function reversalRowMatchesMeanReversionMatrix(
+  row: Pick<CandleReversalStatsRow, "ema20_4hSlopePct7d" | "priceVsEma20_4hPct">,
+): boolean {
+  return reversalLongCandidateEma20_4hOversoldPass(row);
+}
+
+/** Matrix Charging — EMA20∠4h >20% · Velocity <0.5%/h */
+export function reversalRowMatchesChargingMatrix(
+  row: Pick<
+    CandleReversalStatsRow,
+    "ema20_4hSlopePct7d" | "ema4hSlopePct7d" | "trendGainPct" | "ageOfTrendHours"
+  >,
+): boolean {
+  return reversalSlowMoverPass(row);
+}
+
 export function reversalStatsRowMatchesMatrixFilter(
   row: CandleReversalStatsRow,
   filter: ReversalMatrixFilter,
 ): boolean {
   if (filter === "all") return true;
   if (filter === "neutral") return reversalRowMatchesNeutralMatrix(row);
-  if (filter === "slowMover") return reversalRowMatchesSlowMoverMatrix(row);
+  if (filter === "slowMover" || filter === "charging") {
+    return reversalRowMatchesChargingMatrix(row);
+  }
+  if (filter === "earlyTrend") return reversalRowMatchesEarlyTrendMatrix(row);
+  if (filter === "acceleration") return reversalRowMatchesAccelerationMatrix(row);
+  if (filter === "momentum") return reversalRowMatchesMomentumMatrix(row);
+  if (filter === "freshBreakout") return reversalRowMatchesFreshBreakoutMatrix(row);
+  if (filter === "healthyPace") return reversalRowMatchesHealthyPaceMatrix(row);
+  if (filter === "strongTrend") return reversalRowMatchesStrongTrendMatrix(row);
+  if (filter === "meanReversion") return reversalRowMatchesMeanReversionMatrix(row);
   return reversalRowMatchesQualitySignalMatrix(row);
 }
 

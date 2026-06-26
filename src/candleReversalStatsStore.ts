@@ -23,6 +23,7 @@ import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import {
   reversalStatsRowBlocksPlayPending,
+  type ReversalObserveReason,
   type ReversalStatsPlayMode,
 } from "@/lib/reversalStatsPlayMode";
 import {
@@ -86,6 +87,7 @@ type LegacyCandleReversalRowV1 = LegacyCandleReversalRow & {
   signalBarTf?: CandleReversalStatsRow["signalBarTf"];
   tradeSide?: CandleReversalStatsRow["tradeSide"];
   statsPlayMode?: ReversalStatsPlayMode;
+  observeReason?: ReversalObserveReason;
   rangeScore?: number | null;
   wickScore?: number | null;
   rangeRankInLookback?: number | null;
@@ -109,13 +111,20 @@ function normalizeStatsPlayMode(raw: string | undefined): ReversalStatsPlayMode 
   return raw === "observe" ? "observe" : undefined;
 }
 
+function normalizeObserveReason(raw: string | undefined): ReversalObserveReason | undefined {
+  if (raw === "r_bar_range" || raw === "neutral_matrix" || raw === "lower_wick_long") return raw;
+  return undefined;
+}
+
 function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleReversalStatsRow {
   const statsPlayMode = normalizeStatsPlayMode(r.statsPlayMode);
+  const observeReason = normalizeObserveReason(r.observeReason);
   return {
     ...r,
     signalBarTf: r.signalBarTf === "1h" ? "1h" : "1d",
     tradeSide: normalizeTradeSide(r.tradeSide),
     ...(statsPlayMode ? { statsPlayMode } : {}),
+    ...(observeReason ? { observeReason } : {}),
     highRankInLookback: finiteRank(r.highRankInLookback),
     lowRankInLookback: finiteRank(r.lowRankInLookback),
     rangeRankInLookback: finiteRank(r.rangeRankInLookback),
@@ -256,6 +265,7 @@ export type AppendCandleReversalStatsInput = {
   swingLowSource?: CandleReversalStatsRow["swingLowSource"];
   pumpCycleSwingLowV?: number;
   statsPlayMode?: ReversalStatsPlayMode;
+  observeReason?: ReversalObserveReason;
 };
 
 function normalizeStatsSymbol(symbol: string): string {
@@ -583,7 +593,12 @@ export async function appendCandleReversalStatsRow(
     outcome: "pending",
     weeklyAlertNo: weeklyAlert.weeklyAlertNo,
     priceDiffFromPrevAlertPct: weeklyAlert.priceDiffFromPrevAlertPct,
-    ...(isObserve ? { statsPlayMode: "observe" as const } : {}),
+    ...(isObserve
+      ? {
+          statsPlayMode: "observe" as const,
+          ...(input.observeReason ? { observeReason: input.observeReason } : {}),
+        }
+      : {}),
   };
 
   const ema20Incomplete = !statsEma20MetricsComplete(row);

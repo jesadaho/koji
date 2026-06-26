@@ -34,13 +34,12 @@ import {
   isCandleReversalStatsEnabled,
 } from "./candleReversalStatsStore";
 import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
-import { reversalIsObserveSignal, reversalShort1hIsObserveSignal } from "@/lib/reversalStatsPlayMode";
+import { reversalIsObserveSignal, reversalResolveObserveReason, reversalShort1hIsObserveSignal, reversalShortLowerWickDominantIsObserveSignal } from "@/lib/reversalStatsPlayMode";
 import { statsBarRangePctSignal } from "@/lib/statsBarRangePct";
 import { resolvePumpCycleSwingLowFields } from "./statsPumpCycleSwingLow";
 import { formatCandleReversalTfDebugBlock } from "./candleReversalDebugFormat";
 import {
   buildCandleReversalAlertMessage,
-  reversalShortSkipsLowerWickDominant,
   DEFAULT_CANDLE_REVERSAL_1D_ENV,
   DEFAULT_CANDLE_REVERSAL_1H_ENV,
   candleReversalBarIndexBarsAgo,
@@ -647,24 +646,21 @@ async function notifyResults(
 
     const sig = row.evals.signal;
     const tradeSide = sig.tradeSide ?? "short";
-    if (tradeSide === "short") {
-      const upperWick = sig.wickRatio;
-      const lowerWick = sig.lowerWickRatio ?? 0;
-      if (reversalShortSkipsLowerWickDominant(upperWick, lowerWick)) {
-        scanStats.skippedLowerWickDominant += 1;
-        pushReversalScanSymList(scanStats.skippedLowerWickDominantSymbols, row.symbol);
-        continue;
-      }
-    }
 
     const barRangePctSignal = statsBarRangePctSignal(sig.h, sig.l, sig.c);
-    const mightBeBarRangeObserve = reversalShort1hIsObserveSignal({
-      signalBarTf: sig.tf,
-      tradeSide,
-      barRangePctSignal,
-    });
+    const mightBeObserveBeforeCap =
+      reversalShort1hIsObserveSignal({
+        signalBarTf: sig.tf,
+        tradeSide,
+        barRangePctSignal,
+      }) ||
+      reversalShortLowerWickDominantIsObserveSignal({
+        tradeSide,
+        wickRatio: sig.wickRatio,
+        lowerWickRatio: sig.lowerWickRatio,
+      });
 
-    if (!mightBeBarRangeObserve) {
+    if (!mightBeObserveBeforeCap) {
       if (notified >= alertCap) {
         scanStats.cappedByRunLimit += 1;
         pushReversalScanSymList(scanStats.cappedByRunLimitSymbols, row.symbol);
@@ -747,6 +743,18 @@ async function notifyResults(
         trendGainPct: pumpCycleFields.trendGainPct,
         ema20_4hSlopePct7d: mktSnap.ema20_4hSlopePct7d,
         ema4hSlopePct7d: mktSnap.ema4hSlopePct7d,
+        wickRatio: sig.wickRatio,
+        lowerWickRatio: sig.lowerWickRatio,
+      });
+      const observeReason = reversalResolveObserveReason({
+        signalBarTf: sig.tf,
+        tradeSide,
+        barRangePctSignal,
+        trendGainPct: pumpCycleFields.trendGainPct,
+        ema20_4hSlopePct7d: mktSnap.ema20_4hSlopePct7d,
+        ema4hSlopePct7d: mktSnap.ema4hSlopePct7d,
+        wickRatio: sig.wickRatio,
+        lowerWickRatio: sig.lowerWickRatio,
       });
 
       if (isObserve) {
@@ -754,6 +762,7 @@ async function notifyResults(
           const appended = await appendCandleReversalStatsRow({
             ...statsAppendInput,
             statsPlayMode: "observe",
+            observeReason,
           });
           if (appended) {
             scanStats.observeStored += 1;

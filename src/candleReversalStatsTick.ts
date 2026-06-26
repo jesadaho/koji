@@ -759,6 +759,7 @@ function backfillNeutralObserveStatsPlayMode(rows: CandleReversalStatsRow[]): nu
     if (reversalStatsRowIsObserve(row)) continue;
     if (!reversalRowMatchesNeutralMatrix(row)) continue;
     row.statsPlayMode = "observe";
+    row.observeReason = "neutral_matrix";
     updated += 1;
   }
   return updated;
