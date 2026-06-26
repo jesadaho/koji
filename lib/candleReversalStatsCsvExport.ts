@@ -48,6 +48,7 @@ import {
   snowballStatsQuoteVol24hLabel,
 } from "@/lib/snowballStatsClient";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
+import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import { snowballStatsBarRangePctLabel } from "@/lib/snowballStatsClient";
 import {
@@ -96,6 +97,7 @@ const HEADERS = [
   "SAR 4h",
   "SAR dist 4h %",
   "ATR% 14D",
+  "ATR% 4H",
   "Retest",
   "SL",
   "ไส้บน%",
@@ -214,6 +216,7 @@ function candleReversalStatsRowToCsvCells(
     statsPsar4hTrendLabel(r.psar4hTrend),
     statsPsar4hDistPctCsv(r.psar4hDistPct),
     statsAtrPct14dLabel(r.atrPct14d),
+    statsAtrPct4hLabel(r.atrPct4h),
     statsFmtPrice(r.retestPrice),
     statsFmtPrice(r.slPrice),
     (r.tradeSide ?? "short") === "short"

@@ -23,6 +23,7 @@ import {
   reversalStatsWeeklyAlertNoLabel,
 } from "@/lib/reversalStatsWeeklyAlert";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
+import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import {
   pumpCycleAgeHoursLabel,
@@ -353,10 +354,12 @@ type ReversalStatsSectionProps = {
   showLowRank?: boolean;
   adverseTitle?: string;
   strategyPlanTitle?: string;
+  strategyPlanTitleLong?: string;
   strategyMarginUsdt?: number | null;
   strategyLeverage?: number | null;
   strategyLongDynamicLeverageEnabled?: boolean;
   strategyTpSlPlan?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
+  strategyTpSlPlanLong?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
   /** เกณฑ์ ✨ Quality Signal ในตารางนี้ (ค่าเริ่มต้น = Short) */
   qualitySignalProfile?: ReversalQualitySignalProfile;
   /** tooltip คอลัมน์ผล */
@@ -383,10 +386,12 @@ function ReversalStatsSection({
   showLowRank = false,
   adverseTitle,
   strategyPlanTitle = REVERSAL_TP_STRATEGY_SUMMARY,
+  strategyPlanTitleLong,
   strategyMarginUsdt,
   strategyLeverage,
   strategyLongDynamicLeverageEnabled = false,
   strategyTpSlPlan,
+  strategyTpSlPlanLong,
   outcomeColumnTitle,
   showSuggestedSideColumn = false,
   statsPlaySides = { short: true, long: false },
@@ -432,7 +437,8 @@ function ReversalStatsSection({
     }),
     [strategyMarginUsdt, strategyLeverage, strategyLongDynamicLeverageEnabled, resolveLongRowLeverage],
   );
-  const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
+  const longPlanTitle = strategyPlanTitleLong ?? strategyPlanTitle;
+  const longTpSlPlan = strategyTpSlPlanLong ?? strategyTpSlPlan;
   const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
   const [dayFilter, setDayFilter] = useState<ReversalDayFilter>("all");
   const [dowFilter, setDowFilter] = useState<ReversalDowFilter>("all");
@@ -821,6 +827,13 @@ function ReversalStatsSection({
               activeSort={sort}
               onSort={onSortColumn}
             />
+            <SortTh
+              label="ATR%4H"
+              sortKey="atr4h"
+              title="Wilder ATR(14) บนแท่ง 4h ÷ close × 100 ณ เวลาแจ้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
             <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
             <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
             <SortTh
@@ -971,7 +984,7 @@ function ReversalStatsSection({
             {has48h && showSuggestedSideColumn ? (
               <th
                 scope="col"
-                title={`กำไรกลยุทธ์ฝั่ง Long (fade) — แถว 🟢 Long เท่านั้น · ${REVERSAL_TP_STRATEGY_SUMMARY}`}
+                title={`กำไรกลยุทธ์ฝั่ง Long (fade) — แถว 🟢 Long เท่านั้น · ${longPlanTitle}`}
               >
                 กำไร Long 24h
               </th>
@@ -979,7 +992,7 @@ function ReversalStatsSection({
             {has48h && showSuggestedSideColumn ? (
               <th
                 scope="col"
-                title={`กำไรกลยุทธ์ฝั่ง Long (fade) — แถว 🟢 Long เท่านั้น · ${strategyPlanTitle}`}
+                title={`กำไรกลยุทธ์ฝั่ง Long (fade) — แถว 🟢 Long เท่านั้น · ${longPlanTitle}`}
               >
                 กำไร Long 48h
               </th>
@@ -1069,6 +1082,7 @@ function ReversalStatsSection({
                   <td title="PSAR 4h trend">{statsPsar4hTrendLabel(r.psar4hTrend)}</td>
                   <td title="PSAR 4h distance">{statsPsar4hDistPctLabel(r.psar4hDistPct)}</td>
                   <td title="ATR(14) 1d ÷ close">{statsAtrPct14dLabel(r.atrPct14d)}</td>
+                  <td title="ATR(14) 4h ÷ close">{statsAtrPct4hLabel(r.atrPct4h)}</td>
                   <td>{fmtPrice(r.retestPrice)}</td>
                   <td>{fmtPrice(r.slPrice)}</td>
                   <td title="ไส้บน (Short)">
@@ -1151,7 +1165,7 @@ function ReversalStatsSection({
                               strategyExitReason24h={r.strategyExitReasonLong24h}
                               marginUsdt={strategyMarginUsdt}
                               leverage={resolveLongRowLeverage(r)}
-                              tpSlPlan={strategyTpSlPlan}
+                              tpSlPlan={longTpSlPlan}
                               maxDrawdownPct={r.maxDrawdownPct}
                               followUpMaxAdversePct={r.followUpMaxAdversePct}
                               resolveProfit={reversalStatsStrategyProfitLongResolvedForCell}
@@ -1172,7 +1186,7 @@ function ReversalStatsSection({
                               strategyExitReason={r.strategyExitReasonLong}
                               marginUsdt={strategyMarginUsdt}
                               leverage={resolveLongRowLeverage(r)}
-                              tpSlPlan={strategyTpSlPlan}
+                              tpSlPlan={longTpSlPlan}
                               maxDrawdownPct={r.maxDrawdownPct}
                               followUpMaxAdversePct={r.followUpMaxAdversePct}
                               resolveProfit={reversalStatsStrategyProfitLongResolvedForCell}
@@ -2092,10 +2106,12 @@ export default function ReversalStatsTelegramMiniApp() {
           title="สถิติ Reversal · 1H Short"
           subtitle={reversalStatsPlaySubtitle(viewerPlaySides)}
           strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
+          strategyPlanTitleLong={payload?.viewerTpSlPlanSummaryLong ?? payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
           strategyTpSlPlan={payload?.viewerTpSlPlan}
+          strategyTpSlPlanLong={payload?.viewerTpSlPlanLong ?? payload?.viewerTpSlPlan}
           emptyHint="ยังไม่มีแถว 1H Short — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
           footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_SHORT}`}
           csvPrefix="reversal-stats-1h-short"
@@ -2119,10 +2135,12 @@ export default function ReversalStatsTelegramMiniApp() {
           title="สถิติ Reversal · Long 1H (fade SHORT)"
           subtitle="สัญญาณ Long · วัดผลฝั่ง Short (fade) · follow-up 4h/12h/24h/48h (ผลที่ 24h)"
           strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
+          strategyPlanTitleLong={payload?.viewerTpSlPlanSummaryLong ?? payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
           strategyTpSlPlan={payload?.viewerTpSlPlan}
+          strategyTpSlPlanLong={payload?.viewerTpSlPlanLong ?? payload?.viewerTpSlPlan}
           emptyHint="ยังไม่มีแถว Long 1H — รอสัญญาณ Reversal Long ส่งสำเร็จ (CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED)"
           footnote={`${CANDLE_REVERSAL_MODEL_SHORT_LEGEND} · ${FOOTNOTE_1H_LONG}`}
           csvPrefix="reversal-stats-1h-long"

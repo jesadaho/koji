@@ -265,6 +265,17 @@ export default function SettingsTelegramMiniApp() {
   const [revSlEntryOffsetPct, setRevSlEntryOffsetPct] = useState("");
   const [revSlAtEntryAfter24hIfGreen, setRevSlAtEntryAfter24hIfGreen] = useState(true);
   const [revTp12hCloseEnabled, setRevTp12hCloseEnabled] = useState(true);
+  const [revLongTpSlEnabled, setRevLongTpSlEnabled] = useState(true);
+  const [revLongTp1PricePct, setRevLongTp1PricePct] = useState("");
+  const [revLongTp1PartialPct, setRevLongTp1PartialPct] = useState("");
+  const [revLongTp2PricePct, setRevLongTp2PricePct] = useState("");
+  const [revLongMaxHoldHours, setRevLongMaxHoldHours] = useState("");
+  const [revLongHoldExtendIfRed, setRevLongHoldExtendIfRed] = useState(false);
+  const [revLongHoldExtendRedHours, setRevLongHoldExtendRedHours] = useState("");
+  const [revLongSlArmRoiPct, setRevLongSlArmRoiPct] = useState("");
+  const [revLongSlEntryOffsetPct, setRevLongSlEntryOffsetPct] = useState("");
+  const [revLongSlAtEntryAfter24hIfGreen, setRevLongSlAtEntryAfter24hIfGreen] = useState(true);
+  const [revLongTp12hCloseEnabled, setRevLongTp12hCloseEnabled] = useState(true);
   const [revStatsPlayShort, setRevStatsPlayShort] = useState(true);
   const [revStatsPlayLong, setRevStatsPlayLong] = useState(false);
   const [revGateQualitySignal, setRevGateQualitySignal] = useState(true);
@@ -426,6 +437,47 @@ export default function SettingsTelegramMiniApp() {
     );
     setRevSlAtEntryAfter24hIfGreen(st.slAtEntryAfter24hIfGreenEnabled !== false);
     setRevTp12hCloseEnabled(st.tp12hCloseEnabled !== false);
+    setRevLongTpSlEnabled(
+      st.longTpSlEnabled != null ? st.longTpSlEnabled !== false : st.tpSlEnabled !== false,
+    );
+    setRevLongTp1PricePct(
+      st.longTp1PricePct != null && Number.isFinite(st.longTp1PricePct) ? String(st.longTp1PricePct) : "",
+    );
+    setRevLongTp1PartialPct(
+      st.longTp1PartialPct != null && Number.isFinite(st.longTp1PartialPct)
+        ? String(st.longTp1PartialPct)
+        : "",
+    );
+    setRevLongTp2PricePct(
+      st.longTp2PricePct != null && Number.isFinite(st.longTp2PricePct) ? String(st.longTp2PricePct) : "",
+    );
+    setRevLongMaxHoldHours(
+      st.longMaxHoldHours != null && Number.isFinite(st.longMaxHoldHours) ? String(st.longMaxHoldHours) : "",
+    );
+    setRevLongHoldExtendIfRed(Boolean(st.longHoldExtendIfRedEnabled));
+    setRevLongHoldExtendRedHours(
+      st.longHoldExtendRedHours != null && Number.isFinite(st.longHoldExtendRedHours)
+        ? String(st.longHoldExtendRedHours)
+        : "",
+    );
+    setRevLongSlArmRoiPct(
+      st.longSlArmRoiPct != null && Number.isFinite(st.longSlArmRoiPct) ? String(st.longSlArmRoiPct) : "",
+    );
+    setRevLongSlEntryOffsetPct(
+      st.longSlEntryOffsetPct != null && Number.isFinite(st.longSlEntryOffsetPct)
+        ? String(st.longSlEntryOffsetPct)
+        : "",
+    );
+    setRevLongSlAtEntryAfter24hIfGreen(
+      st.longSlAtEntryAfter24hIfGreenEnabled != null
+        ? st.longSlAtEntryAfter24hIfGreenEnabled !== false
+        : st.slAtEntryAfter24hIfGreenEnabled !== false,
+    );
+    setRevLongTp12hCloseEnabled(
+      st.longTp12hCloseEnabled != null
+        ? st.longTp12hCloseEnabled !== false
+        : st.tp12hCloseEnabled !== false,
+    );
     if (st.statsPlayShortEnabled !== undefined || st.statsPlayLongEnabled !== undefined) {
       setRevStatsPlayShort(st.statsPlayShortEnabled !== false);
       setRevStatsPlayLong(st.statsPlayLongEnabled === true);
@@ -971,6 +1023,16 @@ export default function SettingsTelegramMiniApp() {
     const slArmParsed = revSlArmRoiPct.trim() ? parseNumRaw(revSlArmRoiPct) : null;
     const slOffParsed = revSlEntryOffsetPct.trim() ? parseNumRaw(revSlEntryOffsetPct) : null;
 
+    const longTp1Parsed = revLongTp1PricePct.trim() ? parseNumRaw(revLongTp1PricePct) : null;
+    const longTp1PartialParsed = revLongTp1PartialPct.trim() ? parseNumRaw(revLongTp1PartialPct) : null;
+    const longTp2Parsed = revLongTp2PricePct.trim() ? parseNumRaw(revLongTp2PricePct) : null;
+    const longMaxHoldParsed = revLongMaxHoldHours.trim() ? parseNumRaw(revLongMaxHoldHours) : null;
+    const longExtendRedParsed = revLongHoldExtendRedHours.trim()
+      ? parseNumRaw(revLongHoldExtendRedHours)
+      : null;
+    const longSlArmParsed = revLongSlArmRoiPct.trim() ? parseNumRaw(revLongSlArmRoiPct) : null;
+    const longSlOffParsed = revLongSlEntryOffsetPct.trim() ? parseNumRaw(revLongSlEntryOffsetPct) : null;
+
     if (revMargin.trim() && marginParsed == null) {
       setRevSaveErr("Margin ไม่ใช่ตัวเลข");
       return;
@@ -1044,6 +1106,67 @@ export default function SettingsTelegramMiniApp() {
       setRevSaveErr("SL ห่าง entry % ต้องอยู่ระหว่าง 0–50");
       return;
     }
+    if (
+      revLongTp1PricePct.trim() &&
+      (longTp1Parsed == null || !(longTp1Parsed > 0 && longTp1Parsed < 100))
+    ) {
+      setRevSaveErr("Long TP1 ราคา % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (
+      revLongTp1PartialPct.trim() &&
+      (longTp1PartialParsed == null || !(longTp1PartialParsed > 0 && longTp1PartialParsed < 100))
+    ) {
+      setRevSaveErr("Long TP1 ปิด % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (
+      revLongTp2PricePct.trim() &&
+      (longTp2Parsed == null || !(longTp2Parsed > 0 && longTp2Parsed < 100))
+    ) {
+      setRevSaveErr("Long TP2 ราคา % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (
+      revLongMaxHoldHours.trim() &&
+      (longMaxHoldParsed == null || !(longMaxHoldParsed > 0 && longMaxHoldParsed <= 720))
+    ) {
+      setRevSaveErr("Long ชั่วโมงถือสูงสุดต้อง > 0 และ ≤ 720");
+      return;
+    }
+    if (
+      revLongHoldExtendRedHours.trim() &&
+      (longExtendRedParsed == null || !(longExtendRedParsed > 0 && longExtendRedParsed <= 720))
+    ) {
+      setRevSaveErr("Long ขยายเมื่อแดง ต้อง > 0 และ ≤ 720 ชม.");
+      return;
+    }
+    if (longTp1Parsed != null && longTp2Parsed != null && !(longTp2Parsed > longTp1Parsed)) {
+      setRevSaveErr("Long TP2 ต้องมากกว่า TP1");
+      return;
+    }
+    if (revLongSlArmRoiPct.trim() && longSlArmParsed == null) {
+      setRevSaveErr("Long ROI ย้าย SL % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (revLongSlEntryOffsetPct.trim() && longSlOffParsed == null) {
+      setRevSaveErr("Long SL ห่าง entry % ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (
+      revLongSlArmRoiPct.trim() &&
+      (longSlArmParsed == null || !(longSlArmParsed > 0 && longSlArmParsed < 100))
+    ) {
+      setRevSaveErr("Long ROI ย้าย SL % ต้องอยู่ระหว่าง 0–100");
+      return;
+    }
+    if (
+      revLongSlEntryOffsetPct.trim() &&
+      (longSlOffParsed == null || !(longSlOffParsed >= 0 && longSlOffParsed < 50))
+    ) {
+      setRevSaveErr("Long SL ห่าง entry % ต้องอยู่ระหว่าง 0–50");
+      return;
+    }
 
     const shortEntryEmaPeriodParsed = revShortEntryEmaPeriod.trim()
       ? Number(revShortEntryEmaPeriod.trim())
@@ -1084,6 +1207,17 @@ export default function SettingsTelegramMiniApp() {
         slEntryOffsetPct: revSlEntryOffsetPct.trim() ? slOffParsed : null,
         slAtEntryAfter24hIfGreenEnabled: revSlAtEntryAfter24hIfGreen,
         tp12hCloseEnabled: revTp12hCloseEnabled,
+        longTpSlEnabled: revLongTpSlEnabled,
+        longTp1PricePct: revLongTp1PricePct.trim() ? longTp1Parsed : null,
+        longTp1PartialPct: revLongTp1PartialPct.trim() ? longTp1PartialParsed : null,
+        longTp2PricePct: revLongTp2PricePct.trim() ? longTp2Parsed : null,
+        longMaxHoldHours: revLongMaxHoldHours.trim() ? longMaxHoldParsed : null,
+        longHoldExtendIfRedEnabled: revLongHoldExtendIfRed,
+        longHoldExtendRedHours: revLongHoldExtendRedHours.trim() ? longExtendRedParsed : null,
+        longSlArmRoiPct: revLongSlArmRoiPct.trim() ? longSlArmParsed : null,
+        longSlEntryOffsetPct: revLongSlEntryOffsetPct.trim() ? longSlOffParsed : null,
+        longSlAtEntryAfter24hIfGreenEnabled: revLongSlAtEntryAfter24hIfGreen,
+        longTp12hCloseEnabled: revLongTp12hCloseEnabled,
         statsPlayShortEnabled: revStatsPlayShort,
         statsPlayLongEnabled: revStatsPlayLong,
         entryMode: revShortEntryMode,
@@ -2111,7 +2245,7 @@ export default function SettingsTelegramMiniApp() {
         </div>
 
         <p className="sub" style={{ marginTop: "1.1rem", fontWeight: 600 }}>
-          กลยุทธ์ TP/SL (EMA20∠1h + profit band)
+          กลยุทธ์ TP/SL — สัญญาณ Short
         </p>
         <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.92 }}>
           {reversalTpStrategySummary({ close12hEnabled: revTp12hCloseEnabled })}
@@ -2311,6 +2445,157 @@ export default function SettingsTelegramMiniApp() {
             />
             <span className="tmaCheckboxField__text">
               ครบ <strong>24 ชม.</strong> หลังเปิดแล้วยังเขียว → ตั้ง SL @entry ทันที (offset 0 · ไม่รอ ROI ถึงเกณฑ์ด้านบน)
+            </span>
+          </label>
+        </div>
+
+        <p className="sub" style={{ marginTop: "1.1rem", fontWeight: 600 }}>
+          กลยุทธ์ TP/SL — Long (ทิศแนะนำ 🟢 / Market LONG)
+        </p>
+        <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.92 }}>
+          {reversalTpStrategySummary({ close12hEnabled: revLongTp12hCloseEnabled })}
+        </p>
+        <p className="sub" style={{ marginTop: "0.25rem", opacity: 0.88 }}>
+          ช่องว่าง = ใช้ค่า Short · ใช้กับ auto-open LONG และคอลัมน์กำไร Long ในตาราง 1H Short
+        </p>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={revLongTpSlEnabled}
+            onChange={(e) => setRevLongTpSlEnabled(e.target.checked)}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>เปิดใช้กลยุทธ์ TP/SL (Long)</strong>
+          </span>
+        </label>
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.5rem" }}>
+          <input
+            type="checkbox"
+            checked={revLongTp12hCloseEnabled}
+            onChange={(e) => setRevLongTp12hCloseEnabled(e.target.checked)}
+            disabled={!revLongTpSlEnabled}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>เปิดกฎปิด @12 ชม. (Long)</strong>
+          </span>
+        </label>
+
+        <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
+          <label className="sub" style={{ display: "block" }}>
+            TP1 ราคาขึ้น % (ว่าง = Short)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 10"
+              value={revLongTp1PricePct}
+              onChange={(e) => setRevLongTp1PricePct(e.target.value)}
+              disabled={!revLongTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            TP1 ปิด % ของ vol (ว่าง = Short)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 50"
+              value={revLongTp1PartialPct}
+              onChange={(e) => setRevLongTp1PartialPct(e.target.value)}
+              disabled={!revLongTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            TP2 ราคาขึ้น % (ว่าง = Short)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 25"
+              value={revLongTp2PricePct}
+              onChange={(e) => setRevLongTp2PricePct(e.target.value)}
+              disabled={!revLongTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            จังหวะ 1 — ครบกี่ ชม. (ว่าง = Short)
+            <input
+              type="text"
+              inputMode="numeric"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 48"
+              value={revLongMaxHoldHours}
+              onChange={(e) => setRevLongMaxHoldHours(e.target.value)}
+              disabled={!revLongTpSlEnabled}
+            />
+          </label>
+          <label className="sub tmaCheckboxField" style={{ display: "block" }}>
+            <input
+              type="checkbox"
+              checked={revLongHoldExtendIfRed}
+              onChange={(e) => setRevLongHoldExtendIfRed(e.target.checked)}
+              disabled={!revLongTpSlEnabled}
+            />
+            <span className="tmaCheckboxField__text">
+              ครบจังหวะ 1 แล้วยังปิดแดง → ขยายจังหวะ 2 (Long)
+            </span>
+          </label>
+          {revLongHoldExtendIfRed ? (
+            <label className="sub" style={{ display: "block" }}>
+              จังหวะ 2 — ขยายอีกกี่ ชม. (ว่าง = Short)
+              <input
+                type="text"
+                inputMode="numeric"
+                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+                autoComplete="off"
+                placeholder={revLongMaxHoldHours.trim() || revMaxHoldHours.trim() || "เช่น 24"}
+                value={revLongHoldExtendRedHours}
+                onChange={(e) => setRevLongHoldExtendRedHours(e.target.value)}
+                disabled={!revLongTpSlEnabled}
+              />
+            </label>
+          ) : null}
+          <label className="sub" style={{ display: "block" }}>
+            ROI ถึงกี่ % → ย้าย SL บังทุน (ว่าง = Short)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 10"
+              value={revLongSlArmRoiPct}
+              onChange={(e) => setRevLongSlArmRoiPct(e.target.value)}
+              disabled={!revLongTpSlEnabled}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            SL ห่าง entry กี่ % สวนทาง (ว่าง = Short)
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 0"
+              value={revLongSlEntryOffsetPct}
+              onChange={(e) => setRevLongSlEntryOffsetPct(e.target.value)}
+              disabled={!revLongTpSlEnabled}
+            />
+          </label>
+          <label className="sub tmaCheckboxField" style={{ display: "block", margin: 0 }}>
+            <input
+              type="checkbox"
+              checked={revLongSlAtEntryAfter24hIfGreen}
+              onChange={(e) => setRevLongSlAtEntryAfter24hIfGreen(e.target.checked)}
+              disabled={!revLongTpSlEnabled}
+            />
+            <span className="tmaCheckboxField__text">
+              ครบ <strong>24 ชม.</strong> หลังเปิดแล้วยังเขียว → SL @entry (Long)
             </span>
           </label>
         </div>

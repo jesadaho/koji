@@ -83,6 +83,7 @@ import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
 import { backfillAllStatsRowsQuoteVol24h } from "./statsQuoteVol24h";
 import {
   resolveViewerStatsTpSlPlan,
+  resolveViewerReversalTpSlPlans,
   resolveViewerStatsTradeSizing,
   viewerStatsTpSlPlanSummary,
   viewerStatsTpSlPlanPayload,
@@ -1086,33 +1087,42 @@ export async function liffGetCandleReversalStats(
       conflictWith: resolveRowConflictWith(r, conflictSets, "reversal"),
     }));
   let viewerTpSlPlanSummary: string | undefined;
+  let viewerTpSlPlanSummaryLong: string | undefined;
   let viewerTpSlPlan: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
+  let viewerTpSlPlanLong: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
   let viewerStrategyMarginUsdt: number | null | undefined;
   let viewerStrategyLeverage: number | null | undefined;
   let viewerStrategyLongDynamicLeverageEnabled: boolean | undefined;
   let viewerReversalTp12hCloseEnabled: boolean | undefined;
+  let viewerReversalLongTp12hCloseEnabled: boolean | undefined;
   let viewerReversalStatsPlayShortEnabled: boolean | undefined;
   let viewerReversalStatsPlayLongEnabled: boolean | undefined;
   if (telegramUserId != null) {
-    const [plan, sizing] = await Promise.all([
-      resolveViewerStatsTpSlPlan(telegramUserId, "reversal"),
+    const [plans, sizing] = await Promise.all([
+      resolveViewerReversalTpSlPlans(telegramUserId),
       resolveViewerStatsTradeSizing(telegramUserId, "reversal"),
     ]);
     viewerTpSlPlanSummary = reversalTpStrategySummary({
-      close12hEnabled: plan.reversalTp12hCloseEnabled !== false,
+      close12hEnabled: plans.short.reversalTp12hCloseEnabled !== false,
     });
-    viewerTpSlPlan = viewerStatsTpSlPlanPayload(plan);
+    viewerTpSlPlanSummaryLong = reversalTpStrategySummary({
+      close12hEnabled: plans.long.reversalTp12hCloseEnabled !== false,
+    });
+    viewerTpSlPlan = viewerStatsTpSlPlanPayload(plans.short);
+    viewerTpSlPlanLong = viewerStatsTpSlPlanPayload(plans.long);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
     viewerStrategyLongDynamicLeverageEnabled = sizing.reversalLongDynamicLeverageEnabled === true;
-    viewerReversalTp12hCloseEnabled = plan.reversalTp12hCloseEnabled !== false;
+    viewerReversalTp12hCloseEnabled = plans.short.reversalTp12hCloseEnabled !== false;
+    viewerReversalLongTp12hCloseEnabled = plans.long.reversalTp12hCloseEnabled !== false;
     const playSides = sizing.reversalStatsPlaySides ?? { short: true, long: false };
     viewerReversalStatsPlayShortEnabled = playSides.short;
     viewerReversalStatsPlayLongEnabled = playSides.long;
     const reversalSimOpts = {
-      close12hEnabled: plan.reversalTp12hCloseEnabled !== false,
+      short: { close12hEnabled: plans.short.reversalTp12hCloseEnabled !== false },
+      long: { close12hEnabled: plans.long.reversalTp12hCloseEnabled !== false },
     };
-    const dirty = await enrichCandleReversalStatsWithViewerStrategyProfit(rows, plan);
+    const dirty = await enrichCandleReversalStatsWithViewerStrategyProfit(rows, plans);
     if (dirty > 0) {
       await saveCandleReversalStatsState(st);
     }
@@ -1124,7 +1134,9 @@ export async function liffGetCandleReversalStats(
     rows: rows.map(reversalStatsRowForClient),
     ...(telegramUserId != null ? { isAdmin: isAdminTelegramUserId(telegramUserId) } : {}),
     ...(viewerTpSlPlanSummary ? { viewerTpSlPlanSummary } : {}),
+    ...(viewerTpSlPlanSummaryLong ? { viewerTpSlPlanSummaryLong } : {}),
     ...(viewerTpSlPlan ? { viewerTpSlPlan } : {}),
+    ...(viewerTpSlPlanLong ? { viewerTpSlPlanLong } : {}),
     ...(viewerStrategyMarginUsdt != null ? { viewerStrategyMarginUsdt } : {}),
     ...(viewerStrategyLeverage != null ? { viewerStrategyLeverage } : {}),
     ...(viewerStrategyLongDynamicLeverageEnabled
@@ -1134,6 +1146,11 @@ export async function liffGetCandleReversalStats(
       ? { viewerReversalTp12hCloseEnabled: false }
       : viewerReversalTp12hCloseEnabled === true
         ? { viewerReversalTp12hCloseEnabled: true }
+        : {}),
+    ...(viewerReversalLongTp12hCloseEnabled === false
+      ? { viewerReversalLongTp12hCloseEnabled: false }
+      : viewerReversalLongTp12hCloseEnabled === true
+        ? { viewerReversalLongTp12hCloseEnabled: true }
         : {}),
     ...(viewerReversalStatsPlayShortEnabled !== undefined
       ? { viewerReversalStatsPlayShortEnabled }
@@ -1381,6 +1398,18 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     slAtEntryAfter24hIfGreenEnabled:
       row.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== false,
     tp12hCloseEnabled: row.reversalAutoTradeTp12hCloseEnabled !== false,
+    longTpSlEnabled: row.reversalAutoTradeLongTpSlEnabled ?? null,
+    longTp1PricePct: row.reversalAutoTradeLongTp1PricePct ?? null,
+    longTp1PartialPct: row.reversalAutoTradeLongTp1PartialPct ?? null,
+    longTp2PricePct: row.reversalAutoTradeLongTp2PricePct ?? null,
+    longMaxHoldHours: row.reversalAutoTradeLongMaxHoldHours ?? null,
+    longHoldExtendIfRedEnabled: row.reversalAutoTradeLongHoldExtendIfRedEnabled ?? null,
+    longHoldExtendRedHours: row.reversalAutoTradeLongHoldExtendRedHours ?? null,
+    longSlArmRoiPct: row.reversalAutoTradeLongSlArmRoiPct ?? null,
+    longSlEntryOffsetPct: row.reversalAutoTradeLongSlEntryOffsetPct ?? null,
+    longSlAtEntryAfter24hIfGreenEnabled:
+      row.reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled ?? null,
+    longTp12hCloseEnabled: row.reversalAutoTradeLongTp12hCloseEnabled ?? null,
     statsPlayShortEnabled: reversalStatsPlaySidesFromSettings(row).short,
     statsPlayLongEnabled: reversalStatsPlaySidesFromSettings(row).long,
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
@@ -2004,6 +2033,13 @@ function parseReversalAutoTradeNested(
   const mExtH = numOrEmpty("holdExtendRedHours");
   const mSlArm = numOrEmpty("slArmRoiPct");
   const mSlOff = numOrEmpty("slEntryOffsetPct");
+  const mLongTp1 = numOrEmpty("longTp1PricePct");
+  const mLongTp1Partial = numOrEmpty("longTp1PartialPct");
+  const mLongTp2 = numOrEmpty("longTp2PricePct");
+  const mLongMaxH = numOrEmpty("longMaxHoldHours");
+  const mLongExtH = numOrEmpty("longHoldExtendRedHours");
+  const mLongSlArm = numOrEmpty("longSlArmRoiPct");
+  const mLongSlOff = numOrEmpty("longSlEntryOffsetPct");
   if (
     mMargin.err ||
     mLev.err ||
@@ -2013,7 +2049,14 @@ function parseReversalAutoTradeNested(
     mMaxH.err ||
     mExtH.err ||
     mSlArm.err ||
-    mSlOff.err
+    mSlOff.err ||
+    mLongTp1.err ||
+    mLongTp1Partial.err ||
+    mLongTp2.err ||
+    mLongMaxH.err ||
+    mLongExtH.err ||
+    mLongSlArm.err ||
+    mLongSlOff.err
   ) {
     return { ok: false, error: "reversal_numeric_invalid" };
   }
@@ -2056,6 +2099,35 @@ function parseReversalAutoTradeNested(
   }
   if (typeof mExtH.v === "number" && !(mExtH.v > 0 && mExtH.v <= 24 * 30)) {
     return { ok: false, error: "reversal_hold_extend_red_hours_out_of_range" };
+  }
+
+  if (typeof mLongTp1.v === "number" && !(mLongTp1.v > 0 && mLongTp1.v < 100)) {
+    return { ok: false, error: "reversal_long_tp1_price_pct_out_of_range" };
+  }
+  if (typeof mLongTp1Partial.v === "number" && !(mLongTp1Partial.v > 0 && mLongTp1Partial.v < 100)) {
+    return { ok: false, error: "reversal_long_tp1_partial_pct_out_of_range" };
+  }
+  if (typeof mLongTp2.v === "number" && !(mLongTp2.v > 0 && mLongTp2.v < 100)) {
+    return { ok: false, error: "reversal_long_tp2_price_pct_out_of_range" };
+  }
+  if (typeof mLongMaxH.v === "number" && !(mLongMaxH.v > 0 && mLongMaxH.v <= 24 * 30)) {
+    return { ok: false, error: "reversal_long_max_hold_hours_out_of_range" };
+  }
+  if (
+    typeof mLongTp1.v === "number" &&
+    typeof mLongTp2.v === "number" &&
+    !(mLongTp2.v > mLongTp1.v)
+  ) {
+    return { ok: false, error: "reversal_long_tp2_must_gt_tp1" };
+  }
+  if (typeof mLongSlArm.v === "number" && !(mLongSlArm.v > 0 && mLongSlArm.v < 100)) {
+    return { ok: false, error: "reversal_long_sl_arm_roi_pct_out_of_range" };
+  }
+  if (typeof mLongSlOff.v === "number" && !(mLongSlOff.v >= 0 && mLongSlOff.v < 50)) {
+    return { ok: false, error: "reversal_long_sl_entry_offset_pct_out_of_range" };
+  }
+  if (typeof mLongExtH.v === "number" && !(mLongExtH.v > 0 && mLongExtH.v <= 24 * 30)) {
+    return { ok: false, error: "reversal_long_hold_extend_red_hours_out_of_range" };
   }
 
   let tpSlEnabled: boolean | undefined;
@@ -2158,6 +2230,100 @@ function parseReversalAutoTradeNested(
   if (tp12hCloseEnabled !== undefined) {
     patchPart.reversalAutoTradeTp12hCloseEnabled = tp12hCloseEnabled;
   }
+
+  let longTpSlEnabled: boolean | undefined;
+  if (typeof o.longTpSlEnabled === "boolean") longTpSlEnabled = o.longTpSlEnabled;
+  else if (o.longTpSlEnabled === "1" || o.longTpSlEnabled === 1 || o.longTpSlEnabled === "true") {
+    longTpSlEnabled = true;
+  } else if (o.longTpSlEnabled === "0" || o.longTpSlEnabled === 0 || o.longTpSlEnabled === "false") {
+    longTpSlEnabled = false;
+  } else if (o.longTpSlEnabled === null) {
+    longTpSlEnabled = undefined;
+  }
+
+  let longHoldExtendIfRedEnabled: boolean | undefined;
+  if (typeof o.longHoldExtendIfRedEnabled === "boolean") {
+    longHoldExtendIfRedEnabled = o.longHoldExtendIfRedEnabled;
+  } else if (
+    o.longHoldExtendIfRedEnabled === "1" ||
+    o.longHoldExtendIfRedEnabled === 1 ||
+    o.longHoldExtendIfRedEnabled === "true"
+  ) {
+    longHoldExtendIfRedEnabled = true;
+  } else if (
+    o.longHoldExtendIfRedEnabled === "0" ||
+    o.longHoldExtendIfRedEnabled === 0 ||
+    o.longHoldExtendIfRedEnabled === "false"
+  ) {
+    longHoldExtendIfRedEnabled = false;
+  }
+
+  let longSlAtEntryAfter24hIfGreenEnabled: boolean | undefined;
+  if (typeof o.longSlAtEntryAfter24hIfGreenEnabled === "boolean") {
+    longSlAtEntryAfter24hIfGreenEnabled = o.longSlAtEntryAfter24hIfGreenEnabled;
+  } else if (
+    o.longSlAtEntryAfter24hIfGreenEnabled === "1" ||
+    o.longSlAtEntryAfter24hIfGreenEnabled === 1 ||
+    o.longSlAtEntryAfter24hIfGreenEnabled === "true"
+  ) {
+    longSlAtEntryAfter24hIfGreenEnabled = true;
+  } else if (
+    o.longSlAtEntryAfter24hIfGreenEnabled === "0" ||
+    o.longSlAtEntryAfter24hIfGreenEnabled === 0 ||
+    o.longSlAtEntryAfter24hIfGreenEnabled === "false"
+  ) {
+    longSlAtEntryAfter24hIfGreenEnabled = false;
+  } else if (o.longSlAtEntryAfter24hIfGreenEnabled === null) {
+    longSlAtEntryAfter24hIfGreenEnabled = undefined;
+  }
+
+  let longTp12hCloseEnabled: boolean | undefined;
+  if (typeof o.longTp12hCloseEnabled === "boolean") {
+    longTp12hCloseEnabled = o.longTp12hCloseEnabled;
+  } else if (
+    o.longTp12hCloseEnabled === "1" ||
+    o.longTp12hCloseEnabled === 1 ||
+    o.longTp12hCloseEnabled === "true"
+  ) {
+    longTp12hCloseEnabled = true;
+  } else if (
+    o.longTp12hCloseEnabled === "0" ||
+    o.longTp12hCloseEnabled === 0 ||
+    o.longTp12hCloseEnabled === "false"
+  ) {
+    longTp12hCloseEnabled = false;
+  } else if (o.longTp12hCloseEnabled === null) {
+    longTp12hCloseEnabled = undefined;
+  }
+
+  if (longTpSlEnabled !== undefined) patchPart.reversalAutoTradeLongTpSlEnabled = longTpSlEnabled;
+  if (mLongTp1.v !== undefined) patchPart.reversalAutoTradeLongTp1PricePct = mLongTp1.v as number | null | undefined;
+  if (mLongTp1Partial.v !== undefined) {
+    patchPart.reversalAutoTradeLongTp1PartialPct = mLongTp1Partial.v as number | null | undefined;
+  }
+  if (mLongTp2.v !== undefined) patchPart.reversalAutoTradeLongTp2PricePct = mLongTp2.v as number | null | undefined;
+  if (mLongMaxH.v !== undefined) {
+    patchPart.reversalAutoTradeLongMaxHoldHours =
+      mLongMaxH.v == null ? null : (Math.floor(mLongMaxH.v) as number);
+  }
+  if (longHoldExtendIfRedEnabled !== undefined) {
+    patchPart.reversalAutoTradeLongHoldExtendIfRedEnabled = longHoldExtendIfRedEnabled;
+  }
+  if (mLongExtH.v !== undefined) {
+    patchPart.reversalAutoTradeLongHoldExtendRedHours =
+      mLongExtH.v == null ? null : (Math.floor(mLongExtH.v) as number);
+  }
+  if (mLongSlArm.v !== undefined) patchPart.reversalAutoTradeLongSlArmRoiPct = mLongSlArm.v as number | null | undefined;
+  if (mLongSlOff.v !== undefined) {
+    patchPart.reversalAutoTradeLongSlEntryOffsetPct = mLongSlOff.v as number | null | undefined;
+  }
+  if (longSlAtEntryAfter24hIfGreenEnabled !== undefined) {
+    patchPart.reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled = longSlAtEntryAfter24hIfGreenEnabled;
+  }
+  if (longTp12hCloseEnabled !== undefined) {
+    patchPart.reversalAutoTradeLongTp12hCloseEnabled = longTp12hCloseEnabled;
+  }
+
   if ("statsPlayShortEnabled" in o || "statsPlayLongEnabled" in o) {
     if ("statsPlayShortEnabled" in o) {
       patchPart.reversalStatsPlayShortEnabled = o.statsPlayShortEnabled === true;

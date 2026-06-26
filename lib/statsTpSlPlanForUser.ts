@@ -1,8 +1,6 @@
 import {
   DEFAULT_SL_ARM_ROI_PCT,
   DEFAULT_SL_ENTRY_OFFSET_PCT,
-  parseSlArmRoiPct,
-  parseSlEntryOffsetPct,
 } from "@/lib/tpSlBreakevenPlan";
 import { statsTpSlPlanCacheKey } from "@/lib/statsTpSlPlanCacheKey";
 import {
@@ -12,69 +10,56 @@ import {
 } from "@/lib/tpSlStrategySimulate";
 import type { ReversalStatsPlaySides } from "@/lib/reversalMatrixFilters";
 import { reversalStatsPlaySidesFromSettings } from "@/lib/reversalMatrixFilters";
+import {
+  reversalTpSlPlanFromRow,
+  reversalTpSlPlanToViewerStats,
+  reversalViewerTpSlPlansFromRow,
+  type ReversalViewerTpSlPlans,
+  type ReversalViewerStatsTpSlPlan,
+} from "@/lib/reversalTpSlSettings";
 import { resolveSnowballTpSlPlanFromRow } from "@/src/snowballAutoTradeTpSlPlan";
 import {
   loadTradingViewMexcSettingsFullMap,
   type TradingViewMexcUserSettings,
 } from "@/src/tradingViewCloseSettingsStore";
 
-export type StatsTpSlPlanSource = "reversal" | "snowball";
+export type ViewerStatsTpSlPlan = ReversalViewerStatsTpSlPlan;
 
-export type ViewerStatsTpSlPlan = StatsTpSlPlan & {
-  tpSlEnabled: boolean;
-  /** Reversal — กฎปิด @12h (ROI<0 + EMA20∠1h>0) · default เปิด */
-  reversalTp12hCloseEnabled?: boolean;
-};
+export type { ReversalViewerTpSlPlans } from "@/lib/reversalTpSlSettings";
 
 export { statsTpSlPlanCacheKey };
 
-function reversalTpSlPlanFromSettings(row: TradingViewMexcUserSettings): ViewerStatsTpSlPlan {
-  const en = row.reversalAutoTradeTpSlEnabled !== false;
-  const t1 =
-    typeof row.reversalAutoTradeTp1PricePct === "number" &&
-    Number.isFinite(row.reversalAutoTradeTp1PricePct) &&
-    row.reversalAutoTradeTp1PricePct > 0
-      ? row.reversalAutoTradeTp1PricePct
-      : DEFAULT_STATS_TPSL_PLAN.tp1PricePct;
-  const t1p =
-    typeof row.reversalAutoTradeTp1PartialPct === "number" &&
-    Number.isFinite(row.reversalAutoTradeTp1PartialPct) &&
-    row.reversalAutoTradeTp1PartialPct > 0
-      ? row.reversalAutoTradeTp1PartialPct
-      : DEFAULT_STATS_TPSL_PLAN.tp1PartialPct;
-  const t2 =
-    typeof row.reversalAutoTradeTp2PricePct === "number" &&
-    Number.isFinite(row.reversalAutoTradeTp2PricePct) &&
-    row.reversalAutoTradeTp2PricePct > 0
-      ? row.reversalAutoTradeTp2PricePct
-      : DEFAULT_STATS_TPSL_PLAN.tp2PricePct;
-  const mh =
-    typeof row.reversalAutoTradeMaxHoldHours === "number" &&
-    Number.isFinite(row.reversalAutoTradeMaxHoldHours) &&
-    row.reversalAutoTradeMaxHoldHours > 0
-      ? row.reversalAutoTradeMaxHoldHours
-      : DEFAULT_STATS_TPSL_PLAN.maxHoldHours;
-  const extH =
-    typeof row.reversalAutoTradeHoldExtendRedHours === "number" &&
-    Number.isFinite(row.reversalAutoTradeHoldExtendRedHours) &&
-    row.reversalAutoTradeHoldExtendRedHours > 0
-      ? row.reversalAutoTradeHoldExtendRedHours
-      : undefined;
-  return {
-    tpSlEnabled: en,
-    tp1PricePct: t1,
-    tp1PartialPct: Math.min(100, t1p),
-    tp2PricePct: t2,
-    maxHoldHours: mh,
-    holdExtendIfRedEnabled: row.reversalAutoTradeHoldExtendIfRedEnabled === true,
-    holdExtendRedHours: extH,
-    slAtEntryArmRoiPct: parseSlArmRoiPct(row.reversalAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
-    slAtEntryOffsetPct: parseSlEntryOffsetPct(
-      row.reversalAutoTradeSlEntryOffsetPct,
-      DEFAULT_SL_ENTRY_OFFSET_PCT,
-    ),
-    reversalTp12hCloseEnabled: row.reversalAutoTradeTp12hCloseEnabled !== false,
-  };
+function reversalTpSlPlanFromSettings(
+  row: TradingViewMexcUserSettings,
+  side: "short" | "long" = "short",
+): ViewerStatsTpSlPlan {
+  return reversalTpSlPlanToViewerStats(reversalTpSlPlanFromRow(row, side));
+}
+
+export function reversalViewerTpSlPlansForUserId(
+  userId: string,
+  map: Record<string, TradingViewMexcUserSettings>,
+): ReversalViewerTpSlPlans {
+  const row = map[userId.trim()];
+  if (!row) {
+    const fallback = {
+      tpSlEnabled: true,
+      ...DEFAULT_STATS_TPSL_PLAN,
+      slAtEntryArmRoiPct: DEFAULT_SL_ARM_ROI_PCT,
+      slAtEntryOffsetPct: DEFAULT_SL_ENTRY_OFFSET_PCT,
+      reversalTp12hCloseEnabled: true,
+    };
+    return { short: fallback, long: fallback };
+  }
+  return reversalViewerTpSlPlansFromRow(row);
+}
+
+export async function resolveViewerReversalTpSlPlans(
+  telegramUserId: number,
+): Promise<ReversalViewerTpSlPlans> {
+  const userId = `tg:${telegramUserId}`;
+  const map = await loadTradingViewMexcSettingsFullMap();
+  return reversalViewerTpSlPlansForUserId(userId, map);
 }
 
 function snowballTpSlPlanFromSettings(row: TradingViewMexcUserSettings): ViewerStatsTpSlPlan {

@@ -27,19 +27,16 @@ import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNo
 import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } from "./candleReversalDetect";
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
-import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
+import { reversalTpStrategySummary } from "@/lib/reversalTpStrategy";
+import {
+  reversalTpSlPlanFromRow,
+  type ReversalTpSlSignalKind,
+} from "@/lib/reversalTpSlSettings";
 import { reversalMatchesQualitySignalForAlert, reversalAutoTradePlaySidesFromSettings, reversalSuggestedTradeSide } from "@/lib/reversalMatrixFilters";
 import {
   resolveReversalLongTradeLeverage,
   reversalLongDynamicLeverageNote,
 } from "@/lib/reversalLongDynamicLeverage";
-import {
-  DEFAULT_SL_ARM_ROI_PCT,
-  DEFAULT_SL_ENTRY_OFFSET_PCT,
-  parseSlArmRoiPct,
-  parseSlEntryOffsetPct,
-  slAtEntryAfter24hIfGreenEnabledFromSetting,
-} from "@/lib/tpSlBreakevenPlan";
 import { bkkIsSaturdayNow } from "./snowballAutoTradeStateStore";
 import {
   REVERSAL_ENTRY_EMA_PERIOD_DEFAULT,
@@ -49,12 +46,6 @@ import {
   reversalEntryUseMarket,
   type ReversalAutoTradeEntryMode,
 } from "@/lib/reversalAutoTradeEntry";
-
-/** ค่าเริ่มต้นกลยุทธ์ TP/SL เมื่อ user ยังไม่ตั้งค่า (อ่านจาก settings ของ user) */
-const REVERSAL_TPSL_DEFAULT_TP1_PCT = 10;
-const REVERSAL_TPSL_DEFAULT_TP1_PARTIAL = 50;
-const REVERSAL_TPSL_DEFAULT_TP2_PCT = 25;
-const REVERSAL_TPSL_DEFAULT_MAX_HOURS = 48;
 
 /** ค่าเริ่มต้นเปิด — ตั้ง REVERSAL_AUTOTRADE_ENABLED=0/false/off/no เพื่อปิดเซิร์ฟทั้งหมด */
 export function isReversalAutotradeEnabled(): boolean {
@@ -136,60 +127,11 @@ function readMexcAvgEntryPriceShort(
   return null;
 }
 
-export function resolveReversalTpSlPlanFromRow(row: TradingViewMexcUserSettings): {
-  enabled: boolean;
-  tp1PricePct: number;
-  tp1PartialPct: number;
-  tp2PricePct: number;
-  maxHoldHours: number;
-  holdExtendIfRedEnabled: boolean;
-  holdExtendRedHours?: number;
-  slArmRoiPct: number;
-  slEntryOffsetPct: number;
-  slAtEntryAfter24hIfGreenEnabled: boolean;
-  tp12hCloseEnabled: boolean;
-} {
-  const en = row.reversalAutoTradeTpSlEnabled !== false;
-  const t1 =
-    typeof row.reversalAutoTradeTp1PricePct === "number" && Number.isFinite(row.reversalAutoTradeTp1PricePct) && row.reversalAutoTradeTp1PricePct > 0
-      ? row.reversalAutoTradeTp1PricePct
-      : REVERSAL_TPSL_DEFAULT_TP1_PCT;
-  const t1p =
-    typeof row.reversalAutoTradeTp1PartialPct === "number" && Number.isFinite(row.reversalAutoTradeTp1PartialPct) && row.reversalAutoTradeTp1PartialPct > 0
-      ? row.reversalAutoTradeTp1PartialPct
-      : REVERSAL_TPSL_DEFAULT_TP1_PARTIAL;
-  const t2 =
-    typeof row.reversalAutoTradeTp2PricePct === "number" && Number.isFinite(row.reversalAutoTradeTp2PricePct) && row.reversalAutoTradeTp2PricePct > 0
-      ? row.reversalAutoTradeTp2PricePct
-      : REVERSAL_TPSL_DEFAULT_TP2_PCT;
-  const mh =
-    typeof row.reversalAutoTradeMaxHoldHours === "number" && Number.isFinite(row.reversalAutoTradeMaxHoldHours) && row.reversalAutoTradeMaxHoldHours > 0
-      ? row.reversalAutoTradeMaxHoldHours
-      : REVERSAL_TPSL_DEFAULT_MAX_HOURS;
-  const extH =
-    typeof row.reversalAutoTradeHoldExtendRedHours === "number" &&
-    Number.isFinite(row.reversalAutoTradeHoldExtendRedHours) &&
-    row.reversalAutoTradeHoldExtendRedHours > 0
-      ? row.reversalAutoTradeHoldExtendRedHours
-      : undefined;
-  return {
-    enabled: en,
-    tp1PricePct: t1,
-    tp1PartialPct: Math.min(100, t1p),
-    tp2PricePct: t2,
-    maxHoldHours: mh,
-    holdExtendIfRedEnabled: row.reversalAutoTradeHoldExtendIfRedEnabled === true,
-    holdExtendRedHours: extH,
-    slArmRoiPct: parseSlArmRoiPct(row.reversalAutoTradeSlArmRoiPct, DEFAULT_SL_ARM_ROI_PCT),
-    slEntryOffsetPct: parseSlEntryOffsetPct(
-      row.reversalAutoTradeSlEntryOffsetPct,
-      DEFAULT_SL_ENTRY_OFFSET_PCT,
-    ),
-    slAtEntryAfter24hIfGreenEnabled: slAtEntryAfter24hIfGreenEnabledFromSetting(
-      row.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled,
-    ),
-    tp12hCloseEnabled: row.reversalAutoTradeTp12hCloseEnabled !== false,
-  };
+export function resolveReversalTpSlPlanFromRow(
+  row: TradingViewMexcUserSettings,
+  side: ReversalTpSlSignalKind = "short",
+) {
+  return reversalTpSlPlanFromRow(row, side);
 }
 
 export type ReversalAutoTradeInput = {
@@ -1025,7 +967,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
       const rangeScore =
         input.rangeScore != null && Number.isFinite(input.rangeScore) ? input.rangeScore : null;
 
-      const plan = resolveReversalTpSlPlanFromRow(row);
+      const plan = resolveReversalTpSlPlanFromRow(row, mexcSide);
       const placedAtMs = Date.now();
 
       if (!useMarket && limitOrderId && !openMexcLong) {
@@ -1100,7 +1042,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           if (trackedTpSl && mexcAvgEntry != null) {
             tpSlLines.push(
               `ราคาเข้าเฉลี่ย MEXC: ${fmtReversalAutoTradePrice(mexcAvgEntry)} USDT — ใช้คำนวณ % drop จริง`,
-              `กลยุทธ์: ${REVERSAL_TP_STRATEGY_SUMMARY}`,
+              `กลยุทธ์: ${reversalTpStrategySummary({ close12hEnabled: plan.tp12hCloseEnabled })}`,
               `ครบ ${plan.maxHoldHours} ชม. → ปิดทั้งหมด (force)`,
             );
           } else {
@@ -1110,7 +1052,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           }
         } else {
           tpSlLines.push(
-            `กลยุทธ์ TP/SL: รอ Limit fill ก่อนเริ่ม track · ${REVERSAL_TP_STRATEGY_SUMMARY}`,
+            `กลยุทธ์ TP/SL: รอ Limit fill ก่อนเริ่ม track · ${reversalTpStrategySummary({ close12hEnabled: plan.tp12hCloseEnabled })}`,
             `หมดอายุ Limit: ~${fmtExpireBkk(placedAtMs + REVERSAL_LIMIT_EXPIRE_MS)} (8 ชม.) — ไม่ fill จะยกเลิกและปลดล็อกวัน`,
           );
         }

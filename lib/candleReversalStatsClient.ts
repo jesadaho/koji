@@ -75,6 +75,10 @@ export type CandleReversalStatsRow = {
   btcEmaSlopesV?: number;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d?: number | null;
+  /** Wilder ATR(14) บน 4h ÷ close × 100 */
+  atrPct4h?: number | null;
+  /** 1 = ATR% 4h คำนวณ ณ alertedAtMs */
+  atrPct4hV?: number;
   /** Short: ไส้บน ÷ ช่วงแท่ง (%) · Long: ไส้ล่าง */
   wickRatioPct: number | null;
   /** Short เท่านั้น — ไส้ล่าง ÷ ช่วงแท่ง (%) */
@@ -169,8 +173,11 @@ export type CandleReversalStatsApiPayload = {
   isAdmin?: boolean;
   /** สรุปกลยุทธ์ของผู้ดู (จาก Settings) */
   viewerTpSlPlanSummary?: string;
+  /** กลยุทธ์ TP Long (ทิศแนะนำ 🟢) */
+  viewerTpSlPlanSummaryLong?: string;
   /** ค่า TP/SL ของผู้ดู (สำหรับ breakdown ในเซลล์) */
   viewerTpSlPlan?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
+  viewerTpSlPlanLong?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
   /** margin USDT จาก Settings — คำนวณ P/L เป็น $ ในตาราง */
   viewerStrategyMarginUsdt?: number | null;
   viewerStrategyLeverage?: number | null;
@@ -323,6 +330,7 @@ export type CandleReversalStatsSortKey =
   | "psar4h"
   | "psar4hDist"
   | "atr14d"
+  | "atr4h"
   | "retest"
   | "sl"
   | "wickPct"
@@ -470,6 +478,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.psar4hDistPct, b.psar4hDistPct);
     case "atr14d":
       return cmpNumNullLast(a.atrPct14d, b.atrPct14d);
+    case "atr4h":
+      return cmpNumNullLast(a.atrPct4h, b.atrPct4h);
     case "retest":
       return cmpNumNullLast(a.retestPrice, b.retestPrice);
     case "sl":

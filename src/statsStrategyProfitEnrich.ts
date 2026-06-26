@@ -5,7 +5,7 @@ import {
 } from "@/lib/candleReversalStatsClient";
 import { snowballStatsAnchorCloseSec } from "@/lib/snowballStatsClient";
 import type { SnowballStatsRow } from "@/lib/snowballStatsClient";
-import type { ViewerStatsTpSlPlan } from "@/lib/statsTpSlPlanForUser";
+import type { ReversalViewerTpSlPlans, ViewerStatsTpSlPlan } from "@/lib/statsTpSlPlanForUser";
 import type { StrategyProfitByPlanEntry, StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import {
   STATS_STRATEGY_PROFIT_48H_BYPASS_TPSL,
@@ -453,25 +453,31 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
 
 export async function enrichCandleReversalStatsWithViewerStrategyProfit(
   rows: CandleReversalStatsRow[],
-  plan: ViewerStatsTpSlPlan,
+  plans: ReversalViewerTpSlPlans | ViewerStatsTpSlPlan,
 ): Promise<number> {
+  const normalized: ReversalViewerTpSlPlans =
+    "short" in plans && plans.short ? plans : { short: plans, long: plans };
   let dirty = await refreshCandleReversal1hMaxRoiFrom15m(rows);
-  dirty += await enrichReversalRowsStrategyProfit(rows, plan);
+  dirty += await enrichReversalRowsStrategyProfit(rows, normalized);
   return dirty;
 }
 
 async function enrichReversalRowsStrategyProfit(
   rows: CandleReversalStatsRow[],
-  plan: ViewerStatsTpSlPlan,
+  plans: ReversalViewerTpSlPlans,
 ): Promise<number> {
   const packCache = new Map<string, BinanceKlinePack | null>();
   let dirty = 0;
-  const close12hEnabled = plan.reversalTp12hCloseEnabled !== false;
-  const simOpts = { close12hEnabled };
+  const shortSimOpts = {
+    close12hEnabled: plans.short.reversalTp12hCloseEnabled !== false,
+  };
+  const longSimOpts = {
+    close12hEnabled: plans.long.reversalTp12hCloseEnabled !== false,
+  };
 
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
-    const shortCacheKey = reversalTpStrategyCacheKey(holdHours, simOpts);
-    const longCacheKey = reversalTpStrategyCacheKeyLong(holdHours, simOpts);
+    const shortCacheKey = reversalTpStrategyCacheKey(holdHours, shortSimOpts);
+    const longCacheKey = reversalTpStrategyCacheKeyLong(holdHours, longSimOpts);
 
     for (const row of rows) {
       if (row.signalBarTf !== "1h") continue;
@@ -501,10 +507,10 @@ async function enrichReversalRowsStrategyProfit(
           windowEndSec,
           row,
           holdHours,
-          close12hEnabled,
+          close12hEnabled: shortSimOpts.close12hEnabled,
         });
         if (applyHorizonFields(row, holdHours, shortCacheKey, computed)) dirty += 1;
-      } else if (!close12hEnabled) {
+      } else if (!shortSimOpts.close12hEnabled) {
         if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
           if (row.strategyProfitPct24h != null || row.strategyExitReason24h != null) {
             row.strategyProfitPct24h = null;
@@ -527,14 +533,14 @@ async function enrichReversalRowsStrategyProfit(
           row.strategyExitReasonLong24h != null ||
           row.strategyProfitByPlan?.[longCacheKey]
         ) {
-          clearReversalLongStrategyProfitFields(row, simOpts);
+          clearReversalLongStrategyProfitFields(row, longSimOpts);
           dirty += 1;
         }
         continue;
       }
 
       let longCached = row.strategyProfitByPlan?.[longCacheKey];
-      if (longCached?.exitReason === "time_12h" && !close12hEnabled) {
+      if (longCached?.exitReason === "time_12h" && !longSimOpts.close12hEnabled) {
         const rest = { ...row.strategyProfitByPlan };
         delete rest[longCacheKey];
         row.strategyProfitByPlan = Object.keys(rest).length > 0 ? rest : undefined;
@@ -551,10 +557,10 @@ async function enrichReversalRowsStrategyProfit(
           windowEndSec,
           row,
           holdHours,
-          close12hEnabled,
+          close12hEnabled: longSimOpts.close12hEnabled,
         });
         if (applyHorizonFieldsLong(row, holdHours, longCacheKey, computedLong)) dirty += 1;
-      } else if (!close12hEnabled) {
+      } else if (!longSimOpts.close12hEnabled) {
         if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
           if (row.strategyProfitPctLong24h != null || row.strategyExitReasonLong24h != null) {
             row.strategyProfitPctLong24h = null;
@@ -601,10 +607,17 @@ export function withReversalStrategyProfitDisplayFields<
     strategyProfitPctLong24h?: number | null;
     strategyExitReasonLong24h?: StrategyProfitByPlanEntry["exitReason"] | null;
   },
->(row: T, simOpts?: ReversalTpStrategySimOptions): T {
+>(
+  row: T,
+  simOpts?: ReversalTpStrategySimOptions | { short?: ReversalTpStrategySimOptions; long?: ReversalTpStrategySimOptions },
+): T {
+  const shortSimOpts =
+    simOpts && "short" in simOpts ? simOpts.short : (simOpts as ReversalTpStrategySimOptions | undefined);
+  const longSimOpts =
+    simOpts && "long" in simOpts ? simOpts.long : (simOpts as ReversalTpStrategySimOptions | undefined);
   let out = row;
   for (const holdHours of [STATS_STRATEGY_PROFIT_HOLD_24H, STATS_STRATEGY_PROFIT_HOLD_48H] as const) {
-    const cacheKey = reversalTpStrategyCacheKey(holdHours, simOpts);
+    const cacheKey = reversalTpStrategyCacheKey(holdHours, shortSimOpts);
     const cached = row.strategyProfitByPlan?.[cacheKey];
     if (!cached) {
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {
@@ -636,7 +649,7 @@ export function withReversalStrategyProfitDisplayFields<
       };
     }
 
-    const longCacheKey = reversalTpStrategyCacheKeyLong(holdHours, simOpts);
+    const longCacheKey = reversalTpStrategyCacheKeyLong(holdHours, longSimOpts);
     const longCached = row.strategyProfitByPlan?.[longCacheKey];
     if (!longCached) {
       if (holdHours === STATS_STRATEGY_PROFIT_HOLD_24H) {

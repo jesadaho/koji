@@ -18,6 +18,7 @@ import {
   statsEma20MetricsNeedForRow,
 } from "./statsEma20Dist";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
+import { STATS_ATR_PCT_4H_VERSION } from "./statsAtrPct4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
@@ -189,6 +190,8 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
       r.psar4hTrend === "up" || r.psar4hTrend === "down" ? r.psar4hTrend : null,
     psar4hDistPct: nullNum(r.psar4hDistPct),
     atrPct14d: nullNum(r.atrPct14d),
+    atrPct4h: nullNum(r.atrPct4h),
+    atrPct4hV: r.atrPct4hV === STATS_ATR_PCT_4H_VERSION ? STATS_ATR_PCT_4H_VERSION : undefined,
     lenPercentilePct: nullNum(r.lenPercentilePct),
     barRangePctSignal: nullNum(r.barRangePctSignal),
     weeklyAlertNo:
@@ -401,6 +404,7 @@ export async function appendCandleReversalStatsRow(
   let psar4hTrend: CandleReversalStatsRow["psar4hTrend"] = null;
   let psar4hDistPct: CandleReversalStatsRow["psar4hDistPct"] = null;
   let atrPct14d: number | null = null;
+  let atrPct4h: number | null = null;
   try {
     const snap = await fetchReversalAlertMarketSnapshot(input.symbol, input.alertedAtMs);
     quoteVol24hUsdt =
@@ -452,6 +456,10 @@ export async function appendCandleReversalStatsRow(
     atrPct14d =
       snap.atrPct14d != null && Number.isFinite(snap.atrPct14d) && snap.atrPct14d > 0
         ? snap.atrPct14d
+        : null;
+    atrPct4h =
+      snap.atrPct4h != null && Number.isFinite(snap.atrPct4h) && snap.atrPct4h > 0
+        ? snap.atrPct4h
         : null;
   } catch {
     /* ignore */
@@ -505,6 +513,7 @@ export async function appendCandleReversalStatsRow(
     psar4hDistPct,
     psar4hV: STATS_PSAR_4H_VERSION,
     atrPct14d,
+    ...(atrPct4h != null ? { atrPct4h, atrPct4hV: STATS_ATR_PCT_4H_VERSION } : {}),
     wickRatioPct:
       input.wickRatioPct != null && Number.isFinite(input.wickRatioPct) ? input.wickRatioPct : null,
     lowerWickRatioPct:

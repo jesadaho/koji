@@ -193,6 +193,18 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
   /** กฎปิด @12h: ROI<0 + EMA4H>0 — default เปิด */
   reversalAutoTradeTp12hCloseEnabled?: boolean;
+  /** Long (Market LONG / ทิศแนะนำ 🟢) — ว่าง = fallback ค่า Short */
+  reversalAutoTradeLongTpSlEnabled?: boolean;
+  reversalAutoTradeLongTp1PricePct?: number;
+  reversalAutoTradeLongTp1PartialPct?: number;
+  reversalAutoTradeLongTp2PricePct?: number;
+  reversalAutoTradeLongMaxHoldHours?: number;
+  reversalAutoTradeLongHoldExtendIfRedEnabled?: boolean;
+  reversalAutoTradeLongHoldExtendRedHours?: number;
+  reversalAutoTradeLongSlArmRoiPct?: number;
+  reversalAutoTradeLongSlEntryOffsetPct?: number;
+  reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled?: boolean;
+  reversalAutoTradeLongTp12hCloseEnabled?: boolean;
   /** ทิศที่เล่นในตาราง Reversal Short 1H — @deprecated ใช้ playShort/playLong */
   reversalStatsPlaySide?: ReversalStatsPlaySide;
   /** เล่น Short ตามสัญญาณ — default เปิด */
@@ -402,6 +414,17 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled?: boolean;
   /** กฎปิด @12h: ROI<0 + EMA4H>0 — default เปิด */
   reversalAutoTradeTp12hCloseEnabled?: boolean;
+  reversalAutoTradeLongTpSlEnabled?: boolean;
+  reversalAutoTradeLongTp1PricePct?: number | null;
+  reversalAutoTradeLongTp1PartialPct?: number | null;
+  reversalAutoTradeLongTp2PricePct?: number | null;
+  reversalAutoTradeLongMaxHoldHours?: number | null;
+  reversalAutoTradeLongHoldExtendIfRedEnabled?: boolean;
+  reversalAutoTradeLongHoldExtendRedHours?: number | null;
+  reversalAutoTradeLongSlArmRoiPct?: number | null;
+  reversalAutoTradeLongSlEntryOffsetPct?: number | null;
+  reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled?: boolean;
+  reversalAutoTradeLongTp12hCloseEnabled?: boolean;
   reversalStatsPlaySide?: ReversalStatsPlaySide | null;
   reversalStatsPlayShortEnabled?: boolean | null;
   reversalStatsPlayLongEnabled?: boolean | null;
@@ -515,6 +538,17 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeSlEntryOffsetPct !== undefined ||
     input.reversalAutoTradeSlAtEntryAfter24hIfGreenEnabled !== undefined ||
     input.reversalAutoTradeTp12hCloseEnabled !== undefined ||
+    input.reversalAutoTradeLongTpSlEnabled !== undefined ||
+    input.reversalAutoTradeLongTp1PricePct !== undefined ||
+    input.reversalAutoTradeLongTp1PartialPct !== undefined ||
+    input.reversalAutoTradeLongTp2PricePct !== undefined ||
+    input.reversalAutoTradeLongMaxHoldHours !== undefined ||
+    input.reversalAutoTradeLongHoldExtendIfRedEnabled !== undefined ||
+    input.reversalAutoTradeLongHoldExtendRedHours !== undefined ||
+    input.reversalAutoTradeLongSlArmRoiPct !== undefined ||
+    input.reversalAutoTradeLongSlEntryOffsetPct !== undefined ||
+    input.reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled !== undefined ||
+    input.reversalAutoTradeLongTp12hCloseEnabled !== undefined ||
     input.reversalStatsPlaySide !== undefined ||
     input.reversalStatsPlayShortEnabled !== undefined ||
     input.reversalStatsPlayLongEnabled !== undefined ||
@@ -959,6 +993,75 @@ export async function saveTradingViewMexcSettings(
       input.reversalAutoTradeTp12hCloseEnabled !== undefined
         ? input.reversalAutoTradeTp12hCloseEnabled
         : prev?.reversalAutoTradeTp12hCloseEnabled,
+
+    reversalAutoTradeLongTpSlEnabled:
+      input.reversalAutoTradeLongTpSlEnabled !== undefined
+        ? input.reversalAutoTradeLongTpSlEnabled
+        : prev?.reversalAutoTradeLongTpSlEnabled,
+
+    reversalAutoTradeLongTp1PricePct:
+      input.reversalAutoTradeLongTp1PricePct === null
+        ? undefined
+        : input.reversalAutoTradeLongTp1PricePct !== undefined
+          ? input.reversalAutoTradeLongTp1PricePct
+          : prev?.reversalAutoTradeLongTp1PricePct,
+
+    reversalAutoTradeLongTp1PartialPct:
+      input.reversalAutoTradeLongTp1PartialPct === null
+        ? undefined
+        : input.reversalAutoTradeLongTp1PartialPct !== undefined
+          ? input.reversalAutoTradeLongTp1PartialPct
+          : prev?.reversalAutoTradeLongTp1PartialPct,
+
+    reversalAutoTradeLongTp2PricePct:
+      input.reversalAutoTradeLongTp2PricePct === null
+        ? undefined
+        : input.reversalAutoTradeLongTp2PricePct !== undefined
+          ? input.reversalAutoTradeLongTp2PricePct
+          : prev?.reversalAutoTradeLongTp2PricePct,
+
+    reversalAutoTradeLongMaxHoldHours:
+      input.reversalAutoTradeLongMaxHoldHours === null
+        ? undefined
+        : input.reversalAutoTradeLongMaxHoldHours !== undefined
+          ? input.reversalAutoTradeLongMaxHoldHours
+          : prev?.reversalAutoTradeLongMaxHoldHours,
+
+    reversalAutoTradeLongHoldExtendIfRedEnabled:
+      input.reversalAutoTradeLongHoldExtendIfRedEnabled !== undefined
+        ? input.reversalAutoTradeLongHoldExtendIfRedEnabled
+        : prev?.reversalAutoTradeLongHoldExtendIfRedEnabled,
+
+    reversalAutoTradeLongHoldExtendRedHours:
+      input.reversalAutoTradeLongHoldExtendRedHours === null
+        ? undefined
+        : input.reversalAutoTradeLongHoldExtendRedHours !== undefined
+          ? input.reversalAutoTradeLongHoldExtendRedHours
+          : prev?.reversalAutoTradeLongHoldExtendRedHours,
+
+    reversalAutoTradeLongSlArmRoiPct:
+      input.reversalAutoTradeLongSlArmRoiPct === null
+        ? undefined
+        : input.reversalAutoTradeLongSlArmRoiPct !== undefined
+          ? input.reversalAutoTradeLongSlArmRoiPct
+          : prev?.reversalAutoTradeLongSlArmRoiPct,
+
+    reversalAutoTradeLongSlEntryOffsetPct:
+      input.reversalAutoTradeLongSlEntryOffsetPct === null
+        ? undefined
+        : input.reversalAutoTradeLongSlEntryOffsetPct !== undefined
+          ? input.reversalAutoTradeLongSlEntryOffsetPct
+          : prev?.reversalAutoTradeLongSlEntryOffsetPct,
+
+    reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled:
+      input.reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled !== undefined
+        ? input.reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled
+        : prev?.reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled,
+
+    reversalAutoTradeLongTp12hCloseEnabled:
+      input.reversalAutoTradeLongTp12hCloseEnabled !== undefined
+        ? input.reversalAutoTradeLongTp12hCloseEnabled
+        : prev?.reversalAutoTradeLongTp12hCloseEnabled,
 
     reversalStatsPlaySide:
       input.reversalStatsPlaySide === null

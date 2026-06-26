@@ -4,6 +4,7 @@
 
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
+import { fetchSymbolAtrPct4hAtMs } from "./statsAtrPct4h";
 import { fetchStatsQuoteVol24hUsdt } from "./statsQuoteVol24h";
 import { fetchStatsEma20MetricsAtMs } from "./statsEma20Dist";
 import { fetchBtcEmaSlopesAtMs, fetchSymbolEmaSlopesAtMs } from "./statsEmaSlope";
@@ -54,6 +55,8 @@ export type ReversalAlertMarketSnapshot = {
   btcEma20_4hSlopePct7d: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d: number | null;
+  /** Wilder ATR(14) บน 4h ÷ close × 100 ณ atMs */
+  atrPct4h: number | null;
   /** PSAR 4h — ทิศ SAR (up/down) */
   psar4hTrend: "up" | "down" | null;
   /** PSAR 4h — (close − SAR) / close × 100 */
@@ -67,11 +70,12 @@ export async function fetchReversalAlertMarketSnapshot(
 ): Promise<ReversalAlertMarketSnapshot> {
   const sym = binanceSymbol.trim().toUpperCase();
   const base = binanceUsdtPerpBase(sym);
-  const [quoteVol24hUsdt, marketCapUsd, symbolEma, atrPct14d, btcEma, psar4h, ema20Dist] = await Promise.all([
+  const [quoteVol24hUsdt, marketCapUsd, symbolEma, atrPct14d, atrPct4h, btcEma, psar4h, ema20Dist] = await Promise.all([
     fetchStatsQuoteVol24hUsdt(sym),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
     fetchSymbolEmaSlopesAtMs(sym, atMs),
     fetchSymbolAtrPct14d(sym),
+    fetchSymbolAtrPct4hAtMs(sym, atMs),
     fetchBtcEmaSlopesAtMs(atMs),
     fetchSymbolPsar4hAtMs(sym, atMs),
     fetchStatsEma20MetricsAtMs(sym, atMs),
@@ -90,6 +94,7 @@ export async function fetchReversalAlertMarketSnapshot(
     ema20_4hSlopePct7d: ema20Dist.ema20_4hSlopePct7d,
     btcEma20_4hSlopePct7d: ema20Dist.btcEma20_4hSlopePct7d,
     atrPct14d,
+    atrPct4h,
     psar4hTrend: psar4h?.trend ?? null,
     psar4hDistPct: psar4h?.distPct ?? null,
   };
