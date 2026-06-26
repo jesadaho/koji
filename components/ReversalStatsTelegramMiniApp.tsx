@@ -1922,7 +1922,7 @@ export default function ReversalStatsTelegramMiniApp() {
     if (
       !window.confirm(
         "Backfill AI data สำหรับ Reversal 1H?\n\n" +
-          "• ทีละ 5 แถวที่ยังไม่มี AI analysis (ใหม่สุดก่อน)\n" +
+          "• ทีละ 3 แถวที่ยังไม่มี AI analysis (ใหม่สุดก่อน)\n" +
           "• เรียก OpenAI (gpt-5.5) — อาจใช้เวลาหลายสิบวินาที\n" +
           "• ต้องมี OPENAI_API_KEY และเปิด CANDLE_REVERSAL_KLINE_AI_ENABLED\n\n" +
           "กดซ้ำได้จนกว่า remaining จะเป็น 0",
@@ -2076,10 +2076,10 @@ export default function ReversalStatsTelegramMiniApp() {
             type="button"
             className="sparkStatsRefreshBtn"
             disabled={backfillAiBusy}
-            title="เรียก OpenAI วิเคราะห์ kline — ทีละ 5 แถว 1H ที่ยังไม่มี chartAi"
+            title="เรียก OpenAI วิเคราะห์ kline — ทีละ 3 แถว 1H ที่ยังไม่มี chartAi"
             onClick={() => void backfillAiStats()}
           >
-            {backfillAiBusy ? "กำลัง AI…" : "Backfill AI (5)"}
+            {backfillAiBusy ? "กำลัง AI…" : "Backfill AI (3)"}
           </button>
         ) : null}
         {payload?.isAdmin ? (

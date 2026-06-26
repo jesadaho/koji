@@ -1206,7 +1206,7 @@ export async function liffBackfillCandleReversalStats(
   }
 }
 
-/** Backfill AI analysis สำหรับ Reversal 1H — ทีละ 5 แถว (admin) */
+/** Backfill AI analysis สำหรับ Reversal 1H — ทีละ 3 แถว (admin) */
 export async function liffBackfillReversalKlineAi(
   telegramUserId: number,
 ): Promise<

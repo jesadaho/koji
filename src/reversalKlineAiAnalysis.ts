@@ -116,7 +116,7 @@ function reversalKlineAiBackfillPerRun(): number {
 export { reversalKlineAiBackfillPerRun };
 
 /** จำนวนแถว 1H ต่อครั้งเมื่อกดปุ่ม backfill AI ใน Mini App (admin) */
-export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT = 5;
+export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT = 3;
 
 const PREFERRED_SIDES = new Set<ReversalChartAiPreferredSide>(["Long", "Short", "Skip"]);
 const MARKET_CHARS = new Set<ReversalChartAiMarketCharacter>([
