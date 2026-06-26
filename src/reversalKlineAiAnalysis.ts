@@ -115,6 +115,9 @@ function reversalKlineAiBackfillPerRun(): number {
 
 export { reversalKlineAiBackfillPerRun };
 
+/** จำนวนแถว 1H ต่อครั้งเมื่อกดปุ่ม backfill AI ใน Mini App (admin) */
+export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT = 5;
+
 const PREFERRED_SIDES = new Set<ReversalChartAiPreferredSide>(["Long", "Short", "Skip"]);
 const MARKET_CHARS = new Set<ReversalChartAiMarketCharacter>([
   "Trend",
@@ -376,22 +379,84 @@ export function maybeRunReversalKlineAiAnalysis(input: RunReversalKlineAiForRowI
   });
 }
 
+export type ReversalKlineAiBackfillSummary = {
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  remaining: number;
+  symbols: string[];
+  errors: string[];
+};
+
+function countReversalKlineAiPending(rows: CandleReversalStatsRow[]): number {
+  return rows.filter(
+    (r) =>
+      r.signalBarTf === "1h" && r.chartAiAnalysisV !== REVERSAL_CHART_AI_ANALYSIS_VERSION,
+  ).length;
+}
+
 export async function backfillReversalKlineAiAnalysis(
   rows: CandleReversalStatsRow[],
-): Promise<number> {
-  if (!isReversalKlineAiEnabled()) return 0;
+  opts?: { limit?: number },
+): Promise<ReversalKlineAiBackfillSummary> {
+  const empty: ReversalKlineAiBackfillSummary = {
+    attempted: 0,
+    succeeded: 0,
+    failed: 0,
+    remaining: countReversalKlineAiPending(rows),
+    symbols: [],
+    errors: [],
+  };
 
-  const cap = reversalKlineAiBackfillPerRun();
-  let done = 0;
-
-  for (const row of rows) {
-    if (done >= cap) break;
-    if (row.signalBarTf !== "1h") continue;
-    if (row.chartAiAnalysisV === REVERSAL_CHART_AI_ANALYSIS_VERSION) continue;
-
-    const ok = await runReversalKlineAiForRow({ row });
-    if (ok) done += 1;
+  if (!isReversalKlineAiEnabled()) {
+    return {
+      ...empty,
+      errors: ["CANDLE_REVERSAL_KLINE_AI disabled or missing OPENAI_API_KEY"],
+    };
   }
 
-  return done;
+  const cap = opts?.limit ?? reversalKlineAiBackfillPerRun();
+  const needsAi = rows
+    .filter(
+      (r) =>
+        r.signalBarTf === "1h" && r.chartAiAnalysisV !== REVERSAL_CHART_AI_ANALYSIS_VERSION,
+    )
+    .sort((a, b) => b.alertedAtMs - a.alertedAtMs);
+
+  let attempted = 0;
+  let succeeded = 0;
+  let failed = 0;
+  const symbols: string[] = [];
+  const failedRows: { symbol: string; id: string }[] = [];
+
+  for (const row of needsAi) {
+    if (attempted >= cap) break;
+    attempted += 1;
+    const ok = await runReversalKlineAiForRow({ row });
+    if (ok) {
+      succeeded += 1;
+      symbols.push(row.symbol);
+    } else {
+      failed += 1;
+      failedRows.push({ symbol: row.symbol, id: row.id });
+    }
+  }
+
+  const errors: string[] = [];
+  let remaining = Math.max(0, needsAi.length - succeeded);
+  try {
+    const { loadCandleReversalStatsState } = await import("./candleReversalStatsStore");
+    const fresh = await loadCandleReversalStatsState();
+    remaining = countReversalKlineAiPending(fresh.rows);
+    for (const f of failedRows) {
+      const errRow = fresh.rows.find((r) => r.id === f.id);
+      errors.push(`${f.symbol}: ${errRow?.chartAiAnalysisError?.trim() || "analysis failed"}`);
+    }
+  } catch {
+    for (const f of failedRows) {
+      errors.push(`${f.symbol}: analysis failed`);
+    }
+  }
+
+  return { attempted, succeeded, failed, remaining, symbols, errors };
 }

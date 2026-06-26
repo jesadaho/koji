@@ -28,6 +28,7 @@ import {
   liffGetSparkStats,
   liffGetSnowballStats,
   liffBackfillCandleReversalStats,
+  liffBackfillReversalKlineAi,
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
 } from "@/src/liffService";
@@ -323,6 +324,26 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
         updated: r.updated,
         scanned: r.scanned,
         changedOutcome: r.changedOutcome,
+      });
+    }
+    if (segs.length === 2 && a === "reversal-stats" && segs[1] === "backfill-ai") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const tgRaw = tgStoreKeyToTelegramUserIdString(auth.userId);
+      const tgId = tgRaw != null ? Number(tgRaw) : NaN;
+      if (!Number.isFinite(tgId)) {
+        return json({ error: "Backfill AI รองรับเฉพาะ Telegram Mini App" }, 403);
+      }
+      const r = await liffBackfillReversalKlineAi(tgId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({
+        ok: true,
+        attempted: r.attempted,
+        succeeded: r.succeeded,
+        failed: r.failed,
+        remaining: r.remaining,
+        symbols: r.symbols,
+        errors: r.errors,
       });
     }
 

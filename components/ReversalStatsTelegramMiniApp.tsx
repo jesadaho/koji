@@ -1773,7 +1773,9 @@ export default function ReversalStatsTelegramMiniApp() {
   const [resetBusy, setResetBusy] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillAiBusy, setBackfillAiBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [backfillAiMsg, setBackfillAiMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<ReversalStatsTabId>("1d");
 
   const allRows = payload?.rows ?? [];
@@ -1916,6 +1918,50 @@ export default function ReversalStatsTelegramMiniApp() {
     }
   }, [api, loadStats]);
 
+  const backfillAiStats = useCallback(async () => {
+    if (
+      !window.confirm(
+        "Backfill AI data สำหรับ Reversal 1H?\n\n" +
+          "• ทีละ 5 แถวที่ยังไม่มี AI analysis (ใหม่สุดก่อน)\n" +
+          "• เรียก OpenAI (gpt-5.5) — อาจใช้เวลาหลายสิบวินาที\n" +
+          "• ต้องมี OPENAI_API_KEY และเปิด CANDLE_REVERSAL_KLINE_AI_ENABLED\n\n" +
+          "กดซ้ำได้จนกว่า remaining จะเป็น 0",
+      )
+    ) {
+      return;
+    }
+    setBackfillAiBusy(true);
+    setBackfillAiMsg(null);
+    try {
+      const res = (await api("/reversal-stats/backfill-ai", { method: "POST" })) as unknown as {
+        ok?: boolean;
+        attempted?: number;
+        succeeded?: number;
+        failed?: number;
+        remaining?: number;
+        symbols?: string[];
+        errors?: string[];
+      };
+      const attempted = typeof res?.attempted === "number" ? res.attempted : 0;
+      const succeeded = typeof res?.succeeded === "number" ? res.succeeded : 0;
+      const failed = typeof res?.failed === "number" ? res.failed : 0;
+      const remaining = typeof res?.remaining === "number" ? res.remaining : 0;
+      const symbols = Array.isArray(res?.symbols) ? res.symbols : [];
+      const errors = Array.isArray(res?.errors) ? res.errors : [];
+      const symPart = symbols.length > 0 ? ` · ${symbols.join(", ")}` : "";
+      const errPart = errors.length > 0 ? ` · ผิดพลาด: ${errors.join("; ")}` : "";
+      setBackfillAiMsg({
+        kind: failed > 0 && succeeded === 0 ? "error" : "ok",
+        text: `AI backfill — ลอง ${attempted} · สำเร็จ ${succeeded} · ล้มเหลว ${failed} · เหลือ ${remaining}${symPart}${errPart}`,
+      });
+      await loadStats({ mode: "force" });
+    } catch (e) {
+      setBackfillAiMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBackfillAiBusy(false);
+    }
+  }, [api, loadStats]);
+
   const resetStats = useCallback(async () => {
     if (
       !window.confirm(
@@ -2029,6 +2075,17 @@ export default function ReversalStatsTelegramMiniApp() {
           <button
             type="button"
             className="sparkStatsRefreshBtn"
+            disabled={backfillAiBusy}
+            title="เรียก OpenAI วิเคราะห์ kline — ทีละ 5 แถว 1H ที่ยังไม่มี chartAi"
+            onClick={() => void backfillAiStats()}
+          >
+            {backfillAiBusy ? "กำลัง AI…" : "Backfill AI (5)"}
+          </button>
+        ) : null}
+        {payload?.isAdmin ? (
+          <button
+            type="button"
+            className="sparkStatsRefreshBtn"
             disabled={backfillBusy}
             title="Refetch pct จาก Binance + recompute outcome ทุกแถวจาก horizon pct (1H→pct24h · 1D→pct7d) — ข้าม pending guard"
             onClick={() => void backfillStats()}
@@ -2056,6 +2113,17 @@ export default function ReversalStatsTelegramMiniApp() {
           }}
         >
           {backfillMsg.text}
+        </p>
+      ) : null}
+      {backfillAiMsg ? (
+        <p
+          className="sub"
+          style={{
+            marginTop: "0.35rem",
+            color: backfillAiMsg.kind === "error" ? "var(--danger)" : undefined,
+          }}
+        >
+          {backfillAiMsg.text}
         </p>
       ) : null}
       {statsCachedAtMs != null ? (

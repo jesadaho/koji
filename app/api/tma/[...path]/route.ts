@@ -51,6 +51,7 @@ import {
   liffCorrectSnowballStatsOutcome,
   liffBackfillSnowballStats,
   liffBackfillCandleReversalStats,
+  liffBackfillReversalKlineAi,
   liffBackfillRsiDivergenceStats,
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
@@ -474,6 +475,21 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         updated: r.updated,
         scanned: r.scanned,
         changedOutcome: r.changedOutcome,
+      });
+    }
+    if (segs.length === 2 && a === "reversal-stats" && segs[1] === "backfill-ai") {
+      const auth = await authenticateTmaRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const r = await liffBackfillReversalKlineAi(auth.telegramUserId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({
+        ok: true,
+        attempted: r.attempted,
+        succeeded: r.succeeded,
+        failed: r.failed,
+        remaining: r.remaining,
+        symbols: r.symbols,
+        errors: r.errors,
       });
     }
     if (segs.length === 1 && a === "divergence-stats") {

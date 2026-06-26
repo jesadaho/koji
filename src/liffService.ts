@@ -106,6 +106,11 @@ import {
   runCandleReversalStatsFollowUpTick,
 } from "./candleReversalStatsTick";
 import {
+  backfillReversalKlineAiAnalysis,
+  REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT,
+  type ReversalKlineAiBackfillSummary,
+} from "./reversalKlineAiAnalysis";
+import {
   correctRsiDivergenceStatsOutcome,
   runRsiDivergenceStatsFollowUpTick,
 } from "./rsiDivergenceStatsTick";
@@ -1196,6 +1201,27 @@ export async function liffBackfillCandleReversalStats(
     });
     const { scanned, changedOutcome } = await correctCandleReversalStatsOutcome();
     return { ok: true, updated, scanned, changedOutcome, removedDupes };
+  } catch (e) {
+    return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Backfill AI analysis สำหรับ Reversal 1H — ทีละ 5 แถว (admin) */
+export async function liffBackfillReversalKlineAi(
+  telegramUserId: number,
+): Promise<
+  | ({ ok: true } & ReversalKlineAiBackfillSummary)
+  | { ok: false; status: number; error: string }
+> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  try {
+    const st = await loadCandleReversalStatsState();
+    const result = await backfillReversalKlineAiAnalysis(st.rows, {
+      limit: REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT,
+    });
+    return { ok: true, ...result };
   } catch (e) {
     return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
   }

@@ -897,7 +897,7 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += backfill1hOutcomeTo24h(state.rows);
   dirty += await backfillAllStatsRowsTradFiFlag(state.rows);
   dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
-  dirty += await backfillReversalKlineAiAnalysis(state.rows);
+  dirty += (await backfillReversalKlineAiAnalysis(state.rows)).succeeded;
   if (opts?.forceLong1hFadeShort) {
     dirty += await refreshLong1hFadeShortFollowUp(state.rows, nowMs, nowSec);
   }
