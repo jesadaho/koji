@@ -2289,8 +2289,8 @@ export default function SettingsTelegramMiniApp() {
           <li><strong>24 ชม.</strong>: ROI &lt; 3% + EMA20∠1h &gt; 0 → ปิดทันที</li>
           <li><strong>24 ชม.</strong>: ROI &gt; 3% + EMA20∠1h &lt; 0 → ถือต่อ + SL@entry (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code>)</li>
           <li><strong>24–48 ชม.</strong>: แตะ SL@entry → ออก ~0%</li>
-          <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ปิดทั้งหมด (force)</li>
-          <li><strong>จังหวะ 2 (option)</strong>: ครบจังหวะ 1 แล้วยังปิดแดง → ถือต่ออีก {revHoldExtendRedHours.trim() || revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
+          <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ดู EMA12∠1h · ข้างเรา → ขยายจังหวะ 2 · ผิดฝั่ง → ปิด force</li>
+          <li><strong>จังหวะ 2</strong>: ขยายอีก {revHoldExtendRedHours.trim() || revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
           <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
         </ul>
 
@@ -2409,7 +2409,20 @@ export default function SettingsTelegramMiniApp() {
               disabled={!revTpSlEnabled}
             />
           </label>
-          <label className="sub tmaCheckboxField" style={{ display: "block" }}>
+          <label className="sub" style={{ display: "block" }}>
+            จังหวะ 2 — ขยายอีกกี่ ชม. เมื่อ EMA12∠1h ข้างเรา (ว่าง = เท่าจังหวะ 1)
+            <input
+              type="text"
+              inputMode="numeric"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder={revMaxHoldHours.trim() || "เช่น 24"}
+              value={revHoldExtendRedHours}
+              onChange={(e) => setRevHoldExtendRedHours(e.target.value)}
+              disabled={!revTpSlEnabled}
+            />
+          </label>
+          <label className="sub tmaCheckboxField" style={{ display: "block", opacity: 0.85 }}>
             <input
               type="checkbox"
               checked={revHoldExtendIfRed}
@@ -2417,24 +2430,9 @@ export default function SettingsTelegramMiniApp() {
               disabled={!revTpSlEnabled}
             />
             <span className="tmaCheckboxField__text">
-              ครบจังหวะ 1 แล้วยังปิดแดง → ขยายจังหวะ 2
+              fallback: ถ้าดึง EMA12∠1h ไม่ได้ → ใช้แดง/เขียว แทน (Snowball)
             </span>
           </label>
-          {revHoldExtendIfRed ? (
-            <label className="sub" style={{ display: "block" }}>
-              จังหวะ 2 — ขยายอีกกี่ ชม. (ว่าง = เท่าจังหวะ 1)
-              <input
-                type="text"
-                inputMode="numeric"
-                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
-                autoComplete="off"
-                placeholder={revMaxHoldHours.trim() || "เช่น 24"}
-                value={revHoldExtendRedHours}
-                onChange={(e) => setRevHoldExtendRedHours(e.target.value)}
-                disabled={!revTpSlEnabled}
-              />
-            </label>
-          ) : null}
         </div>
 
         <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
@@ -2566,7 +2564,20 @@ export default function SettingsTelegramMiniApp() {
               disabled={!revLongTpSlEnabled}
             />
           </label>
-          <label className="sub tmaCheckboxField" style={{ display: "block" }}>
+          <label className="sub" style={{ display: "block" }}>
+            จังหวะ 2 — ขยายอีกกี่ ชม. เมื่อ EMA12∠1h ข้างเรา (ว่าง = Short)
+            <input
+              type="text"
+              inputMode="numeric"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder={revLongMaxHoldHours.trim() || revMaxHoldHours.trim() || "เช่น 24"}
+              value={revLongHoldExtendRedHours}
+              onChange={(e) => setRevLongHoldExtendRedHours(e.target.value)}
+              disabled={!revLongTpSlEnabled}
+            />
+          </label>
+          <label className="sub tmaCheckboxField" style={{ display: "block", opacity: 0.85 }}>
             <input
               type="checkbox"
               checked={revLongHoldExtendIfRed}
@@ -2574,24 +2585,9 @@ export default function SettingsTelegramMiniApp() {
               disabled={!revLongTpSlEnabled}
             />
             <span className="tmaCheckboxField__text">
-              ครบจังหวะ 1 แล้วยังปิดแดง → ขยายจังหวะ 2 (Long)
+              fallback: ถ้าดึง EMA12∠1h ไม่ได้ → ใช้แดง/เขียว แทน (Long)
             </span>
           </label>
-          {revLongHoldExtendIfRed ? (
-            <label className="sub" style={{ display: "block" }}>
-              จังหวะ 2 — ขยายอีกกี่ ชม. (ว่าง = Short)
-              <input
-                type="text"
-                inputMode="numeric"
-                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
-                autoComplete="off"
-                placeholder={revLongMaxHoldHours.trim() || revMaxHoldHours.trim() || "เช่น 24"}
-                value={revLongHoldExtendRedHours}
-                onChange={(e) => setRevLongHoldExtendRedHours(e.target.value)}
-                disabled={!revLongTpSlEnabled}
-              />
-            </label>
-          ) : null}
           <label className="sub" style={{ display: "block" }}>
             ROI ถึงกี่ % → ย้าย SL บังทุน (ว่าง = Short)
             <input

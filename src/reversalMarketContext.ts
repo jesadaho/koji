@@ -2,6 +2,7 @@
  * บริบทตลาดตอนบันทึก Reversal stats — quote vol 24h (Binance) + market cap (CoinGecko)
  */
 
+import { binanceUsdtPerpBase } from "@/lib/binancePerpBase";
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { fetchSymbolAtrPct14d } from "./statsAtrPct14d";
 import { fetchSymbolAtrPct4hAtMs } from "./statsAtrPct4h";
@@ -15,10 +16,8 @@ import { fetchBtcDomEma20_4hSlopePct7dAtMs } from "./statsBtcDominanceEma";
 const mcapCache = new Map<string, { atMs: number; mcap: number | null }>();
 const MCAP_CACHE_MS = 15 * 60 * 1000;
 
-function binanceUsdtPerpBase(binanceSymbol: string): string | null {
-  const sym = binanceSymbol.trim().toUpperCase();
-  if (!sym.endsWith("USDT") || sym.length < 5) return null;
-  return sym.slice(0, -4);
+function binanceUsdtPerpBaseLocal(binanceSymbol: string): string | null {
+  return binanceUsdtPerpBase(binanceSymbol);
 }
 
 async function fetchMarketCapUsdCached(base: string): Promise<number | null> {
@@ -26,9 +25,9 @@ async function fetchMarketCapUsdCached(base: string): Promise<number | null> {
   if (!key) return null;
   const now = Date.now();
   const hit = mcapCache.get(key);
-  if (hit && now - hit.atMs < MCAP_CACHE_MS) return hit.mcap;
+  if (hit && now - hit.atMs < MCAP_CACHE_MS && hit.mcap != null) return hit.mcap;
   const mcap = await fetchCoinGeckoMarketCapUsd(key);
-  mcapCache.set(key, { atMs: now, mcap });
+  if (mcap != null) mcapCache.set(key, { atMs: now, mcap });
   return mcap;
 }
 
@@ -75,7 +74,7 @@ export async function fetchReversalAlertMarketSnapshot(
   atMs: number = Date.now(),
 ): Promise<ReversalAlertMarketSnapshot> {
   const sym = binanceSymbol.trim().toUpperCase();
-  const base = binanceUsdtPerpBase(sym);
+  const base = binanceUsdtPerpBaseLocal(sym);
   const [quoteVol24hUsdt, marketCapUsd, openInterest, btcDomEma20_4hSlopePct7d, symbolEma, atrPct14d, atrPct4h, btcEma, psar4h, ema20Dist] =
     await Promise.all([
     fetchStatsQuoteVol24hUsdt(sym),

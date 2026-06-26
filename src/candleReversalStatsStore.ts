@@ -22,6 +22,7 @@ import { STATS_ATR_PCT_4H_VERSION } from "./statsAtrPct4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import { STATS_OPEN_INTEREST_VERSION } from "./statsOpenInterest";
 import { STATS_BTC_DOM_EMA20_4H_VERSION } from "./statsBtcDominanceEma";
+import { STATS_MARKET_CAP_VERSION } from "./statsMarketCapUsd";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import {
@@ -219,6 +220,7 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
         : undefined,
     quoteVol24hUsdt: nullNum(r.quoteVol24hUsdt),
     marketCapUsd: nullNum(r.marketCapUsd),
+    marketCapV: r.marketCapV === STATS_MARKET_CAP_VERSION ? STATS_MARKET_CAP_VERSION : undefined,
     openInterestUsdt: nullNum(r.openInterestUsdt),
     openInterestContracts: nullNum(r.openInterestContracts),
     openInterestV: r.openInterestV === STATS_OPEN_INTEREST_VERSION ? STATS_OPEN_INTEREST_VERSION : undefined,
@@ -580,6 +582,7 @@ export async function appendCandleReversalStatsRow(
     quoteVol24hUsdt,
     quoteVol24hV: STATS_QUOTE_VOL_24H_VERSION,
     marketCapUsd,
+    ...(marketCapUsd != null ? { marketCapV: STATS_MARKET_CAP_VERSION } : {}),
     openInterestUsdt,
     openInterestContracts,
     ...(openInterestUsdt != null || openInterestContracts != null

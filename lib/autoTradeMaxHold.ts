@@ -97,9 +97,35 @@ export type AutoTradeHoldCheckpoint =
   | { action: "extend_red"; phase1Hours: number; extendRedHours: number }
   | { action: "force_close"; holdHours: number; phase: 1 | 2 };
 
+/** EMA12∠1h slope % — LONG เอียงขึ้น = ข้างเรา · SHORT เอียงลง = ข้างเรา */
+export function ema12_1hSlopeOnOurSide(
+  side: "long" | "short",
+  ema12_1hSlopePct7d: number | null | undefined,
+): boolean | null {
+  if (ema12_1hSlopePct7d == null || !Number.isFinite(ema12_1hSlopePct7d)) return null;
+  if (side === "long") return ema12_1hSlopePct7d > 0;
+  return ema12_1hSlopePct7d < 0;
+}
+
+export function formatEma12_1hSlopePct(slope: number | null | undefined): string {
+  if (slope == null || !Number.isFinite(slope)) return "—";
+  return `${slope >= 0 ? "+" : ""}${slope.toFixed(2)}%`;
+}
+
+export function formatEma12_1hHoldLine(
+  side: "long" | "short",
+  ema12_1hSlopePct7d: number | null | undefined,
+): string {
+  const pct = formatEma12_1hSlopePct(ema12_1hSlopePct7d);
+  const onSide = ema12_1hSlopeOnOurSide(side, ema12_1hSlopePct7d);
+  if (onSide === true) return `EMA12∠1h: ${pct} · ข้างเรา`;
+  if (onSide === false) return `EMA12∠1h: ${pct} · ผิดฝั่ง`;
+  return `EMA12∠1h: ${pct}`;
+}
+
 /**
- * จังหวะ 1 = phase1Hours · option เปิด + ปิดแดง → ขยายอีก extendRedHours (default = phase1)
- * markPnlPct = pricePctDrop (ติดลบ = ขาดทุนถ้าปิดตอนนี้)
+ * จังหวะ 1 = phase1Hours · option เปิด + EMA12∠1h ข้างเรา → ขยายอีก extendRedHours (default = phase1)
+ * markPnlPct = legacy fallback เมื่อไม่ส่ง ema12_1hSlopePct7d
  */
 export function resolveAutoTradeHoldCheckpoint(input: {
   openedAtMs: number;
@@ -108,6 +134,8 @@ export function resolveAutoTradeHoldCheckpoint(input: {
   extendIfRedEnabled?: boolean;
   holdExtendedForRed?: boolean;
   markPnlPct: number;
+  side?: "long" | "short";
+  ema12_1hSlopePct7d?: number | null;
   nowMs?: number;
 }): AutoTradeHoldCheckpoint {
   const now = input.nowMs ?? Date.now();
@@ -121,23 +149,29 @@ export function resolveAutoTradeHoldCheckpoint(input: {
   const age = now - input.openedAtMs;
   if (!(input.openedAtMs > 0) || age < 0) return { action: "continue" };
 
-  if (input.extendIfRedEnabled) {
-    if (age >= totalMs) {
-      return { action: "force_close", holdHours: p1 + ext, phase: 2 };
+  if (input.holdExtendedForRed && age >= totalMs) {
+    return { action: "force_close", holdHours: p1 + ext, phase: 2 };
+  }
+
+  if (age >= p1Ms) {
+    if (input.holdExtendedForRed) {
+      return { action: "continue" };
     }
-    if (age >= p1Ms) {
-      if (input.holdExtendedForRed) {
-        return { action: "continue" };
+    if (input.side && input.ema12_1hSlopePct7d !== undefined) {
+      const onSide = ema12_1hSlopeOnOurSide(input.side, input.ema12_1hSlopePct7d);
+      if (onSide === true) {
+        return { action: "extend_red", phase1Hours: p1, extendRedHours: ext };
       }
+      if (onSide === false) {
+        return { action: "force_close", holdHours: p1, phase: 1 };
+      }
+    }
+    if (input.extendIfRedEnabled) {
       if (input.markPnlPct < 0) {
         return { action: "extend_red", phase1Hours: p1, extendRedHours: ext };
       }
       return { action: "force_close", holdHours: p1, phase: 1 };
     }
-    return { action: "continue" };
-  }
-
-  if (age >= p1Ms) {
     return { action: "force_close", holdHours: p1, phase: 1 };
   }
   return { action: "continue" };
@@ -159,6 +193,8 @@ export function evaluateAutoOpenMaxHoldSafetyClose(input: {
   holdExtendedForRed: boolean;
   inBotState: boolean;
   markPnlPct: number;
+  side?: "long" | "short";
+  ema12_1hSlopePct7d?: number | null;
   nowMs?: number;
   graceMs?: number;
 }): AutoOpenMaxHoldSafetyDue | null {
@@ -170,7 +206,10 @@ export function evaluateAutoOpenMaxHoldSafetyClose(input: {
       ? input.extendRedHours
       : p1;
   const p1Ms = autoTradePhase1HoldMs(p1);
-  const totalMs = input.extendIfRedEnabled ? autoTradeTotalMaxHoldMs(p1, ext) : p1Ms;
+  const totalMs =
+    input.holdExtendedForRed || input.extendIfRedEnabled
+      ? autoTradeTotalMaxHoldMs(p1, ext)
+      : p1Ms;
   const age = now - input.openedAtMs;
   if (!(input.openedAtMs > 0) || age < 0) return null;
 
@@ -181,6 +220,8 @@ export function evaluateAutoOpenMaxHoldSafetyClose(input: {
     extendIfRedEnabled: input.extendIfRedEnabled,
     holdExtendedForRed: input.holdExtendedForRed,
     markPnlPct: input.markPnlPct,
+    side: input.side,
+    ema12_1hSlopePct7d: input.ema12_1hSlopePct7d,
     nowMs: now,
   });
 
@@ -197,8 +238,8 @@ export function evaluateAutoOpenMaxHoldSafetyClose(input: {
     return {
       due: true,
       reason: "past_absolute_max",
-      holdHours: input.extendIfRedEnabled ? p1 + ext : p1,
-      phase: input.extendIfRedEnabled ? 2 : 1,
+      holdHours: input.holdExtendedForRed || input.extendIfRedEnabled ? p1 + ext : p1,
+      phase: input.holdExtendedForRed || input.extendIfRedEnabled ? 2 : 1,
     };
   }
 

@@ -1,4 +1,5 @@
 import {
+  formatEma12_1hHoldLine,
   resolveAutoTradeHoldCheckpoint,
   resolveAutoTradeHoldExtendIfRed,
   resolveAutoTradeHoldExtendRedHours,
@@ -41,6 +42,10 @@ import {
   type ReversalAutoTradeActive,
 } from "./reversalAutoTradeStateStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
+import {
+  fetchSymbolEmaSlopePctTf,
+  STATS_EMA1H_SLOPE_LOOKBACK_BARS,
+} from "./statsEmaSlope";
 
 function shortContractLabel(contractSymbol: string): string {
   const s = contractSymbol.replace(/_USDT$/i, "").trim();
@@ -105,16 +110,19 @@ async function handleMaxHoldForceClose(
   ctx: TpSlContext,
   holdHours: number,
   phase: 1 | 2 = 1,
+  ema12_1hSlopePct7d?: number | null,
 ): Promise<{ closed: boolean }> {
   const { userId, creds, active, markPrice } = ctx;
   await cancelActiveTpSlPlanOrders(creds, active);
   const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
+  const emaLine = formatEma12_1hHoldLine(active.side, ema12_1hSlopePct7d);
   if (!r.success) {
     await notifyLines(userId, [
       "Koji — Reversal TP/SL (MEXC)",
       `❌ ครบ ${holdHours} ชม. แต่ปิดไม่สำเร็จ`,
       `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
       `Entry MEXC: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)}`,
+      emaLine,
       r.message ? `MEXC: ${r.message}` : "",
     ]);
     return { closed: false };
@@ -123,13 +131,16 @@ async function handleMaxHoldForceClose(
   const phaseLabel =
     phase === 2
       ? `⏰ ครบจังหวะ 2 (${holdHours} ชม. รวม) → ปิดทั้งหมด (force)`
-      : `⏰ ครบจังหวะ 1 (${holdHours} ชม.) → ปิดทั้งหมด (force)`;
+      : ema12_1hSlopePct7d !== undefined
+        ? `⏰ ครบจังหวะ 1 (${holdHours} ชม.) · EMA12∠1h ผิดฝั่ง → ปิดทั้งหมด (force)`
+        : `⏰ ครบจังหวะ 1 (${holdHours} ชม.) → ปิดทั้งหมด (force)`;
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
     phaseLabel,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry MEXC: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)}`,
     Number.isFinite(drop) ? `ราคาเคลื่อน: ${drop >= 0 ? "+" : ""}${drop.toFixed(2)}% จาก entry` : "",
+    emaLine,
   ]);
   return { closed: true };
 }
@@ -296,6 +307,20 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
         };
 
         const drop = pricePctDrop(a.side, a.mexcAvgEntryPrice, mark);
+        const p1Ms = phase1H * 3600 * 1000;
+        const ageMs = nowMs - a.openedAtMs;
+        let ema12_1hSlopePct7d: number | null = null;
+        if (ageMs >= p1Ms - 3600_000 || a.holdExtendedForRed === true) {
+          try {
+            ema12_1hSlopePct7d = await fetchSymbolEmaSlopePctTf(
+              a.binanceSymbol,
+              "1h",
+              STATS_EMA1H_SLOPE_LOOKBACK_BARS,
+            );
+          } catch (e) {
+            console.error("[reversalTpSlTick] ema12 1h slope", a.binanceSymbol, e);
+          }
+        }
         const holdCheckpoint = resolveAutoTradeHoldCheckpoint({
           openedAtMs: a.openedAtMs,
           phase1Hours: phase1H,
@@ -303,21 +328,29 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           extendIfRedEnabled: extendIfRed,
           holdExtendedForRed: a.holdExtendedForRed === true,
           markPnlPct: drop,
+          side: a.side,
+          ema12_1hSlopePct7d,
           nowMs,
         });
         if (holdCheckpoint.action === "extend_red") {
           state = withReversalHoldExtendedForRed(state, userId, a.contractSymbol, a.side);
           await notifyLines(userId, [
             "Koji — Reversal TP/SL (MEXC)",
-            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) ยังปิดแดง → ขยายอีก ${holdCheckpoint.extendRedHours} ชม.`,
+            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) · EMA12∠1h ข้างเรา → ขยายอีก ${holdCheckpoint.extendRedHours} ชม.`,
             `[${shortContractLabel(a.contractSymbol)}]/USDT (${a.side.toUpperCase()})`,
-            `Entry: ${fmtPrice(a.mexcAvgEntryPrice)} · Mark: ${fmtPrice(mark)} · เคลื่อน ${drop.toFixed(2)}%`,
+            `Entry: ${fmtPrice(a.mexcAvgEntryPrice)} · Mark: ${fmtPrice(mark)} · เคลื่อน ${drop >= 0 ? "+" : ""}${drop.toFixed(2)}%`,
+            formatEma12_1hHoldLine(a.side, ema12_1hSlopePct7d),
           ]);
           actionsCount += 1;
           continue;
         }
         if (holdCheckpoint.action === "force_close") {
-          const r = await handleMaxHoldForceClose(ctx, holdCheckpoint.holdHours, holdCheckpoint.phase);
+          const r = await handleMaxHoldForceClose(
+            ctx,
+            holdCheckpoint.holdHours,
+            holdCheckpoint.phase,
+            ema12_1hSlopePct7d,
+          );
           if (r.closed) {
             state = withReversalActiveRemoved(state, userId, a.contractSymbol, a.side);
             actionsCount += 1;

@@ -29,6 +29,7 @@ import {
   liffGetSnowballStats,
   liffBackfillCandleReversalStats,
   liffBackfillReversalKlineAi,
+  liffBackfillReversalMarketCap,
   liffGetCandleReversalStats,
   liffResetCandleReversalStats,
 } from "@/src/liffService";
@@ -325,6 +326,18 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
         scanned: r.scanned,
         changedOutcome: r.changedOutcome,
       });
+    }
+    if (segs.length === 2 && a === "reversal-stats" && segs[1] === "backfill-mcap") {
+      const auth = await authenticateLiffRequest(req.headers.get("authorization"));
+      if (!auth.ok) return json({ error: auth.error }, auth.status);
+      const tgRaw = tgStoreKeyToTelegramUserIdString(auth.userId);
+      const tgId = tgRaw != null ? Number(tgRaw) : NaN;
+      if (!Number.isFinite(tgId)) {
+        return json({ error: "Backfill Mcap รองรับเฉพาะ Telegram Mini App" }, 403);
+      }
+      const r = await liffBackfillReversalMarketCap(tgId);
+      if (!r.ok) return json({ error: r.error }, r.status);
+      return json({ ok: true, updated: r.updated });
     }
     if (segs.length === 2 && a === "reversal-stats" && segs[1] === "backfill-ai") {
       const auth = await authenticateLiffRequest(req.headers.get("authorization"));

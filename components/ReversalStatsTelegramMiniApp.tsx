@@ -38,6 +38,7 @@ import {
   reversalChartAiScoreLabel,
   reversalChartAiSideCellTitle,
 } from "@/lib/reversalChartAiAnalysis";
+import { STATS_MARKET_CAP_MANUAL_BACKFILL_LIMIT } from "@/lib/statsMarketCapUsd";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
@@ -2074,8 +2075,10 @@ export default function ReversalStatsTelegramMiniApp() {
   const [resetError, setResetError] = useState<string | null>(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillAiBusy, setBackfillAiBusy] = useState(false);
+  const [backfillMcapBusy, setBackfillMcapBusy] = useState(false);
   const [backfillMsg, setBackfillMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [backfillAiMsg, setBackfillAiMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [backfillMcapMsg, setBackfillMcapMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [activeTab, setActiveTab] = useState<ReversalStatsTabId>("1d");
 
   const allRows = payload?.rows ?? [];
@@ -2305,6 +2308,40 @@ export default function ReversalStatsTelegramMiniApp() {
     }
   }, [api, loadStats]);
 
+  const backfillMcapStats = useCallback(async () => {
+    if (
+      !window.confirm(
+        "Backfill Market Cap (CoinGecko/CMC)?\n\n" +
+          `• ทีละ ${STATS_MARKET_CAP_MANUAL_BACKFILL_LIMIT} แถวที่ยังไม่มี marketCapV\n` +
+          "• แก้ ticker ชนกัน (เช่น TON → Toncoin/Gram ไม่ใช่ Tokamak)\n" +
+          "• กดซ้ำได้จนกว่าแถวจะครบ",
+      )
+    ) {
+      return;
+    }
+    setBackfillMcapBusy(true);
+    setBackfillMcapMsg(null);
+    try {
+      const res = (await api("/reversal-stats/backfill-mcap", { method: "POST" })) as unknown as {
+        ok?: boolean;
+        updated?: number;
+      };
+      const updated = typeof res?.updated === "number" ? res.updated : 0;
+      setBackfillMcapMsg({
+        kind: updated > 0 ? "ok" : "error",
+        text:
+          updated > 0
+            ? `Mcap backfill — อัปเดต ${updated} แถว`
+            : "Mcap backfill — ไม่มีแถวที่อัปเดต (ครบแล้วหรือ CoinGecko/CMC ไม่มีข้อมูล)",
+      });
+      await loadStats({ mode: "force" });
+    } catch (e) {
+      setBackfillMcapMsg({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBackfillMcapBusy(false);
+    }
+  }, [api, loadStats]);
+
   const resetStats = useCallback(async () => {
     if (
       !window.confirm(
@@ -2423,6 +2460,17 @@ export default function ReversalStatsTelegramMiniApp() {
           <button
             type="button"
             className="sparkStatsRefreshBtn"
+            disabled={backfillMcapBusy}
+            title={`ดึง Market Cap จาก CoinGecko/CMC — ทีละ ${STATS_MARKET_CAP_MANUAL_BACKFILL_LIMIT} แถว`}
+            onClick={() => void backfillMcapStats()}
+          >
+            {backfillMcapBusy ? "กำลัง Mcap…" : `Backfill Mcap (${STATS_MARKET_CAP_MANUAL_BACKFILL_LIMIT})`}
+          </button>
+        ) : null}
+        {payload?.isAdmin ? (
+          <button
+            type="button"
+            className="sparkStatsRefreshBtn"
             disabled={backfillAiBusy}
             title={`เรียก OpenAI วิเคราะห์ kline — ทีละ ${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT} แถว/batch · พัก ${Math.round(REVERSAL_KLINE_AI_MANUAL_BACKFILL_PAUSE_MS / 1000)}s ระหว่าง batch`}
             onClick={() => void backfillAiStats()}
@@ -2472,6 +2520,17 @@ export default function ReversalStatsTelegramMiniApp() {
           }}
         >
           {backfillAiMsg.text}
+        </p>
+      ) : null}
+      {backfillMcapMsg ? (
+        <p
+          className="sub"
+          style={{
+            marginTop: "0.35rem",
+            color: backfillMcapMsg.kind === "error" ? "var(--danger)" : undefined,
+          }}
+        >
+          {backfillMcapMsg.text}
         </p>
       ) : null}
       {statsCachedAtMs != null ? (

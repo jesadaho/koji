@@ -5,6 +5,7 @@ import {
 } from "@/lib/autoOpenMexcActive";
 import {
   evaluateAutoOpenMaxHoldSafetyClose,
+  formatEma12_1hHoldLine,
   resolveAutoTradeHoldExtendIfRed,
   resolveAutoTradeHoldExtendRedHours,
   resolveAutoTradeMaxHoldHours,
@@ -34,6 +35,10 @@ import {
 } from "./snowballAutoTradeStateStore";
 import { loadTradingViewMexcSettingsFullMap } from "./tradingViewCloseSettingsStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
+import {
+  fetchSymbolEmaSlopePctTf,
+  STATS_EMA1H_SLOPE_LOOKBACK_BARS,
+} from "./statsEmaSlope";
 
 const TG_USER_RE = /^tg:\d+$/;
 
@@ -342,6 +347,23 @@ export async function runAutoOpenMaxHoldSafetyTick(nowMs: number): Promise<numbe
       if (mark == null || !(mark > 0)) continue;
 
       const drop = pricePctDrop(side, hold.entry, mark);
+      let ema12_1hSlopePct7d: number | null | undefined;
+      if (bot?.source === "reversal") {
+        const p1Ms = hold.phase1Hours * 3600 * 1000;
+        const ageMs = nowMs - hold.openedAtMs;
+        if (ageMs >= p1Ms - 3600_000 || hold.holdExtendedForRed) {
+          try {
+            ema12_1hSlopePct7d = await fetchSymbolEmaSlopePctTf(
+              bot.active.binanceSymbol,
+              "1h",
+              STATS_EMA1H_SLOPE_LOOKBACK_BARS,
+            );
+          } catch (e) {
+            console.error("[autoOpenMaxHoldSafety] ema12 1h", bot.active.binanceSymbol, e);
+            ema12_1hSlopePct7d = null;
+          }
+        }
+      }
       const due = evaluateAutoOpenMaxHoldSafetyClose({
         openedAtMs: hold.openedAtMs,
         phase1Hours: hold.phase1Hours,
@@ -350,6 +372,8 @@ export async function runAutoOpenMaxHoldSafetyTick(nowMs: number): Promise<numbe
         holdExtendedForRed: hold.holdExtendedForRed,
         inBotState: bot != null,
         markPnlPct: drop,
+        side: bot?.source === "reversal" ? side : undefined,
+        ema12_1hSlopePct7d,
         nowMs,
       });
       if (!due) continue;
@@ -390,6 +414,9 @@ export async function runAutoOpenMaxHoldSafetyTick(nowMs: number): Promise<numbe
           `[${label}]/USDT (${side.toUpperCase()}) · ${sourceLabel}`,
           `Entry: ${fmtPrice(hold.entry)} · Mark: ${fmtPrice(mark)}`,
           Number.isFinite(drop) ? `ราคาเคลื่อน: ${drop >= 0 ? "+" : ""}${drop.toFixed(2)}% จาก entry` : "",
+          bot?.source === "reversal" && ema12_1hSlopePct7d !== undefined
+            ? formatEma12_1hHoldLine(side, ema12_1hSlopePct7d)
+            : "",
           bot ? "เคลียร์ state แล้ว" : "ไม่อยู่ใน state — ปิดจาก order log + MEXC",
         ]);
         actions += 1;

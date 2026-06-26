@@ -2,6 +2,7 @@
  * บริบทตลาดตอนแจ้ง Snowball stats — BTC PSAR 4h + 1h + quote vol 24h ของคู่สัญญาณ
  */
 
+import { binanceUsdtPerpBase } from "@/lib/binancePerpBase";
 import { fetchCoinGeckoMarketCapUsd } from "./coinGeckoMarketCap";
 import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
 import {
@@ -91,20 +92,14 @@ const mcapCache = new Map<string, { atMs: number; mcap: number | null }>();
 const BTC_PSAR_CACHE_MS = 5 * 60 * 1000;
 const MCAP_CACHE_MS = 15 * 60 * 1000;
 
-function binanceUsdtPerpBase(binanceSymbol: string): string | null {
-  const sym = binanceSymbol.trim().toUpperCase();
-  if (!sym.endsWith("USDT") || sym.length < 5) return null;
-  return sym.slice(0, -4);
-}
-
 async function fetchMarketCapUsdCached(base: string): Promise<number | null> {
   const key = base.trim().toUpperCase();
   if (!key) return null;
   const now = Date.now();
   const hit = mcapCache.get(key);
-  if (hit && now - hit.atMs < MCAP_CACHE_MS) return hit.mcap;
+  if (hit && now - hit.atMs < MCAP_CACHE_MS && hit.mcap != null) return hit.mcap;
   const mcap = await fetchCoinGeckoMarketCapUsd(key);
-  mcapCache.set(key, { atMs: now, mcap });
+  if (mcap != null) mcapCache.set(key, { atMs: now, mcap });
   return mcap;
 }
 

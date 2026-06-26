@@ -45,6 +45,7 @@ import { backfillAllStatsRowsAtrPct4h } from "./statsAtrPct4h";
 import { backfillAllStatsRowsQuoteVol24h } from "./statsQuoteVol24h";
 import { backfillAllStatsRowsOpenInterest } from "./statsOpenInterest";
 import { backfillAllStatsRowsBtcDomEma20_4h } from "./statsBtcDominanceEma";
+import { backfillAllStatsRowsMarketCapUsd } from "./statsMarketCapUsd";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
@@ -893,6 +894,7 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillAllStatsRowsPsar4h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsAtrPct4h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsQuoteVol24h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
+  dirty += await backfillAllStatsRowsMarketCapUsd(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsOpenInterest(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsBtcDomEma20_4h(state.rows, { maxRowsPerPass: 15, maxPasses: 5 });
   dirty += await backfillSignalVolVsSma(state.rows);

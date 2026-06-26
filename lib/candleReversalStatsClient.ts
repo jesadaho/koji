@@ -48,6 +48,8 @@ export type CandleReversalStatsRow = {
   quoteVol24hV?: number;
   /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
   marketCapUsd?: number | null;
+  /** version 1 = ดึงต่อ symbol แล้ว */
+  marketCapV?: number;
   /** Open interest USDT (Binance sumOpenInterestValue) ณ เวลาแจ้ง */
   openInterestUsdt?: number | null;
   /** Open interest สัญญา (Binance sumOpenInterest) ณ เวลาแจ้ง */

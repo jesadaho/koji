@@ -111,6 +111,10 @@ import {
   type ReversalKlineAiBackfillSummary,
 } from "./reversalKlineAiAnalysis";
 import {
+  backfillAllStatsRowsMarketCapUsd,
+  STATS_MARKET_CAP_MANUAL_BACKFILL_LIMIT,
+} from "./statsMarketCapUsd";
+import {
   correctRsiDivergenceStatsOutcome,
   runRsiDivergenceStatsFollowUpTick,
 } from "./rsiDivergenceStatsTick";
@@ -1222,6 +1226,25 @@ export async function liffBackfillReversalKlineAi(
       limit: REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT,
     });
     return { ok: true, ...result };
+  } catch (e) {
+    return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Backfill market cap (CoinGecko/CMC) สำหรับแถว Reversal stats — admin */
+export async function liffBackfillReversalMarketCap(
+  telegramUserId: number,
+): Promise<{ ok: true; updated: number } | { ok: false; status: number; error: string }> {
+  if (!isAdminTelegramUserId(telegramUserId)) {
+    return { ok: false, status: 403, error: "เฉพาะ admin — ตั้ง KOJI_ADMIN_IDS ในเซิร์ฟเวอร์" };
+  }
+  try {
+    const st = await loadCandleReversalStatsState();
+    const updated = await backfillAllStatsRowsMarketCapUsd(st.rows, {
+      maxRowsPerPass: STATS_MARKET_CAP_MANUAL_BACKFILL_LIMIT,
+    });
+    if (updated > 0) await saveCandleReversalStatsState(st);
+    return { ok: true, updated };
   } catch (e) {
     return { ok: false, status: 500, error: e instanceof Error ? e.message : String(e) };
   }
