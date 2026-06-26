@@ -204,4 +204,29 @@ export function reversalKlineAiFetchLimit(): number {
   return 60;
 }
 
+/** ช่วงเวลา ms สำหรับดึง kline รอบแท่งสัญญาณ (backfill แถวเก่า) */
+export function reversalKlineAiFetchRangeMs(
+  tf: "15m" | "1h" | "4h",
+  signalBarOpenSec: number,
+): { startTimeMs: number; endTimeMs: number } {
+  const barsNeeded = REVERSAL_KLINE_AI_BARS_PER_TF + 4;
+  const barSec = TF_DURATION_SEC[tf];
+  const sigOpen = signalBarOpenSec;
+
+  if (tf === "1h") {
+    return {
+      startTimeMs: (sigOpen - barsNeeded * barSec) * 1000,
+      endTimeMs: (sigOpen + 3 * barSec) * 1000,
+    };
+  }
+
+  const signalCloseSec = sigOpen + TF_DURATION_SEC["1h"];
+  const anchorSec = signalCloseSec - 1;
+
+  return {
+    startTimeMs: (anchorSec - barsNeeded * barSec) * 1000,
+    endTimeMs: (anchorSec + 3 * barSec) * 1000,
+  };
+}
+
 export const REVERSAL_KLINE_AI_TFS: BinanceIndicatorTf[] = ["15m", "1h", "4h"];

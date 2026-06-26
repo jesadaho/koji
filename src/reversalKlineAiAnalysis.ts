@@ -10,12 +10,13 @@ import {
 } from "@/lib/reversalChartAiAnalysis";
 export { REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT };
 import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
-import { fetchBinanceUsdmKlines } from "./binanceIndicatorKline";
+import { fetchBinanceUsdmKlinesRange } from "./binanceIndicatorKline";
 import { fetchContractTickerSingle } from "./mexcMarkets";
 import { resolveMexcContractFromBinanceSymbolAsync } from "./mexcContractResolver";
 import {
   buildReversalSignalKlineAiPayload,
   reversalKlineAiFetchLimit,
+  reversalKlineAiFetchRangeMs,
   type ReversalSignalKlineAiPayload,
 } from "./reversalSignalKlinePayload";
 import { patchCandleReversalStatsAiAnalysis } from "./candleReversalStatsStore";
@@ -389,18 +390,21 @@ async function fetchFundingRatePct(symbol: string, mexcContract?: string | null)
   }
 }
 
-async function fetchKlinePacks(symbol: string): Promise<{
-  pack15m: NonNullable<Awaited<ReturnType<typeof fetchBinanceUsdmKlines>>>;
-  pack1h: NonNullable<Awaited<ReturnType<typeof fetchBinanceUsdmKlines>>>;
-  pack4h: NonNullable<Awaited<ReturnType<typeof fetchBinanceUsdmKlines>>>;
+async function fetchKlinePacks(
+  symbol: string,
+  signalBarOpenSec: number,
+): Promise<{
+  pack15m: NonNullable<Awaited<ReturnType<typeof fetchBinanceUsdmKlinesRange>>>;
+  pack1h: NonNullable<Awaited<ReturnType<typeof fetchBinanceUsdmKlinesRange>>>;
+  pack4h: NonNullable<Awaited<ReturnType<typeof fetchBinanceUsdmKlinesRange>>>;
 } | null> {
   const limit = reversalKlineAiFetchLimit();
   const sym = symbol.trim().toUpperCase();
-  const [pack15m, pack1h, pack4h] = await Promise.all([
-    fetchBinanceUsdmKlines(sym, "15m", limit),
-    fetchBinanceUsdmKlines(sym, "1h", limit),
-    fetchBinanceUsdmKlines(sym, "4h", limit),
-  ]);
+  const fetchTf = async (tf: "15m" | "1h" | "4h") => {
+    const range = reversalKlineAiFetchRangeMs(tf, signalBarOpenSec);
+    return fetchBinanceUsdmKlinesRange(sym, tf, { ...range, limit });
+  };
+  const [pack15m, pack1h, pack4h] = await Promise.all([fetchTf("15m"), fetchTf("1h"), fetchTf("4h")]);
   if (!pack15m || !pack1h || !pack4h) return null;
   return { pack15m, pack1h, pack4h };
 }
@@ -431,7 +435,7 @@ export type RunReversalKlineAiForRowInput = {
 export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowInput): Promise<boolean> {
   if (!isReversalKlineAiEnabled()) return false;
 
-  const packs = await fetchKlinePacks(input.row.symbol);
+  const packs = await fetchKlinePacks(input.row.symbol, input.row.signalBarOpenSec);
   if (!packs) {
     await patchCandleReversalStatsAiAnalysis(input.row.id, {
       chartAiAnalysisError: "kline fetch failed",
@@ -468,7 +472,7 @@ export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowIn
 
   if (!payload) {
     await patchCandleReversalStatsAiAnalysis(input.row.id, {
-      chartAiAnalysisError: "kline payload build failed",
+      chartAiAnalysisError: "kline payload build failed (signal bar not in kline window)",
     });
     return false;
   }
