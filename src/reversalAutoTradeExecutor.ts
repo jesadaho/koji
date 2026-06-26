@@ -227,6 +227,8 @@ export type ReversalAutoTradeInput = {
   ageOfTrendHours?: number | null;
   /** Vol แท่งสัญญาณ ÷ SMA(volume) — Long 1H Quality Signal */
   signalVolVsSma?: number | null;
+  /** R% ช่วงแท่งสัญญาณ — Long candidate Fresh Breakout */
+  barRangePctSignal?: number | null;
   /** (close − EMA20) / EMA20 × 100 บน 1h — Long candidate */
   priceVsEma20_1hPct?: number | null;
   /** EMA20 1h slope 7d % — Long candidate */
@@ -664,6 +666,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
       reversalRowIsLongCandidate({
         trendGainPct: input.trendGainPct,
         signalVolVsSma: input.signalVolVsSma,
+        barRangePctSignal: input.barRangePctSignal,
         priceVsEma20_1hPct: input.priceVsEma20_1hPct,
         ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
         priceVsEma20_4hPct: input.priceVsEma20_4hPct,

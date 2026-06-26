@@ -21,7 +21,8 @@ export type ReversalMatrixFilter =
   | "healthyPace"
   | "strongTrend"
   | "meanReversion"
-  | "charging";
+  | "charging"
+  | "parabolic";
 
 /** โปรไฟล์ Quality Signal ในตารางสถิติ (แต่ละ section) */
 export type ReversalQualitySignalProfile = "short" | "long1h";
@@ -35,7 +36,7 @@ export const REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA =
 
 /** เกณฑ์ Long candidate ในตาราง Reversal Short 1H */
 export const REVERSAL_LONG_CANDIDATE_CRITERIA =
-  "Trend Gain 5–20% + Vol×SMA 2–5× หรือ EMA20Δ1h 15–30% หรือ EMA20∠1h 50–66% หรือ Trend Gain<16% + Vol×SMA 2–12× หรือ Velocity 0.2–0.3%/h หรือ (EMA20∠4h 40–300% and EMA20Δ4h>20%) หรือ (EMA20∠4h<-5% and EMA20Δ4h>30%) หรือ (EMA20∠4h >20% and Velocity <0.5%/h)";
+  "Trend Gain 5–20% + Vol×SMA 2–5× หรือ EMA20Δ1h 15–30% หรือ EMA20∠1h 50–66% หรือ Trend Gain<16% + Vol×SMA 2–12× + R% สัญญาณ <15% หรือ Velocity 0.2–0.3%/h หรือ (EMA20∠4h 40–300% and EMA20Δ4h>20%) หรือ (EMA20∠4h<-5% and EMA20Δ4h>30%) หรือ (EMA20∠4h >20% and Velocity <0.5%/h)";
 
 /** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_CRITERIA */
 export const REVERSAL_LONG_1H_STATS_FILTER_CRITERIA = REVERSAL_LONG_CANDIDATE_CRITERIA;
@@ -48,10 +49,11 @@ export const REVERSAL_LONG_CANDIDATE_TREND_VELOCITY_MAX = 0.3;
 export const REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT = 50;
 export const REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MAX_PCT = 66;
 
-/** Trend Gain < 16% + Vol×SMA 2–12× — Long candidate ชุดที่ 4 */
+/** Trend Gain < 16% + Vol×SMA 2–12× + R% สัญญาณ <15% — Long candidate ชุดที่ 4 / Fresh Breakout */
 export const REVERSAL_LONG_CANDIDATE_LOW_TREND_GAIN_MAX_EXCLUSIVE = 16;
 export const REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN = 2;
 export const REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX = 12;
+export const REVERSAL_LONG_CANDIDATE_LOW_TREND_BAR_RANGE_PCT_MAX_EXCLUSIVE = 15;
 
 /** @deprecated — ใช้ REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN */
 export const REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN_EXCLUSIVE = 2;
@@ -121,7 +123,8 @@ export const REVERSAL_ACCELERATION_MATRIX_CRITERIA = "EMA20Δ1h 15–30%";
 export const REVERSAL_MOMENTUM_MATRIX_CRITERIA = "EMA20∠1h 50–66%";
 
 /** Matrix Fresh Breakout — Trend Gain <16% · Vol×SMA 2–12× · R% สัญญาณ <15% */
-export const REVERSAL_FRESH_BREAKOUT_MATRIX_BAR_RANGE_PCT_MAX_EXCLUSIVE = 15;
+export const REVERSAL_FRESH_BREAKOUT_MATRIX_BAR_RANGE_PCT_MAX_EXCLUSIVE =
+  REVERSAL_LONG_CANDIDATE_LOW_TREND_BAR_RANGE_PCT_MAX_EXCLUSIVE;
 
 export const REVERSAL_FRESH_BREAKOUT_MATRIX_CRITERIA =
   "Trend Gain <16% · Vol×SMA 2–12× · R% สัญญาณ <15%";
@@ -140,6 +143,13 @@ export const REVERSAL_MEAN_REVERSION_MATRIX_CRITERIA =
 /** Matrix Charging — เทรนด์ขึ้นแต่พักสะสมพลัง (เดิม Slow mover) */
 export const REVERSAL_CHARGING_MATRIX_CRITERIA = REVERSAL_SLOW_MOVER_MATRIX_CRITERIA;
 
+/** Matrix Parabolic — Trend Gain >150% · EMA20∠4h >300% */
+export const REVERSAL_PARABOLIC_MATRIX_TREND_GAIN_MIN_EXCLUSIVE = 150;
+export const REVERSAL_PARABOLIC_MATRIX_EMA4H_MIN_EXCLUSIVE = 300;
+
+export const REVERSAL_PARABOLIC_MATRIX_CRITERIA =
+  "Trend Gain >150% · EMA20∠4h >300%";
+
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
   label: string;
@@ -152,6 +162,7 @@ export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   { value: "freshBreakout", label: "Fresh Breakout" },
   { value: "healthyPace", label: "Healthy Pace" },
   { value: "strongTrend", label: "Strong Trend" },
+  { value: "parabolic", label: "Parabolic" },
   { value: "meanReversion", label: "Mean Reversion" },
   { value: "charging", label: "Charging" },
   { value: "neutral", label: "Neutral" },
@@ -197,6 +208,9 @@ export function reversalMatrixFilterTitle(
   }
   if (filter === "strongTrend") {
     return `Strong Trend: ${REVERSAL_STRONG_TREND_MATRIX_CRITERIA} — เทรนด์หลักแข็งแรงมาก`;
+  }
+  if (filter === "parabolic") {
+    return `Parabolic: ${REVERSAL_PARABOLIC_MATRIX_CRITERIA} — เทรนด์พาราโบลิก วิ่งแรงเกินปกติ`;
   }
   if (filter === "meanReversion") {
     return `Mean Reversion: ${REVERSAL_MEAN_REVERSION_MATRIX_CRITERIA} — ลงแรง มีโอกาสเด้งกลับ`;
@@ -410,14 +424,7 @@ export function reversalRowMatchesMomentumMatrix(
 export function reversalFreshBreakoutPass(
   row: Pick<CandleReversalStatsRow, "trendGainPct" | "signalVolVsSma" | "barRangePctSignal">,
 ): boolean {
-  const r = row.barRangePctSignal;
-  return (
-    reversalLongCandidateLowTrendHighVolPass(row) &&
-    r != null &&
-    Number.isFinite(r) &&
-    r >= 0 &&
-    r < REVERSAL_FRESH_BREAKOUT_MATRIX_BAR_RANGE_PCT_MAX_EXCLUSIVE
-  );
+  return reversalLongCandidateLowTrendHighVolPass(row);
 }
 
 /** Matrix Fresh Breakout — Trend Gain <16% · Vol×SMA 2–12× · R% สัญญาณ <15% */
@@ -458,6 +465,27 @@ export function reversalRowMatchesChargingMatrix(
   return reversalSlowMoverPass(row);
 }
 
+/** Matrix Parabolic — Trend Gain >150% · EMA20∠4h >300% */
+export function reversalParabolicPass(
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "ema20_4hSlopePct7d" | "ema4hSlopePct7d">,
+): boolean {
+  const gain = row.trendGainPct;
+  const ema4h = reversalMatrixCoinEma4hSlopePct7d(row);
+  return (
+    gain != null &&
+    Number.isFinite(gain) &&
+    gain > REVERSAL_PARABOLIC_MATRIX_TREND_GAIN_MIN_EXCLUSIVE &&
+    ema4h != null &&
+    ema4h > REVERSAL_PARABOLIC_MATRIX_EMA4H_MIN_EXCLUSIVE
+  );
+}
+
+export function reversalRowMatchesParabolicMatrix(
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "ema20_4hSlopePct7d" | "ema4hSlopePct7d">,
+): boolean {
+  return reversalParabolicPass(row);
+}
+
 export function reversalStatsRowMatchesMatrixFilter(
   row: CandleReversalStatsRow,
   filter: ReversalMatrixFilter,
@@ -473,6 +501,7 @@ export function reversalStatsRowMatchesMatrixFilter(
   if (filter === "freshBreakout") return reversalRowMatchesFreshBreakoutMatrix(row);
   if (filter === "healthyPace") return reversalRowMatchesHealthyPaceMatrix(row);
   if (filter === "strongTrend") return reversalRowMatchesStrongTrendMatrix(row);
+  if (filter === "parabolic") return reversalRowMatchesParabolicMatrix(row);
   if (filter === "meanReversion") return reversalRowMatchesMeanReversionMatrix(row);
   return reversalRowMatchesQualitySignalMatrix(row);
 }
@@ -500,11 +529,12 @@ export function reversalLongCandidateFilterTitle(filter: ReversalLongCandidateFi
   return `ไม่ใช่ Long candidate — ไม่ผ่าน ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
 }
 
-/** กรอง Long candidate — (Trend+Vol) หรือ EMA20Δ1h หรือ EMA20∠1h หรือ Trend<16%+Vol 2–12× หรือ Velocity 0.2–0.3 หรือ EMA20∠4h+Δ4h หรือ Slow mover */
+/** กรอง Long candidate — (Trend+Vol) หรือ EMA20Δ1h หรือ EMA20∠1h หรือ Trend<16%+Vol 2–12×+R%<15% หรือ Velocity 0.2–0.3 หรือ EMA20∠4h+Δ4h หรือ Slow mover */
 export type ReversalLongCandidateRowSlice = Pick<
   CandleReversalStatsRow,
   | "trendGainPct"
   | "signalVolVsSma"
+  | "barRangePctSignal"
   | "priceVsEma20_1hPct"
   | "ema20_1hSlopePct7d"
   | "priceVsEma20_4hPct"
@@ -532,10 +562,11 @@ export function reversalLongCandidateEma20DistPass(
 }
 
 export function reversalLongCandidateLowTrendHighVolPass(
-  row: Pick<CandleReversalStatsRow, "trendGainPct" | "signalVolVsSma">,
+  row: Pick<CandleReversalStatsRow, "trendGainPct" | "signalVolVsSma" | "barRangePctSignal">,
 ): boolean {
   const gain = row.trendGainPct;
   const vol = row.signalVolVsSma;
+  const r = row.barRangePctSignal;
   return (
     gain != null &&
     Number.isFinite(gain) &&
@@ -543,7 +574,11 @@ export function reversalLongCandidateLowTrendHighVolPass(
     vol != null &&
     Number.isFinite(vol) &&
     vol >= REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN &&
-    vol <= REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX
+    vol <= REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX &&
+    r != null &&
+    Number.isFinite(r) &&
+    r >= 0 &&
+    r < REVERSAL_LONG_CANDIDATE_LOW_TREND_BAR_RANGE_PCT_MAX_EXCLUSIVE
   );
 }
 
@@ -647,6 +682,13 @@ export function reversalLongCandidateDebugTitle(row: ReversalLongCandidateRowSli
     Number.isFinite(vol) &&
     vol >= REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN &&
     vol <= REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX;
+  const r = row.barRangePctSignal;
+  const rLabel = r != null && Number.isFinite(r) ? `${r.toFixed(1)}%` : "—";
+  const rLt15 =
+    r != null &&
+    Number.isFinite(r) &&
+    r >= 0 &&
+    r < REVERSAL_LONG_CANDIDATE_LOW_TREND_BAR_RANGE_PCT_MAX_EXCLUSIVE;
   const distOk = reversalLongCandidateEma20DistPass(row);
   const slopeRangeOk = reversalLongCandidateEma20_1hSlopePass(row);
   const vel = computePumpCycleTrendVelocity(gain, row.ageOfTrendHours);
@@ -660,8 +702,8 @@ export function reversalLongCandidateDebugTitle(row: ReversalLongCandidateRowSli
   const velLt05 =
     vel != null && Number.isFinite(vel) && vel < REVERSAL_SLOW_MOVER_MATRIX_VELOCITY_MAX_EXCLUSIVE;
   return (
-    `ต้อง Trend ${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MIN_PCT}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT}% + Vol×SMA ${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX} หรือ EMA20Δ1h ${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MAX_PCT}% หรือ EMA20∠1h ${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MAX_PCT}% หรือ Trend <${REVERSAL_LONG_CANDIDATE_LOW_TREND_GAIN_MAX_EXCLUSIVE}% + Vol×SMA ${REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN}–${REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX}× หรือ Velocity ${REVERSAL_LONG_CANDIDATE_TREND_VELOCITY_MIN}–${REVERSAL_LONG_CANDIDATE_TREND_VELOCITY_MAX}%/h หรือ EMA20∠4h ${REVERSAL_LONG_CANDIDATE_EMA20_4H_SLOPE_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_4H_SLOPE_MAX_PCT}% + EMA20Δ4h >${REVERSAL_LONG_CANDIDATE_EMA20_4H_DIST_MIN_EXCLUSIVE}% หรือ EMA20∠4h <${REVERSAL_LONG_CANDIDATE_EMA20_4H_SLOPE_MAX_EXCLUSIVE}% + EMA20Δ4h >${REVERSAL_LONG_CANDIDATE_EMA20_4H_OVERSOLD_DIST_MIN_EXCLUSIVE}% หรือ EMA20∠4h >${REVERSAL_SLOW_MOVER_MATRIX_EMA4H_MIN_EXCLUSIVE}% + Velocity <${REVERSAL_SLOW_MOVER_MATRIX_VELOCITY_MAX_EXCLUSIVE}%/h · ` +
-    `Trend ${gainLabel}${gainOk ? " ✓" : ""}${gainLt16 ? " <16✓" : ""} · Vol ${volLabel}${volOk ? " ✓" : ""}${volIn212 ? " 2–12✓" : ""}${trendVolOk ? " (ชุด1✓)" : ""}${lowTrendHighVolOk ? " (ชุด4✓)" : ""} · Δ1h ${distLabel}${distOk ? " ✓" : ""} · ∠1h ${slopeLabel}${slopeRangeOk ? " (50–66✓)" : ""} · Vel ${velLabel}${velOk ? " (0.2–0.3✓)" : ""}${velLt05 ? " <0.5✓" : ""} · ∠4h ${slope4hLabel}${slope4hGt20 ? " >20✓" : ""} + Δ4h ${dist4hLabel}${ema20_4hOk ? " (ชุด6✓)" : ""}${ema20_4hOversoldOk ? " (ชุด7✓)" : ""}${slowMoverOk ? " (Slow mover✓)" : ""}`
+    `ต้อง Trend ${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MIN_PCT}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_TREND_GAIN_MAX_PCT}% + Vol×SMA ${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MIN}–${REVERSAL_QUALITY_SIGNAL_LONG_1H_VOL_VS_SMA_MAX} หรือ EMA20Δ1h ${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_DIST_MAX_PCT}% หรือ EMA20∠1h ${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_1H_SLOPE_MAX_PCT}% หรือ Trend <${REVERSAL_LONG_CANDIDATE_LOW_TREND_GAIN_MAX_EXCLUSIVE}% + Vol×SMA ${REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MIN}–${REVERSAL_LONG_CANDIDATE_LOW_TREND_VOL_VS_SMA_MAX}× + R% สัญญาณ <${REVERSAL_LONG_CANDIDATE_LOW_TREND_BAR_RANGE_PCT_MAX_EXCLUSIVE}% หรือ Velocity ${REVERSAL_LONG_CANDIDATE_TREND_VELOCITY_MIN}–${REVERSAL_LONG_CANDIDATE_TREND_VELOCITY_MAX}%/h หรือ EMA20∠4h ${REVERSAL_LONG_CANDIDATE_EMA20_4H_SLOPE_MIN_PCT}–${REVERSAL_LONG_CANDIDATE_EMA20_4H_SLOPE_MAX_PCT}% + EMA20Δ4h >${REVERSAL_LONG_CANDIDATE_EMA20_4H_DIST_MIN_EXCLUSIVE}% หรือ EMA20∠4h <${REVERSAL_LONG_CANDIDATE_EMA20_4H_SLOPE_MAX_EXCLUSIVE}% + EMA20Δ4h >${REVERSAL_LONG_CANDIDATE_EMA20_4H_OVERSOLD_DIST_MIN_EXCLUSIVE}% หรือ EMA20∠4h >${REVERSAL_SLOW_MOVER_MATRIX_EMA4H_MIN_EXCLUSIVE}% + Velocity <${REVERSAL_SLOW_MOVER_MATRIX_VELOCITY_MAX_EXCLUSIVE}%/h · ` +
+    `Trend ${gainLabel}${gainOk ? " ✓" : ""}${gainLt16 ? " <16✓" : ""} · Vol ${volLabel}${volOk ? " ✓" : ""}${volIn212 ? " 2–12✓" : ""}${trendVolOk ? " (ชุด1✓)" : ""}${lowTrendHighVolOk ? " (Fresh Breakout✓)" : ""} · R% ${rLabel}${rLt15 ? " <15✓" : ""} · Δ1h ${distLabel}${distOk ? " ✓" : ""} · ∠1h ${slopeLabel}${slopeRangeOk ? " (50–66✓)" : ""} · Vel ${velLabel}${velOk ? " (0.2–0.3✓)" : ""}${velLt05 ? " <0.5✓" : ""} · ∠4h ${slope4hLabel}${slope4hGt20 ? " >20✓" : ""} + Δ4h ${dist4hLabel}${ema20_4hOk ? " (ชุด6✓)" : ""}${ema20_4hOversoldOk ? " (ชุด7✓)" : ""}${slowMoverOk ? " (Charging✓)" : ""}`
   );
 }
 

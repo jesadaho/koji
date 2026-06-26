@@ -826,6 +826,7 @@ async function notifyResults(
             trendGainPct: pumpCycleFields.trendGainPct,
             ageOfTrendHours: pumpCycleFields.ageOfTrendHours,
             signalVolVsSma: row.evals.signalVolVsSma,
+            barRangePctSignal,
             priceVsEma20_1hPct: mktSnap.priceVsEma20_1hPct,
             ema20_1hSlopePct7d: mktSnap.ema20_1hSlopePct7d,
             priceVsEma20_4hPct: mktSnap.priceVsEma20_4hPct,
