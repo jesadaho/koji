@@ -104,7 +104,7 @@ export const REVERSAL_CHART_AI_TABLE_COLUMN_COUNT = 9;
 export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT = 3;
 
 /** พักระหว่าง batch ต่อเนื่อง (ms) — ลดโอกาส timeout / rate limit */
-export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_PAUSE_MS = 20_000;
+export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_PAUSE_MS = 40_000;
 
 /** สูงสุดกี่ batch ต่อการกดปุ่มครั้งเดียว (3 × 20 = 60 แถว) */
 export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_MAX_BATCHES = 20;
