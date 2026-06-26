@@ -451,12 +451,23 @@ async function enrichRowsWithViewerStrategyProfit<T extends CandleReversalStatsR
   return dirty;
 }
 
+function isReversalViewerTpSlPlans(
+  plans: ReversalViewerTpSlPlans | ViewerStatsTpSlPlan,
+): plans is ReversalViewerTpSlPlans {
+  return typeof plans === "object" && plans !== null && "long" in plans;
+}
+
+function normalizeReversalViewerTpSlPlans(
+  plans: ReversalViewerTpSlPlans | ViewerStatsTpSlPlan,
+): ReversalViewerTpSlPlans {
+  return isReversalViewerTpSlPlans(plans) ? plans : { short: plans, long: plans };
+}
+
 export async function enrichCandleReversalStatsWithViewerStrategyProfit(
   rows: CandleReversalStatsRow[],
   plans: ReversalViewerTpSlPlans | ViewerStatsTpSlPlan,
 ): Promise<number> {
-  const normalized: ReversalViewerTpSlPlans =
-    "short" in plans && plans.short ? plans : { short: plans, long: plans };
+  const normalized = normalizeReversalViewerTpSlPlans(plans);
   let dirty = await refreshCandleReversal1hMaxRoiFrom15m(rows);
   dirty += await enrichReversalRowsStrategyProfit(rows, normalized);
   return dirty;
