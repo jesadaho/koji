@@ -151,12 +151,12 @@ export const REVERSAL_PARABOLIC_MATRIX_EMA4H_MIN_EXCLUSIVE = 300;
 export const REVERSAL_PARABOLIC_MATRIX_CRITERIA =
   "Trend Gain >150% · EMA20∠4h >300%";
 
-/** Matrix Weak Trend — R% สัญญาณ <3% · EMA20∠1h <15% */
+/** Matrix Weak Trend — R% สัญญาณ <3% · EMA20∠1h <13% */
 export const REVERSAL_WEAK_TREND_MATRIX_BAR_RANGE_PCT_MAX_EXCLUSIVE = 3;
-export const REVERSAL_WEAK_TREND_MATRIX_EMA20_1H_SLOPE_MAX_EXCLUSIVE = 15;
+export const REVERSAL_WEAK_TREND_MATRIX_EMA20_1H_SLOPE_MAX_EXCLUSIVE = 13;
 
 export const REVERSAL_WEAK_TREND_MATRIX_CRITERIA =
-  "R% สัญญาณ <3% · EMA20∠1h <15%";
+  "R% สัญญาณ <3% · EMA20∠1h <13%";
 
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
@@ -498,7 +498,7 @@ export function reversalRowMatchesParabolicMatrix(
   return reversalParabolicPass(row);
 }
 
-/** Matrix Weak Trend — R% สัญญาณ <3% · EMA20∠1h <15% */
+/** Matrix Weak Trend — R% สัญญาณ <3% · EMA20∠1h <13% */
 export function reversalWeakTrendPass(
   row: Pick<CandleReversalStatsRow, "barRangePctSignal" | "ema20_1hSlopePct7d">,
 ): boolean {

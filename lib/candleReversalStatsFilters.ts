@@ -9,9 +9,11 @@ import {
 } from "@/lib/reversalMatrixFilters";
 import {
   reversalRowMatchesBtcEma4hFilter,
+  reversalRowMatchesEma1hFilter,
   reversalRowMatchesEma4hFilter,
   reversalRowMatchesEma1dFilter,
   type BtcEma4hFilter,
+  type ReversalEma1hFilter,
   type ReversalEma4hFilter,
   type ReversalEma1dFilter,
 } from "@/lib/reversalEma4hFilter";
@@ -73,20 +75,25 @@ export function reversalBarRangeSignalFilterTitle(
 
 export type {
   BtcEma4hFilter,
+  ReversalEma1hFilter,
   ReversalEma4hFilter,
   ReversalEma1dFilter,
   ReversalEmaSlopeFilter,
 } from "@/lib/reversalEma4hFilter";
 export {
   BTC_EMA4H_FILTER_OPTIONS,
+  REVERSAL_EMA1H_FILTER_OPTIONS,
   REVERSAL_EMA4H_FILTER_OPTIONS,
   REVERSAL_EMA1D_FILTER_OPTIONS,
   reversalBtcEma4hFilterTitle,
+  reversalEma1hFilterLabel,
+  reversalEma1hFilterTitle,
   reversalEma4hFilterLabel,
   reversalEma4hFilterTitle,
   reversalEma1dFilterLabel,
   reversalEma1dFilterTitle,
   reversalRowMatchesBtcEma4hFilter,
+  reversalRowMatchesEma1hFilter,
   reversalRowMatchesEma4hFilter,
   reversalRowMatchesEma1dFilter,
 } from "@/lib/reversalEma4hFilter";
@@ -132,6 +139,7 @@ export type ReversalStatsFilterQuery = {
   shape?: ReversalShapeFilter;
   lenRank?: ReversalLenRankFilter;
   vol?: StatsVolVsSmaFilter;
+  ema1h?: ReversalEma1hFilter;
   ema4h?: ReversalEma4hFilter;
   ema1d?: ReversalEma1dFilter;
   btcEma4h?: BtcEma4hFilter;
@@ -249,6 +257,7 @@ export function filterCandleReversalStatsRows(
     if (q.shape && q.shape !== "all" && !reversalRowMatchesShapeFilter(r, q.shape)) return false;
     if (q.lenRank && q.lenRank !== "all" && !reversalRowMatchesLenRankFilter(r, q.lenRank)) return false;
     if (q.vol && q.vol !== "all" && !reversalRowMatchesVolVsSmaFilter(r, q.vol)) return false;
+    if (q.ema1h && q.ema1h !== "all" && !reversalRowMatchesEma1hFilter(r, q.ema1h)) return false;
     if (q.ema4h && q.ema4h !== "all" && !reversalRowMatchesEma4hFilter(r, q.ema4h)) return false;
     if (q.ema1d && q.ema1d !== "all" && !reversalRowMatchesEma1dFilter(r, q.ema1d)) return false;
     if (q.btcEma4h && q.btcEma4h !== "all" && !reversalRowMatchesBtcEma4hFilter(r, q.btcEma4h)) return false;
@@ -324,6 +333,7 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.shape = pickEnum(sp.get("shape"), SHAPE_SET, "all");
   q.lenRank = pickEnum(sp.get("lenRank"), LEN_SET, "all");
   q.vol = pickEnum(sp.get("vol"), VOL_SET, "all");
+  q.ema1h = parseReversalEmaSlopeFilterParam(sp.get("ema1h"));
   q.ema4h = parseReversalEmaSlopeFilterParam(sp.get("ema4h"));
   q.ema1d = parseReversalEmaSlopeFilterParam(sp.get("ema1d"));
   q.btcEma4h = parseReversalEmaSlopeFilterParam(sp.get("btcEma4h"));
@@ -343,6 +353,7 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.shape && q.shape !== "all") p.set("shape", q.shape);
   if (q.lenRank && q.lenRank !== "all") p.set("lenRank", q.lenRank);
   if (q.vol && q.vol !== "all") p.set("vol", q.vol);
+  if (q.ema1h && q.ema1h !== "all") p.set("ema1h", q.ema1h);
   if (q.ema4h && q.ema4h !== "all") p.set("ema4h", q.ema4h);
   if (q.ema1d && q.ema1d !== "all") p.set("ema1d", q.ema1d);
   if (q.btcEma4h && q.btcEma4h !== "all") p.set("btcEma4h", q.btcEma4h);

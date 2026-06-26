@@ -120,11 +120,11 @@ export function reversalEma4hFilterTitle(filter: ReversalEma4hFilter): string {
 }
 
 export function reversalEma1hFilterTitle(filter: ReversalEma1hFilter): string {
-  if (filter === "all") return "ไม่กรอง EMA20 1h slope 7 วัน";
-  if (filter === "gt0lt30") return "EMA20 1h slope 7 วัน > 0% และ < 30%";
-  if (filter === "gtm10lt0") return "EMA20 1h slope 7 วัน > -10% และ < 0%";
+  if (filter === "all") return "ไม่กรอง EMA20∠1h";
+  if (filter === "gt0lt30") return "EMA20∠1h > 0% และ < 30%";
+  if (filter === "gtm10lt0") return "EMA20∠1h > -10% และ < 0%";
   const label = reversalEma1hFilterLabel(filter);
-  return `EMA20 1h slope 7 วัน ${label}%`;
+  return `EMA20∠1h ${label}%`;
 }
 
 export function reversalEma1dFilterTitle(filter: ReversalEma1dFilter): string {
