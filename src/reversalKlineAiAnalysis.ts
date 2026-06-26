@@ -376,6 +376,8 @@ export type RunReversalKlineAiForRowInput = {
     | "id"
     | "symbol"
     | "tradeSide"
+    | "signalBarTf"
+    | "chartAiAnalysisV"
     | "model"
     | "signalBarOpenSec"
     | "entryPrice"
