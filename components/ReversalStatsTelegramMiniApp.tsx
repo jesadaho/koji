@@ -26,6 +26,8 @@ import {
 import {
   REVERSAL_CHART_AI_TABLE_COLUMN_COUNT,
   REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT,
+  REVERSAL_KLINE_AI_MANUAL_BACKFILL_MAX_BATCHES,
+  REVERSAL_KLINE_AI_MANUAL_BACKFILL_PAUSE_MS,
   reversalChartAiConfidenceLabel,
   reversalChartAiExpectedPathLabel,
   reversalChartAiExpectedPathShortLabel,
@@ -40,6 +42,7 @@ import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
 import { statsOpenInterestUsdtLabel } from "@/lib/statsOpenInterest";
+import { statsBtcDomEma20_4hSlopeLabel } from "@/lib/statsBtcDominanceEma";
 import {
   pumpCycleAgeHoursLabel,
   pumpCycleSwingLowSourceLabel,
@@ -223,6 +226,20 @@ import {
 } from "@/lib/snowballTrendVelocityFilter";
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type ReversalKlineAiBackfillApiResult = {
+  ok?: boolean;
+  attempted?: number;
+  succeeded?: number;
+  failed?: number;
+  remaining?: number;
+  symbols?: string[];
+  errors?: string[];
+};
 
 const FOOTNOTE_1D =
   "Binance USDT-M · Short bias · 1D: follow-up 1d/3d/7d (ปิด Day) · ผลที่ 7d · ไม่ส่ง Telegram follow-up";
@@ -725,7 +742,7 @@ function ReversalStatsSection({
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const columnGroupSpans = useMemo(() => {
     const signal = 9 + (showSuggestedSideColumn ? 1 : 0) + 11 + extraRankCols;
-    const bot = 21;
+    const bot = 22;
     const ai = showAiColumns ? REVERSAL_CHART_AI_TABLE_COLUMN_COUNT : 0;
     const result =
       3 +
@@ -1085,6 +1102,13 @@ function ReversalStatsSection({
               onSort={onSortColumn}
             />
             <SortTh
+              label="BTC.D∠4h"
+              sortKey="btcDomEma4h"
+              title="BTC dominance EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
               label="BTC∠1d"
               sortKey="btcEma1d"
               title="BTC EMA(12) 1d slope % ย้อนหลัง 7 แท่ง"
@@ -1373,6 +1397,7 @@ function ReversalStatsSection({
                   <td title="(close − EMA20) / EMA20 × 100 บน 4h">{candleReversalPriceVsEma20_4hLabel(r.priceVsEma20_4hPct)}</td>
                   <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
                   <td title="BTC EMA20 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma20_4hSlopePct7d)}</td>
+                  <td title="BTC.D EMA20 4h slope 7d">{statsBtcDomEma20_4hSlopeLabel(r.btcDomEma20_4hSlopePct7d)}</td>
                   <td title="BTC EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.btcEma1dSlopePct7d)}</td>
                   <td title="PSAR 4h trend">{statsPsar4hTrendLabel(r.psar4hTrend)}</td>
                   <td title="PSAR 4h distance">{statsPsar4hDistPctLabel(r.psar4hDistPct)}</td>
@@ -2199,14 +2224,15 @@ export default function ReversalStatsTelegramMiniApp() {
   }, [api, loadStats]);
 
   const backfillAiStats = useCallback(async () => {
+    const pauseSec = Math.round(REVERSAL_KLINE_AI_MANUAL_BACKFILL_PAUSE_MS / 1000);
     if (
       !window.confirm(
         "Backfill AI สำหรับตาราง Reversal Short (แท็บ 1H Short)?\n\n" +
-          `• ทีละ ${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT} แถวที่ยังไม่มี AI analysis (ใหม่สุดก่อน)\n` +
+          `• ทีละ ${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT} แถวต่อ batch (ใหม่สุดก่อน)\n` +
+          `• พัก ${pauseSec} วินาทีระหว่าง batch จนกว่า remaining = 0\n` +
           "• ไม่รวมตาราง Long 1H (fade SHORT)\n" +
           "• เรียก OpenAI (gpt-5.5) — แถวละ ~30–90s · timeout จะ retry อัตโนมัติ 1 ครั้ง\n" +
-          "• ต้องมี OPENAI_API_KEY และเปิด CANDLE_REVERSAL_KLINE_AI_ENABLED\n\n" +
-          "กดซ้ำได้จนกว่า remaining จะเป็น 0",
+          "• ต้องมี OPENAI_API_KEY และเปิด CANDLE_REVERSAL_KLINE_AI_ENABLED",
       )
     ) {
       return;
@@ -2214,26 +2240,62 @@ export default function ReversalStatsTelegramMiniApp() {
     setBackfillAiBusy(true);
     setBackfillAiMsg(null);
     try {
-      const res = (await api("/reversal-stats/backfill-ai", { method: "POST" })) as unknown as {
-        ok?: boolean;
-        attempted?: number;
-        succeeded?: number;
-        failed?: number;
-        remaining?: number;
-        symbols?: string[];
-        errors?: string[];
-      };
-      const attempted = typeof res?.attempted === "number" ? res.attempted : 0;
-      const succeeded = typeof res?.succeeded === "number" ? res.succeeded : 0;
-      const failed = typeof res?.failed === "number" ? res.failed : 0;
-      const remaining = typeof res?.remaining === "number" ? res.remaining : 0;
-      const symbols = Array.isArray(res?.symbols) ? res.symbols : [];
-      const errors = Array.isArray(res?.errors) ? res.errors : [];
-      const symPart = symbols.length > 0 ? ` · ${symbols.join(", ")}` : "";
-      const errPart = errors.length > 0 ? ` · ผิดพลาด: ${errors.join("; ")}` : "";
+      let totalAttempted = 0;
+      let totalSucceeded = 0;
+      let totalFailed = 0;
+      let remaining = Number.POSITIVE_INFINITY;
+      const allSymbols: string[] = [];
+      const allErrors: string[] = [];
+      let batchNo = 0;
+      let prevRemaining = Number.POSITIVE_INFINITY;
+
+      while (remaining > 0 && batchNo < REVERSAL_KLINE_AI_MANUAL_BACKFILL_MAX_BATCHES) {
+        batchNo += 1;
+        setBackfillAiMsg({
+          kind: "ok",
+          text:
+            batchNo === 1
+              ? `กำลัง AI… batch ${batchNo} (ทีละ ${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT} แถว)`
+              : `กำลัง AI… batch ${batchNo} · เหลือ ~${Number.isFinite(remaining) ? remaining : "?"} แถว`,
+        });
+
+        const res = (await api("/reversal-stats/backfill-ai", { method: "POST" })) as unknown as
+          ReversalKlineAiBackfillApiResult;
+
+        const attempted = typeof res?.attempted === "number" ? res.attempted : 0;
+        const succeeded = typeof res?.succeeded === "number" ? res.succeeded : 0;
+        const failed = typeof res?.failed === "number" ? res.failed : 0;
+        remaining = typeof res?.remaining === "number" ? res.remaining : 0;
+        const symbols = Array.isArray(res?.symbols) ? res.symbols : [];
+        const errors = Array.isArray(res?.errors) ? res.errors : [];
+
+        totalAttempted += attempted;
+        totalSucceeded += succeeded;
+        totalFailed += failed;
+        allSymbols.push(...symbols);
+        allErrors.push(...errors);
+
+        if (attempted === 0) break;
+        if (remaining >= prevRemaining && succeeded === 0) break;
+        prevRemaining = remaining;
+
+        if (remaining > 0 && batchNo < REVERSAL_KLINE_AI_MANUAL_BACKFILL_MAX_BATCHES) {
+          setBackfillAiMsg({
+            kind: "ok",
+            text: `พัก ${pauseSec}s ก่อน batch ถัดไป… เหลือ ${remaining} แถว`,
+          });
+          await sleepMs(REVERSAL_KLINE_AI_MANUAL_BACKFILL_PAUSE_MS);
+        }
+      }
+
+      const symPart = allSymbols.length > 0 ? ` · ${allSymbols.join(", ")}` : "";
+      const errPart = allErrors.length > 0 ? ` · ผิดพลาด: ${allErrors.join("; ")}` : "";
+      const batchPart = batchNo > 1 ? ` · ${batchNo} batch` : "";
       setBackfillAiMsg({
-        kind: failed > 0 && succeeded === 0 ? "error" : "ok",
-        text: `AI backfill — ลอง ${attempted} · สำเร็จ ${succeeded} · ล้มเหลว ${failed} · เหลือ ${remaining}${symPart}${errPart}`,
+        kind: totalFailed > 0 && totalSucceeded === 0 ? "error" : "ok",
+        text:
+          `AI backfill — ลอง ${totalAttempted} · สำเร็จ ${totalSucceeded} · ล้มเหลว ${totalFailed}` +
+          ` · เหลือ ${remaining}${batchPart}${symPart}${errPart}`,
       });
       await loadStats({ mode: "force" });
     } catch (e) {
@@ -2362,10 +2424,10 @@ export default function ReversalStatsTelegramMiniApp() {
             type="button"
             className="sparkStatsRefreshBtn"
             disabled={backfillAiBusy}
-            title={`เรียก OpenAI วิเคราะห์ kline — ทีละ ${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT} แถว ตาราง Reversal Short (ไม่รวม Long 1H)`}
+            title={`เรียก OpenAI วิเคราะห์ kline — ทีละ ${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT} แถว/batch · พัก ${Math.round(REVERSAL_KLINE_AI_MANUAL_BACKFILL_PAUSE_MS / 1000)}s ระหว่าง batch`}
             onClick={() => void backfillAiStats()}
           >
-            {backfillAiBusy ? "กำลัง AI…" : `Backfill AI (${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT})`}
+            {backfillAiBusy ? "กำลัง AI…" : `Backfill AI (${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT}/batch)`}
           </button>
         ) : null}
         {payload?.isAdmin ? (

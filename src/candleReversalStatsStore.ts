@@ -21,6 +21,7 @@ import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_ATR_PCT_4H_VERSION } from "./statsAtrPct4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import { STATS_OPEN_INTEREST_VERSION } from "./statsOpenInterest";
+import { STATS_BTC_DOM_EMA20_4H_VERSION } from "./statsBtcDominanceEma";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import {
@@ -231,6 +232,9 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     priceVsEma20_4hPct: nullNum(r.priceVsEma20_4hPct),
     ema20_4hSlopePct7d: nullNum(r.ema20_4hSlopePct7d),
     btcEma20_4hSlopePct7d: nullNum(r.btcEma20_4hSlopePct7d),
+    btcDomEma20_4hSlopePct7d: nullNum(r.btcDomEma20_4hSlopePct7d),
+    btcDomEma20_4hV:
+      r.btcDomEma20_4hV === STATS_BTC_DOM_EMA20_4H_VERSION ? STATS_BTC_DOM_EMA20_4H_VERSION : undefined,
     psar4hTrend:
       r.psar4hTrend === "up" || r.psar4hTrend === "down" ? r.psar4hTrend : null,
     psar4hDistPct: nullNum(r.psar4hDistPct),
@@ -473,6 +477,7 @@ export async function appendCandleReversalStatsRow(
   let priceVsEma20_4hPct: CandleReversalStatsRow["priceVsEma20_4hPct"] = null;
   let ema20_4hSlopePct7d: CandleReversalStatsRow["ema20_4hSlopePct7d"] = null;
   let btcEma20_4hSlopePct7d: CandleReversalStatsRow["btcEma20_4hSlopePct7d"] = null;
+  let btcDomEma20_4hSlopePct7d: CandleReversalStatsRow["btcDomEma20_4hSlopePct7d"] = null;
   let psar4hTrend: CandleReversalStatsRow["psar4hTrend"] = null;
   let psar4hDistPct: CandleReversalStatsRow["psar4hDistPct"] = null;
   let atrPct14d: number | null = null;
@@ -531,6 +536,10 @@ export async function appendCandleReversalStatsRow(
       snap.btcEma20_4hSlopePct7d != null && Number.isFinite(snap.btcEma20_4hSlopePct7d)
         ? snap.btcEma20_4hSlopePct7d
         : null;
+    btcDomEma20_4hSlopePct7d =
+      snap.btcDomEma20_4hSlopePct7d != null && Number.isFinite(snap.btcDomEma20_4hSlopePct7d)
+        ? snap.btcDomEma20_4hSlopePct7d
+        : null;
     psar4hTrend =
       snap.psar4hTrend === "up" || snap.psar4hTrend === "down" ? snap.psar4hTrend : null;
     psar4hDistPct =
@@ -586,6 +595,10 @@ export async function appendCandleReversalStatsRow(
     priceVsEma20_4hPct,
     ema20_4hSlopePct7d,
     btcEma20_4hSlopePct7d,
+    btcDomEma20_4hSlopePct7d,
+    ...(btcDomEma20_4hSlopePct7d != null
+      ? { btcDomEma20_4hV: STATS_BTC_DOM_EMA20_4H_VERSION }
+      : {}),
     ...(statsEma20MetricsComplete({
       ema20_1hSlopePct7d,
       priceVsEma20_1hPct,

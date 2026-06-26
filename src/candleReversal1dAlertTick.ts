@@ -33,7 +33,10 @@ import {
   appendCandleReversalStatsRow,
   isCandleReversalStatsEnabled,
 } from "./candleReversalStatsStore";
-import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
+import {
+  candleReversalStatsAnchorCloseSec,
+  type CandleReversalStatsRow,
+} from "@/lib/candleReversalStatsClient";
 import { reversalIsObserveSignal, reversalResolveObserveReason } from "@/lib/reversalStatsPlayMode";
 import { statsBarRangePctSignal } from "@/lib/statsBarRangePct";
 import { resolvePumpCycleSwingLowFields } from "./statsPumpCycleSwingLow";
@@ -65,7 +68,7 @@ import { candleReversalSignalVolVsSmaAt } from "./candleReversalSignalVolVsSma";
 import { snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import { runReversalAutoTradeAfterReversalAlert } from "./reversalAutoTradeExecutor";
-import { maybeRunReversalKlineAiAnalysis } from "./reversalKlineAiAnalysis";
+import { backfillReversalKlineAiAnalysis } from "./reversalKlineAiAnalysis";
 
 function envFlagOn(key: string, defaultOn: boolean): boolean {
   const raw = process.env[key]?.trim().toLowerCase();
@@ -633,13 +636,19 @@ async function scanTimeframe(
   return { state: nextState, results, scanStats };
 }
 
+type NotifyResultsOutcome = {
+  notified: number;
+  appendedForAi: CandleReversalStatsRow[];
+};
+
 async function notifyResults(
   results: { symbol: string; evals: EvalRow | null }[],
   nowMs: number,
   alertCap: number,
   scanStats: CandleReversalTfScanSummaryStats,
-): Promise<number> {
+): Promise<NotifyResultsOutcome> {
   let notified = 0;
+  const appendedForAi: CandleReversalStatsRow[] = [];
   const assetMetaMap = await buildBinanceUsdmSymbolMetaMap();
 
   for (const row of results) {
@@ -761,7 +770,7 @@ async function notifyResults(
             scanStats.observeStored += 1;
             pushReversalScanSymList(scanStats.observeStoredSymbols, row.symbol);
             if (sig.tf === "1h" && tradeSide === "short") {
-              maybeRunReversalKlineAiAnalysis({ row: appended });
+              appendedForAi.push(appended);
             }
           }
         }
@@ -795,7 +804,7 @@ async function notifyResults(
       if (ok && isCandleReversalStatsEnabled()) {
         const appended = await appendCandleReversalStatsRow(statsAppendInput);
         if (appended && sig.tf === "1h" && tradeSide === "short") {
-          maybeRunReversalKlineAiAnalysis({ row: appended, mexcContract });
+          appendedForAi.push(appended);
         }
       }
       if (ok) {
@@ -849,7 +858,7 @@ async function notifyResults(
       pushReversalScanErr(scanStats, `${row.symbol} TG: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  return notified;
+  return { notified, appendedForAi };
 }
 
 async function maybeSendReversalScanSummary(opts: {
@@ -944,19 +953,21 @@ export async function runCandleReversalAlertTick(
   const summaryParts: string[] = [];
 
   let notified = 0;
+  const appendedForAi: CandleReversalStatsRow[] = [];
 
   if (isCandleReversal1dAlertsEnabled()) {
     const r1d = await scanTimeframe("1d", symbols, state, env1d, env1h, env1hLong, nowMs, concurrency);
     state = r1d.state;
     const n1d = await notifyResults(r1d.results, nowMs, alertCap, r1d.scanStats);
-    notified += n1d;
+    notified += n1d.notified;
+    appendedForAi.push(...n1d.appendedForAi);
     const sum1d = await maybeSendReversalScanSummary({
       tf: "1d",
       nowMs,
       universeLen: symbols.length,
       topAltsCap,
       scanStats: r1d.scanStats,
-      alertsSentThisTf: n1d,
+      alertsSentThisTf: n1d.notified,
       alertCapPerRun: alertCap,
       loaded,
       forceResend: Boolean(opts?.forceScanSummary),
@@ -968,14 +979,15 @@ export async function runCandleReversalAlertTick(
     const r1h = await scanTimeframe("1h", symbols, state, env1d, env1h, env1hLong, nowMs, concurrency);
     state = r1h.state;
     const n1h = await notifyResults(r1h.results, nowMs, Math.max(0, alertCap - notified), r1h.scanStats);
-    notified += n1h;
+    notified += n1h.notified;
+    appendedForAi.push(...n1h.appendedForAi);
     const sum1h = await maybeSendReversalScanSummary({
       tf: "1h",
       nowMs,
       universeLen: symbols.length,
       topAltsCap,
       scanStats: r1h.scanStats,
-      alertsSentThisTf: n1h,
+      alertsSentThisTf: n1h.notified,
       alertCapPerRun: alertCap,
       loaded,
       forceResend: Boolean(opts?.forceScanSummary),
@@ -988,6 +1000,23 @@ export async function runCandleReversalAlertTick(
     await saveCandleReversalAlertStateWithMeta(loaded);
   } catch (e) {
     console.error("[candleReversalAlertTick] save state", e);
+  }
+
+  if (appendedForAi.length > 0) {
+    try {
+      const aiRes = await backfillReversalKlineAiAnalysis(appendedForAi, {
+        limit: appendedForAi.length,
+      });
+      if (aiRes.attempted > 0) {
+        console.info(
+          `[candleReversalAlertTick] kline AI ${aiRes.succeeded}/${aiRes.attempted} ok` +
+            (aiRes.failed > 0 ? ` · failed ${aiRes.failed}` : "") +
+            ` · ${aiRes.symbols.join(", ") || "—"}`,
+        );
+      }
+    } catch (e) {
+      console.error("[candleReversalAlertTick] kline AI after alert", e);
+    }
   }
 
   if (notified > 0) {

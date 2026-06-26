@@ -100,5 +100,11 @@ export function reversalChartAiMarketCharacterShortLabel(
 /** คอลัมน์ AI ในตาราง Reversal 1H (AI Why อยู่ใน tooltip ของ AI Side) */
 export const REVERSAL_CHART_AI_TABLE_COLUMN_COUNT = 9;
 
-/** จำนวนแถวต่อครั้งเมื่อกดปุ่ม Backfill AI ใน Mini App (admin) */
-export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT = 10;
+/** จำนวนแถวต่อ batch เมื่อกดปุ่ม Backfill AI ใน Mini App (admin) */
+export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT = 3;
+
+/** พักระหว่าง batch ต่อเนื่อง (ms) — ลดโอกาส timeout / rate limit */
+export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_PAUSE_MS = 20_000;
+
+/** สูงสุดกี่ batch ต่อการกดปุ่มครั้งเดียว (3 × 20 = 60 แถว) */
+export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_MAX_BATCHES = 20;

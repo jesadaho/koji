@@ -53,7 +53,7 @@ Focus on:
 - Trend continuation vs exhaustion
 - Distribution / Accumulation
 - Risk of adverse move before the expected direction
-- Signal context metrics (Trend Gain, Velocity, EMA20 4H Slope, ATR4H, Vol×SMA, Funding rate %, Open Interest USDT/contracts, BTC EMA20 4H slope 7d %, BTC EMA 1d slope 7d %)
+- Signal context metrics (Trend Gain, Velocity, EMA20 4H Slope, ATR4H, Vol×SMA, Funding rate %, Open Interest USDT/contracts, BTC EMA20 4H slope 7d %, BTC EMA 1d slope 7d %, BTC.D EMA20 4H slope 7d %)
 
 Do NOT explain basic candlestick patterns.
 
@@ -433,6 +433,7 @@ export type RunReversalKlineAiForRowInput = {
     | "openInterestContracts"
     | "btcEma20_4hSlopePct7d"
     | "btcEma1dSlopePct7d"
+    | "btcDomEma20_4hSlopePct7d"
   >;
   mexcContract?: string | null;
   fundingRatePct?: number | null;
@@ -491,6 +492,7 @@ export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowIn
       openInterestContracts,
       btcEma20_4hSlopePct7d: input.row.btcEma20_4hSlopePct7d,
       btcEma1dSlopePct7d: input.row.btcEma1dSlopePct7d,
+      btcDomEma20_4hSlopePct7d: input.row.btcDomEma20_4hSlopePct7d,
     },
   });
 

@@ -74,6 +74,10 @@ export type CandleReversalStatsRow = {
   ema20_4hSlopePct7d?: number | null;
   /** BTC — EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง) */
   btcEma20_4hSlopePct7d?: number | null;
+  /** BTC.D — EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง) */
+  btcDomEma20_4hSlopePct7d?: number | null;
+  /** version 1 = คำนวณ ณ alertedAtMs · หรือข้ามถาวรถ้าเกิน ~90 วัน */
+  btcDomEma20_4hV?: number;
   /** 6 = EMA20 1h/4h slope+dist คำนวณ ณ alertedAtMs */
   ema20DistV?: number;
   /** PSAR 4h — ทิศ SAR (up/down) */
@@ -358,6 +362,7 @@ export type CandleReversalStatsSortKey =
   | "ema20_4hDist"
   | "ema1d"
   | "btcEma4h"
+  | "btcDomEma4h"
   | "btcEma1d"
   | "psar4h"
   | "psar4hDist"
@@ -502,6 +507,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
     case "btcEma4h":
       return cmpNumNullLast(a.btcEma20_4hSlopePct7d, b.btcEma20_4hSlopePct7d);
+    case "btcDomEma4h":
+      return cmpNumNullLast(a.btcDomEma20_4hSlopePct7d, b.btcDomEma20_4hSlopePct7d);
     case "btcEma1d":
       return cmpNumNullLast(a.btcEma1dSlopePct7d, b.btcEma1dSlopePct7d);
     case "psar4h": {

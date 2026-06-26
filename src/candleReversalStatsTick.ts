@@ -44,6 +44,7 @@ import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
 import { backfillAllStatsRowsAtrPct4h } from "./statsAtrPct4h";
 import { backfillAllStatsRowsQuoteVol24h } from "./statsQuoteVol24h";
 import { backfillAllStatsRowsOpenInterest } from "./statsOpenInterest";
+import { backfillAllStatsRowsBtcDomEma20_4h } from "./statsBtcDominanceEma";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClient";
@@ -880,6 +881,9 @@ export async function runCandleReversalStatsFollowUpTick(
   let dirty = 0;
   const nowSec = Math.floor(nowMs / 1000);
 
+  // รันก่อน backfill ช้า — สัญญาณใหม่ไม่ควรค้างเพราะ cron timeout
+  dirty += (await backfillReversalKlineAiAnalysis(state.rows)).succeeded;
+
   dirty += backfillReversalBarRangePctSignalEstimate(state.rows);
   dirty += await backfillRangeRankInLookback(state.rows);
   dirty += backfillLenPercentilePct(state.rows);
@@ -890,6 +894,7 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillAllStatsRowsAtrPct4h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsQuoteVol24h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsOpenInterest(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
+  dirty += await backfillAllStatsRowsBtcDomEma20_4h(state.rows, { maxRowsPerPass: 15, maxPasses: 5 });
   dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += await backfillPumpCycleSwingLowForRows(state.rows, (row) =>
@@ -899,7 +904,6 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += backfill1hOutcomeTo24h(state.rows);
   dirty += await backfillAllStatsRowsTradFiFlag(state.rows);
   dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
-  dirty += (await backfillReversalKlineAiAnalysis(state.rows)).succeeded;
   if (opts?.forceLong1hFadeShort) {
     dirty += await refreshLong1hFadeShortFollowUp(state.rows, nowMs, nowSec);
   }

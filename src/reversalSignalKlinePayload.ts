@@ -39,6 +39,7 @@ export type ReversalSignalContextPayload = {
   open_interest_contracts: number | null;
   btc_ema20_4h_slope_pct_7d: number | null;
   btc_ema1d_slope_pct_7d: number | null;
+  btc_d_ema20_4h_slope_pct_7d: number | null;
 };
 
 export type ReversalSignalKlineAiPayload = {
@@ -158,6 +159,7 @@ export function buildReversalSignalKlineAiPayload(input: {
     openInterestContracts?: number | null;
     btcEma20_4hSlopePct7d?: number | null;
     btcEma1dSlopePct7d?: number | null;
+    btcDomEma20_4hSlopePct7d?: number | null;
   };
 }): ReversalSignalKlineAiPayload | null {
   const n = REVERSAL_KLINE_AI_BARS_PER_TF;
@@ -208,6 +210,7 @@ export function buildReversalSignalKlineAiPayload(input: {
       open_interest_contracts: finiteNum(input.signalContext.openInterestContracts),
       btc_ema20_4h_slope_pct_7d: finiteNum(input.signalContext.btcEma20_4hSlopePct7d),
       btc_ema1d_slope_pct_7d: finiteNum(input.signalContext.btcEma1dSlopePct7d),
+      btc_d_ema20_4h_slope_pct_7d: finiteNum(input.signalContext.btcDomEma20_4hSlopePct7d),
     },
   };
 }

@@ -48,6 +48,7 @@ import {
   snowballStatsQuoteVol24hLabel,
 } from "@/lib/snowballStatsClient";
 import { statsOpenInterestUsdtLabel } from "@/lib/statsOpenInterest";
+import { statsBtcDomEma20_4hSlopeLabel } from "@/lib/statsBtcDominanceEma";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
@@ -103,6 +104,7 @@ const HEADERS = [
   "EMA20 4h dist %",
   "EMA1d slope 7d %",
   "BTC EMA20 4h slope 7d %",
+  "BTC.D EMA20 4h slope 7d %",
   "BTC EMA1d slope 7d %",
   "SAR 4h",
   "SAR dist 4h %",
@@ -233,6 +235,7 @@ function candleReversalStatsRowToCsvCells(
     candleReversalEmaSlopeCsvLabel(r.priceVsEma20_4hPct),
     candleReversalEmaSlopeCsvLabel(r.ema1dSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.btcEma20_4hSlopePct7d),
+    statsBtcDomEma20_4hSlopeLabel(r.btcDomEma20_4hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.btcEma1dSlopePct7d),
     statsPsar4hTrendLabel(r.psar4hTrend),
     statsPsar4hDistPctCsv(r.psar4hDistPct),

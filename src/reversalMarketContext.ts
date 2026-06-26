@@ -10,6 +10,7 @@ import { fetchStatsEma20MetricsAtMs } from "./statsEma20Dist";
 import { fetchBtcEmaSlopesAtMs, fetchSymbolEmaSlopesAtMs } from "./statsEmaSlope";
 import { fetchSymbolPsar4hAtMs } from "./statsPsar4h";
 import { fetchStatsOpenInterestAtMs } from "./statsOpenInterest";
+import { fetchBtcDomEma20_4hSlopePct7dAtMs } from "./statsBtcDominanceEma";
 
 const mcapCache = new Map<string, { atMs: number; mcap: number | null }>();
 const MCAP_CACHE_MS = 15 * 60 * 1000;
@@ -56,6 +57,8 @@ export type ReversalAlertMarketSnapshot = {
   ema20_4hSlopePct7d: number | null;
   /** BTC — EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง) */
   btcEma20_4hSlopePct7d: number | null;
+  /** BTC.D — EMA20 4h slope % ย้อนหลัง 7 วัน (42 แท่ง) */
+  btcDomEma20_4hSlopePct7d: number | null;
   /** Wilder ATR(14) บน 1d ÷ close × 100 */
   atrPct14d: number | null;
   /** Wilder ATR(14) บน 4h ÷ close × 100 ณ atMs */
@@ -73,11 +76,12 @@ export async function fetchReversalAlertMarketSnapshot(
 ): Promise<ReversalAlertMarketSnapshot> {
   const sym = binanceSymbol.trim().toUpperCase();
   const base = binanceUsdtPerpBase(sym);
-  const [quoteVol24hUsdt, marketCapUsd, openInterest, symbolEma, atrPct14d, atrPct4h, btcEma, psar4h, ema20Dist] =
+  const [quoteVol24hUsdt, marketCapUsd, openInterest, btcDomEma20_4hSlopePct7d, symbolEma, atrPct14d, atrPct4h, btcEma, psar4h, ema20Dist] =
     await Promise.all([
     fetchStatsQuoteVol24hUsdt(sym),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
     fetchStatsOpenInterestAtMs(sym, atMs),
+    fetchBtcDomEma20_4hSlopePct7dAtMs(atMs),
     fetchSymbolEmaSlopesAtMs(sym, atMs),
     fetchSymbolAtrPct14d(sym),
     fetchSymbolAtrPct4hAtMs(sym, atMs),
@@ -100,6 +104,7 @@ export async function fetchReversalAlertMarketSnapshot(
     priceVsEma20_4hPct: ema20Dist.priceVsEma20_4hPct,
     ema20_4hSlopePct7d: ema20Dist.ema20_4hSlopePct7d,
     btcEma20_4hSlopePct7d: ema20Dist.btcEma20_4hSlopePct7d,
+    btcDomEma20_4hSlopePct7d,
     atrPct14d,
     atrPct4h,
     psar4hTrend: psar4h?.trend ?? null,
