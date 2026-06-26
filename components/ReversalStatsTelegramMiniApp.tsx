@@ -22,6 +22,17 @@ import {
   reversalStatsPriceDiffFromPrevLabel,
   reversalStatsWeeklyAlertNoLabel,
 } from "@/lib/reversalStatsWeeklyAlert";
+import {
+  REVERSAL_CHART_AI_TABLE_COLUMN_COUNT,
+  reversalChartAiConfidenceLabel,
+  reversalChartAiExpectedPathLabel,
+  reversalChartAiExpectedPathShortLabel,
+  reversalChartAiMarketCharacterLabel,
+  reversalChartAiMarketCharacterShortLabel,
+  reversalChartAiPreferredSideLabel,
+  reversalChartAiPullbackLabel,
+  reversalChartAiScoreLabel,
+} from "@/lib/reversalChartAiAnalysis";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
@@ -312,6 +323,90 @@ function SortTh({
     >
       {label}
       {sortMark(active, activeSort.dir)}
+    </th>
+  );
+}
+
+type ReversalStatsColumnGroup = "signal" | "bot" | "ai" | "result";
+
+const REVERSAL_STATS_COLLAPSED_GROUPS_KEY = "reversalStatsCollapsedGroups";
+
+const REVERSAL_STATS_COLUMN_GROUP_ORDER: ReversalStatsColumnGroup[] = ["signal", "bot", "ai", "result"];
+
+function isReversalStatsColumnGroup(value: unknown): value is ReversalStatsColumnGroup {
+  return value === "signal" || value === "bot" || value === "ai" || value === "result";
+}
+
+function readReversalStatsCollapsedGroups(): Set<ReversalStatsColumnGroup> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(REVERSAL_STATS_COLLAPSED_GROUPS_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter(isReversalStatsColumnGroup));
+  } catch {
+    return new Set();
+  }
+}
+
+function persistReversalStatsCollapsedGroups(groups: Set<ReversalStatsColumnGroup>): void {
+  try {
+    window.localStorage.setItem(
+      REVERSAL_STATS_COLLAPSED_GROUPS_KEY,
+      JSON.stringify([...groups]),
+    );
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+function reversalStatsVisibleColumnCount(
+  collapsed: Set<ReversalStatsColumnGroup>,
+  spans: { signal: number; bot: number; ai: number; result: number },
+  showAiColumns: boolean,
+): number {
+  let n = 0;
+  if (!collapsed.has("signal")) n += spans.signal;
+  if (!collapsed.has("bot")) n += spans.bot;
+  if (showAiColumns && !collapsed.has("ai")) n += spans.ai;
+  if (!collapsed.has("result")) n += spans.result;
+  return n;
+}
+
+function ReversalStatsGroupTh({
+  group,
+  label,
+  span,
+  collapsed,
+  onToggle,
+}: {
+  group: ReversalStatsColumnGroup;
+  label: string;
+  span: number;
+  collapsed: boolean;
+  onToggle: (group: ReversalStatsColumnGroup) => void;
+}) {
+  return (
+    <th
+      colSpan={collapsed ? 1 : span}
+      scope="colgroup"
+      className={`sparkMatrixGroupTh${collapsed ? " sparkMatrixGroupTh--collapsed" : ""}`}
+    >
+      <button
+        type="button"
+        className="sparkMatrixGroupToggle"
+        onClick={() => onToggle(group)}
+        title={collapsed ? `ขยาย ${label} (${span} คอลัมน์)` : `ย่อ ${label}`}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? `ขยาย ${label}` : `ย่อ ${label}`}
+      >
+        <span className="sparkMatrixGroupToggleIcon" aria-hidden>
+          {collapsed ? "▸" : "▾"}
+        </span>
+        <span className="sparkMatrixGroupToggleLabel">{label}</span>
+        {collapsed ? <span className="sparkMatrixGroupToggleCount">{span}</span> : null}
+      </button>
     </th>
   );
 }
@@ -624,8 +719,56 @@ function ReversalStatsSection({
   );
   const playingLongOnly = showSuggestedSideColumn && statsPlaySides.long && !statsPlaySides.short;
   const has48h = tf === "1h";
+  const showAiColumns = tf === "1h";
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
-  const emptyColSpan = (has48h ? 26 : 23) + extraRankCols + 22 + (showSuggestedSideColumn ? 3 : 0);
+  const columnGroupSpans = useMemo(() => {
+    const signal = 9 + (showSuggestedSideColumn ? 1 : 0) + 11 + extraRankCols;
+    const bot = 20;
+    const ai = showAiColumns ? REVERSAL_CHART_AI_TABLE_COLUMN_COUNT : 0;
+    const result =
+      3 +
+      (has48h ? 1 : 0) +
+      3 +
+      2 +
+      (has48h ? 2 : 0) +
+      (has48h && showSuggestedSideColumn ? 2 : 0) +
+      1;
+    return { signal, bot, ai, result };
+  }, [showSuggestedSideColumn, extraRankCols, showAiColumns, has48h]);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<ReversalStatsColumnGroup>>(
+    () => readReversalStatsCollapsedGroups(),
+  );
+  const toggleColumnGroup = useCallback(
+    (group: ReversalStatsColumnGroup) => {
+      setCollapsedGroups((prev) => {
+        const next = new Set(prev);
+        if (next.has(group)) {
+          next.delete(group);
+        } else {
+          const trial = new Set(next);
+          trial.add(group);
+          if (
+            reversalStatsVisibleColumnCount(trial, columnGroupSpans, showAiColumns) === 0
+          ) {
+            return prev;
+          }
+          next.add(group);
+        }
+        persistReversalStatsCollapsedGroups(next);
+        return next;
+      });
+    },
+    [columnGroupSpans, showAiColumns],
+  );
+  const showSignalCols = !collapsedGroups.has("signal");
+  const showBotCols = !collapsedGroups.has("bot");
+  const showAiCols = showAiColumns && !collapsedGroups.has("ai");
+  const showResultCols = !collapsedGroups.has("result");
+  const emptyColSpan = reversalStatsVisibleColumnCount(
+    collapsedGroups,
+    columnGroupSpans,
+    showAiColumns,
+  );
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
@@ -678,7 +821,41 @@ function ReversalStatsSection({
     <div className="sparkMatrixScroll">
       <table className="sparkMatrixTable sparkMatrixTable--compact">
         <thead>
+          <tr className="sparkMatrixGroupRow">
+            <ReversalStatsGroupTh
+              group="signal"
+              label="Signal"
+              span={columnGroupSpans.signal}
+              collapsed={collapsedGroups.has("signal")}
+              onToggle={toggleColumnGroup}
+            />
+            <ReversalStatsGroupTh
+              group="bot"
+              label="Bot Feature"
+              span={columnGroupSpans.bot}
+              collapsed={collapsedGroups.has("bot")}
+              onToggle={toggleColumnGroup}
+            />
+            {showAiColumns ? (
+              <ReversalStatsGroupTh
+                group="ai"
+                label="AI Feature"
+                span={columnGroupSpans.ai}
+                collapsed={collapsedGroups.has("ai")}
+                onToggle={toggleColumnGroup}
+              />
+            ) : null}
+            <ReversalStatsGroupTh
+              group="result"
+              label="Result"
+              span={columnGroupSpans.result}
+              collapsed={collapsedGroups.has("result")}
+              onToggle={toggleColumnGroup}
+            />
+          </tr>
           <tr>
+            {showSignalCols ? (
+              <>
             <SortTh label="เหรียญ" sortKey="symbol" activeSort={sort} onSort={onSortColumn} />
             {showSuggestedSideColumn ? (
               <th
@@ -725,6 +902,75 @@ function ReversalStatsSection({
               onSort={onSortColumn}
             />
             <SortTh label="Entry" sortKey="entry" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="ไส้บน%"
+              sortKey="wickPct"
+              title="Short: ไส้บน ÷ ช่วงแท่ง · Long: —"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="ไส้ล่าง%"
+              sortKey="lowerWickPct"
+              title="Short: ไส้ล่าง ÷ ช่วงแท่ง · Long: ไส้ล่าง (wick หลัก)"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
+            <SortTh
+              label="Len#"
+              sortKey="rangeRank"
+              title="อันดับความยาวแท่ง (high-low) ในรอบ lookback"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Len%"
+              sortKey="lenPct"
+              title="Len percentile — 100% = ยาวสุดในรอบ lookback"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="R% สัญญาณ"
+              sortKey="barRangeSignal"
+              title="(High − Low) / Close × 100 ของแท่งสัญญาณ"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Vol#"
+              sortKey="volRank"
+              title="อันดับ volume ในรอบ lookback"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            {showHighRank ? (
+              <SortTh
+                label="High#"
+                sortKey="highRank"
+                title="อันดับ high ในรอบ lookback"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
+            {showLowRank ? (
+              <SortTh
+                label="Low#"
+                sortKey="lowRank"
+                title="อันดับ low ในรอบ lookback"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
+            <SortTh label="Range" sortKey="range" title="ช่วงแท่ง ÷ ATR100" activeSort={sort} onSort={onSortColumn} />
+            <SortTh label="Wick" sortKey="wick" title="ไส้ ÷ ATR100" activeSort={sort} onSort={onSortColumn} />
+              </>
+            ) : null}
+            {showBotCols ? (
+              <>
             <SortTh
               label="SL Time"
               sortKey="swingLowTime"
@@ -858,51 +1104,6 @@ function ReversalStatsSection({
               activeSort={sort}
               onSort={onSortColumn}
             />
-            <SortTh label="Retest" sortKey="retest" activeSort={sort} onSort={onSortColumn} />
-            <SortTh label="SL" sortKey="sl" activeSort={sort} onSort={onSortColumn} />
-            <SortTh
-              label="ไส้บน%"
-              sortKey="wickPct"
-              title="Short: ไส้บน ÷ ช่วงแท่ง · Long: —"
-              activeSort={sort}
-              onSort={onSortColumn}
-            />
-            <SortTh
-              label="ไส้ล่าง%"
-              sortKey="lowerWickPct"
-              title="Short: ไส้ล่าง ÷ ช่วงแท่ง · Long: ไส้ล่าง (wick หลัก)"
-              activeSort={sort}
-              onSort={onSortColumn}
-            />
-            <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
-            <SortTh
-              label="Len#"
-              sortKey="rangeRank"
-              title="อันดับความยาวแท่ง (high-low) ในรอบ lookback"
-              activeSort={sort}
-              onSort={onSortColumn}
-            />
-            <SortTh
-              label="Len%"
-              sortKey="lenPct"
-              title="Len percentile — 100% = ยาวสุดในรอบ lookback"
-              activeSort={sort}
-              onSort={onSortColumn}
-            />
-            <SortTh
-              label="R% สัญญาณ"
-              sortKey="barRangeSignal"
-              title="(High − Low) / Close × 100 ของแท่งสัญญาณ"
-              activeSort={sort}
-              onSort={onSortColumn}
-            />
-            <SortTh
-              label="Vol#"
-              sortKey="volRank"
-              title="อันดับ volume ในรอบ lookback"
-              activeSort={sort}
-              onSort={onSortColumn}
-            />
             <SortTh
               label="Vol×SMA"
               sortKey="volVsSma"
@@ -910,26 +1111,48 @@ function ReversalStatsSection({
               activeSort={sort}
               onSort={onSortColumn}
             />
-            {showHighRank ? (
-              <SortTh
-                label="High#"
-                sortKey="highRank"
-                title="อันดับ high ในรอบ lookback"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
+              </>
             ) : null}
-            {showLowRank ? (
-              <SortTh
-                label="Low#"
-                sortKey="lowRank"
-                title="อันดับ low ในรอบ lookback"
-                activeSort={sort}
-                onSort={onSortColumn}
-              />
+            {showAiCols ? (
+              <>
+                <th scope="col" title="AI preferred side (24–48h)">
+                  AI Side
+                </th>
+                <SortTh
+                  label="AI Conf"
+                  sortKey="aiConfidence"
+                  title="AI confidence 0–100"
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+                <th scope="col" title="AI trend strength 1–10">
+                  AI Str
+                </th>
+                <th scope="col" title="AI exhaustion risk 1–10">
+                  Exh
+                </th>
+                <th scope="col" title="AI distribution risk 1–10">
+                  Dist
+                </th>
+                <th scope="col" title="AI market character — Trend / Range / Distribution / Accumulation">
+                  AI Mkt
+                </th>
+                <th scope="col" title="AI expected path">
+                  Path
+                </th>
+                <th scope="col" title="AI expected max pullback %">
+                  Pull%
+                </th>
+                <th scope="col" title="AI reason (สั้น)">
+                  AI Why
+                </th>
+                <th scope="col" title="AI analysis schema version">
+                  AIv
+                </th>
+              </>
             ) : null}
-            <SortTh label="Range" sortKey="range" title="ช่วงแท่ง ÷ ATR100" activeSort={sort} onSort={onSortColumn} />
-            <SortTh label="Wick" sortKey="wick" title="ไส้ ÷ ATR100" activeSort={sort} onSort={onSortColumn} />
+            {showResultCols ? (
+              <>
             {horizonLabels[0] ? (
               <SortTh
                 label={horizonLabels[0]!}
@@ -1033,6 +1256,8 @@ function ReversalStatsSection({
               activeSort={sort}
               onSort={onSortColumn}
             />
+              </>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -1049,6 +1274,8 @@ function ReversalStatsSection({
               const horizons = reversalHorizonCells(r);
               return (
                 <tr key={r.id}>
+                  {showSignalCols ? (
+                    <>
                   <td>
                     {coinLabel(r.symbol)}
                     {reversalStatsRowIsObserve(r) ? (
@@ -1081,6 +1308,37 @@ function ReversalStatsSection({
                     {reversalStatsPriceDiffFromPrevLabel(r.priceDiffFromPrevAlertPct)}
                   </td>
                   <td>{fmtPrice(r.entryPrice)}</td>
+                  <td>{fmtPrice(r.retestPrice)}</td>
+                  <td>{fmtPrice(r.slPrice)}</td>
+                  <td title="ไส้บน (Short)">
+                    {(r.tradeSide ?? "short") === "short"
+                      ? candleReversalWickRatioPctLabel(r.wickRatioPct)
+                      : "—"}
+                  </td>
+                  <td title={(r.tradeSide ?? "short") === "short" ? "ไส้ล่าง (Short)" : "ไส้ล่าง (Long)"}>
+                    {(r.tradeSide ?? "short") === "short"
+                      ? candleReversalWickRatioPctLabel(r.lowerWickRatioPct)
+                      : candleReversalWickRatioPctLabel(r.wickRatioPct)}
+                  </td>
+                  <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
+                  <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
+                  <td title="Len percentile">{statsLenPercentileLabel(r.lenPercentilePct)}</td>
+                  <td title="(High − Low) / Close × 100">
+                    {snowballStatsBarRangePctLabel(reversalBarRangePctSignalResolved(r))}
+                  </td>
+                  <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
+                  {showHighRank ? (
+                    <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
+                  ) : null}
+                  {showLowRank ? (
+                    <td>{candleReversalLowLookbackRankCell(r.lowRankInLookback, r.lookbackBars)}</td>
+                  ) : null}
+                  <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
+                  <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
+                    </>
+                  ) : null}
+                  {showBotCols ? (
+                    <>
                   <td>
                     {(() => {
                       const iso = pumpCycleSwingLowTimeIso(r.swingLowOpenSec);
@@ -1107,34 +1365,48 @@ function ReversalStatsSection({
                   <td title="PSAR 4h distance">{statsPsar4hDistPctLabel(r.psar4hDistPct)}</td>
                   <td title="ATR(14) 1d ÷ close">{statsAtrPct14dLabel(r.atrPct14d)}</td>
                   <td title="ATR(14) 4h ÷ close">{statsAtrPct4hLabel(r.atrPct4h)}</td>
-                  <td>{fmtPrice(r.retestPrice)}</td>
-                  <td>{fmtPrice(r.slPrice)}</td>
-                  <td title="ไส้บน (Short)">
-                    {(r.tradeSide ?? "short") === "short"
-                      ? candleReversalWickRatioPctLabel(r.wickRatioPct)
-                      : "—"}
-                  </td>
-                  <td title={(r.tradeSide ?? "short") === "short" ? "ไส้ล่าง (Short)" : "ไส้ล่าง (Long)"}>
-                    {(r.tradeSide ?? "short") === "short"
-                      ? candleReversalWickRatioPctLabel(r.lowerWickRatioPct)
-                      : candleReversalWickRatioPctLabel(r.wickRatioPct)}
-                  </td>
-                  <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
-                  <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
-                  <td title="Len percentile">{statsLenPercentileLabel(r.lenPercentilePct)}</td>
-                  <td title="(High − Low) / Close × 100">
-                    {snowballStatsBarRangePctLabel(reversalBarRangePctSignalResolved(r))}
-                  </td>
-                  <td>{candleReversalLookbackRankCell(r.volRankInLookback, r.lookbackBars)}</td>
                   <td>{candleReversalSignalVolVsSmaLabel(r.signalVolVsSma)}</td>
-                  {showHighRank ? (
-                    <td>{candleReversalLookbackRankCell(r.highRankInLookback, r.lookbackBars)}</td>
+                    </>
                   ) : null}
-                  {showLowRank ? (
-                    <td>{candleReversalLowLookbackRankCell(r.lowRankInLookback, r.lookbackBars)}</td>
+                  {showAiCols ? (
+                    <>
+                      <td
+                        title={
+                          r.chartAiAnalysisError?.trim() ||
+                          reversalChartAiPreferredSideLabel(r.chartAiPreferredSide)
+                        }
+                      >
+                        {r.chartAiAnalysisV
+                          ? reversalChartAiPreferredSideLabel(r.chartAiPreferredSide)
+                          : r.chartAiAnalysisError
+                            ? "err"
+                            : "—"}
+                      </td>
+                      <td>{reversalChartAiConfidenceLabel(r.chartAiConfidence)}</td>
+                      <td>{reversalChartAiScoreLabel(r.chartAiTrendStrength)}</td>
+                      <td>{reversalChartAiScoreLabel(r.chartAiExhaustionRisk)}</td>
+                      <td>{reversalChartAiScoreLabel(r.chartAiDistributionRisk)}</td>
+                      <td title={reversalChartAiMarketCharacterLabel(r.chartAiMarketCharacter)}>
+                        {reversalChartAiMarketCharacterShortLabel(r.chartAiMarketCharacter)}
+                      </td>
+                      <td title={reversalChartAiExpectedPathLabel(r.chartAiExpectedPath)}>
+                        {reversalChartAiExpectedPathShortLabel(r.chartAiExpectedPath)}
+                      </td>
+                      <td>{reversalChartAiPullbackLabel(r.chartAiExpectedMaxPullbackPct)}</td>
+                      <td title={r.chartAiReason ?? undefined}>
+                        {r.chartAiReason
+                          ? r.chartAiReason.length > 28
+                            ? `${r.chartAiReason.slice(0, 28)}…`
+                            : r.chartAiReason
+                          : "—"}
+                      </td>
+                      <td title={r.chartAiAnalyzedAtIso ?? undefined}>
+                        {r.chartAiAnalysisV != null ? String(r.chartAiAnalysisV) : "—"}
+                      </td>
+                    </>
                   ) : null}
-                  <td>{candleReversalVolScoreLabel(r.rangeScore)}</td>
-                  <td>{candleReversalVolScoreLabel(r.wickScore)}</td>
+                  {showResultCols ? (
+                    <>
                   <td>{horizons[0]}</td>
                   <td>{horizons[1]}</td>
                   <td>{horizons[2]}</td>
@@ -1223,6 +1495,8 @@ function ReversalStatsSection({
                     </>
                   ) : null}
                   <td>{candleReversalOutcomeLabel(r.outcome)}</td>
+                    </>
+                  ) : null}
                 </tr>
               );
             })

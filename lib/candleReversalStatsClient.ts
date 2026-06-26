@@ -377,6 +377,7 @@ export type CandleReversalStatsSortKey =
   | "roi"
   | "dd"
   | "followUpAdverse"
+  | "aiConfidence"
   | "outcome";
 
 export type CandleReversalStatsSortDir = "asc" | "desc";
@@ -550,6 +551,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.maxDrawdownPct, b.maxDrawdownPct);
     case "followUpAdverse":
       return cmpNumNullLast(a.followUpMaxAdversePct, b.followUpMaxAdversePct);
+    case "aiConfidence":
+      return cmpNumNullLast(a.chartAiConfidence, b.chartAiConfidence);
     case "outcome": {
       const oa = OUTCOME_SORT_ORDER[a.outcome] ?? 99;
       const ob = OUTCOME_SORT_ORDER[b.outcome] ?? 99;

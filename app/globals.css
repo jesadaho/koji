@@ -481,6 +481,17 @@ code {
   background: color-mix(in srgb, var(--card) 88%, var(--border));
 }
 
+.sparkMatrixTable tr.sparkMatrixGroupRow th.sparkMatrixGroupTh {
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.4rem;
+  background: color-mix(in srgb, var(--card) 72%, var(--accent, #6366f1) 14%);
+  border-bottom: 2px solid var(--border);
+}
+
 .sparkMatrixTable th.sparkStatsSortTh {
   cursor: pointer;
   user-select: none;
