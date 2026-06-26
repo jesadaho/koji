@@ -24,6 +24,7 @@ import {
 } from "@/lib/reversalStatsWeeklyAlert";
 import {
   REVERSAL_CHART_AI_TABLE_COLUMN_COUNT,
+  REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT,
   reversalChartAiConfidenceLabel,
   reversalChartAiExpectedPathLabel,
   reversalChartAiExpectedPathShortLabel,
@@ -2186,7 +2187,7 @@ export default function ReversalStatsTelegramMiniApp() {
     if (
       !window.confirm(
         "Backfill AI สำหรับตาราง Reversal Short (แท็บ 1H Short)?\n\n" +
-          "• ทีละ 3 แถวที่ยังไม่มี AI analysis (ใหม่สุดก่อน)\n" +
+          `• ทีละ ${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT} แถวที่ยังไม่มี AI analysis (ใหม่สุดก่อน)\n` +
           "• ไม่รวมตาราง Long 1H (fade SHORT)\n" +
           "• เรียก OpenAI (gpt-5.5) — แถวละ ~30–90s · timeout จะ retry อัตโนมัติ 1 ครั้ง\n" +
           "• ต้องมี OPENAI_API_KEY และเปิด CANDLE_REVERSAL_KLINE_AI_ENABLED\n\n" +
@@ -2341,10 +2342,10 @@ export default function ReversalStatsTelegramMiniApp() {
             type="button"
             className="sparkStatsRefreshBtn"
             disabled={backfillAiBusy}
-            title="เรียก OpenAI วิเคราะห์ kline — ทีละ 3 แถว ตาราง Reversal Short (ไม่รวม Long 1H)"
+            title={`เรียก OpenAI วิเคราะห์ kline — ทีละ ${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT} แถว ตาราง Reversal Short (ไม่รวม Long 1H)`}
             onClick={() => void backfillAiStats()}
           >
-            {backfillAiBusy ? "กำลัง AI…" : "Backfill AI (3)"}
+            {backfillAiBusy ? "กำลัง AI…" : `Backfill AI (${REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT})`}
           </button>
         ) : null}
         {payload?.isAdmin ? (

@@ -99,3 +99,6 @@ export function reversalChartAiMarketCharacterShortLabel(
 
 /** คอลัมน์ AI ในตาราง Reversal 1H (AI Why อยู่ใน tooltip ของ AI Side) */
 export const REVERSAL_CHART_AI_TABLE_COLUMN_COUNT = 9;
+
+/** จำนวนแถวต่อครั้งเมื่อกดปุ่ม Backfill AI ใน Mini App (admin) */
+export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT = 5;

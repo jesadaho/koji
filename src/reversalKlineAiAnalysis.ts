@@ -2,11 +2,13 @@ import "server-only";
 
 import {
   REVERSAL_CHART_AI_ANALYSIS_VERSION,
+  REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT,
   type ReversalChartAiAnalysis,
   type ReversalChartAiExpectedPath,
   type ReversalChartAiMarketCharacter,
   type ReversalChartAiPreferredSide,
 } from "@/lib/reversalChartAiAnalysis";
+export { REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT };
 import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 import { fetchBinanceUsdmKlines } from "./binanceIndicatorKline";
 import { fetchContractTickerSingle } from "./mexcMarkets";
@@ -148,9 +150,6 @@ function reversalKlineAiBackfillPerRun(): number {
 }
 
 export { reversalKlineAiBackfillPerRun };
-
-/** จำนวนแถว 1H ต่อครั้งเมื่อกดปุ่ม backfill AI ใน Mini App (admin) */
-export const REVERSAL_KLINE_AI_MANUAL_BACKFILL_LIMIT = 3;
 
 const PREFERRED_SIDES = new Set<ReversalChartAiPreferredSide>(["Long", "Short", "Skip"]);
 const MARKET_CHARS = new Set<ReversalChartAiMarketCharacter>([
