@@ -101,6 +101,18 @@ function reversalKlineAiTimeoutMs(): number {
   return Number.isFinite(n) && n >= 3000 && n <= 90000 ? Math.floor(n) : 25_000;
 }
 
+/** gpt-5 / o-series use max_completion_tokens; older chat models use max_tokens. */
+function openAiChatTokenParams(
+  model: string,
+  limit: number,
+): { max_tokens: number } | { max_completion_tokens: number } {
+  const m = model.trim().toLowerCase();
+  if (/^gpt-5|^o[0-9]/.test(m)) {
+    return { max_completion_tokens: limit };
+  }
+  return { max_tokens: limit };
+}
+
 export function isReversalKlineAiEnabled(): boolean {
   const raw = process.env.CANDLE_REVERSAL_KLINE_AI_ENABLED?.trim().toLowerCase();
   if (raw === "0" || raw === "false" || raw === "off" || raw === "no") return false;
@@ -210,7 +222,7 @@ export async function analyzeReversalKlineWithOpenAi(
         model,
         messages: [{ role: "user", content: userContent }],
         temperature: 0.25,
-        max_tokens: 400,
+        ...openAiChatTokenParams(model, 400),
         response_format: { type: "json_object" },
       }),
       signal: controller.signal,

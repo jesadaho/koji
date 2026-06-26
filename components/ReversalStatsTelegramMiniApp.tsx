@@ -331,8 +331,6 @@ type ReversalStatsColumnGroup = "signal" | "bot" | "ai" | "result";
 
 const REVERSAL_STATS_COLLAPSED_GROUPS_KEY = "reversalStatsCollapsedGroups";
 
-const REVERSAL_STATS_COLUMN_GROUP_ORDER: ReversalStatsColumnGroup[] = ["signal", "bot", "ai", "result"];
-
 function isReversalStatsColumnGroup(value: unknown): value is ReversalStatsColumnGroup {
   return value === "signal" || value === "bot" || value === "ai" || value === "result";
 }
@@ -769,6 +767,12 @@ function ReversalStatsSection({
     columnGroupSpans,
     showAiColumns,
   );
+  useEffect(() => {
+    if (emptyColSpan > 0) return;
+    const cleared = new Set<ReversalStatsColumnGroup>();
+    setCollapsedGroups(cleared);
+    persistReversalStatsCollapsedGroups(cleared);
+  }, [emptyColSpan]);
   const followUpAdverseTitle =
     adverseTitle ??
     (showLowRank
