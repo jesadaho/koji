@@ -219,13 +219,13 @@ export function reversalMatrixFilterTitle(
     return `Strong Trend: ${REVERSAL_STRONG_TREND_MATRIX_CRITERIA} — เทรนด์หลักแข็งแรงมาก`;
   }
   if (filter === "parabolic") {
-    return `Parabolic: ${REVERSAL_PARABOLIC_MATRIX_CRITERIA} — เทรนด์พาราโบลิก วิ่งแรงเกินปกติ`;
+    return `Parabolic: ${REVERSAL_PARABOLIC_MATRIX_CRITERIA} — เทรนด์พาราโบลิก · ทิศแนะนำ Short (priority)`;
   }
   if (filter === "meanReversion") {
     return `Mean Reversion: ${REVERSAL_MEAN_REVERSION_MATRIX_CRITERIA} — ลงแรง มีโอกาสเด้งกลับ`;
   }
   if (filter === "weakTrend") {
-    return `Weak Trend: ${REVERSAL_WEAK_TREND_MATRIX_CRITERIA} — เทรนด์อ่อน แท่งเล็ก EMA 1h ยังไม่แรง`;
+    return `Weak Trend: ${REVERSAL_WEAK_TREND_MATRIX_CRITERIA} — เทรนด์อ่อน · ทิศแนะนำ Short (priority)`;
   }
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
@@ -747,8 +747,37 @@ export function reversalRowIsLongCandidate(row: ReversalLongCandidateRowSlice): 
   return reversalLong1hStatsFilterPass(row);
 }
 
+/** Weak Trend / Parabolic — ทิศแนะนำ Short มี priority กว่า Long candidate */
+export function reversalShortPriorityMatrixPass(row: ReversalLongCandidateRowSlice): boolean {
+  return reversalWeakTrendPass(row) || reversalParabolicPass(row);
+}
+
+export function reversalShortPriorityMatrixLabel(row: ReversalLongCandidateRowSlice): string | null {
+  if (reversalWeakTrendPass(row)) return `Weak Trend: ${REVERSAL_WEAK_TREND_MATRIX_CRITERIA}`;
+  if (reversalParabolicPass(row)) return `Parabolic: ${REVERSAL_PARABOLIC_MATRIX_CRITERIA}`;
+  return null;
+}
+
+export const REVERSAL_SHORT_PRIORITY_MATRIX_CRITERIA = `Weak Trend (${REVERSAL_WEAK_TREND_MATRIX_CRITERIA}) หรือ Parabolic (${REVERSAL_PARABOLIC_MATRIX_CRITERIA})`;
+
 export function reversalSuggestedTradeSide(row: ReversalLongCandidateRowSlice): CandleReversalTradeSide {
+  if (reversalShortPriorityMatrixPass(row)) return "short";
   return reversalRowIsLongCandidate(row) ? "long" : "short";
+}
+
+export function reversalRowIsSuggestedLong(row: ReversalLongCandidateRowSlice): boolean {
+  return reversalSuggestedTradeSide(row) === "long";
+}
+
+export function reversalSuggestedTradeSideTitle(row: ReversalLongCandidateRowSlice): string {
+  const shortPriority = reversalShortPriorityMatrixLabel(row);
+  if (shortPriority) {
+    return `ทิศแนะนำ Short (priority) — ${shortPriority}`;
+  }
+  if (reversalRowIsLongCandidate(row)) {
+    return `Long candidate — ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
+  }
+  return `แนะนำ Short — ${reversalLongCandidateDebugTitle(row)}`;
 }
 
 export function reversalSuggestedTradeSideLabel(row: ReversalLongCandidateRowSlice): string {
@@ -783,9 +812,9 @@ export function reversalSuggestedSideFilterLabel(filter: ReversalSuggestedSideFi
 export function reversalSuggestedSideFilterTitle(filter: ReversalSuggestedSideFilter): string {
   if (filter === "all") return "ไม่กรองทิศแนะนำ";
   if (filter === "long") {
-    return `ทิศแนะนำ Long — ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
+    return `ทิศแนะนำ Long — ${REVERSAL_LONG_CANDIDATE_CRITERIA} (ไม่รวม ${REVERSAL_SHORT_PRIORITY_MATRIX_CRITERIA})`;
   }
-  return `ทิศแนะนำ Short — ไม่ผ่าน ${REVERSAL_LONG_CANDIDATE_CRITERIA}`;
+  return `ทิศแนะนำ Short — ไม่ผ่าน Long candidate หรือ priority ${REVERSAL_SHORT_PRIORITY_MATRIX_CRITERIA}`;
 }
 
 export function reversalRowMatchesSuggestedSideFilter(

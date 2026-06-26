@@ -35,7 +35,7 @@ import {
   reversalStatsStrategyProfitResolvedForHorizon,
   type ReversalLongStrategyProfitRowSlice,
 } from "@/lib/reversalTpStrategy";
-import { reversalRowIsLongCandidate } from "@/lib/reversalMatrixFilters";
+import { reversalRowIsSuggestedLong } from "@/lib/reversalMatrixFilters";
 import { reversalStatsPlayModeLabel } from "@/lib/reversalStatsPlayMode";
 import {
   reversalStatsPriceDiffFromPrevLabel,
@@ -261,10 +261,10 @@ function candleReversalStatsRowToCsvCells(
       { maxDrawdownPct: r.maxDrawdownPct, followUpMaxAdversePct: r.followUpMaxAdversePct },
       reversalStatsStrategyProfitResolvedForHorizon,
     ),
-    reversalRowIsLongCandidate(r)
+    reversalRowIsSuggestedLong(r)
       ? reversalLongStrategyProfitCsvCell(r, sizing, STATS_STRATEGY_PROFIT_HOLD_24H)
       : "",
-    reversalRowIsLongCandidate(r)
+    reversalRowIsSuggestedLong(r)
       ? reversalLongStrategyProfitCsvCell(r, sizing, STATS_STRATEGY_PROFIT_HOLD_48H)
       : "",
     candleReversalOutcomeLabel(r.outcome),

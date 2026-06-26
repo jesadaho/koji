@@ -23,7 +23,7 @@ import {
   type ReversalTpStrategySimOptions,
   simulateReversalTpStrategyProfit,
 } from "@/lib/reversalTpStrategy";
-import { reversalLong1hStatsFilterPass } from "@/lib/reversalMatrixFilters";
+import { reversalRowIsSuggestedLong } from "@/lib/reversalMatrixFilters";
 import { firstFollowUpKlineIndexAfterAnchorClose } from "@/lib/statsFollowUpAdverse";
 import {
   DEFAULT_STATS_TPSL_PLAN,
@@ -518,7 +518,7 @@ async function enrichReversalRowsStrategyProfit(
         }
       }
 
-      const isLongCandidate = reversalLong1hStatsFilterPass(row);
+      const isLongCandidate = reversalRowIsSuggestedLong(row);
       if (!isLongCandidate) {
         if (
           row.strategyProfitPctLong != null ||

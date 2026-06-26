@@ -16,7 +16,7 @@ import {
   reversalStatsLongHorizonPct,
   simulateReversalTpStrategyProfit,
 } from "@/lib/reversalTpStrategy";
-import { reversalLong1hStatsFilterPass, reversalRowMatchesNeutralMatrix } from "@/lib/reversalMatrixFilters";
+import { reversalRowIsSuggestedLong, reversalRowMatchesNeutralMatrix } from "@/lib/reversalMatrixFilters";
 import { reversalStatsRowIsObserve } from "@/lib/reversalStatsPlayMode";
 import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
@@ -443,7 +443,7 @@ function applyReversal1hStrategyProfitAtHorizon(
     };
   }
 
-  if (!reversalLong1hStatsFilterPass(row)) return;
+  if (!reversalRowIsSuggestedLong(row)) return;
   const simLong = simulateReversalTpStrategyProfit({
     side: "long",
     entry: row.entryPrice,
@@ -634,14 +634,14 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
     if (row.pct24h != null && row.strategyProfitPct24h == null) return true;
     if (row.pct48h != null && row.strategyProfitPct == null) return true;
     if (
-      reversalLong1hStatsFilterPass(row) &&
+      reversalRowIsSuggestedLong(row) &&
       row.pct24h != null &&
       row.strategyProfitPctLong24h == null
     ) {
       return true;
     }
     if (
-      reversalLong1hStatsFilterPass(row) &&
+      reversalRowIsSuggestedLong(row) &&
       row.pct48h != null &&
       row.strategyProfitPctLong == null
     ) {

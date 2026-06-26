@@ -167,7 +167,7 @@ import {
   reversalLongCandidateDebugTitle,
   reversalMatrixFilterLabel,
   reversalMatrixFilterTitle,
-  reversalRowIsLongCandidate,
+  reversalRowIsSuggestedLong,
   reversalRowMatchesSuggestedSideFilter,
   reversalStatsPlaySidesLabel,
   reversalStatsPlaySubtitle,
@@ -177,6 +177,7 @@ import {
   reversalSuggestedSideFilterLabel,
   reversalSuggestedSideFilterTitle,
   reversalSuggestedTradeSideLabel,
+  reversalSuggestedTradeSideTitle,
   type ReversalMatrixFilter,
   type ReversalQualitySignalProfile,
   type ReversalStatsPlaySides,
@@ -547,7 +548,7 @@ function ReversalStatsSection({
 
   const longCandidateRows = useMemo(
     () =>
-      showSuggestedSideColumn ? strategyProfitScopedRows.filter(reversalRowIsLongCandidate) : [],
+      showSuggestedSideColumn ? strategyProfitScopedRows.filter(reversalRowIsSuggestedLong) : [],
     [strategyProfitScopedRows, showSuggestedSideColumn],
   );
 
@@ -1019,13 +1020,7 @@ function ReversalStatsSection({
                     <PendingConflictBadge conflictWith={r.conflictWith} />
                   </td>
                   {showSuggestedSideColumn ? (
-                    <td
-                      title={
-                        reversalRowIsLongCandidate(r)
-                          ? `Long candidate — ${REVERSAL_LONG_CANDIDATE_CRITERIA}`
-                          : `แนะนำ Short — ${reversalLongCandidateDebugTitle(r)}`
-                      }
-                    >
+                    <td title={reversalSuggestedTradeSideTitle(r)}>
                       {reversalSuggestedTradeSideLabel(r)}
                     </td>
                   ) : null}
@@ -1147,7 +1142,7 @@ function ReversalStatsSection({
                       </td>
                       {showSuggestedSideColumn ? (
                         <td>
-                          {reversalRowIsLongCandidate(r) ? (
+                          {reversalRowIsSuggestedLong(r) ? (
                             <StatsStrategyProfitCell
                               holdHours={STATS_STRATEGY_PROFIT_HOLD_24H}
                               pct24h={r.pct24h}
@@ -1168,7 +1163,7 @@ function ReversalStatsSection({
                       ) : null}
                       {showSuggestedSideColumn ? (
                         <td>
-                          {reversalRowIsLongCandidate(r) ? (
+                          {reversalRowIsSuggestedLong(r) ? (
                             <StatsStrategyProfitCell
                               holdHours={STATS_STRATEGY_PROFIT_HOLD_48H}
                               pct24h={r.pct24h}
@@ -1631,7 +1626,7 @@ function ReversalStatsSection({
                 <>
                   {playingLongOnly ? (
                     <StatsWeekStrategyProfitBlock
-                      rows={g.rows.filter(reversalRowIsLongCandidate)}
+                      rows={g.rows.filter(reversalRowIsSuggestedLong)}
                       sizing={longStrategySizing}
                       band={STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND}
                       resolveProfit={reversalStatsStrategyProfitLongResolvedForHorizon}
@@ -1648,7 +1643,7 @@ function ReversalStatsSection({
                       />
                       {showSuggestedSideColumn ? (
                         <StatsWeekStrategyProfitBlock
-                          rows={g.rows.filter(reversalRowIsLongCandidate)}
+                          rows={g.rows.filter(reversalRowIsSuggestedLong)}
                           sizing={longStrategySizing}
                           band={STATS_STRATEGY_REVERSAL_WIN_LOSS_BAND}
                           resolveProfit={reversalStatsStrategyProfitLongResolvedForHorizon}

@@ -28,7 +28,7 @@ import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } f
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
 import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
-import { reversalMatchesQualitySignalForAlert, reversalAutoTradePlaySidesFromSettings, reversalRowIsLongCandidate } from "@/lib/reversalMatrixFilters";
+import { reversalMatchesQualitySignalForAlert, reversalAutoTradePlaySidesFromSettings, reversalSuggestedTradeSide } from "@/lib/reversalMatrixFilters";
 import {
   resolveReversalLongTradeLeverage,
   reversalLongDynamicLeverageNote,
@@ -663,7 +663,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
     const is1hShortAlert = alertTradeSide === "short" && input.signalBarTf === "1h";
     const isLongCandidate =
       is1hShortAlert &&
-      reversalRowIsLongCandidate({
+      reversalSuggestedTradeSide({
         trendGainPct: input.trendGainPct,
         signalVolVsSma: input.signalVolVsSma,
         barRangePctSignal: input.barRangePctSignal,
@@ -673,7 +673,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
         ema4hSlopePct7d: input.ema4hSlopePct7d,
         ageOfTrendHours: input.ageOfTrendHours,
-      });
+      }) === "long";
 
     if (
       playSides.long &&
