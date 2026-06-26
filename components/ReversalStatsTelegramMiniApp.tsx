@@ -439,6 +439,7 @@ function ReversalStatsSection({
   );
   const longPlanTitle = strategyPlanTitleLong ?? strategyPlanTitle;
   const longTpSlPlan = strategyTpSlPlanLong ?? strategyTpSlPlan;
+  const [sort, setSort] = useState<CandleReversalStatsSort>(CANDLE_REVERSAL_STATS_DEFAULT_SORT);
   const [shapeFilter, setShapeFilter] = useState<ReversalShapeFilter>("all");
   const [dayFilter, setDayFilter] = useState<ReversalDayFilter>("all");
   const [dowFilter, setDowFilter] = useState<ReversalDowFilter>("all");
