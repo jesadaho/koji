@@ -156,6 +156,17 @@ type ReversalAutoTradeApiBundle = {
   slEntryOffsetPct?: number | null;
   slAtEntryAfter24hIfGreenEnabled?: boolean;
   tp12hCloseEnabled?: boolean;
+  longTpSlEnabled?: boolean | null;
+  longTp1PricePct?: number | null;
+  longTp1PartialPct?: number | null;
+  longTp2PricePct?: number | null;
+  longMaxHoldHours?: number | null;
+  longHoldExtendIfRedEnabled?: boolean | null;
+  longHoldExtendRedHours?: number | null;
+  longSlArmRoiPct?: number | null;
+  longSlEntryOffsetPct?: number | null;
+  longSlAtEntryAfter24hIfGreenEnabled?: boolean | null;
+  longTp12hCloseEnabled?: boolean | null;
   statsPlayShortEnabled?: boolean;
   statsPlayLongEnabled?: boolean;
   /** @deprecated */
