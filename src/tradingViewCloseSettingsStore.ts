@@ -223,6 +223,8 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeLongSignalShortEnabled?: boolean;
   /** Long → SHORT: ปรับ leverage ตาม ATR%14D (ดู REVERSAL_LONG_DYNAMIC_LEVERAGE_CRITERIA_TH) */
   reversalAutoTradeLongDynamicLeverageEnabled?: boolean;
+  /** สัญญาณ Short → SHORT: ปรับ leverage ตาม Trend Gain + EMA20∠4h */
+  reversalAutoTradeShortDynamicLeverageEnabled?: boolean;
   /** @deprecated ใช้ shortEntry — เก็บ sync กับ short สำหรับ client เก่า */
   reversalAutoTradeEntryMode?: ReversalAutoTradeEntryMode;
   /** @deprecated ใช้ shortEntry */
@@ -434,6 +436,7 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeSaturdayAllSignalsEnabled?: boolean;
   reversalAutoTradeLongSignalShortEnabled?: boolean;
   reversalAutoTradeLongDynamicLeverageEnabled?: boolean;
+  reversalAutoTradeShortDynamicLeverageEnabled?: boolean;
   reversalAutoTradeEntryMode?: ReversalAutoTradeEntryMode | null;
   reversalAutoTradeEntryEmaPeriod?: number | null;
   reversalAutoTradeShortEntryMode?: ReversalAutoTradeEntryMode | null;
@@ -558,6 +561,7 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeSaturdayAllSignalsEnabled !== undefined ||
     input.reversalAutoTradeLongSignalShortEnabled !== undefined ||
     input.reversalAutoTradeLongDynamicLeverageEnabled !== undefined ||
+    input.reversalAutoTradeShortDynamicLeverageEnabled !== undefined ||
     input.reversalAutoTradeEntryMode !== undefined ||
     input.reversalAutoTradeEntryEmaPeriod !== undefined ||
     input.reversalAutoTradeShortEntryMode !== undefined ||
@@ -1117,6 +1121,11 @@ export async function saveTradingViewMexcSettings(
       input.reversalAutoTradeLongDynamicLeverageEnabled !== undefined
         ? input.reversalAutoTradeLongDynamicLeverageEnabled
         : prev?.reversalAutoTradeLongDynamicLeverageEnabled ?? false,
+
+    reversalAutoTradeShortDynamicLeverageEnabled:
+      input.reversalAutoTradeShortDynamicLeverageEnabled !== undefined
+        ? input.reversalAutoTradeShortDynamicLeverageEnabled
+        : prev?.reversalAutoTradeShortDynamicLeverageEnabled ?? false,
 
     reversalAutoTradeShortEntryMode:
       input.reversalAutoTradeShortEntryMode === null

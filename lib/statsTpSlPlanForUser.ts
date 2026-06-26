@@ -133,6 +133,8 @@ export type ViewerStatsTradeSizing = {
   leverage: number | null;
   /** Reversal Long → SHORT: ปรับ leverage ต่อแถวตาม ATR%14D (เหมือน auto-open) */
   reversalLongDynamicLeverageEnabled?: boolean;
+  /** Reversal Short → SHORT: ปรับ leverage ต่อแถวตาม Trend Gain + EMA20∠4h */
+  reversalShortDynamicLeverageEnabled?: boolean;
   /** ทิศที่เล่น — ตาราง Reversal Short 1H */
   reversalStatsPlaySides?: ReversalStatsPlaySides;
 };
@@ -156,6 +158,7 @@ export async function resolveViewerStatsTradeSizing(
       marginUsdt: positiveNum(row.reversalAutoTradeMarginUsdt),
       leverage: positiveNum(row.reversalAutoTradeLeverage),
       reversalLongDynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
+      reversalShortDynamicLeverageEnabled: row.reversalAutoTradeShortDynamicLeverageEnabled === true,
       reversalStatsPlaySides: reversalStatsPlaySidesFromSettings(row),
     };
   }

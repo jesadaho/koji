@@ -1093,6 +1093,7 @@ export async function liffGetCandleReversalStats(
   let viewerStrategyMarginUsdt: number | null | undefined;
   let viewerStrategyLeverage: number | null | undefined;
   let viewerStrategyLongDynamicLeverageEnabled: boolean | undefined;
+  let viewerStrategyShortDynamicLeverageEnabled: boolean | undefined;
   let viewerReversalTp12hCloseEnabled: boolean | undefined;
   let viewerReversalLongTp12hCloseEnabled: boolean | undefined;
   let viewerReversalStatsPlayShortEnabled: boolean | undefined;
@@ -1113,6 +1114,7 @@ export async function liffGetCandleReversalStats(
     viewerStrategyMarginUsdt = sizing.marginUsdt;
     viewerStrategyLeverage = sizing.leverage;
     viewerStrategyLongDynamicLeverageEnabled = sizing.reversalLongDynamicLeverageEnabled === true;
+    viewerStrategyShortDynamicLeverageEnabled = sizing.reversalShortDynamicLeverageEnabled === true;
     viewerReversalTp12hCloseEnabled = plans.short.reversalTp12hCloseEnabled !== false;
     viewerReversalLongTp12hCloseEnabled = plans.long.reversalTp12hCloseEnabled !== false;
     const playSides = sizing.reversalStatsPlaySides ?? { short: true, long: false };
@@ -1141,6 +1143,9 @@ export async function liffGetCandleReversalStats(
     ...(viewerStrategyLeverage != null ? { viewerStrategyLeverage } : {}),
     ...(viewerStrategyLongDynamicLeverageEnabled
       ? { viewerStrategyLongDynamicLeverageEnabled: true }
+      : {}),
+    ...(viewerStrategyShortDynamicLeverageEnabled
+      ? { viewerStrategyShortDynamicLeverageEnabled: true }
       : {}),
     ...(viewerReversalTp12hCloseEnabled === false
       ? { viewerReversalTp12hCloseEnabled: false }
@@ -1416,6 +1421,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     saturdayAllSignalsEnabled: row.reversalAutoTradeSaturdayAllSignalsEnabled ?? false,
     longSignalShortEnabled: row.reversalAutoTradeLongSignalShortEnabled ?? false,
     longDynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
+    shortDynamicLeverageEnabled: row.reversalAutoTradeShortDynamicLeverageEnabled === true,
     ...(() => {
       const shortEntry = reversalEntrySettingsFromRow(row, "short");
       const longEntry = reversalEntrySettingsFromRow(row, "long");
@@ -2013,6 +2019,17 @@ function parseReversalAutoTradeNested(
     longDynamicLeverageEnabled = true;
   }
 
+  let shortDynamicLeverageEnabled = false;
+  if (typeof o.shortDynamicLeverageEnabled === "boolean") {
+    shortDynamicLeverageEnabled = o.shortDynamicLeverageEnabled;
+  } else if (
+    o.shortDynamicLeverageEnabled === "1" ||
+    o.shortDynamicLeverageEnabled === 1 ||
+    o.shortDynamicLeverageEnabled === "true"
+  ) {
+    shortDynamicLeverageEnabled = true;
+  }
+
   const numOrEmpty = (
     key: string
   ): { v: number | null | undefined; err?: string } => {
@@ -2219,6 +2236,7 @@ function parseReversalAutoTradeNested(
     reversalAutoTradeSaturdayAllSignalsEnabled: saturdayAllSignalsEnabled,
     reversalAutoTradeLongSignalShortEnabled: longSignalShortEnabled,
     reversalAutoTradeLongDynamicLeverageEnabled: longDynamicLeverageEnabled,
+    reversalAutoTradeShortDynamicLeverageEnabled: shortDynamicLeverageEnabled,
   };
   if (tpSlEnabled !== undefined) patchPart.reversalAutoTradeTpSlEnabled = tpSlEnabled;
   if (holdExtendIfRedEnabled !== undefined) {

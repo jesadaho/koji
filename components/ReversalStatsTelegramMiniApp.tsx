@@ -364,6 +364,7 @@ type ReversalStatsSectionProps = {
   strategyMarginUsdt?: number | null;
   strategyLeverage?: number | null;
   strategyLongDynamicLeverageEnabled?: boolean;
+  strategyShortDynamicLeverageEnabled?: boolean;
   strategyTpSlPlan?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
   strategyTpSlPlanLong?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
   /** เกณฑ์ ✨ Quality Signal ในตารางนี้ (ค่าเริ่มต้น = Short) */
@@ -396,6 +397,7 @@ function ReversalStatsSection({
   strategyMarginUsdt,
   strategyLeverage,
   strategyLongDynamicLeverageEnabled = false,
+  strategyShortDynamicLeverageEnabled = false,
   strategyTpSlPlan,
   strategyTpSlPlanLong,
   outcomeColumnTitle,
@@ -404,34 +406,46 @@ function ReversalStatsSection({
   embedded = false,
 }: ReversalStatsSectionProps) {
   const resolveRowLeverage = useCallback(
-    (row: Pick<CandleReversalStatsRow, "tradeSide" | "atrPct14d">) =>
+    (row: Pick<CandleReversalStatsRow, "tradeSide" | "atrPct14d" | "trendGainPct" | "ema20_4hSlopePct7d" | "ema4hSlopePct7d">) =>
       resolveReversalStatsRowLeverage({
         tradeSide: row.tradeSide ?? "short",
         baseLeverage: strategyLeverage,
-        dynamicLeverageEnabled: strategyLongDynamicLeverageEnabled,
+        longDynamicLeverageEnabled: strategyLongDynamicLeverageEnabled,
+        shortDynamicLeverageEnabled: strategyShortDynamicLeverageEnabled,
         atrPct14d: row.atrPct14d,
+        trendGainPct: row.trendGainPct,
+        ema20_4hSlopePct7d: row.ema20_4hSlopePct7d,
+        ema4hSlopePct7d: row.ema4hSlopePct7d,
       }),
-    [strategyLeverage, strategyLongDynamicLeverageEnabled],
+    [strategyLeverage, strategyLongDynamicLeverageEnabled, strategyShortDynamicLeverageEnabled],
   );
   const resolveLongRowLeverage = useCallback(
     (row: Pick<CandleReversalStatsRow, "atrPct14d">) =>
       resolveReversalStatsRowLeverage({
         tradeSide: "long",
         baseLeverage: strategyLeverage,
-        dynamicLeverageEnabled: strategyLongDynamicLeverageEnabled,
+        longDynamicLeverageEnabled: strategyLongDynamicLeverageEnabled,
+        shortDynamicLeverageEnabled: strategyShortDynamicLeverageEnabled,
         atrPct14d: row.atrPct14d,
       }),
-    [strategyLeverage, strategyLongDynamicLeverageEnabled],
+    [strategyLeverage, strategyLongDynamicLeverageEnabled, strategyShortDynamicLeverageEnabled],
   );
   const strategySizing = useMemo(
     () => ({
       marginUsdt: strategyMarginUsdt,
       leverage: strategyLeverage,
-      leverageForRow: strategyLongDynamicLeverageEnabled
-        ? (row: StatsStrategyProfitRowSlice) => resolveRowLeverage(row as CandleReversalStatsRow)
-        : undefined,
+      leverageForRow:
+        strategyLongDynamicLeverageEnabled || strategyShortDynamicLeverageEnabled
+          ? (row: StatsStrategyProfitRowSlice) => resolveRowLeverage(row as CandleReversalStatsRow)
+          : undefined,
     }),
-    [strategyMarginUsdt, strategyLeverage, strategyLongDynamicLeverageEnabled, resolveRowLeverage],
+    [
+      strategyMarginUsdt,
+      strategyLeverage,
+      strategyLongDynamicLeverageEnabled,
+      strategyShortDynamicLeverageEnabled,
+      resolveRowLeverage,
+    ],
   );
   const longStrategySizing = useMemo(
     () => ({
@@ -2145,6 +2159,7 @@ export default function ReversalStatsTelegramMiniApp() {
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
+          strategyShortDynamicLeverageEnabled={payload?.viewerStrategyShortDynamicLeverageEnabled}
           strategyTpSlPlan={payload?.viewerTpSlPlan}
           strategyTpSlPlanLong={payload?.viewerTpSlPlanLong ?? payload?.viewerTpSlPlan}
           emptyHint="ยังไม่มีแถว 1H Short — รอสัญญาณ Reversal ส่งสำเร็จ (CANDLE_REVERSAL_1H_ALERTS_ENABLED)"
@@ -2174,6 +2189,7 @@ export default function ReversalStatsTelegramMiniApp() {
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
+          strategyShortDynamicLeverageEnabled={payload?.viewerStrategyShortDynamicLeverageEnabled}
           strategyTpSlPlan={payload?.viewerTpSlPlan}
           strategyTpSlPlanLong={payload?.viewerTpSlPlanLong ?? payload?.viewerTpSlPlan}
           emptyHint="ยังไม่มีแถว Long 1H — รอสัญญาณ Reversal Long ส่งสำเร็จ (CANDLE_REVERSAL_1H_LONG_ALERTS_ENABLED)"

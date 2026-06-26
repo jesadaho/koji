@@ -9,6 +9,7 @@ import {
   SNOWBALL_SHORT_SIGNAL_CRITERIA,
 } from "@/lib/snowballMatrixFilters";
 import { REVERSAL_LONG_DYNAMIC_LEVERAGE_CRITERIA_TH } from "@/lib/reversalLongDynamicLeverage";
+import { REVERSAL_SHORT_DYNAMIC_LEVERAGE_CRITERIA_TH } from "@/lib/reversalShortDynamicLeverage";
 import { SNOWBALL_LONG_DYNAMIC_BOOST_CRITERIA_TH } from "@/lib/snowballLongDynamicBoost";
 import {
   REVERSAL_QUALITY_SIGNAL_CRITERIA,
@@ -175,6 +176,7 @@ type ReversalAutoTradeApiBundle = {
   saturdayAllSignalsEnabled?: boolean;
   longSignalShortEnabled?: boolean;
   longDynamicLeverageEnabled?: boolean;
+  shortDynamicLeverageEnabled?: boolean;
   /** legacy = short */
   entryMode?: "hybrid_ema" | "market";
   entryEmaPeriod?: number | null;
@@ -293,6 +295,7 @@ export default function SettingsTelegramMiniApp() {
   const [revSaturdayAllSignals, setRevSaturdayAllSignals] = useState(false);
   const [revLongSignalShort, setRevLongSignalShort] = useState(false);
   const [revLongDynamicLeverage, setRevLongDynamicLeverage] = useState(false);
+  const [revShortDynamicLeverage, setRevShortDynamicLeverage] = useState(false);
   const [revShortEntryMode, setRevShortEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
   const [revShortEntryEmaPeriod, setRevShortEntryEmaPeriod] = useState("20");
   const [revLongEntryMode, setRevLongEntryMode] = useState<"hybrid_ema" | "market">("market");
@@ -500,6 +503,7 @@ export default function SettingsTelegramMiniApp() {
     setRevSaturdayAllSignals(Boolean(st.saturdayAllSignalsEnabled));
     setRevLongSignalShort(Boolean(st.longSignalShortEnabled));
     setRevLongDynamicLeverage(Boolean(st.longDynamicLeverageEnabled));
+    setRevShortDynamicLeverage(Boolean(st.shortDynamicLeverageEnabled));
     const shortMode = st.shortEntryMode ?? st.entryMode;
     const longMode = st.longEntryMode ?? st.entryMode;
     setRevShortEntryMode(shortMode === "market" ? "market" : "hybrid_ema");
@@ -1203,6 +1207,7 @@ export default function SettingsTelegramMiniApp() {
         enabled: revEnabled,
         longSignalShortEnabled: revLongSignalShort,
         longDynamicLeverageEnabled: revLongDynamicLeverage,
+        shortDynamicLeverageEnabled: revShortDynamicLeverage,
         gateQualitySignal: revGateQualitySignal,
         saturdayAllSignalsEnabled: revSaturdayAllSignals,
         marginUsdt: revMargin.trim() ? marginParsed : null,
@@ -2214,6 +2219,21 @@ export default function SettingsTelegramMiniApp() {
             Limit ที่ยังไม่ fill จะถูกยกเลิกอัตโนมัติหลัง 8 ชม. และปลดล็อก 1 order/วันเพื่อเปิดซ้ำได้
           </p>
         ) : null}
+
+        <label className="sub tmaCheckboxField" style={{ marginTop: "0.75rem" }}>
+          <input
+            type="checkbox"
+            checked={revShortDynamicLeverage}
+            onChange={(e) => setRevShortDynamicLeverage(e.target.checked)}
+            disabled={!revEnabled}
+          />
+          <span className="tmaCheckboxField__text">
+            <strong style={{ fontWeight: 600 }}>Dynamic leverage (Short → SHORT)</strong>
+            <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
+              {REVERSAL_SHORT_DYNAMIC_LEVERAGE_CRITERIA_TH} — ใช้ Trend Gain + EMA20∠4h ณ เวลาแจ้ง · จำนวนไม้ = อ้างอิงพอร์ต (ยังไม่ enforce)
+            </span>
+          </span>
+        </label>
 
         <p className="sub" style={{ marginTop: "1rem", fontWeight: 600 }}>
           Entry — สัญญาณ Long (fade SHORT)

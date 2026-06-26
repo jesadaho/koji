@@ -37,6 +37,10 @@ import {
   resolveReversalLongTradeLeverage,
   reversalLongDynamicLeverageNote,
 } from "@/lib/reversalLongDynamicLeverage";
+import {
+  resolveReversalShortTradeLeverage,
+  reversalShortDynamicLeverageNote,
+} from "@/lib/reversalShortDynamicLeverage";
 import { bkkIsSaturdayNow } from "./snowballAutoTradeStateStore";
 import {
   REVERSAL_ENTRY_EMA_PERIOD_DEFAULT,
@@ -709,24 +713,56 @@ export async function runReversalAutoTradeAfterReversalAlert(
     }
 
     const baseLev = Math.floor(baseLeverage);
-    const leveragePick = resolveReversalLongTradeLeverage({
-      alertTradeSide: openMexcLong ? "long" : alertTradeSide,
-      baseLeverage: baseLev,
-      dynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
-      atrPct14d: input.atrPct14d,
-    });
-    const leverage = leveragePick.leverage;
-    const leverageDynamicNote = reversalLongDynamicLeverageNote(leveragePick, baseLev);
-    const leverageLogExtra = {
-      leverageBase: baseLev,
-      ...(leveragePick.dynamicApplied
-        ? {
-            dynamicLeverageApplied: true,
-            dynamicLeverageTier: leveragePick.tier ?? undefined,
-            atrPct14d: leveragePick.atrPct14d ?? undefined,
-          }
-        : {}),
-    };
+    let leverage: number;
+    let leverageDynamicNote: string | null = null;
+    let leverageLogExtra: {
+      leverageBase: number;
+      dynamicLeverageApplied?: boolean;
+      dynamicLeverageTier?: string;
+      atrPct14d?: number;
+      trendGainPct?: number;
+      ema4hSlopePct7d?: number;
+      dynamicLeverageMaxSlots?: number;
+    } = { leverageBase: baseLev };
+
+    if (openMexcLong || alertTradeSide === "long") {
+      const leveragePick = resolveReversalLongTradeLeverage({
+        alertTradeSide: "long",
+        baseLeverage: baseLev,
+        dynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
+        atrPct14d: input.atrPct14d,
+      });
+      leverage = leveragePick.leverage;
+      leverageDynamicNote = reversalLongDynamicLeverageNote(leveragePick, baseLev);
+      if (leveragePick.dynamicApplied) {
+        leverageLogExtra = {
+          ...leverageLogExtra,
+          dynamicLeverageApplied: true,
+          dynamicLeverageTier: leveragePick.tier ?? undefined,
+          atrPct14d: leveragePick.atrPct14d ?? undefined,
+        };
+      }
+    } else {
+      const shortPick = resolveReversalShortTradeLeverage({
+        baseLeverage: baseLev,
+        dynamicLeverageEnabled: row.reversalAutoTradeShortDynamicLeverageEnabled === true,
+        trendGainPct: input.trendGainPct,
+        ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
+        ema4hSlopePct7d: input.ema4hSlopePct7d,
+      });
+      leverage = shortPick.leverage;
+      leverageDynamicNote = reversalShortDynamicLeverageNote(shortPick, baseLev);
+      if (shortPick.dynamicApplied) {
+        leverageLogExtra = {
+          ...leverageLogExtra,
+          dynamicLeverageApplied: true,
+          dynamicLeverageTier: shortPick.tier ?? undefined,
+          trendGainPct: shortPick.trendGainPct ?? undefined,
+          ema4hSlopePct7d: shortPick.ema4hSlopePct7d ?? undefined,
+          dynamicLeverageMaxSlots: shortPick.maxSlots ?? undefined,
+        };
+      }
+    }
 
     let entryRes: EntryResolve;
     if (openMexcLong) {

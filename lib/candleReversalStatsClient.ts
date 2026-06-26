@@ -187,6 +187,8 @@ export type CandleReversalStatsApiPayload = {
   viewerStrategyLeverage?: number | null;
   /** เปิดใน Settings → Dynamic leverage (Long → SHORT) */
   viewerStrategyLongDynamicLeverageEnabled?: boolean;
+  /** เปิดใน Settings → Dynamic leverage (Short → SHORT) */
+  viewerStrategyShortDynamicLeverageEnabled?: boolean;
   /** เปิดกฎปิด @12h ในกลยุทธ์ Reversal (default เปิด) */
   viewerReversalTp12hCloseEnabled?: boolean;
   /** ทิศที่เล่น — ตาราง Reversal Short 1H */
