@@ -19,7 +19,7 @@ import {
 import { patchCandleReversalStatsAiAnalysis } from "./candleReversalStatsStore";
 
 type OpenAiChatResponse = {
-  choices?: { message?: { content?: string } }[];
+  choices?: { message?: { content?: string }; finish_reason?: string }[];
   error?: { message?: string };
 };
 
@@ -101,6 +101,15 @@ function reversalKlineAiTimeoutMs(): number {
   return Number.isFinite(n) && n >= 3000 && n <= 90000 ? Math.floor(n) : 25_000;
 }
 
+function reversalKlineAiCompletionTokenLimit(model: string): number {
+  const n = Number(process.env.CANDLE_REVERSAL_KLINE_AI_MAX_COMPLETION_TOKENS?.trim());
+  if (Number.isFinite(n) && n >= 256 && n <= 100_000) return Math.floor(n);
+  const m = model.trim().toLowerCase();
+  // Reasoning models burn tokens internally before visible JSON output.
+  if (/^gpt-5|^o[0-9]/.test(m)) return 8_000;
+  return 400;
+}
+
 /** gpt-5 / o-series use max_completion_tokens; older chat models use max_tokens. */
 function openAiChatTokenParams(
   model: string,
@@ -161,28 +170,63 @@ function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length;
 }
 
+function extractJsonText(raw: string): string {
+  const trimmed = raw.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]?.trim()) return fenced[1].trim();
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
+  return trimmed;
+}
+
+function normalizePreferredSide(raw: string): ReversalChartAiPreferredSide | null {
+  const t = raw.trim();
+  const lower = t.toLowerCase();
+  if (lower === "long") return "Long";
+  if (lower === "short") return "Short";
+  if (lower === "skip") return "Skip";
+  return PREFERRED_SIDES.has(t as ReversalChartAiPreferredSide)
+    ? (t as ReversalChartAiPreferredSide)
+    : null;
+}
+
+function normalizeMarketCharacter(raw: string): ReversalChartAiMarketCharacter | null {
+  const t = raw.trim();
+  for (const v of MARKET_CHARS) {
+    if (t.toLowerCase() === v.toLowerCase()) return v;
+  }
+  return null;
+}
+
+function normalizeExpectedPath(raw: string): ReversalChartAiExpectedPath | null {
+  const t = raw.trim();
+  for (const v of EXPECTED_PATHS) {
+    if (t.toLowerCase() === v.toLowerCase()) return v;
+  }
+  return null;
+}
+
 function parseAnalysisJson(raw: string): ReversalChartAiAnalysis | null {
   let parsed: unknown;
   try {
-    const cleaned = raw.replace(/```[\s\S]*?```/g, "").trim();
-    parsed = JSON.parse(cleaned);
+    parsed = JSON.parse(extractJsonText(raw));
   } catch {
     return null;
   }
   if (!parsed || typeof parsed !== "object") return null;
   const o = parsed as Record<string, unknown>;
 
-  const preferredRaw = String(o.preferred_side ?? "").trim();
-  if (!PREFERRED_SIDES.has(preferredRaw as ReversalChartAiPreferredSide)) return null;
+  const preferred_side = normalizePreferredSide(String(o.preferred_side ?? ""));
+  if (!preferred_side) return null;
 
   const confidence = clampInt(Number(o.confidence), 0, 100);
-  let preferred_side = preferredRaw as ReversalChartAiPreferredSide;
-  if (confidence < 55) preferred_side = "Skip";
+  let resolvedSide = preferred_side;
+  if (confidence < 55) resolvedSide = "Skip";
 
-  const marketRaw = String(o.market_character ?? "").trim();
-  const pathRaw = String(o.expected_path ?? "").trim();
-  if (!MARKET_CHARS.has(marketRaw as ReversalChartAiMarketCharacter)) return null;
-  if (!EXPECTED_PATHS.has(pathRaw as ReversalChartAiExpectedPath)) return null;
+  const market_character = normalizeMarketCharacter(String(o.market_character ?? ""));
+  const expected_path = normalizeExpectedPath(String(o.expected_path ?? ""));
+  if (!market_character || !expected_path) return null;
 
   let reason = String(o.reason ?? "").trim();
   if (!reason) return null;
@@ -195,13 +239,13 @@ function parseAnalysisJson(raw: string): ReversalChartAiAnalysis | null {
   if (!Number.isFinite(maxPullback) || maxPullback < 0) return null;
 
   return {
-    preferred_side,
+    preferred_side: resolvedSide,
     confidence,
     trend_strength: clampInt(Number(o.trend_strength), 1, 10),
     exhaustion_risk: clampInt(Number(o.exhaustion_risk), 1, 10),
     distribution_risk: clampInt(Number(o.distribution_risk), 1, 10),
-    market_character: marketRaw as ReversalChartAiMarketCharacter,
-    expected_path: pathRaw as ReversalChartAiExpectedPath,
+    market_character,
+    expected_path,
     expected_max_pullback_pct: Math.round(maxPullback * 100) / 100,
     reason,
   };
@@ -231,7 +275,7 @@ export async function analyzeReversalKlineWithOpenAi(
         model,
         messages: [{ role: "user", content: userContent }],
         ...openAiChatTemperatureParam(model, 0.25),
-        ...openAiChatTokenParams(model, 400),
+        ...openAiChatTokenParams(model, reversalKlineAiCompletionTokenLimit(model)),
         response_format: { type: "json_object" },
       }),
       signal: controller.signal,
@@ -250,10 +294,22 @@ export async function analyzeReversalKlineWithOpenAi(
     }
 
     const data = JSON.parse(rawText) as OpenAiChatResponse;
-    const content = data?.choices?.[0]?.message?.content ?? "";
+    const choice = data?.choices?.[0];
+    const content = choice?.message?.content ?? "";
     const analysis = parseAnalysisJson(content);
     if (!analysis) {
-      return { ok: false, error: `invalid openai JSON (model ${model})` };
+      const finish = choice?.finish_reason;
+      if (!content.trim()) {
+        return {
+          ok: false,
+          error: `openai empty content (model ${model}${finish ? `, finish=${finish}` : ""}) — token budget too low?`,
+        };
+      }
+      const preview = content.trim().slice(0, 180).replace(/\s+/g, " ");
+      return {
+        ok: false,
+        error: `invalid openai JSON (model ${model}${finish ? `, finish=${finish}` : ""}): ${preview}`,
+      };
     }
     return { ok: true, analysis };
   } catch (e) {
