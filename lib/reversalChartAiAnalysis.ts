@@ -33,6 +33,18 @@ export function reversalChartAiPreferredSideLabel(
   return "—";
 }
 
+export function reversalChartAiSideCellTitle(row: {
+  chartAiAnalysisError?: string | null;
+  chartAiPreferredSide?: ReversalChartAiPreferredSide | null;
+  chartAiReason?: string | null;
+}): string {
+  const err = row.chartAiAnalysisError?.trim();
+  if (err) return err;
+  const reason = row.chartAiReason?.trim();
+  if (reason) return reason;
+  return reversalChartAiPreferredSideLabel(row.chartAiPreferredSide);
+}
+
 export function reversalChartAiMarketCharacterLabel(
   v: ReversalChartAiMarketCharacter | null | undefined,
 ): string {
@@ -85,5 +97,5 @@ export function reversalChartAiMarketCharacterShortLabel(
   return "—";
 }
 
-/** คอลัมน์ AI ในตาราง Reversal 1H */
-export const REVERSAL_CHART_AI_TABLE_COLUMN_COUNT = 10;
+/** คอลัมน์ AI ในตาราง Reversal 1H (AI Why อยู่ใน tooltip ของ AI Side) */
+export const REVERSAL_CHART_AI_TABLE_COLUMN_COUNT = 9;

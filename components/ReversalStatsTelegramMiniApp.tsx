@@ -32,6 +32,7 @@ import {
   reversalChartAiPreferredSideLabel,
   reversalChartAiPullbackLabel,
   reversalChartAiScoreLabel,
+  reversalChartAiSideCellTitle,
 } from "@/lib/reversalChartAiAnalysis";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
@@ -1119,7 +1120,7 @@ function ReversalStatsSection({
             ) : null}
             {showAiCols ? (
               <>
-                <th scope="col" title="AI preferred side (24–48h)">
+                <th scope="col" title="AI preferred side (24–48h) · hover ดู AI Why">
                   AI Side
                 </th>
                 <SortTh
@@ -1146,9 +1147,6 @@ function ReversalStatsSection({
                 </th>
                 <th scope="col" title="AI expected max pullback %">
                   Pull%
-                </th>
-                <th scope="col" title="AI reason (สั้น)">
-                  AI Why
                 </th>
                 <th scope="col" title="AI analysis schema version">
                   AIv
@@ -1374,12 +1372,7 @@ function ReversalStatsSection({
                   ) : null}
                   {showAiCols ? (
                     <>
-                      <td
-                        title={
-                          r.chartAiAnalysisError?.trim() ||
-                          reversalChartAiPreferredSideLabel(r.chartAiPreferredSide)
-                        }
-                      >
+                      <td title={reversalChartAiSideCellTitle(r)}>
                         {r.chartAiAnalysisV
                           ? reversalChartAiPreferredSideLabel(r.chartAiPreferredSide)
                           : r.chartAiAnalysisError
@@ -1397,13 +1390,6 @@ function ReversalStatsSection({
                         {reversalChartAiExpectedPathShortLabel(r.chartAiExpectedPath)}
                       </td>
                       <td>{reversalChartAiPullbackLabel(r.chartAiExpectedMaxPullbackPct)}</td>
-                      <td title={r.chartAiReason ?? undefined}>
-                        {r.chartAiReason
-                          ? r.chartAiReason.length > 28
-                            ? `${r.chartAiReason.slice(0, 28)}…`
-                            : r.chartAiReason
-                          : "—"}
-                      </td>
                       <td title={r.chartAiAnalyzedAtIso ?? undefined}>
                         {r.chartAiAnalysisV != null ? String(r.chartAiAnalysisV) : "—"}
                       </td>
