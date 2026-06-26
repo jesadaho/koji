@@ -4,7 +4,9 @@ import type {
 } from "@/lib/candleReversalStatsClient";
 import {
   REVERSAL_NEUTRAL_MATRIX_CRITERIA,
+  REVERSAL_WEAK_TREND_MATRIX_CRITERIA,
   reversalRowMatchesNeutralMatrix,
+  reversalWeakTrendPass,
 } from "@/lib/reversalMatrixFilters";
 
 export type ReversalStatsPlayMode = "play" | "observe";
@@ -15,7 +17,7 @@ export type ReversalObserveReason = "r_bar_range" | "neutral_matrix" | "lower_wi
 /** R% สัญญาณ — ต่ำกว่านี้ = Observe (1H Short) */
 export const REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX = 3;
 
-export const REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA = `R% สัญญาณ < ${REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX}% (1H Short)`;
+export const REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA = `R% สัญญาณ < ${REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX}% (1H Short) · ไม่ใช่ Weak Trend (${REVERSAL_WEAK_TREND_MATRIX_CRITERIA})`;
 
 export const REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA =
   "ไส้ล่าง > ไส้บน (Short → Observe Long / hammer)";
@@ -39,6 +41,27 @@ export function reversalShort1hIsObserveSignal(input: {
   if ((input.tradeSide ?? "short") !== "short") return false;
   const r = input.barRangePctSignal;
   return r != null && Number.isFinite(r) && r >= 0 && r < REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX;
+}
+
+export function reversalShort1hRBarRangeObserveIsObserveSignal(input: {
+  signalBarTf?: CandleReversalSignalBarTf | null;
+  tradeSide?: CandleReversalTradeSide | null;
+  barRangePctSignal?: number | null;
+  ema20_1hSlopePct7d?: number | null;
+}): boolean {
+  if (
+    !reversalShort1hIsObserveSignal({
+      signalBarTf: input.signalBarTf,
+      tradeSide: input.tradeSide,
+      barRangePctSignal: input.barRangePctSignal,
+    })
+  ) {
+    return false;
+  }
+  return !reversalWeakTrendPass({
+    barRangePctSignal: input.barRangePctSignal,
+    ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
+  });
 }
 
 /** Short ที่ไส้ล่างยาวกว่าไส้บน → observe ฝั่ง Long (hammer / rejection ล่าง) */
@@ -77,6 +100,7 @@ export function reversalIsObserveSignal(input: {
   signalBarTf?: CandleReversalSignalBarTf | null;
   tradeSide?: CandleReversalTradeSide | null;
   barRangePctSignal?: number | null;
+  ema20_1hSlopePct7d?: number | null;
   trendGainPct?: number | null;
   ema20_4hSlopePct7d?: number | null;
   ema4hSlopePct7d?: number | null;
@@ -97,10 +121,11 @@ export function reversalIsObserveSignal(input: {
     return true;
   }
   if (
-    reversalShort1hIsObserveSignal({
+    reversalShort1hRBarRangeObserveIsObserveSignal({
       signalBarTf: input.signalBarTf,
       tradeSide: input.tradeSide,
       barRangePctSignal: input.barRangePctSignal,
+      ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
     })
   ) {
     return true;
@@ -117,6 +142,7 @@ export function reversalResolveObserveReason(input: {
   signalBarTf?: CandleReversalSignalBarTf | null;
   tradeSide?: CandleReversalTradeSide | null;
   barRangePctSignal?: number | null;
+  ema20_1hSlopePct7d?: number | null;
   trendGainPct?: number | null;
   ema20_4hSlopePct7d?: number | null;
   ema4hSlopePct7d?: number | null;
@@ -138,10 +164,11 @@ export function reversalResolveObserveReason(input: {
     return "lower_wick_long";
   }
   if (
-    reversalShort1hIsObserveSignal({
+    reversalShort1hRBarRangeObserveIsObserveSignal({
       signalBarTf: input.signalBarTf,
       tradeSide: input.tradeSide,
       barRangePctSignal: input.barRangePctSignal,
+      ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
     })
   ) {
     return "r_bar_range";
@@ -163,6 +190,7 @@ export function reversalStatsObserveBadgeTitle(row: {
   signalBarTf?: CandleReversalSignalBarTf | null;
   tradeSide?: CandleReversalTradeSide | null;
   barRangePctSignal?: number | null;
+  ema20_1hSlopePct7d?: number | null;
   trendGainPct?: number | null;
   ema20_4hSlopePct7d?: number | null;
   ema4hSlopePct7d?: number | null;
@@ -194,6 +222,7 @@ export function reversalStatsPlayModeLabel(row: {
   signalBarTf?: CandleReversalSignalBarTf | null;
   tradeSide?: CandleReversalTradeSide | null;
   barRangePctSignal?: number | null;
+  ema20_1hSlopePct7d?: number | null;
   trendGainPct?: number | null;
   ema20_4hSlopePct7d?: number | null;
   ema4hSlopePct7d?: number | null;
