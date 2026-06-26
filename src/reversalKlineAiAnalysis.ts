@@ -448,9 +448,10 @@ export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowIn
   return true;
 }
 
-/** Fire-and-forget after stats append — 1H signals only. */
+/** Fire-and-forget after stats append — 1H Short signals only. */
 export function maybeRunReversalKlineAiAnalysis(input: RunReversalKlineAiForRowInput): void {
   if (!isReversalKlineAiEnabled()) return;
+  if (!reversalKlineAiRowNeedsBackfill(input.row)) return;
   void runReversalKlineAiForRow(input).catch((e) => {
     console.error("[reversalKlineAi] run failed", input.row.symbol, input.row.id, e);
   });
@@ -465,11 +466,19 @@ export type ReversalKlineAiBackfillSummary = {
   errors: string[];
 };
 
+/** แถวที่ควรรัน / นับ AI backfill — เฉพาะ Reversal 1H Short (ตาราง 1H Short) */
+export function reversalKlineAiRowNeedsBackfill(
+  row: Pick<CandleReversalStatsRow, "signalBarTf" | "tradeSide" | "chartAiAnalysisV">,
+): boolean {
+  return (
+    (row.signalBarTf ?? "1d") === "1h" &&
+    (row.tradeSide ?? "short") === "short" &&
+    row.chartAiAnalysisV !== REVERSAL_CHART_AI_ANALYSIS_VERSION
+  );
+}
+
 function countReversalKlineAiPending(rows: CandleReversalStatsRow[]): number {
-  return rows.filter(
-    (r) =>
-      r.signalBarTf === "1h" && r.chartAiAnalysisV !== REVERSAL_CHART_AI_ANALYSIS_VERSION,
-  ).length;
+  return rows.filter(reversalKlineAiRowNeedsBackfill).length;
 }
 
 export async function backfillReversalKlineAiAnalysis(
@@ -494,10 +503,7 @@ export async function backfillReversalKlineAiAnalysis(
 
   const cap = opts?.limit ?? reversalKlineAiBackfillPerRun();
   const needsAi = rows
-    .filter(
-      (r) =>
-        r.signalBarTf === "1h" && r.chartAiAnalysisV !== REVERSAL_CHART_AI_ANALYSIS_VERSION,
-    )
+    .filter(reversalKlineAiRowNeedsBackfill)
     .sort((a, b) => b.alertedAtMs - a.alertedAtMs);
 
   let attempted = 0;

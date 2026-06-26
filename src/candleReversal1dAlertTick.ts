@@ -760,7 +760,7 @@ async function notifyResults(
           if (appended) {
             scanStats.observeStored += 1;
             pushReversalScanSymList(scanStats.observeStoredSymbols, row.symbol);
-            if (sig.tf === "1h") {
+            if (sig.tf === "1h" && tradeSide === "short") {
               maybeRunReversalKlineAiAnalysis({ row: appended });
             }
           }
@@ -794,7 +794,7 @@ async function notifyResults(
       const ok = await sendPublicReversalFeedToSparkGroup(msg);
       if (ok && isCandleReversalStatsEnabled()) {
         const appended = await appendCandleReversalStatsRow(statsAppendInput);
-        if (appended && sig.tf === "1h") {
+        if (appended && sig.tf === "1h" && tradeSide === "short") {
           maybeRunReversalKlineAiAnalysis({ row: appended, mexcContract });
         }
       }
