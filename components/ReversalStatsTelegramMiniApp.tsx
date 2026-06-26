@@ -39,6 +39,7 @@ import {
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
+import { statsOpenInterestUsdtLabel } from "@/lib/statsOpenInterest";
 import {
   pumpCycleAgeHoursLabel,
   pumpCycleSwingLowSourceLabel,
@@ -724,7 +725,7 @@ function ReversalStatsSection({
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const columnGroupSpans = useMemo(() => {
     const signal = 9 + (showSuggestedSideColumn ? 1 : 0) + 11 + extraRankCols;
-    const bot = 20;
+    const bot = 21;
     const ai = showAiColumns ? REVERSAL_CHART_AI_TABLE_COLUMN_COUNT : 0;
     const result =
       3 +
@@ -1031,6 +1032,13 @@ function ReversalStatsSection({
               label="Mcap"
               sortKey="mcap"
               title="Market cap USD (CoinGecko) ณ เวลาแจ้ง"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="OI"
+              sortKey="openInterest"
+              title="Open Interest USDT (Binance perp · sumOpenInterestValue) ณ เวลาแจ้ง · backfill ~30 วัน"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -1358,6 +1366,7 @@ function ReversalStatsSection({
                   <td>{pumpCycleSwingLowSourceLabel(r.swingLowSource)}</td>
                   <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
+                  <td title="Open Interest USDT (Binance)">{statsOpenInterestUsdtLabel(r.openInterestUsdt)}</td>
                   <td title="EMA20 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema20_1hSlopePct7d)}</td>
                   <td title="(close − EMA20) / EMA20 × 100 บน 1h">{candleReversalPriceVsEma20_1hLabel(r.priceVsEma20_1hPct)}</td>
                   <td title="EMA20 4h slope 7d">{candleReversalEma20_4hSlopeLabel(r.ema20_4hSlopePct7d)}</td>

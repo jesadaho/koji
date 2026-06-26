@@ -9,6 +9,7 @@ import { fetchStatsQuoteVol24hUsdt } from "./statsQuoteVol24h";
 import { fetchStatsEma20MetricsAtMs } from "./statsEma20Dist";
 import { fetchBtcEmaSlopesAtMs, fetchSymbolEmaSlopesAtMs } from "./statsEmaSlope";
 import { fetchSymbolPsar4hAtMs } from "./statsPsar4h";
+import { fetchStatsOpenInterestAtMs } from "./statsOpenInterest";
 
 const mcapCache = new Map<string, { atMs: number; mcap: number | null }>();
 const MCAP_CACHE_MS = 15 * 60 * 1000;
@@ -33,6 +34,8 @@ async function fetchMarketCapUsdCached(base: string): Promise<number | null> {
 export type ReversalAlertMarketSnapshot = {
   quoteVol24hUsdt: number | null;
   marketCapUsd: number | null;
+  openInterestUsdt: number | null;
+  openInterestContracts: number | null;
   /** EMA(12) 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
   ema1hSlopePct7d: number | null;
   /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
@@ -70,9 +73,11 @@ export async function fetchReversalAlertMarketSnapshot(
 ): Promise<ReversalAlertMarketSnapshot> {
   const sym = binanceSymbol.trim().toUpperCase();
   const base = binanceUsdtPerpBase(sym);
-  const [quoteVol24hUsdt, marketCapUsd, symbolEma, atrPct14d, atrPct4h, btcEma, psar4h, ema20Dist] = await Promise.all([
+  const [quoteVol24hUsdt, marketCapUsd, openInterest, symbolEma, atrPct14d, atrPct4h, btcEma, psar4h, ema20Dist] =
+    await Promise.all([
     fetchStatsQuoteVol24hUsdt(sym),
     base ? fetchMarketCapUsdCached(base) : Promise.resolve(null),
+    fetchStatsOpenInterestAtMs(sym, atMs),
     fetchSymbolEmaSlopesAtMs(sym, atMs),
     fetchSymbolAtrPct14d(sym),
     fetchSymbolAtrPct4hAtMs(sym, atMs),
@@ -83,6 +88,8 @@ export async function fetchReversalAlertMarketSnapshot(
   return {
     quoteVol24hUsdt,
     marketCapUsd,
+    openInterestUsdt: openInterest?.valueUsdt ?? null,
+    openInterestContracts: openInterest?.contracts ?? null,
     ema1hSlopePct7d: symbolEma.ema1hSlopePct7d,
     ema4hSlopePct7d: symbolEma.ema4hSlopePct7d,
     ema1dSlopePct7d: symbolEma.ema1dSlopePct7d,

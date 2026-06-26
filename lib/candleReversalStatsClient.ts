@@ -48,6 +48,12 @@ export type CandleReversalStatsRow = {
   quoteVol24hV?: number;
   /** Market cap USD (CoinGecko) ณ เวลาแจ้ง */
   marketCapUsd?: number | null;
+  /** Open interest USDT (Binance sumOpenInterestValue) ณ เวลาแจ้ง */
+  openInterestUsdt?: number | null;
+  /** Open interest สัญญา (Binance sumOpenInterest) ณ เวลาแจ้ง */
+  openInterestContracts?: number | null;
+  /** version 1 = ดึงแล้ว · หรือข้ามถาวรถ้าแจ้งเกิน ~30 วัน */
+  openInterestV?: number;
   /** EMA(12) 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
   ema1hSlopePct7d?: number | null;
   /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
@@ -345,6 +351,7 @@ export type CandleReversalStatsSortKey =
   | "swingLowSource"
   | "vol24"
   | "mcap"
+  | "openInterest"
   | "ema1h"
   | "ema20_1hDist"
   | "ema20_4h"
@@ -481,6 +488,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.quoteVol24hUsdt, b.quoteVol24hUsdt);
     case "mcap":
       return cmpNumNullLast(a.marketCapUsd, b.marketCapUsd);
+    case "openInterest":
+      return cmpNumNullLast(a.openInterestUsdt, b.openInterestUsdt);
     case "ema1h":
       return cmpNumNullLast(a.ema20_1hSlopePct7d, b.ema20_1hSlopePct7d);
     case "ema20_1hDist":

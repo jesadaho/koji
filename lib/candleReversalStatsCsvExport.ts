@@ -47,6 +47,7 @@ import {
   snowballStatsMarketCapUsdLabel,
   snowballStatsQuoteVol24hLabel,
 } from "@/lib/snowballStatsClient";
+import { statsOpenInterestUsdtLabel } from "@/lib/statsOpenInterest";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
@@ -95,6 +96,7 @@ const HEADERS = [
   "Swing Low Source",
   "Vol 24h",
   "Mcap",
+  "OI (USDT)",
   "EMA20 1h slope 7d %",
   "EMA20 1h dist %",
   "EMA20 4h slope 7d %",
@@ -224,6 +226,7 @@ function candleReversalStatsRowToCsvCells(
     pumpCycleSwingLowSourceCsvCell(r.swingLowSource),
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
+    statsOpenInterestUsdtLabel(r.openInterestUsdt),
     candleReversalEmaSlopeCsvLabel(r.ema20_1hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.priceVsEma20_1hPct),
     candleReversalEmaSlopeCsvLabel(r.ema20_4hSlopePct7d),

@@ -20,6 +20,7 @@ import {
   type ReversalSignalKlineAiPayload,
 } from "./reversalSignalKlinePayload";
 import { patchCandleReversalStatsAiAnalysis } from "./candleReversalStatsStore";
+import { fetchStatsOpenInterestAtMs } from "./statsOpenInterest";
 
 type OpenAiChatResponse = {
   choices?: { message?: { content?: string }; finish_reason?: string }[];
@@ -52,7 +53,7 @@ Focus on:
 - Trend continuation vs exhaustion
 - Distribution / Accumulation
 - Risk of adverse move before the expected direction
-- Signal context metrics (Trend Gain, Velocity, EMA20 4H Slope, ATR4H, Funding, Vol×SMA)
+- Signal context metrics (Trend Gain, Velocity, EMA20 4H Slope, ATR4H, Vol×SMA, Funding rate %, Open Interest USDT/contracts, BTC EMA20 4H slope 7d %, BTC EMA 1d slope 7d %)
 
 Do NOT explain basic candlestick patterns.
 
@@ -422,11 +423,16 @@ export type RunReversalKlineAiForRowInput = {
     | "entryPrice"
     | "retestPrice"
     | "slPrice"
+    | "alertedAtMs"
     | "trendGainPct"
     | "ageOfTrendHours"
     | "ema20_4hSlopePct7d"
     | "atrPct4h"
     | "signalVolVsSma"
+    | "openInterestUsdt"
+    | "openInterestContracts"
+    | "btcEma20_4hSlopePct7d"
+    | "btcEma1dSlopePct7d"
   >;
   mexcContract?: string | null;
   fundingRatePct?: number | null;
@@ -449,6 +455,20 @@ export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowIn
     fundingRatePct = fr;
   }
 
+  let openInterestUsdt = input.row.openInterestUsdt ?? null;
+  let openInterestContracts = input.row.openInterestContracts ?? null;
+  if (
+    (openInterestUsdt == null || openInterestContracts == null) &&
+    Number.isFinite(input.row.alertedAtMs) &&
+    input.row.alertedAtMs > 0
+  ) {
+    const oi = await fetchStatsOpenInterestAtMs(input.row.symbol, input.row.alertedAtMs);
+    if (oi) {
+      if (openInterestUsdt == null && oi.valueUsdt != null) openInterestUsdt = oi.valueUsdt;
+      if (openInterestContracts == null && oi.contracts != null) openInterestContracts = oi.contracts;
+    }
+  }
+
   const payload = buildReversalSignalKlineAiPayload({
     symbol: input.row.symbol,
     tradeSide: input.row.tradeSide,
@@ -467,6 +487,10 @@ export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowIn
       atrPct4h: input.row.atrPct4h,
       fundingRate: fundingRatePct != null ? fundingRatePct / 100 : null,
       signalVolVsSma: input.row.signalVolVsSma,
+      openInterestUsdt,
+      openInterestContracts,
+      btcEma20_4hSlopePct7d: input.row.btcEma20_4hSlopePct7d,
+      btcEma1dSlopePct7d: input.row.btcEma1dSlopePct7d,
     },
   });
 
