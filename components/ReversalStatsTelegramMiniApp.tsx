@@ -17,7 +17,7 @@ import {
 import { useStatsMonthFilter } from "@/lib/useStatsMonthFilter";
 import { groupRowsByBkkWeek, statsRowAlertedAtMs } from "@/lib/autoOpenWeekGroup";
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
-import { excludeObserveStatsRows, reversalStatsObserveBadgeTitle, reversalStatsRowIsObserve } from "@/lib/reversalStatsPlayMode";
+import { formatTelegramMiniAppFetchError } from "@/lib/telegramMiniAppFetchError";
 import {
   reversalStatsPriceDiffFromPrevLabel,
   reversalStatsWeeklyAlertNoLabel,
@@ -2078,14 +2078,19 @@ export default function ReversalStatsTelegramMiniApp() {
   const api = useCallback(async (path: string, init?: RequestInit) => {
     const initData = getTelegramInitData();
     const url = `${apiBase}/api/tma${path}`;
-    const res = await fetch(url, {
-      ...init,
-      headers: {
-        Accept: "application/json",
-        ...(initData ? { Authorization: `tma ${initData}` } : {}),
-        ...(init?.headers ?? {}),
-      },
-    });
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...init,
+        headers: {
+          Accept: "application/json",
+          ...(initData ? { Authorization: `tma ${initData}` } : {}),
+          ...(init?.headers ?? {}),
+        },
+      });
+    } catch (e) {
+      throw new Error(formatTelegramMiniAppFetchError(e, `เรียก ${path}`));
+    }
     const text = await res.text();
     let parsed: unknown = null;
     try {
@@ -2097,8 +2102,8 @@ export default function ReversalStatsTelegramMiniApp() {
       const msg =
         parsed && typeof parsed === "object" && parsed !== null && "error" in parsed
           ? String((parsed as { error: unknown }).error)
-          : res.statusText;
-      throw new Error(msg);
+          : res.statusText || `HTTP ${res.status}`;
+      throw new Error(formatTelegramMiniAppFetchError(new Error(msg), `เรียก ${path}`));
     }
     return parsed as CandleReversalStatsApiPayload;
   }, []);
@@ -2124,11 +2129,11 @@ export default function ReversalStatsTelegramMiniApp() {
         setStatsCachedAtMs(Date.now());
         setStatsRefreshError(null);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = formatTelegramMiniAppFetchError(e);
         if (mode === "background" || mode === "force") {
           setStatsRefreshError(msg);
         } else {
-          throw e;
+          throw new Error(msg);
         }
       } finally {
         if (mode !== "default") setStatsRefreshing(false);
@@ -2268,7 +2273,12 @@ export default function ReversalStatsTelegramMiniApp() {
 
       try {
         const configUrl = `${apiBase}/api/tma/config`;
-        const res = await fetch(configUrl);
+        let res: Response;
+        try {
+          res = await fetch(configUrl);
+        } catch (e) {
+          throw new Error(formatTelegramMiniAppFetchError(e, "เรียก /config"));
+        }
         const cfg = (await res.json()) as { botTokenConfigured?: boolean };
         if (!cfg.botTokenConfigured) {
           if (!cancelled) {
@@ -2282,7 +2292,7 @@ export default function ReversalStatsTelegramMiniApp() {
       } catch (e) {
         if (!cancelled) {
           setSetupBody(
-            <p>โหลดสถิติ Reversal ไม่สำเร็จ: {e instanceof Error ? e.message : String(e)}</p>,
+            <p>{formatTelegramMiniAppFetchError(e, "โหลดสถิติ Reversal ไม่สำเร็จ")}</p>,
           );
           setPhase("setup");
         }
