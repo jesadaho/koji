@@ -7,6 +7,11 @@ import { statsEmaSlopePctLabel } from "@/lib/statsEmaSlope";
 import { reversalBarRangePctSignalResolved } from "@/lib/statsBarRangePct";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
+import type {
+  ReversalChartAiExpectedPath,
+  ReversalChartAiMarketCharacter,
+  ReversalChartAiPreferredSide,
+} from "@/lib/reversalChartAiAnalysis";
 
 export type CandleReversalSignalBarTf = "1d" | "1h";
 
@@ -169,6 +174,20 @@ export type CandleReversalStatsRow = {
   isTradFiV?: number;
   /** ฝั่งตรงข้ามที่เคย conflict (บันทึกตอนแจ้ง) — แสดง badge ถาวร */
   conflictWith?: string | null;
+  /** AI kline analysis — preferred side 24–48h */
+  chartAiPreferredSide?: ReversalChartAiPreferredSide | null;
+  chartAiConfidence?: number | null;
+  chartAiTrendStrength?: number | null;
+  chartAiExhaustionRisk?: number | null;
+  chartAiDistributionRisk?: number | null;
+  chartAiMarketCharacter?: ReversalChartAiMarketCharacter | null;
+  chartAiExpectedPath?: ReversalChartAiExpectedPath | null;
+  chartAiExpectedMaxPullbackPct?: number | null;
+  chartAiReason?: string | null;
+  chartAiAnalyzedAtIso?: string | null;
+  /** 1 = kline AI analysis stored */
+  chartAiAnalysisV?: number;
+  chartAiAnalysisError?: string | null;
 };
 
 export type CandleReversalStatsApiPayload = {

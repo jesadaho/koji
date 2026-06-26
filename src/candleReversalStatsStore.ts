@@ -31,6 +31,12 @@ import {
   backfillReversalStatsWeeklyAlertFields,
   computeReversalStatsWeeklyAlertFields,
 } from "@/lib/reversalStatsWeeklyAlert";
+import {
+  REVERSAL_CHART_AI_ANALYSIS_VERSION,
+  type ReversalChartAiExpectedPath,
+  type ReversalChartAiMarketCharacter,
+  type ReversalChartAiPreferredSide,
+} from "@/lib/reversalChartAiAnalysis";
 
 export type { CandleReversalStatsApiPayload, CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
 export { backfillReversalStatsWeeklyAlertFields } from "@/lib/reversalStatsWeeklyAlert";
@@ -117,6 +123,41 @@ function normalizeObserveReason(raw: string | undefined): ReversalObserveReason 
   return undefined;
 }
 
+function normalizeChartAiPreferredSide(
+  raw: string | undefined,
+): ReversalChartAiPreferredSide | null {
+  if (raw === "Long" || raw === "Short" || raw === "Skip") return raw;
+  return null;
+}
+
+function normalizeChartAiMarketCharacter(
+  raw: string | undefined,
+): ReversalChartAiMarketCharacter | null {
+  if (raw === "Trend" || raw === "Range" || raw === "Distribution" || raw === "Accumulation") {
+    return raw;
+  }
+  return null;
+}
+
+function normalizeChartAiExpectedPath(raw: string | undefined): ReversalChartAiExpectedPath | null {
+  if (
+    raw === "Trend Continue" ||
+    raw === "Pullback then Continue" ||
+    raw === "Sideway" ||
+    raw === "Reversal"
+  ) {
+    return raw;
+  }
+  return null;
+}
+
+function normalizeChartAiInt(v: number | null | undefined, min: number, max: number): number | null {
+  if (v == null || !Number.isFinite(v)) return null;
+  const n = Math.round(v);
+  if (n < min || n > max) return null;
+  return n;
+}
+
 function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleReversalStatsRow {
   const statsPlayMode = normalizeStatsPlayMode(r.statsPlayMode);
   const observeReason = normalizeObserveReason(r.observeReason);
@@ -201,6 +242,28 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     priceDiffFromPrevAlertPct: nullNum(r.priceDiffFromPrevAlertPct),
     isTradFi: r.isTradFi === true ? true : r.isTradFi === false ? false : null,
     isTradFiV: r.isTradFiV === 1 ? 1 : undefined,
+    chartAiPreferredSide: normalizeChartAiPreferredSide(r.chartAiPreferredSide ?? undefined),
+    chartAiConfidence: normalizeChartAiInt(r.chartAiConfidence, 0, 100),
+    chartAiTrendStrength: normalizeChartAiInt(r.chartAiTrendStrength, 1, 10),
+    chartAiExhaustionRisk: normalizeChartAiInt(r.chartAiExhaustionRisk, 1, 10),
+    chartAiDistributionRisk: normalizeChartAiInt(r.chartAiDistributionRisk, 1, 10),
+    chartAiMarketCharacter: normalizeChartAiMarketCharacter(r.chartAiMarketCharacter ?? undefined),
+    chartAiExpectedPath: normalizeChartAiExpectedPath(r.chartAiExpectedPath ?? undefined),
+    chartAiExpectedMaxPullbackPct: nullNum(r.chartAiExpectedMaxPullbackPct),
+    chartAiReason:
+      typeof r.chartAiReason === "string" && r.chartAiReason.trim() ? r.chartAiReason.trim() : null,
+    chartAiAnalyzedAtIso:
+      typeof r.chartAiAnalyzedAtIso === "string" && r.chartAiAnalyzedAtIso.trim()
+        ? r.chartAiAnalyzedAtIso.trim()
+        : null,
+    chartAiAnalysisV:
+      r.chartAiAnalysisV === REVERSAL_CHART_AI_ANALYSIS_VERSION
+        ? REVERSAL_CHART_AI_ANALYSIS_VERSION
+        : undefined,
+    chartAiAnalysisError:
+      typeof r.chartAiAnalysisError === "string" && r.chartAiAnalysisError.trim()
+        ? r.chartAiAnalysisError.trim()
+        : null,
   };
 }
 
@@ -645,6 +708,40 @@ export async function appendCandleReversalStatsRow(
   }
   await saveCandleReversalStatsState(state);
   return row;
+}
+
+export type CandleReversalStatsAiAnalysisPatch = Pick<
+  CandleReversalStatsRow,
+  | "chartAiPreferredSide"
+  | "chartAiConfidence"
+  | "chartAiTrendStrength"
+  | "chartAiExhaustionRisk"
+  | "chartAiDistributionRisk"
+  | "chartAiMarketCharacter"
+  | "chartAiExpectedPath"
+  | "chartAiExpectedMaxPullbackPct"
+  | "chartAiReason"
+  | "chartAiAnalyzedAtIso"
+  | "chartAiAnalysisV"
+  | "chartAiAnalysisError"
+>;
+
+export async function patchCandleReversalStatsAiAnalysis(
+  rowId: string,
+  patch: Partial<CandleReversalStatsAiAnalysisPatch>,
+): Promise<boolean> {
+  const state = await loadCandleReversalStatsState();
+  const idx = state.rows.findIndex((r) => r.id === rowId);
+  if (idx < 0) return false;
+
+  const prev = state.rows[idx]!;
+  const next: CandleReversalStatsRow = {
+    ...prev,
+    ...patch,
+  };
+  state.rows[idx] = normalizeCandleReversalStatsRow(next);
+  await saveCandleReversalStatsState(state);
+  return true;
 }
 
 const EMPTY_CANDLE_REVERSAL_STATS_STATE: CandleReversalStatsState = { rows: [] };

@@ -65,6 +65,7 @@ import { candleReversalSignalVolVsSmaAt } from "./candleReversalSignalVolVsSma";
 import { snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import { runReversalAutoTradeAfterReversalAlert } from "./reversalAutoTradeExecutor";
+import { maybeRunReversalKlineAiAnalysis } from "./reversalKlineAiAnalysis";
 
 function envFlagOn(key: string, defaultOn: boolean): boolean {
   const raw = process.env[key]?.trim().toLowerCase();
@@ -759,6 +760,9 @@ async function notifyResults(
           if (appended) {
             scanStats.observeStored += 1;
             pushReversalScanSymList(scanStats.observeStoredSymbols, row.symbol);
+            if (sig.tf === "1h") {
+              maybeRunReversalKlineAiAnalysis({ row: appended });
+            }
           }
         }
         continue;
@@ -789,7 +793,10 @@ async function notifyResults(
       });
       const ok = await sendPublicReversalFeedToSparkGroup(msg);
       if (ok && isCandleReversalStatsEnabled()) {
-        await appendCandleReversalStatsRow(statsAppendInput);
+        const appended = await appendCandleReversalStatsRow(statsAppendInput);
+        if (appended && sig.tf === "1h") {
+          maybeRunReversalKlineAiAnalysis({ row: appended, mexcContract });
+        }
       }
       if (ok) {
         notified++;

@@ -54,6 +54,7 @@ import {
   saveCandleReversalStatsState,
   type CandleReversalStatsRow,
 } from "./candleReversalStatsStore";
+import { backfillReversalKlineAiAnalysis } from "./reversalKlineAiAnalysis";
 
 const DAY_SEC = 24 * 3600;
 const HOUR_SEC = 3600;
@@ -896,6 +897,7 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += backfill1hOutcomeTo24h(state.rows);
   dirty += await backfillAllStatsRowsTradFiFlag(state.rows);
   dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
+  dirty += await backfillReversalKlineAiAnalysis(state.rows);
   if (opts?.forceLong1hFadeShort) {
     dirty += await refreshLong1hFadeShortFollowUp(state.rows, nowMs, nowSec);
   }
