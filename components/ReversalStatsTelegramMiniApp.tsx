@@ -717,7 +717,7 @@ function ReversalStatsSection({
   );
   const playingLongOnly = showSuggestedSideColumn && statsPlaySides.long && !statsPlaySides.short;
   const has48h = tf === "1h";
-  const showAiColumns = tf === "1h";
+  const showAiColumns = tf === "1h" && showSuggestedSideColumn;
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const columnGroupSpans = useMemo(() => {
     const signal = 9 + (showSuggestedSideColumn ? 1 : 0) + 11 + extraRankCols;
@@ -2199,8 +2199,9 @@ export default function ReversalStatsTelegramMiniApp() {
   const backfillAiStats = useCallback(async () => {
     if (
       !window.confirm(
-        "Backfill AI data สำหรับ Reversal 1H Short?\n\n" +
-          "• ทีละ 3 แถว Short ที่ยังไม่มี AI analysis (ใหม่สุดก่อน)\n" +
+        "Backfill AI สำหรับตาราง Reversal Short (แท็บ 1H Short)?\n\n" +
+          "• ทีละ 3 แถวที่ยังไม่มี AI analysis (ใหม่สุดก่อน)\n" +
+          "• ไม่รวมตาราง Long 1H (fade SHORT)\n" +
           "• เรียก OpenAI (gpt-5.5) — อาจใช้เวลาหลายสิบวินาที\n" +
           "• ต้องมี OPENAI_API_KEY และเปิด CANDLE_REVERSAL_KLINE_AI_ENABLED\n\n" +
           "กดซ้ำได้จนกว่า remaining จะเป็น 0",
@@ -2354,7 +2355,7 @@ export default function ReversalStatsTelegramMiniApp() {
             type="button"
             className="sparkStatsRefreshBtn"
             disabled={backfillAiBusy}
-            title="เรียก OpenAI วิเคราะห์ kline — ทีละ 3 แถว 1H Short ที่ยังไม่มี chartAi"
+            title="เรียก OpenAI วิเคราะห์ kline — ทีละ 3 แถว ตาราง Reversal Short (ไม่รวม Long 1H)"
             onClick={() => void backfillAiStats()}
           >
             {backfillAiBusy ? "กำลัง AI…" : "Backfill AI (3)"}
@@ -2451,8 +2452,8 @@ export default function ReversalStatsTelegramMiniApp() {
           tabIndex={activeTab === "1h-short" ? 0 : -1}
           onClick={() => setActiveTab("1h-short")}
         >
-          <span>1H Short</span>
-          <span className="tmaTabEn">{hourShortRows.length} แถว</span>
+          <span>Reversal Short</span>
+          <span className="tmaTabEn">1H · {hourShortRows.length} แถว</span>
         </button>
         <button
           type="button"
@@ -2464,8 +2465,8 @@ export default function ReversalStatsTelegramMiniApp() {
           tabIndex={activeTab === "1h-long" ? 0 : -1}
           onClick={() => setActiveTab("1h-long")}
         >
-          <span>Long 1H</span>
-          <span className="tmaTabEn">fade SHORT · {hourLongRows.length}</span>
+          <span>Reversal Long</span>
+          <span className="tmaTabEn">1H fade SHORT · {hourLongRows.length}</span>
         </button>
       </div>
 

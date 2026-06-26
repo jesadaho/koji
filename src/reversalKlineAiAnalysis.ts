@@ -448,7 +448,7 @@ export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowIn
   return true;
 }
 
-/** Fire-and-forget after stats append — 1H Short signals only. */
+/** Fire-and-forget after stats append — ตาราง Reversal Short เท่านั้น */
 export function maybeRunReversalKlineAiAnalysis(input: RunReversalKlineAiForRowInput): void {
   if (!isReversalKlineAiEnabled()) return;
   if (!reversalKlineAiRowNeedsBackfill(input.row)) return;
@@ -466,7 +466,7 @@ export type ReversalKlineAiBackfillSummary = {
   errors: string[];
 };
 
-/** แถวที่ควรรัน / นับ AI backfill — เฉพาะ Reversal 1H Short (ตาราง 1H Short) */
+/** แถวที่ควรรัน / นับ AI backfill — ตาราง Reversal Short (1H, tradeSide short) · ไม่รวม Reversal Long */
 export function reversalKlineAiRowNeedsBackfill(
   row: Pick<CandleReversalStatsRow, "signalBarTf" | "tradeSide" | "chartAiAnalysisV">,
 ): boolean {
