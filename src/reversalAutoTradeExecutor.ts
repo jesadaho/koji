@@ -749,6 +749,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         trendGainPct: input.trendGainPct,
         ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
         ema4hSlopePct7d: input.ema4hSlopePct7d,
+        atrPct14d: input.atrPct14d,
       });
       leverage = shortPick.leverage;
       leverageDynamicNote = reversalShortDynamicLeverageNote(shortPick, baseLev);
@@ -759,6 +760,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           dynamicLeverageTier: shortPick.tier ?? undefined,
           trendGainPct: shortPick.trendGainPct ?? undefined,
           ema4hSlopePct7d: shortPick.ema4hSlopePct7d ?? undefined,
+          atrPct14d: shortPick.atrPct14d ?? undefined,
           dynamicLeverageMaxSlots: shortPick.maxSlots ?? undefined,
         };
       }

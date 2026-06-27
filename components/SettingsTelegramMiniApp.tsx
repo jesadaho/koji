@@ -2230,7 +2230,7 @@ export default function SettingsTelegramMiniApp() {
           <span className="tmaCheckboxField__text">
             <strong style={{ fontWeight: 600 }}>Dynamic leverage (Short → SHORT)</strong>
             <span style={{ display: "block", opacity: 0.9, fontSize: "0.93em", marginTop: "0.2rem" }}>
-              {REVERSAL_SHORT_DYNAMIC_LEVERAGE_CRITERIA_TH} — ใช้ Trend Gain + EMA20∠4h ณ เวลาแจ้ง · จำนวนไม้ = อ้างอิงพอร์ต (ยังไม่ enforce)
+              {REVERSAL_SHORT_DYNAMIC_LEVERAGE_CRITERIA_TH} — ใช้ Trend Gain + EMA20∠4h + ATR14D ณ เวลาแจ้ง · lev สุดท้าย = min(tier, ATR cap) · จำนวนไม้ = อ้างอิงพอร์ต (ยังไม่ enforce)
             </span>
           </span>
         </label>

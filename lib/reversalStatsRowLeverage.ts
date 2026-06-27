@@ -40,6 +40,7 @@ export function resolveReversalStatsRowLeverage(input: {
       trendGainPct: input.trendGainPct,
       ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
       ema4hSlopePct7d: input.ema4hSlopePct7d,
+      atrPct14d: input.atrPct14d,
     }).leverage;
   }
   return base;
