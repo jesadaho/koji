@@ -54,7 +54,9 @@ export type CandleReversalStatsRow = {
   openInterestUsdt?: number | null;
   /** Open interest สัญญา (Binance sumOpenInterest) ณ เวลาแจ้ง */
   openInterestContracts?: number | null;
-  /** version 1 = ดึงแล้ว · หรือข้ามถาวรถ้าแจ้งเกิน ~30 วัน */
+  /** OI % change vs 24h ก่อน alertedAt (USDT เป็นหลัก) */
+  openInterestChg24hPct?: number | null;
+  /** version 2 = ดึงแล้ว (+ Δ24h) · หรือข้ามถาวรถ้าแจ้งเกิน ~30 วัน */
   openInterestV?: number;
   /** EMA(12) 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
   ema1hSlopePct7d?: number | null;
@@ -82,6 +84,18 @@ export type CandleReversalStatsRow = {
   btcDomEma20_4hV?: number;
   /** 6 = EMA20 1h/4h slope+dist คำนวณ ณ alertedAtMs */
   ema20DistV?: number;
+  /** EMA20 15m — slope % ย้อนหลัง 7 วัน (672 แท่ง) ณ alertedAtMs */
+  ema20_15mSlopePct7d?: number | null;
+  /** (mark − EMA20) / EMA20 × 100 บน 15m ณ alertedAtMs */
+  priceVsEma20_15mPct?: number | null;
+  /** ราคา EMA20@15m ณ alertedAtMs (limit entry) */
+  entryEma20_15m?: number | null;
+  /** แตะ EMA20@15m ภายใน 8 ชม. · false = หมดอายุ limit · null = ยังรอ */
+  entryEma20_15mTouchedWithin8h?: boolean | null;
+  /** ms แตะครั้งแรก */
+  entryEma20_15mTouchedAtMs?: number | null;
+  /** 1 = EMA20@15m entry metrics คำนวณแล้ว */
+  entryEma20_15mV?: number;
   /** PSAR 4h — ทิศ SAR (up/down) */
   psar4hTrend?: "up" | "down" | null;
   /** PSAR 4h — (close − SAR) / close × 100 */
@@ -358,10 +372,14 @@ export type CandleReversalStatsSortKey =
   | "vol24"
   | "mcap"
   | "openInterest"
+  | "openInterestChg24h"
   | "ema1h"
   | "ema20_1hDist"
   | "ema20_4h"
   | "ema20_4hDist"
+  | "ema20_15m"
+  | "ema20_15mDist"
+  | "ema20_15mTouch"
   | "ema1d"
   | "btcEma4h"
   | "btcDomEma4h"
@@ -497,6 +515,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.marketCapUsd, b.marketCapUsd);
     case "openInterest":
       return cmpNumNullLast(a.openInterestUsdt, b.openInterestUsdt);
+    case "openInterestChg24h":
+      return cmpNumNullLast(a.openInterestChg24hPct, b.openInterestChg24hPct);
     case "ema1h":
       return cmpNumNullLast(a.ema20_1hSlopePct7d, b.ema20_1hSlopePct7d);
     case "ema20_1hDist":
@@ -505,6 +525,17 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.ema20_4hSlopePct7d, b.ema20_4hSlopePct7d);
     case "ema20_4hDist":
       return cmpNumNullLast(a.priceVsEma20_4hPct, b.priceVsEma20_4hPct);
+    case "ema20_15m":
+      return cmpNumNullLast(a.ema20_15mSlopePct7d, b.ema20_15mSlopePct7d);
+    case "ema20_15mDist":
+      return cmpNumNullLast(a.priceVsEma20_15mPct, b.priceVsEma20_15mPct);
+    case "ema20_15mTouch": {
+      const touchOrder = (v: boolean | null | undefined) =>
+        v === false ? 0 : v === null || v === undefined ? 1 : 2;
+      return (
+        touchOrder(a.entryEma20_15mTouchedWithin8h) - touchOrder(b.entryEma20_15mTouchedWithin8h)
+      );
+    }
     case "ema1d":
       return cmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
     case "btcEma4h":
@@ -617,6 +648,72 @@ export function candleReversalPriceVsEma20_4hLabel(
   pct: CandleReversalStatsRow["priceVsEma20_4hPct"],
 ): string {
   return statsEmaSlopePctLabel(pct);
+}
+
+export function candleReversalEma20_15mSlopeLabel(
+  pct: CandleReversalStatsRow["ema20_15mSlopePct7d"],
+): string {
+  return statsEmaSlopePctLabel(pct);
+}
+
+export function candleReversalPriceVsEma20_15mLabel(
+  pct: CandleReversalStatsRow["priceVsEma20_15mPct"],
+): string {
+  return statsEmaSlopePctLabel(pct);
+}
+
+/** ⏳ = ครบ 8 ชม. แล้วยังไม่แตะ EMA20@15m */
+export function candleReversalEntryEma20_15mTouchCell(
+  row: Pick<
+    CandleReversalStatsRow,
+    "entryEma20_15mTouchedWithin8h" | "entryEma20_15m" | "alertedAtMs"
+  >,
+  nowMs = Date.now(),
+): string {
+  if (row.entryEma20_15mTouchedWithin8h === true) return "—";
+  if (row.entryEma20_15mTouchedWithin8h === false) return "⏳";
+  if (
+    row.entryEma20_15m != null &&
+    Number.isFinite(row.alertedAtMs) &&
+    row.alertedAtMs > 0 &&
+    nowMs >= row.alertedAtMs + 8 * 3600 * 1000
+  ) {
+    return "⏳";
+  }
+  return "—";
+}
+
+export function candleReversalEntryEma20_15mTouchTitle(
+  row: Pick<
+    CandleReversalStatsRow,
+    | "entryEma20_15mTouchedWithin8h"
+    | "entryEma20_15mTouchedAtMs"
+    | "entryEma20_15m"
+    | "alertedAtMs"
+  >,
+): string {
+  if (row.entryEma20_15mTouchedWithin8h === true) {
+    if (row.entryEma20_15mTouchedAtMs != null && Number.isFinite(row.entryEma20_15mTouchedAtMs)) {
+      try {
+        const t = new Date(row.entryEma20_15mTouchedAtMs).toLocaleString("th-TH", {
+          timeZone: "Asia/Bangkok",
+          dateStyle: "short",
+          timeStyle: "short",
+        });
+        return `แตะ EMA20@15m แล้ว · ${t} (BKK)`;
+      } catch {
+        return "แตะ EMA20@15m แล้ว";
+      }
+    }
+    return "แตะ EMA20@15m แล้ว (market ณแจ้ง หรือ limit fill)";
+  }
+  if (row.entryEma20_15mTouchedWithin8h === false) {
+    return "ครบ 8 ชม. แล้วยังไม่แตะ EMA20@15m — limit หมดอายุ";
+  }
+  if (row.entryEma20_15m != null && Number.isFinite(row.alertedAtMs) && row.alertedAtMs > 0) {
+    return "รอราคาแตะ EMA20@15m ภายใน 8 ชม. หลังแจ้ง";
+  }
+  return "แตะ EMA20@15m ภายใน 8 ชม. (hybrid entry)";
 }
 
 export function candleReversalEma4hSlopeLabel(pct: CandleReversalStatsRow["ema4hSlopePct7d"]): string {

@@ -40,6 +40,7 @@ import {
 } from "./candleReversalSignalVolVsSma";
 import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
 import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
+import { backfillAllStatsRowsEma20_15mEntry } from "./statsEma20_15mEntry";
 import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
 import { backfillAllStatsRowsAtrPct4h } from "./statsAtrPct4h";
 import { backfillAllStatsRowsQuoteVol24h } from "./statsQuoteVol24h";
@@ -891,6 +892,11 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillReversalEmaSlopes(state.rows);
   dirty += await backfillAllStatsRowsBtcEmaSlopes(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsEma20Dist(state.rows, { maxRowsPerPass: 40, maxPasses: 10 });
+  dirty += await backfillAllStatsRowsEma20_15mEntry(state.rows, {
+    maxRowsPerPass: 25,
+    maxPasses: 10,
+    nowMs,
+  });
   dirty += await backfillAllStatsRowsPsar4h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsAtrPct4h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsQuoteVol24h(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });

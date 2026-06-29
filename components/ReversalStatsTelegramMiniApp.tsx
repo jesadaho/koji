@@ -42,7 +42,7 @@ import { STATS_MARKET_CAP_MANUAL_BACKFILL_LIMIT } from "@/lib/statsMarketCapUsd"
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
 import { statsLenPercentileLabel } from "@/lib/statsLenPercentile";
-import { statsOpenInterestUsdtLabel } from "@/lib/statsOpenInterest";
+import { statsOpenInterestChg24hPctLabel, statsOpenInterestUsdtLabel } from "@/lib/statsOpenInterest";
 import { statsBtcDomEma20_4hSlopeLabel } from "@/lib/statsBtcDominanceEma";
 import {
   pumpCycleAgeHoursLabel,
@@ -85,10 +85,14 @@ import {
   candleReversalDayOfWeekBkk,
   candleReversalEma1hSlopeLabel,
   candleReversalEma20_4hSlopeLabel,
+  candleReversalEma20_15mSlopeLabel,
   candleReversalEma4hSlopeLabel,
   candleReversalEma1dSlopeLabel,
+  candleReversalEntryEma20_15mTouchCell,
+  candleReversalEntryEma20_15mTouchTitle,
   candleReversalPriceVsEma20_1hLabel,
   candleReversalPriceVsEma20_4hLabel,
+  candleReversalPriceVsEma20_15mLabel,
   candleReversalGreenDaysLabel,
   candleReversalHorizonWinrateSummary,
   CANDLE_REVERSAL_MODEL_SHORT_LEGEND,
@@ -743,7 +747,7 @@ function ReversalStatsSection({
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const columnGroupSpans = useMemo(() => {
     const signal = 9 + (showSuggestedSideColumn ? 1 : 0) + 11 + extraRankCols;
-    const bot = 22;
+    const bot = 23 + (showSuggestedSideColumn ? 3 : 0);
     const ai = showAiColumns ? REVERSAL_CHART_AI_TABLE_COLUMN_COUNT : 0;
     const result =
       3 +
@@ -1061,6 +1065,13 @@ function ReversalStatsSection({
               onSort={onSortColumn}
             />
             <SortTh
+              label="OI Δ24h"
+              sortKey="openInterestChg24h"
+              title="OI % change vs 24h ก่อน alertedAt — (OI now − OI 24h ago) / OI 24h ago × 100 · USDT เป็นหลัก"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
               label="EMA20∠1h"
               sortKey="ema1h"
               title="EMA20 1h slope % ย้อนหลัง 7 วัน (168 แท่ง)"
@@ -1088,6 +1099,31 @@ function ReversalStatsSection({
               activeSort={sort}
               onSort={onSortColumn}
             />
+            {showSuggestedSideColumn ? (
+              <>
+                <SortTh
+                  label="EMA20∠15m"
+                  sortKey="ema20_15m"
+                  title="EMA20 15m slope % ย้อนหลัง 7 วัน (672 แท่ง)"
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+                <SortTh
+                  label="EMA20Δ15m"
+                  sortKey="ema20_15mDist"
+                  title="(mark − EMA20) / EMA20 × 100 บน 15m ณแจ้ง — hybrid entry"
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+                <SortTh
+                  label="EMA touch"
+                  sortKey="ema20_15mTouch"
+                  title="แตะ EMA20@15m ภายใน 8 ชม. · ⏳ = หมดอายุ limit"
+                  activeSort={sort}
+                  onSort={onSortColumn}
+                />
+              </>
+            ) : null}
             <SortTh
               label="EMA1d∠7d"
               sortKey="ema1d"
@@ -1392,10 +1428,22 @@ function ReversalStatsSection({
                   <td>{snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt)}</td>
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                   <td title="Open Interest USDT (Binance)">{statsOpenInterestUsdtLabel(r.openInterestUsdt)}</td>
+                  <td title="OI % change 24h (Binance hist)">{statsOpenInterestChg24hPctLabel(r.openInterestChg24hPct)}</td>
                   <td title="EMA20 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema20_1hSlopePct7d)}</td>
                   <td title="(close − EMA20) / EMA20 × 100 บน 1h">{candleReversalPriceVsEma20_1hLabel(r.priceVsEma20_1hPct)}</td>
                   <td title="EMA20 4h slope 7d">{candleReversalEma20_4hSlopeLabel(r.ema20_4hSlopePct7d)}</td>
                   <td title="(close − EMA20) / EMA20 × 100 บน 4h">{candleReversalPriceVsEma20_4hLabel(r.priceVsEma20_4hPct)}</td>
+                  {showSuggestedSideColumn ? (
+                    <>
+                      <td title="EMA20 15m slope 7d">{candleReversalEma20_15mSlopeLabel(r.ema20_15mSlopePct7d)}</td>
+                      <td title="(mark − EMA20) / EMA20 × 100 บน 15m ณแจ้ง">
+                        {candleReversalPriceVsEma20_15mLabel(r.priceVsEma20_15mPct)}
+                      </td>
+                      <td title={candleReversalEntryEma20_15mTouchTitle(r)}>
+                        {candleReversalEntryEma20_15mTouchCell(r)}
+                      </td>
+                    </>
+                  ) : null}
                   <td title="EMA(12) 1d slope 7d">{candleReversalEma1dSlopeLabel(r.ema1dSlopePct7d)}</td>
                   <td title="BTC EMA20 4h slope 7d">{candleReversalEma4hSlopeLabel(r.btcEma20_4hSlopePct7d)}</td>
                   <td title="BTC.D EMA20 4h slope 7d">{statsBtcDomEma20_4hSlopeLabel(r.btcDomEma20_4hSlopePct7d)}</td>

@@ -17,6 +17,10 @@ import {
   statsEma20MetricsComplete,
   statsEma20MetricsNeedForRow,
 } from "./statsEma20Dist";
+import {
+  fetchStatsEma20_15mEntryAtMs,
+  mergeStatsEma20_15mEntryIntoRow,
+} from "./statsEma20_15mEntry";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_ATR_PCT_4H_VERSION } from "./statsAtrPct4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
@@ -223,6 +227,7 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     marketCapV: r.marketCapV === STATS_MARKET_CAP_VERSION ? STATS_MARKET_CAP_VERSION : undefined,
     openInterestUsdt: nullNum(r.openInterestUsdt),
     openInterestContracts: nullNum(r.openInterestContracts),
+    openInterestChg24hPct: nullNum(r.openInterestChg24hPct),
     openInterestV: r.openInterestV === STATS_OPEN_INTEREST_VERSION ? STATS_OPEN_INTEREST_VERSION : undefined,
     ema1hSlopePct7d: nullNum(r.ema1hSlopePct7d),
     ema4hSlopePct7d: nullNum(r.ema4hSlopePct7d),
@@ -469,6 +474,7 @@ export async function appendCandleReversalStatsRow(
   let marketCapUsd: number | null = null;
   let openInterestUsdt: number | null = null;
   let openInterestContracts: number | null = null;
+  let openInterestChg24hPct: number | null = null;
   let ema1hSlopePct7d: CandleReversalStatsRow["ema1hSlopePct7d"] = null;
   let ema4hSlopePct7d: CandleReversalStatsRow["ema4hSlopePct7d"] = null;
   let ema1dSlopePct7d: CandleReversalStatsRow["ema1dSlopePct7d"] = null;
@@ -503,6 +509,10 @@ export async function appendCandleReversalStatsRow(
       Number.isFinite(snap.openInterestContracts) &&
       snap.openInterestContracts > 0
         ? snap.openInterestContracts
+        : null;
+    openInterestChg24hPct =
+      snap.openInterestChg24hPct != null && Number.isFinite(snap.openInterestChg24hPct)
+        ? snap.openInterestChg24hPct
         : null;
     ema1hSlopePct7d =
       snap.ema1hSlopePct7d != null && Number.isFinite(snap.ema1hSlopePct7d) ? snap.ema1hSlopePct7d : null;
@@ -585,7 +595,8 @@ export async function appendCandleReversalStatsRow(
     ...(marketCapUsd != null ? { marketCapV: STATS_MARKET_CAP_VERSION } : {}),
     openInterestUsdt,
     openInterestContracts,
-    ...(openInterestUsdt != null || openInterestContracts != null
+    openInterestChg24hPct,
+    ...(openInterestUsdt != null || openInterestContracts != null || openInterestChg24hPct != null
       ? { openInterestV: STATS_OPEN_INTEREST_VERSION }
       : {}),
     ema1hSlopePct7d,
@@ -721,6 +732,15 @@ export async function appendCandleReversalStatsRow(
       const need = statsEma20MetricsNeedForRow(row);
       const ema20 = await fetchStatsEma20MetricsPartialAtMs(input.symbol, input.alertedAtMs, need);
       mergeStatsEma20MetricsIntoRow(row, ema20);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (signalBarTf === "1h" && tradeSide === "short" && Number.isFinite(input.alertedAtMs) && input.alertedAtMs > 0) {
+    try {
+      const snap15m = await fetchStatsEma20_15mEntryAtMs(input.symbol, input.alertedAtMs, Date.now());
+      mergeStatsEma20_15mEntryIntoRow(row, snap15m);
     } catch {
       /* ignore */
     }

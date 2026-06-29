@@ -1,6 +1,7 @@
 /** Client-safe Open Interest helpers for stats tables / CSV */
 
-export const STATS_OPEN_INTEREST_VERSION = 1;
+/** v2 = เพิ่ม openInterestChg24hPct */
+export const STATS_OPEN_INTEREST_VERSION = 2;
 
 /** Binance openInterestHist ย้อนหลังได้สูงสุด ~30 วัน */
 export const STATS_OPEN_INTEREST_HIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -11,4 +12,11 @@ export function statsOpenInterestUsdtLabel(value: number | null | undefined): st
   if (value >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
   if (value >= 1e3) return `${(value / 1e3).toFixed(1)}K`;
   return value.toFixed(0);
+}
+
+/** OI % change vs 24h ก่อน alertedAt — ใช้ sumOpenInterestValue USDT เป็นหลัก */
+export function statsOpenInterestChg24hPctLabel(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)}%`;
 }

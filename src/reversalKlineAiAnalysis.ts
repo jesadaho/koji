@@ -53,7 +53,7 @@ Focus on:
 - Trend continuation vs exhaustion
 - Distribution / Accumulation
 - Risk of adverse move before the expected direction
-- Signal context metrics (Trend Gain, Velocity, EMA20 4H Slope, ATR4H, Vol×SMA, Funding rate %, Open Interest USDT/contracts, BTC EMA20 4H slope 7d %, BTC EMA 1d slope 7d %, BTC.D EMA20 4H slope 7d %)
+- Signal context metrics (Trend Gain, Velocity, EMA20 4H Slope, ATR4H, Vol×SMA, Funding rate %, Open Interest USDT/contracts, OI % change 24h, BTC EMA20 4H slope 7d %, BTC EMA 1d slope 7d %, BTC.D EMA20 4H slope 7d %)
 
 Do NOT explain basic candlestick patterns.
 
@@ -431,6 +431,7 @@ export type RunReversalKlineAiForRowInput = {
     | "signalVolVsSma"
     | "openInterestUsdt"
     | "openInterestContracts"
+    | "openInterestChg24hPct"
     | "btcEma20_4hSlopePct7d"
     | "btcEma1dSlopePct7d"
     | "btcDomEma20_4hSlopePct7d"
@@ -458,8 +459,11 @@ export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowIn
 
   let openInterestUsdt = input.row.openInterestUsdt ?? null;
   let openInterestContracts = input.row.openInterestContracts ?? null;
+  let openInterestChg24hPct = input.row.openInterestChg24hPct ?? null;
   if (
-    (openInterestUsdt == null || openInterestContracts == null) &&
+    (openInterestUsdt == null ||
+      openInterestContracts == null ||
+      openInterestChg24hPct == null) &&
     Number.isFinite(input.row.alertedAtMs) &&
     input.row.alertedAtMs > 0
   ) {
@@ -467,6 +471,7 @@ export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowIn
     if (oi) {
       if (openInterestUsdt == null && oi.valueUsdt != null) openInterestUsdt = oi.valueUsdt;
       if (openInterestContracts == null && oi.contracts != null) openInterestContracts = oi.contracts;
+      if (openInterestChg24hPct == null && oi.chg24hPct != null) openInterestChg24hPct = oi.chg24hPct;
     }
   }
 
@@ -490,6 +495,7 @@ export async function runReversalKlineAiForRow(input: RunReversalKlineAiForRowIn
       signalVolVsSma: input.row.signalVolVsSma,
       openInterestUsdt,
       openInterestContracts,
+      openInterestChg24hPct,
       btcEma20_4hSlopePct7d: input.row.btcEma20_4hSlopePct7d,
       btcEma1dSlopePct7d: input.row.btcEma1dSlopePct7d,
       btcDomEma20_4hSlopePct7d: input.row.btcDomEma20_4hSlopePct7d,

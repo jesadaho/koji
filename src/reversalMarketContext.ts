@@ -36,6 +36,7 @@ export type ReversalAlertMarketSnapshot = {
   marketCapUsd: number | null;
   openInterestUsdt: number | null;
   openInterestContracts: number | null;
+  openInterestChg24hPct: number | null;
   /** EMA(12) 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
   ema1hSlopePct7d: number | null;
   /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
@@ -93,6 +94,7 @@ export async function fetchReversalAlertMarketSnapshot(
     marketCapUsd,
     openInterestUsdt: openInterest?.valueUsdt ?? null,
     openInterestContracts: openInterest?.contracts ?? null,
+    openInterestChg24hPct: openInterest?.chg24hPct ?? null,
     ema1hSlopePct7d: symbolEma.ema1hSlopePct7d,
     ema4hSlopePct7d: symbolEma.ema4hSlopePct7d,
     ema1dSlopePct7d: symbolEma.ema1dSlopePct7d,

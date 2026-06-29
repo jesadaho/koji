@@ -157,6 +157,7 @@ export function buildReversalSignalKlineAiPayload(input: {
     signalVolVsSma?: number | null;
     openInterestUsdt?: number | null;
     openInterestContracts?: number | null;
+    openInterestChg24hPct?: number | null;
     btcEma20_4hSlopePct7d?: number | null;
     btcEma1dSlopePct7d?: number | null;
     btcDomEma20_4hSlopePct7d?: number | null;
@@ -208,6 +209,7 @@ export function buildReversalSignalKlineAiPayload(input: {
       vol_vs_sma: finiteNum(input.signalContext.signalVolVsSma),
       open_interest_usdt: finiteNum(input.signalContext.openInterestUsdt),
       open_interest_contracts: finiteNum(input.signalContext.openInterestContracts),
+      open_interest_chg_24h_pct: finiteNum(input.signalContext.openInterestChg24hPct),
       btc_ema20_4h_slope_pct_7d: finiteNum(input.signalContext.btcEma20_4hSlopePct7d),
       btc_ema1d_slope_pct_7d: finiteNum(input.signalContext.btcEma1dSlopePct7d),
       btc_d_ema20_4h_slope_pct_7d: finiteNum(input.signalContext.btcDomEma20_4hSlopePct7d),

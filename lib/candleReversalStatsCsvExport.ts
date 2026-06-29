@@ -5,6 +5,7 @@ import {
 import {
   candleReversalDayOfWeekBkk,
   candleReversalEmaSlopeCsvLabel,
+  candleReversalEntryEma20_15mTouchCell,
   reversalBarRangePctSignalResolved,
   candleReversalGreenDaysLabel,
   candleReversalLookbackRankCell,
@@ -47,7 +48,7 @@ import {
   snowballStatsMarketCapUsdLabel,
   snowballStatsQuoteVol24hLabel,
 } from "@/lib/snowballStatsClient";
-import { statsOpenInterestUsdtLabel } from "@/lib/statsOpenInterest";
+import { statsOpenInterestChg24hPctLabel, statsOpenInterestUsdtLabel } from "@/lib/statsOpenInterest";
 import { statsBtcDomEma20_4hSlopeLabel } from "@/lib/statsBtcDominanceEma";
 import { statsAtrPct14dLabel } from "@/lib/statsAtrPct14d";
 import { statsAtrPct4hLabel } from "@/lib/statsAtrPct4h";
@@ -98,10 +99,14 @@ const HEADERS = [
   "Vol 24h",
   "Mcap",
   "OI (USDT)",
+  "OI Δ24h %",
   "EMA20 1h slope 7d %",
   "EMA20 1h dist %",
   "EMA20 4h slope 7d %",
   "EMA20 4h dist %",
+  "EMA20 15m slope 7d %",
+  "EMA20 15m dist % (mark)",
+  "EMA20 15m touch 8h",
   "EMA1d slope 7d %",
   "BTC EMA20 4h slope 7d %",
   "BTC.D EMA20 4h slope 7d %",
@@ -229,10 +234,14 @@ function candleReversalStatsRowToCsvCells(
     snowballStatsQuoteVol24hLabel(r.quoteVol24hUsdt),
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
     statsOpenInterestUsdtLabel(r.openInterestUsdt),
+    statsOpenInterestChg24hPctLabel(r.openInterestChg24hPct),
     candleReversalEmaSlopeCsvLabel(r.ema20_1hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.priceVsEma20_1hPct),
     candleReversalEmaSlopeCsvLabel(r.ema20_4hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.priceVsEma20_4hPct),
+    candleReversalEmaSlopeCsvLabel(r.ema20_15mSlopePct7d),
+    candleReversalEmaSlopeCsvLabel(r.priceVsEma20_15mPct),
+    candleReversalEntryEma20_15mTouchCell(r).replace("—", ""),
     candleReversalEmaSlopeCsvLabel(r.ema1dSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.btcEma20_4hSlopePct7d),
     statsBtcDomEma20_4hSlopeLabel(r.btcDomEma20_4hSlopePct7d),
