@@ -236,8 +236,10 @@ export type CandleReversalStatsApiPayload = {
   /** ค่า TP/SL ของผู้ดู (สำหรับ breakdown ในเซลล์) */
   viewerTpSlPlan?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
   viewerTpSlPlanLong?: import("@/lib/tpSlStrategySimulate").StatsTpSlPlan;
-  /** margin USDT จาก Settings — คำนวณ P/L เป็น $ ในตาราง */
+  /** margin USDT จาก Settings — Short / fade SHORT */
   viewerStrategyMarginUsdt?: number | null;
+  /** margin USDT สำหรับกลยุทธ์ Long (Market LONG) — fallback viewerStrategyMarginUsdt */
+  viewerStrategyLongMarginUsdt?: number | null;
   viewerStrategyLeverage?: number | null;
   /** เปิดใน Settings → Dynamic leverage (Long → SHORT) */
   viewerStrategyLongDynamicLeverageEnabled?: boolean;

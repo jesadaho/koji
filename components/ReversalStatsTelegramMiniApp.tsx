@@ -495,6 +495,7 @@ type ReversalStatsSectionProps = {
   strategyPlanTitle?: string;
   strategyPlanTitleLong?: string;
   strategyMarginUsdt?: number | null;
+  strategyLongMarginUsdt?: number | null;
   strategyLeverage?: number | null;
   strategyLongDynamicLeverageEnabled?: boolean;
   strategyShortDynamicLeverageEnabled?: boolean;
@@ -528,6 +529,7 @@ function ReversalStatsSection({
   strategyPlanTitle = REVERSAL_TP_STRATEGY_SUMMARY,
   strategyPlanTitleLong,
   strategyMarginUsdt,
+  strategyLongMarginUsdt,
   strategyLeverage,
   strategyLongDynamicLeverageEnabled = false,
   strategyShortDynamicLeverageEnabled = false,
@@ -582,13 +584,13 @@ function ReversalStatsSection({
   );
   const longStrategySizing = useMemo(
     () => ({
-      marginUsdt: strategyMarginUsdt,
+      marginUsdt: strategyLongMarginUsdt ?? strategyMarginUsdt,
       leverage: strategyLeverage,
       leverageForRow: strategyLongDynamicLeverageEnabled
         ? (row: StatsStrategyProfitRowSlice) => resolveLongRowLeverage(row as CandleReversalStatsRow)
         : undefined,
     }),
-    [strategyMarginUsdt, strategyLeverage, strategyLongDynamicLeverageEnabled, resolveLongRowLeverage],
+    [strategyLongMarginUsdt, strategyMarginUsdt, strategyLeverage, strategyLongDynamicLeverageEnabled, resolveLongRowLeverage],
   );
   const longPlanTitle = strategyPlanTitleLong ?? strategyPlanTitle;
   const longTpSlPlan = strategyTpSlPlanLong ?? strategyTpSlPlan;
@@ -2810,6 +2812,7 @@ export default function ReversalStatsTelegramMiniApp() {
           strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyPlanTitleLong={payload?.viewerTpSlPlanSummaryLong ?? payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
+          strategyLongMarginUsdt={payload?.viewerStrategyLongMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
           strategyShortDynamicLeverageEnabled={payload?.viewerStrategyShortDynamicLeverageEnabled}
@@ -2841,6 +2844,7 @@ export default function ReversalStatsTelegramMiniApp() {
           strategyPlanTitle={payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyPlanTitleLong={payload?.viewerTpSlPlanSummaryLong ?? payload?.viewerTpSlPlanSummary ?? REVERSAL_TP_STRATEGY_SUMMARY}
           strategyMarginUsdt={payload?.viewerStrategyMarginUsdt}
+          strategyLongMarginUsdt={payload?.viewerStrategyLongMarginUsdt}
           strategyLeverage={payload?.viewerStrategyLeverage}
           strategyLongDynamicLeverageEnabled={payload?.viewerStrategyLongDynamicLeverageEnabled}
           strategyShortDynamicLeverageEnabled={payload?.viewerStrategyShortDynamicLeverageEnabled}

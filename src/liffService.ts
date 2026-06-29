@@ -1118,6 +1118,7 @@ export async function liffGetCandleReversalStats(
   let viewerTpSlPlan: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
   let viewerTpSlPlanLong: ReturnType<typeof viewerStatsTpSlPlanPayload> | undefined;
   let viewerStrategyMarginUsdt: number | null | undefined;
+  let viewerStrategyLongMarginUsdt: number | null | undefined;
   let viewerStrategyLeverage: number | null | undefined;
   let viewerStrategyLongDynamicLeverageEnabled: boolean | undefined;
   let viewerStrategyShortDynamicLeverageEnabled: boolean | undefined;
@@ -1139,6 +1140,7 @@ export async function liffGetCandleReversalStats(
     viewerTpSlPlan = viewerStatsTpSlPlanPayload(plans.short);
     viewerTpSlPlanLong = viewerStatsTpSlPlanPayload(plans.long);
     viewerStrategyMarginUsdt = sizing.marginUsdt;
+    viewerStrategyLongMarginUsdt = sizing.marginUsdtLong;
     viewerStrategyLeverage = sizing.leverage;
     viewerStrategyLongDynamicLeverageEnabled = sizing.reversalLongDynamicLeverageEnabled === true;
     viewerStrategyShortDynamicLeverageEnabled = sizing.reversalShortDynamicLeverageEnabled === true;
@@ -1167,6 +1169,7 @@ export async function liffGetCandleReversalStats(
     ...(viewerTpSlPlan ? { viewerTpSlPlan } : {}),
     ...(viewerTpSlPlanLong ? { viewerTpSlPlanLong } : {}),
     ...(viewerStrategyMarginUsdt != null ? { viewerStrategyMarginUsdt } : {}),
+    ...(viewerStrategyLongMarginUsdt != null ? { viewerStrategyLongMarginUsdt } : {}),
     ...(viewerStrategyLeverage != null ? { viewerStrategyLeverage } : {}),
     ...(viewerStrategyLongDynamicLeverageEnabled
       ? { viewerStrategyLongDynamicLeverageEnabled: true }
@@ -1459,6 +1462,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
   return {
     enabled: row.reversalAutoTradeEnabled ?? false,
     marginUsdt: row.reversalAutoTradeMarginUsdt ?? null,
+    longMarginUsdt: row.reversalAutoTradeLongMarginUsdt ?? null,
     leverage: row.reversalAutoTradeLeverage ?? null,
     tpSlEnabled: row.reversalAutoTradeTpSlEnabled ?? true,
     tp1PricePct: row.reversalAutoTradeTp1PricePct ?? null,
@@ -2111,6 +2115,7 @@ function parseReversalAutoTradeNested(
   };
 
   const mMargin = numOrEmpty("marginUsdt");
+  const mLongMargin = numOrEmpty("longMarginUsdt");
   const mLev = numOrEmpty("leverage");
   const mTp1 = numOrEmpty("tp1PricePct");
   const mTp1Partial = numOrEmpty("tp1PartialPct");
@@ -2128,6 +2133,7 @@ function parseReversalAutoTradeNested(
   const mLongSlOff = numOrEmpty("longSlEntryOffsetPct");
   if (
     mMargin.err ||
+    mLongMargin.err ||
     mLev.err ||
     mTp1.err ||
     mTp1Partial.err ||
@@ -2156,6 +2162,10 @@ function parseReversalAutoTradeNested(
     if (l == null || !(typeof l === "number" && Number.isFinite(l) && l >= 1)) {
       return { ok: false, error: "reversal_leverage_required" };
     }
+  }
+
+  if (typeof mLongMargin.v === "number" && !(mLongMargin.v > 0)) {
+    return { ok: false, error: "reversal_long_margin_invalid" };
   }
 
   if (typeof mTp1.v === "number" && !(mTp1.v > 0 && mTp1.v < 100)) {
@@ -2288,6 +2298,7 @@ function parseReversalAutoTradeNested(
   > = {
     reversalAutoTradeEnabled: enabled,
     reversalAutoTradeMarginUsdt: mMargin.v as number | null | undefined,
+    reversalAutoTradeLongMarginUsdt: mLongMargin.v as number | null | undefined,
     reversalAutoTradeLeverage:
       mLev.v == null
         ? (mLev.v as number | null | undefined)

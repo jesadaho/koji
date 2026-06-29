@@ -171,6 +171,8 @@ export type TradingViewMexcUserSettings = {
   /** Reversal auto-open Short บน MEXC — ทำงานหลัง Reversal alert ส่งสำเร็จ */
   reversalAutoTradeEnabled?: boolean;
   reversalAutoTradeMarginUsdt?: number;
+  /** Market LONG (ทิศแนะนำ 🟢) — ว่าง = fallback margin Short */
+  reversalAutoTradeLongMarginUsdt?: number;
   reversalAutoTradeLeverage?: number;
 
   /**
@@ -403,6 +405,7 @@ export type SaveTradingViewMexcInput = {
 
   reversalAutoTradeEnabled?: boolean;
   reversalAutoTradeMarginUsdt?: number | null;
+  reversalAutoTradeLongMarginUsdt?: number | null;
   reversalAutoTradeLeverage?: number | null;
   reversalAutoTradeTpSlEnabled?: boolean;
   reversalAutoTradeTp1PricePct?: number | null;
@@ -529,6 +532,7 @@ export async function saveTradingViewMexcSettings(
   const touchedReversalPatch =
     input.reversalAutoTradeEnabled !== undefined ||
     input.reversalAutoTradeMarginUsdt !== undefined ||
+    input.reversalAutoTradeLongMarginUsdt !== undefined ||
     input.reversalAutoTradeLeverage !== undefined ||
     input.reversalAutoTradeTpSlEnabled !== undefined ||
     input.reversalAutoTradeTp1PricePct !== undefined ||
@@ -921,6 +925,13 @@ export async function saveTradingViewMexcSettings(
         : input.reversalAutoTradeMarginUsdt !== undefined
           ? input.reversalAutoTradeMarginUsdt
           : prev?.reversalAutoTradeMarginUsdt,
+
+    reversalAutoTradeLongMarginUsdt:
+      input.reversalAutoTradeLongMarginUsdt === null
+        ? undefined
+        : input.reversalAutoTradeLongMarginUsdt !== undefined
+          ? input.reversalAutoTradeLongMarginUsdt
+          : prev?.reversalAutoTradeLongMarginUsdt,
 
     reversalAutoTradeLeverage:
       input.reversalAutoTradeLeverage === null

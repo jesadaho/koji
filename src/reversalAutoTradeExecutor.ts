@@ -35,7 +35,7 @@ import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNo
 import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } from "./candleReversalDetect";
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
 import type { AutoOpenOutcome } from "@/lib/autoOpenOrderLogClient";
-import { reversalTpStrategySummary } from "@/lib/reversalTpStrategy";
+import { reversalAutoTradeMarginUsdtForMexcSide } from "@/lib/reversalAutoTradeMargin";
 import {
   reversalTpSlPlanFromRow,
   type ReversalTpSlSignalKind,
@@ -848,7 +848,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
       continue;
     }
 
-    const marginUsdt = row.reversalAutoTradeMarginUsdt ?? NaN;
+    const marginUsdt = reversalAutoTradeMarginUsdtForMexcSide(row, mexcSide) ?? NaN;
     const baseLeverage = row.reversalAutoTradeLeverage ?? NaN;
     if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) {
       logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", mexcSide);

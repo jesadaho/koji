@@ -8,8 +8,11 @@ import {
   statsTpSlPlanSummary,
   type StatsTpSlPlan,
 } from "@/lib/tpSlStrategySimulate";
-import type { ReversalStatsPlaySides } from "@/lib/reversalMatrixFilters";
-import { reversalStatsPlaySidesFromSettings } from "@/lib/reversalMatrixFilters";
+import {
+  reversalAutoTradeLongMarginUsdt,
+  reversalAutoTradeShortMarginUsdt,
+} from "@/lib/reversalAutoTradeMargin";
+import { reversalStatsPlaySidesFromSettings, type ReversalStatsPlaySides } from "@/lib/reversalMatrixFilters";
 import {
   reversalTpSlPlanFromRow,
   reversalTpSlPlanToViewerStats,
@@ -130,6 +133,8 @@ export function viewerStatsTpSlPlanSummary(plan: ViewerStatsTpSlPlan): string {
 
 export type ViewerStatsTradeSizing = {
   marginUsdt: number | null;
+  /** Long (Market LONG) — fallback marginUsdt */
+  marginUsdtLong: number | null;
   leverage: number | null;
   /** Reversal Long → SHORT: ปรับ leverage ต่อแถวตาม ATR%14D (เหมือน auto-open) */
   reversalLongDynamicLeverageEnabled?: boolean;
@@ -151,11 +156,14 @@ export async function resolveViewerStatsTradeSizing(
   const map = await loadTradingViewMexcSettingsFullMap();
   const row = map[userId];
   if (!row) {
-    return { marginUsdt: null, leverage: null };
+    return { marginUsdt: null, marginUsdtLong: null, leverage: null };
   }
   if (source === "reversal") {
+    const shortMargin = reversalAutoTradeShortMarginUsdt(row) ?? null;
+    const longMargin = reversalAutoTradeLongMarginUsdt(row) ?? null;
     return {
-      marginUsdt: positiveNum(row.reversalAutoTradeMarginUsdt),
+      marginUsdt: shortMargin,
+      marginUsdtLong: longMargin,
       leverage: positiveNum(row.reversalAutoTradeLeverage),
       reversalLongDynamicLeverageEnabled: row.reversalAutoTradeLongDynamicLeverageEnabled === true,
       reversalShortDynamicLeverageEnabled: row.reversalAutoTradeShortDynamicLeverageEnabled === true,
@@ -164,6 +172,7 @@ export async function resolveViewerStatsTradeSizing(
   }
   return {
     marginUsdt: positiveNum(row.snowballAutoTradeMarginUsdt),
+    marginUsdtLong: positiveNum(row.snowballAutoTradeMarginUsdt),
     leverage: positiveNum(row.snowballAutoTradeLeverage),
   };
 }

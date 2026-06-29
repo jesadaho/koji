@@ -145,6 +145,7 @@ type SnowballAutoTradeApiBundle = {
 type ReversalAutoTradeApiBundle = {
   enabled?: boolean;
   marginUsdt?: number | null;
+  longMarginUsdt?: number | null;
   leverage?: number | null;
   tpSlEnabled?: boolean;
   tp1PricePct?: number | null;
@@ -266,6 +267,7 @@ export default function SettingsTelegramMiniApp() {
 
   const [revEnabled, setRevEnabled] = useState(false);
   const [revMargin, setRevMargin] = useState("");
+  const [revLongMargin, setRevLongMargin] = useState("");
   const [revLeverage, setRevLeverage] = useState("");
   const [revTpSlEnabled, setRevTpSlEnabled] = useState(true);
   const [revTp1PricePct, setRevTp1PricePct] = useState("");
@@ -425,6 +427,9 @@ export default function SettingsTelegramMiniApp() {
     if (!st) return;
     setRevEnabled(Boolean(st.enabled));
     setRevMargin(st.marginUsdt != null && Number.isFinite(st.marginUsdt) ? String(st.marginUsdt) : "");
+    setRevLongMargin(
+      st.longMarginUsdt != null && Number.isFinite(st.longMarginUsdt) ? String(st.longMarginUsdt) : "",
+    );
     setRevLeverage(st.leverage != null && Number.isFinite(st.leverage) ? String(st.leverage) : "");
     setRevTpSlEnabled(st.tpSlEnabled !== false);
     setRevTp1PricePct(
@@ -1029,6 +1034,7 @@ export default function SettingsTelegramMiniApp() {
     }
 
     const marginParsed = revMargin.trim() ? parseNumRaw(revMargin) : null;
+    const longMarginParsed = revLongMargin.trim() ? parseNumRaw(revLongMargin) : null;
     const levParsed = revLeverage.trim() ? parseNumRaw(revLeverage) : null;
     const tp1Parsed = revTp1PricePct.trim() ? parseNumRaw(revTp1PricePct) : null;
     const tp1PartialParsed = revTp1PartialPct.trim() ? parseNumRaw(revTp1PartialPct) : null;
@@ -1049,7 +1055,11 @@ export default function SettingsTelegramMiniApp() {
     const longSlOffParsed = revLongSlEntryOffsetPct.trim() ? parseNumRaw(revLongSlEntryOffsetPct) : null;
 
     if (revMargin.trim() && marginParsed == null) {
-      setRevSaveErr("Margin ไม่ใช่ตัวเลข");
+      setRevSaveErr("Margin Short ไม่ใช่ตัวเลข");
+      return;
+    }
+    if (revLongMargin.trim() && longMarginParsed == null) {
+      setRevSaveErr("Margin Long ไม่ใช่ตัวเลข");
       return;
     }
     if (revLeverage.trim() && levParsed == null) {
@@ -1057,7 +1067,11 @@ export default function SettingsTelegramMiniApp() {
       return;
     }
     if (revMargin.trim() && marginParsed != null && marginParsed <= 0) {
-      setRevSaveErr("Margin ต้องเป็นเลขบวก");
+      setRevSaveErr("Margin Short ต้องเป็นเลขบวก");
+      return;
+    }
+    if (revLongMargin.trim() && longMarginParsed != null && longMarginParsed <= 0) {
+      setRevSaveErr("Margin Long ต้องเป็นเลขบวก");
       return;
     }
     if (revLeverage.trim() && levParsed != null && levParsed < 1) {
@@ -1070,7 +1084,7 @@ export default function SettingsTelegramMiniApp() {
         return;
       }
       if (marginParsed == null || marginParsed <= 0) {
-        setRevSaveErr("เปิดใช้แล้วต้องระบุ Margin (เลขบวก)");
+        setRevSaveErr("เปิดใช้แล้วต้องระบุ Margin Short (เลขบวก)");
         return;
       }
       if (levParsed == null || levParsed < 1) {
@@ -1211,6 +1225,7 @@ export default function SettingsTelegramMiniApp() {
         gateQualitySignal: revGateQualitySignal,
         saturdayAllSignalsEnabled: revSaturdayAllSignals,
         marginUsdt: revMargin.trim() ? marginParsed : null,
+        longMarginUsdt: revLongMargin.trim() ? longMarginParsed : null,
         leverage: revLeverage.trim() ? levParsed : null,
         tpSlEnabled: revTpSlEnabled,
         tp1PricePct: revTp1PricePct.trim() ? tp1Parsed : null,
@@ -2250,11 +2265,11 @@ export default function SettingsTelegramMiniApp() {
           Margin / เลเวเรจ
         </p>
         <p className="sub" style={{ marginTop: 0 }}>
-          ใช้กับสัญญาณ Short และ Long→SHORT ที่ผ่าน Quality Signal (หรือทุกสัญญาณในวันเสาร์ถ้าเปิดตัวเลือกด้านบน)
+          Margin แยก Short vs Market LONG · Leverage ใช้ร่วมกัน · ว่าง Long = ใช้ค่า Short
         </p>
         <div style={{ marginTop: "0.5rem", display: "grid", gap: "0.5rem", maxWidth: "min(32rem, 100%)" }}>
           <label className="sub" style={{ display: "block" }}>
-            Margin (USDT)
+            Margin Short (USDT)
             <input
               type="text"
               inputMode="decimal"
@@ -2266,7 +2281,19 @@ export default function SettingsTelegramMiniApp() {
             />
           </label>
           <label className="sub" style={{ display: "block" }}>
-            Leverage
+            Margin Long (USDT) — ว่าง = Short
+            <input
+              type="text"
+              inputMode="decimal"
+              style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+              autoComplete="off"
+              placeholder="เช่น 150"
+              value={revLongMargin}
+              onChange={(e) => setRevLongMargin(e.target.value)}
+            />
+          </label>
+          <label className="sub" style={{ display: "block" }}>
+            Leverage (ร่วม)
             <input
               type="text"
               inputMode="numeric"
