@@ -1,4 +1,5 @@
 import type { CandleReversalModel, CandleReversalTf } from "./candleReversalDetect";
+import { REVERSAL_OBSERVE_CRITERIA_SUMMARY } from "@/lib/reversalStatsPlayMode";
 
 function envFlagOn(key: string, defaultOn: boolean): boolean {
   const raw = process.env[key]?.trim().toLowerCase();
@@ -194,7 +195,7 @@ export function formatCandleReversalScanSummaryMessage(opts: {
 
   lines.push("");
   lines.push("— ส่งแจ้งเตือน —");
-  lines.push(`เก็บ Observe (AND ทิศ Long · OR: R%<3·!Weak · Neutral · ไส้ล่าง>บน): ${stats.observeStored}`);
+  lines.push(`เก็บ Observe (${REVERSAL_OBSERVE_CRITERIA_SUMMARY}): ${stats.observeStored}`);
   lines.push(...formatSymbolListLines("  ", stats.observeStoredSymbols));
   lines.push(`ติด dedupe (แท่งเดิม): ${stats.deduped}`);
   lines.push(...formatSymbolListLines("  ", stats.dedupedSymbols));

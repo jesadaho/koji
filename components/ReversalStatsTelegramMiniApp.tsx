@@ -829,7 +829,7 @@ function ReversalStatsSection({
       ? "Max adverse ตลอดช่วง follow-up (long: low ต่ำสุดจาก entry)"
       : "Max adverse ตลอดช่วง follow-up (short: high สูงสุดจาก entry)");
   const signalBarSlTitle =
-    "SL ที่ยอดแท่งสัญญาณ — Short/fade: high แท่ง · Long: low แท่ง · หลังปิดแท่งสัญญาณ";
+    "SL ที่ยอดแท่งสัญญาณ — Short/fade: high · Long: low · 1H ใช้แท่ง 1h · 1D ใช้แท่ง 1d · หลังปิดแท่งสัญญาณ";
 
   const exportFilterQuery = useMemo((): ReversalStatsFilterQuery => {
     const side = parseSideFromCsvQuery(csvQuery);

@@ -145,7 +145,9 @@ function normalizeStatsPlayMode(raw: string | undefined): ReversalStatsPlayMode 
 }
 
 function normalizeObserveReason(raw: string | undefined): ReversalObserveReason | undefined {
-  if (raw === "r_bar_range" || raw === "neutral_matrix" || raw === "lower_wick_long") return raw;
+  if (raw === "r_bar_range" || raw === "neutral_matrix" || raw === "lower_wick_long" || raw === "atr14d_high") {
+    return raw;
+  }
   return undefined;
 }
 

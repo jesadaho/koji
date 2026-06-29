@@ -6,7 +6,8 @@ import {
 } from "@/lib/candleReversalStatsClient";
 import { firstFollowUpKlineIndexAfterAnchorClose } from "@/lib/statsFollowUpAdverse";
 
-export const STATS_SIGNAL_BAR_SL_VERSION = 1;
+/** v2 = สัญญาณ 1H ใช้แท่ง 1h (ไม่ใช่ 15m) */
+export const STATS_SIGNAL_BAR_SL_VERSION = 2;
 
 export function signalBarSlLevelForMeasureSide(
   side: "short" | "long",

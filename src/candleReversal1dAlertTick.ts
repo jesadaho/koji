@@ -37,7 +37,11 @@ import {
   candleReversalStatsAnchorCloseSec,
   type CandleReversalStatsRow,
 } from "@/lib/candleReversalStatsClient";
-import { reversalIsObserveSignal, reversalResolveObserveReason } from "@/lib/reversalStatsPlayMode";
+import {
+  REVERSAL_OBSERVE_CRITERIA_SUMMARY,
+  reversalIsObserveSignal,
+  reversalResolveObserveReason,
+} from "@/lib/reversalStatsPlayMode";
 import { statsBarRangePctSignal } from "@/lib/statsBarRangePct";
 import { resolvePumpCycleSwingLowFields } from "./statsPumpCycleSwingLow";
 import { formatCandleReversalTfDebugBlock } from "./candleReversalDebugFormat";
@@ -744,6 +748,7 @@ async function notifyResults(
         priceVsEma20_4hPct: mktSnap.priceVsEma20_4hPct,
         wickRatio: sig.wickRatio,
         lowerWickRatio: sig.lowerWickRatio,
+        atrPct14d,
       });
       const observeReason = reversalResolveObserveReason({
         signalBarTf: sig.tf,
@@ -759,6 +764,7 @@ async function notifyResults(
         priceVsEma20_4hPct: mktSnap.priceVsEma20_4hPct,
         wickRatio: sig.wickRatio,
         lowerWickRatio: sig.lowerWickRatio,
+        atrPct14d,
       });
 
       if (isObserve) {

@@ -15,7 +15,16 @@ import {
 export type ReversalStatsPlayMode = "play" | "observe";
 
 /** เหตุผลที่แถวเป็น observe */
-export type ReversalObserveReason = "r_bar_range" | "neutral_matrix" | "lower_wick_long";
+export type ReversalObserveReason =
+  | "r_bar_range"
+  | "neutral_matrix"
+  | "lower_wick_long"
+  | "atr14d_high";
+
+/** ATR%14D สูงกว่านี้ = Observe (OR กับเกณฑ์อื่น) */
+export const REVERSAL_OBSERVE_ATR14D_PCT_MIN = 25;
+
+export const REVERSAL_OBSERVE_ATR14D_CRITERIA = `ATR%14D > ${REVERSAL_OBSERVE_ATR14D_PCT_MIN}%`;
 
 /** R% สัญญาณ — ต่ำกว่านี้ = Observe (1H Short) */
 export const REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX = 3;
@@ -35,6 +44,7 @@ export const REVERSAL_OBSERVE_OR_CRITERIA_SUMMARY = [
   REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA,
   `Neutral (AND): ${REVERSAL_NEUTRAL_MATRIX_CRITERIA}`,
   REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA,
+  REVERSAL_OBSERVE_ATR14D_CRITERIA,
 ].join(REVERSAL_OBSERVE_CRITERIA_OR_JOIN);
 
 /** สรุปเกณฑ์ Observe ทั้งหมด — (OR ชุดด้านบน) AND ทิศแนะนำ Long */
@@ -52,6 +62,7 @@ export type ReversalObserveEvaluateInput = {
   lowerWickRatio?: number | null;
   wickRatioPct?: number | null;
   lowerWickRatioPct?: number | null;
+  atrPct14d?: number | null;
 } & ReversalLongCandidateRowSlice;
 
 export function reversalShort1hIsObserveSignal(input: {
@@ -118,6 +129,14 @@ export function reversalNeutralMatrixIsObserveSignal(
   return reversalRowMatchesNeutralMatrix(row);
 }
 
+/** ATR%14D สูง — volatility สูงเกินเล่น */
+export function reversalAtr14dHighIsObserveSignal(input: {
+  atrPct14d?: number | null;
+}): boolean {
+  const atr = input.atrPct14d;
+  return atr != null && Number.isFinite(atr) && atr > REVERSAL_OBSERVE_ATR14D_PCT_MIN;
+}
+
 function reversalObserveOrCriterionPass(input: ReversalObserveEvaluateInput): boolean {
   if (
     reversalShortLowerWickDominantIsObserveSignal({
@@ -138,6 +157,9 @@ function reversalObserveOrCriterionPass(input: ReversalObserveEvaluateInput): bo
       ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
     })
   ) {
+    return true;
+  }
+  if (reversalAtr14dHighIsObserveSignal({ atrPct14d: input.atrPct14d })) {
     return true;
   }
   return reversalNeutralMatrixIsObserveSignal({
@@ -182,6 +204,9 @@ export function reversalResolveObserveReason(input: {
   ) {
     return "r_bar_range";
   }
+  if (reversalAtr14dHighIsObserveSignal({ atrPct14d: input.atrPct14d })) {
+    return "atr14d_high";
+  }
   if (
     reversalNeutralMatrixIsObserveSignal({
       trendGainPct: input.trendGainPct,
@@ -205,6 +230,7 @@ export function reversalStatsObserveBadgeTitle(row: {
   ema4hSlopePct7d?: number | null;
   wickRatioPct?: number | null;
   lowerWickRatioPct?: number | null;
+  atrPct14d?: number | null;
 }): string {
   const reason = reversalResolveObserveReason(row);
   if (reason === "lower_wick_long") {
@@ -215,6 +241,9 @@ export function reversalStatsObserveBadgeTitle(row: {
   }
   if (reason === "r_bar_range") {
     return `${REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA} · ${REVERSAL_OBSERVE_SUGGESTED_LONG_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
+  }
+  if (reason === "atr14d_high") {
+    return `${REVERSAL_OBSERVE_ATR14D_CRITERIA} · ${REVERSAL_OBSERVE_SUGGESTED_LONG_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
   return "เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram";
 }
@@ -237,12 +266,14 @@ export function reversalStatsPlayModeLabel(row: {
   ema4hSlopePct7d?: number | null;
   wickRatioPct?: number | null;
   lowerWickRatioPct?: number | null;
+  atrPct14d?: number | null;
 }): string {
   if (!reversalStatsRowIsObserve(row)) return "play";
   const reason = reversalResolveObserveReason(row);
   if (reason === "lower_wick_long") return "observe:long_wick";
   if (reason === "neutral_matrix") return "observe:neutral";
   if (reason === "r_bar_range") return "observe:r_low";
+  if (reason === "atr14d_high") return "observe:atr14d";
   return "observe";
 }
 

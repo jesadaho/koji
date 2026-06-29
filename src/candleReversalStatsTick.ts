@@ -617,6 +617,27 @@ function applyReversal1hStrategyProfitAtHorizon(
   /* ไม่เขียน strategyProfitPct* ระดับแถว — enrich ตามแผนผู้ชม */
 }
 
+/** SL ยอดแท่ง — สัญญาณ 1H ใช้แท่ง 1h ให้ตรงความยาวแท่งสัญญาณ */
+async function applySignalBarSlHitFor1hRow(
+  row: CandleReversalStatsRow,
+  nowMs: number,
+  ac: number,
+  windowEndSec: number,
+): Promise<void> {
+  const pack1h = await fetchBinanceUsdmKlinesRange(row.symbol, "1h", {
+    startTimeMs: row.signalBarOpenSec * 1000,
+    endTimeMs: nowMs,
+    limit: 120,
+  });
+  if (!pack1h || pack1h.timeSec.length === 0) return;
+  const { timeSec: t1h, high: h1h, low: l1h } = pack1h;
+  const i1hFirst = t1h.findIndex((t) => t + HOUR_SEC >= ac);
+  if (i1hFirst < 0) return;
+  const i1hLast = indexRangeThrough(t1h, HOUR_SEC, i1hFirst, windowEndSec);
+  if (i1hLast < i1hFirst) return;
+  applySignalBarSlHitFromKlines(row, h1h, l1h, t1h, HOUR_SEC, i1hFirst, i1hLast, ac);
+}
+
 async function followUpCandleReversal1hRow(
   row: CandleReversalStatsRow,
   nowMs: number,
@@ -666,7 +687,7 @@ async function followUpCandleReversal1hRow(
     const adverse = computeFollowUpMaxAdversePct(h15, l15, iAdverseFirst, i15Last, entry, side);
     if (adverse != null) row.followUpMaxAdversePct = adverse;
   }
-  applySignalBarSlHitFromKlines(row, h15, l15, t15, KLINE_15M_SEC, i15First, i15Last, ac);
+  await applySignalBarSlHitFor1hRow(row, nowMs, ac, windowEndSec);
 
   const h4End = ac + 4 * HOUR_SEC;
   const h12End = ac + 12 * HOUR_SEC;
@@ -788,6 +809,7 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
   if (row.outcome === "pending") return true;
   const ac = anchorCloseSec(row);
   if (signalBarTf(row) === "1h") {
+    if (row.signalBarSlV !== STATS_SIGNAL_BAR_SL_VERSION) return true;
     if (row.maxRoi15mV !== STATS_MAX_ROI_15M_VERSION && nowSec >= ac + 24 * HOUR_SEC) return true;
     if (nowSec < ac + 4 * HOUR_SEC && row.pct4h != null) return true;
     if (nowSec < ac + 12 * HOUR_SEC && row.pct12h != null) return true;
