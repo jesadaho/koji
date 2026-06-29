@@ -77,6 +77,7 @@ import { isAdminTelegramUserId } from "./adminIds";
 import { backfillAllStatsMarketSentiment } from "./marketSentimentSnapshotStore";
 import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
 import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
+import { backfillAllStatsRowsEma20_15mEntry } from "./statsEma20_15mEntry";
 import { backfillReversalBarRangePctSignalEstimate } from "@/lib/statsBarRangePct";
 import { backfillReversalStatsWeeklyAlertFields } from "@/lib/reversalStatsWeeklyAlert";
 import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
@@ -1088,7 +1089,13 @@ export async function liffGetCandleReversalStats(
   const barRangeDirty = backfillReversalBarRangePctSignalEstimate(st.rows);
   const weeklyAlertDirty = backfillReversalStatsWeeklyAlertFields(st.rows);
   const ema20Dirty = await backfillAllStatsRowsEma20Dist(st.rows, { maxRowsPerPass: 12, maxPasses: 2 });
-  if (barRangeDirty > 0 || weeklyAlertDirty > 0 || ema20Dirty > 0) await saveCandleReversalStatsState(st);
+  const ema15mDirty = await backfillAllStatsRowsEma20_15mEntry(st.rows, {
+    maxRowsPerPass: 12,
+    maxPasses: 2,
+  });
+  if (barRangeDirty > 0 || weeklyAlertDirty > 0 || ema20Dirty > 0 || ema15mDirty > 0) {
+    await saveCandleReversalStatsState(st);
+  }
 
   const conflictSets = await loadPendingConflictSets();
   const day1StatsEnabled = isCandleReversal1dStatsEnabled();

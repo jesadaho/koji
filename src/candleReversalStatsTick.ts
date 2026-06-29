@@ -26,7 +26,7 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
 } from "@/lib/statsStrategyProfitClient";
-import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
+import { candleLowerWickRatio } from "./candleReversalDetect";
 import {
   fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesRange,
@@ -387,6 +387,34 @@ async function backfillReversalEmaSlopes(rows: CandleReversalStatsRow[]): Promis
 
 async function backfillRangeRankInLookback(rows: CandleReversalStatsRow[]): Promise<number> {
   return backfillLookbackRanksInWindow(rows);
+}
+
+async function backfillLowerWickRatioPct(rows: CandleReversalStatsRow[]): Promise<number> {
+  let updated = 0;
+  for (const row of rows) {
+    if (signalBarTf(row) !== "1h" || (row.tradeSide ?? "short") !== "short") continue;
+    if (row.lowerWickRatioPct != null && Number.isFinite(row.lowerWickRatioPct)) continue;
+    if (!Number.isFinite(row.signalBarOpenSec) || row.signalBarOpenSec <= 0) continue;
+    const tf = signalBarTf(row);
+    const barDur = signalBarDurationSecByTf(tf);
+    try {
+      const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
+        startTimeMs: row.signalBarOpenSec * 1000,
+        endTimeMs: (row.signalBarOpenSec + barDur) * 1000,
+        limit: 8,
+      });
+      if (!pack || pack.timeSec.length === 0) continue;
+      const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
+      if (iSig < 0) continue;
+      const ratio = candleLowerWickRatio(pack, iSig);
+      if (!Number.isFinite(ratio)) continue;
+      row.lowerWickRatioPct = ratio * 100;
+      updated += 1;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] backfill lowerWickRatioPct", row.symbol, e);
+    }
+  }
+  return updated;
 }
 
 async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<number> {
@@ -906,6 +934,7 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillAllStatsRowsOpenInterest(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsBtcDomEma20_4h(state.rows, { maxRowsPerPass: 15, maxPasses: 5 });
   dirty += await backfillSignalVolVsSma(state.rows);
+  dirty += await backfillLowerWickRatioPct(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += await backfillPumpCycleSwingLowForRows(state.rows, (row) =>
     candleReversalStatsAnchorCloseSec(row),

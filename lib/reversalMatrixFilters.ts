@@ -8,6 +8,10 @@ import type {
   CandleReversalTradeSide,
 } from "@/lib/candleReversalStatsClient";
 import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
+import {
+  REVERSAL_MARKET_ENTRY_CANDIDATE_CRITERIA,
+  reversalRowIsMarketEntryCandidate,
+} from "@/lib/reversalMarketEntryCandidate";
 
 export type ReversalMatrixFilter =
   | "all"
@@ -23,7 +27,8 @@ export type ReversalMatrixFilter =
   | "meanReversion"
   | "charging"
   | "parabolic"
-  | "weakTrend";
+  | "weakTrend"
+  | "marketEntry";
 
 /** โปรไฟล์ Quality Signal ในตารางสถิติ (แต่ละ section) */
 export type ReversalQualitySignalProfile = "short" | "long1h";
@@ -159,6 +164,8 @@ export const REVERSAL_WEAK_TREND_MATRIX_EMA20_1H_SLOPE_MAX_EXCLUSIVE = 13;
 export const REVERSAL_WEAK_TREND_MATRIX_CRITERIA =
   "R% สัญญาณ <3% · EMA20∠1h <13%";
 
+export const REVERSAL_MARKET_ENTRY_MATRIX_CRITERIA = REVERSAL_MARKET_ENTRY_CANDIDATE_CRITERIA;
+
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   value: ReversalMatrixFilter;
   label: string;
@@ -175,6 +182,7 @@ export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   { value: "meanReversion", label: "Mean Reversion" },
   { value: "charging", label: "Charging" },
   { value: "weakTrend", label: "Weak Trend" },
+  { value: "marketEntry", label: "Market Entry" },
   { value: "neutral", label: "Neutral" },
 ];
 
@@ -227,6 +235,9 @@ export function reversalMatrixFilterTitle(
   }
   if (filter === "weakTrend") {
     return `Weak Trend: ${REVERSAL_WEAK_TREND_MATRIX_CRITERIA} — เทรนด์อ่อน · ทิศแนะนำ Short (priority)`;
+  }
+  if (filter === "marketEntry") {
+    return `Market Entry: ${REVERSAL_MARKET_ENTRY_MATRIX_CRITERIA}`;
   }
   return "Matrix preset — กรองชุดเงื่อนไขสำเร็จรูป";
 }
@@ -532,6 +543,15 @@ export function reversalRowMatchesWeakTrendMatrix(
   return reversalWeakTrendPass(row);
 }
 
+export function reversalRowMatchesMarketEntryMatrix(
+  row: Pick<
+    CandleReversalStatsRow,
+    "priceVsEma20_15mPct" | "signalVolVsSma" | "lowerWickRatioPct"
+  >,
+): boolean {
+  return reversalRowIsMarketEntryCandidate(row);
+}
+
 export function reversalStatsRowMatchesMatrixFilter(
   row: CandleReversalStatsRow,
   filter: ReversalMatrixFilter,
@@ -550,6 +570,7 @@ export function reversalStatsRowMatchesMatrixFilter(
   if (filter === "parabolic") return reversalRowMatchesParabolicMatrix(row);
   if (filter === "meanReversion") return reversalRowMatchesMeanReversionMatrix(row);
   if (filter === "weakTrend") return reversalRowMatchesWeakTrendMatrix(row);
+  if (filter === "marketEntry") return reversalRowMatchesMarketEntryMatrix(row);
   return reversalRowMatchesQualitySignalMatrix(row);
 }
 
