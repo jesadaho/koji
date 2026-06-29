@@ -32,7 +32,7 @@ import {
   reversalTpSlPlanFromRow,
   type ReversalTpSlSignalKind,
 } from "@/lib/reversalTpSlSettings";
-import { reversalMatchesQualitySignalForAlert, reversalAutoTradePlaySidesFromSettings, reversalSuggestedTradeSide } from "@/lib/reversalMatrixFilters";
+import { reversalMatchesQualitySignalForAlert, reversalAutoTradePlaySidesFromSettings, reversalRowMatchesMarketEntryMatrix, reversalSuggestedTradeSide } from "@/lib/reversalMatrixFilters";
 import {
   resolveReversalLongTradeLeverage,
   reversalLongDynamicLeverageNote,
@@ -49,7 +49,9 @@ import {
   reversalEntrySettingsFromRow,
   reversalEntryUseMarket,
   type ReversalAutoTradeEntryMode,
+  type ReversalShortHybridMarketBypass,
 } from "@/lib/reversalAutoTradeEntry";
+import { priceVsEmaDistPct } from "./statsEma20Dist";
 
 /** ค่าเริ่มต้นเปิด — ตั้ง REVERSAL_AUTOTRADE_ENABLED=0/false/off/no เพื่อปิดเซิร์ฟทั้งหมด */
 export function isReversalAutotradeEnabled(): boolean {
@@ -183,6 +185,8 @@ export type ReversalAutoTradeInput = {
   priceVsEma20_4hPct?: number | null;
   /** EMA20 4h slope 7d % — Long candidate */
   ema20_4hSlopePct7d?: number | null;
+  /** lower wick / range × 100 บนแท่งสัญญาณ — Market Entry matrix */
+  lowerWickRatioPct?: number | null;
   /** เวลาแจ้ง alert (ms) — ใช้ conflict check */
   alertedAtMs?: number;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
@@ -363,7 +367,8 @@ function logReversalAutoOpen(
  * - มี MEXC creds
  * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — ดู REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA
  * - entry Short: Hybrid (EMA 15m) หรือ Market · Long (fade + ทิศที่เล่น Long): Market ตลอด
- *   - Hybrid Short: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.)
+ *   - Hybrid Short: EMA20Δ15m < −2% → Market · ผ่าน Matrix Market Entry → Market
+ *   - นอกนั้น: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.)
  * - TP ใช้ cron tick ปิด market (ไม่วาง plan TP บน MEXC)
  * - 1 order/เหรียญ/วัน (BKK) — ปลดล็อกเมื่อ Limit หมดอายุโดยไม่ fill
  */
@@ -429,6 +434,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         emaFallbackMarket: boolean;
         markSource: "mexc" | "binance" | "signal" | "kline";
         emaLabel: string;
+        hybridMarketBypass?: ReversalShortHybridMarketBypass;
       }
     | { ok: false; reasonCode: "mark_unavailable" | "ema_or_price_unavailable"; error: string };
 
@@ -568,10 +574,37 @@ export async function runReversalAutoTradeAfterReversalAlert(
     }
 
     const entryEma = mode === "hybrid_ema" ? await emaForPeriod(emaPeriod) : null;
+    const ema20ForDist = await emaForPeriod(REVERSAL_ENTRY_EMA_PERIOD_DEFAULT);
+    const priceVsEma20_15mPct =
+      ema20ForDist != null ? priceVsEmaDistPct(markRes.mark, ema20ForDist) : null;
+    const marketEntryMatrixPass =
+      signalKind === "short" &&
+      input.signalBarTf === "1h" &&
+      reversalRowMatchesMarketEntryMatrix({
+        trendGainPct: input.trendGainPct,
+        signalVolVsSma: input.signalVolVsSma,
+        barRangePctSignal: input.barRangePctSignal,
+        priceVsEma20_1hPct: input.priceVsEma20_1hPct,
+        ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
+        priceVsEma20_4hPct: input.priceVsEma20_4hPct,
+        ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
+        ema4hSlopePct7d: input.ema4hSlopePct7d,
+        ageOfTrendHours: input.ageOfTrendHours,
+        priceVsEma20_15mPct,
+        lowerWickRatioPct: input.lowerWickRatioPct,
+      });
     const entryPick = reversalEntryUseMarket({
       mode,
       mark: markRes.mark,
       entryEma,
+      signalKind,
+      shortHybrid:
+        signalKind === "short"
+          ? {
+              priceVsEma20_15mPct,
+              marketEntryMatrixPass,
+            }
+          : undefined,
     });
     const emaLabel = reversalEma15mLabel(emaPeriod);
 
@@ -586,6 +619,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
       emaFallbackMarket: entryPick.emaFallbackMarket,
       markSource: markRes.markSource,
       emaLabel,
+      hybridMarketBypass: entryPick.hybridMarketBypass,
     };
   }
 

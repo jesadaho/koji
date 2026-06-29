@@ -7,6 +7,11 @@ export const REVERSAL_ENTRY_EMA_PERIOD_MIN = 5;
 export const REVERSAL_ENTRY_EMA_PERIOD_MAX = 200;
 export const REVERSAL_LIMIT_EXPIRE_MS = 8 * 3600 * 1000;
 
+/** Hybrid SHORT — EMA20Δ15m ต่ำกว่านี้ → Market ทันที */
+export const REVERSAL_SHORT_HYBRID_IMMEDIATE_MARKET_EMA20_15M_DIFF_MAX_PCT = -2.0;
+
+export type ReversalShortHybridMarketBypass = "ema20_15m_deep" | "market_entry_matrix";
+
 export function reversalEma15mLabel(period: number): string {
   return `EMA${period} 15m`;
 }
@@ -67,13 +72,51 @@ export function reversalEntrySettingsFromRow(
   };
 }
 
+export function reversalShortHybridImmediateMarketByEma20_15m(
+  priceVsEma20_15mPct: number | null | undefined,
+): boolean {
+  return (
+    priceVsEma20_15mPct != null &&
+    Number.isFinite(priceVsEma20_15mPct) &&
+    priceVsEma20_15mPct < REVERSAL_SHORT_HYBRID_IMMEDIATE_MARKET_EMA20_15M_DIFF_MAX_PCT
+  );
+}
+
 export function reversalEntryUseMarket(input: {
   mode: ReversalAutoTradeEntryMode;
   mark: number;
   entryEma: number | null;
-}): { useMarket: boolean; aboveEma: boolean; emaFallbackMarket: boolean } {
+  signalKind?: ReversalEntrySignalKind;
+  shortHybrid?: {
+    priceVsEma20_15mPct: number | null;
+    marketEntryMatrixPass: boolean;
+  };
+}): {
+  useMarket: boolean;
+  aboveEma: boolean;
+  emaFallbackMarket: boolean;
+  hybridMarketBypass?: ReversalShortHybridMarketBypass;
+} {
   if (input.mode === "market") {
     return { useMarket: true, aboveEma: true, emaFallbackMarket: input.entryEma == null };
+  }
+  if (input.signalKind === "short" && input.shortHybrid) {
+    if (reversalShortHybridImmediateMarketByEma20_15m(input.shortHybrid.priceVsEma20_15mPct)) {
+      return {
+        useMarket: true,
+        aboveEma: true,
+        emaFallbackMarket: false,
+        hybridMarketBypass: "ema20_15m_deep",
+      };
+    }
+    if (input.shortHybrid.marketEntryMatrixPass) {
+      return {
+        useMarket: true,
+        aboveEma: true,
+        emaFallbackMarket: false,
+        hybridMarketBypass: "market_entry_matrix",
+      };
+    }
   }
   const emaFallbackMarket = input.entryEma == null;
   const aboveEma = emaFallbackMarket ? true : input.mark > (input.entryEma as number);

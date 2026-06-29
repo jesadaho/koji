@@ -2092,7 +2092,11 @@ export default function SettingsTelegramMiniApp() {
           (สัญญาณ Short ตามแผน · หรือสัญญาณ Long แบบ fade) เมื่อผ่าน <strong>Quality Signal</strong> (ถ้าเปิด gate) · entry ตั้งค่าได้ด้านล่าง (default Hybrid EMA20 บน TF 15m):
         </p>
         <ul className="sub" style={{ marginTop: "0.35rem", paddingLeft: "1.25rem" }}>
-          <li><strong>Hybrid (EMA retest)</strong>: ราคาเหนือ EMA → <strong>Market SHORT</strong> · ราคา ≤ EMA → <strong>Limit SHORT</strong> ที่ EMA (หมดอายุ 8 ชม.)</li>
+          <li>
+            <strong>Hybrid (EMA retest)</strong>: EMA20Δ15m &lt; −2% → <strong>Market SHORT</strong> · ผ่าน Matrix{" "}
+            <strong>Market Entry</strong> → <strong>Market SHORT</strong> · ราคาเหนือ EMA → <strong>Market SHORT</strong> ·
+            ราคา ≤ EMA → <strong>Limit SHORT</strong> ที่ EMA (หมดอายุ 8 ชม.)
+          </li>
           <li><strong>Market ตลอด</strong>: เปิด Market SHORT ทุกสัญญาณ ไม่ใช้ EMA/Limit</li>
         </ul>
         <p className="sub" style={{ marginTop: "0.5rem" }}>

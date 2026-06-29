@@ -845,6 +845,12 @@ async function notifyResults(
             ema20_1hSlopePct7d: mktSnap.ema20_1hSlopePct7d,
             priceVsEma20_4hPct: mktSnap.priceVsEma20_4hPct,
             ema20_4hSlopePct7d: mktSnap.ema20_4hSlopePct7d,
+            lowerWickRatioPct:
+              tradeSide === "short" &&
+              sig.lowerWickRatio != null &&
+              Number.isFinite(sig.lowerWickRatio)
+                ? sig.lowerWickRatio * 100
+                : null,
             alertedAtMs: nowMs,
             signalClosePrice: sig.c,
           });
