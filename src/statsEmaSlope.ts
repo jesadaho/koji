@@ -19,6 +19,9 @@ export const STATS_EMA4H_SLOPE_LOOKBACK_BARS = 42;
 /** 7 วันบน 1h = 168 แท่ง */
 export const STATS_EMA1H_SLOPE_LOOKBACK_BARS = 168;
 
+/** แถวที่คำนวณ EMA12∠1h ณ checkpoint 12 ชม. หลังสัญญาณแล้ว */
+export const STATS_EMA12_1H_AT12H_VERSION = 1;
+
 /** แถวที่คำนวณ BTC EMA slope ณ alertedAtMs แล้ว (ไม่ใช่ backfill ค่าเดียวทั้งตาราง) */
 export const STATS_BTC_EMA_SLOPES_VERSION = 2;
 
@@ -172,6 +175,22 @@ export async function fetchSymbolEmaSlopesAtMs(
       ? computeEmaSlopePctFromPackAt(pack1d, "1d", STATS_EMA1D_SLOPE_LOOKBACK_BARS, atMs)
       : null,
   };
+}
+
+/** EMA(12) 1h slope 7d ณ atMs — ใช้เก็บ checkpoint หลังสัญญาณ (เช่น @12h) */
+export async function fetchSymbolEma12_1hSlopePct7dAtMs(
+  symbol: string,
+  atMs: number,
+): Promise<number | null> {
+  if (!isBinanceIndicatorFapiEnabled()) return null;
+  if (!Number.isFinite(atMs) || atMs <= 0) return null;
+  const ageMs = Date.now() - atMs;
+  if (ageMs >= 0 && ageMs < LIVE_ALERT_MAX_AGE_MS) {
+    return fetchSymbolEmaSlopePctTf(symbol, "1h", STATS_EMA1H_SLOPE_LOOKBACK_BARS);
+  }
+  const pack = await fetchKlinePackThrough(symbol, "1h", atMs, STATS_EMA1H_SLOPE_LOOKBACK_BARS);
+  if (!pack) return null;
+  return computeEmaSlopePctFromPackAt(pack, "1h", STATS_EMA1H_SLOPE_LOOKBACK_BARS, atMs);
 }
 
 let btcEmaSlopesCache: {

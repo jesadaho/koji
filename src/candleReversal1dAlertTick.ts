@@ -711,6 +711,7 @@ async function notifyResults(
           tradeSide === "short" && sig.lowerWickRatio != null && Number.isFinite(sig.lowerWickRatio)
             ? sig.lowerWickRatio * 100
             : null,
+        signalBarLow: tradeSide === "short" && Number.isFinite(sig.l) && sig.l > 0 ? sig.l : null,
         bodyPct: sig.bodyRatio * 100,
         highRankInLookback: sig.highRankInLookback ?? null,
         lowRankInLookback: sig.lowRankInLookback ?? null,

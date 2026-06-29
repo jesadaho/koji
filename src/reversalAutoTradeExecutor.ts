@@ -30,7 +30,7 @@ import {
   withReversalPlacedUnlocked,
   type ReversalAutoTradeState,
 } from "./reversalAutoTradeStateStore";
-import { cancelActiveTpSlPlanOrders } from "./autoTradeTpSlPlanOrders";
+import { cancelActiveTpSlPlanOrders, placeTpPlanOrdersAfterOpen } from "./autoTradeTpSlPlanOrders";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } from "./candleReversalDetect";
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
@@ -1216,10 +1216,22 @@ export async function runReversalAutoTradeAfterReversalAlert(
       }
 
       let mexcAvgEntry: number | null = null;
+      let posAfterOpen: OpenPositionRow | undefined;
       let trackedTpSl = false;
+      let exchangeTpLines: string[] = [];
+      let exchangeTpWarnings: string[] = [];
+      let tpPlanOrderIds: {
+        tp1PlanOrderId?: string;
+        tp2PlanOrderId?: string;
+        initialHoldVol?: number;
+        tp1PlanVol?: number;
+      } = {};
       if (useMarket && plan.enabled) {
         try {
           const posAfter = await getOpenPositions(creds, contractSymbol);
+          posAfterOpen = openMexcLong
+            ? findMexcOpenPositionLong(posAfter, contractSymbol)
+            : findMexcOpenPositionShort(posAfter, contractSymbol);
           mexcAvgEntry = openMexcLong
             ? readMexcAvgEntryPriceLong(posAfter, contractSymbol)
             : readMexcAvgEntryPriceShort(posAfter, contractSymbol);
@@ -1228,6 +1240,32 @@ export async function runReversalAutoTradeAfterReversalAlert(
         }
         const entryForTrack =
           typeof mexcAvgEntry === "number" && mexcAvgEntry > 0 ? mexcAvgEntry : markPrice;
+        if (entryForTrack > 0 && posAfterOpen && mexcAvgEntry != null && mexcAvgEntry > 0) {
+          try {
+            const placed = await placeTpPlanOrdersAfterOpen(creds, {
+              contractSymbol,
+              position: posAfterOpen,
+              entry: mexcAvgEntry,
+              side: mexcSide,
+              tp1PricePct: plan.tp1PricePct,
+              tp1PartialPct: plan.tp1PartialPct,
+              tp2PricePct: plan.tp2PricePct,
+            });
+            if (placed) {
+              exchangeTpLines = placed.notifyLines;
+              exchangeTpWarnings = placed.warnings;
+              if (placed.tp1PlanOrderId) tpPlanOrderIds.tp1PlanOrderId = placed.tp1PlanOrderId;
+              if (placed.tp2PlanOrderId) tpPlanOrderIds.tp2PlanOrderId = placed.tp2PlanOrderId;
+              tpPlanOrderIds.initialHoldVol = placed.initialHoldVol;
+              tpPlanOrderIds.tp1PlanVol = placed.tp1Vol;
+            }
+          } catch (e) {
+            console.error("[reversalAutoTrade] placeTpPlanOrdersAfterOpen", contractSymbol, userId, e);
+            exchangeTpWarnings.push(
+              `วาง plan TP ไม่สำเร็จ: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200),
+            );
+          }
+        }
         if (entryForTrack > 0) {
           state = withReversalActiveOpen(
             state,
@@ -1248,6 +1286,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
               slEntryOffsetPct: plan.slEntryOffsetPct,
               slAtEntryAfter24hIfGreenEnabled: plan.slAtEntryAfter24hIfGreenEnabled,
               ema20_1hSlopePct7d: ema20_1hPct ?? undefined,
+              ...tpPlanOrderIds,
             },
             dayKey,
           );
@@ -1261,7 +1300,10 @@ export async function runReversalAutoTradeAfterReversalAlert(
           if (trackedTpSl && mexcAvgEntry != null) {
             tpSlLines.push(
               `ราคาเข้าเฉลี่ย MEXC: ${fmtReversalAutoTradePrice(mexcAvgEntry)} USDT — ใช้คำนวณ % drop จริง`,
-              `กลยุทธ์: ${reversalTpStrategySummary({ close12hEnabled: plan.tp12hCloseEnabled })}`,
+              `TP1: +${plan.tp1PricePct}% ปิด ${plan.tp1PartialPct}% · TP2: +${plan.tp2PricePct}% ปิดที่เหลือ · หลัง TP1 → SL บังทุน`,
+              ...exchangeTpLines,
+              ...(exchangeTpWarnings.length ? exchangeTpWarnings.map((w) => `⚠️ ${w}`) : []),
+              `กลยุทธ์เวลา: ${reversalTpStrategySummary({ close12hEnabled: plan.tp12hCloseEnabled })}`,
               `ครบ ${plan.maxHoldHours} ชม. → ปิดทั้งหมด (force)`,
             );
           } else {

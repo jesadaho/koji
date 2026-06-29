@@ -6,9 +6,13 @@ import {
   resolveAutoTradeMaxHoldHours,
 } from "@/lib/autoTradeMaxHold";
 import {
+  DEFAULT_SL_ARM_ROI_PCT,
   DEFAULT_SL_ENTRY_OFFSET_PCT,
   formatSlBreakevenTriggerLabel,
+  parseSlArmRoiPct,
   parseSlEntryOffsetPct,
+  resolveSlAtEntryAfter24hIfGreenEnabled,
+  slBreakevenDueAfter24hIfGreen,
 } from "@/lib/tpSlBreakevenPlan";
 import {
   reversalTpStrategyLive12hShouldClose,
@@ -17,15 +21,21 @@ import {
   reversalTpStrategyResolvedEma20_1hSlope,
 } from "@/lib/reversalTpStrategy";
 import {
+  cancelActiveTpPlanOrders,
   cancelActiveTpSlPlanOrders,
+  shouldExecuteMarkTp1Fallback,
+  tp1PlanLikelyFilled,
 } from "./autoTradeTpSlPlanOrders";
 import { mexcSlBreakevenTriggerPrice } from "./autoTradeSlBreakeven";
 import {
   closeAllOpenForSymbol,
+  createPartialCloseOrder,
+  fetchContractDetailPublic,
   getContractLastPricePublic,
   getFuturesUserPositionMode,
   getOpenPositions,
   placePlanOrderStopLoss,
+  roundVolDown,
   type MexcCredentials,
   type OpenPositionRow,
 } from "./mexcFuturesClient";
@@ -37,6 +47,7 @@ import {
   withReversalActiveRemoved,
   withReversalHoldExtendedForRed,
   withReversalSlAtEntryArmed,
+  withReversalTp1Done,
   withReversalTp12hChecked,
   withReversalTp24hChecked,
   type ReversalAutoTradeActive,
@@ -88,7 +99,10 @@ type TpSlContext = {
   position: OpenPositionRow;
   markPrice: number;
   positionMode: 1 | 2;
+  entry: number;
 };
+
+type SlBreakevenArmReason = "roi" | "24h_green" | "24h_strategy";
 
 async function handlePositionDisappeared(args: {
   userId: string;
@@ -196,16 +210,203 @@ async function handleReversal24hStrategyClose(ctx: TpSlContext): Promise<{ close
   return { closed: true };
 }
 
+async function handleTp2Hit(ctx: TpSlContext): Promise<{ closed: boolean }> {
+  const { userId, creds, active, markPrice, entry } = ctx;
+  await cancelActiveTpSlPlanOrders(creds, active);
+  const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
+  const move = pricePctDrop(active.side, entry, markPrice);
+  const tp2 = active.tp2PricePct ?? 25;
+  if (!r.success) {
+    await notifyLines(userId, [
+      "Koji — Reversal TP/SL (MEXC)",
+      `❌ TP2 (${tp2}%) hit แต่ปิดไม่สำเร็จ`,
+      `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+      `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${move.toFixed(2)}%`,
+      r.message ? `MEXC: ${r.message}` : "",
+    ]);
+    return { closed: false };
+  }
+  await notifyLines(userId, [
+    "Koji — Reversal TP/SL (MEXC)",
+    `💰 TP2 hit — ราคาเคลื่อน ${move.toFixed(2)}% (≥ ${tp2}%) → ปิดทั้งหมด`,
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)}`,
+  ]);
+  return { closed: true };
+}
+
+/** หลัง plan TP1 execute บน MEXC — ตั้ง SL บังทุนที่เหลือ (ไม่ partial close ซ้ำ) */
+async function handleTp1BreakevenSlOnly(ctx: TpSlContext): Promise<{ tp1Done: boolean; slOrderId?: string }> {
+  const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
+  if (active.slBreakevenArmed || active.slPlanOrderId?.trim()) {
+    return { tp1Done: true, slOrderId: active.slPlanOrderId };
+  }
+  const move = pricePctDrop(active.side, entry, markPrice);
+  const tp1 = active.tp1PricePct ?? 10;
+
+  if (!(position.holdVol > 0)) {
+    return { tp1Done: true };
+  }
+
+  const slOffset = parseSlEntryOffsetPct(active.slEntryOffsetPct, DEFAULT_SL_ENTRY_OFFSET_PCT);
+  const trigger = await mexcSlBreakevenTriggerPrice(
+    active.contractSymbol,
+    active.side,
+    entry,
+    slOffset,
+  );
+  const slRes =
+    trigger > 0
+      ? await placePlanOrderStopLoss(creds, {
+          contractSymbol: active.contractSymbol,
+          position,
+          triggerPrice: trigger,
+          positionMode,
+        })
+      : { success: false as const, code: -1, message: "trigger ไม่ถูกต้อง" };
+  const slOrderId =
+    slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
+      ? String((slRes.data as { orderId: unknown }).orderId)
+      : undefined;
+
+  await notifyLines(userId, [
+    "Koji — Reversal TP/SL (MEXC)",
+    `🎯 Plan TP1 execute แล้ว — ราคาเคลื่อน ${move.toFixed(2)}% (≥ ${tp1}%)`,
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    `Entry MEXC: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · holdVol คงเหลือ: ${position.holdVol}`,
+    slRes.success
+      ? `🛡️ ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
+      : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — กรุณาตั้งเองที่ MEXC`,
+  ]);
+
+  return { tp1Done: true, slOrderId };
+}
+
+async function handleTp1Hit(
+  ctx: TpSlContext,
+  opts?: { cancelExchangeTpPlans?: boolean },
+): Promise<{ tp1Done: boolean; slOrderId?: string }> {
+  const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
+  const move = pricePctDrop(active.side, entry, markPrice);
+  const tp1 = active.tp1PricePct ?? 10;
+  if (opts?.cancelExchangeTpPlans) {
+    await cancelActiveTpPlanOrders(creds, active);
+  }
+  const detail = await fetchContractDetailPublic(active.contractSymbol);
+  if (!detail) {
+    await notifyLines(userId, [
+      "Koji — Reversal TP/SL (MEXC)",
+      `❌ TP1 (${tp1}%) hit แต่ดึง contract detail ไม่ได้ — ข้ามรอบนี้`,
+      `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+      `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${move.toFixed(2)}%`,
+    ]);
+    return { tp1Done: false };
+  }
+  const partialPct = Math.min(99, Math.max(1, active.tp1PartialPct ?? 50));
+  const partialVolRaw = position.holdVol * (partialPct / 100);
+  const partialVol = roundVolDown(partialVolRaw, detail);
+  if (!(partialVol > 0)) {
+    await notifyLines(userId, [
+      "Koji — Reversal TP/SL (MEXC)",
+      `❌ TP1 hit แต่คำนวณ partial vol ไม่ได้ (vol น้อยเกิน) — ข้าม`,
+      `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+      `holdVol: ${position.holdVol} · partial ${partialPct}% ≈ ${partialVolRaw.toFixed(4)}`,
+    ]);
+    return { tp1Done: false };
+  }
+
+  const partialRes = await createPartialCloseOrder(creds, {
+    symbol: active.contractSymbol,
+    position,
+    vol: partialVol,
+    markPrice,
+    positionMode,
+  });
+  if (!partialRes.success) {
+    await notifyLines(userId, [
+      "Koji — Reversal TP/SL (MEXC)",
+      `❌ TP1 hit แต่ปิด partial ไม่สำเร็จ — ไม่ตั้ง SL บังทุนรอบนี้`,
+      `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+      `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${move.toFixed(2)}%`,
+      partialRes.message ? `MEXC: ${partialRes.message}` : `MEXC: code ${partialRes.code}`,
+    ]);
+    return { tp1Done: false };
+  }
+
+  let remaining: OpenPositionRow | undefined;
+  try {
+    const posAfter = await getOpenPositions(creds, active.contractSymbol);
+    remaining = findActivePositionShort(posAfter, active.contractSymbol, active.side);
+  } catch (e) {
+    console.error("[reversalTpSlTick] getOpenPositions after partial", active.contractSymbol, e);
+  }
+
+  if (!remaining || !(remaining.holdVol > 0)) {
+    await notifyLines(userId, [
+      "Koji — Reversal TP/SL (MEXC)",
+      `🎯 TP1 hit — ปิด ${partialPct}% แล้ว · แต่ตำแหน่งที่เหลือไม่พบ (อาจปิดเสร็จทั้งหมด)`,
+      `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+      `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${move.toFixed(2)}%`,
+      "ระบบจะเคลียร์ state รอบถัดไป",
+    ]);
+    return { tp1Done: true };
+  }
+
+  let slOrderId = active.slPlanOrderId?.trim();
+  let slLine = slOrderId ? `🛡️ SL@entry ตั้งแล้ว (#${slOrderId})` : "";
+  if (!slOrderId) {
+    const slOffset = parseSlEntryOffsetPct(active.slEntryOffsetPct, DEFAULT_SL_ENTRY_OFFSET_PCT);
+    const trigger = await mexcSlBreakevenTriggerPrice(
+      active.contractSymbol,
+      active.side,
+      entry,
+      slOffset,
+    );
+    const slRes =
+      trigger > 0
+        ? await placePlanOrderStopLoss(creds, {
+            contractSymbol: active.contractSymbol,
+            position: remaining,
+            triggerPrice: trigger,
+            positionMode,
+          })
+        : { success: false as const, code: -1, message: "trigger ไม่ถูกต้อง" };
+    slOrderId =
+      slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
+        ? String((slRes.data as { orderId: unknown }).orderId)
+        : undefined;
+    slLine = slRes.success
+      ? `🛡️ ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)} (plan order${slOrderId ? ` #${slOrderId}` : ""})`
+      : `⚠️ ตั้ง SL บังทุนไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — ตั้งเองที่ MEXC`;
+  }
+
+  await notifyLines(userId, [
+    "Koji — Reversal TP/SL (MEXC)",
+    `🎯 TP1 hit — ราคาเคลื่อน ${move.toFixed(2)}% (≥ ${tp1}%) → ปิด ${partialPct}% ของ vol`,
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    `Entry MEXC: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)}`,
+    `Partial vol ปิด: ${partialVol} · holdVol คงเหลือ: ${remaining.holdVol}`,
+    slLine,
+  ]);
+
+  return { tp1Done: true, slOrderId };
+}
+
 async function handleSlAtEntryOnRoi(
   ctx: TpSlContext,
+  opts?: { reason?: SlBreakevenArmReason },
 ): Promise<{ ok: boolean; slOrderId?: string; slBreakevenAttempted?: boolean }> {
-  const { userId, creds, active, position, markPrice, positionMode } = ctx;
+  const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
   if (active.slBreakevenArmed || active.slPlanOrderId?.trim()) {
     return { ok: true, slOrderId: active.slPlanOrderId };
   }
-  const drop = pricePctDrop(active.side, active.mexcAvgEntryPrice, markPrice);
-  const entry = active.mexcAvgEntryPrice;
-  const slOffset = parseSlEntryOffsetPct(active.slEntryOffsetPct, DEFAULT_SL_ENTRY_OFFSET_PCT);
+  const reason = opts?.reason ?? "24h_strategy";
+  const drop = pricePctDrop(active.side, entry, markPrice);
+  const slArm = parseSlArmRoiPct(active.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT);
+  const slOffset =
+    reason === "24h_green"
+      ? 0
+      : parseSlEntryOffsetPct(active.slEntryOffsetPct, DEFAULT_SL_ENTRY_OFFSET_PCT);
 
   if (!(position.holdVol > 0)) {
     return { ok: false };
@@ -230,7 +431,12 @@ async function handleSlAtEntryOnRoi(
       ? String((slRes.data as { orderId: unknown }).orderId)
       : undefined;
 
-  const headline = `🛡️ ครบ 24 ชม. ROI > 3% + EMA20∠1h<0 — ถือต่อ · ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`;
+  const headline =
+    reason === "24h_green"
+      ? `🛡️ ครบ 24 ชม. และยังเขียว — ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`
+      : reason === "roi"
+        ? `🛡️ ROI ≥ ${slArm}% — ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)} (ไม่รอ partial TP1)`
+        : `🛡️ ครบ 24 ชม. ROI > 3% + EMA20∠1h<0 — ถือต่อ · ตั้ง SL บังทุน ${formatSlBreakevenTriggerLabel(active.side, entry, slOffset, fmtPrice)}`;
 
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
@@ -304,6 +510,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           position: pos,
           markPrice: mark,
           positionMode,
+          entry: a.mexcAvgEntryPrice,
         };
 
         const drop = pricePctDrop(a.side, a.mexcAvgEntryPrice, mark);
@@ -362,7 +569,90 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           continue;
         }
 
-        const dropForTp = pricePctDrop(a.side, a.mexcAvgEntryPrice, mark);
+        const entry = a.mexcAvgEntryPrice;
+        if (!(entry > 0)) continue;
+
+        const exchangeTp1 = Boolean(a.tp1PlanOrderId?.trim());
+        const exchangeTp2 = Boolean(a.tp2PlanOrderId?.trim());
+        const move = pricePctDrop(a.side, entry, mark);
+        const tp1 = a.tp1PricePct ?? 10;
+        const tp1Filled = tp1PlanLikelyFilled(a.initialHoldVol, a.tp1PlanVol, pos.holdVol);
+
+        if (exchangeTp1 && !a.tp1Done && tp1Filled) {
+          if (a.slBreakevenArmed || a.slPlanOrderId?.trim()) {
+            state = withReversalTp1Done(state, userId, a.contractSymbol, a.side, a.slPlanOrderId);
+            actionsCount += 1;
+          } else {
+            const r = await handleTp1BreakevenSlOnly(ctx);
+            if (r.tp1Done) {
+              state = withReversalTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);
+              actionsCount += 1;
+            }
+          }
+          continue;
+        }
+
+        const tp2 = a.tp2PricePct ?? 25;
+        if (!exchangeTp2 && Number.isFinite(move) && move >= tp2) {
+          const r = await handleTp2Hit(ctx);
+          if (r.closed) {
+            state = withReversalActiveRemoved(state, userId, a.contractSymbol, a.side);
+            actionsCount += 1;
+          }
+          continue;
+        }
+        if (
+          shouldExecuteMarkTp1Fallback({
+            tp1Done: a.tp1Done === true,
+            exchangeTp1,
+            movePct: move,
+            tp1PricePct: tp1,
+            initialHoldVol: a.initialHoldVol,
+            tp1PlanVol: a.tp1PlanVol,
+            currentHoldVol: pos.holdVol,
+          })
+        ) {
+          const r = await handleTp1Hit(ctx, { cancelExchangeTpPlans: exchangeTp1 });
+          if (r.tp1Done) {
+            state = withReversalTp1Done(state, userId, a.contractSymbol, a.side, r.slOrderId);
+            actionsCount += 1;
+          }
+          continue;
+        }
+
+        if (
+          !a.slPlanOrderId?.trim() &&
+          !a.slBreakevenArmed &&
+          resolveSlAtEntryAfter24hIfGreenEnabled(a, tpPlan.slAtEntryAfter24hIfGreenEnabled) &&
+          slBreakevenDueAfter24hIfGreen(a.openedAtMs, move, nowMs)
+        ) {
+          const r = await handleSlAtEntryOnRoi(ctx, { reason: "24h_green" });
+          if (r.slBreakevenAttempted) {
+            state = withReversalSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
+            actionsCount += 1;
+          }
+          continue;
+        }
+
+        const slArm = parseSlArmRoiPct(a.slArmRoiPct, DEFAULT_SL_ARM_ROI_PCT);
+        if (
+          !a.slPlanOrderId?.trim() &&
+          !a.slBreakevenArmed &&
+          Number.isFinite(move) &&
+          move >= slArm &&
+          !a.tp1Done &&
+          !tp1Filled &&
+          move < tp1
+        ) {
+          const r = await handleSlAtEntryOnRoi(ctx, { reason: "roi" });
+          if (r.slBreakevenAttempted) {
+            state = withReversalSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
+            actionsCount += 1;
+          }
+          continue;
+        }
+
+        const dropForTp = move;
 
         const emaSlope = reversalTpStrategyResolvedEma20_1hSlope({
           ema20_1hSlopePct7d: a.ema20_1hSlopePct7d,
@@ -409,7 +699,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
               ema20_1hSlopePct7d: emaSlope,
             })
           ) {
-            const r = await handleSlAtEntryOnRoi(ctx);
+            const r = await handleSlAtEntryOnRoi(ctx, { reason: "24h_strategy" });
             if (r.slBreakevenAttempted) {
               state = withReversalSlAtEntryArmed(state, userId, a.contractSymbol, a.side, r.slOrderId);
               actionsCount += 1;

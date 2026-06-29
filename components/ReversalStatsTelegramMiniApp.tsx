@@ -83,6 +83,7 @@ import {
 } from "@/lib/snowballStatsClient";
 import {
   candleReversalDayOfWeekBkk,
+  candleReversalEma12_1hSlopeAt12hLabel,
   candleReversalEma1hSlopeLabel,
   candleReversalEma20_4hSlopeLabel,
   candleReversalEma20_15mSlopeLabel,
@@ -108,6 +109,7 @@ import {
   candleReversalSignalVolVsSmaLabel,
   candleReversalVolScoreLabel,
   candleReversalWickRatioPctLabel,
+  reversalDropFrom24hHighToSignalLowLabel,
   type CandleReversalSignalBarTf,
   type CandleReversalStatsApiPayload,
   type CandleReversalStatsRow,
@@ -766,11 +768,11 @@ function ReversalStatsSection({
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const columnGroupSpans = useMemo(() => {
     const signal = 9 + (showSuggestedSideColumn ? 1 : 0) + 11 + extraRankCols;
-    const bot = 23 + (showSuggestedSideColumn ? 4 : 0);
+    const bot = 23 + (showSuggestedSideColumn ? 5 : 0);
     const ai = showAiColumns ? REVERSAL_CHART_AI_TABLE_COLUMN_COUNT : 0;
     const result =
       3 +
-      (has48h ? 1 : 0) +
+      (has48h ? 2 : 0) +
       3 +
       2 +
       (has48h ? 2 : 0) +
@@ -973,6 +975,15 @@ function ReversalStatsSection({
               activeSort={sort}
               onSort={onSortColumn}
             />
+            {showSuggestedSideColumn ? (
+              <SortTh
+                label="24h→Low%"
+                sortKey="high24ToSignalLowPct"
+                title="Short: (high สูงสุดในรอบ 24h − low แท่งสัญญาณ) / high × 100"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
             <SortTh label="เนื้อ%" sortKey="bodyPct" title="เนื้อ ÷ ช่วงแท่ง" activeSort={sort} onSort={onSortColumn} />
             <SortTh
               label="Len#"
@@ -1278,6 +1289,15 @@ function ReversalStatsSection({
                 onSort={onSortColumn}
               />
             ) : null}
+            {has48h ? (
+              <SortTh
+                label="EMA12∠@12h"
+                sortKey="ema12_1hAt12h"
+                title="EMA(12) 1h slope % ย้อนหลัง 7 วัน ณ checkpoint 12 ชม. หลังสัญญาณ"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
             {horizonLabels[2] ? (
               <SortTh
                 label={horizonLabels[2]!}
@@ -1427,6 +1447,13 @@ function ReversalStatsSection({
                       ? candleReversalWickRatioPctLabel(r.lowerWickRatioPct)
                       : candleReversalWickRatioPctLabel(r.wickRatioPct)}
                   </td>
+                  {showSuggestedSideColumn ? (
+                    <td title="(high สูงสุดในรอบ 24h − low แท่งสัญญาณ) / high × 100">
+                      {(r.tradeSide ?? "short") === "short"
+                        ? reversalDropFrom24hHighToSignalLowLabel(r.dropFrom24hHighToSignalLowPct)
+                        : "—"}
+                    </td>
+                  ) : null}
                   <td>{r.bodyPct != null ? `${r.bodyPct.toFixed(1)}%` : "—"}</td>
                   <td>{candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars)}</td>
                   <td title="Len percentile">{statsLenPercentileLabel(r.lenPercentilePct)}</td>
@@ -1521,6 +1548,11 @@ function ReversalStatsSection({
                     <>
                   <td>{horizons[0]}</td>
                   <td>{horizons[1]}</td>
+                  {has48h ? (
+                    <td title="EMA(12) 1h slope 7d ณ checkpoint 12 ชม.">
+                      {candleReversalEma12_1hSlopeAt12hLabel(r.ema12_1hSlopePct7dAt12h)}
+                    </td>
+                  ) : null}
                   <td>{horizons[2]}</td>
                   {has48h ? <td>{horizons[3]}</td> : null}
                   <td>{r.maxRoiPct != null ? `${r.maxRoiPct.toFixed(2)}%` : "—"}</td>

@@ -61,6 +61,10 @@ export type CandleReversalStatsRow = {
   openInterestV?: number;
   /** EMA(12) 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
   ema1hSlopePct7d?: number | null;
+  /** EMA12∠1h ณ checkpoint 12 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) */
+  ema12_1hSlopePct7dAt12h?: number | null;
+  /** 1 = คำนวณ EMA12∠1h @12h แล้ว */
+  ema12_1hAt12hV?: number;
   /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
   ema4hSlopePct7d?: number | null;
   /** EMA(12) 1d — slope % ย้อนหลัง 7 แท่ง */
@@ -115,6 +119,10 @@ export type CandleReversalStatsRow = {
   wickRatioPct: number | null;
   /** Short เท่านั้น — ไส้ล่าง ÷ ช่วงแท่ง (%) */
   lowerWickRatioPct?: number | null;
+  /** Short — (high สูงสุดในรอบ 24h ก่อนปิดแท่งสัญญาณ − low แท่งสัญญาณ) / high × 100 */
+  dropFrom24hHighToSignalLowPct?: number | null;
+  /** 1 = คำนวณจากแท่ง 1h ในช่วง 24 ชม. */
+  signal24hHighDropV?: number;
   bodyPct: number | null;
   /** อันดับ high ในรอบ lookbackBars (1 = สูงสุด) */
   highRankInLookback: number | null;
@@ -294,6 +302,12 @@ export function candleReversalWickRatioPctLabel(pct: number | null | undefined):
   return `${pct.toFixed(1)}%`;
 }
 
+/** Short — ระยะจาก high สูงสุดในรอบ 24h ถึง low แท่งสัญญาณ */
+export function reversalDropFrom24hHighToSignalLowLabel(pct: number | null | undefined): string {
+  if (pct == null || !Number.isFinite(pct)) return "—";
+  return `${pct.toFixed(2)}%`;
+}
+
 /** Short: ไส้บน + ไส้ล่าง · Long: แสดงไส้ล่าง (wickRatioPct) เท่านั้น */
 export function candleReversalWickCellsLabel(
   row: Pick<CandleReversalStatsRow, "tradeSide" | "wickRatioPct" | "lowerWickRatioPct">,
@@ -398,6 +412,7 @@ export type CandleReversalStatsSortKey =
   | "sl"
   | "wickPct"
   | "lowerWickPct"
+  | "high24ToSignalLowPct"
   | "bodyPct"
   | "rangeRank"
   | "lenPct"
@@ -410,6 +425,7 @@ export type CandleReversalStatsSortKey =
   | "wick"
   | "h1"
   | "h2"
+  | "ema12_1hAt12h"
   | "h3"
   | "h4"
   | "roi"
@@ -571,6 +587,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.wickRatioPct, b.wickRatioPct);
     case "lowerWickPct":
       return cmpNumNullLast(a.lowerWickRatioPct, b.lowerWickRatioPct);
+    case "high24ToSignalLowPct":
+      return cmpNumNullLast(a.dropFrom24hHighToSignalLowPct, b.dropFrom24hHighToSignalLowPct);
     case "bodyPct":
       return cmpNumNullLast(a.bodyPct, b.bodyPct);
     case "rangeRank":
@@ -598,6 +616,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(reversalHorizonPct(a, 0), reversalHorizonPct(b, 0));
     case "h2":
       return cmpNumNullLast(reversalHorizonPct(a, 1), reversalHorizonPct(b, 1));
+    case "ema12_1hAt12h":
+      return cmpNumNullLast(a.ema12_1hSlopePct7dAt12h, b.ema12_1hSlopePct7dAt12h);
     case "h3":
       return cmpNumNullLast(reversalHorizonPct(a, 2), reversalHorizonPct(b, 2));
     case "h4":
@@ -634,6 +654,12 @@ export function sortCandleReversalStatsRows(
 export function candleReversalGreenDaysLabel(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v) || v < 0) return "—";
   return `${Math.floor(v)} วัน`;
+}
+
+export function candleReversalEma12_1hSlopeAt12hLabel(
+  pct: CandleReversalStatsRow["ema12_1hSlopePct7dAt12h"],
+): string {
+  return statsEmaSlopePctLabel(pct);
 }
 
 export function candleReversalEma1hSlopeLabel(pct: CandleReversalStatsRow["ema20_1hSlopePct7d"]): string {

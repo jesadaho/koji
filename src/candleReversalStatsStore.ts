@@ -21,6 +21,10 @@ import {
   fetchStatsEma20_15mEntryAtMs,
   mergeStatsEma20_15mEntryIntoRow,
 } from "./statsEma20_15mEntry";
+import {
+  fetchSignal24hHighDropAtSignal,
+  mergeSignal24hHighDropIntoRow,
+} from "./statsSignal24hHighDrop";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_ATR_PCT_4H_VERSION } from "./statsAtrPct4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
@@ -217,6 +221,7 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
         ? (r.strategyExitReason.trim() as CandleReversalStatsRow["strategyExitReason"])
         : null,
     lowerWickRatioPct: nullNum(r.lowerWickRatioPct),
+    dropFrom24hHighToSignalLowPct: nullNum(r.dropFrom24hHighToSignalLowPct),
     strategyProfitPct24h: nullNum(r.strategyProfitPct24h),
     strategyExitReason24h:
       typeof r.strategyExitReason24h === "string" && r.strategyExitReason24h.trim()
@@ -244,6 +249,7 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     openInterestChg24hPct: nullNum(r.openInterestChg24hPct),
     openInterestV: r.openInterestV === STATS_OPEN_INTEREST_VERSION ? STATS_OPEN_INTEREST_VERSION : undefined,
     ema1hSlopePct7d: nullNum(r.ema1hSlopePct7d),
+    ema12_1hSlopePct7dAt12h: nullNum(r.ema12_1hSlopePct7dAt12h),
     ema4hSlopePct7d: nullNum(r.ema4hSlopePct7d),
     ema1dSlopePct7d: nullNum(r.ema1dSlopePct7d),
     btcEma4hSlopePct7d: nullNum(r.btcEma4hSlopePct7d),
@@ -341,6 +347,8 @@ export type AppendCandleReversalStatsInput = {
   slPrice: number;
   wickRatioPct?: number | null;
   lowerWickRatioPct?: number | null;
+  signalBarLow?: number | null;
+  dropFrom24hHighToSignalLowPct?: number | null;
   bodyPct?: number | null;
   highRankInLookback?: number | null;
   lowRankInLookback?: number | null;
@@ -654,6 +662,12 @@ export async function appendCandleReversalStatsRow(
       input.lowerWickRatioPct != null && Number.isFinite(input.lowerWickRatioPct)
         ? input.lowerWickRatioPct
         : null,
+    dropFrom24hHighToSignalLowPct:
+      input.dropFrom24hHighToSignalLowPct != null &&
+      Number.isFinite(input.dropFrom24hHighToSignalLowPct) &&
+      input.dropFrom24hHighToSignalLowPct >= 0
+        ? input.dropFrom24hHighToSignalLowPct
+        : null,
     bodyPct: input.bodyPct != null && Number.isFinite(input.bodyPct) ? input.bodyPct : null,
     highRankInLookback: finiteRank(input.highRankInLookback),
     lowRankInLookback: finiteRank(input.lowRankInLookback),
@@ -763,6 +777,26 @@ export async function appendCandleReversalStatsRow(
       mergeStatsEma20_15mEntryIntoRow(row, snap15m);
     } catch {
       /* ignore */
+    }
+  }
+
+  if (tradeSide === "short" && Number.isFinite(input.signalBarOpenSec) && input.signalBarOpenSec > 0) {
+    const signalLow =
+      input.signalBarLow != null && Number.isFinite(input.signalBarLow) && input.signalBarLow > 0
+        ? input.signalBarLow
+        : null;
+    if (signalLow != null && row.dropFrom24hHighToSignalLowPct == null) {
+      try {
+        const snap24h = await fetchSignal24hHighDropAtSignal(
+          input.symbol,
+          input.signalBarOpenSec,
+          signalBarTf,
+          signalLow,
+        );
+        mergeSignal24hHighDropIntoRow(row, snap24h);
+      } catch {
+        /* ignore */
+      }
     }
   }
 

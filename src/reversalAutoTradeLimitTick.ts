@@ -1,3 +1,4 @@
+import { placeTpPlanOrdersAfterOpen } from "./autoTradeTpSlPlanOrders";
 import {
   cancelOpenOrders,
   getOpenOrders,
@@ -7,6 +8,7 @@ import {
 } from "./mexcFuturesClient";
 import { patchAutoOpenOrderLogLimitFillSafe } from "./autoOpenOrderLogStore";
 import { loadTradingViewMexcSettingsFullMap } from "./tradingViewCloseSettingsStore";
+import { resolveReversalTpSlPlanFromRow } from "./reversalAutoTradeExecutor";
 import {
   bkkReversalAutoTradeDayKeyNow,
   loadReversalAutoTradeState,
@@ -77,12 +79,53 @@ function orderStillOpen(openOrders: { orderId: string }[], orderId: string): boo
 
 async function promotePendingToActive(args: {
   userId: string;
+  creds: MexcCredentials;
   pending: ReversalAutoTradePendingLimit;
+  pos: OpenPositionRow;
   mexcAvgEntry: number;
   dayKey: string;
   state: Awaited<ReturnType<typeof loadReversalAutoTradeState>>;
+  tpSlEnabled: boolean;
+  tp1PricePct: number;
+  tp1PartialPct: number;
+  tp2PricePct: number;
 }): Promise<Awaited<ReturnType<typeof loadReversalAutoTradeState>>> {
-  const { userId, pending, mexcAvgEntry, dayKey } = args;
+  const { userId, creds, pending, pos, mexcAvgEntry, dayKey, tpSlEnabled, tp1PricePct, tp1PartialPct, tp2PricePct } =
+    args;
+  let tpPlanOrderIds: {
+    tp1PlanOrderId?: string;
+    tp2PlanOrderId?: string;
+    initialHoldVol?: number;
+    tp1PlanVol?: number;
+  } = {};
+  const exchangeTpLines: string[] = [];
+  const exchangeTpWarnings: string[] = [];
+  if (tpSlEnabled) {
+    try {
+      const placed = await placeTpPlanOrdersAfterOpen(creds, {
+        contractSymbol: pending.contractSymbol,
+        position: pos,
+        entry: mexcAvgEntry,
+        side: "short",
+        tp1PricePct,
+        tp1PartialPct,
+        tp2PricePct,
+      });
+      if (placed) {
+        exchangeTpLines.push(...placed.notifyLines);
+        exchangeTpWarnings.push(...placed.warnings);
+        if (placed.tp1PlanOrderId) tpPlanOrderIds.tp1PlanOrderId = placed.tp1PlanOrderId;
+        if (placed.tp2PlanOrderId) tpPlanOrderIds.tp2PlanOrderId = placed.tp2PlanOrderId;
+        tpPlanOrderIds.initialHoldVol = placed.initialHoldVol;
+        tpPlanOrderIds.tp1PlanVol = placed.tp1Vol;
+      }
+    } catch (e) {
+      console.error("[reversalLimitTick] placeTpPlanOrdersAfterOpen", userId, pending.contractSymbol, e);
+      exchangeTpWarnings.push(
+        `วาง plan TP ไม่สำเร็จ: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200),
+      );
+    }
+  }
   let state = withReversalActiveOpen(
     args.state,
     userId,
@@ -102,6 +145,7 @@ async function promotePendingToActive(args: {
       slEntryOffsetPct: pending.slEntryOffsetPct,
       slAtEntryAfter24hIfGreenEnabled: pending.slAtEntryAfter24hIfGreenEnabled,
       ema20_1hSlopePct7d: pending.ema20_1hSlopePct7d ?? pending.ema4hSlopePct7d,
+      ...tpPlanOrderIds,
     },
     dayKey,
   );
@@ -119,7 +163,14 @@ async function promotePendingToActive(args: {
     "✅ Limit SHORT fill แล้ว → เริ่มติดตาม TP/SL (tick)",
     `[${shortContractLabel(pending.contractSymbol)}]/USDT`,
     `ราคาเข้าเฉลี่ย MEXC: ${fmtPrice(mexcAvgEntry)} USDT`,
-    `กลยุทธ์: ${REVERSAL_TP_STRATEGY_SUMMARY}`,
+    ...(tpSlEnabled
+      ? [
+          `TP1: +${tp1PricePct}% ปิด ${tp1PartialPct}% · TP2: +${tp2PricePct}% · หลัง TP1 → SL บังทุน`,
+          ...exchangeTpLines,
+          ...(exchangeTpWarnings.length ? exchangeTpWarnings.map((w) => `⚠️ ${w}`) : []),
+        ]
+      : []),
+    `กลยุทธ์เวลา: ${REVERSAL_TP_STRATEGY_SUMMARY}`,
   ]);
   return state;
 }
@@ -148,12 +199,19 @@ export async function runReversalAutoTradeLimitTick(nowMs: number): Promise<numb
         if (pos) {
           const mexcAvgEntry = readMexcAvgEntryPriceShort(positions, pending.contractSymbol);
           if (mexcAvgEntry != null && mexcAvgEntry > 0) {
+            const plan = resolveReversalTpSlPlanFromRow(row, "short");
             state = await promotePendingToActive({
               userId,
+              creds,
               pending,
+              pos,
               mexcAvgEntry,
               dayKey,
               state,
+              tpSlEnabled: plan.enabled,
+              tp1PricePct: plan.tp1PricePct,
+              tp1PartialPct: plan.tp1PartialPct,
+              tp2PricePct: plan.tp2PricePct,
             });
             actionsCount += 1;
           }

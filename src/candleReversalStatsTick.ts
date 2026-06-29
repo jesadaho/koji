@@ -26,7 +26,11 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
 } from "@/lib/statsStrategyProfitClient";
-import { candleLowerWickRatio } from "./candleReversalDetect";
+import {
+  fetchSignal24hHighDropAtSignal,
+  mergeSignal24hHighDropIntoRow,
+  STATS_SIGNAL_24H_HIGH_DROP_VERSION,
+} from "./statsSignal24hHighDrop";
 import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import {
   fetchBinanceUsdmKlines,
@@ -39,7 +43,11 @@ import {
   candleReversalSignalVolVsSmaAt,
   candleReversalVolSmaPeriod,
 } from "./candleReversalSignalVolVsSma";
-import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
+import {
+  backfillAllStatsRowsBtcEmaSlopes,
+  fetchSymbolEma12_1hSlopePct7dAtMs,
+  STATS_EMA12_1H_AT12H_VERSION,
+} from "./statsEmaSlope";
 import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
 import { backfillAllStatsRowsEma20_15mEntry } from "./statsEma20_15mEntry";
 import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
@@ -418,6 +426,55 @@ async function backfillLowerWickRatioPct(rows: CandleReversalStatsRow[]): Promis
   return updated;
 }
 
+async function backfillDropFrom24hHighToSignalLowPct(rows: CandleReversalStatsRow[]): Promise<number> {
+  let updated = 0;
+  for (const row of rows) {
+    if ((row.tradeSide ?? "short") !== "short") continue;
+    if (row.signal24hHighDropV === STATS_SIGNAL_24H_HIGH_DROP_VERSION) continue;
+    if (
+      row.dropFrom24hHighToSignalLowPct != null &&
+      Number.isFinite(row.dropFrom24hHighToSignalLowPct)
+    ) {
+      continue;
+    }
+    if (!Number.isFinite(row.signalBarOpenSec) || row.signalBarOpenSec <= 0) continue;
+    const tf = signalBarTf(row);
+    const barDur = signalBarDurationSecByTf(tf);
+    let signalLow: number | null = null;
+    try {
+      const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
+        startTimeMs: row.signalBarOpenSec * 1000,
+        endTimeMs: (row.signalBarOpenSec + barDur) * 1000,
+        limit: 8,
+      });
+      if (pack && pack.timeSec.length > 0) {
+        const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
+        if (iSig >= 0) {
+          const l = pack.low[iSig]!;
+          if (Number.isFinite(l) && l > 0) signalLow = l;
+        }
+      }
+    } catch (e) {
+      console.error("[candleReversalStatsTick] backfill signalBarLow", row.symbol, e);
+    }
+    if (signalLow == null) continue;
+    try {
+      const snap = await fetchSignal24hHighDropAtSignal(
+        row.symbol,
+        row.signalBarOpenSec,
+        tf,
+        signalLow,
+      );
+      if (snap.dropFrom24hHighToSignalLowPct == null) continue;
+      mergeSignal24hHighDropIntoRow(row, snap);
+      updated += 1;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] backfill dropFrom24hHighToSignalLowPct", row.symbol, e);
+    }
+  }
+  return updated;
+}
+
 async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<number> {
   const period = candleReversalVolSmaPeriod();
   let updated = 0;
@@ -591,6 +648,23 @@ async function followUpCandleReversal1hRow(
     row.price12h = null;
     row.pct12h = null;
   }
+
+  if (
+    signalBarTf(row) === "1h" &&
+    nowSec >= h12End &&
+    row.ema12_1hAt12hV !== STATS_EMA12_1H_AT12H_VERSION
+  ) {
+    try {
+      const slope = await fetchSymbolEma12_1hSlopePct7dAtMs(row.symbol, h12End * 1000);
+      if (slope != null && Number.isFinite(slope)) {
+        row.ema12_1hSlopePct7dAt12h = slope;
+      }
+      row.ema12_1hAt12hV = STATS_EMA12_1H_AT12H_VERSION;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] ema12_1h @12h", row.symbol, e);
+    }
+  }
+
   if (h24) {
     row.price24h = h24.price;
     row.pct24h = h24.pct;
@@ -671,6 +745,12 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
     if (nowSec < ac + 48 * HOUR_SEC && row.pct48h != null) return true;
     if (row.pct4h == null && nowSec >= ac + 4 * HOUR_SEC) return true;
     if (row.pct12h == null && nowSec >= ac + 12 * HOUR_SEC) return true;
+    if (
+      row.ema12_1hAt12hV !== STATS_EMA12_1H_AT12H_VERSION &&
+      nowSec >= ac + 12 * HOUR_SEC
+    ) {
+      return true;
+    }
     if (row.pct24h == null && nowSec >= ac + 24 * HOUR_SEC) return true;
     if (row.pct48h == null && nowSec >= ac + 48 * HOUR_SEC) return true;
     if (row.pct24h != null && row.strategyProfitPct24h == null) return true;
@@ -705,6 +785,28 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
  * Backfill: แถว 1H เก่าเคยปิดผลที่ 48h → re-evaluate ใหม่ที่ 24h
  * (รันต่อแต่ละ tick · no-op หลังครั้งแรกเมื่อ outcome ตรงกับ pct24h แล้ว)
  */
+async function backfillEma12_1hSlopeAt12h(rows: CandleReversalStatsRow[]): Promise<number> {
+  let updated = 0;
+  for (const row of rows) {
+    if (signalBarTf(row) !== "1h") continue;
+    if (row.ema12_1hAt12hV === STATS_EMA12_1H_AT12H_VERSION) continue;
+    const ac = anchorCloseSec(row);
+    const h12End = ac + 12 * HOUR_SEC;
+    if (Date.now() / 1000 < h12End) continue;
+    try {
+      const slope = await fetchSymbolEma12_1hSlopePct7dAtMs(row.symbol, h12End * 1000);
+      if (slope != null && Number.isFinite(slope)) {
+        row.ema12_1hSlopePct7dAt12h = slope;
+      }
+      row.ema12_1hAt12hV = STATS_EMA12_1H_AT12H_VERSION;
+      updated += 1;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] backfill ema12_1h @12h", row.symbol, e);
+    }
+  }
+  return updated;
+}
+
 function backfill1hOutcomeTo24h(rows: CandleReversalStatsRow[]): number {
   let updated = 0;
   for (const row of rows) {
@@ -936,6 +1038,8 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillAllStatsRowsBtcDomEma20_4h(state.rows, { maxRowsPerPass: 15, maxPasses: 5 });
   dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillLowerWickRatioPct(state.rows);
+  dirty += await backfillDropFrom24hHighToSignalLowPct(state.rows);
+  dirty += await backfillEma12_1hSlopeAt12h(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += await backfillPumpCycleSwingLowForRows(state.rows, (row) =>
     candleReversalStatsAnchorCloseSec(row),

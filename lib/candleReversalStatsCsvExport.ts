@@ -7,6 +7,7 @@ import {
   candleReversalEmaSlopeCsvLabel,
   candleReversalEntryEma20_15mTouchCell,
   reversalBarRangePctSignalResolved,
+  reversalDropFrom24hHighToSignalLowLabel,
   candleReversalGreenDaysLabel,
   candleReversalLookbackRankCell,
   candleReversalLowLookbackRankCell,
@@ -121,6 +122,7 @@ const HEADERS = [
   "SL",
   "ไส้บน%",
   "ไส้ล่าง%",
+  "24h→Low%",
   "เนื้อ%",
   "Len#",
   "Len%",
@@ -143,6 +145,7 @@ const HEADERS = [
   "AIv",
   "H1",
   "H2",
+  "EMA12∠1h @12h",
   "H3",
   "H4",
   "Max ROI",
@@ -261,6 +264,9 @@ function candleReversalStatsRowToCsvCells(
     (r.tradeSide ?? "short") === "short"
       ? candleReversalWickRatioPctLabel(r.lowerWickRatioPct).replace("—", "")
       : candleReversalWickRatioPctLabel(r.wickRatioPct).replace("—", ""),
+    (r.tradeSide ?? "short") === "short"
+      ? reversalDropFrom24hHighToSignalLowLabel(r.dropFrom24hHighToSignalLowPct).replace("—", "")
+      : "",
     r.bodyPct != null && Number.isFinite(r.bodyPct) ? `${r.bodyPct.toFixed(1)}%` : "",
     candleReversalLookbackRankCell(r.rangeRankInLookback, r.lookbackBars),
     statsLenPercentileLabel(r.lenPercentilePct),
@@ -283,6 +289,9 @@ function candleReversalStatsRowToCsvCells(
     r.chartAiAnalysisV != null ? String(r.chartAiAnalysisV) : "",
     h1,
     h2,
+    (r.signalBarTf ?? "1d") === "1h"
+      ? candleReversalEmaSlopeCsvLabel(r.ema12_1hSlopePct7dAt12h)
+      : "",
     h3,
     h4,
     r.maxRoiPct != null && Number.isFinite(r.maxRoiPct) ? `${r.maxRoiPct.toFixed(2)}%` : "",
