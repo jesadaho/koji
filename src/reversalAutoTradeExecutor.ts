@@ -1,8 +1,11 @@
 import {
+  cancelOpenOrders,
+  closeOpenPositionForSymbolSide,
   createOpenLimitOrder,
   createOpenMarketOrder,
   getContractLastPricePublic,
   getContractTickerPublic,
+  getOpenOrders,
   getOpenPositions,
   type MexcCredentials,
   type OpenPositionRow,
@@ -21,8 +24,13 @@ import {
   saveReversalAutoTradeState,
   withRecordedReversalPlaced,
   withReversalActiveOpen,
+  withReversalActiveRemoved,
   withReversalPendingLimitAdded,
+  withReversalPendingLimitRemoved,
+  withReversalPlacedUnlocked,
+  type ReversalAutoTradeState,
 } from "./reversalAutoTradeStateStore";
+import { cancelActiveTpSlPlanOrders } from "./autoTradeTpSlPlanOrders";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 import type { CandleReversalModel, CandleReversalTf, CandleReversalTradeSide } from "./candleReversalDetect";
 import { appendAutoOpenOrderLogSafe } from "./autoOpenOrderLogStore";
@@ -316,6 +324,117 @@ function readMexcAvgEntryPriceLong(
   return null;
 }
 
+async function cancelReversalPendingLimitOnMexc(
+  creds: MexcCredentials,
+  contractSymbol: string,
+  orderId: string,
+): Promise<void> {
+  try {
+    const openOrders = await getOpenOrders(creds, contractSymbol);
+    const oid = orderId.trim();
+    if (!openOrders.some((x) => x.orderId === oid)) return;
+    const cancelRes = await cancelOpenOrders(creds, [oid]);
+    if (!cancelRes.success) {
+      console.error("[reversalAutoTrade] cancelOpenOrders", contractSymbol, oid, cancelRes.message);
+    }
+  } catch (e) {
+    console.error("[reversalAutoTrade] cancel pending limit", contractSymbol, orderId, e);
+  }
+}
+
+/** สัญญาณใหม่สวนทิศ → ยกเลิก Limit pending / ปิด position ฝั่งเดิมบน MEXC */
+async function reversalFlipCloseOppositeSideIfNeeded(args: {
+  state: ReversalAutoTradeState;
+  userId: string;
+  creds: MexcCredentials;
+  contractSymbol: string;
+  mexcSide: "short" | "long";
+  dayKey: string;
+  positions: OpenPositionRow[];
+  userTgTitle: string;
+}): Promise<{
+  state: ReversalAutoTradeState;
+  positions: OpenPositionRow[];
+  flipped: boolean;
+  oppositeCloseFailed: boolean;
+}> {
+  const { userId, creds, contractSymbol, mexcSide, dayKey, userTgTitle } = args;
+  const sym = contractSymbol.trim().toUpperCase();
+  const oppositeSide: "short" | "long" = mexcSide === "long" ? "short" : "long";
+  let state = args.state;
+  let positions = args.positions;
+  let flipped = false;
+
+  const pendingForSymbol = [...(state[userId]?.pendingLimits ?? [])].filter(
+    (p) => p.contractSymbol.trim().toUpperCase() === sym,
+  );
+  if (mexcSide === "long" && pendingForSymbol.length > 0) {
+    for (const pending of pendingForSymbol) {
+      await cancelReversalPendingLimitOnMexc(creds, pending.contractSymbol, pending.orderId);
+      state = withReversalPendingLimitRemoved(
+        state,
+        userId,
+        pending.contractSymbol,
+        pending.orderId,
+        dayKey,
+      );
+      state = withReversalPlacedUnlocked(state, userId, pending.contractSymbol, dayKey);
+      flipped = true;
+      await notifyLines(userId, [
+        userTgTitle,
+        "🔄 สัญญาณ LONG ใหม่ → ยกเลิก Limit SHORT ที่ค้าง",
+        `[${shortContractLabel(pending.contractSymbol)}]/USDT`,
+        `Limit ~${fmtReversalAutoTradePrice(pending.limitPrice)} · order #${pending.orderId}`,
+      ]);
+    }
+  }
+
+  const oppositePos =
+    oppositeSide === "short"
+      ? findMexcOpenPositionShort(positions, contractSymbol)
+      : findMexcOpenPositionLong(positions, contractSymbol);
+  if (!oppositePos) {
+    return { state, positions, flipped, oppositeCloseFailed: false };
+  }
+
+  const tracked = (state[userId]?.active ?? []).find(
+    (a) => a.contractSymbol.trim().toUpperCase() === sym && a.side === oppositeSide,
+  );
+  if (tracked) {
+    await cancelActiveTpSlPlanOrders(creds, tracked);
+  }
+
+  const entryPx =
+    oppositeSide === "short"
+      ? readMexcAvgEntryPriceShort(positions, contractSymbol)
+      : readMexcAvgEntryPriceLong(positions, contractSymbol);
+  const mark = (await getContractLastPricePublic(contractSymbol)) ?? NaN;
+  const closeRes = await closeOpenPositionForSymbolSide(creds, contractSymbol, oppositeSide);
+  state = withReversalActiveRemoved(state, userId, contractSymbol, oppositeSide);
+  state = withReversalPlacedUnlocked(state, userId, contractSymbol, dayKey);
+  flipped = true;
+
+  try {
+    positions = await getOpenPositions(creds, contractSymbol);
+  } catch (e) {
+    console.error("[reversalAutoTrade] refresh positions after flip", contractSymbol, userId, e);
+  }
+
+  await notifyLines(userId, [
+    userTgTitle,
+    closeRes.success
+      ? `🔄 สัญญาณ ${mexcSide.toUpperCase()} ใหม่ → ปิด ${oppositeSide.toUpperCase()} ทันที (market)`
+      : `❌ สัญญาณ ${mexcSide.toUpperCase()} ใหม่ — ปิด ${oppositeSide.toUpperCase()} ไม่สำเร็จ`,
+    `[${shortContractLabel(contractSymbol)}]/USDT`,
+    entryPx != null ? `Entry เดิม ~${fmtReversalAutoTradePrice(entryPx)}` : "",
+    Number.isFinite(mark) && mark > 0 ? `Mark ~${fmtReversalAutoTradePrice(mark)}` : "",
+    closeRes.message && !closeRes.success ? `MEXC: ${closeRes.message}` : "",
+    closeRes.success ? "เปิดทิศใหม่ต่อ…" : "",
+  ]);
+
+  return { state, positions, flipped, oppositeCloseFailed: !closeRes.success };
+}
+
 function logReversalAutoOpen(
   userId: string,
   signal: ReversalAutoOpenLogSignal,
@@ -369,6 +488,7 @@ function logReversalAutoOpen(
  * - entry Short: Hybrid (EMA 15m) หรือ Market · Long (fade + ทิศที่เล่น Long): Market ตลอด
  *   - Hybrid Short: EMA20Δ15m < −2% → Market · ผ่าน Matrix Market Entry → Market
  *   - นอกนั้น: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.)
+ * - สลับทิศบนเหรียญเดียวกัน: มี SHORT/LONG ค้างบน MEXC แล้วสัญญาณใหม่สวนทิศ → ปิดทันที (market) แล้วเปิดทิศใหม่
  * - TP ใช้ cron tick ปิด market (ไม่วาง plan TP บน MEXC)
  * - 1 order/เหรียญ/วัน (BKK) — ปลดล็อกเมื่อ Limit หมดอายุโดยไม่ fill
  */
@@ -719,11 +839,6 @@ export async function runReversalAutoTradeAfterReversalAlert(
       continue;
     }
 
-    if (hasPlacedReversalContractToday(state[userId], contractSymbol, dayKey)) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "already_opened_today", mexcSide);
-      continue;
-    }
-
     const creds: MexcCredentials | null =
       row.mexcApiKey?.trim() && row.mexcSecret?.trim()
         ? { apiKey: row.mexcApiKey.trim(), secret: row.mexcSecret.trim() }
@@ -826,15 +941,6 @@ export async function runReversalAutoTradeAfterReversalAlert(
     } else {
       entryRes = await resolveReversalEntryForUser(row);
     }
-    const emaLogExtra = entryRes.ok
-      ? {
-          entryMode: entryRes.mode,
-          entryEmaPeriod: entryRes.emaPeriod,
-          entryEma15m: entryRes.entryEma ?? undefined,
-          markPrice: entryRes.mark,
-          orderKind: (entryRes.useMarket ? "market" : "limit") as "market" | "limit",
-        }
-      : {};
 
     let positions: Awaited<ReturnType<typeof getOpenPositions>>;
     try {
@@ -853,7 +959,6 @@ export async function runReversalAutoTradeAfterReversalAlert(
           marginUsdt,
           leverage: Math.floor(leverage),
           ...leverageLogExtra,
-          ...emaLogExtra,
         },
         signalClosePrice,
       );
@@ -865,7 +970,49 @@ export async function runReversalAutoTradeAfterReversalAlert(
       ]);
       continue;
     }
-    if (openMexcLong ? hasActiveLongPosition(positions, contractSymbol) : hasActiveShortPosition(positions, contractSymbol)) {
+
+    const flipRes = await reversalFlipCloseOppositeSideIfNeeded({
+      state,
+      userId,
+      creds,
+      contractSymbol,
+      mexcSide,
+      dayKey,
+      positions,
+      userTgTitle,
+    });
+    state = flipRes.state;
+    positions = flipRes.positions;
+
+    if (flipRes.oppositeCloseFailed) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "flip_close_failed", mexcSide, {
+        marginUsdt,
+        leverage: Math.floor(leverage),
+        ...leverageLogExtra,
+      });
+      continue;
+    }
+
+    if (hasPlacedReversalContractToday(state[userId], contractSymbol, dayKey)) {
+      logReversalAutoOpen(userId, logSignal, "skipped", "already_opened_today", mexcSide);
+      continue;
+    }
+
+    const emaLogExtra = entryRes.ok
+      ? {
+          entryMode: entryRes.mode,
+          entryEmaPeriod: entryRes.emaPeriod,
+          entryEma15m: entryRes.entryEma ?? undefined,
+          markPrice: entryRes.mark,
+          orderKind: (entryRes.useMarket ? "market" : "limit") as "market" | "limit",
+        }
+      : {};
+
+    if (
+      openMexcLong
+        ? hasActiveLongPosition(positions, contractSymbol)
+        : hasActiveShortPosition(positions, contractSymbol)
+    ) {
       const active = openMexcLong
         ? findMexcOpenPositionLong(positions, contractSymbol)
         : findMexcOpenPositionShort(positions, contractSymbol);
