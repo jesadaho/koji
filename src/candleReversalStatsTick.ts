@@ -27,6 +27,7 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_48H,
 } from "@/lib/statsStrategyProfitClient";
 import { candleLowerWickRatio } from "./candleReversalDetect";
+import { countGreenDaysBeforeSignalBar } from "./greenDayStreak";
 import {
   fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesRange,
