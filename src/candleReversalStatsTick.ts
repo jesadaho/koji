@@ -53,6 +53,7 @@ import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClie
 import { backfillPumpCycleSwingLowForRows } from "./statsPumpCycleSwingLow";
 import { backfillAllStatsRowsTradFiFlag } from "./statsTradFiFlag";
 import {
+  isCandleReversal1hLongStatsEnabled,
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
   saveCandleReversalStatsState,
@@ -912,11 +913,19 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += backfill1hOutcomeTo24h(state.rows);
   dirty += await backfillAllStatsRowsTradFiFlag(state.rows);
   dirty += await backfillAllStatsMarketSentiment(state.rows, { maxPasses: 5 });
-  if (opts?.forceLong1hFadeShort) {
+  if (opts?.forceLong1hFadeShort && isCandleReversal1hLongStatsEnabled()) {
     dirty += await refreshLong1hFadeShortFollowUp(state.rows, nowMs, nowSec);
   }
 
+  const long1hStatsEnabled = isCandleReversal1hLongStatsEnabled();
   for (const row of state.rows) {
+    if (
+      !long1hStatsEnabled &&
+      signalBarTf(row) === "1h" &&
+      row.tradeSide === "long"
+    ) {
+      continue;
+    }
     const entry = row.entryPrice;
     if (!Number.isFinite(entry) || entry <= 0) continue;
 

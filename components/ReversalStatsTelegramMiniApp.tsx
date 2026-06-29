@@ -2177,6 +2177,13 @@ export default function ReversalStatsTelegramMiniApp() {
     () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1h" && r.tradeSide === "long"),
     [allRows],
   );
+  const long1hStatsEnabled = payload?.reversal1hLongStatsEnabled === true;
+
+  useEffect(() => {
+    if (!long1hStatsEnabled && activeTab === "1h-long") {
+      setActiveTab("1h-short");
+    }
+  }, [long1hStatsEnabled, activeTab]);
 
   const viewerPlaySides = useMemo(
     () =>
@@ -2519,7 +2526,8 @@ export default function ReversalStatsTelegramMiniApp() {
       <h1 className="sparkStatsMatrixSectionTitle">
         สถิติ Reversal
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-          แท็บ 1D · 1H Short · Long 1H (fade SHORT) · โดจิ · ทุบ · แดงยาว · เขียวยาว
+          แท็บ 1D · 1H Short
+          {long1hStatsEnabled ? " · Long 1H (fade SHORT)" : ""} · โดจิ · ทุบ · แดงยาว · เขียวยาว
         </span>
       </h1>
 
@@ -2662,19 +2670,21 @@ export default function ReversalStatsTelegramMiniApp() {
           <span>Reversal Short</span>
           <span className="tmaTabEn">1H · {hourShortRows.length} แถว</span>
         </button>
-        <button
-          type="button"
-          className="tmaTab"
-          id="reversal-tab-1h-long"
-          role="tab"
-          aria-selected={activeTab === "1h-long"}
-          aria-controls="reversal-panel-1h-long"
-          tabIndex={activeTab === "1h-long" ? 0 : -1}
-          onClick={() => setActiveTab("1h-long")}
-        >
-          <span>Reversal Long</span>
-          <span className="tmaTabEn">1H fade SHORT · {hourLongRows.length}</span>
-        </button>
+        {long1hStatsEnabled ? (
+          <button
+            type="button"
+            className="tmaTab"
+            id="reversal-tab-1h-long"
+            role="tab"
+            aria-selected={activeTab === "1h-long"}
+            aria-controls="reversal-panel-1h-long"
+            tabIndex={activeTab === "1h-long" ? 0 : -1}
+            onClick={() => setActiveTab("1h-long")}
+          >
+            <span>Reversal Long</span>
+            <span className="tmaTabEn">1H fade SHORT · {hourLongRows.length}</span>
+          </button>
+        ) : null}
       </div>
 
       <div
@@ -2726,6 +2736,7 @@ export default function ReversalStatsTelegramMiniApp() {
         />
       </div>
 
+      {long1hStatsEnabled ? (
       <div
         className="tmaTabPanel"
         id="reversal-panel-1h-long"
@@ -2757,6 +2768,7 @@ export default function ReversalStatsTelegramMiniApp() {
           showLowRank
         />
       </div>
+      ) : null}
     </div>
   );
 }

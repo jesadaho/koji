@@ -241,6 +241,8 @@ export type CandleReversalStatsApiPayload = {
   viewerReversalStatsPlayLongEnabled?: boolean;
   /** @deprecated — ใช้ viewerReversalStatsPlayShort/LongEnabled */
   viewerReversalStatsPlaySide?: import("@/lib/reversalMatrixFilters").ReversalStatsPlaySide;
+  /** เปิดเก็บ/แสดงตาราง Reversal Long 1H (fade SHORT) — จาก CANDLE_REVERSAL_1H_LONG_STATS_ENABLED */
+  reversal1hLongStatsEnabled?: boolean;
 };
 
 export function candleReversalSignalBarTfLabel(tf: CandleReversalSignalBarTf): string {
