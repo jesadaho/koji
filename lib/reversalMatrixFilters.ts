@@ -544,12 +544,10 @@ export function reversalRowMatchesWeakTrendMatrix(
 }
 
 export function reversalRowMatchesMarketEntryMatrix(
-  row: Pick<
-    CandleReversalStatsRow,
-    "priceVsEma20_15mPct" | "signalVolVsSma" | "lowerWickRatioPct"
-  >,
+  row: ReversalLongCandidateRowSlice &
+    Pick<CandleReversalStatsRow, "priceVsEma20_15mPct" | "signalVolVsSma" | "lowerWickRatioPct">,
 ): boolean {
-  return reversalRowIsMarketEntryCandidate(row);
+  return reversalRowIsMarketEntryCandidate(row) && reversalSuggestedTradeSide(row) === "short";
 }
 
 export function reversalStatsRowMatchesMatrixFilter(
