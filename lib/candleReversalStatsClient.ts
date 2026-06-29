@@ -716,6 +716,49 @@ export function candleReversalEntryEma20_15mTouchTitle(
   return "แตะ EMA20@15m ภายใน 8 ชม. (hybrid entry)";
 }
 
+export type ReversalEma20_15mTouchFilter = "all" | "not_touched" | "touched";
+
+export const REVERSAL_EMA20_15M_TOUCH_FILTER_OPTIONS: ReadonlyArray<{
+  value: ReversalEma20_15mTouchFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "not_touched", label: "ไม่แตะ ⏳" },
+  { value: "touched", label: "แตะแล้ว" },
+];
+
+export function reversalEma20_15mTouchFilterLabel(filter: ReversalEma20_15mTouchFilter): string {
+  return REVERSAL_EMA20_15M_TOUCH_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function reversalEma20_15mTouchFilterTitle(filter: ReversalEma20_15mTouchFilter): string {
+  if (filter === "not_touched") {
+    return "ครบ 8 ชม. แล้วยังไม่แตะ EMA20@15m (limit หมดอายุ)";
+  }
+  if (filter === "touched") return "แตะ EMA20@15m ภายใน 8 ชม. (market ณแจ้ง หรือ limit fill)";
+  return "ทุกสถานะ EMA touch";
+}
+
+export function reversalRowEma20_15mTouchExpired(
+  row: Pick<
+    CandleReversalStatsRow,
+    "entryEma20_15mTouchedWithin8h" | "entryEma20_15m" | "alertedAtMs"
+  >,
+  nowMs = Date.now(),
+): boolean {
+  return candleReversalEntryEma20_15mTouchCell(row, nowMs) === "⏳";
+}
+
+export function reversalStatsRowMatchesEma20_15mTouchFilter(
+  row: Pick<CandleReversalStatsRow, "entryEma20_15mTouchedWithin8h" | "entryEma20_15m" | "alertedAtMs">,
+  filter: ReversalEma20_15mTouchFilter,
+  nowMs = Date.now(),
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "not_touched") return reversalRowEma20_15mTouchExpired(row, nowMs);
+  return row.entryEma20_15mTouchedWithin8h === true;
+}
+
 export function candleReversalEma4hSlopeLabel(pct: CandleReversalStatsRow["ema4hSlopePct7d"]): string {
   return statsEmaSlopePctLabel(pct);
 }

@@ -2,7 +2,11 @@
  * ตัวกรองสถิติ Reversal — ใช้ร่วม Mini App + API export CSV
  */
 
-import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
+import type {
+  CandleReversalStatsRow,
+  ReversalEma20_15mTouchFilter,
+} from "@/lib/candleReversalStatsClient";
+import { reversalStatsRowMatchesEma20_15mTouchFilter } from "@/lib/candleReversalStatsClient";
 import {
   reversalStatsRowMatchesMatrixFilter,
   type ReversalMatrixFilter,
@@ -43,6 +47,14 @@ import {
   reversalStatsRowMatchesTradFiFilter,
   type ReversalTradFiFilter,
 } from "@/lib/reversalTradFiStatsFilter";
+
+export type { ReversalEma20_15mTouchFilter } from "@/lib/candleReversalStatsClient";
+export {
+  REVERSAL_EMA20_15M_TOUCH_FILTER_OPTIONS,
+  reversalEma20_15mTouchFilterLabel,
+  reversalEma20_15mTouchFilterTitle,
+  reversalStatsRowMatchesEma20_15mTouchFilter,
+} from "@/lib/candleReversalStatsClient";
 
 export type { ReversalObserveFilter } from "@/lib/reversalStatsPlayMode";
 export {
@@ -163,6 +175,7 @@ export type ReversalStatsFilterQuery = {
   matrix?: ReversalMatrixFilter;
   observe?: ReversalObserveFilter;
   tradFi?: ReversalTradFiFilter;
+  ema15mTouch?: ReversalEma20_15mTouchFilter;
 };
 
 export function reversalShapeFilterLabel(filter: ReversalShapeFilter): string {
@@ -287,6 +300,13 @@ export function filterCandleReversalStatsRows(
     if (q.tradFi && q.tradFi !== "all" && !reversalStatsRowMatchesTradFiFilter(r, q.tradFi)) {
       return false;
     }
+    if (
+      q.ema15mTouch &&
+      q.ema15mTouch !== "all" &&
+      !reversalStatsRowMatchesEma20_15mTouchFilter(r, q.ema15mTouch)
+    ) {
+      return false;
+    }
     return true;
   });
 }
@@ -301,6 +321,7 @@ const R_SIGNAL_SET = new Set(SNOWBALL_BAR_RANGE_SIGNAL_FILTER_OPTIONS.map((o) =>
 const MATRIX_SET = new Set<string>(["all", "qualitySignal", "neutral", "slowMover"]);
 const OBSERVE_SET = new Set<string>(["all", "observe", "play"]);
 const TRADFI_SET = new Set<string>(["all", "crypto", "stock"]);
+const EMA15M_TOUCH_SET = new Set<string>(["all", "not_touched", "touched"]);
 
 function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
   const k = raw?.trim().toLowerCase() ?? "";
@@ -361,6 +382,7 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.matrix = pickEnum(sp.get("matrix"), MATRIX_SET, "all");
   q.observe = pickEnum(sp.get("observe"), OBSERVE_SET, "all");
   q.tradFi = pickEnum(sp.get("tradFi"), TRADFI_SET, "all");
+  q.ema15mTouch = pickEnum(sp.get("ema15mTouch"), EMA15M_TOUCH_SET, "all");
   return q;
 }
 
@@ -382,6 +404,7 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.matrix && q.matrix !== "all") p.set("matrix", q.matrix);
   if (q.observe && q.observe !== "all") p.set("observe", q.observe);
   if (q.tradFi && q.tradFi !== "all") p.set("tradFi", q.tradFi);
+  if (q.ema15mTouch && q.ema15mTouch !== "all") p.set("ema15mTouch", q.ema15mTouch);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

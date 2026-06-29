@@ -77,7 +77,7 @@ export type CandleReversalStatsState = {
 function maxRows(): number {
   const v = Number(process.env.CANDLE_REVERSAL_STATS_MAX_ROWS);
   if (Number.isFinite(v) && v >= 20 && v <= 2000) return Math.floor(v);
-  return 300;
+  return 2000;
 }
 
 export function isCandleReversalStatsEnabled(): boolean {
