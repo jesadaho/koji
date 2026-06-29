@@ -37,6 +37,7 @@ export type ReversalSignalContextPayload = {
   vol_vs_sma: number | null;
   open_interest_usdt: number | null;
   open_interest_contracts: number | null;
+  open_interest_chg_24h_pct: number | null;
   btc_ema20_4h_slope_pct_7d: number | null;
   btc_ema1d_slope_pct_7d: number | null;
   btc_d_ema20_4h_slope_pct_7d: number | null;
