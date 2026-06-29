@@ -5,6 +5,7 @@ import type { PumpCycleSwingLowSource } from "@/lib/pumpCycleSwingLow";
 import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 import { statsEmaSlopePctLabel } from "@/lib/statsEmaSlope";
 import { reversalBarRangePctSignalResolved } from "@/lib/statsBarRangePct";
+import { reversalMomentumScore } from "@/lib/reversalMomentumScore";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 import type {
@@ -375,6 +376,7 @@ export type CandleReversalStatsSortKey =
   | "mcap"
   | "openInterest"
   | "openInterestChg24h"
+  | "momentumScore"
   | "ema1h"
   | "ema20_1hDist"
   | "ema20_4h"
@@ -519,6 +521,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.openInterestUsdt, b.openInterestUsdt);
     case "openInterestChg24h":
       return cmpNumNullLast(a.openInterestChg24hPct, b.openInterestChg24hPct);
+    case "momentumScore":
+      return cmpNumNullLast(reversalMomentumScore(a), reversalMomentumScore(b));
     case "ema1h":
       return cmpNumNullLast(a.ema20_1hSlopePct7d, b.ema20_1hSlopePct7d);
     case "ema20_1hDist":

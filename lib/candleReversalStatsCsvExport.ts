@@ -58,7 +58,7 @@ import {
   statsPsar4hDistPctCsv,
   statsPsar4hTrendLabel,
 } from "@/lib/statsPsar4h";
-import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
+import { reversalMomentumScoreLabel } from "@/lib/reversalMomentumScore";
 import {
   pumpCycleAgeHoursCsvCell,
   pumpCycleSwingLowPriceCsvCell,
@@ -100,6 +100,7 @@ const HEADERS = [
   "Mcap",
   "OI (USDT)",
   "OI Δ24h %",
+  "Momentum Score",
   "EMA20 1h slope 7d %",
   "EMA20 1h dist %",
   "EMA20 4h slope 7d %",
@@ -235,6 +236,7 @@ function candleReversalStatsRowToCsvCells(
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
     statsOpenInterestUsdtLabel(r.openInterestUsdt),
     statsOpenInterestChg24hPctLabel(r.openInterestChg24hPct),
+    reversalMomentumScoreLabel(r),
     candleReversalEmaSlopeCsvLabel(r.ema20_1hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.priceVsEma20_1hPct),
     candleReversalEmaSlopeCsvLabel(r.ema20_4hSlopePct7d),

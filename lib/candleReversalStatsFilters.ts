@@ -7,6 +7,8 @@ import type {
   ReversalEma20_15mTouchFilter,
 } from "@/lib/candleReversalStatsClient";
 import { reversalStatsRowMatchesEma20_15mTouchFilter } from "@/lib/candleReversalStatsClient";
+import { reversalRowMatchesMomentumScoreFilter } from "@/lib/reversalMomentumScore";
+import type { ReversalMomentumScoreFilter } from "@/lib/reversalMomentumScore";
 import {
   reversalStatsRowMatchesMatrixFilter,
   type ReversalMatrixFilter,
@@ -47,6 +49,16 @@ import {
   reversalStatsRowMatchesTradFiFilter,
   type ReversalTradFiFilter,
 } from "@/lib/reversalTradFiStatsFilter";
+
+export type { ReversalMomentumScoreFilter } from "@/lib/reversalMomentumScore";
+export {
+  REVERSAL_MOMENTUM_SCORE_FILTER_OPTIONS,
+  reversalMomentumScoreFilterLabel,
+  reversalMomentumScoreFilterTitle,
+  reversalMomentumScoreLabel,
+  reversalMomentumScoreTitle,
+  reversalRowMatchesMomentumScoreFilter,
+} from "@/lib/reversalMomentumScore";
 
 export type { ReversalEma20_15mTouchFilter } from "@/lib/candleReversalStatsClient";
 export {
@@ -176,6 +188,7 @@ export type ReversalStatsFilterQuery = {
   observe?: ReversalObserveFilter;
   tradFi?: ReversalTradFiFilter;
   ema15mTouch?: ReversalEma20_15mTouchFilter;
+  momentum?: ReversalMomentumScoreFilter;
 };
 
 export function reversalShapeFilterLabel(filter: ReversalShapeFilter): string {
@@ -307,6 +320,9 @@ export function filterCandleReversalStatsRows(
     ) {
       return false;
     }
+    if (q.momentum && q.momentum !== "all" && !reversalRowMatchesMomentumScoreFilter(r, q.momentum)) {
+      return false;
+    }
     return true;
   });
 }
@@ -322,6 +338,7 @@ const MATRIX_SET = new Set<string>(["all", "qualitySignal", "neutral", "slowMove
 const OBSERVE_SET = new Set<string>(["all", "observe", "play"]);
 const TRADFI_SET = new Set<string>(["all", "crypto", "stock"]);
 const EMA15M_TOUCH_SET = new Set<string>(["all", "not_touched", "touched"]);
+const MOMENTUM_SET = new Set<string>(["all", "ge1", "ge2", "ge3", "ge4", "ge5"]);
 
 function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
   const k = raw?.trim().toLowerCase() ?? "";
@@ -383,6 +400,7 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.observe = pickEnum(sp.get("observe"), OBSERVE_SET, "all");
   q.tradFi = pickEnum(sp.get("tradFi"), TRADFI_SET, "all");
   q.ema15mTouch = pickEnum(sp.get("ema15mTouch"), EMA15M_TOUCH_SET, "all");
+  q.momentum = pickEnum(sp.get("momentum"), MOMENTUM_SET, "all");
   return q;
 }
 
@@ -405,6 +423,7 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.observe && q.observe !== "all") p.set("observe", q.observe);
   if (q.tradFi && q.tradFi !== "all") p.set("tradFi", q.tradFi);
   if (q.ema15mTouch && q.ema15mTouch !== "all") p.set("ema15mTouch", q.ema15mTouch);
+  if (q.momentum && q.momentum !== "all") p.set("momentum", q.momentum);
   const s = p.toString();
   return s ? `?${s}` : "";
 }

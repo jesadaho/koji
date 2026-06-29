@@ -175,6 +175,13 @@ import {
   reversalEma20_15mTouchFilterTitle,
   reversalStatsRowMatchesEma20_15mTouchFilter,
   type ReversalEma20_15mTouchFilter,
+  REVERSAL_MOMENTUM_SCORE_FILTER_OPTIONS,
+  reversalMomentumScoreFilterLabel,
+  reversalMomentumScoreFilterTitle,
+  reversalMomentumScoreLabel,
+  reversalMomentumScoreTitle,
+  reversalRowMatchesMomentumScoreFilter,
+  type ReversalMomentumScoreFilter,
   reversalShapeFilterLabel,
   reversalTradFiFilterDetail,
   reversalTradFiFilterLabel,
@@ -592,6 +599,8 @@ function ReversalStatsSection({
   const [matrixFilter, setMatrixFilter] = useState<ReversalMatrixFilter>("all");
   const [observeFilter, setObserveFilter] = useState<ReversalObserveFilter>("all");
   const [ema15mTouchFilter, setEma15mTouchFilter] = useState<ReversalEma20_15mTouchFilter>("all");
+  const [momentumScoreFilter, setMomentumScoreFilter] =
+    useState<ReversalMomentumScoreFilter>("all");
   const [tradFiFilter, setTradFiFilter] = useState<ReversalTradFiFilter>("all");
   const [ema1hFilter, setEma1hFilter] = useState<ReversalEma1hFilter>("all");
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
@@ -636,11 +645,13 @@ function ReversalStatsSection({
           reversalStatsRowMatchesTradFiFilter(r, tradFiFilter) &&
           (!showSuggestedSideColumn ||
             reversalStatsRowMatchesEma20_15mTouchFilter(r, ema15mTouchFilter)) &&
+          (!showSuggestedSideColumn ||
+            reversalRowMatchesMomentumScoreFilter(r, momentumScoreFilter)) &&
           (!showSuggestedSideColumn || reversalRowMatchesSuggestedSideFilter(r, suggestedSideFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendGainFilter(r, trendGainFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendVelocityFilter(r, trendVelocityFilter)),
       ),
-    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -755,7 +766,7 @@ function ReversalStatsSection({
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const columnGroupSpans = useMemo(() => {
     const signal = 9 + (showSuggestedSideColumn ? 1 : 0) + 11 + extraRankCols;
-    const bot = 23 + (showSuggestedSideColumn ? 3 : 0);
+    const bot = 23 + (showSuggestedSideColumn ? 4 : 0);
     const ai = showAiColumns ? REVERSAL_CHART_AI_TABLE_COLUMN_COUNT : 0;
     const result =
       3 +
@@ -834,8 +845,11 @@ function ReversalStatsSection({
       ...(showSuggestedSideColumn && ema15mTouchFilter !== "all"
         ? { ema15mTouch: ema15mTouchFilter }
         : {}),
+      ...(showSuggestedSideColumn && momentumScoreFilter !== "all"
+        ? { momentum: momentumScoreFilter }
+        : {}),
     };
-  }, [csvQuery, dayFilter, dowFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lenRankFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, showSuggestedSideColumn, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, dowFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lenRankFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, showSuggestedSideColumn, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -1082,6 +1096,15 @@ function ReversalStatsSection({
               activeSort={sort}
               onSort={onSortColumn}
             />
+            {showSuggestedSideColumn ? (
+              <SortTh
+                label="Mom"
+                sortKey="momentumScore"
+                title="Momentum Score 0–5 — Velocity>2%/h · EMA20∠4h>15 · EMA20Δ4h>20 · Vol×SMA>4 · OI Δ24h>20 (+1 ต่อข้อ)"
+                activeSort={sort}
+                onSort={onSortColumn}
+              />
+            ) : null}
             <SortTh
               label="EMA20∠1h"
               sortKey="ema1h"
@@ -1349,7 +1372,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA20∠1h ${reversalEma1hFilterLabel(ema1hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · R% ${reversalBarRangeSignalFilterLabel(barRangeSignalFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""}${showSuggestedSideColumn && ema15mTouchFilter !== "all" ? ` · EMA touch ${reversalEma20_15mTouchFilterLabel(ema15mTouchFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)} · Observe ${reversalObserveFilterLabel(observeFilter)} · ประเภท ${reversalTradFiFilterLabel(tradFiFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA20∠1h ${reversalEma1hFilterLabel(ema1hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · R% ${reversalBarRangeSignalFilterLabel(barRangeSignalFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""}${showSuggestedSideColumn && ema15mTouchFilter !== "all" ? ` · EMA touch ${reversalEma20_15mTouchFilterLabel(ema15mTouchFilter)}` : ""}${showSuggestedSideColumn && momentumScoreFilter !== "all" ? ` · Momentum ${reversalMomentumScoreFilterLabel(momentumScoreFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)} · Observe ${reversalObserveFilterLabel(observeFilter)} · ประเภท ${reversalTradFiFilterLabel(tradFiFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -1440,6 +1463,9 @@ function ReversalStatsSection({
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                   <td title="Open Interest USDT (Binance)">{statsOpenInterestUsdtLabel(r.openInterestUsdt)}</td>
                   <td title="OI % change 24h (Binance hist)">{statsOpenInterestChg24hPctLabel(r.openInterestChg24hPct)}</td>
+                  {showSuggestedSideColumn ? (
+                    <td title={reversalMomentumScoreTitle(r)}>{reversalMomentumScoreLabel(r)}</td>
+                  ) : null}
                   <td title="EMA20 1h slope 7d">{candleReversalEma1hSlopeLabel(r.ema20_1hSlopePct7d)}</td>
                   <td title="(close − EMA20) / EMA20 × 100 บน 1h">{candleReversalPriceVsEma20_1hLabel(r.priceVsEma20_1hPct)}</td>
                   <td title="EMA20 4h slope 7d">{candleReversalEma20_4hSlopeLabel(r.ema20_4hSlopePct7d)}</td>
@@ -1892,6 +1918,26 @@ function ReversalStatsSection({
               title={reversalEma20_15mTouchFilterTitle(ema15mTouchFilter)}
             >
               {REVERSAL_EMA20_15M_TOUCH_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {showSuggestedSideColumn ? (
+          <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+            Momentum
+            <select
+              value={momentumScoreFilter}
+              onChange={(e) =>
+                setMomentumScoreFilter(e.currentTarget.value as ReversalMomentumScoreFilter)
+              }
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "7rem" }}
+              title={reversalMomentumScoreFilterTitle(momentumScoreFilter)}
+            >
+              {REVERSAL_MOMENTUM_SCORE_FILTER_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
