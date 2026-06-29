@@ -26,6 +26,7 @@ import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
   STATS_STRATEGY_PROFIT_HOLD_48H,
 } from "@/lib/statsStrategyProfitClient";
+import { candleLowerWickRatio } from "./candleReversalDetect";
 import {
   fetchSignal24hHighDropAtSignal,
   mergeSignal24hHighDropIntoRow,
