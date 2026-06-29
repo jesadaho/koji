@@ -116,6 +116,7 @@ import {
   type CandleReversalStatsSort,
   type CandleReversalStatsSortKey,
 } from "@/lib/candleReversalStatsClient";
+import { reversalSignalBarSlHitLabel } from "@/lib/statsSignalBarSl";
 import {
   marketSentimentFngLabel,
   marketSentimentSentimentLabel,
@@ -827,6 +828,8 @@ function ReversalStatsSection({
     (showLowRank
       ? "Max adverse ตลอดช่วง follow-up (long: low ต่ำสุดจาก entry)"
       : "Max adverse ตลอดช่วง follow-up (short: high สูงสุดจาก entry)");
+  const signalBarSlTitle =
+    "SL ที่ยอดแท่งสัญญาณ — Short/fade: high แท่ง · Long: low แท่ง · หลังปิดแท่งสัญญาณ";
 
   const exportFilterQuery = useMemo((): ReversalStatsFilterQuery => {
     const side = parseSideFromCsvQuery(csvQuery);
@@ -1327,6 +1330,13 @@ function ReversalStatsSection({
               activeSort={sort}
               onSort={onSortColumn}
             />
+            <SortTh
+              label="SL ยอด"
+              sortKey="signalBarSlHit"
+              title={signalBarSlTitle}
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
             <th scope="col" title="Fear & Greed (Market Pulse snapshot ณ เวลาแจ้ง)">
               F&G
             </th>
@@ -1561,6 +1571,9 @@ function ReversalStatsSection({
                   <td>{r.maxDrawdownPct != null ? `${r.maxDrawdownPct.toFixed(2)}%` : "—"}</td>
                   <td>
                     {r.followUpMaxAdversePct != null ? `${r.followUpMaxAdversePct.toFixed(2)}%` : "—"}
+                  </td>
+                  <td title={signalBarSlTitle}>
+                    {reversalSignalBarSlHitLabel(r.signalBarSlHit, r.signalBarSlHitHours)}
                   </td>
                   <td>{marketSentimentFngLabel(r.marketSentiment)}</td>
                   <td>{marketSentimentSentimentLabel(r.marketSentiment)}</td>

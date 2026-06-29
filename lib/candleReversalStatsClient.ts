@@ -5,6 +5,7 @@ import type { PumpCycleSwingLowSource } from "@/lib/pumpCycleSwingLow";
 import { computePumpCycleTrendVelocity } from "@/lib/pumpCycleSwingLow";
 import { statsEmaSlopePctLabel } from "@/lib/statsEmaSlope";
 import { reversalBarRangePctSignalResolved } from "@/lib/statsBarRangePct";
+import { reversalSignalBarSlHitSortOrder } from "@/lib/statsSignalBarSl";
 import { reversalMomentumScore } from "@/lib/reversalMomentumScore";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
@@ -182,6 +183,16 @@ export type CandleReversalStatsRow = {
   maxDrawdownPct: number | null;
   /** Max adverse จาก entry ตลอดช่วง follow-up (ไม่ตัดที่ MFE) */
   followUpMaxAdversePct: number | null;
+  /** High แท่งสัญญาณ — SL ที่ยอดแท่ง (Short / fade SHORT) */
+  signalBarHigh?: number | null;
+  /** Low แท่งสัญญาณ — SL ที่ยอดแท่ง (Long) */
+  signalBarLow?: number | null;
+  /** โดน SL ที่ยอดแท่งสัญญาณหรือไม่ (หลังปิดแท่ง · ตามทิศวัดผล) */
+  signalBarSlHit?: boolean | null;
+  /** ชม. จากปิดแท่งถึงครั้งแรกที่โดน SL ที่ยอดแท่ง */
+  signalBarSlHitHours?: number | null;
+  /** 1 = คำนวณ signalBarSlHit แล้ว */
+  signalBarSlV?: number;
   /** กำไร % ตามกลยุทธ์ TP1/TP2 (จำลองบน 15m) — 48h ใน strategyProfitPct · 24h ใน strategyProfitPct24h */
   strategyProfitPct?: number | null;
   strategyExitReason?: StatsTpSlExitReason | null;
@@ -433,6 +444,7 @@ export type CandleReversalStatsSortKey =
   | "roi"
   | "dd"
   | "followUpAdverse"
+  | "signalBarSlHit"
   | "aiConfidence"
   | "outcome";
 
@@ -630,6 +642,11 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.maxDrawdownPct, b.maxDrawdownPct);
     case "followUpAdverse":
       return cmpNumNullLast(a.followUpMaxAdversePct, b.followUpMaxAdversePct);
+    case "signalBarSlHit": {
+      const oa = reversalSignalBarSlHitSortOrder(a.signalBarSlHit);
+      const ob = reversalSignalBarSlHitSortOrder(b.signalBarSlHit);
+      return oa - ob || cmpNumNullLast(a.signalBarSlHitHours, b.signalBarSlHitHours);
+    }
     case "aiConfidence":
       return cmpNumNullLast(a.chartAiConfidence, b.chartAiConfidence);
     case "outcome": {

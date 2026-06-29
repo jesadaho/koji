@@ -25,6 +25,7 @@ import {
   fetchSignal24hHighDropAtSignal,
   mergeSignal24hHighDropIntoRow,
 } from "./statsSignal24hHighDrop";
+import { STATS_SIGNAL_BAR_SL_VERSION } from "@/lib/statsSignalBarSl";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_ATR_PCT_4H_VERSION } from "./statsAtrPct4h";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
@@ -215,6 +216,12 @@ function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleRe
     price7d: nullNum(r.price7d),
     pct7d: nullNum(r.pct7d),
     followUpMaxAdversePct: nullNum(r.followUpMaxAdversePct),
+    signalBarHigh: nullNum(r.signalBarHigh),
+    signalBarLow: nullNum(r.signalBarLow),
+    signalBarSlHit: typeof r.signalBarSlHit === "boolean" ? r.signalBarSlHit : null,
+    signalBarSlHitHours: nullNum(r.signalBarSlHitHours),
+    signalBarSlV:
+      r.signalBarSlV === STATS_SIGNAL_BAR_SL_VERSION ? STATS_SIGNAL_BAR_SL_VERSION : undefined,
     strategyProfitPct: nullNum(r.strategyProfitPct),
     strategyExitReason:
       typeof r.strategyExitReason === "string" && r.strategyExitReason.trim()
@@ -348,6 +355,7 @@ export type AppendCandleReversalStatsInput = {
   wickRatioPct?: number | null;
   lowerWickRatioPct?: number | null;
   signalBarLow?: number | null;
+  signalBarHigh?: number | null;
   dropFrom24hHighToSignalLowPct?: number | null;
   bodyPct?: number | null;
   highRankInLookback?: number | null;
@@ -617,6 +625,14 @@ export async function appendCandleReversalStatsRow(
     entryPrice: input.entryPrice,
     retestPrice: input.retestPrice,
     slPrice: input.slPrice,
+    signalBarHigh:
+      input.signalBarHigh != null && Number.isFinite(input.signalBarHigh) && input.signalBarHigh > 0
+        ? input.signalBarHigh
+        : null,
+    signalBarLow:
+      input.signalBarLow != null && Number.isFinite(input.signalBarLow) && input.signalBarLow > 0
+        ? input.signalBarLow
+        : null,
     quoteVol24hUsdt,
     quoteVol24hV: STATS_QUOTE_VOL_24H_VERSION,
     marketCapUsd,

@@ -9,6 +9,7 @@ import {
   computeFollowUpMaxAdversePct,
   firstFollowUpKlineIndexAfterAnchorClose,
 } from "@/lib/statsFollowUpAdverse";
+import { applySignalBarSlHitFromKlines, STATS_SIGNAL_BAR_SL_VERSION } from "@/lib/statsSignalBarSl";
 import { favorablePctInBar } from "@/lib/tpSlStrategySimulate";
 import {
   reversalTpStrategyCacheKey,
@@ -399,6 +400,48 @@ async function backfillRangeRankInLookback(rows: CandleReversalStatsRow[]): Prom
   return backfillLookbackRanksInWindow(rows);
 }
 
+async function backfillSignalBarHighLow(rows: CandleReversalStatsRow[]): Promise<number> {
+  let updated = 0;
+  for (const row of rows) {
+    const hasHigh =
+      row.signalBarHigh != null && Number.isFinite(row.signalBarHigh) && row.signalBarHigh > 0;
+    const hasLow = row.signalBarLow != null && Number.isFinite(row.signalBarLow) && row.signalBarLow > 0;
+    if (hasHigh && hasLow) continue;
+    if (!Number.isFinite(row.signalBarOpenSec) || row.signalBarOpenSec <= 0) continue;
+    const tf = signalBarTf(row);
+    const barDur = signalBarDurationSecByTf(tf);
+    try {
+      const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
+        startTimeMs: row.signalBarOpenSec * 1000,
+        endTimeMs: (row.signalBarOpenSec + barDur) * 1000,
+        limit: 8,
+      });
+      if (!pack || pack.timeSec.length === 0) continue;
+      const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
+      if (iSig < 0) continue;
+      let touched = false;
+      if (!hasHigh) {
+        const h = pack.high[iSig]!;
+        if (Number.isFinite(h) && h > 0) {
+          row.signalBarHigh = h;
+          touched = true;
+        }
+      }
+      if (!hasLow) {
+        const l = pack.low[iSig]!;
+        if (Number.isFinite(l) && l > 0) {
+          row.signalBarLow = l;
+          touched = true;
+        }
+      }
+      if (touched) updated += 1;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] backfill signalBarHigh/Low", row.symbol, e);
+    }
+  }
+  return updated;
+}
+
 async function backfillLowerWickRatioPct(rows: CandleReversalStatsRow[]): Promise<number> {
   let updated = 0;
   for (const row of rows) {
@@ -441,22 +484,27 @@ async function backfillDropFrom24hHighToSignalLowPct(rows: CandleReversalStatsRo
     if (!Number.isFinite(row.signalBarOpenSec) || row.signalBarOpenSec <= 0) continue;
     const tf = signalBarTf(row);
     const barDur = signalBarDurationSecByTf(tf);
-    let signalLow: number | null = null;
-    try {
-      const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
-        startTimeMs: row.signalBarOpenSec * 1000,
-        endTimeMs: (row.signalBarOpenSec + barDur) * 1000,
-        limit: 8,
-      });
-      if (pack && pack.timeSec.length > 0) {
-        const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
-        if (iSig >= 0) {
-          const l = pack.low[iSig]!;
-          if (Number.isFinite(l) && l > 0) signalLow = l;
+    let signalLow: number | null =
+      row.signalBarLow != null && Number.isFinite(row.signalBarLow) && row.signalBarLow > 0
+        ? row.signalBarLow
+        : null;
+    if (signalLow == null) {
+      try {
+        const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
+          startTimeMs: row.signalBarOpenSec * 1000,
+          endTimeMs: (row.signalBarOpenSec + barDur) * 1000,
+          limit: 8,
+        });
+        if (pack && pack.timeSec.length > 0) {
+          const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
+          if (iSig >= 0) {
+            const l = pack.low[iSig]!;
+            if (Number.isFinite(l) && l > 0) signalLow = l;
+          }
         }
+      } catch (e) {
+        console.error("[candleReversalStatsTick] backfill signalBarLow", row.symbol, e);
       }
-    } catch (e) {
-      console.error("[candleReversalStatsTick] backfill signalBarLow", row.symbol, e);
     }
     if (signalLow == null) continue;
     try {
@@ -618,6 +666,7 @@ async function followUpCandleReversal1hRow(
     const adverse = computeFollowUpMaxAdversePct(h15, l15, iAdverseFirst, i15Last, entry, side);
     if (adverse != null) row.followUpMaxAdversePct = adverse;
   }
+  applySignalBarSlHitFromKlines(row, h15, l15, t15, KLINE_15M_SEC, i15First, i15Last, ac);
 
   const h4End = ac + 4 * HOUR_SEC;
   const h12End = ac + 12 * HOUR_SEC;
@@ -853,6 +902,16 @@ async function followUpCandleReversal1dRow(
       ? computeFollowUpMaxAdversePct(dayPack.high, dayPack.low, iAdverseFirst, iDayLast, entry, "short")
       : null;
   if (adverse != null) row.followUpMaxAdversePct = adverse;
+  applySignalBarSlHitFromKlines(
+    row,
+    dayPack.high,
+    dayPack.low,
+    dayT,
+    DAY_SEC,
+    iDayFirst,
+    iDayLast,
+    ac,
+  );
 
   const h1dEnd = ac + DAY_SEC;
   const h3dEnd = ac + 3 * DAY_SEC;
@@ -1038,6 +1097,7 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillAllStatsRowsOpenInterest(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsBtcDomEma20_4h(state.rows, { maxRowsPerPass: 15, maxPasses: 5 });
   dirty += await backfillSignalVolVsSma(state.rows);
+  dirty += await backfillSignalBarHighLow(state.rows);
   dirty += await backfillLowerWickRatioPct(state.rows);
   dirty += await backfillDropFrom24hHighToSignalLowPct(state.rows);
   dirty += await backfillEma12_1hSlopeAt12h(state.rows);

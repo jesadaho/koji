@@ -60,7 +60,7 @@ import {
   statsPsar4hTrendLabel,
 } from "@/lib/statsPsar4h";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
-import { reversalMomentumScoreLabel } from "@/lib/reversalMomentumScore";
+import { reversalSignalBarSlHitLabel } from "@/lib/statsSignalBarSl";
 import {
   pumpCycleAgeHoursCsvCell,
   pumpCycleSwingLowPriceCsvCell,
@@ -151,6 +151,7 @@ const HEADERS = [
   "Max ROI",
   "Max DD",
   "สวน max",
+  "SL ยอดแท่ง",
   "F&G",
   "Sentiment",
   "กำไรกลยุทธ์ 24h",
@@ -299,6 +300,7 @@ function candleReversalStatsRowToCsvCells(
     r.followUpMaxAdversePct != null && Number.isFinite(r.followUpMaxAdversePct)
       ? `${r.followUpMaxAdversePct.toFixed(2)}%`
       : "",
+    reversalSignalBarSlHitLabel(r.signalBarSlHit, r.signalBarSlHitHours).replace("—", ""),
     marketSentimentFngLabel(r.marketSentiment),
     marketSentimentSentimentLabel(r.marketSentiment),
     statsStrategyProfitCsvCell(
