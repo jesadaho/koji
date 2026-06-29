@@ -93,6 +93,13 @@ export function isCandleReversal1hLongStatsEnabled(): boolean {
   return raw === "1" || raw === "true" || raw === "yes";
 }
 
+/** เก็บ/แสดงตารางสถิติ Reversal 1D — ค่าเริ่มปิด */
+export function isCandleReversal1dStatsEnabled(): boolean {
+  const raw = process.env.CANDLE_REVERSAL_1D_STATS_ENABLED?.trim().toLowerCase();
+  if (raw === undefined || raw === "") return false;
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
 type LegacyCandleReversalRow = CandleReversalStatsRow & {
   price4h?: number | null;
   pct4h?: number | null;
@@ -459,6 +466,9 @@ export async function appendCandleReversalStatsRow(
 
   const signalBarTf = input.signalBarTf === "1h" ? "1h" : "1d";
   const tradeSide = input.tradeSide === "long" ? "long" : "short";
+  if (signalBarTf === "1d" && !isCandleReversal1dStatsEnabled()) {
+    return null;
+  }
   if (signalBarTf === "1h" && tradeSide === "long" && !isCandleReversal1hLongStatsEnabled()) {
     return null;
   }

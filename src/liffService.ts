@@ -89,6 +89,7 @@ import {
   viewerStatsTpSlPlanPayload,
 } from "@/lib/statsTpSlPlanForUser";
 import {
+  isCandleReversal1dStatsEnabled,
   isCandleReversal1hLongStatsEnabled,
   loadCandleReversalStatsState,
   removeCandleReversalStatsDuplicatePendingRows,
@@ -1090,13 +1091,15 @@ export async function liffGetCandleReversalStats(
   if (barRangeDirty > 0 || weeklyAlertDirty > 0 || ema20Dirty > 0) await saveCandleReversalStatsState(st);
 
   const conflictSets = await loadPendingConflictSets();
+  const day1StatsEnabled = isCandleReversal1dStatsEnabled();
   const long1hStatsEnabled = isCandleReversal1hLongStatsEnabled();
   const rows = [...st.rows]
     .filter(
       (r) =>
-        long1hStatsEnabled ||
-        (r.signalBarTf ?? "1d") !== "1h" ||
-        (r.tradeSide ?? "short") !== "long",
+        (day1StatsEnabled || (r.signalBarTf ?? "1d") !== "1d") &&
+        (long1hStatsEnabled ||
+          (r.signalBarTf ?? "1d") !== "1h" ||
+          (r.tradeSide ?? "short") !== "long"),
     )
     .sort((a, b) => b.alertedAtMs - a.alertedAtMs)
     .map((r) => ({
@@ -1180,6 +1183,7 @@ export async function liffGetCandleReversalStats(
     ...(viewerReversalStatsPlayLongEnabled !== undefined
       ? { viewerReversalStatsPlayLongEnabled }
       : {}),
+    reversal1dStatsEnabled: day1StatsEnabled,
     reversal1hLongStatsEnabled: long1hStatsEnabled,
   };
 }

@@ -53,6 +53,7 @@ import { candleReversalStatsAnchorCloseSec } from "@/lib/candleReversalStatsClie
 import { backfillPumpCycleSwingLowForRows } from "./statsPumpCycleSwingLow";
 import { backfillAllStatsRowsTradFiFlag } from "./statsTradFiFlag";
 import {
+  isCandleReversal1dStatsEnabled,
   isCandleReversal1hLongStatsEnabled,
   isCandleReversalStatsEnabled,
   loadCandleReversalStatsState,
@@ -918,7 +919,11 @@ export async function runCandleReversalStatsFollowUpTick(
   }
 
   const long1hStatsEnabled = isCandleReversal1hLongStatsEnabled();
+  const day1StatsEnabled = isCandleReversal1dStatsEnabled();
   for (const row of state.rows) {
+    if (!day1StatsEnabled && signalBarTf(row) === "1d") {
+      continue;
+    }
     if (
       !long1hStatsEnabled &&
       signalBarTf(row) === "1h" &&

@@ -1,0 +1,95 @@
+import type { CandleReversalStatsRow } from "@/lib/candleReversalStatsClient";
+
+export const REVERSAL_MARKET_ENTRY_EMA20_15M_DIFF_MIN_PCT = 6.5;
+export const REVERSAL_MARKET_ENTRY_VOL_VS_SMA_MIN = 4;
+export const REVERSAL_MARKET_ENTRY_LOWER_WICK_MAX_PCT = 15;
+
+export const REVERSAL_MARKET_ENTRY_CANDIDATE_CRITERIA =
+  `EMA20Δ15m > ${REVERSAL_MARKET_ENTRY_EMA20_15M_DIFF_MIN_PCT}% · Vol×SMA > ${REVERSAL_MARKET_ENTRY_VOL_VS_SMA_MIN} · Lower Wick < ${REVERSAL_MARKET_ENTRY_LOWER_WICK_MAX_PCT}%`;
+
+export type ReversalMarketEntryCandidateRowSlice = Pick<
+  CandleReversalStatsRow,
+  "priceVsEma20_15mPct" | "signalVolVsSma" | "lowerWickRatioPct"
+>;
+
+function finiteGt(v: number | null | undefined, min: number): boolean {
+  return v != null && Number.isFinite(v) && v > min;
+}
+
+function finiteLt(v: number | null | undefined, max: number): boolean {
+  return v != null && Number.isFinite(v) && v < max;
+}
+
+export function reversalMarketEntryEma20_15mDiffPass(
+  row: ReversalMarketEntryCandidateRowSlice,
+): boolean {
+  return finiteGt(row.priceVsEma20_15mPct, REVERSAL_MARKET_ENTRY_EMA20_15M_DIFF_MIN_PCT);
+}
+
+export function reversalMarketEntryVolVsSmaPass(
+  row: ReversalMarketEntryCandidateRowSlice,
+): boolean {
+  return finiteGt(row.signalVolVsSma, REVERSAL_MARKET_ENTRY_VOL_VS_SMA_MIN);
+}
+
+export function reversalMarketEntryLowerWickPass(
+  row: ReversalMarketEntryCandidateRowSlice,
+): boolean {
+  return finiteLt(row.lowerWickRatioPct, REVERSAL_MARKET_ENTRY_LOWER_WICK_MAX_PCT);
+}
+
+export function reversalRowIsMarketEntryCandidate(row: ReversalMarketEntryCandidateRowSlice): boolean {
+  return (
+    reversalMarketEntryEma20_15mDiffPass(row) &&
+    reversalMarketEntryVolVsSmaPass(row) &&
+    reversalMarketEntryLowerWickPass(row)
+  );
+}
+
+export function reversalMarketEntryCandidateTitle(row: ReversalMarketEntryCandidateRowSlice): string {
+  const mark = (ok: boolean) => (ok ? "✓" : "✗");
+  return [
+    reversalRowIsMarketEntryCandidate(row) ? "Market Entry Candidate" : "ไม่ใช่ Market Entry Candidate",
+    `EMA20Δ15m ${row.priceVsEma20_15mPct?.toFixed(1) ?? "—"}% ${mark(reversalMarketEntryEma20_15mDiffPass(row))} (>${REVERSAL_MARKET_ENTRY_EMA20_15M_DIFF_MIN_PCT})`,
+    `Vol×SMA ${row.signalVolVsSma?.toFixed(2) ?? "—"} ${mark(reversalMarketEntryVolVsSmaPass(row))} (>${REVERSAL_MARKET_ENTRY_VOL_VS_SMA_MIN})`,
+    `Lower Wick ${row.lowerWickRatioPct?.toFixed(1) ?? "—"}% ${mark(reversalMarketEntryLowerWickPass(row))} (<${REVERSAL_MARKET_ENTRY_LOWER_WICK_MAX_PCT})`,
+  ].join(" · ");
+}
+
+export type ReversalMarketEntryCandidateFilter = "all" | "candidate" | "notcandidate";
+
+export const REVERSAL_MARKET_ENTRY_CANDIDATE_FILTER_OPTIONS: ReadonlyArray<{
+  value: ReversalMarketEntryCandidateFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "candidate", label: "Market Entry" },
+  { value: "notcandidate", label: "ไม่ใช่ Market Entry" },
+];
+
+export function reversalMarketEntryCandidateFilterLabel(
+  filter: ReversalMarketEntryCandidateFilter,
+): string {
+  return (
+    REVERSAL_MARKET_ENTRY_CANDIDATE_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter
+  );
+}
+
+export function reversalMarketEntryCandidateFilterTitle(
+  filter: ReversalMarketEntryCandidateFilter,
+): string {
+  if (filter === "all") return "ไม่กรอง Market Entry Candidate";
+  if (filter === "candidate") {
+    return `Market Entry Candidate — ${REVERSAL_MARKET_ENTRY_CANDIDATE_CRITERIA}`;
+  }
+  return `ไม่ใช่ Market Entry Candidate — ไม่ผ่าน ${REVERSAL_MARKET_ENTRY_CANDIDATE_CRITERIA}`;
+}
+
+export function reversalRowMatchesMarketEntryCandidateFilter(
+  row: ReversalMarketEntryCandidateRowSlice,
+  filter: ReversalMarketEntryCandidateFilter,
+): boolean {
+  if (filter === "all") return true;
+  const isCandidate = reversalRowIsMarketEntryCandidate(row);
+  return filter === "candidate" ? isCandidate : !isCandidate;
+}

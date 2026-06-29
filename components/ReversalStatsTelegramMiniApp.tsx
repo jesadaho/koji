@@ -182,6 +182,11 @@ import {
   reversalMomentumScoreTitle,
   reversalRowMatchesMomentumScoreFilter,
   type ReversalMomentumScoreFilter,
+  REVERSAL_MARKET_ENTRY_CANDIDATE_FILTER_OPTIONS,
+  reversalMarketEntryCandidateFilterLabel,
+  reversalMarketEntryCandidateFilterTitle,
+  reversalRowMatchesMarketEntryCandidateFilter,
+  type ReversalMarketEntryCandidateFilter,
   reversalShapeFilterLabel,
   reversalTradFiFilterDetail,
   reversalTradFiFilterLabel,
@@ -601,6 +606,8 @@ function ReversalStatsSection({
   const [ema15mTouchFilter, setEma15mTouchFilter] = useState<ReversalEma20_15mTouchFilter>("all");
   const [momentumScoreFilter, setMomentumScoreFilter] =
     useState<ReversalMomentumScoreFilter>("all");
+  const [marketEntryFilter, setMarketEntryFilter] =
+    useState<ReversalMarketEntryCandidateFilter>("all");
   const [tradFiFilter, setTradFiFilter] = useState<ReversalTradFiFilter>("all");
   const [ema1hFilter, setEma1hFilter] = useState<ReversalEma1hFilter>("all");
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
@@ -647,11 +654,13 @@ function ReversalStatsSection({
             reversalStatsRowMatchesEma20_15mTouchFilter(r, ema15mTouchFilter)) &&
           (!showSuggestedSideColumn ||
             reversalRowMatchesMomentumScoreFilter(r, momentumScoreFilter)) &&
+          (!showSuggestedSideColumn ||
+            reversalRowMatchesMarketEntryCandidateFilter(r, marketEntryFilter)) &&
           (!showSuggestedSideColumn || reversalRowMatchesSuggestedSideFilter(r, suggestedSideFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendGainFilter(r, trendGainFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendVelocityFilter(r, trendVelocityFilter)),
       ),
-    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, marketEntryFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -848,8 +857,11 @@ function ReversalStatsSection({
       ...(showSuggestedSideColumn && momentumScoreFilter !== "all"
         ? { momentum: momentumScoreFilter }
         : {}),
+      ...(showSuggestedSideColumn && marketEntryFilter !== "all"
+        ? { marketEntry: marketEntryFilter }
+        : {}),
     };
-  }, [csvQuery, dayFilter, dowFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lenRankFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, showSuggestedSideColumn, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, dowFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lenRankFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, marketEntryFilter, showSuggestedSideColumn, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -1372,7 +1384,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA20∠1h ${reversalEma1hFilterLabel(ema1hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · R% ${reversalBarRangeSignalFilterLabel(barRangeSignalFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""}${showSuggestedSideColumn && ema15mTouchFilter !== "all" ? ` · EMA touch ${reversalEma20_15mTouchFilterLabel(ema15mTouchFilter)}` : ""}${showSuggestedSideColumn && momentumScoreFilter !== "all" ? ` · Momentum ${reversalMomentumScoreFilterLabel(momentumScoreFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)} · Observe ${reversalObserveFilterLabel(observeFilter)} · ประเภท ${reversalTradFiFilterLabel(tradFiFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA20∠1h ${reversalEma1hFilterLabel(ema1hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · R% ${reversalBarRangeSignalFilterLabel(barRangeSignalFilter)}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""}${showSuggestedSideColumn && ema15mTouchFilter !== "all" ? ` · EMA touch ${reversalEma20_15mTouchFilterLabel(ema15mTouchFilter)}` : ""}${showSuggestedSideColumn && momentumScoreFilter !== "all" ? ` · Momentum ${reversalMomentumScoreFilterLabel(momentumScoreFilter)}` : ""}${showSuggestedSideColumn && marketEntryFilter !== "all" ? ` · Market Entry ${reversalMarketEntryCandidateFilterLabel(marketEntryFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)} · Observe ${reversalObserveFilterLabel(observeFilter)} · ประเภท ${reversalTradFiFilterLabel(tradFiFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -1945,6 +1957,26 @@ function ReversalStatsSection({
             </select>
           </label>
         ) : null}
+        {showSuggestedSideColumn ? (
+          <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+            Market Entry
+            <select
+              value={marketEntryFilter}
+              onChange={(e) =>
+                setMarketEntryFilter(e.currentTarget.value as ReversalMarketEntryCandidateFilter)
+              }
+              className="tmaInput"
+              style={{ width: "auto", minWidth: "9rem" }}
+              title={reversalMarketEntryCandidateFilterTitle(marketEntryFilter)}
+            >
+              {REVERSAL_MARKET_ENTRY_CANDIDATE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
           Matrix
           <select
@@ -2204,7 +2236,7 @@ export default function ReversalStatsTelegramMiniApp() {
   const [backfillMsg, setBackfillMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [backfillAiMsg, setBackfillAiMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [backfillMcapMsg, setBackfillMcapMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<ReversalStatsTabId>("1d");
+  const [activeTab, setActiveTab] = useState<ReversalStatsTabId>("1h-short");
 
   const allRows = payload?.rows ?? [];
 
@@ -2223,7 +2255,14 @@ export default function ReversalStatsTelegramMiniApp() {
     () => allRows.filter((r) => (r.signalBarTf ?? "1d") === "1h" && r.tradeSide === "long"),
     [allRows],
   );
+  const day1StatsEnabled = payload?.reversal1dStatsEnabled === true;
   const long1hStatsEnabled = payload?.reversal1hLongStatsEnabled === true;
+
+  useEffect(() => {
+    if (!day1StatsEnabled && activeTab === "1d") {
+      setActiveTab("1h-short");
+    }
+  }, [day1StatsEnabled, activeTab]);
 
   useEffect(() => {
     if (!long1hStatsEnabled && activeTab === "1h-long") {
@@ -2572,7 +2611,7 @@ export default function ReversalStatsTelegramMiniApp() {
       <h1 className="sparkStatsMatrixSectionTitle">
         สถิติ Reversal
         <span className="tmaTabEn" style={{ display: "block", fontWeight: "normal", marginTop: "0.15rem" }}>
-          แท็บ 1D · 1H Short
+          {day1StatsEnabled ? "แท็บ 1D · " : ""}1H Short
           {long1hStatsEnabled ? " · Long 1H (fade SHORT)" : ""} · โดจิ · ทุบ · แดงยาว · เขียวยาว
         </span>
       </h1>
@@ -2690,19 +2729,21 @@ export default function ReversalStatsTelegramMiniApp() {
         aria-label="ตารางสถิติ Reversal"
         style={{ marginTop: "1rem" }}
       >
-        <button
-          type="button"
-          className="tmaTab"
-          id="reversal-tab-1d"
-          role="tab"
-          aria-selected={activeTab === "1d"}
-          aria-controls="reversal-panel-1d"
-          tabIndex={activeTab === "1d" ? 0 : -1}
-          onClick={() => setActiveTab("1d")}
-        >
-          <span>1D</span>
-          <span className="tmaTabEn">{dayRows.length} แถว</span>
-        </button>
+        {day1StatsEnabled ? (
+          <button
+            type="button"
+            className="tmaTab"
+            id="reversal-tab-1d"
+            role="tab"
+            aria-selected={activeTab === "1d"}
+            aria-controls="reversal-panel-1d"
+            tabIndex={activeTab === "1d" ? 0 : -1}
+            onClick={() => setActiveTab("1d")}
+          >
+            <span>1D</span>
+            <span className="tmaTabEn">{dayRows.length} แถว</span>
+          </button>
+        ) : null}
         <button
           type="button"
           className="tmaTab"
@@ -2733,6 +2774,7 @@ export default function ReversalStatsTelegramMiniApp() {
         ) : null}
       </div>
 
+      {day1StatsEnabled ? (
       <div
         className="tmaTabPanel"
         id="reversal-panel-1d"
@@ -2751,6 +2793,7 @@ export default function ReversalStatsTelegramMiniApp() {
           rows={dayRows}
         />
       </div>
+      ) : null}
 
       <div
         className="tmaTabPanel"

@@ -9,6 +9,8 @@ import type {
 import { reversalStatsRowMatchesEma20_15mTouchFilter } from "@/lib/candleReversalStatsClient";
 import { reversalRowMatchesMomentumScoreFilter } from "@/lib/reversalMomentumScore";
 import type { ReversalMomentumScoreFilter } from "@/lib/reversalMomentumScore";
+import { reversalRowMatchesMarketEntryCandidateFilter } from "@/lib/reversalMarketEntryCandidate";
+import type { ReversalMarketEntryCandidateFilter } from "@/lib/reversalMarketEntryCandidate";
 import {
   reversalStatsRowMatchesMatrixFilter,
   type ReversalMatrixFilter,
@@ -59,6 +61,15 @@ export {
   reversalMomentumScoreTitle,
   reversalRowMatchesMomentumScoreFilter,
 } from "@/lib/reversalMomentumScore";
+
+export type { ReversalMarketEntryCandidateFilter } from "@/lib/reversalMarketEntryCandidate";
+export {
+  REVERSAL_MARKET_ENTRY_CANDIDATE_CRITERIA,
+  REVERSAL_MARKET_ENTRY_CANDIDATE_FILTER_OPTIONS,
+  reversalMarketEntryCandidateFilterLabel,
+  reversalMarketEntryCandidateFilterTitle,
+  reversalRowMatchesMarketEntryCandidateFilter,
+} from "@/lib/reversalMarketEntryCandidate";
 
 export type { ReversalEma20_15mTouchFilter } from "@/lib/candleReversalStatsClient";
 export {
@@ -189,6 +200,7 @@ export type ReversalStatsFilterQuery = {
   tradFi?: ReversalTradFiFilter;
   ema15mTouch?: ReversalEma20_15mTouchFilter;
   momentum?: ReversalMomentumScoreFilter;
+  marketEntry?: ReversalMarketEntryCandidateFilter;
 };
 
 export function reversalShapeFilterLabel(filter: ReversalShapeFilter): string {
@@ -323,6 +335,13 @@ export function filterCandleReversalStatsRows(
     if (q.momentum && q.momentum !== "all" && !reversalRowMatchesMomentumScoreFilter(r, q.momentum)) {
       return false;
     }
+    if (
+      q.marketEntry &&
+      q.marketEntry !== "all" &&
+      !reversalRowMatchesMarketEntryCandidateFilter(r, q.marketEntry)
+    ) {
+      return false;
+    }
     return true;
   });
 }
@@ -339,6 +358,7 @@ const OBSERVE_SET = new Set<string>(["all", "observe", "play"]);
 const TRADFI_SET = new Set<string>(["all", "crypto", "stock"]);
 const EMA15M_TOUCH_SET = new Set<string>(["all", "not_touched", "touched"]);
 const MOMENTUM_SET = new Set<string>(["all", "ge1", "ge2", "ge3", "ge4", "ge5"]);
+const MARKET_ENTRY_SET = new Set<string>(["all", "candidate", "notcandidate"]);
 
 function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
   const k = raw?.trim().toLowerCase() ?? "";
@@ -401,6 +421,7 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.tradFi = pickEnum(sp.get("tradFi"), TRADFI_SET, "all");
   q.ema15mTouch = pickEnum(sp.get("ema15mTouch"), EMA15M_TOUCH_SET, "all");
   q.momentum = pickEnum(sp.get("momentum"), MOMENTUM_SET, "all");
+  q.marketEntry = pickEnum(sp.get("marketEntry"), MARKET_ENTRY_SET, "all");
   return q;
 }
 
@@ -424,6 +445,7 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.tradFi && q.tradFi !== "all") p.set("tradFi", q.tradFi);
   if (q.ema15mTouch && q.ema15mTouch !== "all") p.set("ema15mTouch", q.ema15mTouch);
   if (q.momentum && q.momentum !== "all") p.set("momentum", q.momentum);
+  if (q.marketEntry && q.marketEntry !== "all") p.set("marketEntry", q.marketEntry);
   const s = p.toString();
   return s ? `?${s}` : "";
 }
