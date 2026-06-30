@@ -85,6 +85,9 @@ function normalizeRow(raw: unknown): AutoOpenOrderLogRow | null {
   if (o.reversalAlertSide === "short" || o.reversalAlertSide === "long") {
     row.reversalAlertSide = o.reversalAlertSide;
   }
+  if (o.suggestedTradeSide === "long" || o.suggestedTradeSide === "short") {
+    row.suggestedTradeSide = o.suggestedTradeSide;
+  }
   if (typeof o.gradeKey === "string") row.gradeKey = o.gradeKey;
   else if (o.gradeKey === null) row.gradeKey = null;
   if (typeof o.signalBarTf === "string") row.signalBarTf = o.signalBarTf;

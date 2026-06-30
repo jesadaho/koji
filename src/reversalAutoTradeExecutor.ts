@@ -448,6 +448,7 @@ function logReversalAutoOpen(
   outcome: AutoOpenOutcome,
   reasonCode: string,
   mexcSide: "short" | "long",
+  suggestedTradeSide: CandleReversalTradeSide,
   extra?: {
     reasonDetail?: string;
     marginUsdt?: number;
@@ -476,6 +477,7 @@ function logReversalAutoOpen(
     binanceSymbol: signal.binanceSymbol,
     side: mexcSide,
     reversalAlertSide: signal.alertTradeSide,
+    suggestedTradeSide,
     signalBarTf: signal.signalBarTf,
     model: signal.model,
     signalBarOpenSec: signal.signalBarOpenSec,
@@ -525,6 +527,20 @@ export async function runReversalAutoTradeAfterReversalAlert(
   const sym = contractSymbol;
 
   const alertTradeSide: CandleReversalTradeSide = input.alertTradeSide === "long" ? "long" : "short";
+  const suggestedTradeSide: CandleReversalTradeSide =
+    alertTradeSide === "long"
+      ? "short"
+      : reversalSuggestedTradeSide({
+          trendGainPct: input.trendGainPct,
+          signalVolVsSma: input.signalVolVsSma,
+          barRangePctSignal: input.barRangePctSignal,
+          priceVsEma20_1hPct: input.priceVsEma20_1hPct,
+          ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
+          priceVsEma20_4hPct: input.priceVsEma20_4hPct,
+          ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
+          ema4hSlopePct7d: input.ema4hSlopePct7d,
+          ageOfTrendHours: input.ageOfTrendHours,
+        });
 
   const logSignal: ReversalAutoOpenLogSignal = {
     contractSymbol,
@@ -788,7 +804,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
       alertTradeSide === "short" &&
       input.signalBarTf !== "1h"
     ) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "play_long_requires_1h", "long");
+      logReversalAutoOpen(userId, logSignal, "skipped", "play_long_requires_1h", "long", suggestedTradeSide);
       continue;
     }
 
@@ -797,11 +813,11 @@ export async function runReversalAutoTradeAfterReversalAlert(
       if (playSides.long && isLongCandidate) {
         openMexcLong = true;
       } else if (longOnlyPlay) {
-        logReversalAutoOpen(userId, logSignal, "skipped", "not_long_candidate", "long");
+        logReversalAutoOpen(userId, logSignal, "skipped", "not_long_candidate", "long", suggestedTradeSide);
         continue;
       }
     } else if (alertTradeSide === "short" && longOnlyPlay) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "play_short_disabled", "short");
+      logReversalAutoOpen(userId, logSignal, "skipped", "play_short_disabled", "short", suggestedTradeSide);
       continue;
     }
 
@@ -819,6 +835,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         "skipped",
         alertTradeSide === "long" ? "long_fade_disabled" : "user_disabled",
         mexcSide,
+        suggestedTradeSide,
       );
       continue;
     }
@@ -842,7 +859,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         allowQualitySignal: allowQuality,
       })
     ) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "quality_signal_gate", mexcSide);
+      logReversalAutoOpen(userId, logSignal, "skipped", "quality_signal_gate", mexcSide, suggestedTradeSide);
       continue;
     }
 
@@ -851,18 +868,18 @@ export async function runReversalAutoTradeAfterReversalAlert(
         ? { apiKey: row.mexcApiKey.trim(), secret: row.mexcSecret.trim() }
         : null;
     if (!creds) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "no_mexc_creds", mexcSide);
+      logReversalAutoOpen(userId, logSignal, "skipped", "no_mexc_creds", mexcSide, suggestedTradeSide);
       continue;
     }
 
     const marginUsdt = reversalAutoTradeMarginUsdtForMexcSide(row, mexcSide) ?? NaN;
     const baseLeverage = row.reversalAutoTradeLeverage ?? NaN;
     if (!(typeof marginUsdt === "number" && Number.isFinite(marginUsdt) && marginUsdt > 0)) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", mexcSide);
+      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", mexcSide, suggestedTradeSide);
       continue;
     }
     if (!(typeof baseLeverage === "number" && Number.isFinite(baseLeverage) && baseLeverage >= 1)) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", mexcSide, {
+      logReversalAutoOpen(userId, logSignal, "skipped", "invalid_margin_or_leverage", mexcSide, suggestedTradeSide, {
         marginUsdt,
       });
       continue;
@@ -961,6 +978,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         "failed",
         "position_check_failed",
         mexcSide,
+        suggestedTradeSide,
         {
           reasonDetail: detail.slice(0, 400),
           marginUsdt,
@@ -992,7 +1010,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
     positions = flipRes.positions;
 
     if (flipRes.oppositeCloseFailed) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "flip_close_failed", mexcSide, {
+      logReversalAutoOpen(userId, logSignal, "skipped", "flip_close_failed", mexcSide, suggestedTradeSide, {
         marginUsdt,
         leverage: Math.floor(leverage),
         ...leverageLogExtra,
@@ -1001,7 +1019,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
     }
 
     if (hasPlacedReversalContractToday(state[userId], contractSymbol, dayKey)) {
-      logReversalAutoOpen(userId, logSignal, "skipped", "already_opened_today", mexcSide);
+      logReversalAutoOpen(userId, logSignal, "skipped", "already_opened_today", mexcSide, suggestedTradeSide);
       continue;
     }
 
@@ -1024,7 +1042,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         ? findMexcOpenPositionLong(positions, contractSymbol)
         : findMexcOpenPositionShort(positions, contractSymbol);
       const hv = active != null ? Number(active.holdVol) : NaN;
-      logReversalAutoOpen(userId, logSignal, "skipped", "existing_position", mexcSide, {
+      logReversalAutoOpen(userId, logSignal, "skipped", "existing_position", mexcSide, suggestedTradeSide, {
         marginUsdt,
         leverage: Math.floor(leverage),
         ...leverageLogExtra,
@@ -1048,6 +1066,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         "failed",
         entryRes.reasonCode,
         mexcSide,
+        suggestedTradeSide,
         {
           reasonDetail: entryRes.error.slice(0, 400),
           marginUsdt,
@@ -1108,6 +1127,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
           "failed",
           "mexc_order_rejected",
           mexcSide,
+          suggestedTradeSide,
           {
             reasonDetail: msg.slice(0, 400),
             marginUsdt,
@@ -1165,6 +1185,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         "success",
         useMarket ? "open_success_market" : "open_success_limit",
         mexcSide,
+        suggestedTradeSide,
         {
           marginUsdt,
           leverage: lev,
@@ -1377,6 +1398,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         "failed",
         "network_error",
         mexcSide,
+        suggestedTradeSide,
         {
           reasonDetail: detail.slice(0, 400),
           marginUsdt,

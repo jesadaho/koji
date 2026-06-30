@@ -1,12 +1,19 @@
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
+import type { CandleReversalTradeSide } from "@/lib/candleReversalStatsClient";
+import {
+  type ReversalSuggestedSideFilter,
+} from "@/lib/reversalMatrixFilters";
 
 export type AutoOpenSource = "snowball" | "reversal";
 export type AutoOpenOutcome = "success" | "skipped" | "failed";
 /** ทิศสัญญาณ Reversal ที่ยิง alert — long = fade เปิด SHORT */
 export type ReversalAutoOpenAlertSide = "short" | "long";
 
-/** ฟิลเตอร์แหล่งในหน้าประวัติ Bot Trade — แยก Reversal Short / Long */
-export type AutoOpenSourceFilter = "all" | "snowball" | "reversal_short" | "reversal_long";
+/** ฟิลเตอร์แหล่งในหน้าประวัติ Bot Trade */
+export type AutoOpenSourceFilter = "all" | "snowball" | "reversal";
+
+/** ฟิลเตอร์ทิศสัญญาณ Reversal — Short 1H vs Long 1H (fade) */
+export type AutoOpenReversalAlertSideFilter = "all" | "short" | "long";
 
 export type AutoOpenOrderLogRow = {
   id: string;
@@ -23,6 +30,8 @@ export type AutoOpenOrderLogRow = {
   alertSide?: "long" | "bear";
   /** Reversal — ทิศสัญญาณ short หรือ long (fade SHORT) */
   reversalAlertSide?: ReversalAutoOpenAlertSide;
+  /** Reversal — ทิศแนะนำจาก Long candidate (Short 1H) · long signal = short fade */
+  suggestedTradeSide?: CandleReversalTradeSide;
   gradeKey?: string | null;
   signalBarTf?: string;
   signalBarOpenSec?: number;
@@ -177,18 +186,70 @@ export function matchesAutoOpenSourceFilter(
   row: AutoOpenOrderLogRow,
   filter: AutoOpenSourceFilter,
 ): boolean {
-  switch (filter) {
-    case "all":
-      return true;
-    case "snowball":
-      return row.source === "snowball";
-    case "reversal_short":
-      return row.source === "reversal" && resolveReversalAutoOpenAlertSide(row) === "short";
-    case "reversal_long":
-      return row.source === "reversal" && resolveReversalAutoOpenAlertSide(row) === "long";
-    default:
-      return true;
+  if (filter === "all") return true;
+  if (filter === "snowball") return row.source === "snowball";
+  if (filter === "reversal") return row.source === "reversal";
+  return true;
+}
+
+export function matchesAutoOpenReversalAlertSideFilter(
+  row: AutoOpenOrderLogRow,
+  filter: AutoOpenReversalAlertSideFilter,
+): boolean {
+  if (filter === "all") return true;
+  if (row.source !== "reversal") return true;
+  return resolveReversalAutoOpenAlertSide(row) === filter;
+}
+
+/** ทิศแนะนำ — ตาราง Reversal Short 1H · แถวเก่า infer จากทิศ MEXC */
+export function resolveAutoOpenReversalSuggestedTradeSide(
+  row: Pick<
+    AutoOpenOrderLogRow,
+    "source" | "reversalAlertSide" | "suggestedTradeSide" | "side"
+  >,
+): CandleReversalTradeSide | null {
+  if (row.source !== "reversal") return null;
+  if (row.suggestedTradeSide === "long" || row.suggestedTradeSide === "short") {
+    return row.suggestedTradeSide;
   }
+  const alertSide = resolveReversalAutoOpenAlertSide(row);
+  if (alertSide === "long") return "short";
+  if (row.side === "long") return "long";
+  if (row.side === "short") return "short";
+  return null;
+}
+
+export function matchesAutoOpenReversalSuggestedSideFilter(
+  row: AutoOpenOrderLogRow,
+  filter: ReversalSuggestedSideFilter,
+): boolean {
+  if (filter === "all") return true;
+  if (row.source !== "reversal") return true;
+  const suggested = resolveAutoOpenReversalSuggestedTradeSide(row);
+  return suggested === filter;
+}
+
+export type AutoOpenHistoryFilters = {
+  source: AutoOpenSourceFilter;
+  reversalAlertSide: AutoOpenReversalAlertSideFilter;
+  suggestedSide: ReversalSuggestedSideFilter;
+};
+
+export function matchesAutoOpenHistoryFilters(
+  row: AutoOpenOrderLogRow,
+  filters: AutoOpenHistoryFilters,
+): boolean {
+  if (!matchesAutoOpenSourceFilter(row, filters.source)) return false;
+  if (!matchesAutoOpenReversalAlertSideFilter(row, filters.reversalAlertSide)) return false;
+  if (!matchesAutoOpenReversalSuggestedSideFilter(row, filters.suggestedSide)) return false;
+  return true;
+}
+
+export function filterAutoOpenLogsByHistoryFilters(
+  rows: AutoOpenOrderLogRow[],
+  filters: AutoOpenHistoryFilters,
+): AutoOpenOrderLogRow[] {
+  return rows.filter((r) => matchesAutoOpenHistoryFilters(r, filters));
 }
 
 export function filterAutoOpenLogsBySourceFilter(
@@ -199,27 +260,68 @@ export function filterAutoOpenLogsBySourceFilter(
   return rows.filter((r) => matchesAutoOpenSourceFilter(r, filter));
 }
 
+export function autoOpenHistoryFiltersToApiQuery(
+  source: AutoOpenSourceFilter,
+  reversalAlertSide: AutoOpenReversalAlertSideFilter = "all",
+): {
+  source?: AutoOpenSource;
+  reversalAlertSide?: ReversalAutoOpenAlertSide;
+} {
+  if (source === "snowball") return { source: "snowball" };
+  if (source === "reversal") {
+    if (reversalAlertSide === "short" || reversalAlertSide === "long") {
+      return { source: "reversal", reversalAlertSide };
+    }
+    return { source: "reversal" };
+  }
+  return {};
+}
+
+/** @deprecated — ใช้ autoOpenHistoryFiltersToApiQuery */
 export function autoOpenSourceFilterToApiQuery(filter: AutoOpenSourceFilter): {
   source?: AutoOpenSource;
   reversalAlertSide?: ReversalAutoOpenAlertSide;
 } {
   if (filter === "snowball") return { source: "snowball" };
-  if (filter === "reversal_short") return { source: "reversal", reversalAlertSide: "short" };
-  if (filter === "reversal_long") return { source: "reversal", reversalAlertSide: "long" };
+  if (filter === "reversal") return { source: "reversal" };
   return {};
 }
 
-export function autoOpenSourceFilterLabel(filter: AutoOpenSourceFilter): string {
-  switch (filter) {
+export function autoOpenHistoryFilterLabel(
+  source: AutoOpenSourceFilter,
+  reversalAlertSide: AutoOpenReversalAlertSideFilter = "all",
+): string {
+  let label: string;
+  switch (source) {
     case "all":
-      return "Snowball + Reversal";
+      label = "Snowball + Reversal";
+      break;
     case "snowball":
-      return "Snowball";
-    case "reversal_short":
-      return "Reversal Short";
-    case "reversal_long":
-      return "Reversal Long (fade)";
+      label = "Snowball";
+      break;
+    case "reversal":
+      label = "Reversal";
+      break;
   }
+  if (source !== "snowball" && reversalAlertSide !== "all") {
+    label += reversalAlertSide === "short" ? " · Short" : " · Long (fade)";
+  }
+  return label;
+}
+
+export function autoOpenSourceFilterLabel(filter: AutoOpenSourceFilter): string {
+  return autoOpenHistoryFilterLabel(filter, "all");
+}
+
+export function autoOpenReversalSuggestedTradeSideLabel(
+  row: Pick<
+    AutoOpenOrderLogRow,
+    "source" | "reversalAlertSide" | "suggestedTradeSide" | "side"
+  >,
+): string {
+  const suggested = resolveAutoOpenReversalSuggestedTradeSide(row);
+  if (!suggested) return "—";
+  return suggested === "long" ? "🟢 Long" : "🔴 Short";
 }
 
 export function parseReversalAutoOpenAlertSide(

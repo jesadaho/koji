@@ -11,20 +11,28 @@ import { PendingConflictBadge } from "@/components/PendingConflictBadge";
 import {
   autoOpenOutcomeLabel,
   autoOpenReasonLabel,
+  autoOpenHistoryFilterLabel,
+  autoOpenHistoryFiltersToApiQuery,
   autoOpenHistoryQueryToSearchParams,
+  autoOpenReversalSuggestedTradeSideLabel,
   autoOpenSignalSideLabel,
-  autoOpenSourceFilterLabel,
-  autoOpenSourceFilterToApiQuery,
   autoOpenSourceLabel,
   filterAutoOpenLogsByDays,
+  filterAutoOpenLogsByHistoryFilters,
   filterAutoOpenLogsMexcLiveOnly,
   summarizeAutoOpenOrderLogs,
   type AutoOpenOrderLogApiPayload,
   type AutoOpenOrderLogRow,
+  type AutoOpenReversalAlertSideFilter,
   type AutoOpenSourceFilter,
 } from "@/lib/autoOpenOrderLogClient";
 import { groupAutoOpenLogsByBkkWeek } from "@/lib/autoOpenWeekGroup";
 import { excludePendingConflictRows } from "@/lib/signalPendingConflict";
+import {
+  REVERSAL_SUGGESTED_SIDE_FILTER_OPTIONS,
+  reversalSuggestedSideFilterTitle,
+  type ReversalSuggestedSideFilter,
+} from "@/lib/reversalMatrixFilters";
 import {
   autoOpenHorizonDue,
   autoOpenFailedShowsRejectedMarker,
@@ -762,7 +770,7 @@ function renderAutoOpenHistoryTableBody(
   if (rows.length === 0) {
     return (
       <tr>
-        <td colSpan={24} className="sub">
+        <td colSpan={25} className="sub">
           {emptyMessage}
         </td>
       </tr>
@@ -789,6 +797,9 @@ function renderAutoOpenHistoryTableBody(
         </td>
         <td>{r.side ? r.side.toUpperCase() : "—"}</td>
         <td>{autoOpenSignalSideLabel(r)}</td>
+        <td title={r.source === "reversal" ? reversalSuggestedSideFilterTitle("all") : undefined}>
+          {r.source === "reversal" ? autoOpenReversalSuggestedTradeSideLabel(r) : "—"}
+        </td>
         <td>{fmtMarginCell(r)}</td>
         <td>{fmtLeverage(r.leverage)}</td>
         <td>{fmtEntryCell(r, nowPx)}</td>
@@ -893,6 +904,7 @@ function AutoOpenHistoryTable({
             <th title="ทิศสัญญาณที่ยิง alert — Reversal: Short / Long (fade) · Snowball: Long / Bear">
               สัญญาณ
             </th>
+            <th title="ทิศแนะนำจาก Long candidate — Reversal Short 1H เท่านั้น">ทิศแนะนำ</th>
             <th>Margin</th>
             <th>Lev</th>
             <th title="⏳ = Limit รอแตะ (รวมสั่งไม่สำเร็จแต่จำลองรอ fill) · ✕ = ล้มเหลวอื่น">Entry</th>
@@ -1008,6 +1020,9 @@ export default function AutoOpenHistoryTelegramMiniApp() {
   const [payload, setPayload] = useState<AutoOpenOrderLogApiPayload | null>(null);
   const [markPrices, setMarkPrices] = useState<Record<string, number>>({});
   const [sourceFilter, setSourceFilter] = useState<AutoOpenSourceFilter>("all");
+  const [reversalAlertSideFilter, setReversalAlertSideFilter] =
+    useState<AutoOpenReversalAlertSideFilter>("all");
+  const [suggestedSideFilter, setSuggestedSideFilter] = useState<ReversalSuggestedSideFilter>("all");
   const [dayFilter, setDayFilter] = useState<DayFilter>("30");
   const [splitByWeek, setSplitByWeek] = useState(false);
   const [hideLimitPending, setHideLimitPending] = useState(false);
@@ -1073,8 +1088,17 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     [],
   );
 
+  const historyFilters = useMemo(
+    () => ({
+      source: sourceFilter,
+      reversalAlertSide: reversalAlertSideFilter,
+      suggestedSide: suggestedSideFilter,
+    }),
+    [sourceFilter, reversalAlertSideFilter, suggestedSideFilter],
+  );
+
   const loadHistory = useCallback(async () => {
-    const apiQuery = autoOpenSourceFilterToApiQuery(sourceFilter);
+    const apiQuery = autoOpenHistoryFiltersToApiQuery(sourceFilter, reversalAlertSideFilter);
     const q = autoOpenHistoryQueryToSearchParams({
       ...apiQuery,
       days: dayFilter !== "all" ? Number(dayFilter) : undefined,
@@ -1091,14 +1115,14 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       window.alert("ไม่มีรายการข้ามให้ลบ");
       return;
     }
-    const scope = autoOpenSourceFilterLabel(sourceFilter);
+    const scope = autoOpenHistoryFilterLabel(sourceFilter, reversalAlertSideFilter);
     const ok = window.confirm(
       `ลบรายการข้ามทั้งหมด ${total} รายการ (${scope}) ออกจากประวัติ?\n\nการลบไม่สามารถย้อนกลับได้`,
     );
     if (!ok) return;
     setClearingSkipped(true);
     try {
-      const apiQuery = autoOpenSourceFilterToApiQuery(sourceFilter);
+      const apiQuery = autoOpenHistoryFiltersToApiQuery(sourceFilter, reversalAlertSideFilter);
       const body =
         sourceFilter !== "all"
           ? {
@@ -1211,7 +1235,10 @@ export default function AutoOpenHistoryTelegramMiniApp() {
     };
   }, [phase, loadHistory]);
 
-  const rows = payload?.rows ?? [];
+  const rows = useMemo(() => {
+    const raw = payload?.rows ?? [];
+    return filterAutoOpenLogsByHistoryFilters(raw, historyFilters);
+  }, [payload?.rows, historyFilters]);
   const summary = payload?.summary;
 
   const contractSymbols = useMemo(() => {
@@ -1352,7 +1379,7 @@ export default function AutoOpenHistoryTelegramMiniApp() {
       window.alert("ยังไม่มีแถวให้ export");
       return;
     }
-    const apiQuery = autoOpenSourceFilterToApiQuery(sourceFilter);
+    const apiQuery = autoOpenHistoryFiltersToApiQuery(sourceFilter, reversalAlertSideFilter);
     const q = autoOpenHistoryQueryToSearchParams({
       ...apiQuery,
       days: dayFilter !== "all" ? Number(dayFilter) : undefined,
@@ -1444,10 +1471,43 @@ export default function AutoOpenHistoryTelegramMiniApp() {
           >
             <option value="all">ทั้งหมด</option>
             <option value="snowball">Snowball</option>
-            <option value="reversal_short">Reversal Short</option>
-            <option value="reversal_long">Reversal Long (fade)</option>
+            <option value="reversal">Reversal</option>
           </select>
         </label>
+        {sourceFilter !== "snowball" ? (
+          <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+            สัญญาณ
+            <select
+              value={reversalAlertSideFilter}
+              onChange={(e) =>
+                setReversalAlertSideFilter(e.target.value as AutoOpenReversalAlertSideFilter)
+              }
+              title="ทิศสัญญาณ Reversal — Short 1H vs Long 1H (fade SHORT)"
+            >
+              <option value="all">ทั้งหมด</option>
+              <option value="short">Short</option>
+              <option value="long">Long (fade)</option>
+            </select>
+          </label>
+        ) : null}
+        {sourceFilter !== "snowball" && reversalAlertSideFilter !== "long" ? (
+          <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+            ทิศแนะนำ
+            <select
+              value={suggestedSideFilter}
+              onChange={(e) =>
+                setSuggestedSideFilter(e.target.value as ReversalSuggestedSideFilter)
+              }
+              title={reversalSuggestedSideFilterTitle(suggestedSideFilter)}
+            >
+              {REVERSAL_SUGGESTED_SIDE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
           ย้อนหลัง
           <select value={dayFilter} onChange={(e) => setDayFilter(e.target.value as DayFilter)}>
