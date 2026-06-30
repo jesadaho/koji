@@ -61,6 +61,7 @@ import {
 } from "@/lib/statsPsar4h";
 import { buildCsv, statsCoinLabel, statsFmtBkk, statsFmtPctCell, statsFmtPrice } from "@/lib/statsCsv";
 import { reversalMomentumScoreLabel } from "@/lib/reversalMomentumScore";
+import { reversalRiskScoreLabel } from "@/lib/reversalRiskScore";
 import { reversalSignalBarSlHitLabel } from "@/lib/statsSignalBarSl";
 import {
   pumpCycleAgeHoursCsvCell,
@@ -103,6 +104,7 @@ const HEADERS = [
   "Mcap",
   "OI (USDT)",
   "OI Δ24h %",
+  "Risk Score",
   "Momentum Score",
   "EMA20 1h slope 7d %",
   "EMA20 1h dist %",
@@ -245,6 +247,7 @@ function candleReversalStatsRowToCsvCells(
     snowballStatsMarketCapUsdLabel(r.marketCapUsd),
     statsOpenInterestUsdtLabel(r.openInterestUsdt),
     statsOpenInterestChg24hPctLabel(r.openInterestChg24hPct),
+    reversalRiskScoreLabel(r),
     reversalMomentumScoreLabel(r),
     candleReversalEmaSlopeCsvLabel(r.ema20_1hSlopePct7d),
     candleReversalEmaSlopeCsvLabel(r.priceVsEma20_1hPct),

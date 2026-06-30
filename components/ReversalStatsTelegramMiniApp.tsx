@@ -188,6 +188,9 @@ import {
   reversalMomentumScoreTitle,
   reversalRowMatchesMomentumScoreFilter,
   type ReversalMomentumScoreFilter,
+} from "@/lib/candleReversalStatsFilters";
+import { reversalRiskScoreLabel, reversalRiskScoreTitle } from "@/lib/reversalRiskScore";
+import {
   reversalShapeFilterLabel,
   reversalTradFiFilterDetail,
   reversalTradFiFilterLabel,
@@ -777,7 +780,7 @@ function ReversalStatsSection({
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const columnGroupSpans = useMemo(() => {
     const signal = 9 + (showSuggestedSideColumn ? 1 : 0) + 11 + extraRankCols;
-    const bot = 23 + (showSuggestedSideColumn ? 5 : 0);
+    const bot = 24 + (showSuggestedSideColumn ? 5 : 0);
     const ai = showAiColumns ? REVERSAL_CHART_AI_TABLE_COLUMN_COUNT : 0;
     const result =
       3 +
@@ -1116,6 +1119,13 @@ function ReversalStatsSection({
               label="OI Δ24h"
               sortKey="openInterestChg24h"
               title="OI % change vs 24h ก่อน alertedAt — (OI now − OI 24h ago) / OI 24h ago × 100 · USDT เป็นหลัก"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Risk"
+              sortKey="riskScore"
+              title="Risk Score 0–5 — OI Δ24h ≥40% · Trend Gain 30–40% · EMA20Δ4h 25–30% · Vol×SMA >4 · ATR%14D >10 (+1 ต่อข้อ)"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -1536,6 +1546,7 @@ function ReversalStatsSection({
                   <td>{snowballStatsMarketCapUsdLabel(r.marketCapUsd)}</td>
                   <td title="Open Interest USDT (Binance)">{statsOpenInterestUsdtLabel(r.openInterestUsdt)}</td>
                   <td title="OI % change 24h (Binance hist)">{statsOpenInterestChg24hPctLabel(r.openInterestChg24hPct)}</td>
+                  <td title={reversalRiskScoreTitle(r)}>{reversalRiskScoreLabel(r)}</td>
                   {showSuggestedSideColumn ? (
                     <td title={reversalMomentumScoreTitle(r)}>{reversalMomentumScoreLabel(r)}</td>
                   ) : null}

@@ -7,6 +7,7 @@ import { statsEmaSlopePctLabel } from "@/lib/statsEmaSlope";
 import { reversalBarRangePctSignalResolved } from "@/lib/statsBarRangePct";
 import { reversalSignalBarSlHitSortOrder } from "@/lib/statsSignalBarSl";
 import { reversalMomentumScore } from "@/lib/reversalMomentumScore";
+import { reversalRiskScore } from "@/lib/reversalRiskScore";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 import type {
@@ -424,6 +425,7 @@ export type CandleReversalStatsSortKey =
   | "mcap"
   | "openInterest"
   | "openInterestChg24h"
+  | "riskScore"
   | "momentumScore"
   | "ema1h"
   | "ema20_1hDist"
@@ -575,6 +577,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.openInterestUsdt, b.openInterestUsdt);
     case "openInterestChg24h":
       return cmpNumNullLast(a.openInterestChg24hPct, b.openInterestChg24hPct);
+    case "riskScore":
+      return cmpNumNullLast(reversalRiskScore(a), reversalRiskScore(b));
     case "momentumScore":
       return cmpNumNullLast(reversalMomentumScore(a), reversalMomentumScore(b));
     case "ema1h":

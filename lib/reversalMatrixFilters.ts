@@ -28,7 +28,8 @@ export type ReversalMatrixFilter =
   | "charging"
   | "parabolic"
   | "weakTrend"
-  | "marketEntry";
+  | "marketEntry"
+  | "instantPump";
 
 /** โปรไฟล์ Quality Signal ในตารางสถิติ (แต่ละ section) */
 export type ReversalQualitySignalProfile = "short" | "long1h";
@@ -164,6 +165,19 @@ export const REVERSAL_WEAK_TREND_MATRIX_EMA20_1H_SLOPE_MAX_EXCLUSIVE = 13;
 export const REVERSAL_WEAK_TREND_MATRIX_CRITERIA =
   "R% สัญญาณ <3% · EMA20∠1h <13%";
 
+/** Matrix Instant Pump — OI Δ24h 40–50% · Trend Gain 30–40% · EMA20Δ4h 25–30% · Vol×SMA >4 · ATR%14D >10% */
+export const REVERSAL_INSTANT_PUMP_MATRIX_OI_CHG24H_MIN_PCT = 40;
+export const REVERSAL_INSTANT_PUMP_MATRIX_OI_CHG24H_MAX_PCT = 50;
+export const REVERSAL_INSTANT_PUMP_MATRIX_TREND_GAIN_MIN_PCT = 30;
+export const REVERSAL_INSTANT_PUMP_MATRIX_TREND_GAIN_MAX_PCT = 40;
+export const REVERSAL_INSTANT_PUMP_MATRIX_EMA20_4H_DIST_MIN_PCT = 25;
+export const REVERSAL_INSTANT_PUMP_MATRIX_EMA20_4H_DIST_MAX_PCT = 30;
+export const REVERSAL_INSTANT_PUMP_MATRIX_VOL_VS_SMA_MIN_EXCLUSIVE = 4;
+export const REVERSAL_INSTANT_PUMP_MATRIX_ATR14D_MIN_EXCLUSIVE = 10;
+
+export const REVERSAL_INSTANT_PUMP_MATRIX_CRITERIA =
+  "OI Δ24h 40–50% · Trend Gain 30–40% · EMA20Δ4h 25–30% · Vol×SMA >4 · ATR%14D >10%";
+
 export const REVERSAL_MARKET_ENTRY_MATRIX_CRITERIA = REVERSAL_MARKET_ENTRY_CANDIDATE_CRITERIA;
 
 export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
@@ -176,6 +190,7 @@ export const REVERSAL_MATRIX_FILTER_OPTIONS: ReadonlyArray<{
   { value: "acceleration", label: "Acceleration" },
   { value: "momentum", label: "Momentum" },
   { value: "freshBreakout", label: "Fresh Breakout" },
+  { value: "instantPump", label: "Instant Pump" },
   { value: "healthyPace", label: "Healthy Pace" },
   { value: "strongTrend", label: "Strong Trend" },
   { value: "parabolic", label: "Parabolic" },
@@ -220,6 +235,9 @@ export function reversalMatrixFilterTitle(
   }
   if (filter === "freshBreakout") {
     return `Fresh Breakout: ${REVERSAL_FRESH_BREAKOUT_MATRIX_CRITERIA} — เพิ่งเบรก ยังวิ่งไม่ไกล`;
+  }
+  if (filter === "instantPump") {
+    return `Instant Pump: ${REVERSAL_INSTANT_PUMP_MATRIX_CRITERIA} — ปั๊มเร็ว OI เข้า · เทรนด์กำลังเร่ง`;
   }
   if (filter === "healthyPace") {
     return `Healthy Pace: ${REVERSAL_HEALTHY_PACE_MATRIX_CRITERIA} — ความเร็วกำลังดี ไม่ช้าไม่เร็ว`;
@@ -543,6 +561,57 @@ export function reversalRowMatchesWeakTrendMatrix(
   return reversalWeakTrendPass(row);
 }
 
+/** Matrix Instant Pump — OI Δ24h 40–50% · Trend Gain 30–40% · EMA20Δ4h 25–30% · Vol×SMA >4 · ATR%14D >10% */
+export function reversalInstantPumpPass(
+  row: Pick<
+    CandleReversalStatsRow,
+    | "openInterestChg24hPct"
+    | "trendGainPct"
+    | "priceVsEma20_4hPct"
+    | "signalVolVsSma"
+    | "atrPct14d"
+  >,
+): boolean {
+  const oi = row.openInterestChg24hPct;
+  const gain = row.trendGainPct;
+  const dist = row.priceVsEma20_4hPct;
+  const vol = row.signalVolVsSma;
+  const atr = row.atrPct14d;
+  return (
+    oi != null &&
+    Number.isFinite(oi) &&
+    oi >= REVERSAL_INSTANT_PUMP_MATRIX_OI_CHG24H_MIN_PCT &&
+    oi <= REVERSAL_INSTANT_PUMP_MATRIX_OI_CHG24H_MAX_PCT &&
+    gain != null &&
+    Number.isFinite(gain) &&
+    gain >= REVERSAL_INSTANT_PUMP_MATRIX_TREND_GAIN_MIN_PCT &&
+    gain <= REVERSAL_INSTANT_PUMP_MATRIX_TREND_GAIN_MAX_PCT &&
+    dist != null &&
+    Number.isFinite(dist) &&
+    dist >= REVERSAL_INSTANT_PUMP_MATRIX_EMA20_4H_DIST_MIN_PCT &&
+    dist <= REVERSAL_INSTANT_PUMP_MATRIX_EMA20_4H_DIST_MAX_PCT &&
+    vol != null &&
+    Number.isFinite(vol) &&
+    vol > REVERSAL_INSTANT_PUMP_MATRIX_VOL_VS_SMA_MIN_EXCLUSIVE &&
+    atr != null &&
+    Number.isFinite(atr) &&
+    atr > REVERSAL_INSTANT_PUMP_MATRIX_ATR14D_MIN_EXCLUSIVE
+  );
+}
+
+export function reversalRowMatchesInstantPumpMatrix(
+  row: Pick<
+    CandleReversalStatsRow,
+    | "openInterestChg24hPct"
+    | "trendGainPct"
+    | "priceVsEma20_4hPct"
+    | "signalVolVsSma"
+    | "atrPct14d"
+  >,
+): boolean {
+  return reversalInstantPumpPass(row);
+}
+
 export function reversalRowMatchesMarketEntryMatrix(
   row: ReversalLongCandidateRowSlice &
     Pick<CandleReversalStatsRow, "priceVsEma20_15mPct" | "signalVolVsSma" | "lowerWickRatioPct">,
@@ -563,6 +632,7 @@ export function reversalStatsRowMatchesMatrixFilter(
   if (filter === "acceleration") return reversalRowMatchesAccelerationMatrix(row);
   if (filter === "momentum") return reversalRowMatchesMomentumMatrix(row);
   if (filter === "freshBreakout") return reversalRowMatchesFreshBreakoutMatrix(row);
+  if (filter === "instantPump") return reversalRowMatchesInstantPumpMatrix(row);
   if (filter === "healthyPace") return reversalRowMatchesHealthyPaceMatrix(row);
   if (filter === "strongTrend") return reversalRowMatchesStrongTrendMatrix(row);
   if (filter === "parabolic") return reversalRowMatchesParabolicMatrix(row);
