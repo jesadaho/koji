@@ -49,6 +49,12 @@ export const REVERSAL_OBSERVE_OR_CRITERIA_SUMMARY = [
 /** สรุปเกณฑ์ Observe ทั้งหมด */
 export const REVERSAL_OBSERVE_CRITERIA_SUMMARY = REVERSAL_OBSERVE_OR_CRITERIA_SUMMARY;
 
+/**
+ * Bump เมื่อเปลี่ยนเกณฑ์ Observe — backfill ตารางสถิติ re-sync mark/unmark แถวที่ observeV ไม่ตรง
+ * v2: ไส้ล่าง > 45% (ไม่ใช่แค่ > บน) · sync ถอน observe ที่ไม่ผ่านแล้ว
+ */
+export const REVERSAL_OBSERVE_CRITERIA_V = 2;
+
 export type ReversalObserveEvaluateInput = {
   signalBarTf?: CandleReversalSignalBarTf | null;
   tradeSide?: CandleReversalTradeSide | null;
@@ -237,10 +243,9 @@ export function reversalIsObserveSignal(input: ReversalObserveEvaluateInput): bo
   return reversalObserveOrCriterionPass(input);
 }
 
-export function reversalResolveObserveReason(input: {
-  observeReason?: ReversalObserveReason | null;
-} & ReversalObserveEvaluateInput): ReversalObserveReason | undefined {
-  if (input.observeReason) return input.observeReason;
+export function reversalResolveObserveReasonFromMetrics(
+  input: ReversalObserveEvaluateInput,
+): ReversalObserveReason | undefined {
   if (reversalShortAtr14dHighIsObserveSignal(input)) return "atr14d_high";
   if (
     reversalShortLowerWickDominantIsObserveSignal({
@@ -273,6 +278,54 @@ export function reversalResolveObserveReason(input: {
     return "neutral_matrix";
   }
   return undefined;
+}
+
+/** คำนวณเหตุผลจากเมตริกปัจจุบัน — ไม่อ่าน observeReason ที่บันทึกไว้ */
+export function reversalResolveObserveReason(
+  input: ReversalObserveEvaluateInput,
+): ReversalObserveReason | undefined {
+  return reversalResolveObserveReasonFromMetrics(input);
+}
+
+export type ReversalStatsObserveSyncRow = ReversalObserveEvaluateInput & {
+  statsPlayMode?: ReversalStatsPlayMode | null;
+  observeReason?: ReversalObserveReason | null;
+  observeV?: number | null;
+};
+
+export function reversalStatsRowNeedsObserveBackfill(row: { observeV?: number | null }): boolean {
+  return row.observeV !== REVERSAL_OBSERVE_CRITERIA_V;
+}
+
+/** sync statsPlayMode/observeReason ตามเกณฑ์ปัจจุบัน — คืน true ถ้าแถวเปลี่ยน */
+export function syncReversalStatsRowObservePlayMode(row: ReversalStatsObserveSyncRow): boolean {
+  const shouldObserve = reversalIsObserveSignal(row);
+  const wasObserve = reversalStatsRowIsObserve(row);
+  let changed = false;
+
+  if (shouldObserve) {
+    const reason = reversalResolveObserveReasonFromMetrics(row);
+    if (!reason) return false;
+    if (!wasObserve) {
+      row.statsPlayMode = "observe";
+      changed = true;
+    }
+    if (row.observeReason !== reason) {
+      row.observeReason = reason;
+      changed = true;
+    }
+  } else if (wasObserve) {
+    row.statsPlayMode = undefined;
+    row.observeReason = undefined;
+    changed = true;
+  }
+
+  if (row.observeV !== REVERSAL_OBSERVE_CRITERIA_V) {
+    row.observeV = REVERSAL_OBSERVE_CRITERIA_V;
+    changed = true;
+  }
+
+  return changed;
 }
 
 export function reversalStatsObserveBadgeTitle(row: {
@@ -379,6 +432,7 @@ export function reversalObserveFilterDetail(filter: ReversalObserveFilter): stri
       REVERSAL_OBSERVE_OR_CRITERIA_SUMMARY,
       "≠ ตัวกรอง R%<3% ด้านบน — ตัวกรอง R% รวมแถว Play ทุก TF/ทิศ",
       "แถวเก่าก่อนมี Observe ที่ R%<3% ยังเป็น Play",
+      "tick สถิติ backfill sync mark/unmark ตามเกณฑ์ปัจจุบัน",
     ].join(" · ");
   }
   return "รวมแถวที่ส่ง Telegram / เล่นจริง · แถวเก่า R%<3% ที่ยังไม่ถูก mark observe";

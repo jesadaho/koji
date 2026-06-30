@@ -19,9 +19,8 @@ import {
 } from "@/lib/reversalTpStrategy";
 import { reversalRowIsSuggestedLong } from "@/lib/reversalMatrixFilters";
 import {
-  reversalIsObserveSignal,
-  reversalResolveObserveReason,
-  reversalStatsRowIsObserve,
+  reversalStatsRowNeedsObserveBackfill,
+  syncReversalStatsRowObservePlayMode,
 } from "@/lib/reversalStatsPlayMode";
 import {
   STATS_STRATEGY_PROFIT_HOLD_24H,
@@ -1042,13 +1041,8 @@ async function followUpCandleReversal1dRow(
 function backfillObserveStatsPlayMode(rows: CandleReversalStatsRow[]): number {
   let updated = 0;
   for (const row of rows) {
-    if (reversalStatsRowIsObserve(row)) continue;
-    if (!reversalIsObserveSignal(row)) continue;
-    const reason = reversalResolveObserveReason(row);
-    if (!reason) continue;
-    row.statsPlayMode = "observe";
-    row.observeReason = reason;
-    updated += 1;
+    if (!reversalStatsRowNeedsObserveBackfill(row)) continue;
+    if (syncReversalStatsRowObservePlayMode(row)) updated += 1;
   }
   return updated;
 }

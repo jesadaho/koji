@@ -35,6 +35,7 @@ import { STATS_MARKET_CAP_VERSION } from "./statsMarketCapUsd";
 import { lenPercentilePctFromRank } from "@/lib/statsLenPercentile";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import {
+  REVERSAL_OBSERVE_CRITERIA_V,
   reversalStatsRowBlocksPlayPending,
   type ReversalObserveReason,
   type ReversalStatsPlayMode,
@@ -121,6 +122,7 @@ type LegacyCandleReversalRowV1 = LegacyCandleReversalRow & {
   tradeSide?: CandleReversalStatsRow["tradeSide"];
   statsPlayMode?: ReversalStatsPlayMode;
   observeReason?: ReversalObserveReason;
+  observeV?: number;
   rangeScore?: number | null;
   wickScore?: number | null;
   rangeRankInLookback?: number | null;
@@ -189,12 +191,15 @@ function normalizeChartAiInt(v: number | null | undefined, min: number, max: num
 function normalizeCandleReversalStatsRow(r: LegacyCandleReversalRowV1): CandleReversalStatsRow {
   const statsPlayMode = normalizeStatsPlayMode(r.statsPlayMode);
   const observeReason = normalizeObserveReason(r.observeReason);
+  const observeV =
+    r.observeV != null && Number.isFinite(r.observeV) && r.observeV >= 1 ? Math.floor(r.observeV) : undefined;
   return {
     ...r,
     signalBarTf: r.signalBarTf === "1h" ? "1h" : "1d",
     tradeSide: normalizeTradeSide(r.tradeSide),
     ...(statsPlayMode ? { statsPlayMode } : {}),
     ...(observeReason ? { observeReason } : {}),
+    ...(observeV != null ? { observeV } : {}),
     highRankInLookback: finiteRank(r.highRankInLookback),
     lowRankInLookback: finiteRank(r.lowRankInLookback),
     rangeRankInLookback: finiteRank(r.rangeRankInLookback),
@@ -385,6 +390,7 @@ export type AppendCandleReversalStatsInput = {
   pumpCycleSwingLowV?: number;
   statsPlayMode?: ReversalStatsPlayMode;
   observeReason?: ReversalObserveReason;
+  observeV?: number;
   isTradFi?: boolean | null;
 };
 
@@ -778,6 +784,7 @@ export async function appendCandleReversalStatsRow(
           ...(input.observeReason ? { observeReason: input.observeReason } : {}),
         }
       : {}),
+    observeV: REVERSAL_OBSERVE_CRITERIA_V,
     ...(input.isTradFi === true ? { isTradFi: true } : input.isTradFi === false ? { isTradFi: false } : {}),
     ...(input.isTradFi != null ? { isTradFiV: 1 } : {}),
   };

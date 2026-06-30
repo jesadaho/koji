@@ -222,6 +222,8 @@ export type CandleReversalStatsRow = {
   statsPlayMode?: ReversalStatsPlayMode;
   /** เหตุผล observe — จาก lib/reversalStatsPlayMode ReversalObserveReason */
   observeReason?: "r_bar_range" | "neutral_matrix" | "lower_wick_long" | "atr14d_high";
+  /** REVERSAL_OBSERVE_CRITERIA_V — backfill sync mark/unmark Observe */
+  observeV?: number;
   /** ลำดับการแจ้งในรอบสัปดาห์ BKK (symbol+TF+side) — เริ่ม 1 */
   weeklyAlertNo?: number | null;
   /** (Entry − entry ครั้งก่อน) / entry ครั้งก่อน × 100 — symbol+TF+side */
