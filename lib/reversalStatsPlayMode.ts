@@ -110,7 +110,7 @@ export function reversalShortLowerWickPct(input: {
   return null;
 }
 
-export function reversalShortLowerWickDominantIsObserveSignal(input: {
+export function reversalShortLowerWickDominantPass(input: {
   tradeSide?: CandleReversalTradeSide | null;
   wickRatio?: number | null;
   lowerWickRatio?: number | null;
@@ -118,8 +118,6 @@ export function reversalShortLowerWickDominantIsObserveSignal(input: {
   lowerWickRatioPct?: number | null;
 }): boolean {
   if ((input.tradeSide ?? "short") !== "short") return false;
-  const lowerPct = reversalShortLowerWickPct(input);
-  if (lowerPct == null || lowerPct <= REVERSAL_OBSERVE_LOWER_WICK_MIN_PCT) return false;
   if (
     input.wickRatio != null &&
     input.lowerWickRatio != null &&
@@ -134,6 +132,19 @@ export function reversalShortLowerWickDominantIsObserveSignal(input: {
     return false;
   }
   return lower > upper;
+}
+
+export function reversalShortLowerWickDominantIsObserveSignal(input: {
+  tradeSide?: CandleReversalTradeSide | null;
+  wickRatio?: number | null;
+  lowerWickRatio?: number | null;
+  wickRatioPct?: number | null;
+  lowerWickRatioPct?: number | null;
+}): boolean {
+  if ((input.tradeSide ?? "short") !== "short") return false;
+  const lowerPct = reversalShortLowerWickPct(input);
+  if (lowerPct == null || lowerPct <= REVERSAL_OBSERVE_LOWER_WICK_MIN_PCT) return false;
+  return reversalShortLowerWickDominantPass(input);
 }
 
 export type ReversalLowerWickDominantFilter = "all" | "lower_gt_upper";
@@ -156,7 +167,7 @@ export function reversalLowerWickDominantFilterTitle(
   filter: ReversalLowerWickDominantFilter,
 ): string {
   if (filter === "all") return "ทั้งหมด — ไม่กรองไส้";
-  return `${REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA} (Short)`;
+  return "ไส้ล่าง > ไส้บน (Short · คอลัมน์ไส้ล่าง vs ไส้บน)";
 }
 
 export function reversalStatsRowMatchesLowerWickDominantFilter(
@@ -168,7 +179,7 @@ export function reversalStatsRowMatchesLowerWickDominantFilter(
   filter: ReversalLowerWickDominantFilter,
 ): boolean {
   if (filter === "all") return true;
-  return reversalShortLowerWickDominantIsObserveSignal({
+  return reversalShortLowerWickDominantPass({
     tradeSide: row.tradeSide,
     wickRatioPct: row.wickRatioPct,
     lowerWickRatioPct: row.lowerWickRatioPct,
