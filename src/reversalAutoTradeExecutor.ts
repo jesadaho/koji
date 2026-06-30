@@ -495,7 +495,7 @@ function logReversalAutoOpen(
  * - มี MEXC creds
  * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — ดู REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA
  * - entry Short: Hybrid (EMA 15m) หรือ Market · Long (fade + ทิศที่เล่น Long): Market ตลอด
- *   - Hybrid Short: EMA20Δ15m < −2% → Market · ผ่าน Matrix Market Entry → Market
+ *   - Hybrid Short: EMA20Δ15m 0 ถึง −2% → Market · ผ่าน Matrix Market Entry → Market
  *   - นอกนั้น: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.)
  * - สลับทิศบนเหรียญเดียวกัน: มี SHORT/LONG ค้างบน MEXC แล้วสัญญาณใหม่สวนทิศ → ปิดทันที (market) แล้วเปิดทิศใหม่
  * - TP ใช้ cron tick ปิด market (ไม่วาง plan TP บน MEXC)

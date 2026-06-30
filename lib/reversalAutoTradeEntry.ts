@@ -7,8 +7,9 @@ export const REVERSAL_ENTRY_EMA_PERIOD_MIN = 5;
 export const REVERSAL_ENTRY_EMA_PERIOD_MAX = 200;
 export const REVERSAL_LIMIT_EXPIRE_MS = 8 * 3600 * 1000;
 
-/** Hybrid SHORT — EMA20Δ15m ต่ำกว่านี้ → Market ทันที */
-export const REVERSAL_SHORT_HYBRID_IMMEDIATE_MARKET_EMA20_15M_DIFF_MAX_PCT = -2.0;
+/** Hybrid SHORT — EMA20Δ15m ในช่วงนี้ (0 ถึง −2%) → Market ทันที */
+export const REVERSAL_SHORT_HYBRID_IMMEDIATE_MARKET_EMA20_15M_DIFF_MAX_PCT = 0;
+export const REVERSAL_SHORT_HYBRID_IMMEDIATE_MARKET_EMA20_15M_DIFF_MIN_PCT = -2.0;
 
 export type ReversalShortHybridMarketBypass = "ema20_15m_deep" | "market_entry_matrix";
 
@@ -78,7 +79,8 @@ export function reversalShortHybridImmediateMarketByEma20_15m(
   return (
     priceVsEma20_15mPct != null &&
     Number.isFinite(priceVsEma20_15mPct) &&
-    priceVsEma20_15mPct < REVERSAL_SHORT_HYBRID_IMMEDIATE_MARKET_EMA20_15M_DIFF_MAX_PCT
+    priceVsEma20_15mPct <= REVERSAL_SHORT_HYBRID_IMMEDIATE_MARKET_EMA20_15M_DIFF_MAX_PCT &&
+    priceVsEma20_15mPct >= REVERSAL_SHORT_HYBRID_IMMEDIATE_MARKET_EMA20_15M_DIFF_MIN_PCT
   );
 }
 
