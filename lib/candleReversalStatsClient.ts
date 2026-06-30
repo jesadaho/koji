@@ -218,10 +218,15 @@ export type CandleReversalStatsRow = {
   /** cache ตามชุด TP/SL (key = tp1-tp1p-tp2-maxH) */
   strategyProfitByPlan?: StrategyProfitByPlanMap | null;
   outcome: CandleReversalOutcome;
-  /** play = เล่นปกติ · observe = เก็บ stats อย่างเดียว (R%<3 · Neutral · ไส้ล่าง>บน · Short+ATR%14D>25) */
+  /** play = เล่นปกติ · observe = เก็บ stats อย่างเดียว (R%<3 · Neutral · Strong Trend · ไส้ล่าง>45% · Short+ATR%14D>25) */
   statsPlayMode?: ReversalStatsPlayMode;
   /** เหตุผล observe — จาก lib/reversalStatsPlayMode ReversalObserveReason */
-  observeReason?: "r_bar_range" | "neutral_matrix" | "lower_wick_long" | "atr14d_high";
+  observeReason?:
+    | "r_bar_range"
+    | "neutral_matrix"
+    | "strong_trend_matrix"
+    | "lower_wick_long"
+    | "atr14d_high";
   /** REVERSAL_OBSERVE_CRITERIA_V — backfill sync mark/unmark Observe */
   observeV?: number;
   /** ลำดับการแจ้งในรอบสัปดาห์ BKK (symbol+TF+side) — เริ่ม 1 */
