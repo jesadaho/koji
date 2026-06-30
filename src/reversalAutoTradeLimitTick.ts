@@ -19,6 +19,7 @@ import {
   type ReversalAutoTradePendingLimit,
 } from "./reversalAutoTradeStateStore";
 import { REVERSAL_TP_STRATEGY_SUMMARY } from "@/lib/reversalTpStrategy";
+import { REVERSAL_SHORT_8H_SIGNAL_BAR_SL_SUMMARY } from "@/lib/reversalSignalBar8hSl";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
 
 function shortContractLabel(contractSymbol: string): string {
@@ -146,6 +147,10 @@ async function promotePendingToActive(args: {
       slAtEntryAfter24hIfGreenEnabled: pending.slAtEntryAfter24hIfGreenEnabled,
       ema20_1hSlopePct7d: pending.ema20_1hSlopePct7d ?? pending.ema4hSlopePct7d,
       ...tpPlanOrderIds,
+      ...(pending.signalBarHigh != null ? { signalBarHigh: pending.signalBarHigh } : {}),
+      ...(pending.signalCheckpoint8hMs != null
+        ? { signalCheckpoint8hMs: pending.signalCheckpoint8hMs }
+        : {}),
     },
     dayKey,
   );
@@ -170,6 +175,7 @@ async function promotePendingToActive(args: {
           ...(exchangeTpWarnings.length ? exchangeTpWarnings.map((w) => `⚠️ ${w}`) : []),
         ]
       : []),
+    REVERSAL_SHORT_8H_SIGNAL_BAR_SL_SUMMARY,
     `กลยุทธ์เวลา: ${REVERSAL_TP_STRATEGY_SUMMARY}`,
   ]);
   return state;

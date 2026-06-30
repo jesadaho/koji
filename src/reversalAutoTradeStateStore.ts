@@ -51,6 +51,12 @@ export type ReversalAutoTradeActive = {
   ema20_1hSlopePct7d?: number;
   /** @deprecated legacy — fallback เมื่อเปิดก่อน migrate */
   ema4hSlopePct7d?: number;
+  /** ตรวจ 8h checkpoint (SL ยอดแท่ง) แล้ว */
+  reversalTp8hChecked?: boolean;
+  /** High แท่งสัญญาณ — SL / ปิด @8h */
+  signalBarHigh?: number;
+  /** ms ครบ 8 ชม. หลังปิดแท่งสัญญาณ */
+  signalCheckpoint8hMs?: number;
   /** ตรวจ 12h checkpoint แล้ว */
   reversalTp12hChecked?: boolean;
   /** ตรวจ 24h checkpoint แล้ว */
@@ -84,6 +90,8 @@ export type ReversalAutoTradePendingLimit = {
   ema20_1hSlopePct7d?: number;
   /** @deprecated legacy */
   ema4hSlopePct7d?: number;
+  signalBarHigh?: number;
+  signalCheckpoint8hMs?: number;
 };
 
 export type ReversalAutoTradePerUserState = {
@@ -201,6 +209,18 @@ function normalizePendingLimits(raw: unknown): ReversalAutoTradePendingLimit[] {
           ? o.ema4hSlopePct7d
           : undefined;
     if (ema20 != null) pendingRow.ema20_1hSlopePct7d = ema20;
+    const sigHigh =
+      typeof o.signalBarHigh === "number" && Number.isFinite(o.signalBarHigh) && o.signalBarHigh > 0
+        ? o.signalBarHigh
+        : undefined;
+    const sigCk8h =
+      typeof o.signalCheckpoint8hMs === "number" &&
+      Number.isFinite(o.signalCheckpoint8hMs) &&
+      o.signalCheckpoint8hMs > 0
+        ? o.signalCheckpoint8hMs
+        : undefined;
+    if (sigHigh != null) pendingRow.signalBarHigh = sigHigh;
+    if (sigCk8h != null) pendingRow.signalCheckpoint8hMs = sigCk8h;
     out.push(pendingRow);
   }
   const byKey = new Map<string, ReversalAutoTradePendingLimit>();
@@ -316,6 +336,19 @@ function normalizeActive(raw: unknown): ReversalAutoTradeActive[] {
           ? o.ema4hSlopePct7d
           : undefined;
     if (ema20 != null) row.ema20_1hSlopePct7d = ema20;
+    const sigHigh =
+      typeof o.signalBarHigh === "number" && Number.isFinite(o.signalBarHigh) && o.signalBarHigh > 0
+        ? o.signalBarHigh
+        : undefined;
+    const sigCk8h =
+      typeof o.signalCheckpoint8hMs === "number" &&
+      Number.isFinite(o.signalCheckpoint8hMs) &&
+      o.signalCheckpoint8hMs > 0
+        ? o.signalCheckpoint8hMs
+        : undefined;
+    if (sigHigh != null) row.signalBarHigh = sigHigh;
+    if (sigCk8h != null) row.signalCheckpoint8hMs = sigCk8h;
+    if (o.reversalTp8hChecked === true) row.reversalTp8hChecked = true;
     if (o.reversalTp12hChecked === true) row.reversalTp12hChecked = true;
     if (o.reversalTp24hChecked === true) row.reversalTp24hChecked = true;
     out.push(row);
@@ -551,6 +584,8 @@ export function withReversalActiveOpen(
     tp2PlanOrderId?: string;
     initialHoldVol?: number;
     tp1PlanVol?: number;
+    signalBarHigh?: number;
+    signalCheckpoint8hMs?: number;
   },
   dayKey: string
 ): ReversalAutoTradeState {
@@ -591,6 +626,10 @@ export function withReversalActiveOpen(
   if (p.tp2PlanOrderId?.trim()) row.tp2PlanOrderId = p.tp2PlanOrderId.trim();
   if (typeof p.initialHoldVol === "number" && p.initialHoldVol > 0) row.initialHoldVol = p.initialHoldVol;
   if (typeof p.tp1PlanVol === "number" && p.tp1PlanVol > 0) row.tp1PlanVol = p.tp1PlanVol;
+  if (typeof p.signalBarHigh === "number" && p.signalBarHigh > 0) row.signalBarHigh = p.signalBarHigh;
+  if (typeof p.signalCheckpoint8hMs === "number" && p.signalCheckpoint8hMs > 0) {
+    row.signalCheckpoint8hMs = p.signalCheckpoint8hMs;
+  }
   activeNext.push(row);
   const next: ReversalAutoTradePerUserState = {
     dailyKeyBkk: dayKey,
@@ -656,7 +695,7 @@ function withReversalTpCheckpoint(
   userId: string,
   contractSymbol: string,
   side: "short" | "long",
-  field: "reversalTp12hChecked" | "reversalTp24hChecked",
+  field: "reversalTp8hChecked" | "reversalTp12hChecked" | "reversalTp24hChecked",
 ): ReversalAutoTradeState {
   const uid = userId.trim();
   const prev = state[uid];
@@ -666,6 +705,15 @@ function withReversalTpCheckpoint(
     x.contractSymbol === sym && x.side === side ? { ...x, [field]: true } : x,
   );
   return { ...state, [uid]: { ...prev, active: nextActive } };
+}
+
+export function withReversalTp8hChecked(
+  state: ReversalAutoTradeState,
+  userId: string,
+  contractSymbol: string,
+  side: "short" | "long",
+): ReversalAutoTradeState {
+  return withReversalTpCheckpoint(state, userId, contractSymbol, side, "reversalTp8hChecked");
 }
 
 export function withReversalTp12hChecked(

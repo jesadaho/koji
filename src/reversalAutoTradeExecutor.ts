@@ -60,6 +60,10 @@ import {
   type ReversalAutoTradeEntryMode,
   type ReversalShortHybridMarketBypass,
 } from "@/lib/reversalAutoTradeEntry";
+import {
+  REVERSAL_SHORT_8H_SIGNAL_BAR_SL_SUMMARY,
+  reversalAutoTradeSignalBar8hFields,
+} from "@/lib/reversalSignalBar8hSl";
 import { priceVsEmaDistPct } from "./statsEma20Dist";
 
 /** ค่าเริ่มต้นเปิด — ตั้ง REVERSAL_AUTOTRADE_ENABLED=0/false/off/no เพื่อปิดเซิร์ฟทั้งหมด */
@@ -200,6 +204,8 @@ export type ReversalAutoTradeInput = {
   alertedAtMs?: number;
   /** ราคาปิดแท่งสัญญาณ — fallback entry เมื่อเปิดไม่สำเร็จ */
   signalClosePrice?: number;
+  /** High แท่งสัญญาณ — กฎ SL ยอดแท่ง @8h */
+  signalBarHigh?: number | null;
   /** observe = stats-only (defense in depth) */
   statsPlayMode?: "play" | "observe";
 };
@@ -1189,6 +1195,14 @@ export async function runReversalAutoTradeAfterReversalAlert(
 
       const plan = resolveReversalTpSlPlanFromRow(row, mexcSide);
       const placedAtMs = Date.now();
+      const signalBar8h =
+        !openMexcLong && mexcSide === "short"
+          ? reversalAutoTradeSignalBar8hFields({
+              signalBarOpenSec: input.signalBarOpenSec,
+              signalBarTf: input.signalBarTf,
+              signalBarHigh: input.signalBarHigh,
+            })
+          : {};
 
       if (!useMarket && limitOrderId && !openMexcLong) {
         state = withReversalPendingLimitAdded(
@@ -1211,6 +1225,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             slEntryOffsetPct: plan.slEntryOffsetPct,
             slAtEntryAfter24hIfGreenEnabled: plan.slAtEntryAfter24hIfGreenEnabled,
             ema20_1hSlopePct7d: ema20_1hPct ?? undefined,
+            ...signalBar8h,
           },
           dayKey,
         );
@@ -1288,6 +1303,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
               slAtEntryAfter24hIfGreenEnabled: plan.slAtEntryAfter24hIfGreenEnabled,
               ema20_1hSlopePct7d: ema20_1hPct ?? undefined,
               ...tpPlanOrderIds,
+              ...signalBar8h,
             },
             dayKey,
           );
@@ -1305,6 +1321,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
               ...exchangeTpLines,
               ...(exchangeTpWarnings.length ? exchangeTpWarnings.map((w) => `⚠️ ${w}`) : []),
               `กลยุทธ์เวลา: ${reversalTpStrategySummary({ close12hEnabled: plan.tp12hCloseEnabled })}`,
+              REVERSAL_SHORT_8H_SIGNAL_BAR_SL_SUMMARY,
               `ครบ ${plan.maxHoldHours} ชม. → ปิดทั้งหมด (force)`,
             );
           } else {

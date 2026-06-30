@@ -23,6 +23,7 @@ import {
 import {
   cancelActiveTpPlanOrders,
   cancelActiveTpSlPlanOrders,
+  cancelActiveSlPlanOrder,
   shouldExecuteMarkTp1Fallback,
   tp1PlanLikelyFilled,
 } from "./autoTradeTpSlPlanOrders";
@@ -48,6 +49,7 @@ import {
   withReversalHoldExtendedForRed,
   withReversalSlAtEntryArmed,
   withReversalTp1Done,
+  withReversalTp8hChecked,
   withReversalTp12hChecked,
   withReversalTp24hChecked,
   type ReversalAutoTradeActive,
@@ -451,6 +453,69 @@ async function handleSlAtEntryOnRoi(
   return { ok: slRes.success, slOrderId, slBreakevenAttempted: true };
 }
 
+async function handleReversal8hAboveSignalBarHighClose(
+  ctx: TpSlContext,
+  signalBarHigh: number,
+): Promise<{ closed: boolean }> {
+  const { userId, creds, active, markPrice, entry } = ctx;
+  await cancelActiveTpSlPlanOrders(creds, active);
+  const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
+  const move = pricePctDrop(active.side, entry, markPrice);
+  if (!r.success) {
+    await notifyLines(userId, [
+      "Koji — Reversal TP/SL (MEXC)",
+      "❌ ครบ 8 ชม. — ราคา > ยอดแท่งสัญญาณ แต่ปิดไม่สำเร็จ",
+      `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+      `ยอดแท่ง: ${fmtPrice(signalBarHigh)} · Mark: ${fmtPrice(markPrice)} · Entry: ${fmtPrice(entry)}`,
+      r.message ? `MEXC: ${r.message}` : "",
+    ]);
+    return { closed: false };
+  }
+  await notifyLines(userId, [
+    "Koji — Reversal TP/SL (MEXC)",
+    `⏰ ครบ 8 ชม. — ราคา > ยอดแท่งสัญญาณ (${fmtPrice(signalBarHigh)}) → ปิดทันที`,
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${move >= 0 ? "+" : ""}${Number.isFinite(move) ? move.toFixed(2) : "—"}%`,
+  ]);
+  return { closed: true };
+}
+
+async function handleReversal8hSignalBarHighSl(
+  ctx: TpSlContext,
+  signalBarHigh: number,
+): Promise<{ ok: boolean; slOrderId?: string }> {
+  const { userId, creds, active, position, markPrice, positionMode, entry } = ctx;
+  if (!(position.holdVol > 0)) return { ok: false };
+
+  if (active.slPlanOrderId?.trim()) {
+    await cancelActiveSlPlanOrder(creds, active.slPlanOrderId);
+  }
+
+  const slRes = await placePlanOrderStopLoss(creds, {
+    contractSymbol: active.contractSymbol,
+    position,
+    triggerPrice: signalBarHigh,
+    positionMode,
+  });
+  const slOrderId =
+    slRes.success && slRes.data && typeof slRes.data === "object" && slRes.data && "orderId" in slRes.data
+      ? String((slRes.data as { orderId: unknown }).orderId)
+      : undefined;
+  const move = pricePctDrop(active.side, entry, markPrice);
+
+  await notifyLines(userId, [
+    "Koji — Reversal TP/SL (MEXC)",
+    `⏰ ครบ 8 ชม. — ราคา ≤ ยอดแท่ง → ตั้ง SL ที่ยอดแท่ง ${fmtPrice(signalBarHigh)}`,
+    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
+    `Entry: ${fmtPrice(entry)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${move >= 0 ? "+" : ""}${Number.isFinite(move) ? move.toFixed(2) : "—"}%`,
+    slRes.success
+      ? `🛡️ plan SL ยอดแท่ง${slOrderId ? ` #${slOrderId}` : ""}`
+      : `⚠️ ตั้ง SL ยอดแท่งไม่สำเร็จ (${slRes.message ?? `code ${slRes.code}`}) — ตั้งเองที่ MEXC`,
+  ]);
+
+  return { ok: slRes.success, slOrderId };
+}
+
 export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<number> {
   const [map, state0] = await Promise.all([loadTradingViewMexcSettingsFullMap(), loadReversalAutoTradeState()]);
   let state = state0;
@@ -562,6 +627,31 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
             state = withReversalActiveRemoved(state, userId, a.contractSymbol, a.side);
             actionsCount += 1;
           }
+          continue;
+        }
+
+        if (
+          a.side === "short" &&
+          !a.reversalTp8hChecked &&
+          typeof a.signalBarHigh === "number" &&
+          a.signalBarHigh > 0 &&
+          typeof a.signalCheckpoint8hMs === "number" &&
+          nowMs >= a.signalCheckpoint8hMs
+        ) {
+          state = withReversalTp8hChecked(state, userId, a.contractSymbol, a.side);
+          if (mark > a.signalBarHigh) {
+            const r = await handleReversal8hAboveSignalBarHighClose(ctx, a.signalBarHigh);
+            if (r.closed) {
+              state = withReversalActiveRemoved(state, userId, a.contractSymbol, a.side);
+              actionsCount += 1;
+            }
+            continue;
+          }
+          const slR = await handleReversal8hSignalBarHighSl(ctx, a.signalBarHigh);
+          if (slR.ok || slR.slOrderId) {
+            state = withReversalSlAtEntryArmed(state, userId, a.contractSymbol, a.side, slR.slOrderId);
+          }
+          actionsCount += 1;
           continue;
         }
 

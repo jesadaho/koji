@@ -861,6 +861,7 @@ async function notifyResults(
                 : null,
             alertedAtMs: nowMs,
             signalClosePrice: sig.c,
+            signalBarHigh: Number.isFinite(sig.h) && sig.h > 0 ? sig.h : null,
           });
         } catch (e) {
           console.error("[candleReversalAlertTick] reversal autotrade", row.symbol, sig.tf, tradeSide, e);

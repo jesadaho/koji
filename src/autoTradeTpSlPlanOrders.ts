@@ -188,6 +188,20 @@ export async function cancelActiveTpSlPlanOrders(
   }
 }
 
+/** ยกเลิกเฉพาะ plan SL */
+export async function cancelActiveSlPlanOrder(
+  creds: MexcCredentials,
+  slPlanOrderId?: string,
+): Promise<void> {
+  const id = typeof slPlanOrderId === "string" ? slPlanOrderId.trim() : "";
+  if (!id) return;
+  try {
+    await cancelPlanOrders(creds, [id]);
+  } catch (e) {
+    console.error("[autoTradeTpSl] cancel SL plan order", e);
+  }
+}
+
 /** ยกเลิกเฉพาะ plan TP (ก่อน partial close ด้วย tick) */
 export async function cancelActiveTpPlanOrders(
   creds: MexcCredentials,
