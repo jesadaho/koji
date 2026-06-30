@@ -17,6 +17,12 @@ export const STATS_EMA15M_SLOPE_LOOKBACK_BARS = 672;
 
 export const STATS_EMA20_15M_ENTRY_VERSION = 1;
 
+/** EMA20@15m slope + dist ณ checkpoint 8 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) */
+export const STATS_EMA20_15M_AT8H_VERSION = 1;
+
+/** EMA20@15m slope + dist ณ checkpoint 12 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) */
+export const STATS_EMA20_15M_AT12H_VERSION = 1;
+
 const BAR_DUR_15M_SEC = 15 * 60;
 const LIVE_ALERT_MAX_AGE_MS = 10 * 60_000;
 
@@ -162,6 +168,44 @@ const emptySnapshot = (): StatsEma20_15mEntrySnapshot => ({
   entryEma20_15mTouchedWithin8h: null,
   entryEma20_15mTouchedAtMs: null,
 });
+
+export type Ema20_15mMetricsAtMs = {
+  ema20_15mSlopePct7d: number | null;
+  priceVsEma20_15mPct: number | null;
+  entryEma20_15m: number | null;
+};
+
+/** EMA20@15m slope + close diff ณ atMs (ไม่สแกน touch) */
+export async function fetchEma20_15mMetricsAtMs(
+  symbol: string,
+  atMs: number,
+): Promise<Ema20_15mMetricsAtMs> {
+  const empty: Ema20_15mMetricsAtMs = {
+    ema20_15mSlopePct7d: null,
+    priceVsEma20_15mPct: null,
+    entryEma20_15m: null,
+  };
+  if (!isBinanceIndicatorFapiEnabled()) return empty;
+  if (!Number.isFinite(atMs) || atMs <= 0) return empty;
+
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return empty;
+
+  const slopePack = await fetchSlopePack(sym, atMs);
+  if (!slopePack) return empty;
+
+  const entryEma20_15m = computeEntryEma20_15mFromPackAt(slopePack, atMs);
+  const ema20_15mSlopePct7d = computeEma20_15mSlopePctFromPackAt(
+    slopePack,
+    STATS_EMA15M_SLOPE_LOOKBACK_BARS,
+    atMs,
+  );
+  const close = closeAtLastClosedBar(slopePack, atMs);
+  const priceVsEma20_15mPct =
+    close != null && entryEma20_15m != null ? priceVsEmaDistPct(close, entryEma20_15m) : null;
+
+  return { ema20_15mSlopePct7d, priceVsEma20_15mPct, entryEma20_15m };
+}
 
 /** EMA20@15m slope + mark diff + touch ภายใน 8 ชม. ณ alertedAtMs */
 export async function fetchStatsEma20_15mEntryAtMs(

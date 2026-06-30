@@ -145,8 +145,11 @@ const HEADERS = [
   "AI Why",
   "AIv",
   "H1",
+  "EMA20∠15m @8h",
+  "EMA20Δ15m @8h",
   "H2",
-  "EMA12∠1h @12h",
+  "EMA20∠15m @12h",
+  "EMA20Δ15m @12h",
   "H3",
   "H4",
   "Max ROI",
@@ -290,9 +293,18 @@ function candleReversalStatsRowToCsvCells(
     r.chartAiReason ?? "",
     r.chartAiAnalysisV != null ? String(r.chartAiAnalysisV) : "",
     h1,
+    (r.signalBarTf ?? "1d") === "1h" && (r.tradeSide ?? "short") === "short"
+      ? candleReversalEmaSlopeCsvLabel(r.ema20_15mSlopePct7dAt8h)
+      : "",
+    (r.signalBarTf ?? "1d") === "1h" && (r.tradeSide ?? "short") === "short"
+      ? candleReversalEmaSlopeCsvLabel(r.priceVsEma20_15mPctAt8h)
+      : "",
     h2,
-    (r.signalBarTf ?? "1d") === "1h"
-      ? candleReversalEmaSlopeCsvLabel(r.ema12_1hSlopePct7dAt12h)
+    (r.signalBarTf ?? "1d") === "1h" && (r.tradeSide ?? "short") === "short"
+      ? candleReversalEmaSlopeCsvLabel(r.ema20_15mSlopePct7dAt12h)
+      : "",
+    (r.signalBarTf ?? "1d") === "1h" && (r.tradeSide ?? "short") === "short"
+      ? candleReversalEmaSlopeCsvLabel(r.priceVsEma20_15mPctAt12h)
       : "",
     h3,
     h4,

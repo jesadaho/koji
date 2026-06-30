@@ -45,13 +45,14 @@ import {
   candleReversalSignalVolVsSmaAt,
   candleReversalVolSmaPeriod,
 } from "./candleReversalSignalVolVsSma";
-import {
-  backfillAllStatsRowsBtcEmaSlopes,
-  fetchSymbolEma12_1hSlopePct7dAtMs,
-  STATS_EMA12_1H_AT12H_VERSION,
-} from "./statsEmaSlope";
+import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
 import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
-import { backfillAllStatsRowsEma20_15mEntry } from "./statsEma20_15mEntry";
+import {
+  backfillAllStatsRowsEma20_15mEntry,
+  fetchEma20_15mMetricsAtMs,
+  STATS_EMA20_15M_AT8H_VERSION,
+  STATS_EMA20_15M_AT12H_VERSION,
+} from "./statsEma20_15mEntry";
 import { backfillAllStatsRowsPsar4h } from "./statsPsar4h";
 import { backfillAllStatsRowsAtrPct4h } from "./statsAtrPct4h";
 import { backfillAllStatsRowsQuoteVol24h } from "./statsQuoteVol24h";
@@ -709,6 +710,28 @@ async function followUpCandleReversal1hRow(
     row.price4h = null;
     row.pct4h = null;
   }
+
+  const h8End = ac + 8 * HOUR_SEC;
+  if (
+    signalBarTf(row) === "1h" &&
+    row.tradeSide === "short" &&
+    nowSec >= h8End &&
+    row.ema20_15mAt8hV !== STATS_EMA20_15M_AT8H_VERSION
+  ) {
+    try {
+      const snap8h = await fetchEma20_15mMetricsAtMs(row.symbol, h8End * 1000);
+      if (snap8h.ema20_15mSlopePct7d != null && Number.isFinite(snap8h.ema20_15mSlopePct7d)) {
+        row.ema20_15mSlopePct7dAt8h = snap8h.ema20_15mSlopePct7d;
+      }
+      if (snap8h.priceVsEma20_15mPct != null && Number.isFinite(snap8h.priceVsEma20_15mPct)) {
+        row.priceVsEma20_15mPctAt8h = snap8h.priceVsEma20_15mPct;
+      }
+      row.ema20_15mAt8hV = STATS_EMA20_15M_AT8H_VERSION;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] ema20_15m @8h", row.symbol, e);
+    }
+  }
+
   if (h12) {
     row.price12h = h12.price;
     row.pct12h = h12.pct;
@@ -719,17 +742,21 @@ async function followUpCandleReversal1hRow(
 
   if (
     signalBarTf(row) === "1h" &&
+    row.tradeSide === "short" &&
     nowSec >= h12End &&
-    row.ema12_1hAt12hV !== STATS_EMA12_1H_AT12H_VERSION
+    row.ema20_15mAt12hV !== STATS_EMA20_15M_AT12H_VERSION
   ) {
     try {
-      const slope = await fetchSymbolEma12_1hSlopePct7dAtMs(row.symbol, h12End * 1000);
-      if (slope != null && Number.isFinite(slope)) {
-        row.ema12_1hSlopePct7dAt12h = slope;
+      const snap12h = await fetchEma20_15mMetricsAtMs(row.symbol, h12End * 1000);
+      if (snap12h.ema20_15mSlopePct7d != null && Number.isFinite(snap12h.ema20_15mSlopePct7d)) {
+        row.ema20_15mSlopePct7dAt12h = snap12h.ema20_15mSlopePct7d;
       }
-      row.ema12_1hAt12hV = STATS_EMA12_1H_AT12H_VERSION;
+      if (snap12h.priceVsEma20_15mPct != null && Number.isFinite(snap12h.priceVsEma20_15mPct)) {
+        row.priceVsEma20_15mPctAt12h = snap12h.priceVsEma20_15mPct;
+      }
+      row.ema20_15mAt12hV = STATS_EMA20_15M_AT12H_VERSION;
     } catch (e) {
-      console.error("[candleReversalStatsTick] ema12_1h @12h", row.symbol, e);
+      console.error("[candleReversalStatsTick] ema20_15m @12h", row.symbol, e);
     }
   }
 
@@ -813,9 +840,17 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
     if (nowSec < ac + 24 * HOUR_SEC && row.pct24h != null) return true;
     if (nowSec < ac + 48 * HOUR_SEC && row.pct48h != null) return true;
     if (row.pct4h == null && nowSec >= ac + 4 * HOUR_SEC) return true;
+    if (
+      row.tradeSide === "short" &&
+      row.ema20_15mAt8hV !== STATS_EMA20_15M_AT8H_VERSION &&
+      nowSec >= ac + 8 * HOUR_SEC
+    ) {
+      return true;
+    }
     if (row.pct12h == null && nowSec >= ac + 12 * HOUR_SEC) return true;
     if (
-      row.ema12_1hAt12hV !== STATS_EMA12_1H_AT12H_VERSION &&
+      row.tradeSide === "short" &&
+      row.ema20_15mAt12hV !== STATS_EMA20_15M_AT12H_VERSION &&
       nowSec >= ac + 12 * HOUR_SEC
     ) {
       return true;
@@ -854,23 +889,51 @@ function shouldFollowUpReversalRow(row: CandleReversalStatsRow, nowSec: number):
  * Backfill: แถว 1H เก่าเคยปิดผลที่ 48h → re-evaluate ใหม่ที่ 24h
  * (รันต่อแต่ละ tick · no-op หลังครั้งแรกเมื่อ outcome ตรงกับ pct24h แล้ว)
  */
-async function backfillEma12_1hSlopeAt12h(rows: CandleReversalStatsRow[]): Promise<number> {
+async function backfillEma20_15mAt8h(rows: CandleReversalStatsRow[]): Promise<number> {
   let updated = 0;
   for (const row of rows) {
-    if (signalBarTf(row) !== "1h") continue;
-    if (row.ema12_1hAt12hV === STATS_EMA12_1H_AT12H_VERSION) continue;
+    if (signalBarTf(row) !== "1h" || row.tradeSide !== "short") continue;
+    if (row.ema20_15mAt8hV === STATS_EMA20_15M_AT8H_VERSION) continue;
+    const ac = anchorCloseSec(row);
+    const h8End = ac + 8 * HOUR_SEC;
+    if (Date.now() / 1000 < h8End) continue;
+    try {
+      const snap8h = await fetchEma20_15mMetricsAtMs(row.symbol, h8End * 1000);
+      if (snap8h.ema20_15mSlopePct7d != null && Number.isFinite(snap8h.ema20_15mSlopePct7d)) {
+        row.ema20_15mSlopePct7dAt8h = snap8h.ema20_15mSlopePct7d;
+      }
+      if (snap8h.priceVsEma20_15mPct != null && Number.isFinite(snap8h.priceVsEma20_15mPct)) {
+        row.priceVsEma20_15mPctAt8h = snap8h.priceVsEma20_15mPct;
+      }
+      row.ema20_15mAt8hV = STATS_EMA20_15M_AT8H_VERSION;
+      updated += 1;
+    } catch (e) {
+      console.error("[candleReversalStatsTick] backfill ema20_15m @8h", row.symbol, e);
+    }
+  }
+  return updated;
+}
+
+async function backfillEma20_15mAt12h(rows: CandleReversalStatsRow[]): Promise<number> {
+  let updated = 0;
+  for (const row of rows) {
+    if (signalBarTf(row) !== "1h" || row.tradeSide !== "short") continue;
+    if (row.ema20_15mAt12hV === STATS_EMA20_15M_AT12H_VERSION) continue;
     const ac = anchorCloseSec(row);
     const h12End = ac + 12 * HOUR_SEC;
     if (Date.now() / 1000 < h12End) continue;
     try {
-      const slope = await fetchSymbolEma12_1hSlopePct7dAtMs(row.symbol, h12End * 1000);
-      if (slope != null && Number.isFinite(slope)) {
-        row.ema12_1hSlopePct7dAt12h = slope;
+      const snap12h = await fetchEma20_15mMetricsAtMs(row.symbol, h12End * 1000);
+      if (snap12h.ema20_15mSlopePct7d != null && Number.isFinite(snap12h.ema20_15mSlopePct7d)) {
+        row.ema20_15mSlopePct7dAt12h = snap12h.ema20_15mSlopePct7d;
       }
-      row.ema12_1hAt12hV = STATS_EMA12_1H_AT12H_VERSION;
+      if (snap12h.priceVsEma20_15mPct != null && Number.isFinite(snap12h.priceVsEma20_15mPct)) {
+        row.priceVsEma20_15mPctAt12h = snap12h.priceVsEma20_15mPct;
+      }
+      row.ema20_15mAt12hV = STATS_EMA20_15M_AT12H_VERSION;
       updated += 1;
     } catch (e) {
-      console.error("[candleReversalStatsTick] backfill ema12_1h @12h", row.symbol, e);
+      console.error("[candleReversalStatsTick] backfill ema20_15m @12h", row.symbol, e);
     }
   }
   return updated;
@@ -1119,7 +1182,8 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillSignalBarHighLow(state.rows);
   dirty += await backfillLowerWickRatioPct(state.rows);
   dirty += await backfillDropFrom24hHighToSignalLowPct(state.rows);
-  dirty += await backfillEma12_1hSlopeAt12h(state.rows);
+  dirty += await backfillEma20_15mAt8h(state.rows);
+  dirty += await backfillEma20_15mAt12h(state.rows);
   dirty += await backfillGreenDaysBeforeSignal(state.rows);
   dirty += await backfillPumpCycleSwingLowForRows(state.rows, (row) =>
     candleReversalStatsAnchorCloseSec(row),

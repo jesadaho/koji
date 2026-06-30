@@ -62,9 +62,9 @@ export type CandleReversalStatsRow = {
   openInterestV?: number;
   /** EMA(12) 1h — slope % ย้อนหลัง 7 วัน (168 แท่ง) */
   ema1hSlopePct7d?: number | null;
-  /** EMA12∠1h ณ checkpoint 12 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) */
+  /** EMA12∠1h ณ checkpoint 12 ชม. หลังปิดแท่งสัญญาณ (deprecated — ใช้ ema20_15m @12h) */
   ema12_1hSlopePct7dAt12h?: number | null;
-  /** 1 = คำนวณ EMA12∠1h @12h แล้ว */
+  /** @deprecated */
   ema12_1hAt12hV?: number;
   /** EMA(12) 4h — slope % ย้อนหลัง 7 วัน (42 แท่ง) */
   ema4hSlopePct7d?: number | null;
@@ -102,6 +102,18 @@ export type CandleReversalStatsRow = {
   entryEma20_15mTouchedAtMs?: number | null;
   /** 1 = EMA20@15m entry metrics คำนวณแล้ว */
   entryEma20_15mV?: number;
+  /** EMA20 15m — slope % ย้อนหลัง 7 วัน ณ checkpoint 8 ชม. หลังปิดแท่งสัญญาณ */
+  ema20_15mSlopePct7dAt8h?: number | null;
+  /** (close − EMA20) / EMA20 × 100 บน 15m ณ checkpoint 8 ชม. */
+  priceVsEma20_15mPctAt8h?: number | null;
+  /** 1 = คำนวณ EMA20@15m @8h แล้ว */
+  ema20_15mAt8hV?: number;
+  /** EMA20 15m — slope % ย้อนหลัง 7 วัน ณ checkpoint 12 ชม. หลังปิดแท่งสัญญาณ */
+  ema20_15mSlopePct7dAt12h?: number | null;
+  /** (close − EMA20) / EMA20 × 100 บน 15m ณ checkpoint 12 ชม. */
+  priceVsEma20_15mPctAt12h?: number | null;
+  /** 1 = คำนวณ EMA20@15m @12h แล้ว */
+  ema20_15mAt12hV?: number;
   /** PSAR 4h — ทิศ SAR (up/down) */
   psar4hTrend?: "up" | "down" | null;
   /** PSAR 4h — (close − SAR) / close × 100 */
@@ -413,6 +425,8 @@ export type CandleReversalStatsSortKey =
   | "ema20_15m"
   | "ema20_15mDist"
   | "ema20_15mTouch"
+  | "ema20_15mAt8h"
+  | "ema20_15mDistAt8h"
   | "ema1d"
   | "btcEma4h"
   | "btcDomEma4h"
@@ -438,7 +452,8 @@ export type CandleReversalStatsSortKey =
   | "wick"
   | "h1"
   | "h2"
-  | "ema12_1hAt12h"
+  | "ema20_15mAt12h"
+  | "ema20_15mDistAt12h"
   | "h3"
   | "h4"
   | "roi"
@@ -574,6 +589,10 @@ function compareCandleReversalStatsRows(
         touchOrder(a.entryEma20_15mTouchedWithin8h) - touchOrder(b.entryEma20_15mTouchedWithin8h)
       );
     }
+    case "ema20_15mAt8h":
+      return cmpNumNullLast(a.ema20_15mSlopePct7dAt8h, b.ema20_15mSlopePct7dAt8h);
+    case "ema20_15mDistAt8h":
+      return cmpNumNullLast(a.priceVsEma20_15mPctAt8h, b.priceVsEma20_15mPctAt8h);
     case "ema1d":
       return cmpNumNullLast(a.ema1dSlopePct7d, b.ema1dSlopePct7d);
     case "btcEma4h":
@@ -630,8 +649,10 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(reversalHorizonPct(a, 0), reversalHorizonPct(b, 0));
     case "h2":
       return cmpNumNullLast(reversalHorizonPct(a, 1), reversalHorizonPct(b, 1));
-    case "ema12_1hAt12h":
-      return cmpNumNullLast(a.ema12_1hSlopePct7dAt12h, b.ema12_1hSlopePct7dAt12h);
+    case "ema20_15mAt12h":
+      return cmpNumNullLast(a.ema20_15mSlopePct7dAt12h, b.ema20_15mSlopePct7dAt12h);
+    case "ema20_15mDistAt12h":
+      return cmpNumNullLast(a.priceVsEma20_15mPctAt12h, b.priceVsEma20_15mPctAt12h);
     case "h3":
       return cmpNumNullLast(reversalHorizonPct(a, 2), reversalHorizonPct(b, 2));
     case "h4":

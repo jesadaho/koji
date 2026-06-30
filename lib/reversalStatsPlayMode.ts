@@ -93,7 +93,7 @@ export function reversalShort1hRBarRangeObserveIsObserveSignal(input: {
   });
 }
 
-/** Short ที่ไส้ล่างยาวกว่าไส้บน → observe ฝั่ง Long (hammer / rejection ล่าง) */
+/** Short ที่ไส้ล่างยาวกว่าไส้บน (hammer / rejection ล่าง) */
 export function reversalShortLowerWickDominantIsObserveSignal(input: {
   tradeSide?: CandleReversalTradeSide | null;
   wickRatio?: number | null;
@@ -116,6 +116,45 @@ export function reversalShortLowerWickDominantIsObserveSignal(input: {
     return false;
   }
   return lower > upper;
+}
+
+export type ReversalLowerWickDominantFilter = "all" | "lower_gt_upper";
+
+export const REVERSAL_LOWER_WICK_DOMINANT_FILTER_OPTIONS: ReadonlyArray<{
+  value: ReversalLowerWickDominantFilter;
+  label: string;
+}> = [
+  { value: "all", label: "ทั้งหมด" },
+  { value: "lower_gt_upper", label: "ไส้ล่าง>บน" },
+];
+
+export function reversalLowerWickDominantFilterLabel(
+  filter: ReversalLowerWickDominantFilter,
+): string {
+  return REVERSAL_LOWER_WICK_DOMINANT_FILTER_OPTIONS.find((o) => o.value === filter)?.label ?? filter;
+}
+
+export function reversalLowerWickDominantFilterTitle(
+  filter: ReversalLowerWickDominantFilter,
+): string {
+  if (filter === "all") return "ทั้งหมด — ไม่กรองไส้";
+  return `${REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA} (Short)`;
+}
+
+export function reversalStatsRowMatchesLowerWickDominantFilter(
+  row: {
+    tradeSide?: CandleReversalTradeSide | null;
+    wickRatioPct?: number | null;
+    lowerWickRatioPct?: number | null;
+  },
+  filter: ReversalLowerWickDominantFilter,
+): boolean {
+  if (filter === "all") return true;
+  return reversalShortLowerWickDominantIsObserveSignal({
+    tradeSide: row.tradeSide,
+    wickRatioPct: row.wickRatioPct,
+    lowerWickRatioPct: row.lowerWickRatioPct,
+  });
 }
 
 /** Neutral matrix — เก็บ stats observe ก่อนเล่น */
