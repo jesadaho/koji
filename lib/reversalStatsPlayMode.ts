@@ -29,8 +29,11 @@ export const REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX = 3;
 
 export const REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA = `R% สัญญาณ < ${REVERSAL_SHORT_1H_OBSERVE_BAR_RANGE_PCT_MAX}% (1H Short) · ไม่ใช่ Weak Trend (${REVERSAL_WEAK_TREND_MATRIX_CRITERIA})`;
 
+/** ไส้ล่างต้องสูงกว่านี้ (%) — ใช้ร่วมกับ ไส้ล่าง > ไส้บน สำหรับ Observe */
+export const REVERSAL_OBSERVE_LOWER_WICK_MIN_PCT = 45;
+
 export const REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA =
-  "ไส้ล่าง > ไส้บน (Short → Observe Long / hammer)";
+  "ไส้ล่าง > ไส้บน · ไส้ล่าง > 45% (Short → Observe Long / hammer)";
 
 /** คั่นระหว่างชุดเกณฑ์ Observe ระดับบน — ผ่านอย่างใดอย่างหนึ่ง (OR) */
 export const REVERSAL_OBSERVE_CRITERIA_OR_JOIN = " หรือ ";
@@ -93,7 +96,20 @@ export function reversalShort1hRBarRangeObserveIsObserveSignal(input: {
   });
 }
 
-/** Short ที่ไส้ล่างยาวกว่าไส้บน (hammer / rejection ล่าง) */
+/** Short ที่ไส้ล่างยาวกว่าไส้บน และไส้ล่าง > 45% (hammer / rejection ล่าง) */
+export function reversalShortLowerWickPct(input: {
+  lowerWickRatio?: number | null;
+  lowerWickRatioPct?: number | null;
+}): number | null {
+  if (input.lowerWickRatio != null && Number.isFinite(input.lowerWickRatio)) {
+    return input.lowerWickRatio * 100;
+  }
+  if (input.lowerWickRatioPct != null && Number.isFinite(input.lowerWickRatioPct)) {
+    return input.lowerWickRatioPct;
+  }
+  return null;
+}
+
 export function reversalShortLowerWickDominantIsObserveSignal(input: {
   tradeSide?: CandleReversalTradeSide | null;
   wickRatio?: number | null;
@@ -102,6 +118,8 @@ export function reversalShortLowerWickDominantIsObserveSignal(input: {
   lowerWickRatioPct?: number | null;
 }): boolean {
   if ((input.tradeSide ?? "short") !== "short") return false;
+  const lowerPct = reversalShortLowerWickPct(input);
+  if (lowerPct == null || lowerPct <= REVERSAL_OBSERVE_LOWER_WICK_MIN_PCT) return false;
   if (
     input.wickRatio != null &&
     input.lowerWickRatio != null &&
