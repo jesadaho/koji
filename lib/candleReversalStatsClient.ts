@@ -120,7 +120,7 @@ export type CandleReversalStatsRow = {
   wickRatioPct: number | null;
   /** Short เท่านั้น — ไส้ล่าง ÷ ช่วงแท่ง (%) */
   lowerWickRatioPct?: number | null;
-  /** Short — (high สูงสุดในรอบ 24h ก่อนปิดแท่งสัญญาณ − low แท่งสัญญาณ) / high × 100 */
+  /** Short — (high สูงสุดในรอบ 24h − low แท่งสัญญาณ) / close × 100 */
   dropFrom24hHighToSignalLowPct?: number | null;
   /** 1 = คำนวณจากแท่ง 1h ในช่วง 24 ชม. */
   signal24hHighDropV?: number;

@@ -475,12 +475,6 @@ async function backfillDropFrom24hHighToSignalLowPct(rows: CandleReversalStatsRo
   for (const row of rows) {
     if ((row.tradeSide ?? "short") !== "short") continue;
     if (row.signal24hHighDropV === STATS_SIGNAL_24H_HIGH_DROP_VERSION) continue;
-    if (
-      row.dropFrom24hHighToSignalLowPct != null &&
-      Number.isFinite(row.dropFrom24hHighToSignalLowPct)
-    ) {
-      continue;
-    }
     if (!Number.isFinite(row.signalBarOpenSec) || row.signalBarOpenSec <= 0) continue;
     const tf = signalBarTf(row);
     const barDur = signalBarDurationSecByTf(tf);
@@ -507,12 +501,15 @@ async function backfillDropFrom24hHighToSignalLowPct(rows: CandleReversalStatsRo
       }
     }
     if (signalLow == null) continue;
+    const entryClose = row.entryPrice;
+    if (!(Number.isFinite(entryClose) && entryClose > 0)) continue;
     try {
       const snap = await fetchSignal24hHighDropAtSignal(
         row.symbol,
         row.signalBarOpenSec,
         tf,
         signalLow,
+        entryClose,
       );
       if (snap.dropFrom24hHighToSignalLowPct == null) continue;
       mergeSignal24hHighDropIntoRow(row, snap);

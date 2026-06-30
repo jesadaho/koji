@@ -5,15 +5,21 @@ import {
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
 
-export const STATS_SIGNAL_24H_HIGH_DROP_VERSION = 1;
+export const STATS_SIGNAL_24H_HIGH_DROP_VERSION = 2;
 
 const HOUR_SEC = 3600;
 const WINDOW_24H_SEC = 24 * HOUR_SEC;
 
-/** (high24h − signalLow) / high24h × 100 */
-export function dropFrom24hHighToSignalLowPct(high24h: number, signalLow: number): number | null {
-  if (!(high24h > 0) || !(signalLow > 0) || signalLow > high24h * 1.000001) return null;
-  return ((high24h - signalLow) / high24h) * 100;
+/** (high24h − signalLow) / close × 100 — ฐาน close เหมือน R% สัญญาณ */
+export function dropFrom24hHighToSignalLowPct(
+  high24h: number,
+  signalLow: number,
+  close: number,
+): number | null {
+  if (!(high24h > 0) || !(signalLow > 0) || !(close > 0) || signalLow > high24h * 1.000001) {
+    return null;
+  }
+  return ((high24h - signalLow) / close) * 100;
 }
 
 /** สูงสุดของ high บนแท่ง 1h ในช่วง 24 ชม. ก่อนปิดแท่งสัญญาณ (รวมแท่งที่ปิดที่ anchor) */
@@ -35,6 +41,7 @@ export function computeSignal24hHighDropFromPack1h(input: {
   signalBarOpenSec: number;
   signalBarTf: CandleReversalSignalBarTf;
   signalBarLow: number;
+  entryClose: number;
 }): number | null {
   const anchorCloseSec = candleReversalStatsAnchorCloseSec({
     signalBarOpenSec: input.signalBarOpenSec,
@@ -42,7 +49,7 @@ export function computeSignal24hHighDropFromPack1h(input: {
   });
   const high24h = maxHighIn24hWindow1h(input.pack1h, anchorCloseSec);
   if (high24h == null) return null;
-  return dropFrom24hHighToSignalLowPct(high24h, input.signalBarLow);
+  return dropFrom24hHighToSignalLowPct(high24h, input.signalBarLow, input.entryClose);
 }
 
 export type Signal24hHighDropSnapshot = {
@@ -54,8 +61,9 @@ export async function fetchSignal24hHighDropAtSignal(
   signalBarOpenSec: number,
   signalBarTf: CandleReversalSignalBarTf,
   signalBarLow: number,
+  entryClose: number,
 ): Promise<Signal24hHighDropSnapshot> {
-  if (!(signalBarLow > 0) || !(signalBarOpenSec > 0)) {
+  if (!(signalBarLow > 0) || !(signalBarOpenSec > 0) || !(entryClose > 0)) {
     return { dropFrom24hHighToSignalLowPct: null };
   }
   const anchorCloseSec = candleReversalStatsAnchorCloseSec({ signalBarOpenSec, signalBarTf });
@@ -74,6 +82,7 @@ export async function fetchSignal24hHighDropAtSignal(
         signalBarOpenSec,
         signalBarTf,
         signalBarLow,
+        entryClose,
       }),
     };
   } catch {

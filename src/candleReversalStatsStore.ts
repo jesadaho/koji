@@ -804,16 +804,20 @@ export async function appendCandleReversalStatsRow(
         ? input.signalBarLow
         : null;
     if (signalLow != null && row.dropFrom24hHighToSignalLowPct == null) {
-      try {
-        const snap24h = await fetchSignal24hHighDropAtSignal(
-          input.symbol,
-          input.signalBarOpenSec,
-          signalBarTf,
-          signalLow,
-        );
-        mergeSignal24hHighDropIntoRow(row, snap24h);
-      } catch {
-        /* ignore */
+      const entryClose = input.entryPrice;
+      if (Number.isFinite(entryClose) && entryClose > 0) {
+        try {
+          const snap24h = await fetchSignal24hHighDropAtSignal(
+            input.symbol,
+            input.signalBarOpenSec,
+            signalBarTf,
+            signalLow,
+            entryClose,
+          );
+          mergeSignal24hHighDropIntoRow(row, snap24h);
+        } catch {
+          /* ignore */
+        }
       }
     }
   }

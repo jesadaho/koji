@@ -1460,7 +1460,7 @@ function ReversalStatsSection({
                       : candleReversalWickRatioPctLabel(r.wickRatioPct)}
                   </td>
                   {showSuggestedSideColumn ? (
-                    <td title="(high สูงสุดในรอบ 24h − low แท่งสัญญาณ) / high × 100">
+                    <td title="(high สูงสุดในรอบ 24h − low แท่งสัญญาณ) / close × 100 — ≥ R% เมื่อ high24h = high แท่ง">
                       {(r.tradeSide ?? "short") === "short"
                         ? reversalDropFrom24hHighToSignalLowLabel(r.dropFrom24hHighToSignalLowPct)
                         : "—"}
