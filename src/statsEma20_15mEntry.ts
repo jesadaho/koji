@@ -12,10 +12,10 @@ import {
   priceVsEmaDistPct,
 } from "./statsEma20Dist";
 
-/** 7 วันบน 15m = 672 แท่ง */
-export const STATS_EMA15M_SLOPE_LOOKBACK_BARS = 672;
+/** 12 ชม.บน 15m = 48 แท่ง — EMA20∠15m ณแจ้ง */
+export const STATS_EMA15M_SLOPE_LOOKBACK_BARS = 48;
 
-export const STATS_EMA20_15M_ENTRY_VERSION = 1;
+export const STATS_EMA20_15M_ENTRY_VERSION = 2;
 
 /** EMA12@1h slope 12ชม. + EMA12Δ1h ณ checkpoint 8 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) · v2 เปลี่ยนจาก EMA20@15m 7d */
 export const STATS_EMA20_15M_AT8H_VERSION = 2;

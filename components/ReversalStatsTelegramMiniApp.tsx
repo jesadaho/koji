@@ -1171,7 +1171,7 @@ function ReversalStatsSection({
                 <SortTh
                   label="EMA20∠15m"
                   sortKey="ema20_15m"
-                  title="EMA20 15m slope % ย้อนหลัง 7 วัน (672 แท่ง)"
+                  title="EMA20 15m slope % ย้อน 12 ชม. (48 แท่ง)"
                   activeSort={sort}
                   onSort={onSortColumn}
                 />
@@ -1556,7 +1556,7 @@ function ReversalStatsSection({
                   <td title="(close − EMA20) / EMA20 × 100 บน 4h">{candleReversalPriceVsEma20_4hLabel(r.priceVsEma20_4hPct)}</td>
                   {showSuggestedSideColumn ? (
                     <>
-                      <td title="EMA20 15m slope 7d">{candleReversalEma20_15mSlopeLabel(r.ema20_15mSlopePct7d)}</td>
+                      <td title="EMA20 15m slope 12ชม.">{candleReversalEma20_15mSlopeLabel(r.ema20_15mSlopePct7d)}</td>
                       <td title="(mark − EMA20) / EMA20 × 100 บน 15m ณแจ้ง">
                         {candleReversalPriceVsEma20_15mLabel(r.priceVsEma20_15mPct)}
                       </td>

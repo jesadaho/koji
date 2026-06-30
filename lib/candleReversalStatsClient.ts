@@ -91,7 +91,7 @@ export type CandleReversalStatsRow = {
   btcDomEma20_4hV?: number;
   /** 6 = EMA20 1h/4h slope+dist คำนวณ ณ alertedAtMs */
   ema20DistV?: number;
-  /** EMA20 15m — slope % ย้อนหลัง 7 วัน (672 แท่ง) ณ alertedAtMs */
+  /** EMA20 15m — slope % ย้อน 12 ชม. (48 แท่ง) ณ alertedAtMs */
   ema20_15mSlopePct7d?: number | null;
   /** (mark − EMA20) / EMA20 × 100 บน 15m ณ alertedAtMs */
   priceVsEma20_15mPct?: number | null;
@@ -101,7 +101,7 @@ export type CandleReversalStatsRow = {
   entryEma20_15mTouchedWithin8h?: boolean | null;
   /** ms แตะครั้งแรก */
   entryEma20_15mTouchedAtMs?: number | null;
-  /** 1 = EMA20@15m entry metrics คำนวณแล้ว */
+  /** 2 = EMA20@15m entry metrics (slope 12ชม.) · v1 = slope 7d */
   entryEma20_15mV?: number;
   /** EMA12 1h — slope % ย้อน 12 ชม. ณ checkpoint 8 ชม. หลังปิดแท่งสัญญาณ (field name legacy) */
   ema20_15mSlopePct7dAt8h?: number | null;

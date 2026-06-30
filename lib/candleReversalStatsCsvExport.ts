@@ -110,7 +110,7 @@ const HEADERS = [
   "EMA20 1h dist %",
   "EMA20 4h slope 7d %",
   "EMA20 4h dist %",
-  "EMA20 15m slope 7d %",
+  "EMA20 15m slope 12h %",
   "EMA20 15m dist % (mark)",
   "EMA20 15m touch 8h",
   "EMA1d slope 7d %",
