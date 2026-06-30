@@ -1305,16 +1305,16 @@ function ReversalStatsSection({
             {showSuggestedSideColumn && has48h ? (
               <>
                 <SortTh
-                  label="EMA20∠@8h"
+                  label="EMA12∠@8h"
                   sortKey="ema20_15mAt8h"
-                  title="EMA20 15m slope % ย้อนหลัง 7 วัน ณ checkpoint 8 ชม. หลังสัญญาณ"
+                  title="EMA12 1h slope % ย้อน 12 ชม. ณ checkpoint 8 ชม. หลังสัญญาณ"
                   activeSort={sort}
                   onSort={onSortColumn}
                 />
                 <SortTh
-                  label="EMA20Δ@8h"
+                  label="EMA12Δ@8h"
                   sortKey="ema20_15mDistAt8h"
-                  title="(close − EMA20) / EMA20 × 100 บน 15m ณ checkpoint 8 ชม."
+                  title="(close − EMA12) / EMA12 × 100 บน 1h ณ checkpoint 8 ชม."
                   activeSort={sort}
                   onSort={onSortColumn}
                 />
@@ -1332,16 +1332,16 @@ function ReversalStatsSection({
             {showSuggestedSideColumn && has48h ? (
               <>
                 <SortTh
-                  label="EMA20∠@12h"
+                  label="EMA12∠@12h"
                   sortKey="ema20_15mAt12h"
-                  title="EMA20 15m slope % ย้อนหลัง 7 วัน ณ checkpoint 12 ชม. หลังสัญญาณ"
+                  title="EMA12 1h slope % ย้อน 12 ชม. ณ checkpoint 12 ชม. หลังสัญญาณ"
                   activeSort={sort}
                   onSort={onSortColumn}
                 />
                 <SortTh
-                  label="EMA20Δ@12h"
+                  label="EMA12Δ@12h"
                   sortKey="ema20_15mDistAt12h"
-                  title="(close − EMA20) / EMA20 × 100 บน 15m ณ checkpoint 12 ชม."
+                  title="(close − EMA12) / EMA12 × 100 บน 1h ณ checkpoint 12 ชม."
                   activeSort={sort}
                   onSort={onSortColumn}
                 />
@@ -1606,22 +1606,22 @@ function ReversalStatsSection({
                   <td>{horizons[0]}</td>
                   {showSuggestedSideColumn && has48h ? (
                     <>
-                      <td title="EMA20 15m slope 7d ณ checkpoint 8 ชม.">
-                        {candleReversalEma20_15mSlopeLabel(r.ema20_15mSlopePct7dAt8h)}
+                      <td title="EMA12 1h slope 12ชม. ณ checkpoint 8 ชม.">
+                        {candleReversalEma1hSlopeLabel(r.ema20_15mSlopePct7dAt8h)}
                       </td>
-                      <td title="(close − EMA20) / EMA20 × 100 บน 15m ณ checkpoint 8 ชม.">
-                        {candleReversalPriceVsEma20_15mLabel(r.priceVsEma20_15mPctAt8h)}
+                      <td title="(close − EMA12) / EMA12 × 100 บน 1h ณ checkpoint 8 ชม.">
+                        {candleReversalPriceVsEma20_1hLabel(r.priceVsEma20_15mPctAt8h)}
                       </td>
                     </>
                   ) : null}
                   <td>{horizons[1]}</td>
                   {showSuggestedSideColumn && has48h ? (
                     <>
-                      <td title="EMA20 15m slope 7d ณ checkpoint 12 ชม.">
-                        {candleReversalEma20_15mSlopeLabel(r.ema20_15mSlopePct7dAt12h)}
+                      <td title="EMA12 1h slope 12ชม. ณ checkpoint 12 ชม.">
+                        {candleReversalEma1hSlopeLabel(r.ema20_15mSlopePct7dAt12h)}
                       </td>
-                      <td title="(close − EMA20) / EMA20 × 100 บน 15m ณ checkpoint 12 ชม.">
-                        {candleReversalPriceVsEma20_15mLabel(r.priceVsEma20_15mPctAt12h)}
+                      <td title="(close − EMA12) / EMA12 × 100 บน 1h ณ checkpoint 12 ชม.">
+                        {candleReversalPriceVsEma20_1hLabel(r.priceVsEma20_15mPctAt12h)}
                       </td>
                     </>
                   ) : null}

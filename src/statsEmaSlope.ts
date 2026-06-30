@@ -1,5 +1,7 @@
 import { computeEmaLast } from "./emaUtils";
+import { emaLine } from "./indicatorMath";
 import { emaSlopePctFromValues } from "@/lib/statsEmaSlope";
+import { priceVsEmaDistPct } from "./statsEma20Dist";
 import {
   fetchBinanceUsdmKlines,
   fetchBinanceUsdmKlinesRange,
@@ -18,6 +20,9 @@ export const STATS_EMA4H_SLOPE_LOOKBACK_BARS = 42;
 
 /** 7 วันบน 1h = 168 แท่ง */
 export const STATS_EMA1H_SLOPE_LOOKBACK_BARS = 168;
+
+/** 12 ชม.บน 1h — EMA12∠1h ตัดสิน hold checkpoint (Reversal auto-trade) */
+export const STATS_EMA12_1H_HOLD_SLOPE_LOOKBACK_BARS = 12;
 
 /** แถวที่คำนวณ EMA12∠1h ณ checkpoint 12 ชม. หลังสัญญาณแล้ว */
 export const STATS_EMA12_1H_AT12H_VERSION = 1;
@@ -104,6 +109,47 @@ export async function fetchSymbolEmaSlopePctTf(
   const pack = await fetchBinanceUsdmKlines(sym, tf, limit);
   if (!pack) return null;
   return computeEmaSlopePctFromPack(pack, lookbackBars);
+}
+
+/** EMA12 slope % บน 1h ย้อน 12 ชม. — ใช้จังหวะ 1/2 hold checkpoint */
+export async function fetchEma12_1hHoldSlopePct(symbol: string): Promise<number | null> {
+  return fetchSymbolEmaSlopePctTf(symbol, "1h", STATS_EMA12_1H_HOLD_SLOPE_LOOKBACK_BARS);
+}
+
+export type Ema12_1hFollowMetricsAtMs = {
+  ema12_1hSlopePct12h: number | null;
+  priceVsEma12_1hPct: number | null;
+};
+
+function computePriceVsEma12_1hFromPackAt(pack: BinanceKlinePack, atMs: number): number | null {
+  const period = STATS_EMA_SLOPE_PERIOD;
+  if (!pack.close.length || pack.close.length < period + 2) return null;
+  const atSec = Math.floor(atMs / 1000);
+  const iClosed = lastClosedBarIndexAt(pack, tfBarDurSec("1h"), atSec);
+  if (iClosed < period - 1) return null;
+  const emaArr = emaLine(pack.close, period);
+  const ema = emaArr[iClosed];
+  const close = pack.close[iClosed];
+  if (typeof ema !== "number" || !Number.isFinite(ema) || ema <= 0) return null;
+  if (typeof close !== "number" || !Number.isFinite(close) || close <= 0) return null;
+  return priceVsEmaDistPct(close, ema);
+}
+
+/** EMA12∠1h (12ชม.) + EMA12Δ1h ณ atMs — follow-up checkpoint @8h / @12h */
+export async function fetchEma12_1hFollowMetricsAtMs(
+  symbol: string,
+  atMs: number,
+): Promise<Ema12_1hFollowMetricsAtMs> {
+  const empty: Ema12_1hFollowMetricsAtMs = { ema12_1hSlopePct12h: null, priceVsEma12_1hPct: null };
+  if (!isBinanceIndicatorFapiEnabled()) return empty;
+  if (!Number.isFinite(atMs) || atMs <= 0) return empty;
+  const lookback = STATS_EMA12_1H_HOLD_SLOPE_LOOKBACK_BARS;
+  const pack = await fetchKlinePackThrough(symbol.trim().toUpperCase(), "1h", atMs, lookback);
+  if (!pack) return empty;
+  return {
+    ema12_1hSlopePct12h: computeEmaSlopePctFromPackAt(pack, "1h", lookback, atMs),
+    priceVsEma12_1hPct: computePriceVsEma12_1hFromPackAt(pack, atMs),
+  };
 }
 
 async function fetchKlinePackThrough(

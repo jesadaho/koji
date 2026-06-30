@@ -2320,7 +2320,7 @@ export default function SettingsTelegramMiniApp() {
           <li><strong>24 ชม.</strong>: ROI &lt; 3% + EMA20∠1h &gt; 0 → ปิดทันที</li>
           <li><strong>24 ชม.</strong>: ROI &gt; 3% + EMA20∠1h &lt; 0 → ถือต่อ + SL@entry (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code>)</li>
           <li><strong>24–48 ชม.</strong>: แตะ SL@entry → ออก ~0%</li>
-          <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ดู EMA12∠1h · ข้างเรา → ขยายจังหวะ 2 · ผิดฝั่ง → ปิด force</li>
+          <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ดู EMA12∠1h (12ชม.) · ข้างเรา → ขยายจังหวะ 2 · ผิดฝั่ง → ปิด force</li>
           <li><strong>จังหวะ 2</strong>: ขยายอีก {revHoldExtendRedHours.trim() || revMaxHoldHours.trim() || "48"} ชม. แล้วปิด force</li>
           <li>ส่งข้อความ Telegram ทุก action โดยอัตโนมัติ</li>
         </ul>
@@ -2441,7 +2441,7 @@ export default function SettingsTelegramMiniApp() {
             />
           </label>
           <label className="sub" style={{ display: "block" }}>
-            จังหวะ 2 — ขยายอีกกี่ ชม. เมื่อ EMA12∠1h ข้างเรา (ว่าง = เท่าจังหวะ 1)
+            จังหวะ 2 — ขยายอีกกี่ ชม. เมื่อ EMA12∠1h (12ชม.) ข้างเรา (ว่าง = เท่าจังหวะ 1)
             <input
               type="text"
               inputMode="numeric"
@@ -2461,7 +2461,7 @@ export default function SettingsTelegramMiniApp() {
               disabled={!revTpSlEnabled}
             />
             <span className="tmaCheckboxField__text">
-              fallback: ถ้าดึง EMA12∠1h ไม่ได้ → ใช้แดง/เขียว แทน (Snowball)
+              fallback: ถ้าดึง EMA12∠1h (12ชม.) ไม่ได้ → ใช้แดง/เขียว แทน (Snowball)
             </span>
           </label>
         </div>
@@ -2596,7 +2596,7 @@ export default function SettingsTelegramMiniApp() {
             />
           </label>
           <label className="sub" style={{ display: "block" }}>
-            จังหวะ 2 — ขยายอีกกี่ ชม. เมื่อ EMA12∠1h ข้างเรา (ว่าง = Short)
+            จังหวะ 2 — ขยายอีกกี่ ชม. เมื่อ EMA12∠1h (12ชม.) ข้างเรา (ว่าง = Short)
             <input
               type="text"
               inputMode="numeric"
@@ -2616,7 +2616,7 @@ export default function SettingsTelegramMiniApp() {
               disabled={!revLongTpSlEnabled}
             />
             <span className="tmaCheckboxField__text">
-              fallback: ถ้าดึง EMA12∠1h ไม่ได้ → ใช้แดง/เขียว แทน (Long)
+              fallback: ถ้าดึง EMA12∠1h (12ชม.) ไม่ได้ → ใช้แดง/เขียว แทน (Long)
             </span>
           </label>
           <label className="sub" style={{ display: "block" }}>

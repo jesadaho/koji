@@ -103,17 +103,17 @@ export type CandleReversalStatsRow = {
   entryEma20_15mTouchedAtMs?: number | null;
   /** 1 = EMA20@15m entry metrics คำนวณแล้ว */
   entryEma20_15mV?: number;
-  /** EMA20 15m — slope % ย้อนหลัง 7 วัน ณ checkpoint 8 ชม. หลังปิดแท่งสัญญาณ */
+  /** EMA12 1h — slope % ย้อน 12 ชม. ณ checkpoint 8 ชม. หลังปิดแท่งสัญญาณ (field name legacy) */
   ema20_15mSlopePct7dAt8h?: number | null;
-  /** (close − EMA20) / EMA20 × 100 บน 15m ณ checkpoint 8 ชม. */
+  /** (close − EMA12) / EMA12 × 100 บน 1h ณ checkpoint 8 ชม. (field name legacy) */
   priceVsEma20_15mPctAt8h?: number | null;
-  /** 1 = คำนวณ EMA20@15m @8h แล้ว */
+  /** 2 = EMA12@1h follow-up @8h (v1 = EMA20@15m 7d) */
   ema20_15mAt8hV?: number;
-  /** EMA20 15m — slope % ย้อนหลัง 7 วัน ณ checkpoint 12 ชม. หลังปิดแท่งสัญญาณ */
+  /** EMA12 1h — slope % ย้อน 12 ชม. ณ checkpoint 12 ชม. หลังปิดแท่งสัญญาณ (field name legacy) */
   ema20_15mSlopePct7dAt12h?: number | null;
-  /** (close − EMA20) / EMA20 × 100 บน 15m ณ checkpoint 12 ชม. */
+  /** (close − EMA12) / EMA12 × 100 บน 1h ณ checkpoint 12 ชม. (field name legacy) */
   priceVsEma20_15mPctAt12h?: number | null;
-  /** 1 = คำนวณ EMA20@15m @12h แล้ว */
+  /** 2 = EMA12@1h follow-up @12h (v1 = EMA20@15m 7d) */
   ema20_15mAt12hV?: number;
   /** PSAR 4h — ทิศ SAR (up/down) */
   psar4hTrend?: "up" | "down" | null;

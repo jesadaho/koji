@@ -44,11 +44,10 @@ import {
   candleReversalSignalVolVsSmaAt,
   candleReversalVolSmaPeriod,
 } from "./candleReversalSignalVolVsSma";
-import { backfillAllStatsRowsBtcEmaSlopes } from "./statsEmaSlope";
+import { backfillAllStatsRowsBtcEmaSlopes, fetchEma12_1hFollowMetricsAtMs } from "./statsEmaSlope";
 import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
 import {
   backfillAllStatsRowsEma20_15mEntry,
-  fetchEma20_15mMetricsAtMs,
   STATS_EMA20_15M_AT8H_VERSION,
   STATS_EMA20_15M_AT12H_VERSION,
 } from "./statsEma20_15mEntry";
@@ -718,12 +717,12 @@ async function followUpCandleReversal1hRow(
     row.ema20_15mAt8hV !== STATS_EMA20_15M_AT8H_VERSION
   ) {
     try {
-      const snap8h = await fetchEma20_15mMetricsAtMs(row.symbol, h8End * 1000);
-      if (snap8h.ema20_15mSlopePct7d != null && Number.isFinite(snap8h.ema20_15mSlopePct7d)) {
-        row.ema20_15mSlopePct7dAt8h = snap8h.ema20_15mSlopePct7d;
+      const snap8h = await fetchEma12_1hFollowMetricsAtMs(row.symbol, h8End * 1000);
+      if (snap8h.ema12_1hSlopePct12h != null && Number.isFinite(snap8h.ema12_1hSlopePct12h)) {
+        row.ema20_15mSlopePct7dAt8h = snap8h.ema12_1hSlopePct12h;
       }
-      if (snap8h.priceVsEma20_15mPct != null && Number.isFinite(snap8h.priceVsEma20_15mPct)) {
-        row.priceVsEma20_15mPctAt8h = snap8h.priceVsEma20_15mPct;
+      if (snap8h.priceVsEma12_1hPct != null && Number.isFinite(snap8h.priceVsEma12_1hPct)) {
+        row.priceVsEma20_15mPctAt8h = snap8h.priceVsEma12_1hPct;
       }
       row.ema20_15mAt8hV = STATS_EMA20_15M_AT8H_VERSION;
     } catch (e) {
@@ -746,12 +745,12 @@ async function followUpCandleReversal1hRow(
     row.ema20_15mAt12hV !== STATS_EMA20_15M_AT12H_VERSION
   ) {
     try {
-      const snap12h = await fetchEma20_15mMetricsAtMs(row.symbol, h12End * 1000);
-      if (snap12h.ema20_15mSlopePct7d != null && Number.isFinite(snap12h.ema20_15mSlopePct7d)) {
-        row.ema20_15mSlopePct7dAt12h = snap12h.ema20_15mSlopePct7d;
+      const snap12h = await fetchEma12_1hFollowMetricsAtMs(row.symbol, h12End * 1000);
+      if (snap12h.ema12_1hSlopePct12h != null && Number.isFinite(snap12h.ema12_1hSlopePct12h)) {
+        row.ema20_15mSlopePct7dAt12h = snap12h.ema12_1hSlopePct12h;
       }
-      if (snap12h.priceVsEma20_15mPct != null && Number.isFinite(snap12h.priceVsEma20_15mPct)) {
-        row.priceVsEma20_15mPctAt12h = snap12h.priceVsEma20_15mPct;
+      if (snap12h.priceVsEma12_1hPct != null && Number.isFinite(snap12h.priceVsEma12_1hPct)) {
+        row.priceVsEma20_15mPctAt12h = snap12h.priceVsEma12_1hPct;
       }
       row.ema20_15mAt12hV = STATS_EMA20_15M_AT12H_VERSION;
     } catch (e) {
@@ -897,12 +896,12 @@ async function backfillEma20_15mAt8h(rows: CandleReversalStatsRow[]): Promise<nu
     const h8End = ac + 8 * HOUR_SEC;
     if (Date.now() / 1000 < h8End) continue;
     try {
-      const snap8h = await fetchEma20_15mMetricsAtMs(row.symbol, h8End * 1000);
-      if (snap8h.ema20_15mSlopePct7d != null && Number.isFinite(snap8h.ema20_15mSlopePct7d)) {
-        row.ema20_15mSlopePct7dAt8h = snap8h.ema20_15mSlopePct7d;
+      const snap8h = await fetchEma12_1hFollowMetricsAtMs(row.symbol, h8End * 1000);
+      if (snap8h.ema12_1hSlopePct12h != null && Number.isFinite(snap8h.ema12_1hSlopePct12h)) {
+        row.ema20_15mSlopePct7dAt8h = snap8h.ema12_1hSlopePct12h;
       }
-      if (snap8h.priceVsEma20_15mPct != null && Number.isFinite(snap8h.priceVsEma20_15mPct)) {
-        row.priceVsEma20_15mPctAt8h = snap8h.priceVsEma20_15mPct;
+      if (snap8h.priceVsEma12_1hPct != null && Number.isFinite(snap8h.priceVsEma12_1hPct)) {
+        row.priceVsEma20_15mPctAt8h = snap8h.priceVsEma12_1hPct;
       }
       row.ema20_15mAt8hV = STATS_EMA20_15M_AT8H_VERSION;
       updated += 1;
@@ -922,12 +921,12 @@ async function backfillEma20_15mAt12h(rows: CandleReversalStatsRow[]): Promise<n
     const h12End = ac + 12 * HOUR_SEC;
     if (Date.now() / 1000 < h12End) continue;
     try {
-      const snap12h = await fetchEma20_15mMetricsAtMs(row.symbol, h12End * 1000);
-      if (snap12h.ema20_15mSlopePct7d != null && Number.isFinite(snap12h.ema20_15mSlopePct7d)) {
-        row.ema20_15mSlopePct7dAt12h = snap12h.ema20_15mSlopePct7d;
+      const snap12h = await fetchEma12_1hFollowMetricsAtMs(row.symbol, h12End * 1000);
+      if (snap12h.ema12_1hSlopePct12h != null && Number.isFinite(snap12h.ema12_1hSlopePct12h)) {
+        row.ema20_15mSlopePct7dAt12h = snap12h.ema12_1hSlopePct12h;
       }
-      if (snap12h.priceVsEma20_15mPct != null && Number.isFinite(snap12h.priceVsEma20_15mPct)) {
-        row.priceVsEma20_15mPctAt12h = snap12h.priceVsEma20_15mPct;
+      if (snap12h.priceVsEma12_1hPct != null && Number.isFinite(snap12h.priceVsEma12_1hPct)) {
+        row.priceVsEma20_15mPctAt12h = snap12h.priceVsEma12_1hPct;
       }
       row.ema20_15mAt12hV = STATS_EMA20_15M_AT12H_VERSION;
       updated += 1;

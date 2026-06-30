@@ -1,5 +1,6 @@
 import {
   formatEma12_1hHoldLine,
+  EMA12_1H_HOLD_SLOPE_LABEL,
   resolveAutoTradeHoldCheckpoint,
   resolveAutoTradeHoldExtendIfRed,
   resolveAutoTradeHoldExtendRedHours,
@@ -55,10 +56,7 @@ import {
   type ReversalAutoTradeActive,
 } from "./reversalAutoTradeStateStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
-import {
-  fetchSymbolEmaSlopePctTf,
-  STATS_EMA1H_SLOPE_LOOKBACK_BARS,
-} from "./statsEmaSlope";
+import { fetchEma12_1hHoldSlopePct } from "./statsEmaSlope";
 
 function shortContractLabel(contractSymbol: string): string {
   const s = contractSymbol.replace(/_USDT$/i, "").trim();
@@ -148,7 +146,7 @@ async function handleMaxHoldForceClose(
     phase === 2
       ? `⏰ ครบจังหวะ 2 (${holdHours} ชม. รวม) → ปิดทั้งหมด (force)`
       : ema12_1hSlopePct7d !== undefined
-        ? `⏰ ครบจังหวะ 1 (${holdHours} ชม.) · EMA12∠1h ผิดฝั่ง → ปิดทั้งหมด (force)`
+        ? `⏰ ครบจังหวะ 1 (${holdHours} ชม.) · ${EMA12_1H_HOLD_SLOPE_LABEL} ผิดฝั่ง → ปิดทั้งหมด (force)`
         : `⏰ ครบจังหวะ 1 (${holdHours} ชม.) → ปิดทั้งหมด (force)`;
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
@@ -584,11 +582,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
         let ema12_1hSlopePct7d: number | null = null;
         if (ageMs >= p1Ms - 3600_000 || a.holdExtendedForRed === true) {
           try {
-            ema12_1hSlopePct7d = await fetchSymbolEmaSlopePctTf(
-              a.binanceSymbol,
-              "1h",
-              STATS_EMA1H_SLOPE_LOOKBACK_BARS,
-            );
+            ema12_1hSlopePct7d = await fetchEma12_1hHoldSlopePct(a.binanceSymbol);
           } catch (e) {
             console.error("[reversalTpSlTick] ema12 1h slope", a.binanceSymbol, e);
           }
@@ -608,7 +602,7 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
           state = withReversalHoldExtendedForRed(state, userId, a.contractSymbol, a.side);
           await notifyLines(userId, [
             "Koji — Reversal TP/SL (MEXC)",
-            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) · EMA12∠1h ข้างเรา → ขยายอีก ${holdCheckpoint.extendRedHours} ชม.`,
+            `⏳ ครบจังหวะ 1 (${holdCheckpoint.phase1Hours} ชม.) · ${EMA12_1H_HOLD_SLOPE_LABEL} ข้างเรา → ขยายอีก ${holdCheckpoint.extendRedHours} ชม.`,
             `[${shortContractLabel(a.contractSymbol)}]/USDT (${a.side.toUpperCase()})`,
             `Entry: ${fmtPrice(a.mexcAvgEntryPrice)} · Mark: ${fmtPrice(mark)} · เคลื่อน ${drop >= 0 ? "+" : ""}${drop.toFixed(2)}%`,
             formatEma12_1hHoldLine(a.side, ema12_1hSlopePct7d),

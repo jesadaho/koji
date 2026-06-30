@@ -35,10 +35,7 @@ import {
 } from "./snowballAutoTradeStateStore";
 import { loadTradingViewMexcSettingsFullMap } from "./tradingViewCloseSettingsStore";
 import { notifyTradingViewWebhookTelegram } from "./tradingViewWebhookTelegramNotify";
-import {
-  fetchSymbolEmaSlopePctTf,
-  STATS_EMA1H_SLOPE_LOOKBACK_BARS,
-} from "./statsEmaSlope";
+import { fetchEma12_1hHoldSlopePct } from "./statsEmaSlope";
 
 const TG_USER_RE = /^tg:\d+$/;
 
@@ -353,11 +350,7 @@ export async function runAutoOpenMaxHoldSafetyTick(nowMs: number): Promise<numbe
         const ageMs = nowMs - hold.openedAtMs;
         if (ageMs >= p1Ms - 3600_000 || hold.holdExtendedForRed) {
           try {
-            ema12_1hSlopePct7d = await fetchSymbolEmaSlopePctTf(
-              bot.active.binanceSymbol,
-              "1h",
-              STATS_EMA1H_SLOPE_LOOKBACK_BARS,
-            );
+            ema12_1hSlopePct7d = await fetchEma12_1hHoldSlopePct(bot.active.binanceSymbol);
           } catch (e) {
             console.error("[autoOpenMaxHoldSafety] ema12 1h", bot.active.binanceSymbol, e);
             ema12_1hSlopePct7d = null;

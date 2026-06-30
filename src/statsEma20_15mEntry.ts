@@ -17,11 +17,11 @@ export const STATS_EMA15M_SLOPE_LOOKBACK_BARS = 672;
 
 export const STATS_EMA20_15M_ENTRY_VERSION = 1;
 
-/** EMA20@15m slope + dist ณ checkpoint 8 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) */
-export const STATS_EMA20_15M_AT8H_VERSION = 1;
+/** EMA12@1h slope 12ชม. + EMA12Δ1h ณ checkpoint 8 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) · v2 เปลี่ยนจาก EMA20@15m 7d */
+export const STATS_EMA20_15M_AT8H_VERSION = 2;
 
-/** EMA20@15m slope + dist ณ checkpoint 12 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) */
-export const STATS_EMA20_15M_AT12H_VERSION = 1;
+/** EMA12@1h slope 12ชม. + EMA12Δ1h ณ checkpoint 12 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) · v2 เปลี่ยนจาก EMA20@15m 7d */
+export const STATS_EMA20_15M_AT12H_VERSION = 2;
 
 const BAR_DUR_15M_SEC = 15 * 60;
 const LIVE_ALERT_MAX_AGE_MS = 10 * 60_000;

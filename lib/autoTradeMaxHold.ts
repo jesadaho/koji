@@ -97,7 +97,9 @@ export type AutoTradeHoldCheckpoint =
   | { action: "extend_red"; phase1Hours: number; extendRedHours: number }
   | { action: "force_close"; holdHours: number; phase: 1 | 2 };
 
-/** EMA12∠1h slope % — LONG เอียงขึ้น = ข้างเรา · SHORT เอียงลง = ข้างเรา */
+export const EMA12_1H_HOLD_SLOPE_LABEL = "EMA12∠1h (12ชม.)";
+
+/** EMA12∠1h slope % ย้อน 12 ชม. — LONG เอียงขึ้น = ข้างเรา · SHORT เอียงลง = ข้างเรา */
 export function ema12_1hSlopeOnOurSide(
   side: "long" | "short",
   ema12_1hSlopePct7d: number | null | undefined,
@@ -118,13 +120,13 @@ export function formatEma12_1hHoldLine(
 ): string {
   const pct = formatEma12_1hSlopePct(ema12_1hSlopePct7d);
   const onSide = ema12_1hSlopeOnOurSide(side, ema12_1hSlopePct7d);
-  if (onSide === true) return `EMA12∠1h: ${pct} · ข้างเรา`;
-  if (onSide === false) return `EMA12∠1h: ${pct} · ผิดฝั่ง`;
-  return `EMA12∠1h: ${pct}`;
+  if (onSide === true) return `${EMA12_1H_HOLD_SLOPE_LABEL}: ${pct} · ข้างเรา`;
+  if (onSide === false) return `${EMA12_1H_HOLD_SLOPE_LABEL}: ${pct} · ผิดฝั่ง`;
+  return `${EMA12_1H_HOLD_SLOPE_LABEL}: ${pct}`;
 }
 
 /**
- * จังหวะ 1 = phase1Hours · option เปิด + EMA12∠1h ข้างเรา → ขยายอีก extendRedHours (default = phase1)
+ * จังหวะ 1 = phase1Hours · option เปิด + EMA12∠1h (12ชม.) ข้างเรา → ขยายอีก extendRedHours (default = phase1)
  * markPnlPct = legacy fallback เมื่อไม่ส่ง ema12_1hSlopePct7d
  */
 export function resolveAutoTradeHoldCheckpoint(input: {
