@@ -151,6 +151,7 @@ function normalizeObserveReason(raw: string | undefined): ReversalObserveReason 
     raw === "r_bar_range" ||
     raw === "neutral_matrix" ||
     raw === "strong_trend_matrix" ||
+    raw === "instant_pump" ||
     raw === "lower_wick_long" ||
     raw === "atr14d_high"
   ) {

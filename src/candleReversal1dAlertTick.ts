@@ -749,6 +749,7 @@ async function notifyResults(
         wickRatio: sig.wickRatio,
         lowerWickRatio: sig.lowerWickRatio,
         atrPct14d,
+        openInterestChg24hPct: mktSnap.openInterestChg24hPct,
       });
       const observeReason = reversalResolveObserveReason({
         signalBarTf: sig.tf,
@@ -765,6 +766,7 @@ async function notifyResults(
         wickRatio: sig.wickRatio,
         lowerWickRatio: sig.lowerWickRatio,
         atrPct14d,
+        openInterestChg24hPct: mktSnap.openInterestChg24hPct,
       });
 
       if (isObserve) {

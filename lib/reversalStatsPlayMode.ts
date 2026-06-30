@@ -3,9 +3,11 @@ import type {
   CandleReversalTradeSide,
 } from "@/lib/candleReversalStatsClient";
 import {
+  REVERSAL_INSTANT_PUMP_MATRIX_CRITERIA,
   REVERSAL_NEUTRAL_MATRIX_CRITERIA,
   REVERSAL_STRONG_TREND_MATRIX_CRITERIA,
   REVERSAL_WEAK_TREND_MATRIX_CRITERIA,
+  reversalInstantPumpPass,
   reversalRowMatchesNeutralMatrix,
   reversalRowMatchesStrongTrendMatrix,
   reversalWeakTrendPass,
@@ -19,6 +21,7 @@ export type ReversalObserveReason =
   | "r_bar_range"
   | "neutral_matrix"
   | "strong_trend_matrix"
+  | "instant_pump"
   | "lower_wick_long"
   | "atr14d_high";
 
@@ -46,6 +49,7 @@ export const REVERSAL_OBSERVE_OR_CRITERIA_SUMMARY = [
   REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA,
   `Neutral: ${REVERSAL_NEUTRAL_MATRIX_CRITERIA}`,
   `Strong Trend: ${REVERSAL_STRONG_TREND_MATRIX_CRITERIA}`,
+  `Instant Pump: ${REVERSAL_INSTANT_PUMP_MATRIX_CRITERIA}`,
   REVERSAL_OBSERVE_LOWER_WICK_LONG_CRITERIA,
   REVERSAL_OBSERVE_ATR14D_CRITERIA,
 ].join(REVERSAL_OBSERVE_CRITERIA_OR_JOIN);
@@ -57,8 +61,9 @@ export const REVERSAL_OBSERVE_CRITERIA_SUMMARY = REVERSAL_OBSERVE_OR_CRITERIA_SU
  * Bump เมื่อเปลี่ยนเกณฑ์ Observe — backfill ตารางสถิติ re-sync mark/unmark แถวที่ observeV ไม่ตรง
  * v2: ไส้ล่าง > 45% (ไม่ใช่แค่ > บน) · sync ถอน observe ที่ไม่ผ่านแล้ว
  * v3: Strong Trend matrix (EMA20∠4h 40–300% · EMA20Δ4h >20%)
+ * v4: Instant Pump matrix
  */
-export const REVERSAL_OBSERVE_CRITERIA_V = 3;
+export const REVERSAL_OBSERVE_CRITERIA_V = 4;
 
 export type ReversalObserveEvaluateInput = {
   signalBarTf?: CandleReversalSignalBarTf | null;
@@ -73,6 +78,7 @@ export type ReversalObserveEvaluateInput = {
   wickRatioPct?: number | null;
   lowerWickRatioPct?: number | null;
   atrPct14d?: number | null;
+  openInterestChg24hPct?: number | null;
 } & ReversalLongCandidateRowSlice;
 
 export function reversalShort1hIsObserveSignal(input: {
@@ -211,6 +217,13 @@ export function reversalStrongTrendMatrixIsObserveSignal(
   return reversalRowMatchesStrongTrendMatrix(row);
 }
 
+/** Instant Pump matrix — ปั๊มเร็ว OI เข้า · เทรนด์กำลังเร่ง */
+export function reversalInstantPumpIsObserveSignal(
+  row: Parameters<typeof reversalInstantPumpPass>[0],
+): boolean {
+  return reversalInstantPumpPass(row);
+}
+
 /** Short + ATR%14D สูง — volatility สูงเกินเล่น (ไม่ต้องทิศแนะนำ Long) */
 export function reversalShortAtr14dHighIsObserveSignal(input: {
   tradeSide?: CandleReversalTradeSide | null;
@@ -253,9 +266,20 @@ function reversalObserveOrCriterionPass(input: ReversalObserveEvaluateInput): bo
   ) {
     return true;
   }
-  return reversalStrongTrendMatrixIsObserveSignal({
-    ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
+  if (
+    reversalStrongTrendMatrixIsObserveSignal({
+      ema20_4hSlopePct7d: input.ema20_4hSlopePct7d,
+      priceVsEma20_4hPct: input.priceVsEma20_4hPct,
+    })
+  ) {
+    return true;
+  }
+  return reversalInstantPumpIsObserveSignal({
+    openInterestChg24hPct: input.openInterestChg24hPct,
+    trendGainPct: input.trendGainPct,
     priceVsEma20_4hPct: input.priceVsEma20_4hPct,
+    signalVolVsSma: input.signalVolVsSma,
+    atrPct14d: input.atrPct14d,
   });
 }
 
@@ -304,6 +328,17 @@ export function reversalResolveObserveReasonFromMetrics(
     })
   ) {
     return "strong_trend_matrix";
+  }
+  if (
+    reversalInstantPumpIsObserveSignal({
+      openInterestChg24hPct: input.openInterestChg24hPct,
+      trendGainPct: input.trendGainPct,
+      priceVsEma20_4hPct: input.priceVsEma20_4hPct,
+      signalVolVsSma: input.signalVolVsSma,
+      atrPct14d: input.atrPct14d,
+    })
+  ) {
+    return "instant_pump";
   }
   return undefined;
 }
@@ -380,6 +415,9 @@ export function reversalStatsObserveBadgeTitle(row: {
   if (reason === "strong_trend_matrix") {
     return `Observe — Strong Trend: ${REVERSAL_STRONG_TREND_MATRIX_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
+  if (reason === "instant_pump") {
+    return `Observe — Instant Pump: ${REVERSAL_INSTANT_PUMP_MATRIX_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
+  }
   if (reason === "r_bar_range") {
     return `Observe — ${REVERSAL_OBSERVE_R_BAR_RANGE_CRITERIA} — เก็บสถิติอย่างเดียว ไม่เล่น · ไม่ส่ง Telegram`;
   }
@@ -415,6 +453,7 @@ export function reversalStatsPlayModeLabel(row: {
   if (reason === "lower_wick_long") return "observe:long_wick";
   if (reason === "neutral_matrix") return "observe:neutral";
   if (reason === "strong_trend_matrix") return "observe:strong_trend";
+  if (reason === "instant_pump") return "observe:instant_pump";
   if (reason === "r_bar_range") return "observe:r_low";
   if (reason === "atr14d_high") return "observe:atr14d";
   return "observe";
