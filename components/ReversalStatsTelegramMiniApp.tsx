@@ -1185,7 +1185,7 @@ function ReversalStatsSection({
                 <SortTh
                   label="EMA touch"
                   sortKey="ema20_15mTouch"
-                  title="แตะ EMA20@15m ภายใน 8 ชม. · ⏳ = หมดอายุ limit"
+                  title="แตะ EMA20@15m ภายใน 8 ชม. · แสดงกี่ชม.หลังแจ้ง · ⏳ = หมดอายุ limit"
                   activeSort={sort}
                   onSort={onSortColumn}
                 />

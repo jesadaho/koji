@@ -2317,7 +2317,6 @@ export default function SettingsTelegramMiniApp() {
             <strong>12 ชม.</strong>: ROI &lt; 0 + EMA20∠1h &gt; 0 → ปิดทันที
             {revTp12hCloseEnabled ? "" : " (ปิดใช้งาน)"}
           </li>
-          <li><strong>24 ชม.</strong>: ROI &lt; 3% + EMA20∠1h &gt; 0 → ปิดทันที</li>
           <li><strong>24 ชม.</strong>: ROI &gt; 3% + EMA20∠1h &lt; 0 → ถือต่อ + SL@entry (offset <code>{revSlEntryOffsetPct.trim() || "0"}%</code>)</li>
           <li><strong>24–48 ชม.</strong>: แตะ SL@entry → ออก ~0%</li>
           <li><strong>จังหวะ 1</strong>: ครบ {revMaxHoldHours.trim() || "48"} ชม. → ดู EMA12∠1h (12ชม.) · ข้างเรา → ขยายจังหวะ 2 · ผิดฝั่ง → ปิด force</li>

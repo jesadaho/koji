@@ -748,15 +748,46 @@ export function candleReversalPriceVsEma20_15mLabel(
   return statsEmaSlopePctLabel(pct);
 }
 
-/** ⏳ = ครบ 8 ชม. แล้วยังไม่แตะ EMA20@15m */
+/** ชั่วโมงจากแจ้งถึงแตะ EMA20@15m — null ถ้ายังไม่แตะหรือไม่มี timestamp */
+export function candleReversalEntryEma20_15mTouchHoursAfterAlert(
+  row: Pick<
+    CandleReversalStatsRow,
+    "entryEma20_15mTouchedWithin8h" | "entryEma20_15mTouchedAtMs" | "alertedAtMs"
+  >,
+): number | null {
+  if (row.entryEma20_15mTouchedWithin8h !== true) return null;
+  const touchedAt = row.entryEma20_15mTouchedAtMs;
+  const alertedAt = row.alertedAtMs;
+  if (touchedAt == null || !Number.isFinite(touchedAt)) return null;
+  if (!Number.isFinite(alertedAt) || alertedAt <= 0) return null;
+  const hours = (touchedAt - alertedAt) / 3_600_000;
+  if (!Number.isFinite(hours) || hours < 0) return null;
+  return hours;
+}
+
+export function candleReversalEntryEma20_15mTouchHoursLabel(hours: number | null | undefined): string {
+  if (hours == null || !Number.isFinite(hours)) return "—";
+  if (hours < 0.05) return "0ชม.";
+  if (hours < 10) return `${hours.toFixed(1)}ชม.`;
+  return `${hours.toFixed(0)}ชม.`;
+}
+
+/** ⏳ = ครบ 8 ชม. แล้วยังไม่แตะ · แตะแล้ว = กี่ชม. หลังแจ้ง */
 export function candleReversalEntryEma20_15mTouchCell(
   row: Pick<
     CandleReversalStatsRow,
-    "entryEma20_15mTouchedWithin8h" | "entryEma20_15m" | "alertedAtMs"
+    | "entryEma20_15mTouchedWithin8h"
+    | "entryEma20_15mTouchedAtMs"
+    | "entryEma20_15m"
+    | "alertedAtMs"
   >,
   nowMs = Date.now(),
 ): string {
-  if (row.entryEma20_15mTouchedWithin8h === true) return "—";
+  if (row.entryEma20_15mTouchedWithin8h === true) {
+    const hours = candleReversalEntryEma20_15mTouchHoursAfterAlert(row);
+    if (hours != null) return candleReversalEntryEma20_15mTouchHoursLabel(hours);
+    return "แตะ";
+  }
   if (row.entryEma20_15mTouchedWithin8h === false) return "⏳";
   if (
     row.entryEma20_15m != null &&
@@ -779,6 +810,13 @@ export function candleReversalEntryEma20_15mTouchTitle(
   >,
 ): string {
   if (row.entryEma20_15mTouchedWithin8h === true) {
+    const hours = candleReversalEntryEma20_15mTouchHoursAfterAlert(row);
+    const hoursLine =
+      hours != null
+        ? hours < 0.05
+          ? "แตะทันที ณแจ้ง (เหนือ EMA20@15m · market)"
+          : `แตะภายใน ${candleReversalEntryEma20_15mTouchHoursLabel(hours)} หลังแจ้ง`
+        : "แตะ EMA20@15m แล้ว";
     if (row.entryEma20_15mTouchedAtMs != null && Number.isFinite(row.entryEma20_15mTouchedAtMs)) {
       try {
         const t = new Date(row.entryEma20_15mTouchedAtMs).toLocaleString("th-TH", {
@@ -786,12 +824,12 @@ export function candleReversalEntryEma20_15mTouchTitle(
           dateStyle: "short",
           timeStyle: "short",
         });
-        return `แตะ EMA20@15m แล้ว · ${t} (BKK)`;
+        return `${hoursLine} · ${t} (BKK)`;
       } catch {
-        return "แตะ EMA20@15m แล้ว";
+        return hoursLine;
       }
     }
-    return "แตะ EMA20@15m แล้ว (market ณแจ้ง หรือ limit fill)";
+    return hoursLine;
   }
   if (row.entryEma20_15mTouchedWithin8h === false) {
     return "ครบ 8 ชม. แล้วยังไม่แตะ EMA20@15m — limit หมดอายุ";

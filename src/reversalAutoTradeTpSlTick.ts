@@ -18,7 +18,6 @@ import {
 import {
   reversalTpStrategyLive12hShouldClose,
   reversalTpStrategyLive24hShouldArmBe,
-  reversalTpStrategyLive24hShouldClose,
   reversalTpStrategyResolvedEma20_1hSlope,
 } from "@/lib/reversalTpStrategy";
 import {
@@ -180,30 +179,6 @@ async function handleReversal12hStrategyClose(ctx: TpSlContext): Promise<{ close
   await notifyLines(userId, [
     "Koji — Reversal TP/SL (MEXC)",
     `⏰ ครบ 12 ชม. — กลยุทธ์ปิดทันที (ติดลบ + EMA20∠1h>0)`,
-    `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
-    `Entry: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${drop.toFixed(2)}%`,
-  ]);
-  return { closed: true };
-}
-
-async function handleReversal24hStrategyClose(ctx: TpSlContext): Promise<{ closed: boolean }> {
-  const { userId, creds, active, markPrice } = ctx;
-  await cancelActiveTpSlPlanOrders(creds, active);
-  const r = await closeAllOpenForSymbol(creds, active.contractSymbol);
-  const drop = pricePctDrop(active.side, active.mexcAvgEntryPrice, markPrice);
-  if (!r.success) {
-    await notifyLines(userId, [
-      "Koji — Reversal TP/SL (MEXC)",
-      "❌ ครบ 24 ชม. — กลยุทธ์สั่งปิด แต่ปิดไม่สำเร็จ",
-      `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
-      `Entry: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${drop.toFixed(2)}%`,
-      r.message ? `MEXC: ${r.message}` : "",
-    ]);
-    return { closed: false };
-  }
-  await notifyLines(userId, [
-    "Koji — Reversal TP/SL (MEXC)",
-    `⏰ ครบ 24 ชม. — กลยุทธ์ปิดทันที (ROI < 3% + EMA20∠1h>0)`,
     `[${shortContractLabel(active.contractSymbol)}]/USDT (${active.side.toUpperCase()})`,
     `Entry: ${fmtPrice(active.mexcAvgEntryPrice)} · Mark: ${fmtPrice(markPrice)} · เคลื่อน ${drop.toFixed(2)}%`,
   ]);
@@ -764,19 +739,6 @@ export async function runReversalAutoTradeTpSlTick(nowMs: number): Promise<numbe
 
         if (!a.reversalTp24hChecked && nowMs >= a.openedAtMs + MS_24H) {
           state = withReversalTp24hChecked(state, userId, a.contractSymbol, a.side);
-          if (
-            reversalTpStrategyLive24hShouldClose({
-              dropPct: dropForTp,
-              ema20_1hSlopePct7d: emaSlope,
-            })
-          ) {
-            const r = await handleReversal24hStrategyClose(ctx);
-            if (r.closed) {
-              state = withReversalActiveRemoved(state, userId, a.contractSymbol, a.side);
-              actionsCount += 1;
-            }
-            continue;
-          }
           if (
             reversalTpStrategyLive24hShouldArmBe({
               dropPct: dropForTp,

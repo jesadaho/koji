@@ -112,7 +112,7 @@ const HEADERS = [
   "EMA20 4h dist %",
   "EMA20 15m slope 12h %",
   "EMA20 15m dist % (mark)",
-  "EMA20 15m touch 8h",
+  "EMA touch (ชม.หลังแจ้ง)",
   "EMA1d slope 7d %",
   "BTC EMA20 4h slope 7d %",
   "BTC.D EMA20 4h slope 7d %",

@@ -1,9 +1,8 @@
 /**
- * Reversal TP strategy — SHORT · EMA20∠1h + ROI @ 12h / 24h · ถือต่อถึง 48h
- * 12h: ROI < 0 AND EMA20∠1h > 0 → CLOSE
- * 24h: ROI < 3% AND EMA20∠1h > 0 → CLOSE
+ * Reversal TP strategy — SHORT · EMA @ 12h / 24h · max hold EMA12∠1h (12ชม.)
+ * 12h: ROI < 0 AND EMA20∠1h > 0 → CLOSE (optional)
  * 24h: ROI > 3% AND EMA20∠1h < 0 → HOLD + SL@entry
- * 24h: อื่นๆ → HOLD
+ * max hold จังหวะ 1/2: EMA12∠1h (12ชม.) — ดู autoTradeMaxHold
  * 24–48h: แตะ SL@entry → EXIT ~0%
  * 48h: FORCE CLOSE
  */
@@ -29,13 +28,14 @@ import {
   type StatsTpSlExitReason,
 } from "@/lib/tpSlStrategySimulate";
 
+/** @deprecated ยกเลิกแล้ว — ใช้ EMA12∠1h (12ชม.) ที่จังหวะ max hold แทน */
 export const REVERSAL_TP_STRATEGY_24H_ROI_CLOSE_MAX_EXCLUSIVE = 3;
 export const REVERSAL_TP_STRATEGY_24H_ROI_HOLD_SL_MIN_EXCLUSIVE = 3;
 
 export const REVERSAL_TP_STRATEGY_SUMMARY =
-  "12h ROI<0+EMA20∠1h>0→ปิด · 24h ROI<3%+EMA20∠1h>0→ปิด · 24h ROI>3%+EMA20∠1h<0→ถือ+SL@entry · 24–48h SL@entry→0% · 48h force";
+  "12h ROI<0+EMA20∠1h>0→ปิด · 24h ROI>3%+EMA20∠1h<0→ถือ+SL@entry · max hold EMA12∠1h(12ชม.) · 24–48h SL@entry→0% · 48h force";
 
-export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revEma20_1hv1";
+export const REVERSAL_TP_STRATEGY_CACHE_VERSION = "revEma12Holdv1";
 
 export type ReversalTpStrategySimOptions = {
   /** default true — ปิด @12h เมื่อ ROI<0 + EMA20∠1h>0 */
@@ -52,7 +52,7 @@ export function reversalTp12hCloseEnabled(opts?: ReversalTpStrategySimOptions): 
 
 export function reversalTpStrategySummary(opts?: ReversalTpStrategySimOptions): string {
   const twelve = reversalTp12hCloseEnabled(opts) ? "12h ROI<0+EMA20∠1h>0→ปิด · " : "";
-  return `${twelve}24h ROI<3%+EMA20∠1h>0→ปิด · 24h ROI>3%+EMA20∠1h<0→ถือ+SL@entry · 24–48h SL@entry→0% · 48h force`;
+  return `${twelve}24h ROI>3%+EMA20∠1h<0→ถือ+SL@entry · max hold EMA12∠1h(12ชม.) · 24–48h SL@entry→0% · 48h force`;
 }
 
 export type ReversalTpStrategyProfitBand = "win" | "flat_profit" | "flat_loss" | "loss";
@@ -223,17 +223,12 @@ function isolatedLiquidationPricePct(leverage: number): number {
   return 100 / leverage;
 }
 
-/** ตัดสินใจ @ 24h — null = ไม่มีข้อมูล EMA20∠1h สำหรับเงื่อนไขที่ต้องใช้ */
-export function reversalTpStrategy24hShouldClose(input: {
+/** ยกเลิกแล้ว — max hold ใช้ EMA12∠1h (12ชม.) แทน */
+export function reversalTpStrategy24hShouldClose(_input: {
   roiPct: number;
   ema20_1hSlopePct7d?: number | null;
 }): boolean {
-  const emaPos = reversalTpStrategyEma20_1hPositive(input.ema20_1hSlopePct7d);
-  return (
-    emaPos === true &&
-    Number.isFinite(input.roiPct) &&
-    input.roiPct < REVERSAL_TP_STRATEGY_24H_ROI_CLOSE_MAX_EXCLUSIVE
-  );
+  return false;
 }
 
 export function reversalTpStrategy24hShouldArmSlAtEntry(input: {
@@ -365,14 +360,6 @@ export function simulateReversalTpStrategyProfit(input: {
   }
 
   if (maxHorizon === STATS_STRATEGY_PROFIT_HOLD_24H || horizonLast >= i24End) {
-    if (
-      reversalTpStrategy24hShouldClose({
-        roiPct: input.pct24h,
-        ema20_1hSlopePct7d: input.ema20_1hSlopePct7d,
-      })
-    ) {
-      return { profitPct: input.pct24h, exitReason: "time_24h" };
-    }
     if (
       reversalTpStrategy24hShouldArmSlAtEntry({
         roiPct: input.pct24h,
