@@ -185,6 +185,8 @@ type ReversalAutoTradeApiBundle = {
   shortEntryEmaPeriod?: number | null;
   longEntryMode?: "hybrid_ema" | "market";
   longEntryEmaPeriod?: number | null;
+  /** Hybrid Limit SHORT — หมดอายุ (ชม.) · default 2 */
+  limitExpireHours?: number | null;
 };
 
 type TradingViewMexcResponse = {
@@ -300,6 +302,7 @@ export default function SettingsTelegramMiniApp() {
   const [revShortDynamicLeverage, setRevShortDynamicLeverage] = useState(false);
   const [revShortEntryMode, setRevShortEntryMode] = useState<"hybrid_ema" | "market">("hybrid_ema");
   const [revShortEntryEmaPeriod, setRevShortEntryEmaPeriod] = useState("20");
+  const [revLimitExpireHours, setRevLimitExpireHours] = useState("2");
   const [revLongEntryMode, setRevLongEntryMode] = useState<"hybrid_ema" | "market">("market");
   const [revLongEntryEmaPeriod, setRevLongEntryEmaPeriod] = useState("20");
   const [revSaveErr, setRevSaveErr] = useState("");
@@ -518,6 +521,11 @@ export default function SettingsTelegramMiniApp() {
         Number.isFinite(st.shortEntryEmaPeriod ?? st.entryEmaPeriod)
         ? String(st.shortEntryEmaPeriod ?? st.entryEmaPeriod)
         : "20",
+    );
+    setRevLimitExpireHours(
+      st.limitExpireHours != null && Number.isFinite(st.limitExpireHours)
+        ? String(st.limitExpireHours)
+        : "2",
     );
     setRevLongEntryEmaPeriod(
       (st.longEntryEmaPeriod ?? st.entryEmaPeriod) != null &&
@@ -1200,6 +1208,9 @@ export default function SettingsTelegramMiniApp() {
     const shortEntryEmaPeriodParsed = revShortEntryEmaPeriod.trim()
       ? Number(revShortEntryEmaPeriod.trim())
       : NaN;
+    const limitExpireParsed = revLimitExpireHours.trim()
+      ? Number(revLimitExpireHours.trim())
+      : NaN;
     const longEntryEmaPeriodParsed = revLongEntryEmaPeriod.trim()
       ? Number(revLongEntryEmaPeriod.trim())
       : NaN;
@@ -1207,6 +1218,17 @@ export default function SettingsTelegramMiniApp() {
       Number.isFinite(n) && n >= 5 && n <= 200 && Math.floor(n) === n;
     if (revShortEntryMode === "hybrid_ema" && !validEmaPeriod(shortEntryEmaPeriodParsed)) {
       setRevSaveErr("EMA period (สัญญาณ Short) ต้องเป็นจำนวนเต็ม 5–200");
+      return;
+    }
+    if (
+      revShortEntryMode === "hybrid_ema" &&
+      revLimitExpireHours.trim() &&
+      (!Number.isFinite(limitExpireParsed) ||
+        !Number.isInteger(limitExpireParsed) ||
+        limitExpireParsed < 1 ||
+        limitExpireParsed > 48)
+    ) {
+      setRevSaveErr("หมดอายุ Limit ต้องเป็นจำนวนเต็ม 1–48 ชม.");
       return;
     }
 
@@ -1257,6 +1279,12 @@ export default function SettingsTelegramMiniApp() {
         shortEntryMode: revShortEntryMode,
         shortEntryEmaPeriod:
           revShortEntryMode === "hybrid_ema" ? Math.floor(shortEntryEmaPeriodParsed) : null,
+        limitExpireHours:
+          revShortEntryMode === "hybrid_ema"
+            ? revLimitExpireHours.trim()
+              ? Math.floor(limitExpireParsed!)
+              : 2
+            : null,
         longEntryMode: "market",
         longEntryEmaPeriod: null,
       };
@@ -1846,7 +1874,7 @@ export default function SettingsTelegramMiniApp() {
         </div>
         {snowEntryMode === "hybrid_ema" ? (
           <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.9 }}>
-            ราคา &gt; EMA → Market · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม. · ปลดล็อกวันถ้าไม่ fill)
+            ราคา &gt; EMA → Market · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุตั้งค่าได้ · default 2 ชม. · ปลดล็อกวันถ้าไม่ fill)
           </p>
         ) : null}
 
@@ -2110,7 +2138,7 @@ export default function SettingsTelegramMiniApp() {
           <li>
             <strong>Hybrid (EMA retest)</strong>: EMA20Δ15m 0 ถึง −2% → <strong>Market SHORT</strong> · ผ่าน Matrix{" "}
             <strong>Market Entry</strong> → <strong>Market SHORT</strong> · ราคาเหนือ EMA → <strong>Market SHORT</strong> ·
-            ราคา ≤ EMA → <strong>Limit SHORT</strong> ที่ EMA (หมดอายุ 8 ชม.)
+            ราคา ≤ EMA → <strong>Limit SHORT</strong> ที่ EMA (หมดอายุตั้งค่าได้ · default 2 ชม.)
           </li>
           <li><strong>Market ตลอด</strong>: เปิด Market SHORT ทุกสัญญาณ ไม่ใช้ EMA/Limit</li>
         </ul>
@@ -2232,10 +2260,24 @@ export default function SettingsTelegramMiniApp() {
               />
             </label>
           ) : null}
+          {revShortEntryMode === "hybrid_ema" ? (
+            <label className="sub" style={{ display: "block" }}>
+              หมดอายุ Limit (ชม., default 2)
+              <input
+                type="text"
+                inputMode="numeric"
+                style={{ display: "block", width: "100%", marginTop: "0.25rem" }}
+                autoComplete="off"
+                placeholder="2"
+                value={revLimitExpireHours}
+                onChange={(e) => setRevLimitExpireHours(e.target.value)}
+              />
+            </label>
+          ) : null}
         </div>
         {revShortEntryMode === "hybrid_ema" ? (
           <p className="sub" style={{ marginTop: "0.35rem", opacity: 0.9 }}>
-            Limit ที่ยังไม่ fill จะถูกยกเลิกอัตโนมัติหลัง 8 ชม. และปลดล็อก 1 order/วันเพื่อเปิดซ้ำได้
+            Limit ที่ยังไม่ fill จะถูกยกเลิกอัตโนมัติหลังครบเวลาที่ตั้ง (default 2 ชม.) และปลดล็อก 1 order/วันเพื่อเปิดซ้ำได้
           </p>
         ) : null}
 

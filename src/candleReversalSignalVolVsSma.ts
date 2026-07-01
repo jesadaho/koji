@@ -26,6 +26,23 @@ export function candleReversalVolSmaPeriod(): number {
   return 48;
 }
 
+/** Vol×SMA สั้น — SMA 24 แท่งบน TF สัญญาณ */
+export const CANDLE_REVERSAL_VOL_SMA_PERIOD_24 = 24;
+
+export function candleReversalVolSmaPeriod24(): number {
+  return CANDLE_REVERSAL_VOL_SMA_PERIOD_24;
+}
+
+export function candleReversalSignalVolMetricsAt(
+  pack: BinanceKlinePack,
+  idx: number,
+): { signalVolVsSma: number | null; signalVolVsSma24: number | null } {
+  return {
+    signalVolVsSma: candleReversalSignalVolVsSmaAt(pack, idx),
+    signalVolVsSma24: candleReversalSignalVolVsSmaAt(pack, idx, CANDLE_REVERSAL_VOL_SMA_PERIOD_24),
+  };
+}
+
 /** Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด — คืน null ถ้าคำนวณไม่ได้ */
 export function candleReversalSignalVolVsSmaAt(
   pack: BinanceKlinePack,

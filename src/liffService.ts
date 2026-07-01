@@ -183,8 +183,12 @@ import {
 import type { SnowballAutoTradeGradeKey } from "./tradingViewCloseSettingsStore";
 import { isReversalAutotradeEnabled } from "./reversalAutoTradeExecutor";
 import {
+  REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
+  REVERSAL_LIMIT_EXPIRE_HOURS_MAX,
+  REVERSAL_LIMIT_EXPIRE_HOURS_MIN,
   parseReversalAutoTradeEntryEmaPeriod,
   parseReversalAutoTradeEntryMode,
+  parseReversalAutoTradeLimitExpireHours,
   reversalEntrySettingsFromRow,
 } from "@/lib/reversalAutoTradeEntry";
 import {
@@ -197,7 +201,7 @@ const SNOWBALL_AUTO_TRADE_LIFF_NOTE_TH =
 
 /** คำอธิบายใน Mini App สำหรับ Reversal auto-open — short เท่านั้น */
 const REVERSAL_AUTO_TRADE_LIFF_NOTE_TH =
-  `Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — สัญญาณ Short ตามแผน Short · ตัวเลือก Long → SHORT (fade) สำหรับ Reversal Long 1H — gate Quality Signal: Short — ${REVERSAL_QUALITY_SIGNAL_CRITERIA} · Long 1H — ${REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA} — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry: Hybrid (EMA retest บน 15m, default EMA20) ราคา > EMA → Market, ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม. แล้วยกเลิก+ปลดล็อกวัน) · หรือ Market ตลอด — กลยุทธ์ TP: ${reversalTpStrategySummary()} · 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0`;
+  `Reversal auto-open สั่ง SHORT บน MEXC หลัง Reversal alert ส่งสำเร็จ — สัญญาณ Short ตามแผน Short · ตัวเลือก Long → SHORT (fade) สำหรับ Reversal Long 1H — gate Quality Signal: Short — ${REVERSAL_QUALITY_SIGNAL_CRITERIA} · Long 1H — ${REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA} — ถ้าเปิดวันเสาร์: ทุกสัญญาณในวันเสาร์ (เวลาไทย) ข้าม gate — entry: Hybrid (EMA retest บน 15m, default EMA20) ราคา > EMA → Market, ≤ EMA → Limit ที่ EMA (หมดอายุตั้งค่าได้ default ${REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT} ชม. แล้วยกเลิก+ปลดล็อกวัน) · หรือ Market ตลอด — กลยุทธ์ TP: ${reversalTpStrategySummary()} · 1 order/เหรียญ/วัน (BKK) · REVERSAL_AUTOTRADE_ENABLED=0`;
 
 export function getLiffConfig() {
   return {
@@ -1488,6 +1492,7 @@ export function tradingViewReversalAutoTradePayloadFromRow(
     longSlAtEntryAfter24hIfGreenEnabled:
       row.reversalAutoTradeLongSlAtEntryAfter24hIfGreenEnabled ?? null,
     longTp12hCloseEnabled: row.reversalAutoTradeLongTp12hCloseEnabled ?? null,
+    limitExpireHours: row.reversalAutoTradeLimitExpireHours ?? REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
     statsPlayShortEnabled: reversalStatsPlaySidesFromSettings(row).short,
     statsPlayLongEnabled: reversalStatsPlaySidesFromSettings(row).long,
     gateQualitySignal: row.reversalAutoTradeGateQualitySignal !== false,
@@ -2121,6 +2126,7 @@ function parseReversalAutoTradeNested(
   const mTp1Partial = numOrEmpty("tp1PartialPct");
   const mTp2 = numOrEmpty("tp2PricePct");
   const mMaxH = numOrEmpty("maxHoldHours");
+  const mLimitExp = numOrEmpty("limitExpireHours");
   const mExtH = numOrEmpty("holdExtendRedHours");
   const mSlArm = numOrEmpty("slArmRoiPct");
   const mSlOff = numOrEmpty("slEntryOffsetPct");
@@ -2139,6 +2145,7 @@ function parseReversalAutoTradeNested(
     mTp1Partial.err ||
     mTp2.err ||
     mMaxH.err ||
+    mLimitExp.err ||
     mExtH.err ||
     mSlArm.err ||
     mSlOff.err ||
@@ -2179,6 +2186,16 @@ function parseReversalAutoTradeNested(
   }
   if (typeof mMaxH.v === "number" && !(mMaxH.v > 0 && mMaxH.v <= 24 * 30)) {
     return { ok: false, error: "reversal_max_hold_hours_out_of_range" };
+  }
+  if (
+    typeof mLimitExp.v === "number" &&
+    !(
+      Number.isInteger(mLimitExp.v) &&
+      mLimitExp.v >= REVERSAL_LIMIT_EXPIRE_HOURS_MIN &&
+      mLimitExp.v <= REVERSAL_LIMIT_EXPIRE_HOURS_MAX
+    )
+  ) {
+    return { ok: false, error: "reversal_limit_expire_hours_out_of_range" };
   }
   if (
     typeof mTp1.v === "number" &&
@@ -2308,6 +2325,10 @@ function parseReversalAutoTradeNested(
     reversalAutoTradeTp2PricePct: mTp2.v as number | null | undefined,
     reversalAutoTradeMaxHoldHours:
       mMaxH.v == null ? (mMaxH.v as number | null | undefined) : (Math.floor(mMaxH.v) as number),
+    reversalAutoTradeLimitExpireHours:
+      mLimitExp.v == null
+        ? (mLimitExp.v as number | null | undefined)
+        : (parseReversalAutoTradeLimitExpireHours(mLimitExp.v) as number),
     reversalAutoTradeHoldExtendRedHours:
       mExtH.v == null ? (mExtH.v as number | null | undefined) : (Math.floor(mExtH.v) as number),
     reversalAutoTradeSlArmRoiPct: mSlArm.v as number | null | undefined,

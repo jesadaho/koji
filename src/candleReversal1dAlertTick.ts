@@ -68,7 +68,9 @@ import {
 } from "./candleReversalDetect";
 import { fetchGreenDaysBeforeReversalSignal } from "./candleReversalGreenDayStreak";
 import { BKK_DAY_TZ_OFFSET_SEC } from "./greenDayStreak";
-import { candleReversalSignalVolVsSmaAt } from "./candleReversalSignalVolVsSma";
+import {
+  candleReversalSignalVolMetricsAt,
+} from "./candleReversalSignalVolVsSma";
 import { snowballVolatilitySnapshotAt } from "./snowballVolatilityMetrics";
 import { fetchReversalAlertMarketSnapshot } from "./reversalMarketContext";
 import { runReversalAutoTradeAfterReversalAlert } from "./reversalAutoTradeExecutor";
@@ -301,6 +303,7 @@ type EvalRow = {
   rangeScore: number | null;
   wickScore: number | null;
   signalVolVsSma: number | null;
+  signalVolVsSma24: number | null;
   diag: {
     closedBarOpenSec: number | null;
     skippedBars: boolean;
@@ -329,6 +332,7 @@ function evalSymbolTf(
     rangeScore: null as number | null,
     wickScore: null as number | null,
     signalVolVsSma: null as number | null,
+    signalVolVsSma24: null as number | null,
   };
   const emptyDiag = {
     closedBarOpenSec: null as number | null,
@@ -365,7 +369,7 @@ function evalSymbolTf(
   }
 
   const vol = snowballVolatilitySnapshotAt(pack.high, pack.low, pack.close, pack.open, i);
-  const signalVolVsSma = candleReversalSignalVolVsSmaAt(pack, i);
+  const { signalVolVsSma, signalVolVsSma24 } = candleReversalSignalVolMetricsAt(pack, i);
   const barOpen = pack.timeSec[i]!;
   const diag = { ...emptyDiag, closedBarOpenSec: barOpen };
 
@@ -444,6 +448,7 @@ function evalSymbolTf(
       rangeScore: vol.rangeScore,
       wickScore: vol.wickScore,
       signalVolVsSma,
+      signalVolVsSma24,
       diag,
     };
   }
@@ -456,6 +461,7 @@ function evalSymbolTf(
     rangeScore: vol.rangeScore,
     wickScore: vol.wickScore,
     signalVolVsSma,
+    signalVolVsSma24,
     diag,
   };
 }
@@ -473,6 +479,7 @@ function evalSymbolTfLong1h(
     rangeScore: null as number | null,
     wickScore: null as number | null,
     signalVolVsSma: null as number | null,
+    signalVolVsSma24: null as number | null,
   };
   const emptyDiag = {
     closedBarOpenSec: null as number | null,
@@ -498,7 +505,7 @@ function evalSymbolTfLong1h(
   }
 
   const vol = snowballVolatilitySnapshotAt(pack.high, pack.low, pack.close, pack.open, i);
-  const signalVolVsSma = candleReversalSignalVolVsSmaAt(pack, i);
+  const { signalVolVsSma, signalVolVsSma24 } = candleReversalSignalVolMetricsAt(pack, i);
   const barOpen = pack.timeSec[i]!;
   const diag = { ...emptyDiag, closedBarOpenSec: barOpen };
 
@@ -516,6 +523,7 @@ function evalSymbolTfLong1h(
         rangeScore: vol.rangeScore,
         wickScore: vol.wickScore,
         signalVolVsSma,
+        signalVolVsSma24,
         diag,
       };
     }
@@ -528,6 +536,7 @@ function evalSymbolTfLong1h(
       rangeScore: vol.rangeScore,
       wickScore: vol.wickScore,
       signalVolVsSma,
+      signalVolVsSma24,
       diag,
     };
   }
@@ -540,6 +549,7 @@ function evalSymbolTfLong1h(
     rangeScore: vol.rangeScore,
     wickScore: vol.wickScore,
     signalVolVsSma,
+    signalVolVsSma24,
     diag,
   };
 }
@@ -725,6 +735,7 @@ async function notifyResults(
         barRangePctSignal,
         volRankInLookback: sig.volRankInLookback ?? null,
         signalVolVsSma: row.evals.signalVolVsSma,
+        signalVolVsSma24: row.evals.signalVolVsSma24,
         rangeScore: row.evals.rangeScore,
         wickScore: row.evals.wickScore,
         afterInvertedDoji: sig.afterInvertedDoji,

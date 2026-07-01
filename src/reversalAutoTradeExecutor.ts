@@ -53,10 +53,11 @@ import {
 import { bkkIsSaturdayNow } from "./snowballAutoTradeStateStore";
 import {
   REVERSAL_ENTRY_EMA_PERIOD_DEFAULT,
-  REVERSAL_LIMIT_EXPIRE_MS,
   reversalEma15mLabel,
   reversalEntrySettingsFromRow,
   reversalEntryUseMarket,
+  reversalLimitExpireHoursFromRow,
+  reversalLimitExpireMsFromRow,
   type ReversalAutoTradeEntryMode,
   type ReversalShortHybridMarketBypass,
 } from "@/lib/reversalAutoTradeEntry";
@@ -496,7 +497,7 @@ function logReversalAutoOpen(
  * - gate Quality Signal: Short — ดู REVERSAL_QUALITY_SIGNAL_CRITERIA · Long 1H — ดู REVERSAL_QUALITY_SIGNAL_LONG_1H_CRITERIA
  * - entry Short: Hybrid (EMA 15m) หรือ Market · Long (fade + ทิศที่เล่น Long): Market ตลอด
  *   - Hybrid Short: EMA20Δ15m 0 ถึง −2% → Market · ผ่าน Matrix Market Entry → Market
- *   - นอกนั้น: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุ 8 ชม.)
+ *   - นอกนั้น: ราคา > EMA → Market SHORT · ราคา ≤ EMA → Limit ที่ EMA (หมดอายุตั้งค่าได้ · default 2 ชม.)
  * - สลับทิศบนเหรียญเดียวกัน: มี SHORT/LONG ค้างบน MEXC แล้วสัญญาณใหม่สวนทิศ → ปิดทันที (market) แล้วเปิดทิศใหม่
  * - TP ใช้ cron tick ปิด market (ไม่วาง plan TP บน MEXC)
  * - 1 order/เหรียญ/วัน (BKK) — ปลดล็อกเมื่อ Limit หมดอายุโดยไม่ fill
@@ -1215,6 +1216,8 @@ export async function runReversalAutoTradeAfterReversalAlert(
         input.rangeScore != null && Number.isFinite(input.rangeScore) ? input.rangeScore : null;
 
       const plan = resolveReversalTpSlPlanFromRow(row, mexcSide);
+      const limitExpireMs = reversalLimitExpireMsFromRow(row);
+      const limitExpireHours = reversalLimitExpireHoursFromRow(row);
       const placedAtMs = Date.now();
       const signalBar8h =
         !openMexcLong && mexcSide === "short"
@@ -1234,7 +1237,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
             binanceSymbol,
             orderId: limitOrderId,
             placedAtMs,
-            expireAtMs: placedAtMs + REVERSAL_LIMIT_EXPIRE_MS,
+            expireAtMs: placedAtMs + limitExpireMs,
             limitPrice: entryEma!,
             leverage: lev,
             referenceEntryPrice: markPrice,
@@ -1353,7 +1356,7 @@ export async function runReversalAutoTradeAfterReversalAlert(
         } else {
           tpSlLines.push(
             `กลยุทธ์ TP/SL: รอ Limit fill ก่อนเริ่ม track · ${reversalTpStrategySummary({ close12hEnabled: plan.tp12hCloseEnabled })}`,
-            `หมดอายุ Limit: ~${fmtExpireBkk(placedAtMs + REVERSAL_LIMIT_EXPIRE_MS)} (8 ชม.) — ไม่ fill จะยกเลิกและปลดล็อกวัน`,
+            `หมดอายุ Limit: ~${fmtExpireBkk(placedAtMs + limitExpireMs)} (${limitExpireHours} ชม.) — ไม่ fill จะยกเลิกและปลดล็อกวัน`,
           );
         }
       }

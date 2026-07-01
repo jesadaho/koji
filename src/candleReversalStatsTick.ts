@@ -43,6 +43,7 @@ import {
 import {
   candleReversalSignalVolVsSmaAt,
   candleReversalVolSmaPeriod,
+  candleReversalVolSmaPeriod24,
 } from "./candleReversalSignalVolVsSma";
 import { backfillAllStatsRowsBtcEmaSlopes, fetchEma12_1hFollowMetricsAtMs } from "./statsEmaSlope";
 import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
@@ -522,14 +523,18 @@ async function backfillDropFrom24hHighToSignalLowPct(rows: CandleReversalStatsRo
 
 async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<number> {
   const period = candleReversalVolSmaPeriod();
+  const period24 = candleReversalVolSmaPeriod24();
   let updated = 0;
   for (const row of rows) {
-    if (row.signalVolVsSma != null && Number.isFinite(row.signalVolVsSma) && row.signalVolVsSma > 0) {
-      continue;
-    }
+    const need48 =
+      row.signalVolVsSma == null || !Number.isFinite(row.signalVolVsSma) || row.signalVolVsSma <= 0;
+    const need24 =
+      row.signalVolVsSma24 == null || !Number.isFinite(row.signalVolVsSma24) || row.signalVolVsSma24 <= 0;
+    if (!need48 && !need24) continue;
     const tf = signalBarTf(row);
     const barDur = signalBarDurationSecByTf(tf);
-    const windowStartSec = row.signalBarOpenSec - (period + 4) * barDur;
+    const maxPeriod = Math.max(period, period24);
+    const windowStartSec = row.signalBarOpenSec - (maxPeriod + 4) * barDur;
     const windowEndSec = row.signalBarOpenSec + barDur;
     try {
       const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
@@ -540,10 +545,22 @@ async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<n
       if (!pack || pack.timeSec.length === 0) continue;
       const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
       if (iSig < 0) continue;
-      const ratio = candleReversalSignalVolVsSmaAt(pack, iSig, period);
-      if (ratio == null || !Number.isFinite(ratio) || ratio <= 0) continue;
-      row.signalVolVsSma = ratio;
-      updated += 1;
+      let rowTouched = false;
+      if (need48) {
+        const ratio = candleReversalSignalVolVsSmaAt(pack, iSig, period);
+        if (ratio != null && Number.isFinite(ratio) && ratio > 0) {
+          row.signalVolVsSma = ratio;
+          rowTouched = true;
+        }
+      }
+      if (need24) {
+        const ratio24 = candleReversalSignalVolVsSmaAt(pack, iSig, period24);
+        if (ratio24 != null && Number.isFinite(ratio24) && ratio24 > 0) {
+          row.signalVolVsSma24 = ratio24;
+          rowTouched = true;
+        }
+      }
+      if (rowTouched) updated += 1;
     } catch (e) {
       console.error("[candleReversalStatsTick] backfill signalVolVsSma", row.symbol, tf, e);
     }

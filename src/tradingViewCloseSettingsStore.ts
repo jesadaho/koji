@@ -3,7 +3,11 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { dirname, join } from "node:path";
 import { cloudGet, cloudSet, useCloudStorage } from "./remoteJsonStore";
 import type { ReversalStatsPlaySide } from "../lib/reversalMatrixFilters.js";
-import type { ReversalAutoTradeEntryMode } from "../lib/reversalAutoTradeEntry.js";
+import {
+  REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
+  parseReversalAutoTradeLimitExpireHours,
+  type ReversalAutoTradeEntryMode,
+} from "../lib/reversalAutoTradeEntry.js";
 import type { SnowballAutoTradeEntryMode } from "../lib/snowballAutoTradeEntry.js";
 import { snowballAutoTradeGradeKeyFromMigratedRawKey } from "./snowballAutoTradeGradeRules";
 
@@ -236,6 +240,8 @@ export type TradingViewMexcUserSettings = {
   reversalAutoTradeShortEntryEmaPeriod?: number;
   reversalAutoTradeLongEntryMode?: ReversalAutoTradeEntryMode;
   reversalAutoTradeLongEntryEmaPeriod?: number;
+  /** Hybrid Limit SHORT — หมดอายุ (ชม.) · default 2 */
+  reversalAutoTradeLimitExpireHours?: number;
 };
 
 /** จากแถว DB — ฟิลด์ orderSide หรือ invert เดิม */
@@ -446,6 +452,7 @@ export type SaveTradingViewMexcInput = {
   reversalAutoTradeShortEntryEmaPeriod?: number | null;
   reversalAutoTradeLongEntryMode?: ReversalAutoTradeEntryMode | null;
   reversalAutoTradeLongEntryEmaPeriod?: number | null;
+  reversalAutoTradeLimitExpireHours?: number | null;
 };
 
 /**
@@ -571,7 +578,8 @@ export async function saveTradingViewMexcSettings(
     input.reversalAutoTradeShortEntryMode !== undefined ||
     input.reversalAutoTradeShortEntryEmaPeriod !== undefined ||
     input.reversalAutoTradeLongEntryMode !== undefined ||
-    input.reversalAutoTradeLongEntryEmaPeriod !== undefined;
+    input.reversalAutoTradeLongEntryEmaPeriod !== undefined ||
+    input.reversalAutoTradeLimitExpireHours !== undefined;
 
   const mergedSparkDirection = preserveSpark
     ? prev?.sparkAutoTradeDirection ?? "both"
@@ -1181,6 +1189,13 @@ export async function saveTradingViewMexcSettings(
           : prev?.reversalAutoTradeLongEntryEmaPeriod ??
             prev?.reversalAutoTradeEntryEmaPeriod ??
             20,
+
+    reversalAutoTradeLimitExpireHours:
+      input.reversalAutoTradeLimitExpireHours === null
+        ? REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT
+        : input.reversalAutoTradeLimitExpireHours !== undefined
+          ? parseReversalAutoTradeLimitExpireHours(input.reversalAutoTradeLimitExpireHours)
+          : prev?.reversalAutoTradeLimitExpireHours ?? REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
 
     reversalAutoTradeEntryMode:
       input.reversalAutoTradeShortEntryMode === null

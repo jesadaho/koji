@@ -253,9 +253,13 @@ export async function runReversalAutoTradeLimitTick(nowMs: number): Promise<numb
             dayKey,
           );
           state = withReversalPlacedUnlocked(state, userId, pending.contractSymbol, dayKey);
+          const expireHours = Math.max(
+            1,
+            Math.round((pending.expireAtMs - pending.placedAtMs) / 3_600_000),
+          );
           await notifyLines(userId, [
             "Koji — Reversal auto-open (MEXC)",
-            "⏱️ Limit SHORT หมดอายุ 8 ชม. — ยกเลิก order บน MEXC แล้ว",
+            `⏱️ Limit SHORT หมดอายุ ${expireHours} ชม. — ยกเลิก order บน MEXC แล้ว`,
             `[${shortContractLabel(pending.contractSymbol)}]/USDT`,
             `Limit ~${fmtPrice(pending.limitPrice)} · หมดอายุ ~${fmtExpireBkk(pending.expireAtMs)}`,
             "ปลดล็อก 1 order/วัน — เปิดซ้ำเหรียญนี้วันนี้ได้อีก",

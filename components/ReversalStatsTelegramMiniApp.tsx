@@ -115,6 +115,7 @@ import {
   type CandleReversalStatsSort,
   type CandleReversalStatsSortKey,
 } from "@/lib/candleReversalStatsClient";
+import { REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT } from "@/lib/reversalAutoTradeEntry";
 import { reversalSignalBarSlHitLabel } from "@/lib/statsSignalBarSl";
 import {
   marketSentimentFngLabel,
@@ -780,7 +781,7 @@ function ReversalStatsSection({
   const extraRankCols = (showHighRank ? 1 : 0) + (showLowRank ? 1 : 0);
   const columnGroupSpans = useMemo(() => {
     const signal = 9 + (showSuggestedSideColumn ? 1 : 0) + 11 + extraRankCols;
-    const bot = 24 + (showSuggestedSideColumn ? 5 : 0);
+    const bot = 25 + (showSuggestedSideColumn ? 5 : 0);
     const ai = showAiColumns ? REVERSAL_CHART_AI_TABLE_COLUMN_COUNT : 0;
     const result =
       3 +
@@ -1185,7 +1186,7 @@ function ReversalStatsSection({
                 <SortTh
                   label="EMA touch"
                   sortKey="ema20_15mTouch"
-                  title="แตะ EMA20@15m ภายใน 8 ชม. · แสดงกี่ชม.หลังแจ้ง · ⏳ = หมดอายุ limit"
+                  title={`แตะ EMA20@15m ภายใน ${REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT} ชม. (default) · แสดงกี่ชม.หลังแจ้ง · ⏳ = หมดอายุ limit`}
                   activeSort={sort}
                   onSort={onSortColumn}
                 />
@@ -1248,9 +1249,16 @@ function ReversalStatsSection({
               onSort={onSortColumn}
             />
             <SortTh
-              label="Vol×SMA"
+              label="Vol×SMA48"
               sortKey="volVsSma"
-              title="Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด"
+              title="Vol แท่งสัญญาณ ÷ SMA(volume) 48 แท่ง ณ แท่งปิด"
+              activeSort={sort}
+              onSort={onSortColumn}
+            />
+            <SortTh
+              label="Vol×SMA24"
+              sortKey="volVsSma24"
+              title="Vol แท่งสัญญาณ ÷ SMA(volume) 24 แท่ง ณ แท่งปิด"
               activeSort={sort}
               onSort={onSortColumn}
             />
@@ -1574,6 +1582,7 @@ function ReversalStatsSection({
                   <td title="ATR(14) 1d ÷ close">{statsAtrPct14dLabel(r.atrPct14d)}</td>
                   <td title="ATR(14) 4h ÷ close">{statsAtrPct4hLabel(r.atrPct4h)}</td>
                   <td>{candleReversalSignalVolVsSmaLabel(r.signalVolVsSma)}</td>
+                  <td>{candleReversalSignalVolVsSmaLabel(r.signalVolVsSma24)}</td>
                     </>
                   ) : null}
                   {showAiCols ? (

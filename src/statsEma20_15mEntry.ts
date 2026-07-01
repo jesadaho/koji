@@ -15,7 +15,7 @@ import {
 /** 12 ชม.บน 15m = 48 แท่ง — EMA20∠15m ณแจ้ง */
 export const STATS_EMA15M_SLOPE_LOOKBACK_BARS = 48;
 
-export const STATS_EMA20_15M_ENTRY_VERSION = 2;
+export const STATS_EMA20_15M_ENTRY_VERSION = 3;
 
 /** EMA12@1h slope 12ชม. + EMA12Δ1h ณ checkpoint 8 ชม. หลังปิดแท่งสัญญาณ (1H follow-up) · v2 เปลี่ยนจาก EMA20@15m 7d */
 export const STATS_EMA20_15M_AT8H_VERSION = 2;
@@ -207,7 +207,7 @@ export async function fetchEma20_15mMetricsAtMs(
   return { ema20_15mSlopePct7d, priceVsEma20_15mPct, entryEma20_15m };
 }
 
-/** EMA20@15m slope + mark diff + touch ภายใน 8 ชม. ณ alertedAtMs */
+/** EMA20@15m slope + mark diff + touch ภายใน limit window (default 2 ชม.) ณ alertedAtMs */
 export async function fetchStatsEma20_15mEntryAtMs(
   symbol: string,
   alertedAtMs: number,

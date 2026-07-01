@@ -10,11 +10,19 @@ import { reversalMomentumScore } from "@/lib/reversalMomentumScore";
 import { reversalRiskScore } from "@/lib/reversalRiskScore";
 import type { StrategyProfitByPlanMap } from "@/lib/statsStrategyProfitClient";
 import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
+import {
+  REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
+  REVERSAL_LIMIT_EXPIRE_MS,
+} from "@/lib/reversalAutoTradeEntry";
 import type {
   ReversalChartAiExpectedPath,
   ReversalChartAiMarketCharacter,
   ReversalChartAiPreferredSide,
 } from "@/lib/reversalChartAiAnalysis";
+
+function reversalLimitExpireWindowLabel(): string {
+  return `${REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT} ชม.`;
+}
 
 export type CandleReversalSignalBarTf = "1d" | "1h";
 
@@ -97,7 +105,7 @@ export type CandleReversalStatsRow = {
   priceVsEma20_15mPct?: number | null;
   /** ราคา EMA20@15m ณ alertedAtMs (limit entry) */
   entryEma20_15m?: number | null;
-  /** แตะ EMA20@15m ภายใน 8 ชม. · false = หมดอายุ limit · null = ยังรอ */
+  /** แตะ EMA20@15m ภายใน limit window (default 2 ชม.) · false = หมดอายุ limit · null = ยังรอ */
   entryEma20_15mTouchedWithin8h?: boolean | null;
   /** ms แตะครั้งแรก */
   entryEma20_15mTouchedAtMs?: number | null;
@@ -150,8 +158,10 @@ export type CandleReversalStatsRow = {
   barRangePctSignal?: number | null;
   /** อันดับ volume ในรอบ lookbackBars (1 = สูงสุด) */
   volRankInLookback: number | null;
-  /** Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด */
+  /** Vol แท่งสัญญาณ ÷ SMA(volume) ณ แท่งปิด — default SMA 48 แท่ง */
   signalVolVsSma?: number | null;
+  /** Vol แท่งสัญญาณ ÷ SMA(volume) 24 แท่ง ณ แท่งปิด */
+  signalVolVsSma24?: number | null;
   lookbackBars: number | null;
   rangeScore: number | null;
   wickScore: number | null;
@@ -456,6 +466,7 @@ export type CandleReversalStatsSortKey =
   | "barRangeSignal"
   | "volRank"
   | "volVsSma"
+  | "volVsSma24"
   | "highRank"
   | "lowRank"
   | "range"
@@ -649,6 +660,8 @@ function compareCandleReversalStatsRows(
       return cmpNumNullLast(a.volRankInLookback, b.volRankInLookback);
     case "volVsSma":
       return cmpNumNullLast(a.signalVolVsSma, b.signalVolVsSma);
+    case "volVsSma24":
+      return cmpNumNullLast(a.signalVolVsSma24, b.signalVolVsSma24);
     case "highRank":
       return cmpNumNullLast(a.highRankInLookback, b.highRankInLookback);
     case "lowRank":
@@ -772,7 +785,7 @@ export function candleReversalEntryEma20_15mTouchHoursLabel(hours: number | null
   return `${hours.toFixed(0)}ชม.`;
 }
 
-/** ⏳ = ครบ 8 ชม. แล้วยังไม่แตะ · แตะแล้ว = กี่ชม. หลังแจ้ง */
+/** ⏳ = ครบ limit window แล้วยังไม่แตะ · แตะแล้ว = กี่ชม. หลังแจ้ง */
 export function candleReversalEntryEma20_15mTouchCell(
   row: Pick<
     CandleReversalStatsRow,
@@ -793,7 +806,7 @@ export function candleReversalEntryEma20_15mTouchCell(
     row.entryEma20_15m != null &&
     Number.isFinite(row.alertedAtMs) &&
     row.alertedAtMs > 0 &&
-    nowMs >= row.alertedAtMs + 8 * 3600 * 1000
+    nowMs >= row.alertedAtMs + REVERSAL_LIMIT_EXPIRE_MS
   ) {
     return "⏳";
   }
@@ -832,12 +845,12 @@ export function candleReversalEntryEma20_15mTouchTitle(
     return hoursLine;
   }
   if (row.entryEma20_15mTouchedWithin8h === false) {
-    return "ครบ 8 ชม. แล้วยังไม่แตะ EMA20@15m — limit หมดอายุ";
+    return `ครบ ${reversalLimitExpireWindowLabel()} แล้วยังไม่แตะ EMA20@15m — limit หมดอายุ`;
   }
   if (row.entryEma20_15m != null && Number.isFinite(row.alertedAtMs) && row.alertedAtMs > 0) {
-    return "รอราคาแตะ EMA20@15m ภายใน 8 ชม. หลังแจ้ง";
+    return `รอราคาแตะ EMA20@15m ภายใน ${reversalLimitExpireWindowLabel()} หลังแจ้ง`;
   }
-  return "แตะ EMA20@15m ภายใน 8 ชม. (hybrid entry)";
+  return `แตะ EMA20@15m ภายใน ${reversalLimitExpireWindowLabel()} (hybrid entry)`;
 }
 
 export type ReversalEma20_15mTouchFilter = "all" | "not_touched" | "touched";
@@ -857,9 +870,11 @@ export function reversalEma20_15mTouchFilterLabel(filter: ReversalEma20_15mTouch
 
 export function reversalEma20_15mTouchFilterTitle(filter: ReversalEma20_15mTouchFilter): string {
   if (filter === "not_touched") {
-    return "ครบ 8 ชม. แล้วยังไม่แตะ EMA20@15m (limit หมดอายุ)";
+    return `ครบ ${reversalLimitExpireWindowLabel()} แล้วยังไม่แตะ EMA20@15m (limit หมดอายุ)`;
   }
-  if (filter === "touched") return "แตะ EMA20@15m ภายใน 8 ชม. (market ณแจ้ง หรือ limit fill)";
+  if (filter === "touched") {
+    return `แตะ EMA20@15m ภายใน ${reversalLimitExpireWindowLabel()} (market ณแจ้ง หรือ limit fill)`;
+  }
   return "ทุกสถานะ EMA touch";
 }
 
