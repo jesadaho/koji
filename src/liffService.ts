@@ -186,9 +186,11 @@ import {
   REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
   REVERSAL_LIMIT_EXPIRE_HOURS_MAX,
   REVERSAL_LIMIT_EXPIRE_HOURS_MIN,
+  parseReversalAutoTradeLimitExpireHours,
+} from "@/lib/reversalLimitExpire";
+import {
   parseReversalAutoTradeEntryEmaPeriod,
   parseReversalAutoTradeEntryMode,
-  parseReversalAutoTradeLimitExpireHours,
   reversalEntrySettingsFromRow,
 } from "@/lib/reversalAutoTradeEntry";
 import {

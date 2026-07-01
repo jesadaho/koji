@@ -1,47 +1,31 @@
 import type { TradingViewMexcUserSettings } from "@/src/tradingViewCloseSettingsStore";
+import {
+  REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
+  REVERSAL_LIMIT_EXPIRE_HOURS_MAX,
+  REVERSAL_LIMIT_EXPIRE_HOURS_MIN,
+  REVERSAL_LIMIT_EXPIRE_MS,
+  parseReversalAutoTradeLimitExpireHours,
+  reversalLimitExpireHoursFromRow,
+  reversalLimitExpireMsFromHours,
+  reversalLimitExpireMsFromRow,
+} from "@/lib/reversalLimitExpire";
 
-export type ReversalAutoTradeEntryMode = "hybrid_ema" | "market";
+export {
+  REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
+  REVERSAL_LIMIT_EXPIRE_HOURS_MAX,
+  REVERSAL_LIMIT_EXPIRE_HOURS_MIN,
+  REVERSAL_LIMIT_EXPIRE_MS,
+  parseReversalAutoTradeLimitExpireHours,
+  reversalLimitExpireHoursFromRow,
+  reversalLimitExpireMsFromHours,
+  reversalLimitExpireMsFromRow,
+};
 
 export const REVERSAL_ENTRY_EMA_PERIOD_DEFAULT = 20;
 export const REVERSAL_ENTRY_EMA_PERIOD_MIN = 5;
 export const REVERSAL_ENTRY_EMA_PERIOD_MAX = 200;
 
-/** Hybrid Limit SHORT — หมดอายุถ้าไม่ fill (ชม.) */
-export const REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT = 2;
-export const REVERSAL_LIMIT_EXPIRE_HOURS_MIN = 1;
-export const REVERSAL_LIMIT_EXPIRE_HOURS_MAX = 48;
-
-export function parseReversalAutoTradeLimitExpireHours(
-  raw: unknown,
-  fallback = REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
-): number {
-  const n = typeof raw === "number" ? raw : Number(String(raw ?? "").trim());
-  if (!Number.isFinite(n)) return fallback;
-  const h = Math.floor(n);
-  if (h < REVERSAL_LIMIT_EXPIRE_HOURS_MIN || h > REVERSAL_LIMIT_EXPIRE_HOURS_MAX) return fallback;
-  return h;
-}
-
-export function reversalLimitExpireMsFromHours(hours: number): number {
-  return hours * 3600 * 1000;
-}
-
-/** default 2 ชม. — ใช้ stats touch window เมื่อไม่มี per-user config */
-export const REVERSAL_LIMIT_EXPIRE_MS = reversalLimitExpireMsFromHours(
-  REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
-);
-
-export function reversalLimitExpireHoursFromRow(
-  row: Pick<TradingViewMexcUserSettings, "reversalAutoTradeLimitExpireHours">,
-): number {
-  return parseReversalAutoTradeLimitExpireHours(row.reversalAutoTradeLimitExpireHours);
-}
-
-export function reversalLimitExpireMsFromRow(
-  row: Pick<TradingViewMexcUserSettings, "reversalAutoTradeLimitExpireHours">,
-): number {
-  return reversalLimitExpireMsFromHours(reversalLimitExpireHoursFromRow(row));
-}
+export type ReversalAutoTradeEntryMode = "hybrid_ema" | "market";
 
 /** Hybrid SHORT — EMA20Δ15m ในช่วงนี้ (0 ถึง −2%) → Market ทันที */
 export const REVERSAL_SHORT_HYBRID_IMMEDIATE_MARKET_EMA20_15M_DIFF_MAX_PCT = 0;

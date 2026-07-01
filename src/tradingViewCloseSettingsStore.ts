@@ -6,8 +6,8 @@ import type { ReversalStatsPlaySide } from "../lib/reversalMatrixFilters.js";
 import {
   REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
   parseReversalAutoTradeLimitExpireHours,
-  type ReversalAutoTradeEntryMode,
-} from "../lib/reversalAutoTradeEntry.js";
+} from "@/lib/reversalLimitExpire";
+import type { ReversalAutoTradeEntryMode } from "../lib/reversalAutoTradeEntry.js";
 import type { SnowballAutoTradeEntryMode } from "../lib/snowballAutoTradeEntry.js";
 import { snowballAutoTradeGradeKeyFromMigratedRawKey } from "./snowballAutoTradeGradeRules";
 

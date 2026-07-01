@@ -13,7 +13,7 @@ import type { StatsTpSlExitReason } from "@/lib/tpSlStrategySimulate";
 import {
   REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT,
   REVERSAL_LIMIT_EXPIRE_MS,
-} from "@/lib/reversalAutoTradeEntry";
+} from "@/lib/reversalLimitExpire";
 import type {
   ReversalChartAiExpectedPath,
   ReversalChartAiMarketCharacter,

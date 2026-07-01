@@ -1,4 +1,4 @@
-import { REVERSAL_LIMIT_EXPIRE_MS } from "@/lib/reversalAutoTradeEntry";
+import { REVERSAL_LIMIT_EXPIRE_MS } from "@/lib/reversalLimitExpire";
 import { computeEmaLast } from "./emaUtils";
 import { emaLine } from "./indicatorMath";
 import {

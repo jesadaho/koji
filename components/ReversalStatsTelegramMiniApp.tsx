@@ -115,7 +115,7 @@ import {
   type CandleReversalStatsSort,
   type CandleReversalStatsSortKey,
 } from "@/lib/candleReversalStatsClient";
-import { REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT } from "@/lib/reversalAutoTradeEntry";
+import { REVERSAL_LIMIT_EXPIRE_HOURS_DEFAULT } from "@/lib/reversalLimitExpire";
 import { reversalSignalBarSlHitLabel } from "@/lib/statsSignalBarSl";
 import {
   marketSentimentFngLabel,
