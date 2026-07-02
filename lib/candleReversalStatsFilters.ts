@@ -52,10 +52,6 @@ import {
   reversalStatsRowMatchesTradFiFilter,
   type ReversalTradFiFilter,
 } from "@/lib/reversalTradFiStatsFilter";
-import {
-  reversalStatsRowMatchesMomentumSurgeFilter,
-  type ReversalMomentumSurgeFilter,
-} from "@/lib/reversalMomentumSurgeFilter";
 
 export type { ReversalMomentumScoreFilter } from "@/lib/reversalMomentumScore";
 export {
@@ -97,14 +93,6 @@ export {
   reversalTradFiFilterLabel,
   reversalTradFiFilterTitle,
 } from "@/lib/reversalTradFiStatsFilter";
-
-export type { ReversalMomentumSurgeFilter } from "@/lib/reversalMomentumSurgeFilter";
-export {
-  REVERSAL_MOMENTUM_SURGE_FILTER_OPTIONS,
-  reversalMomentumSurgeFilterLabel,
-  reversalMomentumSurgeFilterTitle,
-  reversalStatsRowMatchesMomentumSurgeFilter,
-} from "@/lib/reversalMomentumSurgeFilter";
 
 export type { StatsAtrPct14dFilter } from "@/lib/statsAtrPct14dFilter";
 export {
@@ -208,7 +196,6 @@ export type ReversalStatsFilterQuery = {
   tradFi?: ReversalTradFiFilter;
   ema15mTouch?: ReversalEma20_15mTouchFilter;
   momentum?: ReversalMomentumScoreFilter;
-  momentumSurge?: ReversalMomentumSurgeFilter;
   lowerWick?: ReversalLowerWickDominantFilter;
 };
 
@@ -345,13 +332,6 @@ export function filterCandleReversalStatsRows(
       return false;
     }
     if (
-      q.momentumSurge &&
-      q.momentumSurge !== "all" &&
-      !reversalStatsRowMatchesMomentumSurgeFilter(r, q.momentumSurge)
-    ) {
-      return false;
-    }
-    if (
       q.lowerWick &&
       q.lowerWick !== "all" &&
       !reversalStatsRowMatchesLowerWickDominantFilter(r, q.lowerWick)
@@ -374,7 +354,6 @@ const OBSERVE_SET = new Set<string>(["all", "observe", "play"]);
 const TRADFI_SET = new Set<string>(["all", "crypto", "stock"]);
 const EMA15M_TOUCH_SET = new Set<string>(["all", "not_touched", "touched"]);
 const MOMENTUM_SET = new Set<string>(["all", "ge1", "ge2", "ge3", "ge4", "ge5"]);
-const MOMENTUM_SURGE_SET = new Set<string>(["all", "surge"]);
 const LOWER_WICK_SET = new Set<string>(["all", "lower_gt_upper"]);
 
 function parseReversalEmaSlopeFilterParam(raw: string | null): ReversalEma4hFilter {
@@ -438,8 +417,11 @@ export function reversalStatsFilterQueryFromSearchParams(
   q.tradFi = pickEnum(sp.get("tradFi"), TRADFI_SET, "all");
   q.ema15mTouch = pickEnum(sp.get("ema15mTouch"), EMA15M_TOUCH_SET, "all");
   q.momentum = pickEnum(sp.get("momentum"), MOMENTUM_SET, "all");
-  q.momentumSurge = pickEnum(sp.get("momentumSurge"), MOMENTUM_SURGE_SET, "all");
   q.lowerWick = pickEnum(sp.get("lowerWick"), LOWER_WICK_SET, "all");
+  const momentumSurgeLegacy = sp.get("momentumSurge")?.trim().toLowerCase();
+  if (momentumSurgeLegacy === "surge" && (!q.matrix || q.matrix === "all")) {
+    q.matrix = "momentumSurge";
+  }
   return q;
 }
 
@@ -463,7 +445,6 @@ export function buildReversalStatsCsvSearchParams(q: ReversalStatsFilterQuery): 
   if (q.tradFi && q.tradFi !== "all") p.set("tradFi", q.tradFi);
   if (q.ema15mTouch && q.ema15mTouch !== "all") p.set("ema15mTouch", q.ema15mTouch);
   if (q.momentum && q.momentum !== "all") p.set("momentum", q.momentum);
-  if (q.momentumSurge && q.momentumSurge !== "all") p.set("momentumSurge", q.momentumSurge);
   if (q.lowerWick && q.lowerWick !== "all") p.set("lowerWick", q.lowerWick);
   const s = p.toString();
   return s ? `?${s}` : "";

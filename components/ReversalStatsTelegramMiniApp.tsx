@@ -189,11 +189,6 @@ import {
   reversalMomentumScoreTitle,
   reversalRowMatchesMomentumScoreFilter,
   type ReversalMomentumScoreFilter,
-  REVERSAL_MOMENTUM_SURGE_FILTER_OPTIONS,
-  reversalMomentumSurgeFilterLabel,
-  reversalMomentumSurgeFilterTitle,
-  reversalStatsRowMatchesMomentumSurgeFilter,
-  type ReversalMomentumSurgeFilter,
 } from "@/lib/candleReversalStatsFilters";
 import { reversalRiskScoreLabel, reversalRiskScoreTitle } from "@/lib/reversalRiskScore";
 import {
@@ -619,8 +614,6 @@ function ReversalStatsSection({
   const [ema15mTouchFilter, setEma15mTouchFilter] = useState<ReversalEma20_15mTouchFilter>("all");
   const [momentumScoreFilter, setMomentumScoreFilter] =
     useState<ReversalMomentumScoreFilter>("all");
-  const [momentumSurgeFilter, setMomentumSurgeFilter] =
-    useState<ReversalMomentumSurgeFilter>("all");
   const [tradFiFilter, setTradFiFilter] = useState<ReversalTradFiFilter>("all");
   const [ema1hFilter, setEma1hFilter] = useState<ReversalEma1hFilter>("all");
   const [ema1dFilter, setEma1dFilter] = useState<ReversalEma1dFilter>("all");
@@ -656,7 +649,6 @@ function ReversalStatsSection({
           reversalRowMatchesDowFilter(r, dowFilter) &&
           reversalRowMatchesLenRankFilter(r, lenRankFilter) &&
           reversalRowMatchesVolVsSmaFilter(r, volVsSmaFilter) &&
-          reversalStatsRowMatchesMomentumSurgeFilter(r, momentumSurgeFilter) &&
           reversalRowMatchesEma1hFilter(r, ema1hFilter) &&
           reversalRowMatchesEma1dFilter(r, ema1dFilter) &&
           reversalRowMatchesBtcEma4hFilter(r, btcEma4hFilter) &&
@@ -674,7 +666,7 @@ function ReversalStatsSection({
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendGainFilter(r, trendGainFilter)) &&
           (!showPumpCycleFilters || snowballStatsRowMatchesTrendVelocityFilter(r, trendVelocityFilter)),
       ),
-    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, momentumSurgeFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lowerWickFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
+    [rawRows, shapeFilter, dayFilter, dowFilter, lenRankFilter, volVsSmaFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lowerWickFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, showSuggestedSideColumn, suggestedSideFilter, showPumpCycleFilters, trendGainFilter, trendVelocityFilter],
   );
   const { monthFilter, setMonthFilter, monthKeys, scopedRows } = useStatsMonthFilter(
     filteredRows,
@@ -859,7 +851,6 @@ function ReversalStatsSection({
       shape: shapeFilter,
       lenRank: lenRankFilter,
       vol: volVsSmaFilter,
-      ...(momentumSurgeFilter !== "all" ? { momentumSurge: momentumSurgeFilter } : {}),
       ema1h: ema1hFilter,
       ema1d: ema1dFilter,
       btcEma4h: btcEma4hFilter,
@@ -876,7 +867,7 @@ function ReversalStatsSection({
         ? { momentum: momentumScoreFilter }
         : {}),
     };
-  }, [csvQuery, dayFilter, dowFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lowerWickFilter, lenRankFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, momentumSurgeFilter, showSuggestedSideColumn, shapeFilter, tf, volVsSmaFilter]);
+  }, [csvQuery, dayFilter, dowFilter, ema1hFilter, ema1dFilter, btcEma4hFilter, atrFilter, barRangeSignalFilter, lowerWickFilter, lenRankFilter, matrixFilter, observeFilter, tradFiFilter, ema15mTouchFilter, momentumScoreFilter, showSuggestedSideColumn, shapeFilter, tf, volVsSmaFilter]);
 
   const exportCsv = useCallback(async () => {
     if (rows.length === 0) {
@@ -1465,7 +1456,7 @@ function ReversalStatsSection({
             <tr>
               <td colSpan={emptyColSpan} className="sub">
                 {rawRows.length > 0
-                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)}${momentumSurgeFilter !== "all" ? ` · ${reversalMomentumSurgeFilterLabel(momentumSurgeFilter)}` : ""} · EMA20∠1h ${reversalEma1hFilterLabel(ema1hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · R% ${reversalBarRangeSignalFilterLabel(barRangeSignalFilter)}${lowerWickFilter !== "all" ? ` · ไส้ ${reversalLowerWickDominantFilterLabel(lowerWickFilter)}` : ""}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""}${showSuggestedSideColumn && ema15mTouchFilter !== "all" ? ` · EMA touch ${reversalEma20_15mTouchFilterLabel(ema15mTouchFilter)}` : ""}${showSuggestedSideColumn && momentumScoreFilter !== "all" ? ` · Momentum ${reversalMomentumScoreFilterLabel(momentumScoreFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)} · Observe ${reversalObserveFilterLabel(observeFilter)} · ประเภท ${reversalTradFiFilterLabel(tradFiFilter)}`
+                  ? `ไม่มีแถวที่ตรงตัวกรอง — ${reversalDayFilterLabel(dayFilter)} · วัน ${reversalDowFilterLabel(dowFilter)} · ${reversalShapeFilterLabel(shapeFilter)} · Len# ${reversalLenRankFilterLabel(lenRankFilter)} · Vol×SMA ${statsVolVsSmaFilterLabel(volVsSmaFilter)} · EMA20∠1h ${reversalEma1hFilterLabel(ema1hFilter)} · EMA1d ${reversalEma1dFilterLabel(ema1dFilter)} · BTC EMA20∠4h ${reversalEma4hFilterLabel(btcEma4hFilter)} · ATR ${statsAtrPct14dFilterLabel(atrFilter)} · R% ${reversalBarRangeSignalFilterLabel(barRangeSignalFilter)}${lowerWickFilter !== "all" ? ` · ไส้ ${reversalLowerWickDominantFilterLabel(lowerWickFilter)}` : ""}${showPumpCycleFilters ? ` · Trend Gain ${snowballTrendGainFilterLabel(trendGainFilter)} · Velocity ${snowballTrendVelocityFilterLabel(trendVelocityFilter)}` : ""}${showSuggestedSideColumn && suggestedSideFilter !== "all" ? ` · ทิศแนะนำ ${reversalSuggestedSideFilterLabel(suggestedSideFilter)}` : ""}${showSuggestedSideColumn && ema15mTouchFilter !== "all" ? ` · EMA touch ${reversalEma20_15mTouchFilterLabel(ema15mTouchFilter)}` : ""}${showSuggestedSideColumn && momentumScoreFilter !== "all" ? ` · Momentum ${reversalMomentumScoreFilterLabel(momentumScoreFilter)}` : ""} · Matrix ${reversalMatrixFilterLabel(matrixFilter)} · Observe ${reversalObserveFilterLabel(observeFilter)} · ประเภท ${reversalTradFiFilterLabel(tradFiFilter)}`
                   : emptyHint}
               </td>
             </tr>
@@ -1871,24 +1862,6 @@ function ReversalStatsSection({
           </select>
         </label>
         <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
-          Momentum Surge
-          <select
-            value={momentumSurgeFilter}
-            onChange={(e) =>
-              setMomentumSurgeFilter(e.currentTarget.value as ReversalMomentumSurgeFilter)
-            }
-            className="tmaInput"
-            style={{ width: "auto", minWidth: "9rem" }}
-            title={reversalMomentumSurgeFilterTitle(momentumSurgeFilter)}
-          >
-            {REVERSAL_MOMENTUM_SURGE_FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="sub" style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
           EMA20∠1h
           <select
             value={ema1hFilter}
@@ -2153,15 +2126,6 @@ function ReversalStatsSection({
             title={reversalBarRangeSignalFilterTitle(barRangeSignalFilter)}
           >
             {reversalBarRangeSignalFilterTitle(barRangeSignalFilter)}
-          </p>
-        ) : null}
-        {momentumSurgeFilter !== "all" ? (
-          <p
-            className="sub"
-            style={{ width: "100%", margin: 0 }}
-            title={reversalMomentumSurgeFilterTitle(momentumSurgeFilter)}
-          >
-            {reversalMomentumSurgeFilterTitle(momentumSurgeFilter)}
           </p>
         ) : null}
         {matrixFilter !== "all" ? (
