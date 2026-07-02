@@ -28,6 +28,7 @@ import {
 import { STATS_SIGNAL_BAR_SL_VERSION } from "@/lib/statsSignalBarSl";
 import { STATS_PSAR_4H_VERSION } from "./statsPsar4h";
 import { STATS_ATR_PCT_4H_VERSION } from "./statsAtrPct4h";
+import { STATS_SIGNAL_VOL_VS_SMA24_VERSION } from "./statsSignalVolVsSmaBackfill";
 import { STATS_QUOTE_VOL_24H_VERSION } from "./statsQuoteVol24h";
 import { STATS_OPEN_INTEREST_VERSION } from "./statsOpenInterest";
 import { STATS_BTC_DOM_EMA20_4H_VERSION } from "./statsBtcDominanceEma";
@@ -729,6 +730,11 @@ export async function appendCandleReversalStatsRow(
       input.signalVolVsSma24 != null && Number.isFinite(input.signalVolVsSma24) && input.signalVolVsSma24 > 0
         ? input.signalVolVsSma24
         : null,
+    ...(input.signalVolVsSma24 != null &&
+    Number.isFinite(input.signalVolVsSma24) &&
+    input.signalVolVsSma24 > 0
+      ? { signalVolVsSma24V: STATS_SIGNAL_VOL_VS_SMA24_VERSION }
+      : {}),
     lookbackBars: finiteRank(input.lookbackBars),
     rangeScore,
     wickScore,

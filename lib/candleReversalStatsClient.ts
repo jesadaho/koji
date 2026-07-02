@@ -162,6 +162,8 @@ export type CandleReversalStatsRow = {
   signalVolVsSma?: number | null;
   /** Vol แท่งสัญญาณ ÷ SMA(volume) 24 แท่ง ณ แท่งปิด */
   signalVolVsSma24?: number | null;
+  /** 1 = signalVolVsSma24 backfill แล้ว */
+  signalVolVsSma24V?: number;
   lookbackBars: number | null;
   rangeScore: number | null;
   wickScore: number | null;

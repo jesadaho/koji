@@ -40,11 +40,7 @@ import {
   resetBinanceIndicatorFapi451LogDedupe,
   type BinanceKlinePack,
 } from "./binanceIndicatorKline";
-import {
-  candleReversalSignalVolVsSmaAt,
-  candleReversalVolSmaPeriod,
-  candleReversalVolSmaPeriod24,
-} from "./candleReversalSignalVolVsSma";
+import { backfillAllStatsRowsSignalVolVsSma } from "./statsSignalVolVsSmaBackfill";
 import { backfillAllStatsRowsBtcEmaSlopes, fetchEma12_1hFollowMetricsAtMs } from "./statsEmaSlope";
 import { backfillAllStatsRowsEma20Dist } from "./statsEma20Dist";
 import {
@@ -516,53 +512,6 @@ async function backfillDropFrom24hHighToSignalLowPct(rows: CandleReversalStatsRo
       updated += 1;
     } catch (e) {
       console.error("[candleReversalStatsTick] backfill dropFrom24hHighToSignalLowPct", row.symbol, e);
-    }
-  }
-  return updated;
-}
-
-async function backfillSignalVolVsSma(rows: CandleReversalStatsRow[]): Promise<number> {
-  const period = candleReversalVolSmaPeriod();
-  const period24 = candleReversalVolSmaPeriod24();
-  let updated = 0;
-  for (const row of rows) {
-    const need48 =
-      row.signalVolVsSma == null || !Number.isFinite(row.signalVolVsSma) || row.signalVolVsSma <= 0;
-    const need24 =
-      row.signalVolVsSma24 == null || !Number.isFinite(row.signalVolVsSma24) || row.signalVolVsSma24 <= 0;
-    if (!need48 && !need24) continue;
-    const tf = signalBarTf(row);
-    const barDur = signalBarDurationSecByTf(tf);
-    const maxPeriod = Math.max(period, period24);
-    const windowStartSec = row.signalBarOpenSec - (maxPeriod + 4) * barDur;
-    const windowEndSec = row.signalBarOpenSec + barDur;
-    try {
-      const pack = await fetchBinanceUsdmKlinesRange(row.symbol, tf, {
-        startTimeMs: windowStartSec * 1000,
-        endTimeMs: windowEndSec * 1000,
-        limit: 800,
-      });
-      if (!pack || pack.timeSec.length === 0) continue;
-      const iSig = pack.timeSec.findIndex((t) => t === row.signalBarOpenSec);
-      if (iSig < 0) continue;
-      let rowTouched = false;
-      if (need48) {
-        const ratio = candleReversalSignalVolVsSmaAt(pack, iSig, period);
-        if (ratio != null && Number.isFinite(ratio) && ratio > 0) {
-          row.signalVolVsSma = ratio;
-          rowTouched = true;
-        }
-      }
-      if (need24) {
-        const ratio24 = candleReversalSignalVolVsSmaAt(pack, iSig, period24);
-        if (ratio24 != null && Number.isFinite(ratio24) && ratio24 > 0) {
-          row.signalVolVsSma24 = ratio24;
-          rowTouched = true;
-        }
-      }
-      if (rowTouched) updated += 1;
-    } catch (e) {
-      console.error("[candleReversalStatsTick] backfill signalVolVsSma", row.symbol, tf, e);
     }
   }
   return updated;
@@ -1170,6 +1119,10 @@ export async function runCandleReversalStatsFollowUpTick(
 
   // รันก่อน backfill ช้า — สัญญาณใหม่ไม่ควรค้างเพราะ cron timeout
   dirty += (await backfillReversalKlineAiAnalysis(state.rows)).succeeded;
+  dirty += await backfillAllStatsRowsSignalVolVsSma(state.rows, {
+    maxRowsPerPass: 40,
+    maxPasses: 12,
+  });
 
   dirty += backfillReversalBarRangePctSignalEstimate(state.rows);
   dirty += await backfillRangeRankInLookback(state.rows);
@@ -1188,7 +1141,6 @@ export async function runCandleReversalStatsFollowUpTick(
   dirty += await backfillAllStatsRowsMarketCapUsd(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsOpenInterest(state.rows, { maxRowsPerPass: 20, maxPasses: 5 });
   dirty += await backfillAllStatsRowsBtcDomEma20_4h(state.rows, { maxRowsPerPass: 15, maxPasses: 5 });
-  dirty += await backfillSignalVolVsSma(state.rows);
   dirty += await backfillSignalBarHighLow(state.rows);
   dirty += await backfillLowerWickRatioPct(state.rows);
   dirty += await backfillDropFrom24hHighToSignalLowPct(state.rows);

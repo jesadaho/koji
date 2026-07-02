@@ -287,7 +287,7 @@ export const DEFAULT_CANDLE_REVERSAL_1H_ENV: CandleReversal1hDetectEnv = {
   longestRedBodyHighRankMax: 3,
   longestRedBodyHighRankMaxWhenLenRank1: 10,
   emaPeriod: 20,
-  longestRedBodyEmaDistAboveMaxPct: 13,
+  longestRedBodyEmaDistAboveMaxPct: 16,
   longestRedBodyEmaDistBelowMaxPct: 10,
   slBufferPct: 0.001,
 };
