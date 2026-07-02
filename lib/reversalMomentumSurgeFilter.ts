@@ -6,9 +6,10 @@ export const REVERSAL_MOMENTUM_SURGE_EMA20_15M_SLOPE_MIN_PCT = 12;
 export const REVERSAL_MOMENTUM_SURGE_EMA20_4H_DIST_MIN_PCT = 12;
 export const REVERSAL_MOMENTUM_SURGE_EMA20_1H_DIST_MAX_PCT = 15;
 export const REVERSAL_MOMENTUM_SURGE_VELOCITY_MIN = 1.5;
+export const REVERSAL_MOMENTUM_SURGE_VELOCITY_MAX = 3.0;
 
 export const REVERSAL_MOMENTUM_SURGE_CRITERIA =
-  `EMA20Δ15m > ${REVERSAL_MOMENTUM_SURGE_EMA20_15M_DIST_MIN_PCT}% · EMA20∠15m > ${REVERSAL_MOMENTUM_SURGE_EMA20_15M_SLOPE_MIN_PCT}% · EMA20Δ4h > ${REVERSAL_MOMENTUM_SURGE_EMA20_4H_DIST_MIN_PCT}% · EMA20Δ1h < ${REVERSAL_MOMENTUM_SURGE_EMA20_1H_DIST_MAX_PCT}% · Velocity > ${REVERSAL_MOMENTUM_SURGE_VELOCITY_MIN}%/h`;
+  `EMA20Δ15m > ${REVERSAL_MOMENTUM_SURGE_EMA20_15M_DIST_MIN_PCT}% · EMA20∠15m > ${REVERSAL_MOMENTUM_SURGE_EMA20_15M_SLOPE_MIN_PCT}% · EMA20Δ4h > ${REVERSAL_MOMENTUM_SURGE_EMA20_4H_DIST_MIN_PCT}% · EMA20Δ1h < ${REVERSAL_MOMENTUM_SURGE_EMA20_1H_DIST_MAX_PCT}% · Velocity ${REVERSAL_MOMENTUM_SURGE_VELOCITY_MIN}–${REVERSAL_MOMENTUM_SURGE_VELOCITY_MAX}%/h`;
 
 export type ReversalMomentumSurgeRowSlice = Pick<
   CandleReversalStatsRow,
@@ -26,6 +27,10 @@ function finiteGt(v: number | null | undefined, min: number): boolean {
 
 function finiteLt(v: number | null | undefined, max: number): boolean {
   return v != null && Number.isFinite(v) && v < max;
+}
+
+function finiteInRange(v: number | null | undefined, min: number, max: number): boolean {
+  return v != null && Number.isFinite(v) && v >= min && v <= max;
 }
 
 export function reversalMomentumSurgeEma20_15mDistPass(
@@ -54,7 +59,11 @@ export function reversalMomentumSurgeEma20_1hDistPass(
 
 export function reversalMomentumSurgeVelocityPass(row: ReversalMomentumSurgeRowSlice): boolean {
   const vel = computePumpCycleTrendVelocity(row.trendGainPct, row.ageOfTrendHours);
-  return finiteGt(vel, REVERSAL_MOMENTUM_SURGE_VELOCITY_MIN);
+  return finiteInRange(
+    vel,
+    REVERSAL_MOMENTUM_SURGE_VELOCITY_MIN,
+    REVERSAL_MOMENTUM_SURGE_VELOCITY_MAX,
+  );
 }
 
 export function reversalStatsRowMatchesMomentumSurge(row: ReversalMomentumSurgeRowSlice): boolean {
@@ -77,6 +86,6 @@ export function reversalMomentumSurgeTitle(row: ReversalMomentumSurgeRowSlice): 
     `EMA20∠15m ${row.ema20_15mSlopePct7d?.toFixed(1) ?? "—"}% ${mark(reversalMomentumSurgeEma20_15mSlopePass(row))} (>${REVERSAL_MOMENTUM_SURGE_EMA20_15M_SLOPE_MIN_PCT})`,
     `EMA20Δ4h ${row.priceVsEma20_4hPct?.toFixed(1) ?? "—"}% ${mark(reversalMomentumSurgeEma20_4hDistPass(row))} (>${REVERSAL_MOMENTUM_SURGE_EMA20_4H_DIST_MIN_PCT})`,
     `EMA20Δ1h ${row.priceVsEma20_1hPct?.toFixed(1) ?? "—"}% ${mark(reversalMomentumSurgeEma20_1hDistPass(row))} (<${REVERSAL_MOMENTUM_SURGE_EMA20_1H_DIST_MAX_PCT})`,
-    `Velocity ${velTxt} ${mark(reversalMomentumSurgeVelocityPass(row))} (>${REVERSAL_MOMENTUM_SURGE_VELOCITY_MIN})`,
+    `Velocity ${velTxt} ${mark(reversalMomentumSurgeVelocityPass(row))} (${REVERSAL_MOMENTUM_SURGE_VELOCITY_MIN}–${REVERSAL_MOMENTUM_SURGE_VELOCITY_MAX}%/h)`,
   ].join(" · ");
 }
